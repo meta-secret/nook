@@ -59,29 +59,15 @@ tasks:
           dev) wasm_opt_flag="--no-opt" ; stamp_mode="no-opt" ;;
           *) echo "Unsupported WASM_BUILD_MODE=${WASM_BUILD_MODE:-{{.WASM_BUILD_MODE}}} (expected dev or prod)" >&2; exit 1 ;;
         esac;
-        for spec in \
-          "nook-wasm:default" \
-          "nook-wasm-simple:app-simple" \
-          "nook-wasm-sentinel:app-sentinel" \
-          "nook-wasm-extension:app-extension" \
-          "nook-wasm-migration:app-legacy-migration"; do
-          out_dir="${spec%%:*}";
-          feature="${spec#*:}";
-          output="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/$out_dir/nook_wasm_bg.wasm";
-          stamp="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/$out_dir/.wasm-source-sha256";
-          desired="$current $stamp_mode $feature";
-          stored="";
-          if [ -f "$stamp" ]; then stored="$(cat "$stamp")"; fi;
-          if [ ! -f "$output" ] || [ "$desired" != "$stored" ]; then
-            if [ "$feature" = default ]; then
-              cargo_args="";
-            else
-              cargo_args="-- --no-default-features --features $feature";
-            fi;
-            cd "{{.APP_ROOT}}" && wasm-pack build nook-wasm --target web --out-dir "../nook-web/nook-web-shared/src/vault-app/lib/$out_dir" --out-name nook_wasm $wasm_opt_flag $cargo_args;
-            echo "$desired" > "$stamp";
-          fi;
-        done'
+        output="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm";
+        stamp="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/.wasm-source-sha256";
+        desired="$current $stamp_mode";
+        stored="";
+        if [ -f "$stamp" ]; then stored="$(cat "$stamp")"; fi;
+        if [ ! -f "$output" ] || [ "$desired" != "$stored" ]; then
+          cd "{{.APP_ROOT}}" && wasm-pack build nook-wasm --target web --out-dir "../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" --out-name nook_wasm $wasm_opt_flag;
+          echo "$desired" > "$stamp";
+        fi'
 
   _wasm:test:
     desc: Run nook-wasm wasm-bindgen tests in Node.

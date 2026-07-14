@@ -16,17 +16,27 @@ building blocks. They are not selectable modes inside one production web app.
 
 The two vault apps have independent package manifests, HTML and TypeScript
 entrypoints, Vite configurations, output directories, Cloudflare Pages
-projects, WebAuthn relying-party origins, IndexedDB origin storage, and compiled
-WASM capabilities. Common Svelte presentation and typed browser adapters live
-under `nook-web-shared/src/vault-app`.
+projects, WebAuthn relying-party origins, and IndexedDB origin storage. They
+share one audited, generated WASM package. Common Svelte presentation and typed
+browser adapters live under `nook-web-shared/src/vault-app`.
 
 ## Enforcement
 
-`VaultApplication` in `nook-core` owns the compatibility matrix. Each production
-WASM artifact is compiled with exactly one mutually-exclusive capability
-feature. A manager validates architecture before creation, local selection,
-import, remote adoption, and extension approval. TypeScript may tailor the
-surface but is never the authority for the boundary.
+`VaultApplication` in `nook-core` owns the compatibility matrix. `nook-wasm` is
+compiled and optimized exactly once; each application entrypoint configures its
+immutable application identity in Rust before importing the Svelte app. The
+identity may be configured idempotently but cannot be changed in the same WASM
+realm. Every manager reads that Rust-owned identity and validates architecture
+before creation, local selection, import, remote adoption, and extension
+approval. TypeScript selects the application at bootstrap but is never the
+authority for the boundary.
+
+The shared package contains the extension-approval binding needed by Simple and
+the browser companion. Sentinel remains extension-free because its Rust
+application identity rejects approval, its web bundle contains no extension
+protocol or UI, it serves no extension-connect route, and the extension manifest
+cannot connect to or inject into its origin. Isolation verification checks all
+of these boundaries in the built production artifacts.
 
 Sentinel's web artifact has no extension-connect route. The extension manifest
 accepts external connections only from `simple.nokey.sh` and excludes

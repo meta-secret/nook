@@ -182,6 +182,11 @@ test harness. The production builds are `bun run build` inside
 `nook-vault-simple` and `nook-vault-sentinel`; they never use a hostname flag to
 select a vault type.
 
+All web surfaces consume one audited `nook-wasm` package that is compiled and
+optimized once. Each entrypoint configures its immutable Rust-owned application
+identity before loading app modules, so Simple and Sentinel remain separate
+projects and origins without recompiling the same Rust library per surface.
+
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx prepares the Rust/WASM and web
 dependency branches in parallel, exports only the generated WASM and coverage

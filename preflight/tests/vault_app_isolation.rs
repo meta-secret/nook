@@ -25,7 +25,7 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
 }
 
 #[test]
-fn production_vault_apps_are_separate_compile_time_capabilities() {
+fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
     let root = repository_root();
     for project in ["nook-vault-simple", "nook-vault-sentinel"] {
         assert!(
@@ -37,68 +37,93 @@ fn production_vault_apps_are_separate_compile_time_capabilities() {
         );
     }
 
-    let wasm_manifest = read(&root, "nook-app/nook-wasm/Cargo.toml");
-    for retired_feature in [
-        "app-unified-development",
+    let workspace = read(&root, "nook-app/Cargo.toml");
+    assert!(
+        !workspace.contains("nook-wasm/apps/"),
+        "application wrappers must not recompile the shared WASM library"
+    );
+    let application = read(&root, "nook-app/nook-wasm/src/application.rs");
+    assert!(application.contains("compiles and optimizes one shared WASM library"));
+    assert!(application.contains("cannot change it"));
+
+    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    assert!(
+        wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
+        "delivery must compile and optimize nook-wasm exactly once"
+    );
+    for forbidden in [
+        "nook-wasm/apps/",
+        "nook-wasm-simple",
+        "nook-wasm-sentinel",
+        "nook-wasm-extension",
+        "nook-wasm-migration",
+    ] {
+        assert!(
+            !wasm_dockerfile.contains(forbidden),
+            "WASM Dockerfile still contains retired artifact {forbidden}"
+        );
+    }
+    let wasm_tasks = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    assert_eq!(
+        wasm_tasks.matches("wasm-pack build nook-wasm").count(),
+        1,
+        "the fast rebuild path must compile the shared WASM package once"
+    );
+    for forbidden in [
+        "nook-wasm-simple",
+        "nook-wasm-sentinel",
+        "nook-wasm-extension",
+        "nook-wasm-migration",
         "app-simple",
         "app-sentinel",
         "app-extension",
         "app-legacy-migration",
     ] {
         assert!(
-            !wasm_manifest.contains(retired_feature),
-            "shared nook-wasm must not be recompiled behind {retired_feature}"
+            !wasm_tasks.contains(forbidden),
+            "fast WASM rebuild still contains retired artifact or feature {forbidden}"
         );
     }
-    for (app, capability) in [
-        ("unified", "UnifiedDevelopment"),
-        ("simple", "Simple"),
-        ("sentinel", "Sentinel"),
-        ("extension", "Extension"),
-        ("migration", "LegacyMigration"),
-    ] {
-        let manifest = root
-            .join("nook-app/nook-wasm/apps")
-            .join(app)
-            .join("Cargo.toml");
-        assert!(manifest.is_file(), "missing thin {app} WASM leaf crate");
-        let source = read(&root, &format!("nook-app/nook-wasm/apps/{app}/src/lib.rs"));
-        assert!(
-            source.contains(&format!("VaultApplication::{capability}")),
-            "{app} leaf must fix capability {capability}"
-        );
-        if matches!(app, "sentinel" | "extension" | "migration") {
-            assert!(
-                !source.contains("approveExtensionDevice"),
-                "{app} leaf must not link extension approval"
-            );
-        }
-    }
-    let application = read(&root, "nook-app/nook-wasm/src/application.rs");
-    assert!(application.contains("featureless shared bridge compiles once"));
-
-    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
-    assert!(wasm_dockerfile.contains("nook-wasm/apps/simple"));
-    assert!(wasm_dockerfile.contains("nook-wasm/apps/sentinel"));
-    assert!(
-        !wasm_dockerfile.contains("--no-default-features")
-            && !wasm_dockerfile.contains("--features $feature"),
-        "WASM artifacts must come from thin leaf crates, not full-crate feature rebuilds"
+    let web_dockerfile = read(&root, "nook-app/nook-web/nook-web-app/Dockerfile");
+    assert_eq!(
+        web_dockerfile
+            .matches("COPY --from=web-artifacts /nook-wasm ")
+            .count(),
+        1,
+        "web build must receive one shared WASM package"
     );
 
     let sentinel_config = read(
         &root,
         "nook-app/nook-web/nook-vault-sentinel/vite.config.ts",
     );
-    assert!(sentinel_config.contains("nook-wasm-sentinel"));
+    assert!(sentinel_config.contains("lib/nook-wasm/nook_wasm"));
+    assert!(sentinel_config.contains("__NOOK_WASM_APPLICATION__"));
+    assert!(sentinel_config.contains("JSON.stringify(\"sentinel\")"));
     assert!(
         sentinel_config.contains("pathname ===") && sentinel_config.contains("/extension-connect")
     );
     assert!(!sentinel_config.contains("extension-connect.html"));
 
     let simple_config = read(&root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
-    assert!(simple_config.contains("nook-wasm-simple"));
+    assert!(simple_config.contains("lib/nook-wasm/nook_wasm"));
+    assert!(simple_config.contains("__NOOK_WASM_APPLICATION__"));
+    assert!(simple_config.contains("JSON.stringify(\"simple\")"));
     assert!(simple_config.contains("extension-connect"));
+
+    let wasm_bridge = read(
+        &root,
+        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/wasm-bootstrap.ts",
+    );
+    assert!(wasm_bridge.contains("configureVaultApplication(WASM_APPLICATION)"));
+    for entry in [
+        "nook-app/nook-web/nook-vault-simple/src/main.ts",
+        "nook-app/nook-web/nook-vault-sentinel/src/main.ts",
+    ] {
+        let source = read(&root, entry);
+        assert!(source.contains("await ensureAppWasm()"));
+        assert!(source.contains("await import("));
+    }
 
     let dockerignore = read(&root, ".dockerignore");
     assert!(
@@ -177,6 +202,33 @@ fn development_and_release_wasm_build_modes_stay_separate() {
     assert!(
         !release.contains("WASM_BUILD_MODE=dev"),
         "release artifacts must remain production-optimized"
+    );
+}
+
+#[test]
+fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
+    let root = repository_root();
+    let dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
+    let warmup = section(
+        &dockerfile,
+        "# Also warm the COVERAGE-instrumented deps:",
+        "# Warm the wasm32 DEBUG/TEST-profile dependencies",
+    );
+
+    assert_eq!(
+        warmup.matches("RUN cargo llvm-cov nextest").count(),
+        1,
+        "coverage dependencies must be warmed in one instrumented build"
+    );
+    assert!(warmup.contains(
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass"
+    ));
+    assert!(
+        dockerfile.contains("RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2")
+    );
+    assert!(
+        dockerfile
+            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
     );
 }
 

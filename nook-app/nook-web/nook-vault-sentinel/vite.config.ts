@@ -59,6 +59,7 @@ export default defineConfig({
   base: "./",
   define: {
     __NOOK_APP_KIND__: JSON.stringify("sentinel"),
+    __NOOK_WASM_APPLICATION__: JSON.stringify("sentinel"),
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(
       "https://sentinel.nokey.sh",
     ),
@@ -84,7 +85,7 @@ export default defineConfig({
       "$web-shared": new URL("../nook-web-shared/src", import.meta.url)
         .pathname,
       "$app-wasm": new URL(
-        "../nook-web-shared/src/vault-app/lib/nook-wasm-sentinel/nook_wasm",
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
         import.meta.url,
       ).pathname,
     },

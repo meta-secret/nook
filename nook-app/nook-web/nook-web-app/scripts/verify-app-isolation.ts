@@ -74,25 +74,18 @@ for (const root of [simpleRoot, sentinelRoot]) {
   }
 }
 
-const simpleBindings = await readFile(
-  join(
-    webRoot,
-    'nook-web-shared/src/vault-app/lib/nook-wasm-simple/nook_wasm.js',
-  ),
+const sharedBindings = await readFile(
+  join(webRoot, 'nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'),
   'utf8',
 )
-const sentinelBindings = await readFile(
-  join(
-    webRoot,
-    'nook-web-shared/src/vault-app/lib/nook-wasm-sentinel/nook_wasm.js',
-  ),
-  'utf8',
-)
-if (!simpleBindings.includes('approveExtensionDevice')) {
-  throw new Error('Simple Vault WASM is missing extension approval capability.')
-}
-if (sentinelBindings.includes('approveExtensionDevice')) {
-  throw new Error('Sentinel Vault WASM exposes extension approval capability.')
+for (const requiredExport of [
+  'configureVaultApplication',
+  'configuredVaultApplication',
+  'approveExtensionDevice',
+]) {
+  if (!sharedBindings.includes(requiredExport)) {
+    throw new Error(`Shared WASM is missing ${requiredExport}.`)
+  }
 }
 
 const sentinelText = (

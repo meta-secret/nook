@@ -18,9 +18,7 @@
       "$vault-shared": ["../nook-web-shared/src/vault-app"],
       "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
       "$web-shared/*": ["../nook-web-shared/src/*"],
-      "$app-wasm": [
-        "../nook-web-shared/src/vault-app/lib/nook-wasm-sentinel/nook_wasm"
-      ]
+      "$app-wasm": ["../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"]
     }
   },
   "include": [

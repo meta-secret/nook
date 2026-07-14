@@ -304,9 +304,8 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    /// Simple/unified leaf artifacts expose this internal bridge as a free
-    /// wasm-bindgen function. Sentinel, extension, and migration never link an
-    /// approval export.
+    /// Approve an extension only when this manager was configured for the
+    /// Simple app (or the unified development harness) and owns a Simple vault.
     pub async fn approve_extension_device(
         &mut self,
         join_device_id: String,
@@ -314,6 +313,8 @@ impl NookVaultManager {
         join_signing_public_key: String,
         label: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
+        self.application
+            .validate_extension_approval(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
         let join = nook_core::JoinRequest {

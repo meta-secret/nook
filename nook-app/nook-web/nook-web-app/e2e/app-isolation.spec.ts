@@ -3,7 +3,6 @@ import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 
 type DebugVault = {
   manager?: {
-    vaultApplication: string
     setVaultArchitectureJson(value: string): void
   }
 }
@@ -28,8 +27,8 @@ test('exposes only the project capability and rejects the opposite vault type', 
     .poll(() =>
       page.evaluate(
         () =>
-          (window as Window & { __nookVault?: DebugVault }).__nookVault?.manager
-            ?.vaultApplication,
+          (window as Window & { __nookConfiguredVaultApplication?: string })
+            .__nookConfiguredVaultApplication,
       ),
     )
     .toBe(expectedKind)

@@ -114,15 +114,16 @@ root/
 - **`nook-vault-simple`:** fixed Simple capability, Simple-only local registry,
   create/import/open/manage flows, and the extension-consent route.
 - **`nook-vault-sentinel`:** fixed Sentinel capability, Sentinel-only local
-  registry, genesis/quorum/import/open/manage flows, and no extension route or
-  extension approval WASM export.
+  registry, genesis/quorum/import/open/manage flows, no extension route or
+  protocol UI, and Rust-rejected extension approval.
 - **`nook-web-app`:** public `nokey.sh` site, locked destination-bound legacy
   migration broker, and unified local/e2e harness. It is not a universal
   production vault artifact.
 - **Origin boundary:** each production app uses its own origin-scoped IndexedDB,
   WebAuthn RP ID (`simple.nokey.sh` or `sentinel.nokey.sh`), session state,
-  security headers, Cloudflare Pages project, and compile-time Rust/WASM
-  `VaultApplication` capability.
+  security headers, and Cloudflare Pages project. Before app modules load, its
+  entrypoint configures an immutable Rust/WASM `VaultApplication` identity that
+  every manager uses for fail-closed capability checks.
 
 - **Svelte 5 components:** Shared layout and forms are consumed by separate
   project entrypoints; TypeScript visibility never authorizes a vault type.
@@ -144,12 +145,15 @@ root/
   but it must not own vault format logic, crypto, validation, password
   generation, or secret search. Those remain in `nook-core` and are exposed
   through `nook-wasm`.
-- **Capability-specific generated artifacts:** `nook-wasm` is a featureless
-  shared bridge compiled once. Thin cdylib leaf crates under
-  `nook-wasm/apps/{unified,simple,sentinel,extension,migration}` fix the immutable
-  `VaultApplication` identity and expose only leaf-owned extras. Generated
-  bindings live under `nook-web-shared/src/vault-app/lib/nook-wasm-*`; Sentinel,
-  extension, and migration leaves never link Simple's extension-approval export.
+- **One generated WASM package:** `nook-wasm` is compiled and optimized once into
+  `nook-web-shared/src/vault-app/lib/nook-wasm`. Unified, Simple, Sentinel,
+  extension, and migration bootstraps configure distinct immutable Rust
+  application identities before importing their app modules. Separate web
+  projects and origins remain the product boundary; manager construction and
+  domain operations validate the configured identity in Rust. Sentinel's built
+  web surface contains no extension route, protocol, or UI, and Rust rejects
+  extension approval for its identity even though the shared binding exists for
+  Simple and the browser companion.
 
 ### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
 
@@ -323,5 +327,5 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
 ### Build & verify
 
 - **Native linking:** `nook-app/.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in `rust-base`); wasm32 targets keep the default linker.
-- **Wasm:** `builder-wasm` compiles the featureless `nook-wasm` bridge once and runs `wasm-pack` on five thin leaf crates to link isolated Unified, Simple, Sentinel, extension, and migration artifacts. The generated packages cross the host artifact boundary and are seeded into the web image. Mounted local-iteration paths regenerate them from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR/main CI use dev mode, while release passes `WASM_BUILD_MODE=prod` explicitly.
+- **Wasm:** `builder-wasm` compiles the featureless `nook-wasm` bridge and runs `wasm-pack` exactly once. Unified, Simple, Sentinel, extension, and migration consumers share that generated package; immutable Rust-owned application configuration and manager capability checks enforce the active realm. The package crosses the host artifact boundary and is seeded into the web image. Mounted local-iteration paths regenerate it from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR/main CI use dev mode, while release passes `WASM_BUILD_MODE=prod` explicitly.
 - **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set.

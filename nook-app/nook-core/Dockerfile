@@ -14,19 +14,8 @@ COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
-COPY nook-app/nook-wasm/apps/unified/Cargo.toml nook-wasm/apps/unified/Cargo.toml
-COPY nook-app/nook-wasm/apps/simple/Cargo.toml nook-wasm/apps/simple/Cargo.toml
-COPY nook-app/nook-wasm/apps/sentinel/Cargo.toml nook-wasm/apps/sentinel/Cargo.toml
-COPY nook-app/nook-wasm/apps/extension/Cargo.toml nook-wasm/apps/extension/Cargo.toml
-COPY nook-app/nook-wasm/apps/migration/Cargo.toml nook-wasm/apps/migration/Cargo.toml
 RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src \
-        nook-wasm/apps/unified/src nook-wasm/apps/simple/src \
-        nook-wasm/apps/sentinel/src nook-wasm/apps/extension/src \
-        nook-wasm/apps/migration/src \
-    && touch nook-auth2/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs \
-        nook-wasm/apps/unified/src/lib.rs nook-wasm/apps/simple/src/lib.rs \
-        nook-wasm/apps/sentinel/src/lib.rs nook-wasm/apps/extension/src/lib.rs \
-        nook-wasm/apps/migration/src/lib.rs
+    && touch nook-auth2/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Shared rust dependency cache (chef cook + fetch once) ---
@@ -41,11 +30,6 @@ COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
-COPY nook-app/nook-wasm/apps/unified/Cargo.toml nook-wasm/apps/unified/Cargo.toml
-COPY nook-app/nook-wasm/apps/simple/Cargo.toml nook-wasm/apps/simple/Cargo.toml
-COPY nook-app/nook-wasm/apps/sentinel/Cargo.toml nook-wasm/apps/sentinel/Cargo.toml
-COPY nook-app/nook-wasm/apps/extension/Cargo.toml nook-wasm/apps/extension/Cargo.toml
-COPY nook-app/nook-wasm/apps/migration/Cargo.toml nook-wasm/apps/migration/Cargo.toml
 # wasm deps via cargo-chef (the wasm build in nook-app/nook-wasm/Dockerfile reuses these). Separate RUNs so
 # each cooks into its own cache layer.
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
@@ -55,19 +39,13 @@ RUN cargo fetch --locked
 # cargo-chef rewrites workspace versions to 0.0.1, so its cooked native artifacts are NOT reused by
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
 # native deps here instead of with chef. Stub in dummy crate roots so the workspace resolves,
-# compile the deps, and keep the stubs for unselected workspace packages. Real crate source is
+# compile the deps, and keep the stubs for downstream workspace packages. Real crate source is
 # copied over the stubs in builder-debug in dependency order (nook-auth2 -> nook-core -> nook-wasm).
 # Kept as separate cache layers.
-RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src \
-        nook-wasm/apps/unified/src nook-wasm/apps/simple/src \
-        nook-wasm/apps/sentinel/src nook-wasm/apps/extension/src \
-        nook-wasm/apps/migration/src
+RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
 RUN echo '' > nook-auth2/src/lib.rs
 RUN echo '' > nook-core/src/lib.rs
 RUN echo '' > nook-wasm/src/lib.rs
-RUN for app in unified simple sentinel extension migration; do \
-      echo '' > "nook-wasm/apps/$app/src/lib.rs"; \
-    done
 RUN cargo nextest run --no-run -p nook-auth2 --profile ci
 RUN cargo nextest run --no-run -p nook-core --profile ci
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings
@@ -78,8 +56,7 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # recompiles every dependency with instrumentation. --no-report skips report merge; --no-tests=pass
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 --no-tests=pass
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-core --no-tests=pass
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass
 # Warm the wasm32 DEBUG/TEST-profile dependencies used by `wasm-pack test --node` in CI. The
 # release-profile chef layers above cannot satisfy this separate target/wasm32-unknown-unknown/debug
 # artifact set. Keeping the warm-up here, before real sources are copied, makes it manifest-keyed;
@@ -99,7 +76,10 @@ COPY nook-app/.config .config
 # can reuse the nook-auth2 clippy and coverage-test layers; a nook-wasm-only change can reuse both.
 COPY nook-app/nook-auth2 nook-auth2
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings
-RUN cargo llvm-cov nextest --profile ci -p nook-auth2 --no-report
+# --no-clean keeps the manifest-keyed instrumented dependencies warmed above. cargo-llvm-cov does
+# not allow --no-clean with --no-report, so this first source-level run emits its interim report;
+# the nook-core run below then extends the same coverage session and enforces the combined floor.
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2
 
 COPY nook-app/nook-core nook-core
 # Docker COPY preserves source mtimes, while the inherited target directory can

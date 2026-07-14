@@ -6,7 +6,7 @@
 - Examples: `connect`, `add_secret`, `filter_secrets`, `generate_password`.
 
 ## 2. Compiling for the web
-- `task wasm:build` compiles the featureless `nook-wasm` bridge once, then invokes wasm-pack from the **Rust workspace root** (`nook-app`) on the thin leaf crates under `nook-wasm/apps/`. The leaves link isolated Unified, Simple, Sentinel, extension, and migration packages into their matching generated web directories while reusing the same chef-cached `target/`.
+- `task wasm:build` invokes wasm-pack exactly once from the **Rust workspace root** (`nook-app`) on the featureless `nook-wasm` bridge. The resulting generated package is shared by Unified, Simple, Sentinel, extension, and migration consumers; immutable Rust-owned application configuration and manager capability checks enforce the active realm at runtime.
 - **Build mode:** `WASM_BUILD_MODE` defaults to `dev`, which runs release `wasm-pack` with `--no-opt` and stamps `.wasm-source-sha256` with `no-opt`. `WASM_BUILD_MODE=prod` runs the Binaryen `wasm-opt` pass and stamps `optimized`. Local `task check`, `task setup`, `task web:dev`, `task wasm:build`, PR CI, and main development delivery use dev mode; release CI passes `WASM_BUILD_MODE=prod`.
 - **Fast local iteration:** `task wasm:build:fast` regenerates the web pkg on the mounted worktree in dev/no-opt mode. It uses the existing `nook-web:local` image and bind-mounts the worktree; run `task setup` once first if that image does not exist. `task wasm:build:prod` is the explicit optimized local path.
 - **CI** does not rely on defaults: PR and main CI call Task with `WASM_BUILD_MODE=dev` to skip `wasm-opt`; release alone calls Task with `WASM_BUILD_MODE=prod` so stable artifacts are optimized exactly once.

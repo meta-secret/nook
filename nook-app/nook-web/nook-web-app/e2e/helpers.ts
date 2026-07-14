@@ -833,6 +833,9 @@ export async function waitForVaultOperationsIdle(
   timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
 ) {
   await pauseVaultBackgroundSync(page)
+  // Sync UI flags can be reasserted by an already queued timer after it is
+  // stopped. The storage chain below is the authoritative persistence gate;
+  // only unlock/save/password work must block this poll.
   await expect
     .poll(
       async () =>
@@ -842,22 +845,12 @@ export async function waitForVaultOperationsIdle(
               __nookVault?: {
                 isVerifying?: boolean
                 isSaving?: boolean
-                isSyncing?: boolean
-                isFanOutSyncing?: boolean
-                syncingProviderId?: string | undefined
                 isPasswordBusy?: boolean
               }
             }
           ).__nookVault
           if (!vault) return true
-          return (
-            !vault.isVerifying &&
-            !vault.isSaving &&
-            !vault.isSyncing &&
-            !vault.isFanOutSyncing &&
-            !vault.syncingProviderId &&
-            !vault.isPasswordBusy
-          )
+          return !vault.isVerifying && !vault.isSaving && !vault.isPasswordBusy
         }),
       { timeout: timeoutMs },
     )
@@ -3635,6 +3628,10 @@ export async function reloadUnlockWithSyncProvider(
     }
   }
 
+  // Unlock starts idle tracking asynchronously after the shell first appears.
+  // A one-shot stop can therefore run too early and let the 2.5s e2e timeout
+  // lock the vault while provider loading is still in progress.
+  await keepVaultIdleLockDisabled(page)
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -3648,10 +3645,9 @@ export async function reloadUnlockWithSyncProvider(
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await disableVaultIdleLock(page)
   await dismissSyncConflictIfVisible(page)
-  await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
+  await waitForVaultOperationsIdle(page)
   await waitForLoadedSyncProviders(page)
   await waitForVaultSyncIdle(page)
   if (sharedStub) {
