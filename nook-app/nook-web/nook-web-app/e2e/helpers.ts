@@ -850,11 +850,7 @@ export async function waitForVaultOperationsIdle(
             }
           ).__nookVault
           if (!vault) return true
-          return (
-            !vault.isVerifying &&
-            !vault.isSaving &&
-            !vault.isPasswordBusy
-          )
+          return !vault.isVerifying && !vault.isSaving && !vault.isPasswordBusy
         }),
       { timeout: timeoutMs },
     )
