@@ -56,8 +56,7 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # recompiles every dependency with instrumentation. --no-report skips report merge; --no-tests=pass
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 --no-tests=pass
-RUN cargo llvm-cov nextest --no-clean --no-report --profile ci -p nook-core --no-tests=pass
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass
 # Warm the wasm32 DEBUG/TEST-profile dependencies used by `wasm-pack test --node` in CI. The
 # release-profile chef layers above cannot satisfy this separate target/wasm32-unknown-unknown/debug
 # artifact set. Keeping the warm-up here, before real sources are copied, makes it manifest-keyed;

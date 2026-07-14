@@ -185,7 +185,7 @@ fn development_and_release_wasm_build_modes_stay_separate() {
 }
 
 #[test]
-fn coverage_dependency_warmup_preserves_prior_instrumented_artifacts() {
+fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     let root = repository_root();
     let dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
     let warmup = section(
@@ -194,13 +194,13 @@ fn coverage_dependency_warmup_preserves_prior_instrumented_artifacts() {
         "# Warm the wasm32 DEBUG/TEST-profile dependencies",
     );
 
-    assert!(
-        warmup.contains(
-            "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 --no-tests=pass"
-        )
+    assert_eq!(
+        warmup.matches("RUN cargo llvm-cov nextest").count(),
+        1,
+        "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
-        "cargo llvm-cov nextest --no-clean --no-report --profile ci -p nook-core --no-tests=pass"
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass"
     ));
 }
 
