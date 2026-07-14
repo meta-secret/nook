@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 @import "github-markdown-css/github-markdown.css";
 
+/* Split-app builds run Tailwind from sibling project roots, so explicitly scan
+ * the shared vault UI that owns their authored utility classes. */
+@source ".";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
