@@ -70,7 +70,6 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     const passkeyOverlay = deviceA.getByTestId('passkey-auth-overlay')
     const nameStep = deviceA.getByTestId('sentinel-genesis-name-step')
     const policyStep = deviceA.getByTestId('sentinel-genesis-policy-step')
-    const responseInput = deviceA.getByTestId('sentinel-genesis-response-input')
     await expect
       .poll(
         async () =>
@@ -96,7 +95,9 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await deviceA.getByTestId('sentinel-genesis-participant-count').click()
     await deviceA.getByTestId('sentinel-participant-count-option-3').click()
     await deviceA.getByTestId('sentinel-onboarding-continue-devices').click()
-    await expect(responseInput).toBeVisible()
+    await expect(
+      deviceA.getByTestId('sentinel-genesis-participant-fields'),
+    ).toBeVisible()
 
     const genesisRequest = deviceA.getByTestId(
       'sentinel-genesis-request-output',
@@ -142,9 +143,22 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       return responseLink
     }
 
-    await deviceA.goto(await connectParticipant(deviceB))
-    await expect(responseInput).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await deviceA.goto(await connectParticipant(deviceC))
+    async function addParticipant(
+      participantDevice: Page,
+      participantName: string,
+    ) {
+      await deviceA.goto(await connectParticipant(participantDevice))
+      await expect(
+        deviceA.getByTestId('sentinel-genesis-authentication-ready'),
+      ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await deviceA
+        .getByTestId('sentinel-genesis-participant-name')
+        .fill(participantName)
+      await deviceA.getByTestId('sentinel-genesis-add-participant').click()
+    }
+
+    await addParticipant(deviceB, 'Member device B')
+    await addParticipant(deviceC, 'Member device C')
     await expect(
       deviceA.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveCount(0)
