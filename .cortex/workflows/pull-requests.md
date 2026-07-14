@@ -304,7 +304,7 @@ user asked you to merge (or the task implies merge-on-green):
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full local-provider and extension **e2e**. Nightly covers sync-live. Failures in either workflow invoke the `ci-fix` AI worker, which opens a fix PR, waits for checks, and squash-merges the repair.
+After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a fix PR, waits for checks, and squash-merges the repair.
 
 ### 9. Task completion report
 
