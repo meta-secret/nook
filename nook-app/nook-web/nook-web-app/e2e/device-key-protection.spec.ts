@@ -54,6 +54,12 @@ async function createSentinelParticipantAnnouncement(
   return { context, announcement }
 }
 
+function participantAuthenticationUrl(announcement: string): string {
+  return `/app/#sentinel-response=${Buffer.from(announcement).toString(
+    'base64url',
+  )}`
+}
+
 async function openExistingVaultProtectionOverlay(page: Page) {
   const overlay = page.getByTestId('passkey-auth-overlay')
   await expect(overlay).toBeHidden()
@@ -226,26 +232,27 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible()
+    ).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-genesis-authentication-instructions'),
+    ).toContainText('Open the authentication URL')
     const participantNameInput = page.getByTestId(
       'sentinel-genesis-participant-name',
     )
     await expect(participantNameInput).toBeVisible()
-    await page.getByTestId('sentinel-genesis-response-input').fill('bb')
     await expect(
       page.getByTestId('sentinel-genesis-add-participant'),
     ).toBeDisabled()
     await participantNameInput.fill("Ada's iPhone")
     await expect(
       page.getByTestId('sentinel-genesis-add-participant'),
-    ).toBeEnabled()
-    await page.getByTestId('sentinel-genesis-add-participant').click()
+    ).toBeDisabled()
+
+    await page.goto(participantAuthenticationUrl(participantAnnouncement))
     await expect(
-      page.getByTestId('sentinel-genesis-participant-error'),
-    ).toContainText('Could not verify this participant response.')
-    await page
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantAnnouncement)
+      page.getByTestId('sentinel-genesis-authentication-ready'),
+    ).toContainText('Authentication response received')
+    await participantNameInput.fill("Ada's iPhone")
     await expect(
       page.getByTestId('sentinel-genesis-add-participant'),
     ).toBeEnabled()
@@ -254,10 +261,11 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-card-stack-dashboard'),
     ).toContainText("Ada's iPhone")
+    await page.goto(participantAuthenticationUrl(participantTwo.announcement))
+    await expect(
+      page.getByTestId('sentinel-genesis-authentication-ready'),
+    ).toContainText('Authentication response received')
     await participantNameInput.fill("Grace's Laptop")
-    await page
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantTwo.announcement)
     await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
       page.getByTestId('sentinel-card-stack-dashboard'),

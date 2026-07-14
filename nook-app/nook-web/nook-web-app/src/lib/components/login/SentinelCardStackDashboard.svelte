@@ -43,6 +43,7 @@
     threshold = $bindable(2),
     status,
     request,
+    participantResponse = '',
     participants,
     deliveries,
     isBusy,
@@ -63,6 +64,7 @@
     threshold: number
     status: SentinelGenesisStatus
     request: string
+    participantResponse?: string
     participants: Participant[]
     deliveries: Delivery[]
     isBusy: boolean
@@ -84,6 +86,7 @@
   } = $props()
 
   let response = $state('')
+  let loadedParticipantResponse = $state('')
   let participantLabel = $state('')
   let actionBusy = $state(false)
   let copied = $state(false)
@@ -132,6 +135,19 @@
   )
 
   $effect(() => {
+    const incomingResponse = participantResponse.trim()
+    if (
+      incomingResponse &&
+      incomingResponse !== loadedParticipantResponse &&
+      status === 'collecting'
+    ) {
+      response = incomingResponse
+      loadedParticipantResponse = incomingResponse
+      participantInputError = ''
+    }
+  })
+
+  $effect(() => {
     if (status === 'collecting') {
       onboardingStage = 'roster'
     } else if (status !== 'idle') {
@@ -151,11 +167,6 @@
   function changeThreshold(value: string | undefined) {
     if (!value) return
     threshold = Number(value)
-  }
-
-  function changeParticipantPayload(event: Event) {
-    response = (event.currentTarget as HTMLInputElement).value
-    participantInputError = ''
   }
 
   function continueToPolicy() {
@@ -481,28 +492,43 @@
                     bind:value={participantLabel}
                   />
                 </label>
-                <label
-                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
-                >
-                  {vault.t('login.sentinel_genesis_response_label')}
-                  <textarea
-                    class="mt-2 min-h-20 w-full resize-y border border-white/20 bg-[#192128] p-3 font-mono text-xs leading-5 text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
-                    data-testid="sentinel-genesis-response-input"
-                    placeholder={vault.t(
-                      'login.sentinel_genesis_response_placeholder',
-                    )}
-                    value={response}
-                    oninput={changeParticipantPayload}
-                    onkeydown={(event) =>
-                      event.key === 'Enter' &&
-                      (event.metaKey || event.ctrlKey) &&
-                      void addParticipant()}></textarea>
-                  <span
-                    class="mt-2 block text-[10px] leading-4 tracking-normal text-[#75818c] normal-case"
+                {#if response}
+                  <div
+                    class="border border-[#63eaa1]/40 bg-[#63eaa1]/5 px-3 py-3"
+                    data-testid="sentinel-genesis-authentication-ready"
+                    aria-live="polite"
                   >
-                    {vault.t('login.sentinel_genesis_response_help')}
-                  </span>
-                </label>
+                    <p
+                      class="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-[#63eaa1] uppercase"
+                    >
+                      <Check class="size-4" />
+                      {vault.t(
+                        'login.sentinel_card_stack_authentication_ready',
+                      )}
+                    </p>
+                    <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
+                      {vault.t(
+                        'login.sentinel_card_stack_authentication_ready_help',
+                      )}
+                    </p>
+                  </div>
+                {:else}
+                  <div
+                    class="border border-white/15 bg-white/[0.025] px-3 py-3"
+                    data-testid="sentinel-genesis-authentication-instructions"
+                  >
+                    <p
+                      class="text-[10px] font-semibold tracking-wider text-[#8d99a4] uppercase"
+                    >
+                      {vault.t(
+                        'login.sentinel_card_stack_authentication_label',
+                      )}
+                    </p>
+                    <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
+                      {vault.t('login.sentinel_card_stack_authentication_help')}
+                    </p>
+                  </div>
+                {/if}
               </div>
               {#if participantInputError}
                 <p

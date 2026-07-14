@@ -160,6 +160,7 @@
       !response ||
       response === importedParticipantResponse ||
       sentinelGenesisStatus !== 'collecting' ||
+      sentinelDashboard !== 'terminal' ||
       !onAddSentinelGenesisParticipantResponse
     ) {
       return
@@ -637,6 +638,7 @@
       bind:threshold={sentinelThreshold}
       status={sentinelGenesisStatus}
       request={sentinelGenesisInvitationLink}
+      participantResponse={sentinelParticipantResponse}
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
