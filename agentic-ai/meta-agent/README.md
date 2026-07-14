@@ -1,23 +1,35 @@
 # Nook meta-agent
 
-`meta-agent` turns one developer feature prompt into a validated, repository-grounded task DAG that can later drive multiple Codex workers safely.
+`meta-agent` turns one developer feature prompt into a validated,
+repository-grounded task DAG and can execute that DAG with embedded Codex
+workers.
 
-The first release is a planner, validator, and artifact generator. It does not create GitHub issues or execute the generated tasks yet.
+It remains a local host process and does not create GitHub issues, branches, or
+commits.
 
 ## Embedded Codex runtime
 
-The CLI embeds OpenAI's Codex Rust source from `main` through one direct dependency, aliased as `codex` in `Cargo.toml` from OpenAI's public `codex-core-api` facade. `ThreadManager` creates an in-process `CodexThread`, and `Op::UserInput` submits the developer prompt together with the planner's JSON schema. A planning turn therefore runs in the meta-agent process with:
+The CLI embeds OpenAI's Codex Rust source from `main` through one direct dependency, aliased as `codex` in `Cargo.toml` from OpenAI's public `codex-core-api` facade. `ThreadManager` creates in-process `CodexThread` sessions, and `Op::UserInput` submits prompts with strict JSON schemas. Planning and execution therefore run in the meta-agent process with:
 
 - an ephemeral, read-only planning session;
+- one ephemeral workspace-write thread per runnable implementation task;
 - the target repository as Codex's working directory;
-- a strict JSON output schema; and
+- strict planner and task-completion output schemas; and
 - the developer's existing `CODEX_HOME` authentication and configuration.
 
-No Codex CLI parser, subprocess, CLI-over-JSONL wrapper, app-server transport, HTTP server, repository mount, or Docker socket is involved. The adapter follows OpenAI's `thread-manager-sample`, uses the developer's `CODEX_HOME` authentication, and constructs an ephemeral read-only core configuration for the target repository. `Cargo.lock` records the exact `main` commit used by a build; refreshing Codex is an explicit lockfile update because these source-crate APIs are not a separately versioned stable SDK contract.
+No Codex CLI parser, subprocess, CLI-over-JSONL wrapper, app-server transport,
+HTTP server, repository mount, or Docker socket is involved. The adapter uses
+the developer's `CODEX_HOME` authentication and constructs ephemeral core
+configurations with read-only planning permissions or workspace-write execution
+permissions. `Cargo.lock` records the exact `main` commit used by a build;
+refreshing Codex is an explicit lockfile update because these source-crate APIs
+are not a separately versioned stable SDK contract.
 
 OpenAI `main` currently relies on patched WebSocket crates for proxy support. Cargo does not inherit a Git dependency's workspace-level `[patch]` entries, so this manifest mirrors those two upstream patch overrides. They are not additional direct Codex dependencies; `cargo tree --depth 1` exposes only the single aliased `codex` facade.
 
-The `CodexRunner` Rust trait contains that upstream coupling. The current adapter already consumes core thread events directly; a future execution controller can retain threads for steering, approvals, and multiple turns without changing DAG validation, scheduling, or artifacts.
+The `CodexRunner` and execution-agent traits contain that upstream coupling. The
+adapter consumes core thread events directly for planning and implementation
+turns.
 
 ## Usage
 
@@ -51,6 +63,19 @@ Validate an existing artifact and print conflict-safe execution batches:
 task meta-agent:validate FEATURE=agentic-ai/meta-agent/target/features/resumable-sync
 ```
 
+Execute every task in dependency order, with safe tasks in each wave running in
+parallel:
+
+```bash
+task meta-agent:execute \
+  FEATURE=agentic-ai/meta-agent/target/features/resumable-sync
+```
+
+Each worker must explicitly report `completed` or `blocked`. A blocked or failed
+task stops the run before any descendant starts. Workers share the repository
+working tree, may modify only their declared write scope, and are forbidden from
+creating commits, branches, worktrees, or stashes.
+
 Run the host Rust format, Clippy, and test gate:
 
 ```bash
@@ -83,7 +108,7 @@ feature:
     - Interrupted synchronization resumes without data loss.
 semantics:
   depends_on: Every referenced task must complete successfully before this task becomes runnable.
-  resources: Tasks with overlapping write scopes must not run concurrently; resource conflicts do not imply a logical dependency.
+  resources: Tasks must not run concurrently when either task's write scope overlaps the other's read or write scope; resource conflicts do not imply a logical dependency.
 defaults:
   priority: medium
 tasks:
@@ -109,12 +134,18 @@ The Markdown files are issue-ready views. `feature.md` is the parent issue; ever
 The Rust domain layer rejects:
 
 - missing dependency targets;
+- omitted `depends_on` fields, including for root tasks;
 - self-dependencies;
 - dependency cycles;
 - unstable or duplicate task IDs;
 - unsafe issue filenames; and
 - missing Markdown issue files.
 
-Logical dependencies and merge-conflict constraints stay separate. The scheduler derives runnable tasks from `depends_on`, then splits a logical wave into deterministic batches when repository-relative `resources.write` scopes may overlap. This prevents fake dependencies while keeping concurrent workers away from the same files.
+Logical dependencies and resource constraints stay separate. The scheduler
+derives runnable tasks from mandatory `depends_on` fields, then splits a logical
+wave into deterministic batches whenever one task's write scope overlaps
+another task's read or write scope. The executor runs every task in a batch
+concurrently, waits for explicit successful completion, and only then unlocks
+the next batch.
 
 Artifact publication is staged in a temporary sibling directory and renamed only after every file is rendered. Existing feature directories are never replaced implicitly.

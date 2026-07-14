@@ -289,4 +289,17 @@ mod tests {
         let error = load_feature(&target).unwrap_err();
         assert!(matches!(error, ArtifactError::MissingIssue(_)));
     }
+
+    #[test]
+    fn loader_requires_explicit_depends_on_for_every_task() {
+        let root = tempfile::tempdir().unwrap();
+        let target = write_feature(root.path(), &example_plan(), "Build vault sync").unwrap();
+        let yaml_path = target.join("feature.yaml");
+        let yaml = fs::read_to_string(&yaml_path).unwrap();
+        fs::write(&yaml_path, yaml.replace("    depends_on: []\n", "")).unwrap();
+
+        let error = load_feature(&target).unwrap_err();
+
+        assert!(error.to_string().contains("missing field `depends_on`"));
+    }
 }

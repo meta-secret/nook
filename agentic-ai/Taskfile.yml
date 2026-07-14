@@ -70,6 +70,31 @@ tasks:
       - >-
         cargo run --quiet --manifest-path "{{.REPO_ROOT}}/agentic-ai/meta-agent/Cargo.toml" --locked -- validate "$META_AGENT_FEATURE"
 
+  meta-agent:execute:
+    desc: Execute FEATURE as a dependency/resource-safe graph of embedded Codex agents.
+    silent: true
+    requires:
+      vars:
+        - FEATURE
+    vars:
+      REPO_ROOT:
+        sh: 'git rev-parse --show-toplevel'
+      META_AGENT_MODEL: '{{default "gpt-5.6-luna" .META_AGENT_MODEL}}'
+      META_AGENT_REASONING_EFFORT: '{{default "low" .META_AGENT_REASONING_EFFORT}}'
+    env:
+      META_AGENT_FEATURE: '{{.FEATURE}}'
+      META_AGENT_SELECTED_MODEL: '{{.META_AGENT_MODEL}}'
+      META_AGENT_SELECTED_REASONING_EFFORT: '{{.META_AGENT_REASONING_EFFORT}}'
+    cmds:
+      - >-
+        cargo run --quiet
+        --manifest-path "{{.REPO_ROOT}}/agentic-ai/meta-agent/Cargo.toml"
+        --locked
+        -- execute "$META_AGENT_FEATURE"
+        --repo-root "{{.REPO_ROOT}}"
+        --model "$META_AGENT_SELECTED_MODEL"
+        --reasoning-effort "$META_AGENT_SELECTED_REASONING_EFFORT"
+
   ci-agent:install:
     internal: true
     dir: '{{.CI_AGENT_DIR}}'

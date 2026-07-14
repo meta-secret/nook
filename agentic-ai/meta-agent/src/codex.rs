@@ -21,8 +21,15 @@ use codex::{
 use thiserror::Error;
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
+const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-luna";
 pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "low";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodexAccess {
+    ReadOnly,
+    WorkspaceWrite,
+}
 
 #[derive(Debug, Clone)]
 pub struct CodexOptions {
@@ -30,6 +37,7 @@ pub struct CodexOptions {
     pub model: Option<String>,
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
+    pub access: CodexAccess,
 }
 
 impl CodexOptions {
@@ -39,7 +47,13 @@ impl CodexOptions {
             model: Some(DEFAULT_CODEX_MODEL.to_owned()),
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
+            access: CodexAccess::ReadOnly,
         }
+    }
+
+    pub fn with_workspace_write(mut self) -> Self {
+        self.access = CodexAccess::WorkspaceWrite;
+        self
     }
 }
 
@@ -60,7 +74,7 @@ impl InProcessCodexRunner {
         Self { options }
     }
 
-    async fn run_turn(&self, prompt: &str) -> Result<String, CodexError> {
+    async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<String, CodexError> {
         let config = new_config(&self.options)?;
         let state_db = init_state_db(&config).await;
         let auth_manager =
@@ -104,13 +118,18 @@ impl InProcessCodexRunner {
             .await
             .map_err(|error| CodexError::Run(error.to_string()))?;
 
-        let turn_result = submit_and_wait(&thread, prompt).await;
+        let turn_result = submit_and_wait(&thread, prompt, kind).await;
         let shutdown_result = thread.shutdown_and_wait().await;
         let _ = thread_manager.remove_thread(&thread_id).await;
 
         let response = turn_result?;
         shutdown_result.map_err(|error| CodexError::Run(error.to_string()))?;
         Ok(response)
+    }
+
+    pub async fn execute_task(&self, task_id: &str, prompt: &str) -> Result<String, CodexError> {
+        self.run_turn(prompt, TurnKind::Task(task_id.to_owned()))
+            .await
     }
 }
 
@@ -131,7 +150,7 @@ impl CodexRunner for InProcessCodexRunner {
         &'a self,
         prompt: &'a str,
     ) -> impl Future<Output = Result<String, CodexError>> + Send + 'a {
-        self.run_turn(prompt)
+        self.run_turn(prompt, TurnKind::Planning)
     }
 }
 
@@ -146,9 +165,13 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         .get(&model_provider_id)
         .cloned()
         .ok_or_else(|| CodexError::Configuration("OpenAI model provider is unavailable".into()))?;
+    let permission_profile = match options.access {
+        CodexAccess::ReadOnly => PermissionProfile::read_only(),
+        CodexAccess::WorkspaceWrite => PermissionProfile::workspace_write(),
+    };
     let permissions = Permissions::from_approval_and_profile(
         Constrained::allow_any(AskForApproval::Never),
-        Constrained::allow_any(PermissionProfile::read_only()),
+        Constrained::allow_any(permission_profile),
     )
     .map_err(|error| CodexError::Configuration(error.to_string()))?;
     let model_reasoning_effort =
@@ -290,8 +313,22 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
     Ok(config)
 }
 
-async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, CodexError> {
-    let output_schema = serde_json::from_str(OUTPUT_SCHEMA).map_err(CodexError::OutputSchema)?;
+#[derive(Debug)]
+enum TurnKind {
+    Planning,
+    Task(String),
+}
+
+async fn submit_and_wait(
+    thread: &CodexThread,
+    prompt: &str,
+    kind: TurnKind,
+) -> Result<String, CodexError> {
+    let schema = match &kind {
+        TurnKind::Planning => OUTPUT_SCHEMA,
+        TurnKind::Task(_) => TASK_OUTPUT_SCHEMA,
+    };
+    let output_schema = serde_json::from_str(schema).map_err(CodexError::OutputSchema)?;
     thread
         .submit(Op::UserInput {
             items: vec![UserInput::Text {
@@ -308,7 +345,12 @@ async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, C
 
     let stderr = io::stderr();
     let decorate = stderr.is_terminal() && std::env::var_os("NO_COLOR").is_none();
-    let mut progress = ProgressReporter::new(stderr, decorate);
+    let mut progress = match kind {
+        TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(stderr, decorate)),
+        TurnKind::Task(task_id) => {
+            TurnProgress::Task(TaskProgressReporter::new(stderr, decorate, task_id))
+        }
+    };
     loop {
         let event = thread
             .next_event()
@@ -349,6 +391,85 @@ async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, C
                 ));
             }
             _ => {}
+        }
+    }
+}
+
+enum TurnProgress<W> {
+    Planning(ProgressReporter<W>),
+    Task(TaskProgressReporter<W>),
+}
+
+impl<W: Write> TurnProgress<W> {
+    fn observe(&mut self, event: &EventMsg) -> io::Result<()> {
+        match self {
+            Self::Planning(progress) => progress.observe(event),
+            Self::Task(progress) => progress.observe(event),
+        }
+    }
+}
+
+struct TaskProgressReporter<W> {
+    writer: W,
+    decorate: bool,
+    task_id: String,
+    step: usize,
+}
+
+impl<W: Write> TaskProgressReporter<W> {
+    fn new(writer: W, decorate: bool, task_id: String) -> Self {
+        Self {
+            writer,
+            decorate,
+            task_id,
+            step: 0,
+        }
+    }
+
+    fn observe(&mut self, event: &EventMsg) -> io::Result<()> {
+        match event {
+            EventMsg::ExecCommandBegin(event) => {
+                self.step += 1;
+                let summary = summarize_inspection(&event.command);
+                self.line("36", "↳", &format!("{:02} {}", self.step, summary.title))
+            }
+            EventMsg::ExecCommandEnd(event) if event.exit_code != 0 => {
+                self.line(
+                    "31",
+                    "✗",
+                    &format!("command failed with exit {}", event.exit_code),
+                )?;
+                let command = self.paint("2", &event.command.join(" "));
+                writeln!(self.writer, "       {command}")?;
+                self.writer.flush()
+            }
+            EventMsg::Warning(event) | EventMsg::GuardianWarning(event) => {
+                self.line("33", "!", &event.message)
+            }
+            EventMsg::StreamError(event) => {
+                self.line("33", "↻", &format!("connection retry: {}", event.message))
+            }
+            EventMsg::ModelReroute(event) => self.line(
+                "36",
+                "↪",
+                &format!("model rerouted: {} → {}", event.from_model, event.to_model),
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn line(&mut self, color: &str, symbol: &str, message: &str) -> io::Result<()> {
+        let symbol = self.paint(color, symbol);
+        let task_id = self.paint("1", &self.task_id);
+        writeln!(self.writer, "    {symbol}  {task_id} · {message}")?;
+        self.writer.flush()
+    }
+
+    fn paint(&self, code: &str, text: &str) -> String {
+        if self.decorate {
+            format!("\u{1b}[{code}m{text}\u{1b}[0m")
+        } else {
+            text.to_owned()
         }
     }
 }
@@ -581,6 +702,7 @@ mod tests {
                 codex_linux_sandbox_exe: Some(PathBuf::from("/bin/codex-linux-sandbox")),
                 main_execve_wrapper_exe: Some(PathBuf::from("/bin/codex-execve-wrapper")),
             },
+            access: CodexAccess::ReadOnly,
         };
         let config = new_config(&options).unwrap();
 
@@ -602,6 +724,10 @@ mod tests {
             config.codex_self_exe,
             Some(PathBuf::from("/bin/meta-agent"))
         );
+        assert_eq!(
+            config.permissions.permission_profile(),
+            &PermissionProfile::read_only()
+        );
     }
 
     #[test]
@@ -611,6 +737,19 @@ mod tests {
 
         assert_eq!(options.model.as_deref(), Some(DEFAULT_CODEX_MODEL));
         assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
+    }
+
+    #[test]
+    fn execution_options_enable_workspace_write() {
+        let repository = tempfile::tempdir().unwrap();
+        let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
+        let config = new_config(&options).unwrap();
+
+        assert_eq!(options.access, CodexAccess::WorkspaceWrite);
+        assert_eq!(
+            config.permissions.permission_profile(),
+            &PermissionProfile::workspace_write()
+        );
     }
 
     #[test]

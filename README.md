@@ -150,7 +150,7 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
 | `nook-web-app` | Public site, locked migration broker, and unified local e2e harness |
 | `nook-web-extension` | Simple-only Manifest V3 browser extension |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
-| `agentic-ai/meta-agent` | Rust CLI that turns feature prompts into validated task DAGs and GitHub-ready Markdown |
+| `agentic-ai/meta-agent` | Rust CLI that plans validated task DAGs and executes safe waves with embedded Codex agents |
 
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
@@ -183,9 +183,14 @@ Plan a large coding feature as a dependency and resource-aware task DAG after au
 ```sh
 task meta-agent:plan PROMPT='Describe the feature and its required outcome'
 task meta-agent:validate FEATURE=agentic-ai/meta-agent/target/features/<feature-id>
+task meta-agent:execute FEATURE=agentic-ai/meta-agent/target/features/<feature-id>
 ```
 
-The generated `feature.yaml`, parent `feature.md`, and child `<task-id>.md` files stay under the ignored `agentic-ai/meta-agent/target/features/` tree for local review; this initial planner does not publish GitHub issues or run implementation agents.
+The generated `feature.yaml`, parent `feature.md`, and child `<task-id>.md` files
+stay under the ignored `agentic-ai/meta-agent/target/features/` tree for local
+review. Execution starts independent tasks concurrently, waits for successful
+completion, and then unlocks their dependents. It modifies the current worktree
+but does not publish GitHub issues or create commits or branches.
 
 ```sh
 task web:dev

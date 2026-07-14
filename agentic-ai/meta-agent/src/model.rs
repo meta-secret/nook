@@ -5,7 +5,7 @@ use thiserror::Error;
 
 pub const DEPENDENCY_SEMANTICS: &str =
     "Every referenced task must complete successfully before this task becomes runnable.";
-pub const RESOURCE_SEMANTICS: &str = "Tasks with overlapping write scopes must not run concurrently; resource conflicts do not imply a logical dependency.";
+pub const RESOURCE_SEMANTICS: &str = "Tasks must not run concurrently when either task's write scope overlaps the other's read or write scope; resource conflicts do not imply a logical dependency.";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -215,9 +215,9 @@ impl FeaturePlan {
             let mut batch = Vec::new();
             for candidate in ready {
                 if batch.iter().all(|selected| {
-                    !write_scopes_overlap(
-                        &self.tasks[&candidate].resources.write,
-                        &self.tasks[selected].resources.write,
+                    !resources_conflict(
+                        &self.tasks[&candidate].resources,
+                        &self.tasks[selected].resources,
                     )
                 }) {
                     batch.push(candidate);
@@ -307,7 +307,13 @@ pub fn is_stable_id(value: &str) -> bool {
     })
 }
 
-fn write_scopes_overlap(left: &[String], right: &[String]) -> bool {
+fn resources_conflict(left: &Resources, right: &Resources) -> bool {
+    scopes_overlap(&left.write, &right.write)
+        || scopes_overlap(&left.write, &right.read)
+        || scopes_overlap(&right.write, &left.read)
+}
+
+fn scopes_overlap(left: &[String], right: &[String]) -> bool {
     left.iter().any(|left_scope| {
         right
             .iter()
@@ -424,6 +430,23 @@ mod tests {
         );
         assert!(feature.tasks["client"].depends_on.is_empty());
         assert!(feature.tasks["server"].depends_on.is_empty());
+    }
+
+    #[test]
+    fn serializes_readers_against_concurrent_writers() {
+        let mut reader = task(&[], &["docs/**"]);
+        reader.resources.read = vec!["crates/protocol/**".into()];
+        let feature = plan(BTreeMap::from([
+            ("reader".into(), reader),
+            ("writer".into(), task(&[], &["crates/protocol/src/lib.rs"])),
+        ]));
+
+        assert_eq!(
+            feature.execution_batches().unwrap(),
+            vec![vec!["reader"], vec!["writer"]]
+        );
+        assert!(feature.tasks["reader"].depends_on.is_empty());
+        assert!(feature.tasks["writer"].depends_on.is_empty());
     }
 
     #[test]
