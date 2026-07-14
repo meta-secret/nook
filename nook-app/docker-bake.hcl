@@ -31,9 +31,10 @@ variable "DOCKER_E2E_IMAGE" {
   default = "nook-web-e2e:local"
 }
 
-// ghcr.io/<owner>/<repo>/toolchain — shared remote cache. Defaults to the canonical repo path so
-// that EVERYONE (local dev included) pulls the warm dep/target layers CI already published. This is
-// the whole point: a fresh local build reuses CI's cache instead of a catastrophic cold recompile.
+// ghcr.io/<owner>/<repo>/toolchain — remote caches for the compact web dependency and browser
+// lineages. Rust deliberately does not use a registry cache: exporting target/ with mode=max
+// serializes every intermediate compiler mutation, and importing that history is more expensive
+// than relying on the persistent delivery runner's local BuildKit cache.
 variable "TOOLCHAIN_REGISTRY" {
   default = "ghcr.io/meta-secret/nook/toolchain"
 }
@@ -51,19 +52,15 @@ variable "WASM_BUILD_MODE" {
   default = "dev"
 }
 
-// One remote manifest per independent lineage. Importing the retired combined cache and immutable
-// image tags forced cold runners to resolve overlapping multi-GB Rust histories.
-rust_cache_from = TOOLCHAIN_REGISTRY != "" ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache",
-] : []
+// Rust is runner-local only. Keep these variables because package-local bake targets share the
+// same interface, but never import or export the enormous target/ snapshot through a registry.
+rust_cache_from = []
 
 web_cache_from = TOOLCHAIN_REGISTRY != "" ? [
   "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
 ] : []
 
-rust_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache,mode=max",
-] : []
+rust_cache_to = []
 
 web_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
   "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache,mode=max",
@@ -98,10 +95,10 @@ group "builders" {
   targets = ["builder-wasm", "web-deps"]
 }
 
-// Main publishes the independent Rust and web cache images in parallel. Keeping this legacy group
-// name preserves the existing Task/workflow interface without constructing a merged image.
+// Main publishes only the compact web cache images in parallel. Keeping this legacy group name
+// preserves the existing Task/workflow interface.
 group "toolchain-push" {
-  targets = ["rust-toolchain-push", "web-toolchain-push", "web-e2e-toolchain-push"]
+  targets = ["web-toolchain-push", "web-e2e-toolchain-push"]
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
@@ -135,14 +132,6 @@ target "nook-rust-browser" {
   inherits = ["_nook-rust-browser-common"]
   tags     = [DOCKER_RUST_BROWSER_IMAGE]
   output   = ["type=docker"]
-}
-
-// After green main CI, publish only the verified max-mode Rust/WASM cache. A second immutable image
-// manifest would reference the same enormous layer history without improving cache reuse.
-target "rust-toolchain-push" {
-  inherits = ["builder-wasm"]
-  output   = ["type=cacheonly"]
-  cache-to = rust_cache_to
 }
 
 // Publish only the web dependency cache. This lineage has no Cargo registry, Rust toolchain, or target/.

@@ -38,19 +38,53 @@ fn production_vault_apps_are_separate_compile_time_capabilities() {
     }
 
     let wasm_manifest = read(&root, "nook-app/nook-wasm/Cargo.toml");
-    for feature in [
+    for retired_feature in [
+        "app-unified-development",
         "app-simple",
         "app-sentinel",
         "app-extension",
         "app-legacy-migration",
     ] {
         assert!(
-            wasm_manifest.contains(feature),
-            "missing WASM capability {feature}"
+            !wasm_manifest.contains(retired_feature),
+            "shared nook-wasm must not be recompiled behind {retired_feature}"
         );
     }
+    for (app, capability) in [
+        ("unified", "UnifiedDevelopment"),
+        ("simple", "Simple"),
+        ("sentinel", "Sentinel"),
+        ("extension", "Extension"),
+        ("migration", "LegacyMigration"),
+    ] {
+        let manifest = root
+            .join("nook-app/nook-wasm/apps")
+            .join(app)
+            .join("Cargo.toml");
+        assert!(manifest.is_file(), "missing thin {app} WASM leaf crate");
+        let source = read(&root, &format!("nook-app/nook-wasm/apps/{app}/src/lib.rs"));
+        assert!(
+            source.contains(&format!("VaultApplication::{capability}")),
+            "{app} leaf must fix capability {capability}"
+        );
+        if matches!(app, "sentinel" | "extension" | "migration") {
+            assert!(
+                !source.contains("approveExtensionDevice"),
+                "{app} leaf must not link extension approval"
+            );
+        }
+    }
     let application = read(&root, "nook-app/nook-wasm/src/application.rs");
-    assert!(application.contains("features are mutually exclusive"));
+    assert!(application.contains("featureless shared bridge compiles once"));
+
+    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    assert!(wasm_dockerfile.contains("nook-wasm/apps/simple"));
+    assert!(wasm_dockerfile.contains("nook-wasm/apps/sentinel"));
+    assert!(
+        !wasm_dockerfile.contains("--no-default-features")
+            && !wasm_dockerfile.contains("--features $feature"),
+        "WASM artifacts must come from thin leaf crates, not full-crate feature rebuilds"
+    );
 
     let sentinel_config = read(
         &root,
@@ -136,7 +170,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
     assert_eq!(
         release.matches("WASM_BUILD_MODE=prod").count(),
         1,
-        "release must perform one optimized WASM build, not rebuild all five variants"
+        "release must perform one optimized WASM artifact batch"
     );
     assert!(
         !release.contains("Build stable Pages artifact") && !release.contains("run: task setup"),
@@ -229,7 +263,15 @@ fn delivery_ci_reuses_local_layers_and_one_remote_cache_per_lineage() {
     }
 
     let bake = read(&root, "nook-app/docker-bake.hcl");
-    for cache in ["rust-buildcache", "web-buildcache", "web-e2e-buildcache"] {
+    assert!(
+        !bake.contains("rust-buildcache"),
+        "Rust target snapshots must remain runner-local; registry mode=max transfers their entire layer history"
+    );
+    assert!(
+        !bake.contains("rust-toolchain-push"),
+        "the toolchain publish group must not export Rust target snapshots"
+    );
+    for cache in ["web-buildcache", "web-e2e-buildcache"] {
         assert_eq!(
             bake.matches(cache).count(),
             2,

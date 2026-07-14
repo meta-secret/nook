@@ -271,12 +271,12 @@ service) are never requested, polled, or awaited. Existing actionable comments
 must still be addressed, but no external status may delay merge or handoff.
 
 **Delivery jobs are cache-warm.** PR verification, main, and release use the
-persistent self-hosted `nook` runner, so the Rust target, web dependencies, and
-browser layers survive the PR -> main -> release chain instead of being downloaded
-again into fresh VMs. Scheduled/manual e2e, research, and every AI-agent job remain
-on isolated GitHub-hosted runners and may import the independent GHCR caches. Main
-updates one max-mode cache manifest per Rust/WASM, web-dependency, and browser-e2e
-lineage after green verify and deploys the active development channel to Cloudflare
+persistent self-hosted `nook` runner, so the Rust target and other local BuildKit
+layers survive the PR -> main -> release chain instead of being downloaded again.
+Scheduled/manual e2e, research, and every AI-agent job remain on isolated
+GitHub-hosted runners. They may import the compact web GHCR caches, but compile Rust
+cold rather than restoring a registry `mode=max` target snapshot. Main updates the
+web-dependency and browser-e2e cache manifests after green verify and deploys the active development channel to Cloudflare
 Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
 `release.yml` runs the main-equivalent gate without pushing the toolchain,
 deploys an immutable semantic-version tag to GitHub Pages for the public
@@ -285,8 +285,8 @@ Sentinel, then verifies app identity, security headers, exact commit, and
 extension-route presence/absence before publishing the GitHub Release.
 
 Main's cache publish must authenticate immediately before the GHCR
-`toolchain-push` bake group. The legacy group name now fans out to independent
-Rust and web targets and never constructs a merged image. Do not assume a prior Docker login from setup is still
+`toolchain-push` bake group. The legacy group name now fans out to the independent
+web dependency and browser targets; Rust remains runner-local. Do not assume a prior Docker login from setup is still
 visible to Buildx throughout the job; a green verify/e2e run can still
 block the Pages deploy if the final push falls back to anonymous GHCR auth and
 gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into

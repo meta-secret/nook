@@ -9,6 +9,7 @@
   import { Button } from '$lib/components/ui/button'
   import type { ExtensionConnectRequest } from '$lib/extension-connect'
   import type { VaultState } from '$lib/vault.svelte'
+  import { approveExtensionDevice } from '$app-wasm'
 
   let {
     vault,
@@ -115,7 +116,8 @@
     vault.errorMsg = ''
     try {
       await vault.enqueueStorage(() =>
-        vault.manager!.approveExtensionDevice(
+        approveExtensionDevice(
+          vault.manager!,
           request.deviceId,
           request.devicePublicKey,
           request.deviceSigningPublicKey,

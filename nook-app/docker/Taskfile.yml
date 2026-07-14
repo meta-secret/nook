@@ -7,7 +7,7 @@ tasks:
       - task: setup
 
   docker:push:
-    desc: Publish independent Rust and web cache images to GHCR after green main CI.
+    desc: Publish compact web dependency and browser cache images to GHCR after green main CI.
     # PUSH_TOOLCHAIN is re-declared here (not just on the docker:push:ci wrapper): go-task does NOT
     # propagate a parent task's `env:` into a called subtask, so we source it from the ambient var
     # so the gate below sees it regardless of caller.

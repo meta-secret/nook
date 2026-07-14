@@ -30,7 +30,7 @@ ARG LLVM_COV_VERSION=0.8.7
 ARG BINARYEN_VERSION=122
 
 # Cargo uses the default <workspace>/target (i.e. /meta-secret/nook/nook-app/target). The heavy
-# target directory remains in the Rust lineage and in BuildKit/GHCR cache, but is not inherited by
+# target directory remains in the Rust lineage and local BuildKit cache, but is not inherited by
 # the slim web image.
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10

@@ -1401,6 +1401,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-wasm-extension"
+version = "1.0.0"
+dependencies = [
+ "nook-core",
+ "nook-wasm",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "nook-wasm-migration"
+version = "1.0.0"
+dependencies = [
+ "nook-core",
+ "nook-wasm",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "nook-wasm-sentinel"
+version = "1.0.0"
+dependencies = [
+ "nook-core",
+ "nook-wasm",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "nook-wasm-simple"
+version = "1.0.0"
+dependencies = [
+ "nook-core",
+ "nook-wasm",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "nook-wasm-unified"
+version = "1.0.0"
+dependencies = [
+ "nook-core",
+ "nook-wasm",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

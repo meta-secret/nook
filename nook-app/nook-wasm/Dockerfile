@@ -14,7 +14,14 @@ ARG WASM_BUILD_MODE=dev
 
 # Rust clippy, native coverage/tests, and wasm-bindgen Node tests finish in the Rust branch. The
 # slim web image can therefore run web-only Task gates without Cargo installed.
-RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
+RUN cargo clippy --release --target wasm32-unknown-unknown \
+      -p nook-wasm \
+      -p nook-wasm-unified \
+      -p nook-wasm-simple \
+      -p nook-wasm-sentinel \
+      -p nook-wasm-extension \
+      -p nook-wasm-migration \
+      -- -D warnings
 # --out-dir is relative to the crate dir (nook-wasm/), so "../nook-web/nook-web-app/..." lands the JS/wasm bundle
 # in the web source tree where Vite imports it. target/ stays in-tree for reuse.
 RUN case "$WASM_BUILD_MODE" in \
@@ -23,17 +30,17 @@ RUN case "$WASM_BUILD_MODE" in \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
     && for spec in \
-         "nook-wasm:default" \
-         "nook-wasm-simple:app-simple" \
-         "nook-wasm-sentinel:app-sentinel" \
-         "nook-wasm-extension:app-extension" \
-         "nook-wasm-migration:app-legacy-migration"; do \
-         out_dir="${spec%%:*}"; feature="${spec#*:}"; \
-         if [ "$feature" = default ]; then cargo_args=""; \
-         else cargo_args="-- --no-default-features --features $feature"; fi; \
-         wasm-pack build nook-wasm --target web --out-dir "../nook-web/nook-web-shared/src/vault-app/lib/$out_dir" --out-name nook_wasm $wasm_opt_flag $cargo_args || exit 1; \
+         "nook-wasm:nook-wasm/apps/unified" \
+         "nook-wasm-simple:nook-wasm/apps/simple" \
+         "nook-wasm-sentinel:nook-wasm/apps/sentinel" \
+         "nook-wasm-extension:nook-wasm/apps/extension" \
+         "nook-wasm-migration:nook-wasm/apps/migration"; do \
+         out_dir="${spec%%:*}"; crate_dir="${spec#*:}"; \
+         wasm-pack build "$crate_dir" --target web \
+           --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/$out_dir" \
+           --out-name nook_wasm $wasm_opt_flag || exit 1; \
        done \
-    && ( current="$(find nook-wasm/src nook-core/src nook-core/locales nook-auth2/src \
+    && ( current="$(find nook-wasm/src nook-wasm/apps nook-core/src nook-core/locales nook-auth2/src \
            \( -name '*.rs' -o -name '*.json' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \

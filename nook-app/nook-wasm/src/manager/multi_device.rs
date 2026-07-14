@@ -301,9 +301,12 @@ impl NookVaultManager {
             shares,
         }))
     }
+}
 
-    #[cfg(any(feature = "app-unified-development", feature = "app-simple"))]
-    #[wasm_bindgen(js_name = approveExtensionDevice)]
+impl NookVaultManager {
+    /// Simple/unified leaf artifacts expose this internal bridge as a free
+    /// wasm-bindgen function. Sentinel, extension, and migration never link an
+    /// approval export.
     pub async fn approve_extension_device(
         &mut self,
         join_device_id: String,
@@ -343,7 +346,10 @@ impl NookVaultManager {
         self.persist_vault_change(operations).await?;
         Ok(self.get_records()?)
     }
+}
 
+#[wasm_bindgen]
+impl NookVaultManager {
     #[wasm_bindgen(js_name = deviceSigningPublicKey)]
     pub async fn device_signing_public_key_js(&mut self) -> Result<String, JsError> {
         let signing = self.ensure_signing_identity().await?;

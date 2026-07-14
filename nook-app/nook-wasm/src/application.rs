@@ -1,51 +1,37 @@
-//! Compile-time application capability for this WASM artifact.
+//! Immutable application capability selected by a thin leaf artifact.
 //!
-//! Production builds select exactly one capability feature. The default
-//! unified capability is reserved for local development and Rust tests.
+//! The featureless shared bridge compiles once. Each leaf cdylib calls
+//! [`configure_vault_application`] from its `wasm_bindgen(start)` hook before
+//! JavaScript can construct a manager or invoke an export.
 
-#[cfg(not(any(
-    feature = "app-unified-development",
-    feature = "app-simple",
-    feature = "app-sentinel",
-    feature = "app-extension",
-    feature = "app-legacy-migration"
-)))]
-compile_error!("one nook-wasm application capability feature must be enabled");
+use std::cell::Cell;
 
-#[cfg(any(
-    all(feature = "app-unified-development", feature = "app-simple"),
-    all(feature = "app-unified-development", feature = "app-sentinel"),
-    all(feature = "app-unified-development", feature = "app-extension"),
-    all(feature = "app-unified-development", feature = "app-legacy-migration"),
-    all(feature = "app-simple", feature = "app-sentinel"),
-    all(feature = "app-simple", feature = "app-extension"),
-    all(feature = "app-simple", feature = "app-legacy-migration"),
-    all(feature = "app-sentinel", feature = "app-extension"),
-    all(feature = "app-sentinel", feature = "app-legacy-migration"),
-    all(feature = "app-extension", feature = "app-legacy-migration")
-))]
-compile_error!("nook-wasm application capability features are mutually exclusive");
+thread_local! {
+    static COMPILED_APPLICATION: Cell<Option<nook_core::VaultApplication>> = const { Cell::new(None) };
+}
+
+pub fn configure_vault_application(application: nook_core::VaultApplication) {
+    COMPILED_APPLICATION.with(|compiled| match compiled.get() {
+        None => compiled.set(Some(application)),
+        Some(existing) if existing == application => {}
+        Some(existing) => panic!(
+            "WASM application already configured as {}; cannot change it to {}",
+            existing.as_str(),
+            application.as_str()
+        ),
+    });
+}
 
 #[must_use]
-pub const fn compiled_vault_application() -> nook_core::VaultApplication {
-    #[cfg(feature = "app-simple")]
-    {
-        return nook_core::VaultApplication::Simple;
-    }
-    #[cfg(feature = "app-sentinel")]
-    {
-        return nook_core::VaultApplication::Sentinel;
-    }
-    #[cfg(feature = "app-extension")]
-    {
-        return nook_core::VaultApplication::Extension;
-    }
-    #[cfg(feature = "app-legacy-migration")]
-    {
-        return nook_core::VaultApplication::LegacyMigration;
-    }
-    #[cfg(feature = "app-unified-development")]
-    {
-        nook_core::VaultApplication::UnifiedDevelopment
-    }
+pub fn compiled_vault_application() -> nook_core::VaultApplication {
+    COMPILED_APPLICATION.with(|compiled| {
+        compiled.get().unwrap_or_else(|| {
+            #[cfg(test)]
+            {
+                nook_core::VaultApplication::UnifiedDevelopment
+            }
+            #[cfg(not(test))]
+            panic!("WASM application capability was not configured by its leaf artifact")
+        })
+    })
 }
