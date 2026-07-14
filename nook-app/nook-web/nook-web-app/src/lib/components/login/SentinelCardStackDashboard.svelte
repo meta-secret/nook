@@ -720,8 +720,12 @@
           {vault.t('login.sentinel_card_stack_active_configuration')}
         </p>
         <div
-          class="relative mt-5 min-h-[28rem] overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-7 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-10"
+          class={[
+            'relative mt-5 overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px]',
+            status === 'idle' ? 'min-h-[28rem] p-7 sm:p-10' : 'p-5 sm:p-6',
+          ]}
           data-testid="sentinel-onboarding-vault-summary"
+          data-layout={status === 'idle' ? 'expanded' : 'compact'}
         >
           <div class="relative flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -740,23 +744,41 @@
           </div>
 
           <dl
-            class="relative mt-8 grid gap-3 sm:grid-cols-2"
+            class={[
+              'relative grid gap-3',
+              status === 'idle'
+                ? 'mt-8 sm:grid-cols-2'
+                : 'mt-5 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]',
+            ]}
             data-testid="sentinel-onboarding-summary-details"
           >
-            <div class="border border-white/10 bg-black/10 p-4 sm:col-span-2">
+            <div
+              class={[
+                'border border-white/10 bg-black/10',
+                status === 'idle' ? 'p-4 sm:col-span-2' : 'min-w-0 p-3',
+              ]}
+            >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
                 {vault.t('login.sentinel_card_stack_module_identity')}
               </dt>
               <dd
-                class="mt-2 break-words text-lg font-semibold text-[#d7e0e6]"
+                class={[
+                  'mt-2 break-words font-semibold text-[#d7e0e6]',
+                  status === 'idle' ? 'text-lg' : 'truncate text-sm',
+                ]}
                 data-testid="sentinel-onboarding-summary-name"
               >
                 {name.trim() || vault.t('login.sentinel_onboarding_not_set')}
               </dd>
             </div>
-            <div class="border border-white/10 bg-black/10 p-4">
+            <div
+              class={[
+                'border border-white/10 bg-black/10',
+                status === 'idle' ? 'p-4' : 'min-w-0 p-3',
+              ]}
+            >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
@@ -774,7 +796,12 @@
                     })}
               </dd>
             </div>
-            <div class="border border-white/10 bg-black/10 p-4">
+            <div
+              class={[
+                'border border-white/10 bg-black/10',
+                status === 'idle' ? 'p-4' : 'p-3 sm:min-w-28',
+              ]}
+            >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
@@ -814,7 +841,7 @@
             {/if}
           {:else}
             <div
-              class="relative mt-10 space-y-5"
+              class="relative mt-6 space-y-4"
               data-testid="sentinel-genesis-ceremony-step"
             >
               <div>
@@ -826,7 +853,7 @@
                 </p>
               </div>
               <div
-                class="border border-white/10 bg-black/10 p-5"
+                class="border border-white/10 bg-black/10 p-4"
                 data-testid="sentinel-genesis-request"
               >
                 <div class="flex items-start justify-between gap-4">
@@ -846,7 +873,7 @@
                   </span>
                 </div>
                 {#if request}
-                  <div class="mt-5 grid gap-4 sm:grid-cols-[150px_1fr]">
+                  <div class="mt-4 grid gap-4 sm:grid-cols-[150px_1fr]">
                     <EnrollmentQrCode
                       enrollmentLink={request}
                       loadingLabel={vault.t(
@@ -876,7 +903,7 @@
                 {/if}
               </div>
               <p
-                class="border border-white/10 bg-black/10 p-4 text-xs leading-5 text-[#aeb8c2]"
+                class="border border-white/10 bg-black/10 p-3 text-xs leading-5 text-[#aeb8c2]"
               >
                 {vault.t('login.sentinel_genesis_atomic_notice')}
               </p>

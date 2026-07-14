@@ -399,6 +399,7 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(vaultSummary).toHaveAttribute('data-layout', 'compact')
     await expect(nameSummaryCard).toBeVisible()
     await expect(nameSummaryCard).toContainText('Ordered Sentinel')
     await expect(nameSummaryCard).toBeDisabled()
@@ -409,9 +410,21 @@ test.describe('vault architecture modes', () => {
     await expect(
       actionsColumn.getByTestId('sentinel-genesis-finalize'),
     ).toBeVisible()
-    await expect(
-      summaryColumn.getByTestId('sentinel-genesis-request'),
-    ).toBeVisible()
+    const summaryDetails = summaryColumn.getByTestId(
+      'sentinel-onboarding-summary-details',
+    )
+    const participantRequest = summaryColumn.getByTestId(
+      'sentinel-genesis-request',
+    )
+    await expect(participantRequest).toBeVisible()
+    const compactSummaryBox = await summaryDetails.boundingBox()
+    const participantRequestBox = await participantRequest.boundingBox()
+    const collectingSummaryBox = await vaultSummary.boundingBox()
+    if (!compactSummaryBox || !participantRequestBox || !collectingSummaryBox) {
+      throw new Error('Sentinel collecting summary must have layout boxes')
+    }
+    expect(compactSummaryBox.height).toBeLessThan(120)
+    expect(participantRequestBox.y - collectingSummaryBox.y).toBeLessThan(360)
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toBeVisible()
