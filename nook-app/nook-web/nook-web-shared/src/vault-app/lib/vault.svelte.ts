@@ -68,6 +68,7 @@ import {
   type VaultIdleSessionTracker,
 } from "$lib/vault-idle-session";
 import {
+  isPasskeyCeremonyNotAllowedError,
   isPasskeyPrfUnavailableError,
   isPasskeyUnavailableError,
   recoverDeviceProtectionWithPasskey as recoverExistingPasskeyProtection,
@@ -993,6 +994,11 @@ export class VaultState {
       await this.continueInitializationAfterDeviceUnlock();
       this.deviceProtectionStatus = "unlocked";
     } catch (error) {
+      if (isPasskeyCeremonyNotAllowedError(error)) {
+        vaultLog.warn("passkey creation did not finish");
+        this.errorMsg = this.t("device_protection.passkey_create_not_allowed");
+        return;
+      }
       if (isPasskeyUnavailableError(error)) {
         vaultLog.warn(
           "passkey unavailable; offering PIN device protection fallback",
@@ -1042,6 +1048,13 @@ export class VaultState {
       await this.continueInitializationAfterDeviceUnlock();
       this.deviceProtectionStatus = "unlocked";
     } catch (error) {
+      if (isPasskeyCeremonyNotAllowedError(error)) {
+        vaultLog.warn("passkey recovery did not finish");
+        this.errorMsg = this.t(
+          "device_protection.passkey_recovery_not_allowed",
+        );
+        return;
+      }
       if (isPasskeyUnavailableError(error)) {
         vaultLog.warn(
           "passkey recovery unavailable; offering PIN device protection fallback",
@@ -1126,6 +1139,11 @@ export class VaultState {
       await this.continueInitializationAfterDeviceUnlock();
       this.deviceProtectionStatus = "unlocked";
     } catch (error) {
+      if (isPasskeyCeremonyNotAllowedError(error)) {
+        vaultLog.warn("passkey authorization did not finish");
+        this.errorMsg = this.t("device_protection.passkey_unlock_not_allowed");
+        return;
+      }
       if (
         this.deviceProtectionStatus === "unlocked" ||
         deviceIdentityUnlocked

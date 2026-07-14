@@ -552,7 +552,29 @@ test.describe('passkey device-key protection', () => {
     await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
 
-    await expect(page.getByTestId('device-protection-error')).toBeVisible()
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'This browser did not finish creating the passkey',
+    )
+    await expect(page.getByTestId('device-protection-setup-btn')).toBeEnabled()
+    await expect(
+      page.getByTestId('device-protection-pin-setup-btn'),
+    ).toBeHidden()
+  })
+
+  test('explains ambiguous cross-device passkey recovery failures', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+      localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
+    })
+    await page.goto('/app/')
+    await openPasskeyOverlayForSimpleCreate(page)
+    await page.getByTestId('device-protection-use-existing-choice').click()
+
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'Your phone may have approved the passkey, but this browser did not receive a usable credential',
+    )
     await expect(page.getByTestId('device-protection-setup-btn')).toBeEnabled()
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),
