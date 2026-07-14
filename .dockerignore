@@ -7,5 +7,6 @@ nook-app/nook-web/node_modules
 nook-app/nook-web/dist
 nook-app/nook-web/src/lib/nook-wasm
 nook-app/nook-web/nook-web-app/src/lib/nook-wasm
+nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*
 nook-app/nook-web-extension/dist
 .DS_Store

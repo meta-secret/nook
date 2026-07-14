@@ -189,7 +189,7 @@ impl NookVaultManager {
             imported = imported.saturating_add(1);
         }
         if let Some(snapshot) = payload.auth_snapshot_json() {
-            auth_providers::import_raw_auth_snapshot_json(snapshot).await?;
+            auth_providers::import_raw_auth_snapshot_json(&identity, snapshot).await?;
         }
         for encoded_entry in payload.sentinel_share_deliveries() {
             let entry: indexed_db::SentinelGenesisShareCatalogEntry =

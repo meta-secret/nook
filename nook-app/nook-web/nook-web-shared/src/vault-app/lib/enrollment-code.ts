@@ -2,11 +2,18 @@ import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
   normalizeEnrollmentCode,
 } from "$app-wasm";
+import { APP_KIND, type AppKind } from "$lib/app-kind";
 
 const ENROLLMENT_HASH_PREFIX = "#enroll=";
 
-function appRootUrl(siteRoot: string): string {
+export function enrollmentAppRootUrl(
+  siteRoot: string,
+  appKind: AppKind = APP_KIND,
+): string {
   const normalized = siteRoot.replace(/\/$/, "");
+  if (appKind === "simple" || appKind === "sentinel") {
+    return `${normalized}/`;
+  }
   return normalized.endsWith("/app") ? `${normalized}/` : `${normalized}/app/`;
 }
 
@@ -17,10 +24,10 @@ export function getEnrollmentLinkBase(): string {
   }
   const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
   if (configured) {
-    return appRootUrl(configured);
+    return enrollmentAppRootUrl(configured);
   }
   const basePath = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-  return appRootUrl(`${window.location.origin}${basePath}`);
+  return enrollmentAppRootUrl(`${window.location.origin}${basePath}`);
 }
 
 /** Deep link scanned from a QR code — opens the browser and carries the raw code in the hash. */

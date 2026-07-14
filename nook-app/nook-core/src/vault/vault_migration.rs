@@ -135,6 +135,22 @@ pub fn vault_migration_request_type(
     Ok(request.vault_type)
 }
 
+/// Validate that a browser message carrying a migration request came from the
+/// exact isolated origin named by that request.
+pub fn validate_vault_migration_request_origin(
+    request_json: &str,
+    message_origin: &str,
+    now_epoch_ms: u64,
+) -> VaultResult<()> {
+    let request: VaultMigrationRequest =
+        serde_json::from_str(request_json).map_err(|_| ValidationError::MigrationRequestInvalid)?;
+    validate_request(&request, now_epoch_ms)?;
+    if request.target_origin != message_origin {
+        return Err(ValidationError::MigrationOriginMismatch.into());
+    }
+    Ok(())
+}
+
 pub fn build_vault_migration_capsule(
     request_json: &str,
     now_epoch_ms: u64,
@@ -321,6 +337,20 @@ mod tests {
 
         let tampered = capsule.replacen("AGE ENCRYPTED FILE", "AGE TAMPERED FILE", 1);
         assert!(open_vault_migration_capsule(&request, &tampered, 1_001, &transport).is_err());
+    }
+
+    #[test]
+    fn request_origin_must_match_the_sending_window() {
+        let (simple_request, _) = create_vault_migration_request(VaultType::Simple, 2_000).unwrap();
+        assert!(
+            validate_vault_migration_request_origin(&simple_request, SIMPLE_ORIGIN, 1_000).is_ok()
+        );
+        assert!(matches!(
+            validate_vault_migration_request_origin(&simple_request, SENTINEL_ORIGIN, 1_000),
+            Err(crate::VaultError::Validation(
+                ValidationError::MigrationOriginMismatch
+            ))
+        ));
     }
 
     #[test]

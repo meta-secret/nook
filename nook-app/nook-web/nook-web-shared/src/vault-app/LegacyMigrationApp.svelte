@@ -2,7 +2,11 @@
   import { onMount } from 'svelte'
   import { Button } from '$lib/components/ui/button'
   import { getVaultManager, type NookVaultManager } from '$lib/nook'
-  import { resolveAppLocaleFromTags, translate } from '$app-wasm'
+  import {
+    resolveAppLocaleFromTags,
+    translate,
+    validateVaultMigrationRequestOrigin,
+  } from '$app-wasm'
 
   const locale = resolveAppLocaleFromTags([...navigator.languages])
   const t = (key: string) => translate(locale, key)
@@ -35,6 +39,15 @@
       }
       const message = event.data as { kind?: string; request?: string }
       if (message.kind !== 'nook-migration-request' || !message.request) return
+      try {
+        validateVaultMigrationRequestOrigin(
+          message.request,
+          event.origin,
+          Date.now(),
+        )
+      } catch {
+        return
+      }
       requestJson = message.request
       destinationOrigin = event.origin
       destinationWindow = event.source as Window

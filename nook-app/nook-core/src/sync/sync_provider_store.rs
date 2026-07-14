@@ -94,6 +94,58 @@ pub struct AuthProvidersSnapshotData {
     pub active_vault_store_id: Option<String>,
 }
 
+/// Keep provider state that belongs to the migrated vault set. Legacy rows
+/// without a `store_id` are retained only when the active vault is part of the
+/// migrated set: before per-vault scoping existed, the browser treated those
+/// rows as belonging to that active vault.
+#[must_use]
+pub fn auth_snapshot_for_migrated_store_ids(
+    snapshot: &AuthProvidersSnapshotData,
+    store_ids: &[String],
+) -> AuthProvidersSnapshotData {
+    let mut migrated = snapshot.clone();
+    let active_vault_migrates = snapshot
+        .active_vault_store_id
+        .as_ref()
+        .is_some_and(|store_id| store_ids.contains(store_id));
+    migrated.providers.retain(|provider| {
+        provider
+            .store_id
+            .as_ref()
+            .map_or(active_vault_migrates, |store_id| {
+                store_ids.contains(store_id)
+            })
+    });
+    migrated.active_vault_store_id = migrated
+        .active_vault_store_id
+        .filter(|store_id| store_ids.contains(store_id));
+    migrated
+}
+
+/// Verify that a migrated provider snapshot cannot reference a vault outside
+/// the capsule. Unscoped legacy rows remain valid for backward compatibility.
+#[must_use]
+pub fn auth_snapshot_matches_migrated_store_ids(
+    snapshot: &AuthProvidersSnapshotData,
+    store_ids: &[String],
+) -> bool {
+    let active_vault_migrates = snapshot
+        .active_vault_store_id
+        .as_ref()
+        .is_some_and(|store_id| store_ids.contains(store_id));
+    snapshot.providers.iter().all(|provider| {
+        provider
+            .store_id
+            .as_ref()
+            .map_or(active_vault_migrates, |store_id| {
+                store_ids.contains(store_id)
+            })
+    }) && snapshot
+        .active_vault_store_id
+        .as_ref()
+        .is_none_or(|store_id| store_ids.contains(store_id))
+}
+
 /// Result of [`normalize_auth_snapshot`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -824,6 +876,49 @@ mod tests {
             Some("vault-1")
         );
         assert!(!result.changed);
+    }
+
+    #[test]
+    fn migration_keeps_matching_and_legacy_unscoped_providers() {
+        let mut unscoped = github_provider("legacy", "legacy-repo", "legacy-pat");
+        unscoped.store_id = None;
+        let mut matching = github_provider("matching", "matching-repo", "matching-pat");
+        matching.store_id = Some("store-simple".to_owned());
+        let mut foreign = github_provider("foreign", "foreign-repo", "foreign-pat");
+        foreign.store_id = Some("store-sentinel".to_owned());
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![unscoped.clone(), matching.clone(), foreign],
+            active_vault_store_id: Some("store-simple".to_owned()),
+        };
+        let store_ids = vec!["store-simple".to_owned()];
+
+        let migrated = auth_snapshot_for_migrated_store_ids(&snapshot, &store_ids);
+
+        assert_eq!(migrated.providers, vec![unscoped, matching]);
+        assert_eq!(
+            migrated.active_vault_store_id.as_deref(),
+            Some("store-simple")
+        );
+        assert!(auth_snapshot_matches_migrated_store_ids(
+            &migrated, &store_ids
+        ));
+        assert!(!auth_snapshot_matches_migrated_store_ids(
+            &snapshot, &store_ids
+        ));
+
+        let no_active_scope = AuthProvidersSnapshotData {
+            providers: vec![github_provider("legacy", "legacy-repo", "legacy-pat")],
+            active_vault_store_id: None,
+        };
+        assert!(
+            auth_snapshot_for_migrated_store_ids(&no_active_scope, &store_ids)
+                .providers
+                .is_empty()
+        );
+        assert!(!auth_snapshot_matches_migrated_store_ids(
+            &no_active_scope,
+            &store_ids
+        ));
     }
 
     #[test]

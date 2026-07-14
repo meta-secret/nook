@@ -179,7 +179,7 @@ impl NookVaultManager {
         join_device_id: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         self.application
-            .validate_extension_approval(self.vault.architecture.vault_type)?;
+            .validate_session_access(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
         let pending = nook_core::list_join_requests(&records);

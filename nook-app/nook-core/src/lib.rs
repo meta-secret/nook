@@ -143,6 +143,7 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
+    auth_snapshot_for_migrated_store_ids, auth_snapshot_matches_migrated_store_ids,
     draft_storage_args, enrollment_provider_for_architecture,
     enrollment_provider_for_architecture_with_storage_target, ensure_local_provider_row,
     find_duplicate_sync_provider, localize_provider_label, migrate_provider_fields,
@@ -221,7 +222,8 @@ pub use vault_ids::{
 };
 pub use vault_migration::{
     VaultMigrationPayload, build_vault_migration_capsule, create_vault_migration_request,
-    open_vault_migration_capsule, vault_migration_request_type,
+    open_vault_migration_capsule, validate_vault_migration_request_origin,
+    vault_migration_request_type,
 };
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,

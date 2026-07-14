@@ -10,51 +10,14 @@
     generateSuggestedPassword,
     setupExtensionDeviceProtection,
   } from '../lib/nook-wasm'
+  import {
+    normalizeExtensionSetupState,
+    type ExtensionConsentScope,
+    type ExtensionSetupState,
+  } from './setup-state'
 
   const setupStorageKey = 'nook:extension-setup'
   const extensionConnectUrl = 'https://simple.nokey.sh/extension-connect'
-
-  type ExtensionConsentScope =
-    | 'vault-access'
-    | 'password-filling'
-    | 'sync-provider-credentials'
-
-  type ExtensionSetupState =
-    | { status: 'not-set-up'; deviceLabel: string }
-    | { status: 'protecting'; deviceLabel: string }
-    | {
-        status: 'pairing'
-        deviceLabel: string
-        deviceId: string
-        devicePublicKey: string
-        deviceSigningPublicKey: string
-        requestNonce: string
-        requestUrl: string
-        requestedScopes: ExtensionConsentScope[]
-      }
-    | {
-        status: 'pairing-failed'
-        deviceLabel: string
-        message: string
-      }
-    | {
-        status: 'locked'
-        deviceLabel: string
-        pairedVaults: string[]
-        selectedVaultName?: string | undefined
-      }
-    | {
-        status: 'ready'
-        deviceLabel: string
-        pairedVaults: string[]
-        selectedVaultName?: string | undefined
-        syncProviderCount: number
-      }
-    | {
-        status: 'revoked'
-        deviceLabel: string
-        message: string
-      }
 
   type ScanState =
     | { status: 'loading'; tabTitle: string }
@@ -84,22 +47,6 @@
 
   function defaultDeviceLabel() {
     return i18n.t('extension.setup.profile_title')
-  }
-
-  function isStringArray(value: unknown): value is string[] {
-    return Array.isArray(value) && value.every((item) => typeof item === 'string')
-  }
-
-  function isConsentScope(value: unknown): value is ExtensionConsentScope {
-    return (
-      value === 'vault-access' ||
-      value === 'password-filling' ||
-      value === 'sync-provider-credentials'
-    )
-  }
-
-  function isConsentScopeArray(value: unknown): value is ExtensionConsentScope[] {
-    return Array.isArray(value) && value.every(isConsentScope)
   }
 
   function requestedConsentScopes(): ExtensionConsentScope[] {
@@ -140,71 +87,19 @@
     return url.toString()
   }
 
-  function isExtensionSetupState(
-    value: unknown,
-  ): value is ExtensionSetupState {
-    if (typeof value !== 'object' || !value || !('status' in value)) {
-      return false
-    }
-
-    const candidate = value as Record<string, unknown>
-    if (typeof candidate.deviceLabel !== 'string') {
-      return false
-    }
-
-    if (
-      candidate.status === 'not-set-up' ||
-      candidate.status === 'protecting'
-    ) {
-      return true
-    }
-
-    if (candidate.status === 'pairing') {
-      return (
-        typeof candidate.deviceId === 'string' &&
-        typeof candidate.devicePublicKey === 'string' &&
-        typeof candidate.deviceSigningPublicKey === 'string' &&
-        typeof candidate.requestNonce === 'string' &&
-        typeof candidate.requestUrl === 'string' &&
-        isConsentScopeArray(candidate.requestedScopes)
-      )
-    }
-
-    if (
-      candidate.status === 'pairing-failed' ||
-      candidate.status === 'revoked'
-    ) {
-      return typeof candidate.message === 'string'
-    }
-
-    if (candidate.status === 'locked') {
-      return (
-        isStringArray(candidate.pairedVaults) &&
-        (candidate.selectedVaultName === undefined ||
-          typeof candidate.selectedVaultName === 'string')
-      )
-    }
-
-    if (candidate.status === 'ready') {
-      return (
-        isStringArray(candidate.pairedVaults) &&
-        (candidate.selectedVaultName === undefined ||
-          typeof candidate.selectedVaultName === 'string') &&
-        typeof candidate.syncProviderCount === 'number'
-      )
-    }
-
-    return false
-  }
-
   function readSetupState(): Promise<ExtensionSetupState> {
     return new Promise((resolve) => {
       chrome.storage.local.get(setupStorageKey, (items) => {
         const value = items[setupStorageKey]
+        const normalized = normalizeExtensionSetupState(value)
+        if (normalized?.migrated) {
+          chrome.storage.local.set({ [setupStorageKey]: normalized.state })
+        }
         resolve(
-          isExtensionSetupState(value)
-            ? value
-            : { status: 'not-set-up', deviceLabel: defaultDeviceLabel() },
+          normalized?.state ?? {
+            status: 'not-set-up',
+            deviceLabel: defaultDeviceLabel(),
+          },
         )
       })
     })
@@ -422,11 +317,14 @@
       <h2>{i18n.t('extension.setup.pair_simple_title')}</h2>
       <p>{i18n.t('extension.setup.pair_simple_description')}</p>
       <p class="request-detail">
-        {i18n.t('extension.setup.device_request')}: <code>{setupState.deviceId}</code>
+        {i18n.t('extension.setup.device_request')}:
+        <code>{setupState.deviceId}</code>
       </p>
       <ul class="scope-list">
         {#each setupState.requestedScopes as scope}
-          <li>{i18n.t(`extension.setup.scope_${scope.replaceAll('-', '_')}`)}</li>
+          <li>
+            {i18n.t(`extension.setup.scope_${scope.replaceAll('-', '_')}`)}
+          </li>
         {/each}
       </ul>
       <button
@@ -465,8 +363,13 @@
   {:else}
     <section class="vault-panel">
       <div>
-        <span class="metric-label">{i18n.t('extension.setup.selected_vault')}</span>
-        <strong>{setupState.selectedVaultName ?? i18n.t('extension.setup.default_vault')}</strong>
+        <span class="metric-label"
+          >{i18n.t('extension.setup.selected_vault')}</span
+        >
+        <strong
+          >{setupState.selectedVaultName ??
+            i18n.t('extension.setup.default_vault')}</strong
+        >
       </div>
       <div>
         <span class="metric-label">{i18n.t('extension.setup.sync')}</span>
@@ -487,8 +390,7 @@
         <span class="metric-label"
           >{i18n.t('extension.popup.password_fields')}</span
         >
-        <strong
-          data-testid="password-field-count"
+        <strong data-testid="password-field-count"
           >{scanState.status === 'ready'
             ? scanState.summary.passwordFieldCount
             : '-'}</strong
@@ -498,8 +400,7 @@
         <span class="metric-label"
           >{i18n.t('extension.popup.login_fields')}</span
         >
-        <strong
-          data-testid="username-field-count"
+        <strong data-testid="username-field-count"
           >{scanState.status === 'ready'
             ? scanState.summary.usernameFieldCount
             : '-'}</strong

@@ -55,6 +55,11 @@ fn production_vault_apps_are_separate_compile_time_capabilities() {
     let simple_config = read(&root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
     assert!(simple_config.contains("nook-wasm-simple"));
     assert!(simple_config.contains("extension-connect"));
+
+    let dockerignore = read(&root, ".dockerignore");
+    assert!(
+        dockerignore.contains("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*")
+    );
 }
 
 #[test]
