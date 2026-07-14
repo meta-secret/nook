@@ -67,11 +67,32 @@ else
 fi
 
 if [[ "$need" -eq 1 ]]; then
-  # The full Playwright project needs a rebuilt unified harness plus the /simple/ and /sentinel/
-  # preview routes. Their standalone production artifacts are already sealed in the image, so
-  # reassemble those directories after the unified build instead of compiling them again.
+  # The full Playwright project needs a rebuilt unified harness plus the independent public,
+  # Simple, and Sentinel artifacts. `vite build --mode unified` empties dist, so preserve the
+  # already-built public site before rebuilding instead of compiling or losing it. Main/nightly
+  # CI keeps the sealed production tree in dist-prod; direct local runs can reuse dist/site.
+  site_source="$WEB_ROOT/dist-prod/site"
+  site_snapshot=""
+  if [[ ! -d "$site_source" ]] && [[ -d "$DIST/site" ]]; then
+    site_snapshot="$(mktemp -d)/site"
+    cp -a "$DIST/site" "$site_snapshot"
+    site_source="$site_snapshot"
+  fi
+
   echo "==> e2e dist stale or missing — building unified e2e harness"
-  (cd "$WEB_ROOT" && bun run build:unified && bun run assemble:preview)
+  (cd "$WEB_ROOT" && bun run build:unified)
+
+  if [[ -d "$site_source" ]]; then
+    cp -a "$site_source" "$DIST/site"
+  else
+    echo "==> public site artifact missing — building it once for the e2e preview"
+    (cd "$WEB_ROOT" && bun run build:site)
+  fi
+  (cd "$WEB_ROOT" && bun run assemble:preview)
+
+  if [[ -n "$site_snapshot" ]]; then
+    rm -rf "$(dirname "$site_snapshot")"
+  fi
   mkdir -p "$DIST"
   printf '%s' "$inputs_hash" >"$STAMP"
 else
