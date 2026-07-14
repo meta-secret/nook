@@ -15,11 +15,13 @@ import {
   providerStorageDetail as providerStorageDetailCore,
   saveAuthProviders as saveAuthProvidersWasm,
   sealAuthProvidersForDevicePublicKey as sealAuthProvidersForDevicePublicKeyWasm,
+  setGoogleDriveProviderMode as setGoogleDriveProviderModeWasm,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookAuthProvidersSnapshot,
   type NookLoadedAuthProviders,
   type NookLocalAuthProviderSnapshot,
   type NookLocalFolderProviderConfig,
+  type NookGoogleDriveMode,
   type NookOAuthFileConfig,
   type NookOAuthFilePreset,
   type NookStorageProvider,
@@ -31,6 +33,7 @@ await initNookWasm();
 
 export type StorageProviderType = NookStorageProviderType;
 export type OAuthFilePreset = NookOAuthFilePreset;
+export type GoogleDriveMode = NookGoogleDriveMode;
 export type OAuthFileConfig = NookOAuthFileConfig;
 export type LocalFolderConfig = NookLocalFolderProviderConfig;
 export type StorageProvider = NookStorageProvider;
@@ -54,6 +57,16 @@ export const OAUTH_FILE_PROVIDER_TYPE = NookStorageProviderTypeUtil.value(
 
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo();
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName();
+
+export function setGoogleDriveProviderMode(
+  config: OAuthFileConfig,
+  mode: GoogleDriveMode,
+): OAuthFileConfig {
+  return setGoogleDriveProviderModeWasm(
+    toPlain(config),
+    mode,
+  ) as OAuthFileConfig;
+}
 
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
 function toPlain<T>(value: T): T {

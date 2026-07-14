@@ -29,8 +29,8 @@ pub use manager::NookVaultManager;
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
     NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
-    NookEnrollmentIssueInput, NookEnrollmentProvider, NookJoinRequest, NookPasskeySetup,
-    NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookJoinRequest,
+    NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
     NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecurityConflict,
     NookStorageConnectArgs, NookStorageProviderKind, NookStorageProviderTypeUtil,
     NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
@@ -440,6 +440,18 @@ pub fn provider_wasm_args(
     Ok(nook_core::storage_args_for_provider(&provider)?.into())
 }
 
+#[wasm_bindgen(js_name = setGoogleDriveProviderMode)]
+pub fn set_google_drive_provider_mode(
+    config: JsValue,
+    mode: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let config: nook_core::OAuthFileConfigData = serde_wasm_bindgen::from_value(config)?;
+    let mode = nook_core::GoogleDriveMode::parse(mode)?;
+    Ok(to_js_value(&nook_core::set_google_drive_provider_mode(
+        &config, mode,
+    ))?)
+}
+
 #[wasm_bindgen(js_name = defaultVaultArchitecture)]
 pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
     Ok(to_js_value(&nook_core::VaultArchitecture::default())?)
@@ -613,6 +625,18 @@ pub async fn prepare_shared_storage_grant(
         other => other,
     };
     Ok(to_js_value(&outcome)?)
+}
+
+/// Resolve a shared Drive folder id/URL and verify write access for the current
+/// account before persisting the provider row.
+#[wasm_bindgen(js_name = verifySharedGoogleDriveFolder)]
+pub async fn verify_shared_google_drive_folder(
+    access_token: &str,
+    folder_ref: &str,
+) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {
+    let (id, name) =
+        storage::drive_shared::verify_shared_vault_folder(access_token, folder_ref).await?;
+    Ok(NookGoogleDriveFolder::new(id, name))
 }
 
 #[wasm_bindgen(js_name = wasmStorageArgs)]

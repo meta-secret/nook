@@ -30,6 +30,7 @@ export type NookStorageProviderType =
   | 'oauth-file';
 
 export type NookOAuthFilePreset = 'google-drive' | 'icloud';
+export type NookGoogleDriveMode = 'private' | 'shared';
 
 export interface NookOAuthFileConfig {
   preset: NookOAuthFilePreset;
@@ -39,7 +40,8 @@ export interface NookOAuthFileConfig {
   fileId?: string;
   fileName?: string;
   accountEmail?: string;
-  /** Shared-replication My Drive folder id (`drive.file`). */
+  driveMode?: NookGoogleDriveMode;
+  /** Shared-mode My Drive folder id (`drive.file`). */
   folderId?: string;
 }
 
@@ -253,6 +255,34 @@ impl NookStorageConnectArgs {
     #[must_use]
     pub fn repo(&self) -> String {
         self.repo.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookGoogleDriveFolder {
+    id: String,
+    name: String,
+}
+
+impl NookGoogleDriveFolder {
+    pub(crate) fn new(id: String, name: String) -> Self {
+        Self { id, name }
+    }
+}
+
+#[wasm_bindgen]
+impl NookGoogleDriveFolder {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 }
 
@@ -828,6 +858,7 @@ impl NookSyncProviderTarget {
         file_name: Option<String>,
         account_email: Option<String>,
         access_token: Option<String>,
+        folder_id: Option<String>,
     ) -> Result<NookSyncProviderTarget, wasm_bindgen::JsError> {
         let preset = preset
             .as_deref()
@@ -838,6 +869,7 @@ impl NookSyncProviderTarget {
             nook_core::OauthFileSyncTarget {
                 preset,
                 file_id,
+                folder_id,
                 file_name,
                 account_email,
                 access_token,

@@ -125,8 +125,9 @@ a connection to an external account identity. Unsupported provider operations
 must fail closed in Rust, but they do not create a `personal` or `shared` vault
 mode.
 
-The currently implemented Google Drive shared-folder grant remains a provider
-feature:
+The Google Drive `private` / `shared` choice is a provider feature independent
+of vault architecture. Private mode uses app-private storage; shared mode uses
+a visible folder and the following grant flow:
 
 1. the owner creates a folder and grants the joiner's external identity;
 2. the connection records the folder target without embedding owner tokens;

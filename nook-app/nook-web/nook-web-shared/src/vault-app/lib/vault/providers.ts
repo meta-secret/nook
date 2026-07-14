@@ -168,6 +168,7 @@ export function beginProviderSetup(
       preset,
       accessToken: "",
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      driveMode: preset === "google-drive" ? "private" : undefined,
     };
   } else {
     state.oauthSetupPreset = undefined;
@@ -255,6 +256,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           expiresAt: state.oauthFile?.expiresAt,
           fileId: state.oauthFile?.fileId,
           folderId: state.oauthFile?.folderId,
+          driveMode: state.oauthFile?.driveMode,
           accountEmail: state.oauthFile?.accountEmail,
           fileName: driveFile,
         }
@@ -354,6 +356,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         expiresAt: provider.oauthFile.expiresAt ?? state.oauthFile!.expiresAt,
         fileId: state.oauthFile!.fileId,
         folderId: state.oauthFile!.folderId ?? provider.oauthFile.folderId,
+        driveMode: state.oauthFile!.driveMode ?? provider.oauthFile.driveMode,
         fileName:
           provider.oauthFile.fileName?.trim() ||
           state.oauthFile!.fileName?.trim() ||

@@ -27,6 +27,7 @@ import {
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
+import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 const VAULT_PASSWORD = 'file-onboard-pass-1'
 
@@ -101,6 +102,109 @@ test.describe('file sync provider onboarding', () => {
     await assertVaultReady(deviceB)
     await waitForSecretOnDevice(deviceB, secretKey)
     expect(await revealSecretValue(deviceB, secretKey)).toBe(secretValue)
+  })
+})
+
+test.describe('Google Drive provider modes', () => {
+  test.setTimeout(180_000)
+
+  test('shares one Drive folder across independently signed-in accounts', async ({
+    browser,
+    page: owner,
+  }) => {
+    const ownerToken = 'ya29.e2e_shared_owner'
+    const collaboratorToken = 'ya29.e2e_shared_collaborator'
+    const collaboratorEmail = 'collaborator@example.com'
+    const driveStub = createLocalE2eGoogleDriveVaultStub(
+      '',
+      'shared-provider-events',
+    )
+    await installGoogleOAuthMock(owner, ownerToken)
+    await driveStub.install(owner, {
+      accessToken: ownerToken,
+      fileName: 'shared-provider-events',
+    })
+    await owner.goto('/app/')
+    await clearBrowserVault(owner)
+    await owner.reload()
+
+    await openLoginProviderSetup(owner)
+    await owner.getByTestId('provider-option-oauth-file').click()
+    await expect(owner.getByTestId('google-oauth-setup')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(
+      owner.getByTestId('google-drive-mode-private'),
+    ).toHaveAttribute('aria-checked', 'true')
+    await owner.getByTestId('google-drive-mode-shared').click()
+    await expect(owner.getByTestId('google-drive-mode-shared')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await owner.getByTestId('drive-file-input').fill('shared-provider-events')
+    await owner.getByTestId('google-sign-in-btn').click()
+    await expect(owner.getByTestId('google-shared-account-email')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await owner
+      .getByTestId('google-shared-account-email')
+      .fill(collaboratorEmail)
+    await owner.getByTestId('google-create-shared-folder-btn').click()
+
+    await expect
+      .poll(
+        () =>
+          driveStub
+            .getSharedFolders()[0]
+            ?.writers.includes(collaboratorEmail) ?? false,
+        { timeout: UI_TIMEOUT_MS },
+      )
+      .toBe(true)
+
+    const [sharedFolder] = driveStub.getSharedFolders()
+    expect(sharedFolder).toBeDefined()
+    if (!sharedFolder) throw new Error('Drive stub did not create a folder')
+    const connectButton = owner.getByTestId('connect-provider-btn')
+    await expect(connectButton).toBeEnabled()
+    await connectButton.click()
+    await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    await assertVaultReady(owner)
+    await expect
+      .poll(() => driveStub.getEventFileCountForParent(sharedFolder.id), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(0)
+
+    const collaboratorContext = await createIsolatedContext(browser)
+    const collaborator = await collaboratorContext.newPage()
+    try {
+      await installGoogleOAuthMock(collaborator, collaboratorToken)
+      await driveStub.install(collaborator, {
+        accessToken: collaboratorToken,
+        fileName: 'shared-provider-events',
+      })
+      await collaborator.goto('/app/')
+      await clearBrowserVault(collaborator)
+      await collaborator.reload()
+      await openLoginProviderSetup(collaborator)
+      await collaborator.getByTestId('provider-option-oauth-file').click()
+      await collaborator.getByTestId('google-drive-mode-shared').click()
+      await collaborator.getByTestId('google-sign-in-btn').click()
+      await expect(
+        collaborator.getByTestId('google-shared-folder-create-mode'),
+      ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      await collaborator.getByTestId('google-shared-folder-join-mode').click()
+      await collaborator
+        .getByTestId('google-shared-folder-ref')
+        .fill(`https://drive.google.com/drive/folders/${sharedFolder.id}`)
+      await collaborator.getByTestId('google-use-shared-folder-btn').click()
+      await expect(
+        collaborator.getByTestId('connect-provider-btn'),
+      ).toBeEnabled()
+    } finally {
+      await collaborator.close()
+      await collaboratorContext.close()
+    }
   })
 })
 

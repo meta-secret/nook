@@ -273,6 +273,7 @@ mod wasm_idb_tests {
                     file_id: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: None,
+                    drive_mode: Some(nook_core::GoogleDriveMode::Private),
                     folder_id: None,
                 }),
                 local_folder: None,

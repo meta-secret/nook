@@ -261,17 +261,25 @@
         <h2>5. Google Drive optional sync</h2>
         <p>
           If you choose Sign in with Google, Nook uses Google Identity Services
-          in the browser to obtain an OAuth access token with the
-          <code>https://www.googleapis.com/auth/drive.appdata</code> scope. That
-          scope lets Nook store and read an encrypted vault file in a hidden
-          Google Drive application data folder associated with your Google
-          account.
+          in the browser to obtain an OAuth access token. You choose the
+          provider's storage mode independently of the vault type. Private mode
+          uses <code>https://www.googleapis.com/auth/drive.appdata</code> for a
+          hidden application data folder associated with your Google account.
+          Shared mode uses
+          <code>https://www.googleapis.com/auth/drive.file</code> for a
+          dedicated My Drive folder that multiple Google accounts can access
+          with their own sign-ins.
         </p>
         <ul>
           <li>The OAuth token is stored only in your browser.</li>
           <li>
             Nook may read your Google account email address to show "Signed in
             as" in the UI.
+          </li>
+          <li>
+            In shared mode, Nook sends the Google account email you enter to
+            Google only to grant that account writer access. Google may email
+            the invited account about the shared folder.
           </li>
           <li>
             Nook sends ciphertext only to Google Drive, not plaintext secrets.

@@ -6,8 +6,8 @@
  * while the user's Google session is still active.
  *
  * Scopes:
- * - Personal vaults: `drive.appdata` (hidden application data folder).
- * - Shared vaults: `drive.file` (My Drive folder created/shared by Nook).
+ * - Private provider mode: `drive.appdata` (hidden application data folder).
+ * - Shared provider mode: `drive.file` (My Drive folder created/shared by Nook).
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
@@ -145,12 +145,12 @@ async function tokenClientForScope(
   return slot;
 }
 
-/** Personal vaults: initialize the default `drive.appdata` token client. */
+/** Private mode: initialize the default `drive.appdata` token client. */
 export async function initGoogleAuth(): Promise<void> {
   await tokenClientForScope("appdata");
 }
 
-/** Shared vaults: initialize a `drive.file` token client. */
+/** Shared mode: initialize a `drive.file` token client. */
 export async function initGoogleSharedDriveAuth(): Promise<void> {
   await tokenClientForScope("file");
 }
@@ -192,7 +192,7 @@ export async function requestGoogleAccessToken(options?: {
   });
 }
 
-/** Request a token with `drive.file` for shared-replication vaults. */
+/** Request a token with `drive.file` for a shared Google Drive provider. */
 export async function requestGoogleDriveSharedAccess(options?: {
   prompt?: "" | "none" | "consent" | "select_account";
 }): Promise<GoogleOAuthTokens> {
@@ -214,6 +214,9 @@ export function oauthTokensToConfig(
     fileName: existing?.fileName,
     accountEmail: existing?.accountEmail,
     refreshToken: existing?.refreshToken,
+    driveMode:
+      existing?.driveMode ??
+      (existing?.folderId?.trim() ? "shared" : "private"),
     folderId: existing?.folderId,
   };
 }

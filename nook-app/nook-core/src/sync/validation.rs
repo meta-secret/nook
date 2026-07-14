@@ -1,5 +1,6 @@
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{is_auth_key_id, is_device_id};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Backend that persists the encrypted vault file.
@@ -116,6 +117,40 @@ pub enum OauthFilePreset {
     ICloud,
 }
 
+/// Google Drive storage visibility selected for one provider connection.
+///
+/// This is intentionally independent from vault membership/replication policy:
+/// a Simple or Sentinel vault may use either a private app-data replica or a
+/// folder shared through Google Drive ACLs.
+#[wasm_bindgen]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GoogleDriveMode {
+    #[default]
+    Private,
+    Shared,
+}
+
+impl GoogleDriveMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Private => "private",
+            Self::Shared => "shared",
+        }
+    }
+
+    pub fn parse(value: &str) -> ValidationResult<Self> {
+        match value.trim() {
+            "" | "private" => Ok(Self::Private),
+            "shared" => Ok(Self::Shared),
+            other => Err(ValidationError::UnknownStorageMode {
+                mode: format!("google-drive:{other}"),
+            }),
+        }
+    }
+}
+
 impl OauthFilePreset {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -157,6 +192,7 @@ pub struct GithubSyncTarget {
 pub struct OauthFileSyncTarget {
     pub preset: OauthFilePreset,
     pub file_id: Option<String>,
+    pub folder_id: Option<String>,
     pub file_name: Option<String>,
     pub account_email: Option<String>,
     pub access_token: Option<String>,
@@ -310,6 +346,22 @@ impl DriveBackupName {
     }
 }
 
+/// Validated Google Drive folder id used by shared provider connections.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GoogleDriveFolderId(String);
+
+impl GoogleDriveFolderId {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
 impl std::fmt::Display for DriveBackupName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
@@ -413,10 +465,40 @@ pub fn validate_drive_backup_name(name: &str) -> ValidationResult<DriveBackupNam
     Ok(DriveBackupName(file_name))
 }
 
+/// Normalize either an opaque Drive folder id or a standard Drive folder URL.
+/// Query parameters (including resource keys) are intentionally excluded from
+/// the persisted provider identity; the folder id is the stable event parent.
+pub fn normalize_google_drive_folder_ref(raw: &str) -> ValidationResult<GoogleDriveFolderId> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(ValidationError::SharedStorageTargetRequired);
+    }
+    let without_suffix = trimmed
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('/');
+    let candidate = if let Some((_, tail)) = without_suffix.rsplit_once("/folders/") {
+        tail.rsplit('/').next().unwrap_or_default()
+    } else {
+        without_suffix
+    }
+    .trim();
+    if candidate.is_empty()
+        || candidate.len() > 256
+        || !candidate
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return Err(ValidationError::SharedStorageTargetInvalid);
+    }
+    Ok(GoogleDriveFolderId(candidate.to_owned()))
+}
+
 /// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
 /// or `fileName` alone when no cached file id exists yet.
 ///
-/// Shared-replication folder ids are encoded as `shared:<folderId>` in the
+/// Shared Google Drive provider folder ids are encoded as `shared:<folderId>` in the
 /// `fileId` slot so connect args stay a 3-tuple.
 pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveBackupName)> {
     if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
@@ -435,9 +517,9 @@ pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
 /// Where Google Drive event files live for the current vault.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriveEventParent {
-    /// Personal vaults: hidden application data folder (`drive.appdata`).
+    /// Private provider mode: hidden application data folder (`drive.appdata`).
     AppDataFolder,
-    /// Shared vaults: a My Drive folder created under `drive.file`.
+    /// Shared provider mode: a My Drive folder created under `drive.file`.
     SharedFolder { folder_id: String },
 }
 
@@ -636,9 +718,11 @@ pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
             Some(format!("github:{repo}:{pat}"))
         }
         SyncProviderTarget::OauthFile(oauth) => {
-            let file_key = non_empty(oauth.file_id.as_ref())
-                .or_else(|| non_empty(oauth.file_name.as_ref()))
-                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
+            let file_key = non_empty(oauth.folder_id.as_ref())
+                .map(|folder_id| format!("shared:{folder_id}"))
+                .or_else(|| non_empty(oauth.file_id.as_ref()).map(str::to_owned))
+                .or_else(|| non_empty(oauth.file_name.as_ref()).map(str::to_owned))
+                .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
             let account_key = non_empty(oauth.account_email.as_ref())
                 .or_else(|| non_empty(oauth.access_token.as_ref()))
                 .unwrap_or_default();
@@ -965,6 +1049,7 @@ mod tests {
         let drive_by_id = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
             preset: OauthFilePreset::GoogleDrive,
             file_id: Some("file-123".to_owned()),
+            folder_id: None,
             file_name: Some("other-name.yaml".to_owned()),
             account_email: Some("me@example.com".to_owned()),
             access_token: Some("ya29.test".to_owned()),
@@ -972,6 +1057,7 @@ mod tests {
         let drive_by_name = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
             preset: OauthFilePreset::GoogleDrive,
             file_id: None,
+            folder_id: None,
             file_name: Some("other-name.yaml".to_owned()),
             account_email: Some("me@example.com".to_owned()),
             access_token: Some("ya29.test".to_owned()),
@@ -1200,5 +1286,37 @@ mod tests {
             .encode_storage_id(),
             "shared:folder-xyz"
         );
+    }
+
+    #[test]
+    fn google_drive_mode_is_explicit_and_backward_compatible() {
+        assert_eq!(
+            GoogleDriveMode::parse("").unwrap(),
+            GoogleDriveMode::Private
+        );
+        assert_eq!(
+            GoogleDriveMode::parse("shared").unwrap(),
+            GoogleDriveMode::Shared
+        );
+        assert!(GoogleDriveMode::parse("public").is_err());
+    }
+
+    #[test]
+    fn normalize_google_drive_folder_ref_accepts_id_and_folder_url() {
+        assert_eq!(
+            normalize_google_drive_folder_ref(" folder_ABC-123 ")
+                .unwrap()
+                .as_str(),
+            "folder_ABC-123"
+        );
+        assert_eq!(
+            normalize_google_drive_folder_ref(
+                "https://drive.google.com/drive/u/1/folders/folder_ABC-123?resourcekey=key"
+            )
+            .unwrap()
+            .as_str(),
+            "folder_ABC-123"
+        );
+        assert!(normalize_google_drive_folder_ref("https://example.com/not-a-folder").is_err());
     }
 }

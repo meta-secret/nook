@@ -90,6 +90,9 @@ pub enum ValidationError {
     #[error("errors.validation.shared_storage_target_required")]
     SharedStorageTargetRequired,
 
+    #[error("errors.validation.shared_storage_target_invalid")]
+    SharedStorageTargetInvalid,
+
     #[error("errors.validation.secret_data_required")]
     SecretDataRequired,
 

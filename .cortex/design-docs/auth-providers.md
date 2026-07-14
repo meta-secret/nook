@@ -40,6 +40,17 @@ interface StorageProvider {
   lastSyncRevision?: string
   createdAt: string    // ISO timestamp
 }
+
+interface OAuthFileConfig {
+  preset: 'google-drive' | 'icloud'
+  accessToken: string
+  refreshToken?: string
+  expiresAt?: string
+  fileName?: string
+  accountEmail?: string
+  driveMode?: 'private' | 'shared' // Google Drive only; absent legacy rows migrate
+  folderId?: string               // shared mode only; stable Drive parent id
+}
 ```
 
 
@@ -59,6 +70,15 @@ interface StorageProvider {
 **Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`had_plaintext` upgrade path).
 
 **Provider switch:** Changing the active saved provider calls `resetVaultSession` in wasm and clears login password-entry preview state so backup-password lists always reflect the remote vault for that provider — never a prior provider's in-memory session.
+
+**Google Drive modes:** Provider setup offers `private` and `shared`
+independently of vault replication or membership. Private mode requests
+`drive.appdata` and stores events below the hidden `appDataFolder`. Shared mode
+requests `drive.file`, creates or verifies a visible My Drive folder, and stores
+its stable `folderId`. Each collaborator saves a separate OAuth token for their
+own Google account. Switching modes clears the scope-bound token and target in
+Rust before the user signs in again; it never reuses an app-data token for a
+shared folder or vice versa.
 
 **Local-folder provider availability:** Local backup uses the browser File
 System Access directory API (`showDirectoryPicker`) and persisted structured

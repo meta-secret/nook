@@ -1,5 +1,10 @@
 import type { VaultState } from "$lib/vault.svelte";
-import { DEFAULT_DRIVE_BACKUP_NAME } from "$lib/auth-providers";
+import {
+  DEFAULT_DRIVE_BACKUP_NAME,
+  setGoogleDriveProviderMode,
+  type GoogleDriveMode,
+} from "$lib/auth-providers";
+import { verifySharedGoogleDriveFolder } from "$app-wasm";
 import {
   ensureValidOAuthFileConfig,
   fetchGoogleAccountEmail,
@@ -23,6 +28,7 @@ import {
   type BrowserOAuthProvider,
 } from "$lib/oauth-origin";
 import { createLogger } from "$lib/log";
+import { prepareSharedStorageGrant } from "$lib/vault-architecture";
 
 const log = createLogger("vault-oauth");
 
@@ -77,7 +83,9 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
   state.googleOAuthBusy = true;
   state.errorMsg = "";
   try {
-    const shared = state.vaultArchitecture.replication_type === "shared";
+    const shared =
+      state.oauthFile?.driveMode === "shared" ||
+      Boolean(state.oauthFile?.folderId?.trim());
     const tokens = shared
       ? await requestGoogleDriveSharedAccess({ prompt: "consent" })
       : await (async () => {
@@ -91,6 +99,100 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
   } finally {
     state.googleOAuthBusy = false;
   }
+}
+
+export function selectGoogleDriveMode(
+  state: VaultState,
+  mode: GoogleDriveMode,
+): void {
+  if (!state.oauthFile || state.oauthFile.preset !== "google-drive") return;
+  const current =
+    state.oauthFile.driveMode ??
+    (state.oauthFile.folderId?.trim() ? "shared" : "private");
+  if (current === mode) return;
+  state.oauthFile = setGoogleDriveProviderMode(state.oauthFile, mode);
+  state.sharedGrantInstructions = "";
+  state.errorMsg = "";
+}
+
+export async function createGoogleSharedFolder(
+  state: VaultState,
+  collaboratorEmail: string,
+): Promise<string> {
+  const accessToken = state.oauthFile?.accessToken?.trim();
+  if (!accessToken) {
+    throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
+  }
+  const folderName =
+    state.githubRepo.trim() ||
+    state.oauthFile?.fileName?.trim() ||
+    DEFAULT_DRIVE_BACKUP_NAME;
+  const grant = await prepareSharedStorageGrant({
+    providerType: "oauth-file",
+    oauthPreset: "google-drive",
+    joinerIdentityKind: "email",
+    joinerIdentity: collaboratorEmail,
+    storageTargetHint: folderName,
+    accessToken,
+  });
+  if (grant.kind === "unsupported") {
+    throw new Error(state.t(grant.reasonKey));
+  }
+  if (!grant.storageTargetId) {
+    throw new Error(state.t("provider_setup.google_shared_create_failed"));
+  }
+  state.oauthFile = {
+    ...state.oauthFile!,
+    driveMode: "shared",
+    folderId: grant.storageTargetId,
+    fileId: undefined,
+  };
+  state.sharedGrantInstructions =
+    grant.kind === "granted"
+      ? state.t("provider_setup.google_shared_folder_created", {
+          email: collaboratorEmail.trim(),
+          folder: grant.storageTargetName ?? grant.storageTargetId,
+        })
+      : state.t(grant.instructionsKey, {
+          email: grant.joinerIdentity,
+          folder:
+            grant.storageTargetName ?? grant.storageTargetId ?? folderName,
+        });
+  return grant.storageTargetName ?? folderName;
+}
+
+export async function useGoogleSharedFolder(
+  state: VaultState,
+  folderRef: string,
+): Promise<string> {
+  const accessToken = state.oauthFile?.accessToken?.trim();
+  if (!accessToken) {
+    throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
+  }
+  let folder;
+  try {
+    folder = await verifySharedGoogleDriveFolder(accessToken, folderRef);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("provider_setup.google_shared_not_folder")) {
+      throw new Error(state.t("provider_setup.google_shared_not_folder"));
+    }
+    if (message.includes("provider_setup.google_shared_not_writable")) {
+      throw new Error(state.t("provider_setup.google_shared_not_writable"));
+    }
+    throw error;
+  }
+  state.oauthFile = {
+    ...state.oauthFile!,
+    driveMode: "shared",
+    folderId: folder.id,
+    fileId: undefined,
+  };
+  state.sharedGrantInstructions = state.t(
+    "provider_setup.google_shared_folder_connected",
+    { folder: folder.name },
+  );
+  return folder.name;
 }
 
 export async function signInWithICloud(
@@ -279,6 +381,9 @@ async function applyGoogleOAuthTokens(
     expiresAt: tokens.expiresAt,
     fileId: state.oauthFile?.fileId,
     folderId: state.oauthFile?.folderId,
+    driveMode:
+      state.oauthFile?.driveMode ??
+      (state.oauthFile?.folderId?.trim() ? "shared" : "private"),
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
