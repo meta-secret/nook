@@ -28,7 +28,7 @@ test.describe('application logging', () => {
 
     await page.getByTestId('logs-back-btn').click()
     await expect(page.getByTestId('logs-page')).not.toBeVisible()
-    await expect(page).toHaveURL('/app/')
+    await expect(page).toHaveURL('/')
   })
 
   test('persists info-level milestones when creating a local vault', async ({
