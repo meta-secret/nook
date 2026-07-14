@@ -129,7 +129,7 @@
 
 <div
   class={[
-    'relative grid shrink-0 place-items-center',
+    'pointer-events-none relative grid shrink-0 place-items-center',
     compact ? 'size-32' : 'size-48',
   ]}
   data-testid={compact ? 'vault-security-orbit-mobile' : 'vault-security-orbit'}

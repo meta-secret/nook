@@ -143,6 +143,22 @@
 }
 
 @layer utilities {
+  .authenticated-shell {
+    min-height: calc(100svh - 11rem);
+  }
+
+  .authenticated-shell.authenticated-shell-editor {
+    min-height: calc(100svh - 5rem);
+  }
+
+  @media (width >= 40rem) {
+    .authenticated-shell,
+    .authenticated-shell.authenticated-shell-editor {
+      height: min(40rem, calc(100svh - 7rem));
+      min-height: 0;
+    }
+  }
+
   .shell-scroll {
     scrollbar-width: thin;
     scrollbar-color: color-mix(
