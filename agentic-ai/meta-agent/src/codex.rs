@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -306,7 +306,9 @@ async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, C
         .await
         .map_err(|error| CodexError::Run(error.to_string()))?;
 
-    let mut progress = ProgressReporter::new(io::stderr());
+    let stderr = io::stderr();
+    let decorate = stderr.is_terminal() && std::env::var_os("NO_COLOR").is_none();
+    let mut progress = ProgressReporter::new(stderr, decorate);
     loop {
         let event = thread
             .next_event()
@@ -353,15 +355,19 @@ async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, C
 
 struct ProgressReporter<W> {
     writer: W,
+    decorate: bool,
+    inspection_step: usize,
     reasoning_open: bool,
     saw_reasoning_delta: bool,
     plan_output_announced: bool,
 }
 
 impl<W: Write> ProgressReporter<W> {
-    fn new(writer: W) -> Self {
+    fn new(writer: W, decorate: bool) -> Self {
         Self {
             writer,
+            decorate,
+            inspection_step: 0,
             reasoning_open: false,
             saw_reasoning_delta: false,
             plan_output_announced: false,
@@ -370,50 +376,53 @@ impl<W: Write> ProgressReporter<W> {
 
     fn observe(&mut self, event: &EventMsg) -> io::Result<()> {
         match event {
-            EventMsg::TurnStarted(_) => {
-                self.status("Codex planning started; loading repository instructions...")
-            }
+            EventMsg::TurnStarted(_) => self.phase(
+                "●",
+                "Planning started",
+                Some("Loading repository instructions and project context"),
+            ),
             EventMsg::ReasoningContentDelta(event) => self.reasoning_delta(&event.delta),
             EventMsg::AgentReasoning(event) if !self.saw_reasoning_delta => {
-                self.status(&format!("Codex: {}", event.text.trim()))
+                self.note(event.text.trim())
             }
             EventMsg::AgentReasoningSectionBreak(_) => self.finish_reasoning(),
-            EventMsg::ExecCommandBegin(event) => self.status(&format!(
-                "Inspecting repository: {}",
-                event.command.join(" ")
-            )),
-            EventMsg::ExecCommandEnd(event) if event.exit_code != 0 => self.status(&format!(
-                "Inspection command exited with status {}: {}",
-                event.exit_code,
-                event.command.join(" ")
-            )),
+            EventMsg::ExecCommandBegin(event) => self.inspection(&event.command),
+            EventMsg::ExecCommandEnd(event) if event.exit_code != 0 => {
+                self.failed_inspection(event.exit_code, &event.command)
+            }
             EventMsg::AgentMessageContentDelta(_) => self.announce_plan_output(),
             EventMsg::Warning(event) | EventMsg::GuardianWarning(event) => {
-                self.status(&format!("Codex warning: {}", event.message))
+                self.alert("!", "Warning", &event.message, "33")
             }
             EventMsg::StreamError(event) => {
-                self.status(&format!("Codex stream retry: {}", event.message))
+                self.alert("↻", "Connection retry", &event.message, "33")
             }
-            EventMsg::ModelReroute(event) => self.status(&format!(
-                "Codex rerouted model from {} to {}.",
-                event.from_model, event.to_model
-            )),
-            EventMsg::TurnComplete(_) => {
-                self.status("Codex planning complete; validating the generated DAG...")
-            }
+            EventMsg::ModelReroute(event) => self.phase(
+                "↪",
+                "Model rerouted",
+                Some(&format!("{} → {}", event.from_model, event.to_model)),
+            ),
+            EventMsg::TurnComplete(_) => self.phase(
+                "✓",
+                "Plan ready",
+                Some("Validating tasks and DAG dependencies"),
+            ),
             _ => Ok(()),
         }
     }
 
     fn reasoning_delta(&mut self, delta: &str) -> io::Result<()> {
         self.saw_reasoning_delta = true;
-        if !self.reasoning_open {
-            write!(self.writer, "Codex: ")?;
-            self.reasoning_open = true;
-        }
-        write!(self.writer, "{delta}")?;
-        if delta.ends_with('\n') {
-            self.reasoning_open = false;
+        for part in delta.split_inclusive('\n') {
+            if !self.reasoning_open {
+                let prefix = self.paint("2", "  ↳ ");
+                write!(self.writer, "{prefix}")?;
+                self.reasoning_open = true;
+            }
+            write!(self.writer, "{part}")?;
+            if part.ends_with('\n') {
+                self.reasoning_open = false;
+            }
         }
         self.writer.flush()
     }
@@ -423,13 +432,75 @@ impl<W: Write> ProgressReporter<W> {
             return Ok(());
         }
         self.plan_output_announced = true;
-        self.status("Codex is assembling the structured feature plan...")
+        self.phase(
+            "◆",
+            "Building feature plan",
+            Some("Writing structured tasks and dependencies"),
+        )
     }
 
-    fn status(&mut self, message: &str) -> io::Result<()> {
+    fn inspection(&mut self, command: &[String]) -> io::Result<()> {
         self.finish_reasoning()?;
-        writeln!(self.writer, "{message}")?;
+        self.inspection_step += 1;
+        let summary = summarize_inspection(command);
+        let number = self.paint("36", &format!("{:02}", self.inspection_step));
+        let title = self.paint("1", summary.title);
+        writeln!(self.writer, "  {number}  {title}")?;
+        if let Some(detail) = summary.detail {
+            let detail = self.paint("2", &format!("      {detail}"));
+            writeln!(self.writer, "{detail}")?;
+        }
         self.writer.flush()
+    }
+
+    fn failed_inspection(&mut self, exit_code: i32, command: &[String]) -> io::Result<()> {
+        self.finish_reasoning()?;
+        let symbol = self.paint("31", "✗");
+        let title = self.paint("1;31", "Repository inspection failed");
+        writeln!(self.writer, "  {symbol}  {title} (exit {exit_code})")?;
+        let command = self.paint("2", &format!("     {}", command.join(" ")));
+        writeln!(self.writer, "{command}")?;
+        self.writer.flush()
+    }
+
+    fn phase(&mut self, symbol: &str, title: &str, detail: Option<&str>) -> io::Result<()> {
+        self.finish_reasoning()?;
+        let color = if symbol == "✓" { "32" } else { "36" };
+        let symbol = self.paint(color, symbol);
+        let title = self.paint("1", title);
+        writeln!(self.writer, "  {symbol}  {title}")?;
+        if let Some(detail) = detail {
+            let detail = self.paint("2", &format!("     {detail}"));
+            writeln!(self.writer, "{detail}")?;
+        }
+        self.writer.flush()
+    }
+
+    fn note(&mut self, message: &str) -> io::Result<()> {
+        self.finish_reasoning()?;
+        for line in message.lines().filter(|line| !line.trim().is_empty()) {
+            let line = self.paint("2", &format!("  ↳ {}", line.trim()));
+            writeln!(self.writer, "{line}")?;
+        }
+        self.writer.flush()
+    }
+
+    fn alert(&mut self, symbol: &str, title: &str, detail: &str, color: &str) -> io::Result<()> {
+        self.finish_reasoning()?;
+        let symbol = self.paint(color, symbol);
+        let title = self.paint(&format!("1;{color}"), title);
+        writeln!(self.writer, "  {symbol}  {title}")?;
+        let detail = self.paint("2", &format!("     {detail}"));
+        writeln!(self.writer, "{detail}")?;
+        self.writer.flush()
+    }
+
+    fn paint(&self, code: &str, text: &str) -> String {
+        if self.decorate {
+            format!("\u{1b}[{code}m{text}\u{1b}[0m")
+        } else {
+            text.to_owned()
+        }
     }
 
     fn finish_reasoning(&mut self) -> io::Result<()> {
@@ -439,6 +510,59 @@ impl<W: Write> ProgressReporter<W> {
         }
         Ok(())
     }
+}
+
+struct InspectionSummary {
+    title: &'static str,
+    detail: Option<String>,
+}
+
+fn summarize_inspection(command: &[String]) -> InspectionSummary {
+    let command_text = command.join(" ");
+    let title = if command_text.contains("AGENTS.md") {
+        "Discovering project instructions"
+    } else if command_text.contains(".cortex/") {
+        "Reading architecture and project guidance"
+    } else if command_text.contains("rg -n") || command_text.contains("rg --line-number") {
+        "Searching implementation"
+    } else if command_text.contains("rg --files") {
+        "Mapping repository structure"
+    } else if command_text.contains("sed -n") {
+        "Reading implementation context"
+    } else if command_text.contains("cargo ") || command_text.contains("task ") {
+        "Checking repository behavior"
+    } else {
+        "Inspecting repository"
+    };
+
+    InspectionSummary {
+        title,
+        detail: inspection_file_hints(&command_text),
+    }
+}
+
+fn inspection_file_hints(command: &str) -> Option<String> {
+    let mut files = Vec::new();
+    for token in command.split_whitespace() {
+        let token = token.trim_matches(|character: char| {
+            matches!(character, '\'' | '"' | ';' | ',' | '(' | ')' | ':' | '\\')
+        });
+        let looks_like_file = [".md", ".rs", ".ts", ".svelte", ".yml", ".yaml", ".toml"]
+            .iter()
+            .any(|extension| token.ends_with(extension));
+        if looks_like_file
+            && !token.starts_with('!')
+            && !token.contains('*')
+            && !files.contains(&token)
+        {
+            files.push(token);
+        }
+        if files.len() == 3 {
+            break;
+        }
+    }
+
+    (!files.is_empty()).then(|| files.join(" · "))
 }
 
 #[cfg(test)]
@@ -491,7 +615,7 @@ mod tests {
 
     #[test]
     fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() {
-        let mut progress = ProgressReporter::new(Vec::new());
+        let mut progress = ProgressReporter::new(Vec::new(), false);
 
         progress.reasoning_delta("Inspecting ").unwrap();
         progress.reasoning_delta("the repository.\n").unwrap();
@@ -501,8 +625,54 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(progress.writer).unwrap(),
-            "Codex: Inspecting the repository.\nCodex is assembling the structured feature plan...\n"
+            "  ↳ Inspecting the repository.\n  ◆  Building feature plan\n     Writing structured tasks and dependencies\n"
         );
         assert!(progress.plan_output_announced);
+    }
+
+    #[test]
+    fn inspection_progress_hides_shell_commands_behind_readable_steps() {
+        let mut progress = ProgressReporter::new(Vec::new(), false);
+        let commands = [
+            vec![
+                "/bin/zsh".into(),
+                "-lc".into(),
+                "pwd && rg --files -g 'AGENTS.md' && sed -n '1,240p' .cortex/AGENTS.md".into(),
+            ],
+            vec![
+                "/bin/zsh".into(),
+                "-lc".into(),
+                "rg -n -i 'onboard|simple vault' nook-app --glob '!target/**'".into(),
+            ],
+            vec![
+                "/bin/zsh".into(),
+                "-lc".into(),
+                "sed -n '1,220p' .cortex/ARCHITECTURE.md".into(),
+            ],
+        ];
+
+        for command in commands {
+            progress.inspection(&command).unwrap();
+        }
+        let output = String::from_utf8(progress.writer).unwrap();
+
+        assert!(output.contains("01  Discovering project instructions"));
+        assert!(output.contains("02  Searching implementation"));
+        assert!(output.contains("03  Reading architecture and project guidance"));
+        assert!(output.contains(".cortex/AGENTS.md"));
+        assert!(!output.contains("/bin/zsh"));
+        assert!(!output.contains("rg -n"));
+    }
+
+    #[test]
+    fn failed_inspection_includes_the_command_for_debugging() {
+        let mut progress = ProgressReporter::new(Vec::new(), false);
+        let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
+
+        progress.failed_inspection(2, &command).unwrap();
+        let output = String::from_utf8(progress.writer).unwrap();
+
+        assert!(output.contains("Repository inspection failed (exit 2)"));
+        assert!(output.contains("/bin/zsh -lc rg missing-file"));
     }
 }

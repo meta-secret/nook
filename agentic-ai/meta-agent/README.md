@@ -30,10 +30,11 @@ task meta-agent:plan PROMPT='Add a repository-grounded feature planner'
 Planning defaults to `gpt-5.6-luna` with `low` reasoning effort (the API name
 for Luna's lighter reasoning setting).
 
-The command streams Codex reasoning summaries, repository inspection commands,
-warnings, and plan-assembly status to the terminal while keeping the incomplete
-structured JSON internal. The final line reports the generated feature
-directory.
+The command presents a compact, colored progress view with named planning
+phases, numbered repository-inspection steps, warnings, and a final execution
+schedule. Shell commands stay hidden during normal operation and are shown only
+when an inspection fails; incomplete structured JSON remains internal. Set
+`NO_COLOR=1` to disable terminal colors.
 
 Override the model or reasoning effort when needed:
 

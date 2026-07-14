@@ -95,24 +95,62 @@ async fn run_plan(args: PlanArgs, arg0_paths: Arg0DispatchPaths) -> Result<()> {
         options.reasoning_effort = reasoning_effort;
     }
     options.arg0_paths = arg0_paths;
-    eprintln!(
-        "Inspecting {} with Codex (model: {}, effort: {})...",
-        options.repo_root.display(),
-        options.model.as_deref().unwrap_or(DEFAULT_CODEX_MODEL),
-        if options.reasoning_effort.is_empty() {
-            DEFAULT_CODEX_REASONING_EFFORT
-        } else {
-            &options.reasoning_effort
-        }
-    );
+    print_run_header(&options);
     let plan = Planner::new(InProcessCodexRunner::new(options))
         .plan(&prompt, args.feature_id.as_deref())
         .await?;
     let target = write_feature(&output_root, &plan, &prompt)?;
 
-    println!("Created {}", target.display());
+    let decorate = io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
+    println!();
+    println!(
+        "  {}  {}",
+        paint(decorate, "32", "✓"),
+        paint(decorate, "1;32", "Feature plan created")
+    );
+    println!("     {}", target.display());
+    println!();
     print_schedule(&plan)?;
     Ok(())
+}
+
+fn print_run_header(options: &CodexOptions) {
+    let decorate = io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none();
+    let model = options.model.as_deref().unwrap_or(DEFAULT_CODEX_MODEL);
+    let reasoning = if options.reasoning_effort.is_empty() {
+        DEFAULT_CODEX_REASONING_EFFORT
+    } else {
+        &options.reasoning_effort
+    };
+
+    eprintln!();
+    eprintln!(
+        "{}",
+        paint(decorate, "1;36", "╭─ Meta-agent ─────────────────────────")
+    );
+    eprintln!(
+        "{} {} {}",
+        paint(decorate, "36", "│"),
+        paint(decorate, "2", &format!("{:<11}", "Repository")),
+        options.repo_root.display()
+    );
+    eprintln!(
+        "{} {} {}",
+        paint(decorate, "36", "│"),
+        paint(decorate, "2", &format!("{:<11}", "Model")),
+        model
+    );
+    eprintln!(
+        "{} {} {}",
+        paint(decorate, "36", "│"),
+        paint(decorate, "2", &format!("{:<11}", "Reasoning")),
+        reasoning
+    );
+    eprintln!(
+        "{}",
+        paint(decorate, "36", "╰──────────────────────────────────────")
+    );
+    eprintln!();
 }
 
 fn resolve_prompt(args: &PlanArgs) -> Result<String> {
@@ -140,14 +178,32 @@ fn absolute(path: &Path) -> Result<PathBuf, io::Error> {
 
 fn print_schedule(plan: &nook_meta_agent::FeaturePlan) -> Result<()> {
     let batches = plan.execution_batches()?;
+    let decorate = io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
     println!(
-        "Valid feature `{}`: {} tasks in {} safe execution batches",
+        "  {}  {}",
+        paint(decorate, "36", "◆"),
+        paint(decorate, "1", "Execution plan")
+    );
+    println!(
+        "     {} · {} tasks · {} safe parallel batches",
         plan.feature.id,
         plan.tasks.len(),
         batches.len()
     );
     for (index, batch) in batches.iter().enumerate() {
-        println!("  Batch {}: {}", index + 1, batch.join(", "));
+        println!(
+            "     {}  {}",
+            paint(decorate, "36", &format!("{:02}", index + 1)),
+            batch.join("  ·  ")
+        );
     }
     Ok(())
+}
+
+fn paint(enabled: bool, code: &str, text: &str) -> String {
+    if enabled {
+        format!("\u{1b}[{code}m{text}\u{1b}[0m")
+    } else {
+        text.to_owned()
+    }
 }
