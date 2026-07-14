@@ -182,10 +182,10 @@ Plan a large coding feature as a dependency and resource-aware task DAG after au
 
 ```sh
 task meta-agent:plan PROMPT='Describe the feature and its required outcome'
-task meta-agent:validate FEATURE=agentic-ai/features/<feature-id>
+task meta-agent:validate FEATURE=agentic-ai/meta-agent/target/features/<feature-id>
 ```
 
-The generated `feature.yaml`, parent `feature.md`, and child `<task-id>.md` files stay local for review; this initial planner does not publish GitHub issues or run implementation agents.
+The generated `feature.yaml`, parent `feature.md`, and child `<task-id>.md` files stay under the ignored `agentic-ai/meta-agent/target/features/` tree for local review; this initial planner does not publish GitHub issues or run implementation agents.
 
 ```sh
 task web:dev

@@ -47,7 +47,7 @@ struct PlanArgs {
     repo_root: PathBuf,
 
     /// Parent directory for generated feature directories, relative to repo-root by default.
-    #[arg(long, default_value = "agentic-ai/features")]
+    #[arg(long, default_value = "agentic-ai/meta-agent/target/features")]
     output_root: PathBuf,
 
     /// Override the model-generated stable feature ID.

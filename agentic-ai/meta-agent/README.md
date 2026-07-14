@@ -35,12 +35,11 @@ warnings, and plan-assembly status to the terminal while keeping the incomplete
 structured JSON internal. The final line reports the generated feature
 directory.
 
-Override the output root or model when needed:
+Override the model or reasoning effort when needed:
 
 ```bash
 task meta-agent:plan \
   PROMPT='Add resumable provider synchronization' \
-  FEATURE_OUTPUT_ROOT=agentic-ai/features \
   META_AGENT_MODEL=gpt-5.6-sol \
   META_AGENT_REASONING_EFFORT=medium
 ```
@@ -48,7 +47,7 @@ task meta-agent:plan \
 Validate an existing artifact and print conflict-safe execution batches:
 
 ```bash
-task meta-agent:validate FEATURE=agentic-ai/features/resumable-sync
+task meta-agent:validate FEATURE=agentic-ai/meta-agent/target/features/resumable-sync
 ```
 
 Run the host Rust format, Clippy, and test gate:
@@ -62,7 +61,7 @@ task meta-agent:check
 Each feature gets one directory:
 
 ```text
-agentic-ai/features/resumable-sync/
+agentic-ai/meta-agent/target/features/resumable-sync/
 ├── feature.yaml
 ├── feature.md
 ├── design-protocol.md

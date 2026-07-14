@@ -38,7 +38,7 @@ tasks:
     vars:
       REPO_ROOT:
         sh: 'git rev-parse --show-toplevel'
-      FEATURE_OUTPUT_ROOT: '{{default "agentic-ai/features" .FEATURE_OUTPUT_ROOT}}'
+      FEATURE_OUTPUT_ROOT: '{{default "agentic-ai/meta-agent/target/features" .FEATURE_OUTPUT_ROOT}}'
       META_AGENT_MODEL: '{{default "gpt-5.6-luna" .META_AGENT_MODEL}}'
       META_AGENT_REASONING_EFFORT: '{{default "low" .META_AGENT_REASONING_EFFORT}}'
     env:
