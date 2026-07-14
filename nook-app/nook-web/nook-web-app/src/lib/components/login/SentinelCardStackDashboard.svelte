@@ -452,12 +452,10 @@
                   class="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={
-                    !participantLabel.trim() ||
+                  disabled={!participantLabel.trim() ||
                     !response.trim() ||
                     isBusy ||
-                    actionBusy
-                  }
+                    actionBusy}
                   onclick={() => void addParticipant()}
                 >
                   {#if actionBusy}<RefreshCw

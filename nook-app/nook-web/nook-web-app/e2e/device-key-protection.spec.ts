@@ -237,9 +237,9 @@ test.describe('passkey device-key protection', () => {
     ).toBeEnabled()
 
     await page.getByTestId('sentinel-genesis-add-participant').click()
-    await expect(page.getByTestId('sentinel-card-stack-dashboard')).toContainText(
-      "Ada's iPhone",
-    )
+    await expect(
+      page.getByTestId('sentinel-card-stack-dashboard'),
+    ).toContainText("Ada's iPhone")
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toHaveCount(0)
