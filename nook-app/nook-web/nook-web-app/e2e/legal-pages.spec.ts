@@ -20,7 +20,7 @@ test.describe('legal pages', () => {
     await page.goto(`${PUBLIC_SITE_PATH}/terms.html`)
     await expect(page.locator('h1')).toHaveText('Terms of Service')
     await expect(page.locator('body')).toContainText('as is')
-    await page.locator('header a[href="/privacy.html"]').click()
+    await page.locator('header a[href="./privacy.html"]').click()
     await expect(page.locator('h1')).toHaveText('Privacy Policy')
   })
 
@@ -318,6 +318,6 @@ test.describe('legal pages', () => {
   }) => {
     await page.goto(`${PUBLIC_SITE_PATH}/privacy.html`)
     await page.locator('header a.brand').click()
-    await expect(page).toHaveURL('/')
+    await expect(page).toHaveURL(`${PUBLIC_SITE_PATH}/`)
   })
 })
