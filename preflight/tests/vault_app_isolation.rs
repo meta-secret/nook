@@ -14,6 +14,16 @@ fn read(root: &Path, path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
+    content
+        .split_once(start)
+        .unwrap_or_else(|| panic!("missing section start: {start}"))
+        .1
+        .split_once(end)
+        .unwrap_or_else(|| panic!("missing section end: {end}"))
+        .0
+}
+
 #[test]
 fn production_vault_apps_are_separate_compile_time_capabilities() {
     let root = repository_root();
@@ -103,5 +113,54 @@ fn development_and_release_wasm_build_modes_stay_separate() {
     assert!(
         !release.contains("WASM_BUILD_MODE=dev"),
         "release artifacts must remain production-optimized"
+    );
+}
+
+#[test]
+fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
+    let root = repository_root();
+    let release = read(&root, ".github/workflows/release.yml");
+    assert_eq!(
+        release.matches("WASM_BUILD_MODE=prod").count(),
+        1,
+        "release must perform one optimized WASM build, not rebuild all five variants"
+    );
+    assert!(
+        !release.contains("Build stable Pages artifact") && !release.contains("run: task setup"),
+        "release must extract the already-tested sealed image instead of running setup twice"
+    );
+    for required in [
+        "VITE_SITE_URL=${{ env.CI_RELEASE_URL }}",
+        "VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}",
+        "VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}",
+    ] {
+        assert!(
+            release.contains(required),
+            "initial release build missing production input: {required}"
+        );
+    }
+
+    let ci = read(&root, "nook-app/.task/ci.yml");
+    let verify = section(&ci, "  _ci:pr:parallel:\n", "\n  _ci:main:build:");
+    assert!(
+        !verify.contains("_web:build:parallel"),
+        "the sealed image already contains the validated production web build"
+    );
+    let main = section(&ci, "  _ci:main:\n", "\n  _ci:nightly:e2e:");
+    assert!(
+        !main.contains("_web:e2e:build-dist"),
+        "main must not request the same e2e build before the e2e task checks its stamp"
+    );
+
+    let web = read(&root, "nook-app/nook-web/.task/web.yml");
+    let e2e = section(
+        &web,
+        "  _web:test:e2e:parallel:\n",
+        "\n  _web:e2e:build-if-needed:",
+    );
+    assert!(e2e.contains("_web:e2e:build-if-needed"));
+    assert!(
+        !e2e.contains("bun run build"),
+        "the e2e task must rely on the freshness-checked build instead of rebuilding unconditionally"
     );
 }

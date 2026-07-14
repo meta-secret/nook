@@ -107,8 +107,14 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Preflight, check, build, and e2e
-        run: task ci:main VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }} WASM_BUILD_MODE=prod
+      - name: Preflight, check, build once, and e2e
+        run: >-
+          task ci:main
+          VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }}
+          VITE_SITE_URL=${{ env.CI_RELEASE_URL }}
+          VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}
+          VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
+          WASM_BUILD_MODE=prod
         env:
           CI: true
 
@@ -124,11 +130,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag --annotate "$RELEASE_TAG" "$RELEASE_SHA" --message "Nook $RELEASE_TAG"
           git push origin "refs/tags/$RELEASE_TAG"
-
-      - name: Build stable Pages artifact
-        run: task setup VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }} VITE_SITE_URL=${{ env.CI_RELEASE_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
-        env:
-          CI: true
 
       - name: Extract dist from nook-web image
         run: task docker:extract:dist

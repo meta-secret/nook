@@ -11,6 +11,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 WEB_ROOT="nook-app/nook-web/nook-web-app"
+WEB_GROUP_ROOT="nook-app/nook-web"
+WEB_SHARED_ROOT="$WEB_GROUP_ROOT/nook-web-shared"
+SIMPLE_ROOT="$WEB_GROUP_ROOT/nook-vault-simple"
+SENTINEL_ROOT="$WEB_GROUP_ROOT/nook-vault-sentinel"
 DIST="$WEB_ROOT/dist"
 STAMP="$DIST/.nook-e2e-build-stamp"
 INDEX="$DIST/index.html"
@@ -44,9 +48,18 @@ else
   elif find \
     "$WEB_ROOT/src" \
     "$WEB_ROOT/index.html" \
+    "$WEB_ROOT/package.json" \
     "$WEB_ROOT/vite.config.ts" \
     "$WEB_ROOT/svelte.config.js" \
-    "$WEB_ROOT/src/lib/nook-wasm/nook_wasm_bg.wasm" \
+    "$WEB_SHARED_ROOT/src/vault-app" \
+    "$SIMPLE_ROOT/src" \
+    "$SIMPLE_ROOT/index.html" \
+    "$SIMPLE_ROOT/package.json" \
+    "$SIMPLE_ROOT/vite.config.ts" \
+    "$SENTINEL_ROOT/src" \
+    "$SENTINEL_ROOT/index.html" \
+    "$SENTINEL_ROOT/package.json" \
+    "$SENTINEL_ROOT/vite.config.ts" \
     -newer "$INDEX" \
     -print -quit 2>/dev/null | grep -q .; then
     need=1
