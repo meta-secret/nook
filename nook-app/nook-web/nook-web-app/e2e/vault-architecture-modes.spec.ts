@@ -262,9 +262,7 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-create-keys'),
     ).toBeVisible()
-    const initialSummary = page.getByTestId(
-      'sentinel-onboarding-vault-summary',
-    )
+    const initialSummary = page.getByTestId('sentinel-onboarding-vault-summary')
     const initialSummaryDetails = page.getByTestId(
       'sentinel-onboarding-summary-details',
     )
@@ -298,13 +296,14 @@ test.describe('vault architecture modes', () => {
     expect(brandBox.y).toBeLessThan(progressBox.y)
     expect(brandBox.y).toBeLessThan(96)
     expect(brandBox.height).toBeLessThan(64)
-    expect(
-      progressBox.y - (brandBox.y + brandBox.height),
-    ).toBeLessThanOrEqual(24)
+    expect(progressBox.y - (brandBox.y + brandBox.height)).toBeLessThanOrEqual(
+      24,
+    )
     expect(backButtonBox.x).toBeGreaterThan(brandBox.x + brandBox.width)
     expect(
       Math.abs(
-        backButtonBox.y + backButtonBox.height / 2 -
+        backButtonBox.y +
+          backButtonBox.height / 2 -
           (brandBox.y + brandBox.height / 2),
       ),
     ).toBeLessThan(8)

@@ -248,9 +248,7 @@
     class="pointer-events-none fixed inset-0 opacity-45 [background-image:radial-gradient(#a9b8c5_1px,transparent_1px)] [background-size:22px_22px]"
   ></div>
 
-  <section
-    class="relative mx-auto max-w-7xl px-6 pt-8 pb-12 sm:px-10 sm:pt-10"
-  >
+  <section class="relative mx-auto max-w-7xl px-6 pt-8 pb-12 sm:px-10 sm:pt-10">
     <header
       class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"
       data-testid="sentinel-dashboard-heading"
@@ -752,9 +750,7 @@
             class="relative mt-5 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]"
             data-testid="sentinel-onboarding-summary-details"
           >
-            <div
-              class="min-w-0 border border-white/10 bg-black/10 p-3"
-            >
+            <div class="min-w-0 border border-white/10 bg-black/10 p-3">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
@@ -767,9 +763,7 @@
                 {name.trim() || vault.t('login.sentinel_onboarding_not_set')}
               </dd>
             </div>
-            <div
-              class="min-w-0 border border-white/10 bg-black/10 p-3"
-            >
+            <div class="min-w-0 border border-white/10 bg-black/10 p-3">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
@@ -787,9 +781,7 @@
                     })}
               </dd>
             </div>
-            <div
-              class="border border-white/10 bg-black/10 p-3 sm:min-w-28"
-            >
+            <div class="border border-white/10 bg-black/10 p-3 sm:min-w-28">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
