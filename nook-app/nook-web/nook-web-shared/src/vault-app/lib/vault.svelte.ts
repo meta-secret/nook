@@ -179,7 +179,9 @@ function plainProvider(provider: StorageProvider): StorageProvider {
 export class VaultState {
   browserLocale = new NookBrowserLocale();
   runtimeConfig = new NookRuntimeConfig(
-    NookClientRunModeUtil.parse(import.meta.env.MODE),
+    NookClientRunModeUtil.parse(
+      import.meta.env.VITE_NOOK_CLIENT_RUN_MODE ?? import.meta.env.MODE,
+    ),
     import.meta.env.VITE_E2E_EXPOSE_VAULT === "true",
   );
 
