@@ -17,7 +17,7 @@ ARG VITE_PUBLIC_APP_URL=
 WORKDIR /meta-secret/nook
 
 # Only these small outputs cross the Rust/web boundary. The Rust target/, Cargo registry, and
-# compiler toolchain remain exclusively in BuildKit/GHCR cache.
+# compiler toolchain remain exclusively in the builder's local BuildKit content store.
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
 RUN ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules
 COPY --from=web-artifacts /nook-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm

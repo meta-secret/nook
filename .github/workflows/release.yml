@@ -22,7 +22,6 @@ permissions:
   contents: write
   pages: write
   id-token: write
-  packages: read
 
 concurrency:
   group: production-release
@@ -106,8 +105,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Preflight, check, build once, and e2e
         run: >-

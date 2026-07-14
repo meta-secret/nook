@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   sync-live:
@@ -37,8 +36,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare, build, and run live e2e
         run: task ci:nightly:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000 WASM_BUILD_MODE=prod
@@ -62,7 +59,6 @@ jobs:
       contents: write
       pull-requests: write
       checks: read
-      packages: write
     env:
       FIX_BRANCH: fix/nightly-e2e-${{ github.run_id }}
       GITHUB_REPOSITORY: ${{ github.repository }}
@@ -80,13 +76,9 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=prod
-        env:
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Run ci-fix (Docker + docker.sock)
         env:

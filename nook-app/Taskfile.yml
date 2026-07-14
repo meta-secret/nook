@@ -29,7 +29,6 @@ vars:
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
-  TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -46,7 +45,6 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
-  # CI sets TOOLCHAIN_REGISTRY so bake reuses the split GHCR rust/web caches; dev builds locally.
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
   VITE_SITE_URL: '{{default "" .VITE_SITE_URL}}'
@@ -84,10 +82,9 @@ tasks:
     # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
     # generated WASM package + coverage files to a commit-scoped, invocation-isolated host directory.
     # Phase two consumes that tiny directory to build the web image; builder-wasm is never a
-    # parent/context of nook-web. Do not retry the whole solve here: registry/session failures can
-    # take minutes to surface, so a retry loop makes a failed PR occupy the runner indefinitely.
+    # parent/context of nook-web. Do not retry the whole solve here: a failed graph should surface
+    # immediately instead of occupying the delivery runner indefinitely.
     env:
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
       VITE_BASE: '{{.VITE_BASE}}'
@@ -127,7 +124,6 @@ tasks:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
     dir: '{{.REPO_ROOT}}'
     env:
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
@@ -146,7 +142,6 @@ tasks:
     desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.
     dir: '{{.REPO_ROOT}}'
     env:
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:

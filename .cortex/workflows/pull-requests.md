@@ -189,7 +189,7 @@ Skip e2e for small, isolated Rust-only or docs-only changes.
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
-`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build, with **no browser e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish and the automatic full browser e2e gate run on main only (`ci:main:publish`).
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build, with **no browser e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. The automatic full browser e2e gate runs on main only (`ci:main`).
 
 **Do not stop after opening the PR.** Wait only for applicable repository-owned
 workflows: `PR`, plus `Web research` when `.github/workflows/web-research.yml` or

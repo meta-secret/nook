@@ -1,4 +1,4 @@
-// App bake: shared variables, parallel groups, and the publish variants.
+// App bake: shared variables, parallel groups, and loadable runtime variants.
 // Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
 // is merged in via multiple -f flags (bake has no `include`):
 //   nook-app/docker/base.docker-bake.hcl        -> rust-base, web-base
@@ -12,8 +12,8 @@
 // parallel with web-base -> web-deps. web-artifacts is exported to a commit-scoped,
 // invocation-isolated host directory.
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
-// Rust snapshot never becomes a context or parent of the final image. Main publishes the two cache
-// lineages independently; no combined Rust + web image exists.
+// Rust snapshot never becomes a context or parent of the final image. All lineages reuse the
+// persistent delivery runner's local BuildKit content store; no combined Rust + web image exists.
 
 variable "DOCKER_IMAGE" {
   default = "nook-web:local"
@@ -31,48 +31,12 @@ variable "DOCKER_E2E_IMAGE" {
   default = "nook-web-e2e:local"
 }
 
-// ghcr.io/<owner>/<repo>/toolchain — remote caches for the compact web dependency and browser
-// lineages. Rust deliberately does not use a registry cache: exporting target/ with mode=max
-// serializes every intermediate compiler mutation, and importing that history is more expensive
-// than relying on the persistent delivery runner's local BuildKit cache.
-variable "TOOLCHAIN_REGISTRY" {
-  default = "ghcr.io/meta-secret/nook/toolchain"
-}
-
-// Push the cache to GHCR? Only CI has write creds and should publish the shared base. Local dev
-// leaves this empty, so it PULLS the cache but never pushes (avoids a 403 without registry auth).
-variable "TOOLCHAIN_PUSH" {
-  default = ""
-}
-
 // Passed to every target that reaches the internal builder-wasm Dockerfile stage. Setting only the
 // standalone `builder-wasm` bake target is insufficient for scratch exports such as web-artifacts,
 // because each final target owns its own Dockerfile solve.
 variable "WASM_BUILD_MODE" {
   default = "dev"
 }
-
-// Rust is runner-local only. Keep these variables because package-local bake targets share the
-// same interface, but never import or export the enormous target/ snapshot through a registry.
-rust_cache_from = []
-
-web_cache_from = TOOLCHAIN_REGISTRY != "" ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
-] : []
-
-rust_cache_to = []
-
-web_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache,mode=max",
-] : []
-
-web_e2e_cache_from = TOOLCHAIN_REGISTRY != "" ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-e2e-buildcache",
-] : []
-
-web_e2e_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-e2e-buildcache,mode=max",
-] : []
 
 // Default: build the nook-web image (source-in-image) that `task` runs.
 group "default" {
@@ -90,15 +54,9 @@ group "prepare-with-unformatted-rust" {
   targets = ["web-artifacts", "web-deps"]
 }
 
-// Pre-build both independent cache lineages in parallel.
+// Pre-build both independent local lineages in parallel.
 group "builders" {
   targets = ["builder-wasm", "web-deps"]
-}
-
-// Main publishes only the compact web cache images in parallel. Keeping this legacy group name
-// preserves the existing Task/workflow interface.
-group "toolchain-push" {
-  targets = ["web-toolchain-push", "web-e2e-toolchain-push"]
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
@@ -132,18 +90,4 @@ target "nook-rust-browser" {
   inherits = ["_nook-rust-browser-common"]
   tags     = [DOCKER_RUST_BROWSER_IMAGE]
   output   = ["type=docker"]
-}
-
-// Publish only the web dependency cache. This lineage has no Cargo registry, Rust toolchain, or target/.
-target "web-toolchain-push" {
-  inherits = ["web-deps"]
-  output   = ["type=cacheonly"]
-  cache-to = web_cache_to
-}
-
-# Browser cache is separate so PR cache imports never fetch Chromium layers.
-target "web-e2e-toolchain-push" {
-  inherits = ["web-e2e-base"]
-  output   = ["type=cacheonly"]
-  cache-to = web_e2e_cache_to
 }

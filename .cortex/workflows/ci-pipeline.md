@@ -7,7 +7,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
 | [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt capability-specific WASM, web/unit tests, all three web builds, Cloudflare preview with `/simple/` + `/sentinel/`, `github-pages` deployment status | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, Cloudflare Pages deploy to development `dev.nokey.sh` | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On persistent `nook`: pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → **squash merge** or manual handoff (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -22,7 +22,6 @@ flowchart LR
 
   merge[Squash merge to main] --> main_yml[main.yml]
   main_yml --> main_verify[Verify + build + e2e]
-  main_yml --> toolchain_push[Push toolchain to GHCR]
   main_yml --> cf_dev[Cloudflare Pages dev]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
@@ -253,8 +252,7 @@ self-hosted `nook` pool and reuses its Docker/BuildKit cache. `task ci:pr` runs
 the standalone Rust **repository preflight** before app setup, then one parallel
 Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
 no browser e2e, Cloudflare preview,
-and a successful `github-pages` deployment status for the PR head SHA — no
-toolchain image push). The preview deploy reuses that prepared sealed image and
+and a successful `github-pages` deployment status for the PR head SHA). The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
 `nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
 inputs reuse the exact base commit's main artifact (with a coverage-only build
@@ -274,24 +272,21 @@ must still be addressed, but no external status may delay merge or handoff.
 persistent self-hosted `nook` runner, so the Rust target and other local BuildKit
 layers survive the PR -> main -> release chain instead of being downloaded again.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
-GitHub-hosted runners. They may import the compact web GHCR caches, but compile Rust
-cold rather than restoring a registry `mode=max` target snapshot. Main updates the
-web-dependency and browser-e2e cache manifests after green verify and deploys the active development channel to Cloudflare
-Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
-`release.yml` runs the main-equivalent gate without pushing the toolchain,
+GitHub-hosted runners. They build cold and never import registry cache snapshots.
+Main deploys the active development channel to Cloudflare Pages for
+`dev.nokey.sh` from the same prepared image, without a second setup.
+`release.yml` runs the main-equivalent gate,
 deploys an immutable semantic-version tag to GitHub Pages for the public
 `nokey.sh` site and to independent Cloudflare Pages projects for Simple and
 Sentinel, then verifies app identity, security headers, exact commit, and
 extension-route presence/absence before publishing the GitHub Release.
 
-Main's cache publish must authenticate immediately before the GHCR
-`toolchain-push` bake group. The legacy group name now fans out to the independent
-web dependency and browser targets; Rust remains runner-local. Do not assume a prior Docker login from setup is still
-visible to Buildx throughout the job; a green verify/e2e run can still
-block the Pages deploy if the final push falls back to anonymous GHCR auth and
-gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into
-`task ci:main:publish`, and `docker:push` re-logins before pushing. After the
-publish gate, `main.yml` deploys the Cloudflare artifact with
+No delivery workflow logs into GHCR for BuildKit, imports a registry cache
+manifest, or publishes cache layers. The persistent `nook` runners reuse only
+their local BuildKit content store across the PR → main → release chain. This is
+an explicit reliability boundary: cache restoration must never block validation
+on a remote blob or registry session. After the `task ci:main` gate, `main.yml`
+deploys the Cloudflare artifact with
 `VITE_SITE_URL=https://dev.nokey.sh` and
 `VITE_PUBLIC_APP_URL=https://dev.nokey.sh`, ensures the Cloudflare Pages custom
 domain exists, verifies the preconfigured Cloudflare DNS CNAME and HTTPS
@@ -355,7 +350,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | `NOOK_GITHUB_PAT`                                   | sync-live e2e, ci-fix PR/push, and agent-implement PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; PR CI then records that preview as a successful `github-pages` GitHub deployment for ruleset enforcement                                         |
-| `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core + nook-auth2 coverage comment                                                                                                 |
+| `GITHUB_TOKEN`                                      | PR comments, deployment records, nook-core + nook-auth2 coverage comment                                                                                             |
 | `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml) and agent-implement.yml                                                                                                   |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.

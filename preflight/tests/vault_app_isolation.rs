@@ -282,7 +282,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
 }
 
 #[test]
-fn delivery_ci_reuses_local_layers_and_one_remote_cache_per_lineage() {
+fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     let root = repository_root();
     for workflow in [
         ".github/workflows/main.yml",
@@ -296,31 +296,34 @@ fn delivery_ci_reuses_local_layers_and_one_remote_cache_per_lineage() {
     }
 
     let bake = read(&root, "nook-app/docker-bake.hcl");
-    assert!(
-        !bake.contains("rust-buildcache"),
-        "Rust target snapshots must remain runner-local; registry mode=max transfers their entire layer history"
-    );
-    assert!(
-        !bake.contains("rust-toolchain-push"),
-        "the toolchain publish group must not export Rust target snapshots"
-    );
-    for cache in ["web-buildcache", "web-e2e-buildcache"] {
-        assert_eq!(
-            bake.matches(cache).count(),
-            2,
-            "{cache} must have exactly one import and one export"
-        );
-    }
     for retired in [
-        ":buildcache",
-        "rust-${GIT_COMMIT_ID}",
-        "web-${GIT_COMMIT_ID}",
-        "web-e2e-${GIT_COMMIT_ID}",
-        ":${GIT_COMMIT_ID}",
+        "type=registry",
+        "TOOLCHAIN_REGISTRY",
+        "TOOLCHAIN_PUSH",
+        "toolchain-push",
+        "buildcache",
+        "${GIT_COMMIT_ID}",
     ] {
         assert!(
             !bake.contains(retired),
-            "retired overlapping cache reference remains: {retired}"
+            "remote BuildKit cache transfer remains in bake configuration: {retired}"
+        );
+    }
+
+    let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
+    for retired in ["docker/login-action", "ghcr.io", "TOOLCHAIN_REGISTRY"] {
+        assert!(
+            !setup.contains(retired),
+            "Docker setup must not authenticate or configure remote BuildKit caches: {retired}"
+        );
+    }
+
+    let main = read(&root, ".github/workflows/main.yml");
+    assert!(main.contains("run: task ci:main "));
+    for retired in ["ci:main:publish", "PUSH_TOOLCHAIN", "TOOLCHAIN_REGISTRY"] {
+        assert!(
+            !main.contains(retired),
+            "main must not publish or import remote BuildKit caches: {retired}"
         );
     }
 

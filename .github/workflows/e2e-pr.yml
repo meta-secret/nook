@@ -30,7 +30,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
   pull-requests: read
 
 concurrency:
@@ -68,8 +67,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (format, wasm, verify, web)
         run: task ci:main:build SETUP_TARGET=nook-web-e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod

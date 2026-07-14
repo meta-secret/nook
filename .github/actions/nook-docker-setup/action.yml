@@ -1,10 +1,5 @@
 name: Nook Docker setup
-description: Task, containerd image store, and GHCR login (split cache resolve/pull/bake runs via task setup).
-
-inputs:
-  github-token:
-    description: Token with packages:read/write for GHCR login and build cache.
-    required: true
+description: Task and containerd image store setup for runner-local BuildKit caching.
 
 runs:
   using: composite
@@ -65,15 +60,7 @@ runs:
         # slow classic export and we would silently lose the speedup.
         docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'
 
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ inputs.github-token }}
-
-    - name: Set toolchain registry
+    - name: Set CI environment
       shell: bash
       run: |
-        echo "TOOLCHAIN_REGISTRY=$(echo "ghcr.io/${{ github.repository }}/toolchain" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
         echo "NOOK_ENV=ci" >> $GITHUB_ENV
