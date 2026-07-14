@@ -451,16 +451,14 @@
 
           <HeaderLanguageSelect {vault} />
 
-          {#if siblingAppUrl()}
+          {#if IS_SENTINEL_APP}
             <a
               href={siblingAppUrl()}
               class="hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex"
               data-testid="sibling-vault-app-link"
               onclick={navigateToSiblingApp}
             >
-              {IS_SENTINEL_APP
-                ? vault.t('app.open_simple_app')
-                : vault.t('app.open_sentinel_app')}
+              {vault.t('app.open_simple_app')}
             </a>
           {/if}
 

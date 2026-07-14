@@ -40,7 +40,9 @@ of these boundaries in the built production artifacts.
 
 Sentinel's web artifact has no extension-connect route. The extension manifest
 accepts external connections only from `simple.nokey.sh` and excludes
-`sentinel.nokey.sh` from content-script injection.
+`sentinel.nokey.sh` from content-script injection. Simple never advertises or
+links to Sentinel in its vault application shell. Sentinel may offer a one-way
+link back to Simple for users leaving the quorum-only product.
 
 ## Deployment
 

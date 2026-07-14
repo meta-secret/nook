@@ -156,9 +156,8 @@ Identity Services in the browser; the current Google web client is configured
 for `http://localhost:5173`, `https://simple.nokey.sh`,
 `https://sentinel.nokey.sh`, and `https://dev.nokey.sh`. Nook's CloudKit JS
 token must likewise register the two production vault origins and the
-development origin. `https://nokey.sh` remains registered only while the
-time-bounded legacy migration broker needs provider-state compatibility; it is
-not a production vault origin.
+development origin. `https://nokey.sh` is the public product site, not a
+production vault or provider-callback origin.
 
 Google/Auth Platform branding should use `https://nokey.sh/` as the public app
 home page. The root path is the crawlable product and branding page; the vault
@@ -171,8 +170,8 @@ the sitemap. Legal branding links should use the static
 `https://nokey.sh/privacy.html` and `https://nokey.sh/terms.html` documents so
 GitHub Pages can serve them directly without relying on the SPA router.
 `robots.txt` should allow the public root/legal pages and assets while
-disallowing migration and private utility routes. Both vault applications emit
-`robots.txt` with `Disallow: /`.
+disallowing private utility routes. Both vault applications emit `robots.txt`
+with `Disallow: /`.
 
 PR previews deploy to Cloudflare Pages aliases such as
 `https://pr-191.nook-1n8.pages.dev/`. The browser origin is the exact

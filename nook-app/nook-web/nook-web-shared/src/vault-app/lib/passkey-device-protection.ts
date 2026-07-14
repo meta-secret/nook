@@ -3,6 +3,7 @@ import type { DeviceMode } from "$lib/vault-architecture";
 
 const PASSKEY_PRF_UNAVAILABLE = "PASSKEY_PRF_UNAVAILABLE";
 const PASSKEY_UNAVAILABLE = "PASSKEY_UNAVAILABLE";
+const PASSKEY_CEREMONY_NOT_ALLOWED = "PASSKEY_CEREMONY_NOT_ALLOWED";
 
 export function isPasskeyUnavailableError(error: unknown): boolean {
   return error instanceof Error && error.message.includes(PASSKEY_UNAVAILABLE);
@@ -11,6 +12,13 @@ export function isPasskeyUnavailableError(error: unknown): boolean {
 export function isPasskeyPrfUnavailableError(error: unknown): boolean {
   return (
     error instanceof Error && error.message.includes(PASSKEY_PRF_UNAVAILABLE)
+  );
+}
+
+export function isPasskeyCeremonyNotAllowedError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(PASSKEY_CEREMONY_NOT_ALLOWED)
   );
 }
 

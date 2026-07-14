@@ -27,6 +27,7 @@ use wasm_bindgen_futures::JsFuture;
 
 pub(crate) const PASSKEY_PRF_UNAVAILABLE: &str = "PASSKEY_PRF_UNAVAILABLE";
 pub(crate) const PASSKEY_UNAVAILABLE: &str = "PASSKEY_UNAVAILABLE";
+pub(crate) const PASSKEY_CEREMONY_NOT_ALLOWED: &str = "PASSKEY_CEREMONY_NOT_ALLOWED";
 pub(crate) const DEFAULT_PASSKEY_LABEL: &str = "Nook device";
 
 const CHALLENGE_LEN: usize = 32;
@@ -216,14 +217,34 @@ async fn credential_ceremony(method: &str, options: &JsValue) -> Result<JsValue,
 fn credential_ceremony_error(method: &str, error: &JsValue) -> JsError {
     let name = js_error_text(error, "name");
     let message = js_error_text(error, "message");
-    let detail = match (name.as_deref(), message.as_deref()) {
+    JsError::new(&credential_ceremony_error_message(
+        method,
+        name.as_deref(),
+        message.as_deref(),
+    ))
+}
+
+fn credential_ceremony_error_message(
+    method: &str,
+    name: Option<&str>,
+    message: Option<&str>,
+) -> String {
+    // WebAuthn intentionally uses NotAllowedError for multiple
+    // privacy-sensitive outcomes, including cancellation, timeout, policy
+    // refusal, and an unavailable credential. Preserve that ambiguity as a
+    // typed result so presentation layers can explain it without guessing.
+    if name == Some("NotAllowedError") {
+        return format!("{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey {method} request did not finish.");
+    }
+
+    let detail = match (name, message) {
         (Some(name), Some(message)) => format!("{name}: {message}"),
         (Some(name), None) => name.to_owned(),
         (None, Some(message)) => message.to_owned(),
         (None, None) => "unknown browser error".to_owned(),
     };
 
-    JsError::new(&format!("Passkey {method} ceremony failed ({detail})."))
+    format!("Passkey {method} ceremony failed ({detail}).")
 }
 
 fn js_error_text(error: &JsValue, property: &str) -> Option<String> {
@@ -677,6 +698,30 @@ mod tests {
                 .expect("first prf input")
                 .len(),
             32
+        );
+    }
+
+    #[test]
+    fn not_allowed_ceremony_is_classified_without_claiming_an_exact_cause() {
+        assert_eq!(
+            credential_ceremony_error_message(
+                "get",
+                Some("NotAllowedError"),
+                Some("The operation either timed out or was not allowed."),
+            ),
+            format!("{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey get request did not finish.")
+        );
+    }
+
+    #[test]
+    fn other_ceremony_errors_keep_the_browser_detail() {
+        assert_eq!(
+            credential_ceremony_error_message(
+                "create",
+                Some("SecurityError"),
+                Some("This is an invalid domain."),
+            ),
+            "Passkey create ceremony failed (SecurityError: This is an invalid domain.)."
         );
     }
 }
