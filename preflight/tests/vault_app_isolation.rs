@@ -86,3 +86,22 @@ fn extension_and_release_contract_preserve_origin_isolation() {
         );
     }
 }
+
+#[test]
+fn development_and_release_wasm_build_modes_stay_separate() {
+    let root = repository_root();
+    let main = read(&root, ".github/workflows/main.yml");
+    assert!(main.contains("WASM_BUILD_MODE=dev"));
+    assert!(main.contains("WASM_BUILD_MODE: dev"));
+    assert!(
+        !main.contains("WASM_BUILD_MODE=prod") && !main.contains("WASM_BUILD_MODE: prod"),
+        "main must not serialize production wasm optimization for development artifacts"
+    );
+
+    let release = read(&root, ".github/workflows/release.yml");
+    assert!(release.contains("WASM_BUILD_MODE=prod"));
+    assert!(
+        !release.contains("WASM_BUILD_MODE=dev"),
+        "release artifacts must remain production-optimized"
+    );
+}
