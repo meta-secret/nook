@@ -7,10 +7,6 @@
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
 #
-# On CI failure: task ci-agent:fix (Cursor SDK + GitHub REST API) fixes, opens PR, squash-merges.
-# Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a user so
-# pr.yml runs and branch protection does not require manual bot-approval).
-#
 # Playwright browsers are pre-installed in the web base image.
 
 name: Main
@@ -38,9 +34,6 @@ env:
   CI_MAIN_CF_PAGES_PROJECT: nokey-sh
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
-  CI_MAIN_GITHUB_POLL_MS: "3000"
-  CI_MAIN_GITHUB_SYNC_TIMEOUT_MS: "15000"
-  CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS: "30000"
 
 jobs:
   ci:
@@ -210,46 +203,3 @@ jobs:
           path: coverage/main
           retention-days: 90
           if-no-files-found: error
-
-  ci-fix:
-    name: AI fix, PR, and merge
-    needs: ci
-    if: failure() && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: write
-      pull-requests: write
-      checks: read
-    env:
-      FIX_BRANCH: fix/ci-${{ github.run_id }}
-      GITHUB_REPOSITORY: ${{ github.repository }}
-      GITHUB_RUN_ID: ${{ github.run_id }}
-      # Match the 6-hour GitHub-hosted job ceiling instead of the harness's 90-minute default.
-      CI_AGENT_TIMEOUT_MS: '21600000'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-
-      - name: Build split Rust/WASM and web images
-        run: task setup WASM_BUILD_MODE=dev
-
-      - name: Run ci-fix (Docker + docker.sock)
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          REPO_ROOT: ${{ github.workspace }}
-          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
-          WASM_BUILD_MODE: dev
-          VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-          NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}-fix
-          NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}
-          NOOK_GITHUB_SYNC_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_SYNC_TIMEOUT_MS }}
-          NOOK_GITHUB_CONNECT_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS }}
-        run: task ci-agent:fix

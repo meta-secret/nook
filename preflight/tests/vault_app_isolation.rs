@@ -191,7 +191,6 @@ fn development_and_release_wasm_build_modes_stay_separate() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     assert!(main.contains("WASM_BUILD_MODE=dev"));
-    assert!(main.contains("WASM_BUILD_MODE: dev"));
     assert!(
         !main.contains("WASM_BUILD_MODE=prod") && !main.contains("WASM_BUILD_MODE: prod"),
         "main must not serialize production wasm optimization for development artifacts"
@@ -202,6 +201,16 @@ fn development_and_release_wasm_build_modes_stay_separate() {
     assert!(
         !release.contains("WASM_BUILD_MODE=dev"),
         "release artifacts must remain production-optimized"
+    );
+}
+
+#[test]
+fn main_failures_do_not_trigger_an_ai_repair_agent() {
+    let root = repository_root();
+    let main = read(&root, ".github/workflows/main.yml");
+    assert!(
+        !main.contains("\n  ci-fix:") && !main.contains("task ci-agent:fix"),
+        "main failures must remain visible for manual handling"
     );
 }
 
