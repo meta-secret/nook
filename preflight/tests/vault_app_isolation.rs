@@ -63,12 +63,11 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
             "WASM Dockerfile still contains retired artifact {forbidden}"
         );
     }
-    let web_dockerfile = read(
-        &root,
-        "nook-app/nook-web/nook-web-app/Dockerfile",
-    );
+    let web_dockerfile = read(&root, "nook-app/nook-web/nook-web-app/Dockerfile");
     assert_eq!(
-        web_dockerfile.matches("COPY --from=web-artifacts /nook-wasm ").count(),
+        web_dockerfile
+            .matches("COPY --from=web-artifacts /nook-wasm ")
+            .count(),
         1,
         "web build must receive one shared WASM package"
     );
