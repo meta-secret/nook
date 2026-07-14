@@ -63,6 +63,27 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
             "WASM Dockerfile still contains retired artifact {forbidden}"
         );
     }
+    let wasm_tasks = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    assert_eq!(
+        wasm_tasks.matches("wasm-pack build nook-wasm").count(),
+        1,
+        "the fast rebuild path must compile the shared WASM package once"
+    );
+    for forbidden in [
+        "nook-wasm-simple",
+        "nook-wasm-sentinel",
+        "nook-wasm-extension",
+        "nook-wasm-migration",
+        "app-simple",
+        "app-sentinel",
+        "app-extension",
+        "app-legacy-migration",
+    ] {
+        assert!(
+            !wasm_tasks.contains(forbidden),
+            "fast WASM rebuild still contains retired artifact or feature {forbidden}"
+        );
+    }
     let web_dockerfile = read(&root, "nook-app/nook-web/nook-web-app/Dockerfile");
     assert_eq!(
         web_dockerfile

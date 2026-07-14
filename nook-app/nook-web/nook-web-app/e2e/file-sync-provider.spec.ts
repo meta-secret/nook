@@ -14,6 +14,7 @@ import {
   waitForJoinerVaultReady,
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
+  waitForVaultSyncIdle,
 } from './helpers'
 import {
   connectSyncGenesisDevice,
@@ -210,6 +211,7 @@ async function addFileBackupProvider(
 ) {
   // Provider snapshots must not be mutated while periodic sync is loading the
   // same snapshot, or the in-flight read can restore the previous provider set.
+  await waitForVaultSyncIdle(page)
   await waitForVaultOperationsIdle(page)
   await installSyncRemote(page, target)
   await seedExtraOauthFileProviders(page, [
