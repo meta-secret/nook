@@ -1,6 +1,7 @@
 .git
 target
 nook-app/target
+agentic-ai/meta-agent/target
 node_modules
 dist
 nook-app/nook-web/node_modules
