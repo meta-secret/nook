@@ -22,7 +22,6 @@ permissions:
   contents: write
   pages: write
   id-token: write
-  packages: read
 
 concurrency:
   group: production-release
@@ -36,7 +35,9 @@ env:
 jobs:
   deploy:
     name: Verify and deploy production
-    runs-on: ubuntu-latest
+    # Reuse the exact Docker/BuildKit state warmed by PR and main. A fresh hosted runner would pull
+    # the full Rust cache again immediately before release.
+    runs-on: nook
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -104,11 +105,15 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Preflight, check, build, and e2e
-        run: task ci:main VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }} WASM_BUILD_MODE=prod
+      - name: Preflight, check, build once, and e2e
+        run: >-
+          task ci:main
+          VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }}
+          VITE_SITE_URL=${{ env.CI_RELEASE_URL }}
+          VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}
+          VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
+          WASM_BUILD_MODE=prod
         env:
           CI: true
 
@@ -124,11 +129,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag --annotate "$RELEASE_TAG" "$RELEASE_SHA" --message "Nook $RELEASE_TAG"
           git push origin "refs/tags/$RELEASE_TAG"
-
-      - name: Build stable Pages artifact
-        run: task setup VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }} VITE_SITE_URL=${{ env.CI_RELEASE_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
-        env:
-          CI: true
 
       - name: Extract dist from nook-web image
         run: task docker:extract:dist
@@ -156,17 +156,30 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          for spec in "simple:nokey-simple" "sentinel:nokey-sentinel"; do
-            artifact="${spec%%:*}"
-            project="${spec#*:}"
-            dist_dir="nook-app/nook-web/nook-vault-$artifact/dist"
-            npx --yes wrangler@4 pages project create "$project" --production-branch=main >/dev/null 2>&1 || true
-            npx --yes wrangler@4 pages deploy \
-              "$dist_dir" \
-              --project-name="$project" \
-              --branch=main \
-              --commit-dirty=true
-          done
+          # The self-hosted delivery runner guarantees Docker, not host Node/npm. Use the Node
+          # image already consumed by the web build so release deployment has an explicit CLI
+          # runtime without adding npm or Wrangler to every PR image.
+          docker run --rm \
+            --env CLOUDFLARE_API_TOKEN \
+            --env CLOUDFLARE_ACCOUNT_ID \
+            --env HOME=/tmp \
+            --user "$(id -u):$(id -g)" \
+            --volume "$PWD:/workspace" \
+            --workdir /workspace \
+            node:24-trixie-slim \
+            sh -euc '
+              for spec in "simple:nokey-simple" "sentinel:nokey-sentinel"; do
+                artifact="${spec%%:*}"
+                project="${spec#*:}"
+                dist_dir="nook-app/nook-web/nook-vault-$artifact/dist"
+                npx --yes wrangler@4 pages project create "$project" --production-branch=main >/dev/null 2>&1 || true
+                npx --yes wrangler@4 pages deploy \
+                  "$dist_dir" \
+                  --project-name="$project" \
+                  --branch=main \
+                  --commit-dirty=true
+              done
+            '
 
       - name: Attach and verify isolated production domains
         env:
@@ -248,24 +261,34 @@ jobs:
         uses: actions/deploy-pages@v5
 
       - name: Publish GitHub Release
-        shell: bash
+        uses: actions/github-script@v9
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
-        run: |
-          set -euo pipefail
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tag = process.env.RELEASE_TAG
+            const sha = process.env.RELEASE_SHA
+            const prerelease = process.env.IS_PRERELEASE === 'true'
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "GitHub Release $RELEASE_TAG already exists; leaving it unchanged."
-            exit 0
-          fi
+            try {
+              await github.rest.repos.getReleaseByTag({ ...context.repo, tag })
+              core.info(`GitHub Release ${tag} already exists; leaving it unchanged.`)
+              return
+            } catch (error) {
+              if (error.status !== 404) throw error
+            }
 
-          release_flags=(--verify-tag --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes)
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
-            release_flags+=(--prerelease)
-          else
-            release_flags+=(--latest)
-          fi
-          gh release create "$RELEASE_TAG" "${release_flags[@]}"
+            // Fail instead of silently creating a release from a missing/movable tag.
+            await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` })
+            await github.rest.repos.createRelease({
+              ...context.repo,
+              tag_name: tag,
+              target_commitish: sha,
+              name: tag,
+              generate_release_notes: true,
+              prerelease,
+              make_latest: prerelease ? 'false' : 'true',
+            })

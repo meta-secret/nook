@@ -201,7 +201,6 @@ tasks:
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
         -e DOCKER={{.DOCKER}}
         -e DOCKER_IMAGE
-        -e TOOLCHAIN_REGISTRY
         -e NOOK_ENV
         -e CI=1
         {{.CI_AGENT_IMAGE}}

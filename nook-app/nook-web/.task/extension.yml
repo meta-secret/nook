@@ -10,7 +10,7 @@ tasks:
         vars: { TASK: _extension:build }
 
   extension:check:
-    desc: Type-check and build the browser extension in Docker.
+    desc: Type-check the browser extension and verify the build sealed by setup.
     deps:
       - setup
     cmds:
@@ -111,10 +111,9 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun run build
 
   _extension:check:
-    desc: Type-check and build the browser extension.
+    desc: Type-check the browser extension; setup already validated and sealed its build.
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run check
-      - cd "{{.EXTENSION_ROOT}}" && bun run build
 
   _extension:test:e2e:
     desc: Run browser extension Playwright e2e.

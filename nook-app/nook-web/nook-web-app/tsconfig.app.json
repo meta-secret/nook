@@ -27,7 +27,6 @@
   },
   "include": [
     "src/main.ts",
-    "src/migration.ts",
     "../nook-web-shared/src/**/*.ts",
     "../nook-web-shared/src/**/*.svelte",
     "tests/**/*.ts"

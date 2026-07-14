@@ -1,10 +1,5 @@
 name: Nook Docker setup
-description: Task, containerd image store, and GHCR login (split cache resolve/pull/bake runs via task setup).
-
-inputs:
-  github-token:
-    description: Token with packages:read/write for GHCR login and build cache.
-    required: true
+description: Task and containerd image store setup for runner-local BuildKit caching.
 
 runs:
   using: composite
@@ -36,7 +31,7 @@ runs:
     # Enable the containerd image store so the `docker` driver builder (the daemon's built-in
     # BuildKit, which `task setup` selects via `docker context show` -> "default") writes build
     # results STRAIGHT into the image store — no full-image tarball export + load. The common web
-    # image is now slim, while the heavy Rust lineage stays in BuildKit/GHCR cache. We do NOT use
+    # image is now slim, while the heavy Rust lineage stays in the runner's local BuildKit cache. We do NOT use
     # docker/setup-buildx-action: that creates a
     # `docker-container` builder which forces a full-image re-export on every build.
     # Recent ubuntu-latest (Docker 29+) enables this by default, but we set it explicitly so the
@@ -65,15 +60,7 @@ runs:
         # slow classic export and we would silently lose the speedup.
         docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'
 
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ inputs.github-token }}
-
-    - name: Set toolchain registry
+    - name: Set CI environment
       shell: bash
       run: |
-        echo "TOOLCHAIN_REGISTRY=$(echo "ghcr.io/${{ github.repository }}/toolchain" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
         echo "NOOK_ENV=ci" >> $GITHUB_ENV

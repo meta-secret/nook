@@ -1,14 +1,11 @@
-# Main branch: one container for format/wasm/verify/build/e2e (task ci:main:publish);
-# deploy the development channel to Cloudflare Pages.
+# Main branch: one container for format/wasm/verify/build/e2e (task ci:main);
+# deploy the fast, unoptimized development channel to Cloudflare Pages. Immutable releases remain
+# responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
-#
-# On CI failure: task ci-agent:fix (Cursor SDK + GitHub REST API) fixes, opens PR, squash-merges.
-# Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a user so
-# pr.yml runs and branch protection does not require manual bot-approval).
 #
 # Playwright browsers are pre-installed in the web base image.
 
@@ -37,39 +34,31 @@ env:
   CI_MAIN_CF_PAGES_PROJECT: nokey-sh
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
-  CI_MAIN_GITHUB_POLL_MS: "3000"
-  CI_MAIN_GITHUB_SYNC_TIMEOUT_MS: "15000"
-  CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS: "30000"
 
 jobs:
   ci:
     name: Check, build, e2e, and deploy dev
-    runs-on: ubuntu-latest
+    # Keep the multi-GB Rust target and browser layers on the persistent delivery runner instead of
+    # downloading them into a fresh GitHub-hosted VM after every merge.
+    runs-on: nook
     environment:
       name: development
       url: https://dev.nokey.sh/
     permissions:
       contents: read
       deployments: write
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Preflight, check, build, e2e, and push toolchain
-        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=prod
+      - name: Preflight, check, build, and e2e
+        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
         env:
           CI: true
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_COMMIT_ID: ${{ github.sha }}
-          PUSH_TOOLCHAIN: "1"
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Deploy development to Cloudflare Pages
         id: deploy-dev
@@ -80,9 +69,9 @@ jobs:
           CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
           CF_PAGES_PRODUCTION_BRANCH: main
         run: |
-          # ci:main:publish prepared the sealed image; deploy it without a second setup/bake.
+          # ci:main prepared the sealed image; deploy it without a second setup/bake.
           set +e
-          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod 2>&1)"
+          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
           status=$?
           set -e
           echo "$out"
@@ -214,51 +203,3 @@ jobs:
           path: coverage/main
           retention-days: 90
           if-no-files-found: error
-
-  ci-fix:
-    name: AI fix, PR, and merge
-    needs: ci
-    if: failure() && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: write
-      pull-requests: write
-      checks: read
-      packages: write
-    env:
-      FIX_BRANCH: fix/ci-${{ github.run_id }}
-      GITHUB_REPOSITORY: ${{ github.repository }}
-      GITHUB_RUN_ID: ${{ github.run_id }}
-      # Match the 6-hour GitHub-hosted job ceiling instead of the harness's 90-minute default.
-      CI_AGENT_TIMEOUT_MS: '21600000'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build split Rust/WASM and web images
-        run: task setup WASM_BUILD_MODE=prod
-        env:
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
-
-      - name: Run ci-fix (Docker + docker.sock)
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          REPO_ROOT: ${{ github.workspace }}
-          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
-          WASM_BUILD_MODE: prod
-          VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-          NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}-fix
-          NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}
-          NOOK_GITHUB_SYNC_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_SYNC_TIMEOUT_MS }}
-          NOOK_GITHUB_CONNECT_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS }}
-        run: task ci-agent:fix

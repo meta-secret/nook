@@ -1,7 +1,7 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
 # build and deploy the preview. Only browser e2e is excluded.
 # Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
-# and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
+# and nightly runs sync-live. Only nightly failures invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
@@ -22,7 +22,6 @@ permissions:
   actions: read
   contents: read
   deployments: write
-  packages: read
   pull-requests: write
   issues: write
 
@@ -43,8 +42,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
       # dependency preparation. Never split Rust into an earlier solve: that serializes the critical

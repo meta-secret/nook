@@ -19,12 +19,12 @@ Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 
-The public site at [nokey.sh](https://nokey.sh) is the sealed-capsule landing
-page and locked legacy-migration broker (English / Russian). Everyday Simple
-vaults live at [simple.nokey.sh](https://simple.nokey.sh); quorum-protected
-Sentinel vaults live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are
-independent applications and browser origins, not modes in one production app.
-The browser extension can pair only with Simple Vault.
+The public site lives at [nokey.sh](https://nokey.sh) (English / Russian).
+Everyday Simple vaults live at
+[simple.nokey.sh](https://simple.nokey.sh); quorum-protected Sentinel vaults
+live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are independent
+applications and browser origins, not modes in one production app. The browser
+extension can pair only with Simple Vault.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -147,7 +147,7 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
 | `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
 | `nook-vault-simple` | Independent Svelte 5 Simple Vault application and artifact |
 | `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application and artifact |
-| `nook-web-app` | Public site, locked migration broker, and unified local e2e harness |
+| `nook-web-app` | Public site and unified local e2e harness |
 | `nook-web-extension` | Simple-only Manifest V3 browser extension |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
 | `agentic-ai/meta-agent` | Rust CLI that plans validated task DAGs and executes safe waves with embedded Codex agents |
@@ -201,6 +201,11 @@ Open [http://localhost:5173](http://localhost:5173) for the landing page, or
 test harness. The production builds are `bun run build` inside
 `nook-vault-simple` and `nook-vault-sentinel`; they never use a hostname flag to
 select a vault type.
+
+All web surfaces consume one audited `nook-wasm` package that is compiled and
+optimized once. Each entrypoint configures its immutable Rust-owned application
+identity before loading app modules, so Simple and Sentinel remain separate
+projects and origins without recompiling the same Rust library per surface.
 
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx prepares the Rust/WASM and web
@@ -277,25 +282,20 @@ Architecture changes belong in the lowest appropriate layer: key access in
 `nook-web-*`. When package boundaries, sync model, or public Task commands
 change, update this README in the same change (see [`.cortex/AGENTS.md`](.cortex/AGENTS.md)).
 
-### Rust dependency cache
+### Docker dependency caches
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) and
-independent **linux/amd64** Rust and web caches on GHCR. Workspace source is
-copied into the slim `nook-web:local` image (sealed image; no runtime bind mount
-except `task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a
-separate source-sealed Rust image on demand.
+independent **linux/amd64** Rust, web dependency, and browser lineages in the
+selected builder's local BuildKit content store. Workspace source is copied into
+the slim `nook-web:local` image (sealed image; no runtime bind mount except
+`task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a separate
+source-sealed Rust image on demand.
 
-```text
-ghcr.io/<owner>/<repo>/toolchain:rust-<git-commit>  # Rust/WASM cache image
-ghcr.io/<owner>/<repo>/toolchain:rust-buildcache    # Rust BuildKit cache
-ghcr.io/<owner>/<repo>/toolchain:web-<git-commit>   # web-deps cache image
-ghcr.io/<owner>/<repo>/toolchain:web-buildcache     # web BuildKit cache
-nook-web:local                                      # slim common task image
-```
-
-**The GHCR caches are pull-always, push-main-only.** Local builds pull both
-branch caches; only main CI publishes them. Run `docker login ghcr.io` once so local pulls
-authenticate. Details: [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
+No BuildKit cache is imported from or exported to a registry. The persistent
+`nook` delivery runners reuse their local content store across PR, main, and
+release jobs; isolated GitHub-hosted jobs build cold. This prevents cache blobs
+from becoming large, failure-prone network transfers. Details:
+[`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:
 

@@ -15,9 +15,10 @@ import {
   generateSecretId as wasmGenerateSecretId,
 } from "$app-wasm";
 import { createLogger, initWasmLogging } from "$lib/log";
+import { ensureAppWasm } from "$lib/wasm-bootstrap";
 import { generatePasswordWithOptions } from "$web-shared/password/generator";
 
-await initNookWasm();
+await ensureAppWasm();
 initWasmLogging();
 
 export type {

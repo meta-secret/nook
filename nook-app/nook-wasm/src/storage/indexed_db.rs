@@ -32,7 +32,6 @@ const DEVICE_ID_KEY: &str = "device_id";
 const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 const SENTINEL_GENESIS_SHARE_CATALOG_KEY: &str = "sentinel_genesis_share_catalog";
 const SENTINEL_GENESIS_FINALIZATION_PENDING_KEY: &str = "sentinel_genesis_finalization_pending";
-const CONSUMED_MIGRATION_NONCES_KEY: &str = "consumed_migration_nonces";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultRegistryEntry {
@@ -559,35 +558,6 @@ pub(crate) async fn load_sentinel_genesis_finalization_pending() -> Result<Optio
 
 pub(crate) async fn clear_sentinel_genesis_finalization_pending() -> Result<(), NookError> {
     idb_delete_key(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await
-}
-
-pub(crate) async fn migration_nonce_was_consumed(nonce: &str) -> Result<bool, NookError> {
-    let Some(json) = idb_get_string(CONSUMED_MIGRATION_NONCES_KEY).await? else {
-        return Ok(false);
-    };
-    let nonces: Vec<String> = serde_json::from_str(&json)
-        .map_err(|error| NookError::IndexedDb(format!("Migration nonce parse error: {error}")))?;
-    Ok(nonces.iter().any(|candidate| candidate == nonce))
-}
-
-pub(crate) async fn mark_migration_nonce_consumed(nonce: &str) -> Result<(), NookError> {
-    let mut nonces = if let Some(json) = idb_get_string(CONSUMED_MIGRATION_NONCES_KEY).await? {
-        serde_json::from_str::<Vec<String>>(&json).map_err(|error| {
-            NookError::IndexedDb(format!("Migration nonce parse error: {error}"))
-        })?
-    } else {
-        Vec::new()
-    };
-    if !nonces.iter().any(|candidate| candidate == nonce) {
-        nonces.push(nonce.to_owned());
-    }
-    if nonces.len() > 64 {
-        nonces.drain(..nonces.len() - 64);
-    }
-    let json = serde_json::to_string(&nonces).map_err(|error| {
-        NookError::IndexedDb(format!("Migration nonce serialize error: {error}"))
-    })?;
-    idb_put_string(CONSUMED_MIGRATION_NONCES_KEY, &json).await
 }
 
 pub(crate) async fn save_to_indexed_db(content: &str) -> Result<(), NookError> {

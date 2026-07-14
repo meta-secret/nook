@@ -9,7 +9,6 @@ const spaPaths = new Set([
   "/app-logs",
   "/extension-connect",
   "/logs",
-  "/migrate",
   "/privacy",
   "/terms",
 ]);
@@ -37,12 +36,7 @@ function simpleSpa(): Plugin {
       const outDir = join(process.cwd(), "dist");
       const shell = join(outDir, "index.html");
       copyFileSync(shell, join(outDir, "404.html"));
-      for (const alias of [
-        "app-logs",
-        "extension-connect",
-        "logs",
-        "migrate",
-      ]) {
+      for (const alias of ["app-logs", "extension-connect", "logs"]) {
         copyFileSync(shell, join(outDir, `${alias}.html`));
       }
       writeFileSync(join(outDir, "_headers"), vaultAppHeaders());
@@ -55,6 +49,7 @@ export default defineConfig({
   base: "./",
   define: {
     __NOOK_APP_KIND__: JSON.stringify("simple"),
+    __NOOK_WASM_APPLICATION__: JSON.stringify("simple"),
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(
       "https://simple.nokey.sh",
     ),
@@ -72,7 +67,7 @@ export default defineConfig({
       "$web-shared": new URL("../nook-web-shared/src", import.meta.url)
         .pathname,
       "$app-wasm": new URL(
-        "../nook-web-shared/src/vault-app/lib/nook-wasm-simple/nook_wasm",
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
         import.meta.url,
       ).pathname,
     },

@@ -25,6 +25,14 @@ for (const root of [simpleRoot, sentinelRoot]) {
   ) {
     throw new Error(`Independent vault project was not built: ${root}`)
   }
+  if (existsSync(join(root, 'dist/migrate.html'))) {
+    throw new Error(
+      `Vault artifact contains a retired migration route: ${root}`,
+    )
+  }
+}
+if (existsSync(join(webRoot, 'nook-web-app/dist/site/migration.html'))) {
+  throw new Error('Public site artifact contains a retired migration broker.')
 }
 
 const simpleHtml = await readFile(join(simpleRoot, 'dist/index.html'), 'utf8')
@@ -74,25 +82,29 @@ for (const root of [simpleRoot, sentinelRoot]) {
   }
 }
 
-const simpleBindings = await readFile(
-  join(
-    webRoot,
-    'nook-web-shared/src/vault-app/lib/nook-wasm-simple/nook_wasm.js',
-  ),
+const sharedBindings = await readFile(
+  join(webRoot, 'nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'),
   'utf8',
 )
-const sentinelBindings = await readFile(
-  join(
-    webRoot,
-    'nook-web-shared/src/vault-app/lib/nook-wasm-sentinel/nook_wasm.js',
-  ),
-  'utf8',
-)
-if (!simpleBindings.includes('approveExtensionDevice')) {
-  throw new Error('Simple Vault WASM is missing extension approval capability.')
+for (const requiredExport of [
+  'configureVaultApplication',
+  'configuredVaultApplication',
+  'approveExtensionDevice',
+]) {
+  if (!sharedBindings.includes(requiredExport)) {
+    throw new Error(`Shared WASM is missing ${requiredExport}.`)
+  }
 }
-if (sentinelBindings.includes('approveExtensionDevice')) {
-  throw new Error('Sentinel Vault WASM exposes extension approval capability.')
+for (const retiredExport of [
+  'beginVaultMigration',
+  'buildVaultMigrationCapsule',
+  'acceptVaultMigrationCapsule',
+  'finishVaultMigrationWithPasskey',
+  'validateVaultMigrationRequestOrigin',
+]) {
+  if (sharedBindings.includes(retiredExport)) {
+    throw new Error(`Shared WASM still exports ${retiredExport}.`)
+  }
 }
 
 const sentinelText = (

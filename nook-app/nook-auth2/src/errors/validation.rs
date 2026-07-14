@@ -24,29 +24,11 @@ pub enum ValidationError {
         vault_type: String,
     },
 
-    #[error("errors.validation.migration_application_cannot_open_vault")]
-    MigrationApplicationCannotOpenVault,
-
     #[error("errors.validation.sentinel_extension_forbidden")]
     SentinelExtensionForbidden,
 
     #[error("errors.validation.extension_approval_application_forbidden:{application}")]
     ExtensionApprovalApplicationForbidden { application: String },
-
-    #[error("errors.validation.migration_request_invalid")]
-    MigrationRequestInvalid,
-
-    #[error("errors.validation.migration_request_expired")]
-    MigrationRequestExpired,
-
-    #[error("errors.validation.migration_origin_mismatch")]
-    MigrationOriginMismatch,
-
-    #[error("errors.validation.migration_nonce_mismatch")]
-    MigrationNonceMismatch,
-
-    #[error("errors.validation.migration_vault_type_mismatch")]
-    MigrationVaultTypeMismatch,
 
     #[error("errors.validation.unknown_replication_type:{replication_type}")]
     UnknownReplicationType { replication_type: String },

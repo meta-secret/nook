@@ -22,7 +22,6 @@ mod connect;
 mod device_protection;
 mod diagnostics;
 mod event_log;
-mod migration;
 mod multi_device;
 mod password;
 mod secrets;
@@ -216,10 +215,6 @@ pub struct NookVaultManager {
     pub(in crate::manager) sentinel_unlock: Option<nook_core::SentinelUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
-    pub(in crate::manager) migration_request_json: String,
-    pub(in crate::manager) migration_transport_identity: Option<nook_core::DeviceIdentity>,
-    pub(in crate::manager) migration_payload: Option<nook_core::VaultMigrationPayload>,
-    pub(in crate::manager) migration_passkey_ready: bool,
 }
 
 impl Drop for NookVaultManager {
@@ -232,10 +227,6 @@ impl Drop for NookVaultManager {
         self.pending_sentinel_genesis_request = None;
         self.sentinel_unlock = None;
         self.sync_outbox.reset();
-        self.migration_request_json.clear();
-        self.migration_transport_identity = None;
-        self.migration_payload = None;
-        self.migration_passkey_ready = false;
     }
 }
 
@@ -244,7 +235,7 @@ impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            application: crate::application::compiled_vault_application(),
+            application: crate::application::configured_vault_application(),
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),
@@ -254,10 +245,6 @@ impl NookVaultManager {
             pending_sentinel_genesis_request: None,
             sentinel_unlock: None,
             sync_outbox: SyncOutboxState::default(),
-            migration_request_json: String::new(),
-            migration_transport_identity: None,
-            migration_payload: None,
-            migration_passkey_ready: false,
         }
     }
 

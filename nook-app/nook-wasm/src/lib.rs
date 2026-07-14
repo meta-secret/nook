@@ -21,6 +21,10 @@ mod storage;
 mod sync_io;
 mod types;
 
+#[doc(hidden)]
+#[doc(hidden)]
+pub use wasm_bindgen_futures as __wasm_bindgen_futures;
+
 pub use manager::NookVaultManager;
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
@@ -869,16 +873,26 @@ struct LocalAuthProviderSnapshot {
     migrated: bool,
 }
 
-fn validate_compiled_application_for_content(content: &str) -> Result<(), NookError> {
+fn validate_configured_application_for_content(content: &str) -> Result<(), NookError> {
     let architecture = nook_core::read_vault_architecture(content)?;
-    application::compiled_vault_application().validate_session_access(architecture.vault_type)?;
+    application::configured_vault_application().validate_session_access(architecture.vault_type)?;
     Ok(())
 }
 
-/// Return the immutable capability compiled into this WASM artifact.
-#[wasm_bindgen(js_name = compiledVaultApplication)]
-pub fn compiled_vault_application_name() -> String {
-    application::compiled_vault_application()
+/// Configure the immutable application capability for this browser realm.
+#[wasm_bindgen(js_name = configureVaultApplication)]
+pub fn configure_vault_application_name(
+    application_name: &str,
+) -> Result<(), wasm_bindgen::JsError> {
+    let application = nook_core::VaultApplication::parse(application_name)?;
+    application::configure_vault_application(application);
+    Ok(())
+}
+
+/// Return the immutable capability configured by the current web app.
+#[wasm_bindgen(js_name = configuredVaultApplication)]
+pub fn configured_vault_application_name() -> String {
+    application::configured_vault_application()
         .as_str()
         .to_owned()
 }
@@ -887,7 +901,27 @@ pub fn compiled_vault_application_name() -> String {
 /// not belong to this artifact's compile-time application capability.
 #[wasm_bindgen(js_name = validateVaultContentForApplication)]
 pub fn validate_vault_content_for_application(content: &str) -> Result<(), wasm_bindgen::JsError> {
-    validate_compiled_application_for_content(content).map_err(Into::into)
+    validate_configured_application_for_content(content).map_err(Into::into)
+}
+
+/// Approve an extension join through a manager whose Rust-owned application
+/// capability permits extension approval.
+#[wasm_bindgen(js_name = approveExtensionDevice)]
+pub async fn approve_extension_device(
+    manager: &mut NookVaultManager,
+    join_device_id: String,
+    join_public_key: String,
+    join_signing_public_key: String,
+    label: String,
+) -> Result<Vec<NookSecretRecord>, wasm_bindgen::JsError> {
+    manager
+        .approve_extension_device(
+            join_device_id,
+            join_public_key,
+            join_signing_public_key,
+            label,
+        )
+        .await
 }
 
 /// Validate extension pairing metadata through the Rust capability matrix.
@@ -896,7 +930,7 @@ pub fn validate_extension_pairing_vault_type(
     vault_type: &str,
 ) -> Result<(), wasm_bindgen::JsError> {
     let vault_type = nook_core::VaultType::parse(vault_type)?;
-    let application = application::compiled_vault_application();
+    let application = application::configured_vault_application();
     if application == nook_core::VaultApplication::Extension {
         application.validate_session_access(vault_type)?;
     } else {
@@ -905,33 +939,12 @@ pub fn validate_extension_pairing_vault_type(
     Ok(())
 }
 
-/// Reject cross-origin migration requests unless the browser message origin is
-/// the exact destination origin cryptographically bound into the request.
-#[wasm_bindgen(js_name = validateVaultMigrationRequestOrigin)]
-pub fn validate_vault_migration_request_origin(
-    request_json: &str,
-    message_origin: &str,
-    now_epoch_ms: f64,
-) -> Result<(), wasm_bindgen::JsError> {
-    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
-    if !now_epoch_ms.is_finite()
-        || !(0.0..=MAX_SAFE_INTEGER).contains(&now_epoch_ms)
-        || now_epoch_ms.fract() != 0.0
-    {
-        return Err(nook_core::ValidationError::MigrationRequestInvalid.into());
-    }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let now_epoch_ms = now_epoch_ms as u64;
-    nook_core::validate_vault_migration_request_origin(request_json, message_origin, now_epoch_ms)?;
-    Ok(())
-}
-
 async fn local_vault_matches_compiled_application(store_id: &str) -> Result<bool, NookError> {
     let Some(content) = crate::storage::indexed_db::load_vault_blob(store_id).await? else {
         return Ok(false);
     };
     let architecture = nook_core::read_vault_architecture(&content)?;
-    Ok(application::compiled_vault_application().permits_vault_type(architecture.vault_type))
+    Ok(application::configured_vault_application().permits_vault_type(architecture.vault_type))
 }
 
 /// Ensure auth snapshots always keep a local provider row when this browser has
@@ -1046,7 +1059,7 @@ pub async fn set_active_vault(store_id: String) -> Result<(), wasm_bindgen::JsEr
     let content = crate::storage::indexed_db::load_vault_blob(&store_id)
         .await?
         .ok_or_else(|| NookError::Database("Local vault was not found.".to_owned()))?;
-    validate_compiled_application_for_content(&content)?;
+    validate_configured_application_for_content(&content)?;
     crate::storage::indexed_db::switch_active_vault(&store_id)
         .await
         .map_err(Into::into)
@@ -1074,7 +1087,7 @@ pub async fn import_local_vault_blob(
     content: String,
     label: Option<String>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    validate_compiled_application_for_content(&content)?;
+    validate_configured_application_for_content(&content)?;
     crate::storage::indexed_db::import_vault_blob(&content, label.as_deref())
         .await
         .map_err(Into::into)

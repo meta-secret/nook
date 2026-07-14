@@ -267,7 +267,7 @@ gh run watch "$pr_run_id" --exit-status
 # Repeat with --workflow "Web research" when web-research paths changed.
 ```
 
-`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. Toolchain publish and the automatic full browser gate are main-only (`task ci:main:publish`).
+`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. The automatic full browser gate is main-only (`task ci:main`).
 
 E2e helpers when debugging web flows:
 
@@ -339,9 +339,9 @@ gh pr merge <number> --squash
 
 Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
 
-## CI auto-fix (main / nightly failures)
+## CI auto-fix (nightly failures only)
 
-When [`main.yml`](../../.github/workflows/main.yml) or [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent, opens a fix PR, waits only for Nook's applicable repository-owned PR test checks, performs one final existing-feedback audit, and squash-merges only when no manual feedback handling remains. That path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you — `pr.yml` triggers and you are not stuck approving a `github-actions[bot]` PR. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
+When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent, opens a fix PR, waits only for Nook's applicable repository-owned PR test checks, performs one final existing-feedback audit, and squash-merges only when no manual feedback handling remains. Main-branch failures never start an AI agent automatically and remain visible for manual handling. The nightly path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you — `pr.yml` triggers and you are not stuck approving a `github-actions[bot]` PR. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
 
 ## Non-negotiables
 

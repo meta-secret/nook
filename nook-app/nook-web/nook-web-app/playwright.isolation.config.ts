@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test'
 
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+
 const commonEnvironment = {
   VITE_E2E_EXPOSE_VAULT: 'true',
   VITE_VAULT_IDLE_TIMEOUT_MS: '300000',
@@ -11,7 +14,12 @@ export default defineConfig({
   testMatch: '**/app-isolation.spec.ts',
   timeout: 90_000,
   reporter: process.env.CI ? 'line' : 'list',
-  use: { trace: 'on-first-retry' },
+  use: {
+    trace: 'on-first-retry',
+    launchOptions: {
+      executablePath: chromiumExecutablePath,
+    },
+  },
   webServer: [
     {
       command: 'bun run dev -- --host 127.0.0.1 --port 5174',

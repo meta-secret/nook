@@ -5,13 +5,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig, type Plugin } from "vitest/config";
 import { vaultAppHeaders } from "../nook-web-shared/src/vault-app/security-headers";
 
-const spaPaths = new Set([
-  "/app-logs",
-  "/logs",
-  "/migrate",
-  "/privacy",
-  "/terms",
-]);
+const spaPaths = new Set(["/app-logs", "/logs", "/privacy", "/terms"]);
 
 function sentinelSpa(): Plugin {
   return {
@@ -46,7 +40,7 @@ function sentinelSpa(): Plugin {
       const outDir = join(process.cwd(), "dist");
       const shell = join(outDir, "index.html");
       copyFileSync(shell, join(outDir, "404.html"));
-      for (const alias of ["app-logs", "logs", "migrate"]) {
+      for (const alias of ["app-logs", "logs"]) {
         copyFileSync(shell, join(outDir, `${alias}.html`));
       }
       writeFileSync(join(outDir, "_headers"), vaultAppHeaders());
@@ -59,6 +53,7 @@ export default defineConfig({
   base: "./",
   define: {
     __NOOK_APP_KIND__: JSON.stringify("sentinel"),
+    __NOOK_WASM_APPLICATION__: JSON.stringify("sentinel"),
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(
       "https://sentinel.nokey.sh",
     ),
@@ -84,7 +79,7 @@ export default defineConfig({
       "$web-shared": new URL("../nook-web-shared/src", import.meta.url)
         .pathname,
       "$app-wasm": new URL(
-        "../nook-web-shared/src/vault-app/lib/nook-wasm-sentinel/nook_wasm",
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
         import.meta.url,
       ).pathname,
     },

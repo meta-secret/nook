@@ -86,46 +86,6 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
     Ok(())
 }
 
-pub(crate) async fn export_raw_auth_snapshot_for_store_ids(
-    store_ids: &[String],
-) -> Result<Option<String>, NookError> {
-    let raw = read_raw_snapshot().await?;
-    if raw.is_null() {
-        return Ok(None);
-    }
-    let mut normalized = nook_core::normalize_auth_snapshot(&raw).snapshot;
-    if normalized.active_vault_store_id.is_none() {
-        normalized.active_vault_store_id = super::indexed_db::get_active_vault_id().await?;
-    }
-    let snapshot = nook_core::auth_snapshot_for_migrated_store_ids(&normalized, store_ids);
-    serde_json::to_string(&snapshot)
-        .map(Some)
-        .map_err(|error| NookError::Serialization(error.to_string()))
-}
-
-pub(crate) async fn import_raw_auth_snapshot_json(
-    identity: &DeviceIdentity,
-    raw_json: &str,
-) -> Result<(), NookError> {
-    let snapshot = parse_raw_auth_snapshot_json(raw_json)?;
-    save_auth_providers(identity, &snapshot).await
-}
-
-fn parse_raw_auth_snapshot_json(raw_json: &str) -> Result<AuthProvidersSnapshotData, NookError> {
-    serde_json::from_str(raw_json).map_err(|error| NookError::Serialization(error.to_string()))
-}
-
-pub(crate) fn validate_raw_auth_snapshot_for_store_ids(
-    raw_json: &str,
-    store_ids: &[String],
-) -> Result<(), NookError> {
-    let snapshot = parse_raw_auth_snapshot_json(raw_json)?;
-    if !nook_core::auth_snapshot_matches_migrated_store_ids(&snapshot, store_ids) {
-        return Err(nook_core::ValidationError::MigrationVaultTypeMismatch.into());
-    }
-    Ok(())
-}
-
 fn legacy_local_storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok().flatten()
 }
@@ -290,25 +250,6 @@ mod wasm_idb_tests {
             .expect("githubPat");
         assert!(nook_core::is_sealed_credential(stored_pat));
         assert!(!stored_pat.contains("LEGACYplain"));
-    }
-
-    #[wasm_bindgen_test]
-    async fn migration_import_seals_legacy_plaintext_before_persistence() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
-        let pat = "github_pat_44MIGRATIONplain";
-        let raw_json = serde_json::to_string(&github_snapshot(pat)).expect("serialize");
-
-        import_raw_auth_snapshot_json(&identity, &raw_json)
-            .await
-            .expect("import");
-
-        let raw = read_raw_snapshot().await.expect("read raw");
-        let stored_pat = raw["providers"][0]["githubPat"]
-            .as_str()
-            .expect("githubPat");
-        assert!(nook_core::is_sealed_credential(stored_pat));
-        assert!(!stored_pat.contains("MIGRATIONplain"));
     }
 
     #[wasm_bindgen_test]

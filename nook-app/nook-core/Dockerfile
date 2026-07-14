@@ -39,7 +39,7 @@ RUN cargo fetch --locked
 # cargo-chef rewrites workspace versions to 0.0.1, so its cooked native artifacts are NOT reused by
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
 # native deps here instead of with chef. Stub in dummy crate roots so the workspace resolves,
-# compile the deps, and keep the stubs for unselected workspace packages. Real crate source is
+# compile the deps, and keep the stubs for downstream workspace packages. Real crate source is
 # copied over the stubs in builder-debug in dependency order (nook-auth2 -> nook-core -> nook-wasm).
 # Kept as separate cache layers.
 RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
@@ -56,8 +56,7 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # recompiles every dependency with instrumentation. --no-report skips report merge; --no-tests=pass
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 --no-tests=pass
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-core --no-tests=pass
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass
 # Warm the wasm32 DEBUG/TEST-profile dependencies used by `wasm-pack test --node` in CI. The
 # release-profile chef layers above cannot satisfy this separate target/wasm32-unknown-unknown/debug
 # artifact set. Keeping the warm-up here, before real sources are copied, makes it manifest-keyed;
@@ -77,7 +76,10 @@ COPY nook-app/.config .config
 # can reuse the nook-auth2 clippy and coverage-test layers; a nook-wasm-only change can reuse both.
 COPY nook-app/nook-auth2 nook-auth2
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings
-RUN cargo llvm-cov nextest --profile ci -p nook-auth2 --no-report
+# --no-clean keeps the manifest-keyed instrumented dependencies warmed above. cargo-llvm-cov does
+# not allow --no-clean with --no-report, so this first source-level run emits its interim report;
+# the nook-core run below then extends the same coverage session and enforces the combined floor.
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2
 
 COPY nook-app/nook-core nook-core
 # Docker COPY preserves source mtimes, while the inherited target directory can
