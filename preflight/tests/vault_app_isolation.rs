@@ -185,6 +185,26 @@ fn development_and_release_wasm_build_modes_stay_separate() {
 }
 
 #[test]
+fn coverage_dependency_warmup_preserves_prior_instrumented_artifacts() {
+    let root = repository_root();
+    let dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
+    let warmup = section(
+        &dockerfile,
+        "# Also warm the COVERAGE-instrumented deps:",
+        "# Warm the wasm32 DEBUG/TEST-profile dependencies",
+    );
+
+    assert!(
+        warmup.contains(
+            "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 --no-tests=pass"
+        )
+    );
+    assert!(warmup.contains(
+        "cargo llvm-cov nextest --no-clean --no-report --profile ci -p nook-core --no-tests=pass"
+    ));
+}
+
+#[test]
 fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
     let root = repository_root();
     let release = read(&root, ".github/workflows/release.yml");
