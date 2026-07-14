@@ -36,7 +36,9 @@ env:
 jobs:
   deploy:
     name: Verify and deploy production
-    runs-on: ubuntu-latest
+    # Reuse the exact Docker/BuildKit state warmed by PR and main. A fresh hosted runner would pull
+    # the full Rust cache again immediately before release.
+    runs-on: nook
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -44,11 +44,6 @@ variable "TOOLCHAIN_PUSH" {
   default = ""
 }
 
-// Current git commit — immutable toolchain image tag (set by Taskfile `GIT_COMMIT_ID` var).
-variable "GIT_COMMIT_ID" {
-  default = ""
-}
-
 // Passed to every target that reaches the internal builder-wasm Dockerfile stage. Setting only the
 // standalone `builder-wasm` bake target is insufficient for scratch exports such as web-artifacts,
 // because each final target owns its own Dockerfile solve.
@@ -56,29 +51,15 @@ variable "WASM_BUILD_MODE" {
   default = "dev"
 }
 
-// Rust and web use independent cache refs so publishing one branch never assembles or overwrites
-// the other. The legacy combined refs remain read-only fallbacks during the migration.
-rust_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
-  [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-  ],
-  GIT_COMMIT_ID != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-${GIT_COMMIT_ID}",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
-  ] : [],
-) : []
+// One remote manifest per independent lineage. Importing the retired combined cache and immutable
+// image tags forced cold runners to resolve overlapping multi-GB Rust histories.
+rust_cache_from = TOOLCHAIN_REGISTRY != "" ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache",
+] : []
 
-web_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
-  [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-  ],
-  GIT_COMMIT_ID != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-${GIT_COMMIT_ID}",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
-  ] : [],
-) : []
+web_cache_from = TOOLCHAIN_REGISTRY != "" ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
+] : []
 
 rust_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
   "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache,mode=max",
@@ -156,32 +137,24 @@ target "nook-rust-browser" {
   output   = ["type=docker"]
 }
 
-// After green main CI, publish the verified Rust/WASM lineage and its max-mode cache.
+// After green main CI, publish only the verified max-mode Rust/WASM cache. A second immutable image
+// manifest would reference the same enormous layer history without improving cache reuse.
 target "rust-toolchain-push" {
   inherits = ["builder-wasm"]
-  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:rust-${GIT_COMMIT_ID}",
-  ] : []
-  output   = ["type=registry"]
+  output   = ["type=cacheonly"]
   cache-to = rust_cache_to
 }
 
-// Publish web dependencies separately. This image has no Cargo registry, Rust toolchain, or target/.
+// Publish only the web dependency cache. This lineage has no Cargo registry, Rust toolchain, or target/.
 target "web-toolchain-push" {
   inherits = ["web-deps"]
-  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:web-${GIT_COMMIT_ID}",
-  ] : []
-  output   = ["type=registry"]
+  output   = ["type=cacheonly"]
   cache-to = web_cache_to
 }
 
 # Browser cache is separate so PR cache imports never fetch Chromium layers.
 target "web-e2e-toolchain-push" {
   inherits = ["web-e2e-base"]
-  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:web-e2e-${GIT_COMMIT_ID}",
-  ] : []
-  output   = ["type=registry"]
+  output   = ["type=cacheonly"]
   cache-to = web_e2e_cache_to
 }

@@ -70,6 +70,19 @@ fn production_vault_apps_are_separate_compile_time_capabilities() {
     assert!(
         dockerignore.contains("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*")
     );
+    for ignored in [
+        "**/target",
+        "**/node_modules",
+        "**/dist",
+        "**/test-results",
+        "**/playwright-report",
+        "**/coverage",
+    ] {
+        assert!(
+            dockerignore.lines().any(|line| line == ignored),
+            "Docker context must recursively ignore {ignored}"
+        );
+    }
 }
 
 #[test]
@@ -199,4 +212,46 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
             "{config} must use the e2e image's system Chromium"
         );
     }
+}
+
+#[test]
+fn delivery_ci_reuses_local_layers_and_one_remote_cache_per_lineage() {
+    let root = repository_root();
+    for workflow in [
+        ".github/workflows/main.yml",
+        ".github/workflows/release.yml",
+    ] {
+        let content = read(&root, workflow);
+        assert!(
+            content.contains("runs-on: nook"),
+            "{workflow} must reuse the persistent delivery runner's Docker layers"
+        );
+    }
+
+    let bake = read(&root, "nook-app/docker-bake.hcl");
+    for cache in ["rust-buildcache", "web-buildcache", "web-e2e-buildcache"] {
+        assert_eq!(
+            bake.matches(cache).count(),
+            2,
+            "{cache} must have exactly one import and one export"
+        );
+    }
+    for retired in [
+        ":buildcache",
+        "rust-${GIT_COMMIT_ID}",
+        "web-${GIT_COMMIT_ID}",
+        "web-e2e-${GIT_COMMIT_ID}",
+        ":${GIT_COMMIT_ID}",
+    ] {
+        assert!(
+            !bake.contains(retired),
+            "retired overlapping cache reference remains: {retired}"
+        );
+    }
+
+    let cleanup = read(&root, ".github/workflows/runner-cleanup.yml");
+    assert!(
+        cleanup.contains("--filter until=168h"),
+        "runner cleanup must preserve the recent delivery cache"
+    );
 }
