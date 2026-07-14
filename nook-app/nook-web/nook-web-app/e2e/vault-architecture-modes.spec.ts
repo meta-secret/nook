@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures'
+import { generateKeyPairSync, sign } from 'node:crypto'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
@@ -28,6 +29,35 @@ const ONBOARD_PASSWORD = 'architecture-onboard-password-1'
 const SHARED_JOINER_IDENTITY = 'joiner@example.com'
 const SHARED_SECRET_VALUE = 'architecture-shared-secret-value'
 const SHARED_JOINER_TOKEN = 'ya29.architecture-shared-joiner-token'
+
+function signedSentinelInvitation(): string {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519')
+  const signingPublicKey = publicKey
+    .export({ format: 'der', type: 'spki' })
+    .subarray(-32)
+    .toString('hex')
+  const request = {
+    version: 1,
+    sessionId: 'abcdefghijk',
+    policy: { participantCount: 3, threshold: 2 },
+    initiatorDeviceId: '0123456789abcdef',
+    initiatorSigningPublicKey: signingPublicKey,
+  }
+  const signature = sign(
+    undefined,
+    Buffer.from(
+      JSON.stringify([
+        request.version,
+        request.sessionId,
+        request.policy,
+        request.initiatorDeviceId,
+        request.initiatorSigningPublicKey,
+      ]),
+    ),
+    privateKey,
+  ).toString('hex')
+  return JSON.stringify({ ...request, signature })
+}
 const PERSONAL_ONLY_PROVIDER = {
   id: 'architecture-personal-only-github',
   label: 'Personal-only GitHub',
@@ -384,13 +414,8 @@ test.describe('vault architecture modes', () => {
   test('opens participant response only from an owner invitation URL', async ({
     page,
   }) => {
-    const ownerRequest = JSON.stringify({
-      version: 1,
-      sessionId: 'abcdefghijk',
-      policy: { participantCount: 3, threshold: 2 },
-      initiatorDeviceId: '0123456789abcdef',
-      initiatorSigningPublicKey: 'ab'.repeat(32),
-    })
+    await createLocalVaultOnLogin(page)
+    const ownerRequest = signedSentinelInvitation()
     await page.goto(
       `/app/?sentinel-request=${encodeURIComponent(ownerRequest)}`,
     )

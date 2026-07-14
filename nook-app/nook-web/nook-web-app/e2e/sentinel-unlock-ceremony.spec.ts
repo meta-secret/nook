@@ -127,10 +127,7 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     const participantResponseLink = await participantResponseOutput.inputValue()
     expect(participantResponseLink).toContain('#sentinel-response=')
 
-    await deviceA
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantResponseLink)
-    await deviceA.getByTestId('sentinel-genesis-add-participant').click()
+    await deviceA.goto(participantResponseLink)
     await expect(
       deviceA.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveCount(0)

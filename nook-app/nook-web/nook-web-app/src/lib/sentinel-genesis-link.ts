@@ -2,10 +2,12 @@ import { getEnrollmentLinkBase } from '$lib/enrollment-code'
 import {
   buildSentinelGenesisParticipantResponseLink as buildParticipantResponseLinkCore,
   buildSentinelGenesisRequestLink as buildRequestLinkCore,
+  normalizeSentinelGenesisParticipantPayload,
   normalizeSentinelGenesisRequest,
 } from '$lib/nook-wasm/nook_wasm'
 
 const SENTINEL_REQUEST_HASH_PREFIX = '#sentinel-request='
+const SENTINEL_RESPONSE_HASH_PREFIX = '#sentinel-response='
 
 export function buildSentinelGenesisRequestLink(
   requestJson: string,
@@ -41,6 +43,25 @@ export function consumeSentinelGenesisRequestFromLocation(): string {
     url.searchParams.delete('sentinel-request')
     history.replaceState(undefined, '', `${url.pathname}${url.search}`)
     return request
+  } catch {
+    return ''
+  }
+}
+
+export function consumeSentinelGenesisParticipantResponseFromLocation(): string {
+  if (typeof window === 'undefined') return ''
+  const url = new URL(window.location.href)
+  const hasResponse =
+    url.hash.startsWith(SENTINEL_RESPONSE_HASH_PREFIX) ||
+    url.searchParams.has('sentinel-response')
+  if (!hasResponse) return ''
+
+  try {
+    const response = normalizeSentinelGenesisParticipantPayload(url.toString())
+    url.hash = ''
+    url.searchParams.delete('sentinel-response')
+    history.replaceState(undefined, '', `${url.pathname}${url.search}`)
+    return response
   } catch {
     return ''
   }

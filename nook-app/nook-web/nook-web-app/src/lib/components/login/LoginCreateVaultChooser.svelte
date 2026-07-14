@@ -74,6 +74,7 @@
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
     sentinelInvitationRequest = '',
+    sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
   }: {
@@ -107,6 +108,7 @@
     sentinelGenesisParticipants?: SentinelGenesisParticipantSummary[]
     sentinelGenesisDeliveries?: SentinelGenesisDelivery[]
     sentinelInvitationRequest?: string
+    sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
@@ -133,6 +135,7 @@
   let initiatorFingerprint = $state('')
   let initiatorKeyLoading = $state(false)
   let initiatorPasskeyRequested = $state(false)
+  let importedParticipantResponse = $state('')
 
   $effect(() => {
     if (sentinelOnboardingPackage.trim() && wizardStep === 'choose') {
@@ -148,6 +151,20 @@
     chosenPath = 'join'
     joinPasskeyRequested = false
     wizardStep = 'join'
+  })
+
+  $effect(() => {
+    const response = sentinelParticipantResponse.trim()
+    if (
+      !response ||
+      response === importedParticipantResponse ||
+      sentinelGenesisStatus !== 'collecting' ||
+      !onAddSentinelGenesisParticipantResponse
+    ) {
+      return
+    }
+    importedParticipantResponse = response
+    void onAddSentinelGenesisParticipantResponse(response)
   })
 
   $effect(() => {

@@ -41,7 +41,10 @@
   } from '$lib/extension-connect'
   import type { VaultItemType } from '$lib/nook'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
-  import { consumeSentinelGenesisRequestFromLocation } from '$lib/sentinel-genesis-link'
+  import {
+    consumeSentinelGenesisParticipantResponseFromLocation,
+    consumeSentinelGenesisRequestFromLocation,
+  } from '$lib/sentinel-genesis-link'
 
   const vault = new VaultState()
   type ColorMode = 'light' | 'dark'
@@ -86,6 +89,11 @@
       ? consumeSentinelGenesisRequestFromLocation()
       : '',
   )
+  let sentinelParticipantResponse = $state(
+    typeof window !== 'undefined'
+      ? consumeSentinelGenesisParticipantResponseFromLocation()
+      : '',
+  )
   let sentinelOnboardingPackage = $state(
     typeof window !== 'undefined'
       ? consumeSentinelOnboardingFromLocation()
@@ -102,6 +110,9 @@
     )
     const invitationRequest = consumeSentinelGenesisRequestFromLocation()
     if (invitationRequest) sentinelInvitationRequest = invitationRequest
+    const participantResponse =
+      consumeSentinelGenesisParticipantResponseFromLocation()
+    if (participantResponse) sentinelParticipantResponse = participantResponse
     const onboardingPackage = consumeSentinelOnboardingFromLocation()
     if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
   }
@@ -179,12 +190,14 @@
 
     syncRoute()
     window.addEventListener('popstate', syncRoute)
+    window.addEventListener('hashchange', syncRoute)
 
     return () => {
       vault.stopVaultSync()
       vault.stopIdleSessionTracking()
       void vault.lockDeviceProtection()
       window.removeEventListener('popstate', syncRoute)
+      window.removeEventListener('hashchange', syncRoute)
       colorScheme.removeEventListener('change', handleColorSchemeChange)
     }
   })
@@ -596,6 +609,7 @@
                 prefillEnrollmentCode={vault.prefillEnrollmentCode}
                 enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
                 {sentinelInvitationRequest}
+                {sentinelParticipantResponse}
                 {sentinelOnboardingPackage}
                 onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
                 onUnlockWithPassword={handlePasswordUnlock}

@@ -59,6 +59,7 @@
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
     sentinelInvitationRequest = '',
+    sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
   }: {
@@ -102,6 +103,7 @@
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
     sentinelInvitationRequest?: string
+    sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
@@ -232,7 +234,7 @@
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}
     />
-  {:else if showCreateVault && onCreateDeviceVault}
+  {:else if (showCreateVault || sentinelInvitationRequest.trim()) && onCreateDeviceVault}
     <LoginCreateVaultChooser
       {vault}
       {isVerifying}
@@ -258,6 +260,7 @@
       sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
       sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
       {sentinelInvitationRequest}
+      {sentinelParticipantResponse}
       {sentinelOnboardingPackage}
       {onAcceptSentinelOnboardingPackage}
       onConnectStorage={() => {
