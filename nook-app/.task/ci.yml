@@ -147,16 +147,15 @@ tasks:
         vars: { TASK: _verify }
 
   _ci:pr:
-    desc: PR gate — format, wasm (image-seeded), verify ‖ build (one container; no browser e2e).
+    desc: PR gate — format and verify the production dist already built into the sealed image.
     cmds:
       - task: _format:check
       - task: _ci:pr:parallel
 
   _ci:pr:parallel:
-    desc: Lint/test ‖ production web build after wasm is ready.
+    desc: Lint/test the production web build already validated while sealing the image.
     deps:
       - _verify:parallel
-      - _web:build:parallel
 
   _ci:main:build:
     desc: Main verify/build track without e2e.
@@ -165,11 +164,10 @@ tasks:
       - task: _ci:pr:parallel
 
   _ci:main:
-    desc: Main gate — format, wasm, verify ‖ build, stub web e2e, extension e2e, restore prod dist.
+    desc: Main gate — verify the sealed production build, create one e2e build, test, and restore prod dist.
     cmds:
       - task: _ci:main:build
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
-      - task: _web:e2e:build-dist
       - task: _web:test:e2e:parallel
       - task: _web:test:e2e:isolation
       - task: _web:e2e:restore-prod-dist

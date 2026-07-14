@@ -24,6 +24,8 @@ type StoredPasswordSummary = {
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const extensionDir = path.join(rootDir, 'dist')
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const setupStorageKey = 'nook:extension-setup'
 const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
 
@@ -209,6 +211,7 @@ test('loads the extension and scans a login form from the popup', async ({
 
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
+    executablePath: chromiumExecutablePath,
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,

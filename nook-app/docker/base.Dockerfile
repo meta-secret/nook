@@ -30,7 +30,7 @@ ARG LLVM_COV_VERSION=0.8.7
 ARG BINARYEN_VERSION=122
 
 # Cargo uses the default <workspace>/target (i.e. /meta-secret/nook/nook-app/target). The heavy
-# target directory remains in the Rust lineage and in BuildKit/GHCR cache, but is not inherited by
+# target directory remains in the Rust lineage and local BuildKit cache, but is not inherited by
 # the slim web image.
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
@@ -95,12 +95,12 @@ RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/
 WORKDIR /meta-secret/nook
 
 # Browser binaries are deliberately outside web-base. PR checks use web-base for unit tests and
-# preview builds, so putting Chromium here forces every PR solve to pull a ~432 MB browser layer.
+# preview builds. Main/nightly e2e uses Debian's single Chromium package instead of Playwright's
+# bundled Chromium + headless-shell download, which otherwise produces a ~1.3 GB image layer.
 FROM web-base AS web-e2e-base
 
-ARG PLAYWRIGHT_VERSION=1.55.0
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-RUN bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
-    && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
-    && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium xvfb \
     && rm -rf /var/lib/apt/lists/*

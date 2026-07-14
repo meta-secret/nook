@@ -45,7 +45,9 @@ env:
 jobs:
   ci:
     name: Check, build, e2e, and deploy dev
-    runs-on: ubuntu-latest
+    # Keep the multi-GB Rust target and browser layers on the persistent delivery runner instead of
+    # downloading them into a fresh GitHub-hosted VM after every merge.
+    runs-on: nook
     environment:
       name: development
       url: https://dev.nokey.sh/

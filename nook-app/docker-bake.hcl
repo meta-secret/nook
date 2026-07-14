@@ -31,9 +31,10 @@ variable "DOCKER_E2E_IMAGE" {
   default = "nook-web-e2e:local"
 }
 
-// ghcr.io/<owner>/<repo>/toolchain — shared remote cache. Defaults to the canonical repo path so
-// that EVERYONE (local dev included) pulls the warm dep/target layers CI already published. This is
-// the whole point: a fresh local build reuses CI's cache instead of a catastrophic cold recompile.
+// ghcr.io/<owner>/<repo>/toolchain — remote caches for the compact web dependency and browser
+// lineages. Rust deliberately does not use a registry cache: exporting target/ with mode=max
+// serializes every intermediate compiler mutation, and importing that history is more expensive
+// than relying on the persistent delivery runner's local BuildKit cache.
 variable "TOOLCHAIN_REGISTRY" {
   default = "ghcr.io/meta-secret/nook/toolchain"
 }
@@ -44,11 +45,6 @@ variable "TOOLCHAIN_PUSH" {
   default = ""
 }
 
-// Current git commit — immutable toolchain image tag (set by Taskfile `GIT_COMMIT_ID` var).
-variable "GIT_COMMIT_ID" {
-  default = ""
-}
-
 // Passed to every target that reaches the internal builder-wasm Dockerfile stage. Setting only the
 // standalone `builder-wasm` bake target is insufficient for scratch exports such as web-artifacts,
 // because each final target owns its own Dockerfile solve.
@@ -56,33 +52,15 @@ variable "WASM_BUILD_MODE" {
   default = "dev"
 }
 
-// Rust and web use independent cache refs so publishing one branch never assembles or overwrites
-// the other. The legacy combined refs remain read-only fallbacks during the migration.
-rust_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
-  [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-  ],
-  GIT_COMMIT_ID != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-${GIT_COMMIT_ID}",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
-  ] : [],
-) : []
+// Rust is runner-local only. Keep these variables because package-local bake targets share the
+// same interface, but never import or export the enormous target/ snapshot through a registry.
+rust_cache_from = []
 
-web_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
-  [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-  ],
-  GIT_COMMIT_ID != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-${GIT_COMMIT_ID}",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
-  ] : [],
-) : []
-
-rust_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache,mode=max",
+web_cache_from = TOOLCHAIN_REGISTRY != "" ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
 ] : []
+
+rust_cache_to = []
 
 web_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
   "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache,mode=max",
@@ -117,10 +95,10 @@ group "builders" {
   targets = ["builder-wasm", "web-deps"]
 }
 
-// Main publishes the independent Rust and web cache images in parallel. Keeping this legacy group
-// name preserves the existing Task/workflow interface without constructing a merged image.
+// Main publishes only the compact web cache images in parallel. Keeping this legacy group name
+// preserves the existing Task/workflow interface.
 group "toolchain-push" {
-  targets = ["rust-toolchain-push", "web-toolchain-push", "web-e2e-toolchain-push"]
+  targets = ["web-toolchain-push", "web-e2e-toolchain-push"]
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
@@ -156,32 +134,16 @@ target "nook-rust-browser" {
   output   = ["type=docker"]
 }
 
-// After green main CI, publish the verified Rust/WASM lineage and its max-mode cache.
-target "rust-toolchain-push" {
-  inherits = ["builder-wasm"]
-  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:rust-${GIT_COMMIT_ID}",
-  ] : []
-  output   = ["type=registry"]
-  cache-to = rust_cache_to
-}
-
-// Publish web dependencies separately. This image has no Cargo registry, Rust toolchain, or target/.
+// Publish only the web dependency cache. This lineage has no Cargo registry, Rust toolchain, or target/.
 target "web-toolchain-push" {
   inherits = ["web-deps"]
-  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:web-${GIT_COMMIT_ID}",
-  ] : []
-  output   = ["type=registry"]
+  output   = ["type=cacheonly"]
   cache-to = web_cache_to
 }
 
 # Browser cache is separate so PR cache imports never fetch Chromium layers.
 target "web-e2e-toolchain-push" {
   inherits = ["web-e2e-base"]
-  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:web-e2e-${GIT_COMMIT_ID}",
-  ] : []
-  output   = ["type=registry"]
+  output   = ["type=cacheonly"]
   cache-to = web_e2e_cache_to
 }

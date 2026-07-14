@@ -24,13 +24,12 @@ jobs:
       - name: Docker disk usage before cleanup
         run: docker system df
 
-      - name: Prune unused Docker data
+      - name: Prune stale Docker data
         run: |
           set -euo pipefail
-          # --all includes tagged images that no container uses. Without it,
-          # system prune only removes dangling images even though `system df`
-          # reports every unused tagged image as reclaimable.
-          output="$(docker system prune --all --force --volumes)"
+          # Keep one week of recent BuildKit/image state so PR -> main -> release can reuse the
+          # expensive Rust and Chromium layers. The age filter still bounds long-term disk use.
+          output="$(docker system prune --all --force --volumes --filter until=168h)"
           printf '%s\n' "$output"
           reclaimed="$(printf '%s\n' "$output" | awk -F': ' '/^Total reclaimed space:/ { print $2; found=1 } END { if (!found) print "unknown" }')"
 

@@ -264,7 +264,7 @@ tasks:
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Full stub Playwright e2e when wasm/dist already built (ci:pr/main).
+    desc: Full stub Playwright e2e, rebuilding the e2e dist only when its stamp is stale.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
@@ -273,7 +273,7 @@ tasks:
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright e2e project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
-      - cd "{{.WEB_ROOT}}" && bun run build
+      - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun run test:e2e
 
   _web:e2e:build-if-needed:

@@ -7,8 +7,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
 | [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt capability-specific WASM, web/unit tests, all three web builds, Cloudflare preview with `/simple/` + `/sentinel/`, `github-pages` deployment status | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
-| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
+| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On persistent `nook`: pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → **squash merge** or manual handoff (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
@@ -112,20 +112,22 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Runner placement separates latency-sensitive PR validation from long-running
-background work. The `pr.yml` verify/preview gate uses the self-hosted `nook`
-pool so it can reuse warm Docker/BuildKit state. AI implement/fix/smoke jobs use
-GitHub-hosted `ubuntu-latest`, where their six-hour background work cannot
-exhaust or block the Nook machine. Other scheduled, main, release, manual e2e,
-and research jobs also remain GitHub-hosted.
+Runner placement separates delivery validation from long-running background
+work. The `pr.yml` verify/preview gate, main delivery, and production release use
+the self-hosted `nook` pool so they can reuse warm Docker/BuildKit state. AI
+implement/fix/smoke jobs use GitHub-hosted `ubuntu-latest`, where their six-hour
+background work cannot exhaust or block the Nook machine. Other scheduled,
+manual e2e, and research jobs also remain GitHub-hosted.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
-PR web solves use browser-free `web-base`. The roughly 432 MB Playwright
-Chromium layer lives in `web-e2e-base`, uses a separate remote cache, and is
-pulled only by main, nightly, or explicitly requested browser e2e.
+PR web solves use browser-free `web-base`. Main, nightly, and explicitly
+requested browser e2e use a separate `web-e2e-base` with Debian's single
+`chromium` package. Playwright is pointed at `/usr/bin/chromium`; do not install
+its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
+image layer (about 432 MB compressed) on cold runners.
 The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
 a whole-build retry loop.
 
@@ -133,7 +135,8 @@ a whole-build retry loop.
 | --- | --- | --- |
 | `pr.yml` | `nook` | Fast, cache-warm verification and preview for developer-critical PRs |
 | `agent-implement.yml`, `ci-agent-smoke.yml`, `main.yml` `ci-fix`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Isolate long-running background AI work from the Nook machine |
-| `main.yml` `ci`, `release.yml`, `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | GitHub-hosted post-merge, release, scheduled, manual, and research work |
+| `main.yml` `ci`, `release.yml` | `nook` | Reuse the warm Docker/BuildKit state across PR, post-merge delivery, and release instead of downloading the multi-GB Rust/browser lineages into fresh VMs |
+| `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Isolate scheduled, manual, and research work from the delivery runner |
 | `runner-cleanup.yml` | `nook` | Maintain the self-hosted Docker cache and disk |
 
 ## Why local-provider e2e vs sync-live
@@ -267,22 +270,23 @@ External reviews and checks (Codex, Claude, Cursor, CodeRabbit, or any other
 service) are never requested, polled, or awaited. Existing actionable comments
 must still be addressed, but no external status may delay merge or handoff.
 
-**GitHub-hosted jobs are isolated but cold.** Main, release, scheduled/manual e2e,
-research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
-the independent Rust and web caches from GHCR. Main pushes separate commit-tagged
-Rust/WASM and web-dependency cache images after green verify and deploys the active development channel to Cloudflare
+**Delivery jobs are cache-warm.** PR verification, main, and release use the
+persistent self-hosted `nook` runner, so the Rust target and other local BuildKit
+layers survive the PR -> main -> release chain instead of being downloaded again.
+Scheduled/manual e2e, research, and every AI-agent job remain on isolated
+GitHub-hosted runners. They may import the compact web GHCR caches, but compile Rust
+cold rather than restoring a registry `mode=max` target snapshot. Main updates the
+web-dependency and browser-e2e cache manifests after green verify and deploys the active development channel to Cloudflare
 Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
 `release.yml` runs the main-equivalent gate without pushing the toolchain,
 deploys an immutable semantic-version tag to GitHub Pages for the public
 `nokey.sh` site and to independent Cloudflare Pages projects for Simple and
 Sentinel, then verifies app identity, security headers, exact commit, and
-extension-route presence/absence before publishing the GitHub Release. The
-extra latency is acceptable for background work and keeps it from consuming
-the Nook runner pool.
+extension-route presence/absence before publishing the GitHub Release.
 
 Main's cache publish must authenticate immediately before the GHCR
-`toolchain-push` bake group. The legacy group name now fans out to independent
-Rust and web targets and never constructs a merged image. Do not assume a prior Docker login from setup is still
+`toolchain-push` bake group. The legacy group name now fans out to the independent
+web dependency and browser targets; Rust remains runner-local. Do not assume a prior Docker login from setup is still
 visible to Buildx throughout the job; a green verify/e2e run can still
 block the Pages deploy if the final push falls back to anonymous GHCR auth and
 gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into

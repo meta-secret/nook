@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-# Web dependency cache branch. Rust/WASM lives in a separate Dockerfile and GHCR cache lineage;
+# Web dependency cache branch. Rust/WASM lives in a separate Dockerfile and local BuildKit lineage;
 # there is intentionally no stage that merges the two filesystems.
 
 # --- WEB branch: node_modules only, independent of Rust (builds in parallel with the rust chain) ---

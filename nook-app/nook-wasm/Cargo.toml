@@ -40,12 +40,7 @@ zeroize = "1.9.0"
 wasm-bindgen-test = "0.3.50"
 
 [features]
-default = ["app-unified-development"]
-app-unified-development = []
-app-simple = []
-app-sentinel = []
-app-extension = []
-app-legacy-migration = []
+default = []
 browser-wasm-tests = []
 
 [lints]

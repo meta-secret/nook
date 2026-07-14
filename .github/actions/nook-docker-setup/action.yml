@@ -36,7 +36,7 @@ runs:
     # Enable the containerd image store so the `docker` driver builder (the daemon's built-in
     # BuildKit, which `task setup` selects via `docker context show` -> "default") writes build
     # results STRAIGHT into the image store — no full-image tarball export + load. The common web
-    # image is now slim, while the heavy Rust lineage stays in BuildKit/GHCR cache. We do NOT use
+    # image is now slim, while the heavy Rust lineage stays in the runner's local BuildKit cache. We do NOT use
     # docker/setup-buildx-action: that creates a
     # `docker-container` builder which forces a full-image re-export on every build.
     # Recent ubuntu-latest (Docker 29+) enables this by default, but we set it explicitly so the

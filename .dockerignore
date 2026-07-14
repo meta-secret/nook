@@ -1,10 +1,10 @@
 .git
-target
-nook-app/target
-node_modules
-dist
-nook-app/nook-web/node_modules
-nook-app/nook-web/dist
+**/target
+**/node_modules
+**/dist
+**/test-results
+**/playwright-report
+**/coverage
 nook-app/nook-web/src/lib/nook-wasm
 nook-app/nook-web/nook-web-app/src/lib/nook-wasm
 nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*

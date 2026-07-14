@@ -21,6 +21,11 @@ mod storage;
 mod sync_io;
 mod types;
 
+#[doc(hidden)]
+pub use application::configure_vault_application;
+#[doc(hidden)]
+pub use wasm_bindgen_futures as __wasm_bindgen_futures;
+
 pub use manager::NookVaultManager;
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{

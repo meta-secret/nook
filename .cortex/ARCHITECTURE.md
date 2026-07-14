@@ -144,10 +144,12 @@ root/
   but it must not own vault format logic, crypto, validation, password
   generation, or secret search. Those remain in `nook-core` and are exposed
   through `nook-wasm`.
-- **Capability-specific generated artifacts:** generated WASM bindings live
-  under `nook-web-shared/src/vault-app/lib/nook-wasm-*`; Simple, Sentinel,
-  extension, and legacy-migration builds each consume only their matching
-  compile-time capability surface.
+- **Capability-specific generated artifacts:** `nook-wasm` is a featureless
+  shared bridge compiled once. Thin cdylib leaf crates under
+  `nook-wasm/apps/{unified,simple,sentinel,extension,migration}` fix the immutable
+  `VaultApplication` identity and expose only leaf-owned extras. Generated
+  bindings live under `nook-web-shared/src/vault-app/lib/nook-wasm-*`; Sentinel,
+  extension, and migration leaves never link Simple's extension-approval export.
 
 ### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
 
@@ -265,7 +267,7 @@ All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` 
 
 ### Split Rust/WASM and web images
 
-- **Rust/WASM lineage**: `rust-base` + chef-cooked dependencies + native coverage/tests + WASM clippy/build/Node tests. Its multi-GB `target/`, Cargo registry, and compiler live only in BuildKit and the GHCR `:rust-*` cache refs. Explicit `task rust:*` / `task wasm:*` commands load the source-sealed `nook-rust:local` image on demand; browser-only WASM tests and mounted Vite development use `nook-rust-browser:local`.
+- **Rust/WASM lineage**: `rust-base` + chef-cooked dependencies + native coverage/tests + WASM clippy/build/Node tests. Its multi-GB `target/`, Cargo registry, and compiler live only in the persistent runner's local BuildKit store. Explicit `task rust:*` / `task wasm:*` commands load the source-sealed `nook-rust:local` image on demand; browser-only WASM tests and mounted Vite development use `nook-rust-browser:local`.
 - **Web lineage**: `web-base` contains Bun, Node, and Task; `web-deps` adds `node_modules`. PR unit/preview builds use this browser-free lineage. `web-e2e-base` adds Playwright Chromium only for main/nightly/manual e2e and uses a separate `:web-e2e-*` cache, so PR cache imports never pull the browser layer. Neither lineage contains Cargo or `target/`.
 - **Common task image** (`nook-web:local`): starts from `web-base`, adds `node_modules`, the generated WASM package, coverage artifacts, workspace source, and built web/extension output. This is the slim image used by normal Task and CI runtime checks.
 
@@ -290,9 +292,9 @@ The old combined `nook-web` filesystem was about 9 GB because it inherited warm 
 
 - **Builder selection:** `task setup` passes `--builder $(docker context show)`. buildx auto-creates a docker-driver builder named after the active context, so this resolves to `desktop-linux` on Docker Desktop and `default` on plain Linux/CI. **Never** point this at a `docker-container` builder (e.g. what `docker/setup-buildx-action` creates) — that driver forces a full-image re-export every build. Override with `BUILDX_BUILDER` if needed.
 - **CI parity:** `.github/actions/nook-docker-setup` enables the containerd image store on the runner (`daemon.json` `features.containerd-snapshotter=true`, then restart + assert) and does **not** use `setup-buildx-action`. Recent `ubuntu-latest` (Docker 29+) enables it by default; we set it explicitly so the fast path survives runner-image drift. The action raises Linux watcher limits when passwordless `sudo` is available; locked-down self-hosted runners emit a warning instead of failing setup because those host-level limits must be managed outside the job.
-- **Registry push is split:** main publishes `rust-<commit>` / `rust-buildcache` and `web-<commit>` / `web-buildcache` independently. There is no combined registry image.
+- **Registry push is web-only:** main updates `web-buildcache` and `web-e2e-buildcache` independently. Rust/WASM remains in the persistent runner's local BuildKit cache; publishing `target/` with registry `mode=max` is forbidden because a cold import transfers its entire intermediate layer history.
 
-**Shared caches are pull-always, push-main-only.** Rust targets read `:rust-buildcache` / `:rust-<commit>` and web targets read `:web-buildcache` / `:web-<commit>`. Both temporarily retain the old combined refs as read-only migration fallbacks. Publishing is gated on `TOOLCHAIN_PUSH`, which only **main** CI sets; PR CI and local development never push. A missed or unauthenticated pull falls back to a cold build, so the registry remains a cache rather than a build dependency.
+**Compact shared caches are pull-always, push-main-only.** Web reads one `:web-buildcache` manifest and browser e2e reads one `:web-e2e-buildcache` manifest. Rust reads no registry cache at all. Retired combined, Rust target, and commit-image fallbacks must not return. Publishing is gated on `TOOLCHAIN_PUSH`, which only **main** CI sets; PR CI and local development never push. A missed or unauthenticated web-cache pull falls back to a cold build, so the registry remains a cache rather than a build dependency.
 
 Docker bake orchestration is app-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl` plus package-local bake files under `nook-app/**/docker-bake.hcl` to `docker buildx bake`, while the root `Taskfile.yml` includes those app commands for repo-root usage. The Taskfile passes bake files as absolute paths, grants buildx read access to the repo root, and sets every source target context to the repo root so local and self-hosted runner buildx versions resolve paths the same way. During the host handoff it grants write access only to the current commit/invocation artifact directory, then read access only to that directory for the web solve. The main Docker build context remains the repository root, so the sealed app image can copy root workflow files (`Taskfile.yml`, `.task/agentic-ai.yml`, docs, and CI helper scripts) as well as `nook-app`.
 
@@ -302,9 +304,9 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 
 | What                    | How it is cached                                                                                                                                                                                                                                                                                                                          |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust/web cache images   | Each branch pulls its own GHCR commit image + max-mode cache. **Main** publishes both through the legacy-named `toolchain-push` bake group; the group contains two independent targets and never merges their filesystems. |
+| Rust/web cache images   | Rust uses only the persistent runner's local BuildKit cache. Web and browser-e2e each import one max-mode GHCR cache; **main** updates those two compact lineages through the legacy-named `toolchain-push` bake group. |
 | Rust crate dependencies | **cargo-chef** release WASM cooks plus manifest-keyed dummy-root warm-ups for native nextest/clippy/coverage and the debug/test WASM artifacts consumed by `wasm-pack test --node`. The chef planner and warm-up layers copy only `Cargo.toml`/`Cargo.lock` plus dummy crate roots, so ordinary Rust source edits do not recompile the dependency graphs. |
-| `nook-app/target/`      | Lives at `/meta-secret/nook/nook-app/target` in the Rust lineage only. It is cached by BuildKit/GHCR and deliberately absent from `nook-web:local`. |
+| `nook-app/target/`      | Lives at `/meta-secret/nook/nook-app/target` in the Rust lineage only. It is cached by the persistent runner's local BuildKit store, never transferred through GHCR, and deliberately absent from `nook-web:local`. |
 | `nook-app/nook-web/nook-web-app/node_modules` | Installed directly in the `web-deps` Dockerfile layer (parallel branch, own `cache-to` like `builder-deps`), with no host/daemon cache mount. `web:dev` (mounted) runs `bun install` in its command.                                                                                                         |
 | Web wasm pkg + coverage | Generated in `builder-wasm`, exported from a scratch target under `${TMPDIR}/nook-web-artifacts/<commit>/<invocation>/`, then consumed as a small named context by the web solve. |
 | Web dist                | Built at **nook-web image build time** (`bun run build`, `VITE_BASE` arg) so it is present in every container: Cloudflare deploys for PR/main read it in-container, while GitHub Pages release uploads extract it via `task docker:extract:dist`.                                                                                          |
@@ -321,5 +323,5 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
 ### Build & verify
 
 - **Native linking:** `nook-app/.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in `rust-base`); wasm32 targets keep the default linker.
-- **Wasm:** generated by `wasm-pack build nook-wasm` in `builder-wasm`, exported through the host artifact boundary, and seeded into the web image. Mounted local-iteration paths regenerate it from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR CI uses dev mode, while main and release pass `WASM_BUILD_MODE=prod` explicitly.
+- **Wasm:** `builder-wasm` compiles the featureless `nook-wasm` bridge once and runs `wasm-pack` on five thin leaf crates to link isolated Unified, Simple, Sentinel, extension, and migration artifacts. The generated packages cross the host artifact boundary and are seeded into the web image. Mounted local-iteration paths regenerate them from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR/main CI use dev mode, while release passes `WASM_BUILD_MODE=prod` explicitly.
 - **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set.
