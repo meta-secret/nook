@@ -1217,7 +1217,6 @@
     "capability_mismatch": "Web project {app} loaded incompatible {wasm} WASM.",
     "migrate_legacy": "Migrate legacy vaults",
     "open_simple_app": "Open Simple Vault",
-    "open_sentinel_app": "Open Sentinel Vault",
     "switch_light": "Switch to light mode",
     "switch_dark": "Switch to dark mode",
     "github_title": "Nook on GitHub — open source",

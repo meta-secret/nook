@@ -1050,7 +1050,6 @@
     "capability_mismatch": "Веб-проект {app} загрузил несовместимый WASM {wasm}.",
     "migrate_legacy": "Перенести прежние сейфы",
     "open_simple_app": "Открыть простой сейф",
-    "open_sentinel_app": "Открыть сейф Sentinel",
     "switch_light": "Переключить на светлую тему",
     "switch_dark": "Переключить на темную тему",
     "github_title": "Nook на GitHub — открытый исходный код",
