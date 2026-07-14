@@ -208,6 +208,9 @@ async function addFileBackupProvider(
   target: SyncE2eTarget,
   opts: { id: string; label: string; minProviderCount: number },
 ) {
+  // Provider snapshots must not be mutated while periodic sync is loading the
+  // same snapshot, or the in-flight read can restore the previous provider set.
+  await waitForVaultOperationsIdle(page)
   await installSyncRemote(page, target)
   await seedExtraOauthFileProviders(page, [
     {
