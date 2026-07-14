@@ -30,14 +30,14 @@ inputs_hash="$(
 )"
 
 if [[ "${E2E_FORCE_BUILD:-}" == "1" ]]; then
-  echo "==> E2E_FORCE_BUILD=1 — running vite build"
+  echo "==> E2E_FORCE_BUILD=1 — building unified e2e harness"
   need=1
 elif [[ "${E2E_SKIP_BUILD:-}" == "1" ]]; then
   if [[ ! -f "$INDEX" ]]; then
     echo "error: E2E_SKIP_BUILD=1 but $INDEX is missing" >&2
     exit 1
   fi
-  echo "==> E2E_SKIP_BUILD=1 — skipping vite build"
+  echo "==> E2E_SKIP_BUILD=1 — skipping unified e2e build"
   exit 0
 else
   need=0
@@ -67,10 +67,13 @@ else
 fi
 
 if [[ "$need" -eq 1 ]]; then
-  echo "==> e2e dist stale or missing — running vite build"
-  (cd "$WEB_ROOT" && bun run build)
+  # The full Playwright project consumes only the unified harness. The standalone Simple/Sentinel
+  # boundary suite starts those projects with their own Vite servers, so building their production
+  # artifacts here only duplicates the sealed production build.
+  echo "==> e2e dist stale or missing — building unified e2e harness"
+  (cd "$WEB_ROOT" && bun run build:unified)
   mkdir -p "$DIST"
   printf '%s' "$inputs_hash" >"$STAMP"
 else
-  echo "==> e2e dist up to date — skipping vite build"
+  echo "==> e2e dist up to date — skipping unified e2e build"
 fi

@@ -163,4 +163,23 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
         !e2e.contains("bun run build"),
         "the e2e task must rely on the freshness-checked build instead of rebuilding unconditionally"
     );
+
+    let e2e_builder = read(&root, ".github/scripts/e2e-build-if-needed.sh");
+    assert!(e2e_builder.contains("bun run build:unified"));
+    assert!(
+        !e2e_builder.contains("&& bun run build)"),
+        "e2e needs the unified harness, not every deployable production artifact"
+    );
+
+    let extension = read(&root, "nook-app/nook-web/.task/extension.yml");
+    let extension_check = section(
+        &extension,
+        "  _extension:check:\n",
+        "\n  _extension:test:e2e:",
+    );
+    assert!(extension_check.contains("bun run check"));
+    assert!(
+        !extension_check.contains("bun run build"),
+        "extension setup already sealed a validated build"
+    );
 }

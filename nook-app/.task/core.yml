@@ -156,7 +156,7 @@ tasks:
       - task: _extension:format:check
 
   _test:parallel:
-    desc: Svelte check, Vitest, and extension check after all Rust/WASM tests ran at image build.
+    desc: Svelte check, Vitest, and extension type-check after Rust/WASM and web builds ran at image build.
     deps:
       - _web:check:parallel
       - _web:test:parallel
