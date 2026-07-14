@@ -21,11 +21,14 @@ use codex::{
 use thiserror::Error;
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
+pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-luna";
+pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "low";
 
 #[derive(Debug, Clone)]
 pub struct CodexOptions {
     pub repo_root: PathBuf,
     pub model: Option<String>,
+    pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
 }
 
@@ -33,7 +36,8 @@ impl CodexOptions {
     pub fn new(repo_root: PathBuf) -> Self {
         Self {
             repo_root,
-            model: None,
+            model: Some(DEFAULT_CODEX_MODEL.to_owned()),
+            reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
         }
     }
@@ -147,6 +151,14 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         Constrained::allow_any(PermissionProfile::read_only()),
     )
     .map_err(|error| CodexError::Configuration(error.to_string()))?;
+    let model_reasoning_effort =
+        serde_json::from_value(serde_json::Value::String(options.reasoning_effort.clone()))
+            .map_err(|error| {
+                CodexError::Configuration(format!(
+                    "invalid reasoning effort `{}`: {error}",
+                    options.reasoning_effort
+                ))
+            })?;
 
     let mut config = Config {
         config_layer_stack: ConfigLayerStack::default(),
@@ -229,7 +241,7 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         codex_linux_sandbox_exe: options.arg0_paths.codex_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: options.arg0_paths.main_execve_wrapper_exe.clone(),
         zsh_path: None,
-        model_reasoning_effort: None,
+        model_reasoning_effort: Some(model_reasoning_effort),
         plan_mode_reasoning_effort: None,
         model_reasoning_summary: None,
         model_catalog: None,
@@ -439,6 +451,7 @@ mod tests {
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
             model: Some("test-model".into()),
+            reasoning_effort: "low".into(),
             arg0_paths: Arg0DispatchPaths {
                 codex_self_exe: Some(PathBuf::from("/bin/meta-agent")),
                 codex_linux_sandbox_exe: Some(PathBuf::from("/bin/codex-linux-sandbox")),
@@ -448,6 +461,14 @@ mod tests {
         let config = new_config(&options).unwrap();
 
         assert_eq!(config.model.as_deref(), Some("test-model"));
+        assert_eq!(
+            config
+                .model_reasoning_effort
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("low")
+        );
         assert_eq!(config.cwd.as_ref(), repository.path());
         assert_eq!(config.workspace_roots, vec![config.cwd.clone()]);
         assert!(config.workspace_roots_explicit);
@@ -457,6 +478,15 @@ mod tests {
             config.codex_self_exe,
             Some(PathBuf::from("/bin/meta-agent"))
         );
+    }
+
+    #[test]
+    fn defaults_to_luna_with_light_reasoning() {
+        let repository = tempfile::tempdir().unwrap();
+        let options = CodexOptions::new(repository.path().to_owned());
+
+        assert_eq!(options.model.as_deref(), Some(DEFAULT_CODEX_MODEL));
+        assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
     }
 
     #[test]

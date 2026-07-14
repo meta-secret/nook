@@ -27,6 +27,9 @@ Install Rust 1.96 and ensure the host `CODEX_HOME` contains Codex authentication
 task meta-agent:plan PROMPT='Add a repository-grounded feature planner'
 ```
 
+Planning defaults to `gpt-5.6-luna` with `low` reasoning effort (the API name
+for Luna's lighter reasoning setting).
+
 The command streams Codex reasoning summaries, repository inspection commands,
 warnings, and plan-assembly status to the terminal while keeping the incomplete
 structured JSON internal. The final line reports the generated feature
@@ -38,7 +41,8 @@ Override the output root or model when needed:
 task meta-agent:plan \
   PROMPT='Add resumable provider synchronization' \
   FEATURE_OUTPUT_ROOT=agentic-ai/features \
-  META_AGENT_MODEL=gpt-5.4
+  META_AGENT_MODEL=gpt-5.6-sol \
+  META_AGENT_REASONING_EFFORT=medium
 ```
 
 Validate an existing artifact and print conflict-safe execution batches:

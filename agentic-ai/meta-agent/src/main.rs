@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand};
 use codex::Arg0DispatchPaths;
-use nook_meta_agent::{CodexOptions, InProcessCodexRunner, Planner, load_feature, write_feature};
+use nook_meta_agent::{
+    CodexOptions, DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT, InProcessCodexRunner,
+    Planner, load_feature, write_feature,
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -51,9 +54,13 @@ struct PlanArgs {
     #[arg(long)]
     feature_id: Option<String>,
 
-    /// Override the Codex model; the configured default is used when omitted.
+    /// Override the Codex model; defaults to gpt-5.6-luna.
     #[arg(long)]
     model: Option<String>,
+
+    /// Override reasoning effort; defaults to low (lighter reasoning).
+    #[arg(long)]
+    reasoning_effort: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -80,10 +87,24 @@ async fn run_plan(args: PlanArgs, arg0_paths: Arg0DispatchPaths) -> Result<()> {
         repo_root.join(&args.output_root)
     };
 
-    eprintln!("Inspecting {} with Codex...", repo_root.display());
     let mut options = CodexOptions::new(repo_root);
-    options.model = args.model;
+    if let Some(model) = args.model {
+        options.model = Some(model);
+    }
+    if let Some(reasoning_effort) = args.reasoning_effort {
+        options.reasoning_effort = reasoning_effort;
+    }
     options.arg0_paths = arg0_paths;
+    eprintln!(
+        "Inspecting {} with Codex (model: {}, effort: {})...",
+        options.repo_root.display(),
+        options.model.as_deref().unwrap_or(DEFAULT_CODEX_MODEL),
+        if options.reasoning_effort.is_empty() {
+            DEFAULT_CODEX_REASONING_EFFORT
+        } else {
+            &options.reasoning_effort
+        }
+    );
     let plan = Planner::new(InProcessCodexRunner::new(options))
         .plan(&prompt, args.feature_id.as_deref())
         .await?;
