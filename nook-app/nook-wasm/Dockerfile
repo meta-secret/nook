@@ -16,31 +16,18 @@ ARG WASM_BUILD_MODE=dev
 # slim web image can therefore run web-only Task gates without Cargo installed.
 RUN cargo clippy --release --target wasm32-unknown-unknown \
       -p nook-wasm \
-      -p nook-wasm-unified \
-      -p nook-wasm-simple \
-      -p nook-wasm-sentinel \
-      -p nook-wasm-extension \
-      -p nook-wasm-migration \
       -- -D warnings
-# --out-dir is relative to the crate dir (nook-wasm/), so "../nook-web/nook-web-app/..." lands the JS/wasm bundle
-# in the web source tree where Vite imports it. target/ stays in-tree for reuse.
+# Emit the single JS/WASM package directly into the shared web source tree where every app imports
+# it. target/ stays in-tree for reuse.
 RUN case "$WASM_BUILD_MODE" in \
       prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
-    && for spec in \
-         "nook-wasm:nook-wasm/apps/unified" \
-         "nook-wasm-simple:nook-wasm/apps/simple" \
-         "nook-wasm-sentinel:nook-wasm/apps/sentinel" \
-         "nook-wasm-extension:nook-wasm/apps/extension" \
-         "nook-wasm-migration:nook-wasm/apps/migration"; do \
-         out_dir="${spec%%:*}"; crate_dir="${spec#*:}"; \
-         wasm-pack build "$crate_dir" --target web \
-           --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/$out_dir" \
-           --out-name nook_wasm $wasm_opt_flag || exit 1; \
-       done \
-    && ( current="$(find nook-wasm/src nook-wasm/apps nook-core/src nook-core/locales nook-auth2/src \
+    && wasm-pack build nook-wasm --target web \
+         --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
+         --out-name nook_wasm $wasm_opt_flag \
+    && ( current="$(find nook-wasm/src nook-core/src nook-core/locales nook-auth2/src \
            \( -name '*.rs' -o -name '*.json' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
@@ -62,10 +49,6 @@ RUN cargo fmt --all -- --check
 FROM scratch AS web-artifacts
 
 COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-simple /nook-wasm-simple
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-sentinel /nook-wasm-sentinel
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-extension /nook-wasm-extension
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-migration /nook-wasm-migration
 COPY --from=builder-wasm /opt/nook/coverage /coverage
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting

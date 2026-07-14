@@ -244,7 +244,7 @@ impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            application: crate::application::compiled_vault_application(),
+            application: crate::application::configured_vault_application(),
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),

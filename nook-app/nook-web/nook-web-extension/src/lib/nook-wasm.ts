@@ -5,6 +5,7 @@ import {
 } from '../../../nook-web-shared/src/password/generator'
 import {
   default as initNookWasm,
+  configureVaultApplication,
   buildPasskeyPrfRequestOptions,
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
@@ -14,7 +15,7 @@ import {
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
   translateFromCatalog as wasmTranslateFromCatalog,
   type NookAppLocale,
-} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm-extension/nook_wasm'
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 let initPromise: Promise<unknown> | undefined
 
@@ -32,7 +33,10 @@ type CredentialWithPrf = PublicKeyCredential & {
 export type { NookAppLocale }
 
 export function ensureNookWasm() {
-  initPromise ??= initNookWasm()
+  initPromise ??= initNookWasm().then((value) => {
+    configureVaultApplication('extension')
+    return value
+  })
   return initPromise
 }
 

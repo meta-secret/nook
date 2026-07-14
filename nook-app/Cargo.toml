@@ -3,11 +3,6 @@ members = [
     "nook-auth2",
     "nook-core",
     "nook-wasm",
-    "nook-wasm/apps/unified",
-    "nook-wasm/apps/simple",
-    "nook-wasm/apps/sentinel",
-    "nook-wasm/apps/extension",
-    "nook-wasm/apps/migration",
 ]
 resolver = "3"
 

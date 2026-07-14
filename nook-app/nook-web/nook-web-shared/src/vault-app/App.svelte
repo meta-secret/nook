@@ -41,6 +41,7 @@
     type ExtensionConnectRequest,
   } from '$lib/extension-connect'
   import type { VaultItemType } from '$lib/nook'
+  import { configuredVaultApplication } from '$app-wasm'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
   import {
     APP_KIND,
@@ -192,6 +193,9 @@
 
     if (vault.runtimeConfig.exposeDebugHooks()) {
       ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
+      ;(
+        window as Window & { __nookConfiguredVaultApplication?: string }
+      ).__nookConfiguredVaultApplication = configuredVaultApplication()
       ;(
         window as Window & {
           __nookAuthProviders?: {
