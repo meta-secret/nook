@@ -39,7 +39,10 @@ function routeSpaRequestsToApp(
     const suffix = suffixIndex === -1 ? '' : requestUrl.slice(suffixIndex)
     const normalizedPath = pathname.replace(/\/$/, '') || '/'
 
-    if (NOT_FOUND_PATHS.has(normalizedPath)) {
+    if (
+      NOT_FOUND_PATHS.has(normalizedPath) ||
+      normalizedPath === '/site/schema.xml'
+    ) {
       response.statusCode = 404
       response.setHeader('Content-Type', 'text/plain; charset=utf-8')
       response.end('Not Found')
@@ -95,8 +98,37 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
 
 /** Emit sitemap.xml and robots.txt for production deploys (nokey.sh). */
 function seoStaticFiles(outputDirectory: string): Plugin {
+  const serveDevelopmentSeoFiles = (server: ViteDevServer): void => {
+    server.middlewares.use((request, response, next) => {
+      const pathname = request.url?.split(/[?#]/, 1)[0]
+      const siteUrl = siteUrlFromEnv(process.env)
+      const body =
+        pathname === '/robots.txt'
+          ? buildRobotsTxt(siteUrl)
+          : pathname === '/sitemap.xml'
+            ? buildSitemapXml(siteUrl)
+            : undefined
+      if (body === undefined) {
+        next()
+        return
+      }
+
+      response.statusCode = 200
+      response.setHeader(
+        'Content-Type',
+        pathname === '/robots.txt'
+          ? 'text/plain; charset=utf-8'
+          : 'application/xml; charset=utf-8',
+      )
+      response.end(body)
+    })
+  }
+
   return {
     name: 'seo-static-files',
+    configureServer(server) {
+      serveDevelopmentSeoFiles(server)
+    },
     writeBundle() {
       const outDir = join(process.cwd(), outputDirectory)
       const siteUrl = siteUrlFromEnv(process.env)

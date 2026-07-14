@@ -293,11 +293,6 @@
   const authenticatedShellSpacing = $derived(
     secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
   )
-  const authenticatedShellSize = $derived(
-    secretsAddOpen
-      ? 'min-h-[calc(100svh-5rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]'
-      : 'min-h-[calc(100svh-11rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]',
-  )
   const shellSpacing = $derived(
     legalPage || logsPage || extensionConnectRoute || migrationRoute
       ? 'py-5 sm:py-6'
@@ -425,7 +420,7 @@
     class:dark={colorMode === 'dark'}
   >
     <header
-      class="border-b border-border/50 bg-card/80 backdrop-blur-md sticky top-0 z-40"
+      class="app-header border-b border-border/50 bg-card/80 backdrop-blur-md"
     >
       <div
         class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
@@ -718,7 +713,8 @@
         </div>
       {:else if vault.isAuthenticated}
         <div
-          class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+          class:authenticated-shell-editor={secretsAddOpen}
+          class="authenticated-shell flex w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
           data-testid="authenticated-shell"
         >
           <div

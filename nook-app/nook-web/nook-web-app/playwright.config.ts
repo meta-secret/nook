@@ -67,6 +67,10 @@ const specPaths = (files: readonly string[]) =>
 
 /** CI runs e2e after `ci:main:parallel` — serve production dist (no Vite dev optimizer). */
 const usePreviewServer = isCi && fs.existsSync(distDir)
+// The assembled production preview mounts the independent nokey.sh artifact
+// under /site. The default local Vite server serves that same public surface
+// at /, so keep the spec runnable in both environments.
+process.env.NOOK_E2E_PUBLIC_SITE_PATH = usePreviewServer ? '/site' : ''
 const webServerCommand = usePreviewServer
   ? 'bun run preview -- --host 127.0.0.1 --port 5173'
   : 'bun run dev -- --host 127.0.0.1 --port 5173'
