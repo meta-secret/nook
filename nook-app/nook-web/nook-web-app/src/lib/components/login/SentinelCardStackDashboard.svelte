@@ -536,7 +536,7 @@
                     <Select.Content
                       portalProps={{ disabled: true }}
                       side="top"
-                      class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                      class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
                       {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
                         <Select.Item
@@ -576,7 +576,7 @@
                     <Select.Content
                       portalProps={{ disabled: true }}
                       side="top"
-                      class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                      class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
                       {#each participantChoices as option (option)}
                         <Select.Item
