@@ -55,8 +55,6 @@
     onAddParticipant,
     onFinalize,
     onCompleteDelivery,
-    onChooseSyncProvider,
-    onPrepareOnboardingLinks,
   }: {
     vault: VaultState
     name: string
@@ -81,8 +79,6 @@
     ) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
-    onChooseSyncProvider: () => void
-    onPrepareOnboardingLinks: () => void | Promise<void>
   } = $props()
 
   let response = $state('')
@@ -93,19 +89,12 @@
   let selected = $state(0)
   let participantInputError = $state('')
   let onboardingStage = $state<OnboardingStage>('identity')
-  let preparingOnboardingLinks = $state(false)
 
   const participantChoices = [3, 4, 5]
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),
   )
-  const syncProviderReady = $derived(vault.syncProviders.length > 0)
-  const onboardingLinksReady = $derived(
-    memberDeliveries.length > 0 &&
-      memberDeliveries.every((delivery) => delivery.payload.startsWith('http')),
-  )
-
   const initiatorKeyReady = $derived(
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
   )
@@ -227,20 +216,6 @@
       actionBusy = false
     }
   }
-
-  $effect(() => {
-    if (
-      status === 'delivering' &&
-      syncProviderReady &&
-      !onboardingLinksReady &&
-      !preparingOnboardingLinks
-    ) {
-      preparingOnboardingLinks = true
-      void Promise.resolve(onPrepareOnboardingLinks()).finally(() => {
-        preparingOnboardingLinks = false
-      })
-    }
-  })
 
   async function copyRequest() {
     if (!request) return
@@ -741,33 +716,23 @@
             <p
               class="font-mono text-[10px] tracking-[0.16em] text-[#79dfff] uppercase"
             >
-              {vault.t('login.sentinel_onboarding_sync_step')}
+              {vault.t('login.sentinel_onboarding_vault_ready_step')}
             </p>
             <h2 class="mt-2 text-xl font-semibold">
-              {vault.t('login.sentinel_onboarding_sync_title')}
+              {vault.t('login.sentinel_onboarding_vault_ready_title')}
             </h2>
             <p class="mt-2 text-sm leading-relaxed text-[#aeb8c2]">
-              {vault.t('login.sentinel_onboarding_sync_description')}
+              {vault.t('login.sentinel_onboarding_vault_ready_description')}
             </p>
-            {#if !syncProviderReady}
-              <button
-                type="button"
-                class="mt-5 rounded-md bg-[#79dfff] px-6 py-3 text-xs font-bold tracking-wide text-[#101820] uppercase hover:bg-[#9be7ff]"
-                data-testid="sentinel-choose-sync-provider"
-                onclick={onChooseSyncProvider}
-              >
-                {vault.t('login.sentinel_onboarding_sync_action')}
-              </button>
-            {:else if onboardingLinksReady}
-              <Button
-                type="button"
-                class="mt-5"
-                data-testid="sentinel-genesis-delivery-complete"
-                onclick={() => void onCompleteDelivery()}
-              >
-                {vault.t('login.sentinel_onboarding_finish_action')}
-              </Button>
-            {/if}
+            <Button
+              type="button"
+              class="mt-5"
+              data-testid="sentinel-genesis-delivery-complete"
+              disabled={memberDeliveries.length === 0}
+              onclick={() => void onCompleteDelivery()}
+            >
+              {vault.t('login.sentinel_onboarding_finish_action')}
+            </Button>
           </div>
         {/if}
       </div>
@@ -851,7 +816,7 @@
             </div>
           </dl>
 
-          {#if status !== 'idle'}
+          {#if status !== 'idle' && status !== 'delivering' && status !== 'complete'}
             <div
               class="relative mt-6 space-y-4"
               data-testid="sentinel-genesis-ceremony-step"
@@ -937,67 +902,35 @@
 
         {#if status === 'delivering' || deliveries.length > 0}
           <div class="mt-8 space-y-4" data-testid="sentinel-genesis-deliveries">
-            {#if !syncProviderReady}
+            <h2 class="text-lg font-semibold">
+              {vault.t('login.sentinel_genesis_delivery_title')}
+            </h2>
+            <p class="text-sm text-[#aeb8c2]">
+              {vault.t('login.sentinel_genesis_delivery_description')}
+            </p>
+            {#each memberDeliveries as delivery, index (delivery.participantId)}
               <div
-                class="rounded-lg border border-[#79dfff]/25 bg-[#79dfff]/5 p-6"
+                class="grid gap-4 border border-white/10 bg-[#242d35] p-4 sm:grid-cols-[120px_1fr]"
+                data-testid="sentinel-genesis-delivery"
               >
-                <p
-                  class="font-mono text-[10px] tracking-[0.16em] text-[#79dfff] uppercase"
-                >
-                  {vault.t('login.sentinel_onboarding_sync_step')}
-                </p>
-                <h2 class="mt-2 text-xl font-semibold">
-                  {vault.t('login.sentinel_onboarding_sync_title')}
-                </h2>
-                <p
-                  class="mt-2 max-w-2xl text-sm leading-relaxed text-[#aeb8c2]"
-                >
-                  {vault.t('login.sentinel_onboarding_sync_description')}
-                </p>
+                <EnrollmentQrCode
+                  enrollmentLink={delivery.payload}
+                  loadingLabel={vault.t('login.sentinel_genesis_qr_loading')}
+                  dense
+                />
+                <div class="space-y-2">
+                  <p class="text-sm font-semibold">
+                    {vault.t('login.sentinel_genesis_delivery_participant')}
+                    {index + 2}
+                  </p>
+                  <textarea
+                    class="min-h-20 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white"
+                    readonly
+                    data-testid="sentinel-genesis-delivery-output"
+                    value={delivery.payload}></textarea>
+                </div>
               </div>
-            {:else}
-              <h2 class="text-lg font-semibold">
-                {vault.t('login.sentinel_genesis_delivery_title')}
-              </h2>
-              <p class="text-sm text-[#aeb8c2]">
-                {vault.t('login.sentinel_genesis_delivery_description')}
-              </p>
-              {#if preparingOnboardingLinks || !onboardingLinksReady}
-                <p
-                  class="flex items-center gap-2 text-sm text-[#aeb8c2]"
-                  role="status"
-                >
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('login.sentinel_onboarding_links_preparing')}
-                </p>
-              {:else}
-                {#each memberDeliveries as delivery, index (delivery.participantId)}
-                  <div
-                    class="grid gap-4 border border-white/10 bg-[#242d35] p-4 sm:grid-cols-[120px_1fr]"
-                    data-testid="sentinel-genesis-delivery"
-                  >
-                    <EnrollmentQrCode
-                      enrollmentLink={delivery.payload}
-                      loadingLabel={vault.t(
-                        'login.sentinel_genesis_qr_loading',
-                      )}
-                      dense
-                    />
-                    <div class="space-y-2">
-                      <p class="text-sm font-semibold">
-                        {vault.t('login.sentinel_genesis_delivery_participant')}
-                        {index + 2}
-                      </p>
-                      <textarea
-                        class="min-h-20 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white"
-                        readonly
-                        data-testid="sentinel-genesis-delivery-output"
-                        value={delivery.payload}></textarea>
-                    </div>
-                  </div>
-                {/each}
-              {/if}
-            {/if}
+            {/each}
           </div>
         {/if}
       </div>

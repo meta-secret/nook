@@ -25,8 +25,9 @@ Get started (empty device) presents exactly two owner creation paths:
 - **Create Sentinel:** start a reverse-onboarding ceremony. Do not create an
   openable vault, generate a usable vault session, or configure a sync provider
   before atomic genesis. The initiator chooses `N`/`T`, waits for every
-  participant public key, atomically creates the empty vault, then selects one
-  sync provider and issues one addressed onboarding QR/link per remote member.
+  participant public key, atomically creates the empty local vault, then issues
+  one addressed encrypted-share delivery per remote member. Sync providers are
+  optional replicas configured after the vault is unlocked.
 
 There is no unrestricted **Join Sentinel** choice on the creation landing page.
 The initiating owner onboards participants from the Sentinel workspace; a
@@ -34,10 +35,11 @@ participant never starts genesis independently. The current wire format accepts
 signed public-key announcements, while cryptographically binding every remote
 response to an owner-issued QR/link request is tracked in
 [#337](https://github.com/meta-secret/nook/issues/337).
-After genesis, the owner must connect a sync provider before member invitations
-are emitted. Each invitation combines that participant's signed encrypted share
-with a provider snapshot whose credentials are age-encrypted to the same
-participant device public key. Simple-vault password enrollment is not reused.
+After genesis, the owner returns each participant's encrypted share directly;
+share delivery does not require or initialize a sync provider. The owner then
+uses the normal Sentinel quorum ceremony to unlock the empty vault. Provider
+replicas may be added from inside the unlocked vault. Simple-vault password
+enrollment is not reused.
 
 When a local vault already exists, the passkey/device-protection gate runs
 **before** unlock. Product and persisted wire names use Sentinel consistently.
@@ -94,11 +96,11 @@ keys.
 The Card Stack also keeps a stable interaction boundary between its two
 columns. The left column owns every setup and management action: creating local
 keys, naming the draft, choosing `T` and `N`, importing participant responses,
-finalizing genesis, and choosing or completing sync delivery. The right column
-is read-only ceremony context: it accumulates the chosen vault name, policy,
-and roster count, then presents invitation and delivery QR data. Copying
-displayed ceremony data is allowed on the right; configuration controls are
-not.
+finalizing genesis, and continuing to Sentinel unlock. The right column is
+read-only ceremony context: it accumulates the chosen vault name, policy, and
+roster count, then presents invitation and encrypted-share delivery QR data.
+Copying displayed ceremony data is allowed on the right; configuration controls
+are not.
 
 Within the left column, configuration is progressive and compact. Device-key
 creation, vault naming, threshold selection, and participant collection are
@@ -141,25 +143,21 @@ retry reads or re-delivers the same encrypted artifact instead of issuing a new
 share generation. Finalization itself is one-shot; callers must never rerun key
 generation to repair a partially persisted result.
 
-### Round 2: connect storage and invite members
+### Round 2: deliver participant shares
 
-After atomic genesis, Device A chooses one remote sync provider and uploads the
-encrypted vault. Local-folder storage cannot serve member onboarding because a
-browser folder handle is not transferable. Nook then creates a distinct QR/link
-for every remote participant. The package contains the Round 1 request, that
-participant's signed encrypted share delivery, and one provider snapshot
-encrypted to the participant public key collected in Round 1.
+After atomic genesis, Nook presents a distinct encrypted-share delivery for
+every remote participant. Each delivery is bound to the Round 1 request and to
+the participant public key collected in Round 1. It contains no sync-provider
+credential or transferable browser handle.
 
 Delivery acceptance verifies the genesis session, policy, initiator signing
 key, participant identity, public key, and share signature. Only the matching
-device can decrypt the provider snapshot and its share. It persists both, pulls
-the encrypted vault from the provider, and enters the normal Sentinel quorum
-unlock ceremony. Provider access is necessary for this onboarding transport but
-is never sufficient to open the vault.
+device can accept and persist its share. The initiator then enters the normal
+Sentinel quorum unlock ceremony. After unlock, the owner may add sync providers
+from vault settings; provider access is never sufficient to open the vault.
 
 This second direction is cryptographically required: collecting public keys
-alone does not deliver the generated shares or encrypted vault replica back to
-their owners.
+alone does not deliver the generated shares back to their owners.
 
 After delivering the share set, Device A clears the plaintext Sentinel root,
 derived vault keys, and plaintext shares. Opening the newly created vault then

@@ -224,12 +224,7 @@
 
   async function handleUnlock() {
     if (vault.loginSetupType) {
-      if (vault.sentinelGenesisStatus === 'delivering') {
-        await vault.connectAndSyncStagedProvider()
-        await vault.prepareSentinelOnboardingLinks()
-      } else {
-        await vault.connectStagedProvider()
-      }
+      await vault.connectStagedProvider()
       return
     }
     if (existingVaultNeedsDeviceUnlock) {

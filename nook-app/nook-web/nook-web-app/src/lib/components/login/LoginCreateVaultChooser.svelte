@@ -651,8 +651,6 @@
         onAddSentinelGenesisParticipantResponse?.(payload, participantLabel)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
-      onChooseSyncProvider={onConnectStorage}
-      onPrepareOnboardingLinks={() => vault.prepareSentinelOnboardingLinks()}
     />
   {:else if sentinelDashboardActive && sentinelDashboard === 'terminal'}
     <SentinelTerminalDashboard
@@ -671,8 +669,6 @@
         onAddSentinelGenesisParticipantResponse?.(payload)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
-      onChooseSyncProvider={onConnectStorage}
-      onPrepareOnboardingLinks={() => vault.prepareSentinelOnboardingLinks()}
     />
   {:else}
     <section
