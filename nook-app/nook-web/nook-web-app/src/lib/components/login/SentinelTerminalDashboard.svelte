@@ -493,12 +493,7 @@
         <div class="mt-8 border-t border-[#22321f] pt-5">
           <p class="text-[#456440]">WORKFLOW</p>
           <ol class="mt-4 space-y-4">
-            {#each [
-              'Name draft',
-              'Set N / K',
-              vault.t('login.sentinel_genesis_collect_title'),
-              'Seal vault',
-            ] as item, index (item)}
+            {#each ['Name draft', 'Set N / K', vault.t('login.sentinel_genesis_collect_title'), 'Seal vault'] as item, index (item)}
               <li
                 class={`flex items-center gap-3 ${index + 1 < workflowStage ? 'text-[#83e273]' : index + 1 === workflowStage ? 'text-[#d9c365]' : 'text-[#385334]'}`}
               >
