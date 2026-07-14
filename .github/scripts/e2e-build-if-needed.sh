@@ -67,11 +67,11 @@ else
 fi
 
 if [[ "$need" -eq 1 ]]; then
-  # The full Playwright project consumes only the unified harness. The standalone Simple/Sentinel
-  # boundary suite starts those projects with their own Vite servers, so building their production
-  # artifacts here only duplicates the sealed production build.
+  # The full Playwright project needs a rebuilt unified harness plus the /simple/ and /sentinel/
+  # preview routes. Their standalone production artifacts are already sealed in the image, so
+  # reassemble those directories after the unified build instead of compiling them again.
   echo "==> e2e dist stale or missing — building unified e2e harness"
-  (cd "$WEB_ROOT" && bun run build:unified)
+  (cd "$WEB_ROOT" && bun run build:unified && bun run assemble:preview)
   mkdir -p "$DIST"
   printf '%s' "$inputs_hash" >"$STAMP"
 else

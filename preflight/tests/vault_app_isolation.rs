@@ -165,7 +165,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
     );
 
     let e2e_builder = read(&root, ".github/scripts/e2e-build-if-needed.sh");
-    assert!(e2e_builder.contains("bun run build:unified"));
+    assert!(e2e_builder.contains("bun run build:unified && bun run assemble:preview"));
     assert!(
         !e2e_builder.contains("&& bun run build)"),
         "e2e needs the unified harness, not every deployable production artifact"
