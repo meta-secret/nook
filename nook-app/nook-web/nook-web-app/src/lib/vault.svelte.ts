@@ -1273,14 +1273,20 @@ export class VaultState {
     }
   }
 
-  async addSentinelGenesisParticipantResponse(payload: string): Promise<void> {
+  async addSentinelGenesisParticipantResponse(
+    payload: string,
+    participantLabel = '',
+  ): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     try {
       const status = await this.enqueueStorage(() =>
-        this.manager!.addSentinelGenesisParticipantResponse(payload.trim()),
+        this.manager!.addSentinelGenesisParticipantResponse(
+          payload.trim(),
+          participantLabel.trim(),
+        ),
       )
       this.applySentinelGenesisStatus(status)
     } catch (error) {

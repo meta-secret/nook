@@ -88,6 +88,7 @@
     ) => boolean | void | Promise<boolean | void>
     onAddSentinelGenesisParticipantResponse?: (
       payload: string,
+      participantLabel?: string,
     ) => void | Promise<void>
     onFinalizeSentinelGenesis?: () => void | Promise<void>
     onCreateSentinelGenesisParticipantResponse?: (
@@ -644,8 +645,8 @@
       onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={(payload) =>
-        onAddSentinelGenesisParticipantResponse?.(payload)}
+      onAddParticipant={(payload, participantLabel) =>
+        onAddSentinelGenesisParticipantResponse?.(payload, participantLabel)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
       onChooseSyncProvider={onConnectStorage}

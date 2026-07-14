@@ -236,6 +236,7 @@ impl NookVaultManager {
     pub fn add_sentinel_genesis_participant_response(
         &mut self,
         response_json: &str,
+        participant_label: String,
     ) -> Result<String, JsError> {
         let session = self
             .sentinel_genesis
@@ -243,7 +244,11 @@ impl NookVaultManager {
             .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?;
         let response_json =
             nook_core::normalize_sentinel_genesis_participant_payload(response_json)?;
-        nook_core::add_sentinel_genesis_participant_payload(session, &response_json)?;
+        nook_core::add_sentinel_genesis_participant_payload_with_label(
+            session,
+            &response_json,
+            &participant_label,
+        )?;
         self.sentinel_genesis_status_json()
     }
 

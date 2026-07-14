@@ -213,7 +213,15 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
     ).toBeVisible()
+    const participantNameInput = page.getByTestId(
+      'sentinel-genesis-participant-name',
+    )
+    await expect(participantNameInput).toBeVisible()
     await page.getByTestId('sentinel-genesis-response-input').fill('bb')
+    await expect(
+      page.getByTestId('sentinel-genesis-add-participant'),
+    ).toBeDisabled()
+    await participantNameInput.fill("Ada's iPhone")
     await expect(
       page.getByTestId('sentinel-genesis-add-participant'),
     ).toBeEnabled()
@@ -229,6 +237,9 @@ test.describe('passkey device-key protection', () => {
     ).toBeEnabled()
 
     await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(page.getByTestId('sentinel-card-stack-dashboard')).toContainText(
+      "Ada's iPhone",
+    )
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toHaveCount(0)

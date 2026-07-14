@@ -73,7 +73,10 @@
     onStart: (
       args: StartSentinelGenesisArgs,
     ) => boolean | void | Promise<boolean | void>
-    onAddParticipant: (payload: string) => void | Promise<void>
+    onAddParticipant: (
+      payload: string,
+      participantLabel: string,
+    ) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
     onChooseSyncProvider: () => void
@@ -81,6 +84,7 @@
   } = $props()
 
   let response = $state('')
+  let participantLabel = $state('')
   let actionBusy = $state(false)
   let copied = $state(false)
   let selected = $state(0)
@@ -188,8 +192,9 @@
       return
     actionBusy = true
     try {
-      await onAddParticipant(payload)
+      await onAddParticipant(payload, participantLabel.trim())
       response = ''
+      participantLabel = ''
       participantInputError = ''
       selected = participants.length
     } catch {
@@ -447,7 +452,12 @@
                   class="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={!response.trim() || isBusy || actionBusy}
+                  disabled={
+                    !participantLabel.trim() ||
+                    !response.trim() ||
+                    isBusy ||
+                    actionBusy
+                  }
                   onclick={() => void addParticipant()}
                 >
                   {#if actionBusy}<RefreshCw
@@ -456,18 +466,32 @@
                 </button>
               </div>
               <div
-                class="mt-4"
+                class="mt-4 grid gap-4"
                 data-testid="sentinel-genesis-participant-fields"
               >
                 <label
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
-                  {vault.t('login.sentinel_card_stack_public_key_label')}
+                  {vault.t('login.sentinel_card_stack_device_name_label')}
+                  <input
+                    class="mt-2 h-11 w-full border border-white/20 bg-[#192128] px-3 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                    data-testid="sentinel-genesis-participant-name"
+                    maxlength="80"
+                    placeholder={vault.t(
+                      'login.sentinel_card_stack_device_name_placeholder',
+                    )}
+                    bind:value={participantLabel}
+                  />
+                </label>
+                <label
+                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
+                >
+                  {vault.t('login.sentinel_genesis_response_label')}
                   <textarea
                     class="mt-2 min-h-20 w-full resize-y border border-white/20 bg-[#192128] p-3 font-mono text-xs leading-5 text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
                     data-testid="sentinel-genesis-response-input"
                     placeholder={vault.t(
-                      'login.sentinel_card_stack_public_key_placeholder',
+                      'login.sentinel_genesis_response_placeholder',
                     )}
                     value={response}
                     oninput={changeParticipantPayload}
@@ -475,6 +499,11 @@
                       event.key === 'Enter' &&
                       (event.metaKey || event.ctrlKey) &&
                       void addParticipant()}></textarea>
+                  <span
+                    class="mt-2 block text-[10px] leading-4 tracking-normal text-[#75818c] normal-case"
+                  >
+                    {vault.t('login.sentinel_genesis_response_help')}
+                  </span>
                 </label>
               </div>
               {#if participantInputError}
