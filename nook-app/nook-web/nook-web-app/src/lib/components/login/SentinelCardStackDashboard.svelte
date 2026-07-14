@@ -735,9 +735,7 @@
                 data-testid="sentinel-genesis-delivery-acknowledgement"
               />
               <span>
-                {vault.t(
-                  'login.sentinel_onboarding_delivery_acknowledgement',
-                )}
+                {vault.t('login.sentinel_onboarding_delivery_acknowledgement')}
               </span>
             </label>
             <Button
