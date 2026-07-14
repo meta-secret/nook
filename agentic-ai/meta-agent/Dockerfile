@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
-ARG RUST_IMAGE=rust:1.96-bookworm
-ARG NODE_IMAGE=node:24-bookworm-slim
+ARG RUST_IMAGE=rust:1.96-trixie
+ARG NODE_IMAGE=node:24-trixie-slim
 ARG CODEX_VERSION=0.144.4
 
 FROM ${RUST_IMAGE} AS check
