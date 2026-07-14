@@ -728,12 +728,9 @@
           {vault.t('login.sentinel_card_stack_active_configuration')}
         </p>
         <div
-          class={[
-            'relative mt-5 overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px]',
-            status === 'idle' ? 'min-h-[28rem] p-7 sm:p-10' : 'p-5 sm:p-6',
-          ]}
+          class="relative mt-5 overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-5 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-6"
           data-testid="sentinel-onboarding-vault-summary"
-          data-layout={status === 'idle' ? 'expanded' : 'compact'}
+          data-layout="compact"
         >
           <div class="relative flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -752,19 +749,11 @@
           </div>
 
           <dl
-            class={[
-              'relative grid gap-3',
-              status === 'idle'
-                ? 'mt-8 sm:grid-cols-2'
-                : 'mt-5 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]',
-            ]}
+            class="relative mt-5 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]"
             data-testid="sentinel-onboarding-summary-details"
           >
             <div
-              class={[
-                'border border-white/10 bg-black/10',
-                status === 'idle' ? 'p-4 sm:col-span-2' : 'min-w-0 p-3',
-              ]}
+              class="min-w-0 border border-white/10 bg-black/10 p-3"
             >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
@@ -772,20 +761,14 @@
                 {vault.t('login.sentinel_card_stack_module_identity')}
               </dt>
               <dd
-                class={[
-                  'mt-2 break-words font-semibold text-[#d7e0e6]',
-                  status === 'idle' ? 'text-lg' : 'truncate text-sm',
-                ]}
+                class="mt-2 truncate text-sm font-semibold text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-name"
               >
                 {name.trim() || vault.t('login.sentinel_onboarding_not_set')}
               </dd>
             </div>
             <div
-              class={[
-                'border border-white/10 bg-black/10',
-                status === 'idle' ? 'p-4' : 'min-w-0 p-3',
-              ]}
+              class="min-w-0 border border-white/10 bg-black/10 p-3"
             >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
@@ -805,10 +788,7 @@
               </dd>
             </div>
             <div
-              class={[
-                'border border-white/10 bg-black/10',
-                status === 'idle' ? 'p-4' : 'p-3 sm:min-w-28',
-              ]}
+              class="border border-white/10 bg-black/10 p-3 sm:min-w-28"
             >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
@@ -824,30 +804,7 @@
             </div>
           </dl>
 
-          {#if status === 'idle'}
-            {#if onboardingStage === 'identity'}
-              <div
-                class="relative mt-10 grid min-h-72 place-items-center border border-white/10 bg-black/10 p-8 text-center"
-                data-testid="sentinel-onboarding-guidance"
-              >
-                <div class="max-w-md">
-                  <span
-                    class="mx-auto grid size-16 place-items-center rounded-full border border-[#79dfff]/30 bg-[#79dfff]/5 text-[#79dfff] shadow-[0_0_50px_rgb(82_198_238/0.1)]"
-                  >
-                    <Cpu class="size-7" />
-                  </span>
-                  <h2 class="mt-6 text-2xl font-semibold">
-                    {vault.t('login.sentinel_onboarding_create_keys_title')}
-                  </h2>
-                  <p class="mt-3 text-sm leading-6 text-[#9eabb5]">
-                    {vault.t(
-                      'login.sentinel_onboarding_create_keys_description',
-                    )}
-                  </p>
-                </div>
-              </div>
-            {/if}
-          {:else}
+          {#if status !== 'idle'}
             <div
               class="relative mt-6 space-y-4"
               data-testid="sentinel-genesis-ceremony-step"

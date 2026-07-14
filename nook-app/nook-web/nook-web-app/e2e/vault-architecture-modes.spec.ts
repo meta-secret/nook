@@ -262,6 +262,27 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-create-keys'),
     ).toBeVisible()
+    const initialSummary = page.getByTestId(
+      'sentinel-onboarding-vault-summary',
+    )
+    const initialSummaryDetails = page.getByTestId(
+      'sentinel-onboarding-summary-details',
+    )
+    await expect(initialSummary).toHaveAttribute('data-layout', 'compact')
+    await expect(page.getByTestId('sentinel-onboarding-guidance')).toHaveCount(
+      0,
+    )
+    await expect(
+      page.getByTestId('sentinel-onboarding-summary-name'),
+    ).toHaveText('NOT SET')
+    await expect(
+      page.getByTestId('sentinel-onboarding-summary-policy'),
+    ).toHaveText('NOT SET')
+    const initialSummaryDetailsBox = await initialSummaryDetails.boundingBox()
+    if (!initialSummaryDetailsBox) {
+      throw new Error('Initial Sentinel summary must have a layout box')
+    }
+    expect(initialSummaryDetailsBox.height).toBeLessThan(120)
     const brandBox = await page
       .getByTestId('sentinel-dashboard-brand')
       .boundingBox()
