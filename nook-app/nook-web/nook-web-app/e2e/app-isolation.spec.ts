@@ -12,6 +12,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: UI_TIMEOUT_MS * 2,
   })
+  await expect(page.getByTestId('migrate-legacy-vaults-link')).toHaveCount(0)
 })
 
 test('exposes only the project capability and rejects the opposite vault type', async ({
@@ -36,13 +37,11 @@ test('exposes only the project capability and rejects the opposite vault type', 
   if (isSimple) {
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
-    await expect(page.getByTestId('migrate-legacy-vaults-link')).toHaveCount(1)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)
   } else {
     await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
     await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
-    await expect(page.getByTestId('migrate-legacy-vaults-link')).toHaveCount(1)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveAttribute(
       'href',
       'https://simple.nokey.sh/',

@@ -60,14 +60,8 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::UnknownVaultType { .. }
             | ValidationError::UnknownVaultApplication { .. }
             | ValidationError::VaultApplicationTypeMismatch { .. }
-            | ValidationError::MigrationApplicationCannotOpenVault
             | ValidationError::SentinelExtensionForbidden
             | ValidationError::ExtensionApprovalApplicationForbidden { .. }
-            | ValidationError::MigrationRequestInvalid
-            | ValidationError::MigrationRequestExpired
-            | ValidationError::MigrationOriginMismatch
-            | ValidationError::MigrationNonceMismatch
-            | ValidationError::MigrationVaultTypeMismatch
             | ValidationError::UnknownReplicationType { .. }
             | ValidationError::UnsupportedProviderReplication { .. }
             | ValidationError::SimpleVaultHasSentinelPolicy

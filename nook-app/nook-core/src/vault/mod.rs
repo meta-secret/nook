@@ -12,7 +12,6 @@ pub(crate) mod vault_event_session;
 pub(crate) mod vault_event_store;
 pub(crate) mod vault_format;
 pub(crate) mod vault_ids;
-pub(crate) mod vault_migration;
 pub(crate) mod vault_projection;
 pub(crate) mod vault_sentinel_genesis;
 pub(crate) mod vault_sentinel_onboarding;

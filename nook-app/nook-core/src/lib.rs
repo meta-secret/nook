@@ -22,9 +22,8 @@ pub(crate) use sync::{
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
     vault_event, vault_event_builder, vault_event_graph, vault_event_session, vault_event_store,
-    vault_format, vault_ids, vault_migration, vault_projection, vault_sentinel_genesis,
-    vault_sentinel_onboarding, vault_sentinel_unlock, vault_session, vault_session_cache,
-    vault_wire,
+    vault_format, vault_ids, vault_projection, vault_sentinel_genesis, vault_sentinel_onboarding,
+    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
 pub use bip39::{
@@ -45,7 +44,6 @@ pub use device_key_protection::{
     resolve_passkey_registration, resolve_passkey_registration_for_mode,
     serialize_wrapped_device_identity, unlock_passkey_device_identity,
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
-    wrap_existing_device_identity_with_passkey,
 };
 pub use enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
@@ -143,7 +141,6 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
-    auth_snapshot_for_migrated_store_ids, auth_snapshot_matches_migrated_store_ids,
     draft_storage_args, enrollment_provider_for_architecture,
     enrollment_provider_for_architecture_with_storage_target, ensure_local_provider_row,
     find_duplicate_sync_provider, localize_provider_label, migrate_provider_fields,
@@ -219,11 +216,6 @@ pub use vault_ids::{
     generate_secret_id, generate_store_id, is_auth_key_id, is_compact_token, is_device_id,
     normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
     validate_store_id,
-};
-pub use vault_migration::{
-    VaultMigrationPayload, build_vault_migration_capsule, create_vault_migration_request,
-    open_vault_migration_capsule, validate_vault_migration_request_origin,
-    vault_migration_request_type,
 };
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,

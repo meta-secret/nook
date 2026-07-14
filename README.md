@@ -19,12 +19,12 @@ Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 
-The public site at [nokey.sh](https://nokey.sh) is the sealed-capsule landing
-page and locked legacy-migration broker (English / Russian). Everyday Simple
-vaults live at [simple.nokey.sh](https://simple.nokey.sh); quorum-protected
-Sentinel vaults live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are
-independent applications and browser origins, not modes in one production app.
-The browser extension can pair only with Simple Vault.
+The public site lives at [nokey.sh](https://nokey.sh) (English / Russian).
+Everyday Simple vaults live at
+[simple.nokey.sh](https://simple.nokey.sh); quorum-protected Sentinel vaults
+live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are independent
+applications and browser origins, not modes in one production app. The browser
+extension can pair only with Simple Vault.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -147,7 +147,7 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
 | `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
 | `nook-vault-simple` | Independent Svelte 5 Simple Vault application and artifact |
 | `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application and artifact |
-| `nook-web-app` | Public site, locked migration broker, and unified local e2e harness |
+| `nook-web-app` | Public site and unified local e2e harness |
 | `nook-web-extension` | Simple-only Manifest V3 browser extension |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
 

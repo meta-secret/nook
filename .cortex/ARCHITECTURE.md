@@ -44,7 +44,7 @@ root/
 |      nook-vault-simple       |      nook-vault-sentinel     |
 |  (independent Simple app)    |  (independent Sentinel app)  |
 +-------------------------------------------------------------+
-|             nook-web-app (site + migration broker)          |
+|                    nook-web-app (site)                      |
 +-------------------------------------------------------------+
 |                    nook-web-extension                       |
 |       (Manifest V3 extension UI, service worker, scripts)   |
@@ -116,9 +116,9 @@ root/
 - **`nook-vault-sentinel`:** fixed Sentinel capability, Sentinel-only local
   registry, genesis/quorum/import/open/manage flows, no extension route or
   protocol UI, and Rust-rejected extension approval.
-- **`nook-web-app`:** public `nokey.sh` site, locked destination-bound legacy
-  migration broker, and unified local/e2e harness. It is not a universal
-  production vault artifact.
+- **`nook-web-app`:** public `nokey.sh` site and unified local/e2e harness. It
+  is not a universal production vault artifact; the public production build
+  contains no vault entrypoint.
 - **Origin boundary:** each production app uses its own origin-scoped IndexedDB,
   WebAuthn RP ID (`simple.nokey.sh` or `sentinel.nokey.sh`), session state,
   security headers, and Cloudflare Pages project. Before app modules load, its
@@ -146,9 +146,9 @@ root/
   generation, or secret search. Those remain in `nook-core` and are exposed
   through `nook-wasm`.
 - **One generated WASM package:** `nook-wasm` is compiled and optimized once into
-  `nook-web-shared/src/vault-app/lib/nook-wasm`. Unified, Simple, Sentinel,
-  extension, and migration bootstraps configure distinct immutable Rust
-  application identities before importing their app modules. Separate web
+  `nook-web-shared/src/vault-app/lib/nook-wasm`. Unified, Simple, Sentinel, and
+  extension bootstraps configure distinct immutable Rust application
+  identities before importing their app modules. Separate web
   projects and origins remain the product boundary; manager construction and
   domain operations validate the configured identity in Rust. Sentinel's built
   web surface contains no extension route, protocol, or UI, and Rust rejects
@@ -327,5 +327,5 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
 ### Build & verify
 
 - **Native linking:** `nook-app/.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in `rust-base`); wasm32 targets keep the default linker.
-- **Wasm:** `builder-wasm` compiles the featureless `nook-wasm` bridge and runs `wasm-pack` exactly once. Unified, Simple, Sentinel, extension, and migration consumers share that generated package; immutable Rust-owned application configuration and manager capability checks enforce the active realm. The package crosses the host artifact boundary and is seeded into the web image. Mounted local-iteration paths regenerate it from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR/main CI use dev mode, while release passes `WASM_BUILD_MODE=prod` explicitly.
+- **Wasm:** `builder-wasm` compiles the featureless `nook-wasm` bridge and runs `wasm-pack` exactly once. Unified, Simple, Sentinel, and extension consumers share that generated package; immutable Rust-owned application configuration and manager capability checks enforce the active realm. The package crosses the host artifact boundary and is seeded into the web image. Mounted local-iteration paths regenerate it from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR/main CI use dev mode, while release passes `WASM_BUILD_MODE=prod` explicitly.
 - **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set.

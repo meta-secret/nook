@@ -9,7 +9,6 @@ const spaPaths = new Set([
   "/app-logs",
   "/extension-connect",
   "/logs",
-  "/migrate",
   "/privacy",
   "/terms",
 ]);
@@ -37,12 +36,7 @@ function simpleSpa(): Plugin {
       const outDir = join(process.cwd(), "dist");
       const shell = join(outDir, "index.html");
       copyFileSync(shell, join(outDir, "404.html"));
-      for (const alias of [
-        "app-logs",
-        "extension-connect",
-        "logs",
-        "migrate",
-      ]) {
+      for (const alias of ["app-logs", "extension-connect", "logs"]) {
         copyFileSync(shell, join(outDir, `${alias}.html`));
       }
       writeFileSync(join(outDir, "_headers"), vaultAppHeaders());

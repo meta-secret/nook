@@ -25,6 +25,14 @@ for (const root of [simpleRoot, sentinelRoot]) {
   ) {
     throw new Error(`Independent vault project was not built: ${root}`)
   }
+  if (existsSync(join(root, 'dist/migrate.html'))) {
+    throw new Error(
+      `Vault artifact contains a retired migration route: ${root}`,
+    )
+  }
+}
+if (existsSync(join(webRoot, 'nook-web-app/dist/site/migration.html'))) {
+  throw new Error('Public site artifact contains a retired migration broker.')
 }
 
 const simpleHtml = await readFile(join(simpleRoot, 'dist/index.html'), 'utf8')
@@ -85,6 +93,17 @@ for (const requiredExport of [
 ]) {
   if (!sharedBindings.includes(requiredExport)) {
     throw new Error(`Shared WASM is missing ${requiredExport}.`)
+  }
+}
+for (const retiredExport of [
+  'beginVaultMigration',
+  'buildVaultMigrationCapsule',
+  'acceptVaultMigrationCapsule',
+  'finishVaultMigrationWithPasskey',
+  'validateVaultMigrationRequestOrigin',
+]) {
+  if (sharedBindings.includes(retiredExport)) {
+    throw new Error(`Shared WASM still exports ${retiredExport}.`)
   }
 }
 
