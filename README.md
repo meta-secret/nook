@@ -150,6 +150,7 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
 | `nook-web-app` | Public site, locked migration broker, and unified local e2e harness |
 | `nook-web-extension` | Simple-only Manifest V3 browser extension |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
+| `agentic-ai/meta-agent` | Rust CLI that turns feature prompts into validated task DAGs and GitHub-ready Markdown |
 
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
@@ -160,6 +161,7 @@ Deeper documentation lives in [`.cortex/`](.cortex/):
 - [Password manager](.cortex/product-specs/password-manager.md)
 - [Decentralized multi-device auth](.cortex/product-specs/decentralized-auth.md)
 - [Engineering principles](.cortex/design-docs/core-beliefs.md)
+- [Meta-agent feature DAG](.cortex/design-docs/meta-agent-feature-dag.md)
 - [Agent map](.cortex/AGENTS.md)
 
 ## Run locally
@@ -171,6 +173,15 @@ Prerequisites:
 
 The root `Taskfile.yml` is the repository entrypoint. All compile, test, and
 package installs run inside the project container.
+
+Plan a large coding feature as a dependency and resource-aware task DAG after authenticating Codex on the host:
+
+```sh
+task meta-agent:plan PROMPT='Describe the feature and its required outcome'
+task meta-agent:validate FEATURE=agentic-ai/features/<feature-id>
+```
+
+The generated `feature.yaml`, parent `feature.md`, and child `<task-id>.md` files stay local for review; this initial planner does not publish GitHub issues or run implementation agents.
 
 ```sh
 task web:dev

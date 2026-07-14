@@ -14,3 +14,4 @@ This directory contains design specifications, architecture rationales, and core
 | [sentinel-genesis.md](sentinel-genesis.md) | Provider-free Sentinel reverse onboarding, threshold policy, and atomic genesis | Accepted target design |
 | [vault-schema-versioning.md](vault-schema-versioning.md) | #52 safe migration via event log; projection `schema_version` | Implemented |
 | [typed-newtypes.md](typed-newtypes.md) | Domain newtypes over raw `String`/`u32`; version wrappers for multi-schema vault | In progress |
+| [meta-agent-feature-dag.md](meta-agent-feature-dag.md) | Rust meta-agent planning boundary, feature artifact contract, and conflict-safe DAG scheduling | Initial planner implemented |

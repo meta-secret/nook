@@ -3,12 +3,104 @@ version: '3'
 vars:
   CI_AGENT_DIR: agentic-ai/ci-agent
   CI_AGENT_IMAGE: '{{default "nook-ci-agent:local" .CI_AGENT_IMAGE}}'
+  META_AGENT_DIR: agentic-ai/meta-agent
+  META_AGENT_IMAGE: '{{default "nook-meta-agent:local" .META_AGENT_IMAGE}}'
+  META_AGENT_CODEX_VERSION: '{{default "0.144.4" .META_AGENT_CODEX_VERSION}}'
   # Host Docker socket (sibling containers via sock — not DinD). Override on unusual setups.
   DOCKER_SOCK: '{{default "/var/run/docker.sock" .DOCKER_SOCK}}'
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
+  meta-agent:check:
+    desc: Run meta-agent Rust format, Clippy, and unit tests in Docker.
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - >-
+        {{.DOCKER}} buildx build
+        --builder "${BUILDX_BUILDER:-$({{.DOCKER}} context show 2>/dev/null || echo default)}"
+        --platform linux/amd64
+        --file {{.META_AGENT_DIR}}/Dockerfile
+        --target check
+        --output type=cacheonly
+        {{.META_AGENT_DIR}}
+
+  meta-agent:docker:build:
+    desc: Build the Rust meta-agent image with the pinned Codex CLI.
+    sources:
+      - agentic-ai/meta-agent/Cargo.toml
+      - agentic-ai/meta-agent/Cargo.lock
+      - agentic-ai/meta-agent/Dockerfile
+      - agentic-ai/meta-agent/src/**/*
+      - agentic-ai/meta-agent/tests/**/*
+    cmds:
+      - >-
+        {{.DOCKER}} build
+        --platform linux/amd64
+        --build-arg CODEX_VERSION={{.META_AGENT_CODEX_VERSION}}
+        --target runtime
+        --tag {{.META_AGENT_IMAGE}}
+        --file {{.META_AGENT_DIR}}/Dockerfile
+        {{.META_AGENT_DIR}}
+
+  meta-agent:plan:
+    desc: Convert PROMPT into a validated local feature DAG using Codex.
+    deps:
+      - meta-agent:docker:build
+    requires:
+      vars:
+        - PROMPT
+    vars:
+      REPO_ROOT:
+        sh: 'git rev-parse --show-toplevel'
+      FEATURE_OUTPUT_ROOT: '{{default "agentic-ai/features" .FEATURE_OUTPUT_ROOT}}'
+      META_AGENT_MODEL: '{{default "" .META_AGENT_MODEL}}'
+    env:
+      META_AGENT_PROMPT: '{{.PROMPT}}'
+      META_AGENT_OUTPUT_ROOT: '{{.FEATURE_OUTPUT_ROOT}}'
+      META_AGENT_SELECTED_MODEL: '{{.META_AGENT_MODEL}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        repo_root="{{.REPO_ROOT}}";
+        git_common_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)";
+        codex_home="${CODEX_HOME:-$HOME/.codex}";
+        if [ ! -d "$codex_home" ]; then
+          echo "meta-agent:plan: missing Codex home at $codex_home; authenticate Codex first" >&2;
+          exit 1;
+        fi;
+        mounts=(-v "$repo_root:$repo_root");
+        case "$git_common_dir" in "$repo_root"|"$repo_root"/*) ;; *) mounts+=(-v "$git_common_dir:$git_common_dir:ro");; esac;
+        args=(plan --repo-root "$repo_root" --output-root "$META_AGENT_OUTPUT_ROOT");
+        if [ -n "$META_AGENT_SELECTED_MODEL" ]; then args+=(--model "$META_AGENT_SELECTED_MODEL"); fi;
+        printf "%s\n" "$META_AGENT_PROMPT" |
+          {{.DOCKER}} run --rm -i
+          "${mounts[@]}"
+          -v "$codex_home:/root/.codex"
+          -e CODEX_HOME=/root/.codex
+          -e CODEX_API_KEY
+          -w "$repo_root"
+          {{.META_AGENT_IMAGE}}
+          "${args[@]}"'
+
+  meta-agent:validate:
+    desc: Validate FEATURE and print its dependency/resource-safe execution batches.
+    deps:
+      - meta-agent:docker:build
+    requires:
+      vars:
+        - FEATURE
+    vars:
+      REPO_ROOT:
+        sh: 'git rev-parse --show-toplevel'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        -v "{{.REPO_ROOT}}:{{.REPO_ROOT}}:ro"
+        -w "{{.REPO_ROOT}}"
+        {{.META_AGENT_IMAGE}}
+        validate "{{.FEATURE}}"
+
   ci-agent:install:
     internal: true
     dir: '{{.CI_AGENT_DIR}}'

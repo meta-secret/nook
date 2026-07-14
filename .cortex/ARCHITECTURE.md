@@ -11,6 +11,9 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 root/
 ├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
+├── agentic-ai/
+│   ├── ci-agent/         (Cursor-based implementation and CI repair harness)
+│   └── meta-agent/       (Rust feature-DAG planner and validator using Codex CLI)
 ├── preflight/            (standalone Rust tests for whole-repository invariants)
 │   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
 │   ├── Dockerfile
@@ -249,6 +252,7 @@ members:  members_key-encrypted catalog entries
 
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentic-ai/meta-agent` | `task meta-agent:check` — containerized Rust format, Clippy, and behavior tests for DAG validation, resource-aware scheduling, and artifact generation |
 | `preflight` | `task preflight` — standalone Rust tests for whole-repository invariants; runs before app setup in PR/main CI                                                                                            |
 | `nook-core` / `nook-auth2` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web/nook-web-app`  | Playwright e2e: `task web:test:e2e` (main stub gate and explicit PR validation), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
@@ -262,6 +266,8 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 ## 7. The Engineering Harness
 
 All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload) and `task wasm:build:fast` (mounted no-opt WASM regeneration).
+
+Repository agent tooling lives under `agentic-ai/` and is exposed through `.task/agentic-ai.yml`. The Rust `meta-agent` uses `task meta-agent:plan` to inspect a developer prompt with an ephemeral read-only Codex session, writes one validated feature directory, and derives conflict-safe execution batches from logical dependencies plus declared write scopes. Its artifact and scheduling contract is documented in [meta-agent-feature-dag.md](design-docs/meta-agent-feature-dag.md).
 
 ### Split Rust/WASM and web images
 
