@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.103"
 clap = { version = "4.6.1", features = ["derive"] }
-codex = { package = "codex-core-api", git = "https://github.com/openai/codex.git" }
+codex = { package = "codex-core-api", git = "https://github.com/openai/codex.git", rev = "d7ba5ff9553a6aa0898a8e3bd5cb3bc00d0c9ddf" }
 futures = "0.3.31"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
