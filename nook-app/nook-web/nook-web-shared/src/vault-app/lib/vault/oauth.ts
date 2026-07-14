@@ -175,10 +175,14 @@ export async function useGoogleSharedFolder(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("provider_setup.google_shared_not_folder")) {
-      throw new Error(state.t("provider_setup.google_shared_not_folder"));
+      throw new Error(state.t("provider_setup.google_shared_not_folder"), {
+        cause: error,
+      });
     }
     if (message.includes("provider_setup.google_shared_not_writable")) {
-      throw new Error(state.t("provider_setup.google_shared_not_writable"));
+      throw new Error(state.t("provider_setup.google_shared_not_writable"), {
+        cause: error,
+      });
     }
     throw error;
   }
