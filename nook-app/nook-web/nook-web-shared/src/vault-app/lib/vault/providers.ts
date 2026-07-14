@@ -168,6 +168,7 @@ export function beginProviderSetup(
       preset,
       accessToken: "",
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      driveMode: preset === "google-drive" ? "private" : undefined,
     };
   } else {
     state.oauthSetupPreset = undefined;
@@ -240,9 +241,16 @@ export async function removeProvider(
 export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const pat = state.githubPat.trim();
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO;
-  const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+  const sharedGoogleDrive =
+    state.oauthFile?.preset === "google-drive" &&
+    (state.oauthFile.driveMode === "shared" ||
+      Boolean(state.oauthFile.folderId?.trim()));
+  const driveFile = sharedGoogleDrive
+    ? state.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+    : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = state.loginSetupType ?? state.storageMode;
   const isNewSetup = state.loginSetupType !== undefined;
+  let oauthProviderToUpdateId: string | undefined;
   const vaultStoreId = vaultStoreIdForProviderSave(state);
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? "google-drive";
@@ -255,6 +263,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           expiresAt: state.oauthFile?.expiresAt,
           fileId: state.oauthFile?.fileId,
           folderId: state.oauthFile?.folderId,
+          driveMode: state.oauthFile?.driveMode,
           accountEmail: state.oauthFile?.accountEmail,
           fileName: driveFile,
         }
@@ -304,6 +313,9 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
       }
     } else {
       state.providers = [...state.providers, provider];
+      if (provider.type === "oauth-file") {
+        oauthProviderToUpdateId = provider.id;
+      }
     }
   } else if (isNewSetup && type === "local" && !state.localProvider) {
     const provider: StorageProvider = {
@@ -338,11 +350,18 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
 
   if (state.storageMode === "oauth-file" && state.oauthFile?.fileId) {
     const activePreset = state.oauthFile.preset;
+    oauthProviderToUpdateId ??= findDuplicateSyncProvider(state.syncProviders, {
+      id: "oauth-provider-update-target",
+      type: "oauth-file",
+      label: "",
+      oauthFile: state.oauthFile,
+      createdAt: "",
+    })?.id;
     state.providers = state.providers.map((provider) => {
       if (
         provider.type !== "oauth-file" ||
         !provider.oauthFile ||
-        provider.oauthFile.preset !== activePreset
+        provider.id !== oauthProviderToUpdateId
       ) {
         return provider;
       }
@@ -354,6 +373,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         expiresAt: provider.oauthFile.expiresAt ?? state.oauthFile!.expiresAt,
         fileId: state.oauthFile!.fileId,
         folderId: state.oauthFile!.folderId ?? provider.oauthFile.folderId,
+        driveMode: state.oauthFile!.driveMode ?? provider.oauthFile.driveMode,
         fileName:
           provider.oauthFile.fileName?.trim() ||
           state.oauthFile!.fileName?.trim() ||
@@ -365,7 +385,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
     });
     state.oauthFile =
       state.providers.find(
-        (p) => p.type === "oauth-file" && p.oauthFile?.preset === activePreset,
+        (provider) => provider.id === oauthProviderToUpdateId,
       )?.oauthFile ?? state.oauthFile;
   }
 

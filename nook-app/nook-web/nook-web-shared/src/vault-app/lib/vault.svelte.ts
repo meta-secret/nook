@@ -43,7 +43,6 @@ import { APP_KIND } from "$lib/app-kind";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
-  formatDriveStorageRef,
   GITHUB_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   loadAuthProviders,
@@ -55,6 +54,7 @@ import {
   storageProviderKind,
   wasmStorageModeForProvider,
   type LocalFolderConfig,
+  type GoogleDriveMode,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
@@ -488,22 +488,30 @@ export class VaultState {
       return [wasmStorageModeForProvider(GITHUB_PROVIDER_TYPE), pat, repo];
     }
     if (kind === NookStorageProviderKind.OauthFile) {
-      const token = this.oauthFile?.accessToken?.trim();
-      if (!token) {
+      const oauthFile = this.oauthFile;
+      const token = oauthFile?.accessToken?.trim();
+      if (!oauthFile || !token) {
         return undefined;
       }
-      const fileName =
-        this.githubRepo.trim() ||
-        this.oauthFile?.fileName?.trim() ||
-        DEFAULT_DRIVE_BACKUP_NAME;
-      return [
-        wasmStorageModeForProvider(
-          OAUTH_FILE_PROVIDER_TYPE,
-          this.oauthFile?.preset,
-        ),
-        token,
-        formatDriveStorageRef(this.oauthFile?.fileId, fileName),
-      ];
+      const sharedGoogleDrive =
+        oauthFile.preset === "google-drive" &&
+        (oauthFile.driveMode === "shared" ||
+          Boolean(oauthFile.folderId?.trim()));
+      // The visible shared-folder display name is not the legacy Drive backup
+      // file name. Keep the validated internal name independent so ordinary
+      // folder names such as "Team Vault" cannot break the connect boundary.
+      const fileName = sharedGoogleDrive
+        ? oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+        : this.githubRepo.trim() ||
+          oauthFile.fileName?.trim() ||
+          DEFAULT_DRIVE_BACKUP_NAME;
+      return this.providerWasmArgs({
+        id: "staged-oauth-file",
+        type: OAUTH_FILE_PROVIDER_TYPE,
+        label: "",
+        oauthFile: { ...oauthFile, accessToken: token, fileName },
+        createdAt: isoTimestamp(),
+      });
     }
     return undefined;
   }
@@ -560,6 +568,18 @@ export class VaultState {
 
   async signInWithGoogle(): Promise<void> {
     return oauthActions.signInWithGoogle(this);
+  }
+
+  selectGoogleDriveMode(mode: GoogleDriveMode): void {
+    oauthActions.selectGoogleDriveMode(this, mode);
+  }
+
+  async createGoogleSharedFolder(collaboratorEmail: string): Promise<string> {
+    return oauthActions.createGoogleSharedFolder(this, collaboratorEmail);
+  }
+
+  async useGoogleSharedFolder(folderRef: string): Promise<string> {
+    return oauthActions.useGoogleSharedFolder(this, folderRef);
   }
 
   async prepareICloudSignIn(): Promise<void> {

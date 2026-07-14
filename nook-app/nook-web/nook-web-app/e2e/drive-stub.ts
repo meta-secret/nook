@@ -300,6 +300,22 @@ export function createLocalE2eGoogleDriveVaultStub(
         }
 
         if (driveFileId && method === 'GET') {
+          const sharedFolder = sharedFolders.get(
+            decodeURIComponent(driveFileId),
+          )
+          if (sharedFolder) {
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                id: decodeURIComponent(driveFileId),
+                name: sharedFolder.name,
+                mimeType: 'application/vnd.google-apps.folder',
+                capabilities: { canAddChildren: true },
+              }),
+            })
+            return
+          }
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
             if (!allEventFiles().has(eventDigest)) {

@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import {
+    FolderOpen,
+    FolderPlus,
+    LockKeyhole,
+    RefreshCw,
+    ShieldCheck,
+    Users,
+  } from '@lucide/svelte'
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
@@ -33,7 +40,20 @@
   } = $props()
 
   const isICloud = $derived(preset === 'icloud')
+  const googleDriveMode = $derived(
+    vault.oauthFile?.driveMode ??
+      (vault.oauthFile?.folderId?.trim() ? 'shared' : 'private'),
+  )
+  const isSharedGoogleDrive = $derived(
+    !isICloud && googleDriveMode === 'shared',
+  )
   const oauthSignedIn = $derived(Boolean(vault.oauthFile?.accessToken?.trim()))
+  const sharedFolderReady = $derived(
+    isSharedGoogleDrive && Boolean(vault.oauthFile?.folderId?.trim()),
+  )
+  const canConnect = $derived(
+    oauthSignedIn && (!isSharedGoogleDrive || sharedFolderReady),
+  )
   const oauthAccount = $derived(vault.oauthFile?.accountEmail ?? '')
   const oauthBusy = $derived(
     isICloud ? vault.icloudOAuthBusy : vault.googleOAuthBusy,
@@ -55,8 +75,56 @@
   )
 
   let connectionStepOpen = $state(true)
+  let sharedFolderStepOpen = $state(false)
   let syncStepOpen = $state(false)
   let icloudSignInPrepareStarted = $state(false)
+  let sharedFolderAction = $state<'create' | 'join'>('create')
+  let collaboratorEmail = $state('')
+  let sharedFolderRef = $state('')
+  let sharedFolderBusy = $state(false)
+
+  function selectGoogleDriveMode(mode: 'private' | 'shared') {
+    vault.selectGoogleDriveMode(mode)
+    connectionStepOpen = true
+    sharedFolderStepOpen = false
+    syncStepOpen = false
+  }
+
+  async function createSharedFolder() {
+    if (sharedFolderBusy) return
+    sharedFolderBusy = true
+    vault.errorMsg = ''
+    try {
+      await vault.createGoogleSharedFolder(collaboratorEmail)
+      sharedFolderStepOpen = false
+      syncStepOpen = true
+    } catch (error: unknown) {
+      vault.errorMsg =
+        error instanceof Error
+          ? error.message
+          : vault.t('provider_setup.google_shared_create_failed')
+    } finally {
+      sharedFolderBusy = false
+    }
+  }
+
+  async function useSharedFolder() {
+    if (sharedFolderBusy) return
+    sharedFolderBusy = true
+    vault.errorMsg = ''
+    try {
+      await vault.useGoogleSharedFolder(sharedFolderRef)
+      sharedFolderStepOpen = false
+      syncStepOpen = true
+    } catch (error: unknown) {
+      vault.errorMsg =
+        error instanceof Error
+          ? error.message
+          : vault.t('provider_setup.google_shared_connect_failed')
+    } finally {
+      sharedFolderBusy = false
+    }
+  }
 
   function watchICloudSignInIntent(node: HTMLElement) {
     let deferredSignInPending = false
@@ -116,7 +184,8 @@
   $effect(() => {
     if (oauthSignedIn) {
       connectionStepOpen = false
-      syncStepOpen = true
+      sharedFolderStepOpen = isSharedGoogleDrive && !sharedFolderReady
+      syncStepOpen = !isSharedGoogleDrive || sharedFolderReady
     }
   })
 
@@ -208,15 +277,83 @@
       <p class="text-sm text-foreground text-pretty">
         {isICloud
           ? vault.t('provider_setup.icloud_desc')
-          : vault.t('provider_setup.google_drive_desc')}
+          : vault.t(
+              isSharedGoogleDrive
+                ? 'provider_setup.google_drive_shared_desc'
+                : 'provider_setup.google_drive_desc',
+            )}
       </p>
+
+      {#if !isICloud}
+        <fieldset class="space-y-2" data-testid="google-drive-mode-fieldset">
+          <legend class="text-xs font-medium text-foreground">
+            {vault.t('provider_setup.google_drive_mode')}
+          </legend>
+          <div
+            class="grid overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label={vault.t('provider_setup.google_drive_mode')}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={googleDriveMode === 'private'}
+              class="flex gap-2.5 px-3 py-3 text-left transition-colors {googleDriveMode ===
+              'private'
+                ? 'bg-primary/[0.06] text-foreground'
+                : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+              data-testid="google-drive-mode-private"
+              onclick={() => selectGoogleDriveMode('private')}
+            >
+              <LockKeyhole class="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span class="block text-sm font-medium"
+                  >{vault.t('provider_setup.google_drive_private')}</span
+                >
+                <span class="mt-0.5 block text-[11px] leading-snug"
+                  >{vault.t(
+                    'provider_setup.google_drive_private_desc',
+                  )}</span
+                >
+              </span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={googleDriveMode === 'shared'}
+              class="flex gap-2.5 border-t border-border/40 px-3 py-3 text-left transition-colors sm:border-t-0 sm:border-l {googleDriveMode ===
+              'shared'
+                ? 'bg-primary/[0.06] text-foreground'
+                : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+              data-testid="google-drive-mode-shared"
+              onclick={() => selectGoogleDriveMode('shared')}
+            >
+              <Users class="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span class="block text-sm font-medium"
+                  >{vault.t('provider_setup.google_drive_shared')}</span
+                >
+                <span class="mt-0.5 block text-[11px] leading-snug"
+                  >{vault.t(
+                    'provider_setup.google_drive_shared_mode_desc',
+                  )}</span
+                >
+              </span>
+            </button>
+          </div>
+        </fieldset>
+      {/if}
 
       <div class="space-y-1.5">
         <label
           class="text-xs font-medium text-foreground"
           for="{idPrefix}-drive-file"
         >
-          {vault.t('provider_setup.drive_file_name')}
+          {vault.t(
+            isSharedGoogleDrive
+              ? 'provider_setup.drive_folder_name'
+              : 'provider_setup.drive_file_name',
+          )}
         </label>
         <input
           id="{idPrefix}-drive-file"
@@ -231,7 +368,11 @@
         <p class="text-[11px] text-muted-foreground text-pretty">
           {isICloud
             ? vault.t('provider_setup.icloud_event_log_desc')
-            : vault.t('provider_setup.drive_event_log_desc')}
+            : vault.t(
+                isSharedGoogleDrive
+                  ? 'provider_setup.drive_shared_event_log_desc'
+                  : 'provider_setup.drive_event_log_desc',
+              )}
         </p>
       </div>
 
@@ -323,15 +464,151 @@
       </p>
     </SetupWizardStep>
 
+    {#if isSharedGoogleDrive}
+      <SetupWizardStep
+        stepNumber={2}
+        title={vault.t('provider_setup.google_shared_folder_step')}
+        subtitle={oauthSignedIn
+          ? sharedFolderReady
+            ? vault.t('provider_setup.google_shared_folder_ready')
+            : vault.t('provider_setup.google_shared_folder_subtitle')
+          : vault.t('login_wizard.available_after_connect')}
+        disabled={!oauthSignedIn}
+        bind:open={sharedFolderStepOpen}
+        testId="google-shared-folder-step"
+      >
+        <div
+          class="grid overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
+          role="radiogroup"
+          aria-label={vault.t('provider_setup.google_shared_folder_step')}
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={sharedFolderAction === 'create'}
+            class="flex items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors {sharedFolderAction ===
+            'create'
+              ? 'bg-primary/[0.06] text-foreground'
+              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+            data-testid="google-shared-folder-create-mode"
+            onclick={() => (sharedFolderAction = 'create')}
+          >
+            <FolderPlus class="size-4 shrink-0" />
+            {vault.t('provider_setup.google_shared_create')}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={sharedFolderAction === 'join'}
+            class="flex items-center gap-2.5 border-t border-border/40 px-3 py-2.5 text-left text-sm transition-colors sm:border-t-0 sm:border-l {sharedFolderAction ===
+            'join'
+              ? 'bg-primary/[0.06] text-foreground'
+              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+            data-testid="google-shared-folder-join-mode"
+            onclick={() => (sharedFolderAction = 'join')}
+          >
+            <FolderOpen class="size-4 shrink-0" />
+            {vault.t('provider_setup.google_shared_join')}
+          </button>
+        </div>
+
+        {#if sharedFolderAction === 'create'}
+          <div class="space-y-1.5">
+            <label
+              class="text-xs font-medium text-foreground"
+              for="{idPrefix}-shared-email"
+            >
+              {vault.t('provider_setup.google_shared_account_email')}
+            </label>
+            <input
+              id="{idPrefix}-shared-email"
+              type="email"
+              bind:value={collaboratorEmail}
+              autocomplete="email"
+              data-testid="google-shared-account-email"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+              placeholder={vault.t(
+                'provider_setup.google_shared_account_placeholder',
+              )}
+            />
+            <p class="text-[11px] text-muted-foreground text-pretty">
+              {vault.t('provider_setup.google_shared_account_desc')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            data-testid="google-create-shared-folder-btn"
+            disabled={sharedFolderBusy || !collaboratorEmail.trim()}
+            onclick={() => void createSharedFolder()}
+          >
+            {#if sharedFolderBusy}
+              <RefreshCw class="size-4 animate-spin" />
+            {:else}
+              <FolderPlus class="size-4" />
+            {/if}
+            {vault.t('provider_setup.google_shared_create_and_share')}
+          </Button>
+        {:else}
+          <div class="space-y-1.5">
+            <label
+              class="text-xs font-medium text-foreground"
+              for="{idPrefix}-shared-folder-ref"
+            >
+              {vault.t('provider_setup.google_shared_folder_link')}
+            </label>
+            <input
+              id="{idPrefix}-shared-folder-ref"
+              type="text"
+              bind:value={sharedFolderRef}
+              autocomplete="off"
+              spellcheck="false"
+              data-testid="google-shared-folder-ref"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+              placeholder="https://drive.google.com/drive/folders/…"
+            />
+            <p class="text-[11px] text-muted-foreground text-pretty">
+              {vault.t('provider_setup.google_shared_folder_link_desc')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            data-testid="google-use-shared-folder-btn"
+            disabled={sharedFolderBusy || !sharedFolderRef.trim()}
+            onclick={() => void useSharedFolder()}
+          >
+            {#if sharedFolderBusy}
+              <RefreshCw class="size-4 animate-spin" />
+            {:else}
+              <FolderOpen class="size-4" />
+            {/if}
+            {vault.t('provider_setup.google_shared_use_folder')}
+          </Button>
+        {/if}
+
+        {#if vault.sharedGrantInstructions}
+          <p
+            class="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="google-shared-folder-status"
+          >
+            {vault.sharedGrantInstructions}
+          </p>
+        {/if}
+      </SetupWizardStep>
+    {/if}
+
     <SetupWizardStep
-      stepNumber={2}
+      stepNumber={isSharedGoogleDrive ? 3 : 2}
       title={vault.t('auth_storage.connect_and_sync')}
-      subtitle={oauthSignedIn
+      subtitle={canConnect
         ? isICloud
           ? vault.t('provider_setup.icloud_sync_subtitle')
           : vault.t('provider_setup.google_sync_subtitle')
+        : oauthSignedIn && isSharedGoogleDrive
+          ? vault.t('provider_setup.google_shared_folder_required')
         : vault.t('login_wizard.available_after_connect')}
-      disabled={!oauthSignedIn}
+      disabled={!canConnect}
       bind:open={syncStepOpen}
       testId={isICloud ? 'icloud-setup-sync-step' : 'google-setup-sync-step'}
     >
@@ -343,7 +620,7 @@
           type="button"
           class="sm:min-w-[180px]"
           data-testid="connect-provider-btn"
-          disabled={!oauthSignedIn || isVerifying || isInitializing}
+          disabled={!canConnect || isVerifying || isInitializing}
           onclick={() => void onConnect()}
         >
           {#if isInitializing}

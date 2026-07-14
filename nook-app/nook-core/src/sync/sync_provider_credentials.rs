@@ -179,6 +179,7 @@ mod tests {
                     expires_at: None,
                     file_id: None,
                     folder_id: None,
+                    drive_mode: Some(crate::GoogleDriveMode::Private),
                     file_name: Some("nook-events".to_owned()),
                     account_email: Some("me@example.com".to_owned()),
                 }),

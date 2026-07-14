@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, EnrollmentProvider, GithubPatMask,
-    GithubSyncTarget, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
+    GithubSyncTarget, GoogleDriveMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
     ProviderReplicationCapability, ReplicationType, StorageMode, StorageProviderType,
     SyncProviderTarget, VaultArchitecture, format_drive_storage_ref_raw, mask_github_pat,
     provider_replication_capability, storage_mode_for_provider, sync_provider_default_label,
@@ -39,10 +39,47 @@ pub struct OAuthFileConfigData {
     pub file_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_email: Option<String>,
-    /// Shared-replication My Drive folder id (`drive.file` scope). Personal
-    /// vaults leave this unset and continue using `drive.appdata`.
+    /// Explicit Google Drive provider mode. Legacy rows infer shared mode from
+    /// `folder_id`; rows without either field remain private.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drive_mode: Option<GoogleDriveMode>,
+    /// Shared-mode My Drive folder id (`drive.file` writes plus cross-account
+    /// `drive.readonly`). Private-mode
+    /// providers leave this unset and continue using `drive.appdata`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub folder_id: Option<String>,
+}
+
+impl OAuthFileConfigData {
+    #[must_use]
+    pub fn resolved_google_drive_mode(&self) -> GoogleDriveMode {
+        self.drive_mode.unwrap_or_else(|| {
+            if non_empty(self.folder_id.as_deref()).is_some() {
+                GoogleDriveMode::Shared
+            } else {
+                GoogleDriveMode::Private
+            }
+        })
+    }
+}
+
+/// Switch Google Drive storage mode without carrying an OAuth token issued for
+/// the previous scope into the new mode. Provider target ids are also scoped to
+/// their mode, so stale app-data or shared-folder references are discarded.
+#[must_use]
+pub fn set_google_drive_provider_mode(
+    config: &OAuthFileConfigData,
+    mode: GoogleDriveMode,
+) -> OAuthFileConfigData {
+    let mut switched = config.clone();
+    switched.drive_mode = Some(mode);
+    switched.access_token.clear();
+    switched.refresh_token = None;
+    switched.expires_at = None;
+    switched.account_email = None;
+    switched.file_id = None;
+    switched.folder_id = None;
+    switched
 }
 
 /// Browser-local File System Access folder handle metadata.
@@ -170,7 +207,15 @@ pub fn storage_args_for_provider(
             .as_ref()
             .map(|oauth| oauth.preset.as_str()),
     )?;
-    let mode = storage_mode_for_provider(provider_type, oauth_preset)
+    // Empty legacy OAuth presets mean Google Drive everywhere else in the
+    // provider model. Resolve that default here too so shared folder ids are
+    // not accidentally encoded as private app-data targets.
+    let resolved_oauth_preset = if provider_type == StorageProviderType::OauthFile {
+        Some(oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive))
+    } else {
+        oauth_preset
+    };
+    let mode = storage_mode_for_provider(provider_type, resolved_oauth_preset)
         .as_str()
         .to_owned();
     match provider_type {
@@ -190,12 +235,21 @@ pub fn storage_args_for_provider(
                 .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
             // Shared replication stores events under a My Drive folder id.
             // Encode with the `shared:` prefix so prepare_storage can select
-            // drive.file parent vs personal appDataFolder without a 4th arg.
-            let storage_id = oauth
-                .and_then(|oauth| non_empty(oauth.folder_id.as_deref()))
-                .map(|folder_id| format!("shared:{folder_id}"))
-                .or_else(|| oauth.and_then(|oauth| non_empty(oauth.file_id.as_deref())))
-                .unwrap_or_default();
+            // Shared Drive parent vs personal appDataFolder without a 4th arg.
+            let storage_id = match (resolved_oauth_preset, oauth) {
+                (Some(OauthFilePreset::GoogleDrive), Some(oauth))
+                    if oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared =>
+                {
+                    format!(
+                        "shared:{}",
+                        non_empty(oauth.folder_id.as_deref())
+                            .ok_or(ValidationError::SharedStorageTargetRequired)?
+                    )
+                }
+                _ => oauth
+                    .and_then(|oauth| non_empty(oauth.file_id.as_deref()))
+                    .unwrap_or_default(),
+            };
             Ok(StorageConnectArgs {
                 mode,
                 pat: oauth
@@ -489,6 +543,7 @@ fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
                 preset: OauthFilePreset::parse(&oauth.preset)
                     .unwrap_or(OauthFilePreset::GoogleDrive),
                 file_id: oauth.file_id.clone(),
+                folder_id: oauth.folder_id.clone(),
                 file_name: oauth.file_name.clone(),
                 account_email: oauth.account_email.clone(),
                 access_token: Some(oauth.access_token.clone()),
@@ -578,16 +633,25 @@ pub fn migrate_provider_fields(
                     .as_ref()
                     .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
                     .is_some();
-                if has_file_name {
+                let existing = provider.oauth_file.as_ref();
+                let is_google = existing.is_none_or(|oauth| {
+                    oauth.preset.trim().is_empty() || oauth.preset == "google-drive"
+                });
+                let needs_drive_mode =
+                    is_google && existing.and_then(|oauth| oauth.drive_mode).is_none();
+                if has_file_name && !needs_drive_mode {
                     return provider.clone();
                 }
                 changed = true;
-                let existing = provider.oauth_file.as_ref();
                 StorageProviderData {
                     oauth_file: Some(OAuthFileConfigData {
                         preset: existing.map_or_else(
                             || OauthFilePreset::GoogleDrive.as_str().to_owned(),
-                            |oauth| oauth.preset.clone(),
+                            |oauth| {
+                                non_empty(Some(oauth.preset.as_str())).unwrap_or_else(|| {
+                                    OauthFilePreset::GoogleDrive.as_str().to_owned()
+                                })
+                            },
                         ),
                         access_token: existing
                             .map(|oauth| oauth.access_token.clone())
@@ -597,7 +661,16 @@ pub fn migrate_provider_fields(
                         file_id: existing.and_then(|oauth| oauth.file_id.clone()),
                         folder_id: existing.and_then(|oauth| oauth.folder_id.clone()),
                         account_email: existing.and_then(|oauth| oauth.account_email.clone()),
-                        file_name: Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned()),
+                        drive_mode: if is_google {
+                            Some(existing.map_or(GoogleDriveMode::Private, |oauth| {
+                                oauth.resolved_google_drive_mode()
+                            }))
+                        } else {
+                            existing.and_then(|oauth| oauth.drive_mode)
+                        },
+                        file_name: existing
+                            .and_then(|oauth| oauth.file_name.clone())
+                            .or_else(|| Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned())),
                     }),
                     local_folder: None,
                     ..provider.clone()
@@ -876,6 +949,30 @@ mod tests {
     }
 
     #[test]
+    fn oauth_target_identity_keeps_private_and_shared_drive_rows_distinct() {
+        let mut private = oauth_provider("drive-private", "google-drive", None, "events");
+        private.oauth_file.as_mut().unwrap().drive_mode = Some(GoogleDriveMode::Private);
+        let mut shared = oauth_provider("drive-shared", "google-drive", None, "events");
+        let shared_oauth = shared.oauth_file.as_mut().unwrap();
+        shared_oauth.drive_mode = Some(GoogleDriveMode::Shared);
+        shared_oauth.folder_id = Some("folder-team".to_owned());
+
+        let providers = vec![private.clone(), shared.clone()];
+        assert_eq!(
+            find_duplicate_sync_provider(&providers, &private, None)
+                .map(|provider| provider.id)
+                .as_deref(),
+            Some("drive-private")
+        );
+        assert_eq!(
+            find_duplicate_sync_provider(&providers, &shared, None)
+                .map(|provider| provider.id)
+                .as_deref(),
+            Some("drive-shared")
+        );
+    }
+
+    #[test]
     fn storage_args_for_configured_provider_rows_match_wasm_connect_contract() {
         assert_eq!(
             storage_args_for_provider(&github_provider("gh", " team-vault ", " pat ")).unwrap(),
@@ -902,6 +999,62 @@ mod tests {
         assert_eq!(
             storage_args_for_provider(&local_folder_provider("folder", "handle-1")).unwrap(),
             StorageConnectArgs::local()
+        );
+    }
+
+    #[test]
+    fn google_drive_mode_switch_clears_scope_bound_credentials_and_targets() {
+        let config = OAuthFileConfigData {
+            preset: "google-drive".to_owned(),
+            access_token: "appdata-token".to_owned(),
+            refresh_token: Some("refresh".to_owned()),
+            expires_at: Some("2026-07-14T00:00:00Z".to_owned()),
+            file_id: Some("appdata-file".to_owned()),
+            file_name: Some("nook-events".to_owned()),
+            account_email: Some("owner@example.com".to_owned()),
+            drive_mode: Some(GoogleDriveMode::Private),
+            folder_id: None,
+        };
+        let switched = set_google_drive_provider_mode(&config, GoogleDriveMode::Shared);
+        assert_eq!(switched.drive_mode, Some(GoogleDriveMode::Shared));
+        assert!(switched.access_token.is_empty());
+        assert_eq!(switched.refresh_token, None);
+        assert_eq!(switched.expires_at, None);
+        assert_eq!(switched.account_email, None);
+        assert_eq!(switched.file_id, None);
+        assert_eq!(switched.folder_id, None);
+        assert_eq!(switched.file_name.as_deref(), Some("nook-events"));
+    }
+
+    #[test]
+    fn storage_args_require_folder_for_explicit_shared_drive_mode() {
+        let mut provider = oauth_provider("drive", "google-drive", None, "events");
+        provider.oauth_file.as_mut().unwrap().drive_mode = Some(GoogleDriveMode::Shared);
+        assert_eq!(
+            storage_args_for_provider(&provider),
+            Err(ValidationError::SharedStorageTargetRequired)
+        );
+        provider.oauth_file.as_mut().unwrap().folder_id = Some("folder-1".to_owned());
+        assert_eq!(
+            storage_args_for_provider(&provider).unwrap().repo,
+            "shared:folder-1\tevents"
+        );
+    }
+
+    #[test]
+    fn storage_args_preserve_shared_folder_for_empty_legacy_google_preset() {
+        let mut provider = oauth_provider("drive", "", None, "events");
+        let oauth = provider.oauth_file.as_mut().unwrap();
+        oauth.drive_mode = Some(GoogleDriveMode::Shared);
+        oauth.folder_id = Some("folder-legacy".to_owned());
+
+        assert_eq!(
+            storage_args_for_provider(&provider).unwrap(),
+            StorageConnectArgs {
+                mode: "google-drive".to_owned(),
+                pat: "token".to_owned(),
+                repo: "shared:folder-legacy\tevents".to_owned(),
+            }
         );
     }
 
@@ -1167,6 +1320,22 @@ mod tests {
         assert_eq!(oauth.preset, "icloud");
         assert_eq!(oauth.access_token, "tok");
         assert_eq!(oauth.account_email.as_deref(), Some("me@example.com"));
+    }
+
+    #[test]
+    fn migrate_infers_shared_mode_for_legacy_google_folder_rows() {
+        let mut provider = oauth_provider("gd", "", None, "events");
+        provider.oauth_file.as_mut().unwrap().folder_id = Some("folder-1".to_owned());
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![provider],
+            active_vault_store_id: None,
+        };
+        let (migrated, changed) = migrate_provider_fields(&snapshot);
+        assert!(changed);
+        let oauth = migrated.providers[0].oauth_file.as_ref().unwrap();
+        assert_eq!(oauth.preset, "google-drive");
+        assert_eq!(oauth.drive_mode, Some(GoogleDriveMode::Shared));
+        assert_eq!(oauth.folder_id.as_deref(), Some("folder-1"));
     }
 
     #[test]
