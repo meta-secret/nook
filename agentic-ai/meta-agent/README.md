@@ -27,6 +27,11 @@ Install Rust 1.96 and ensure the host `CODEX_HOME` contains Codex authentication
 task meta-agent:plan PROMPT='Add a repository-grounded feature planner'
 ```
 
+The command streams Codex reasoning summaries, repository inspection commands,
+warnings, and plan-assembly status to the terminal while keeping the incomplete
+structured JSON internal. The final line reports the generated feature
+directory.
+
 Override the output root or model when needed:
 
 ```bash

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -293,11 +294,15 @@ async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, C
         .await
         .map_err(|error| CodexError::Run(error.to_string()))?;
 
+    let mut progress = ProgressReporter::new(io::stderr());
     loop {
         let event = thread
             .next_event()
             .await
             .map_err(|error| CodexError::Run(error.to_string()))?;
+        progress
+            .observe(&event.msg)
+            .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
         match event.msg {
             EventMsg::TurnComplete(event) => {
                 return event
@@ -334,6 +339,96 @@ async fn submit_and_wait(thread: &CodexThread, prompt: &str) -> Result<String, C
     }
 }
 
+struct ProgressReporter<W> {
+    writer: W,
+    reasoning_open: bool,
+    saw_reasoning_delta: bool,
+    plan_output_announced: bool,
+}
+
+impl<W: Write> ProgressReporter<W> {
+    fn new(writer: W) -> Self {
+        Self {
+            writer,
+            reasoning_open: false,
+            saw_reasoning_delta: false,
+            plan_output_announced: false,
+        }
+    }
+
+    fn observe(&mut self, event: &EventMsg) -> io::Result<()> {
+        match event {
+            EventMsg::TurnStarted(_) => {
+                self.status("Codex planning started; loading repository instructions...")
+            }
+            EventMsg::ReasoningContentDelta(event) => self.reasoning_delta(&event.delta),
+            EventMsg::AgentReasoning(event) if !self.saw_reasoning_delta => {
+                self.status(&format!("Codex: {}", event.text.trim()))
+            }
+            EventMsg::AgentReasoningSectionBreak(_) => self.finish_reasoning(),
+            EventMsg::ExecCommandBegin(event) => self.status(&format!(
+                "Inspecting repository: {}",
+                event.command.join(" ")
+            )),
+            EventMsg::ExecCommandEnd(event) if event.exit_code != 0 => self.status(&format!(
+                "Inspection command exited with status {}: {}",
+                event.exit_code,
+                event.command.join(" ")
+            )),
+            EventMsg::AgentMessageContentDelta(_) => self.announce_plan_output(),
+            EventMsg::Warning(event) | EventMsg::GuardianWarning(event) => {
+                self.status(&format!("Codex warning: {}", event.message))
+            }
+            EventMsg::StreamError(event) => {
+                self.status(&format!("Codex stream retry: {}", event.message))
+            }
+            EventMsg::ModelReroute(event) => self.status(&format!(
+                "Codex rerouted model from {} to {}.",
+                event.from_model, event.to_model
+            )),
+            EventMsg::TurnComplete(_) => {
+                self.status("Codex planning complete; validating the generated DAG...")
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn reasoning_delta(&mut self, delta: &str) -> io::Result<()> {
+        self.saw_reasoning_delta = true;
+        if !self.reasoning_open {
+            write!(self.writer, "Codex: ")?;
+            self.reasoning_open = true;
+        }
+        write!(self.writer, "{delta}")?;
+        if delta.ends_with('\n') {
+            self.reasoning_open = false;
+        }
+        self.writer.flush()
+    }
+
+    fn announce_plan_output(&mut self) -> io::Result<()> {
+        if self.plan_output_announced {
+            return Ok(());
+        }
+        self.plan_output_announced = true;
+        self.status("Codex is assembling the structured feature plan...")
+    }
+
+    fn status(&mut self, message: &str) -> io::Result<()> {
+        self.finish_reasoning()?;
+        writeln!(self.writer, "{message}")?;
+        self.writer.flush()
+    }
+
+    fn finish_reasoning(&mut self) -> io::Result<()> {
+        if self.reasoning_open {
+            writeln!(self.writer)?;
+            self.reasoning_open = false;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,5 +457,22 @@ mod tests {
             config.codex_self_exe,
             Some(PathBuf::from("/bin/meta-agent"))
         );
+    }
+
+    #[test]
+    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() {
+        let mut progress = ProgressReporter::new(Vec::new());
+
+        progress.reasoning_delta("Inspecting ").unwrap();
+        progress.reasoning_delta("the repository.\n").unwrap();
+        progress.announce_plan_output().unwrap();
+        progress.announce_plan_output().unwrap();
+        progress.finish_reasoning().unwrap();
+
+        assert_eq!(
+            String::from_utf8(progress.writer).unwrap(),
+            "Codex: Inspecting the repository.\nCodex is assembling the structured feature plan...\n"
+        );
+        assert!(progress.plan_output_announced);
     }
 }
