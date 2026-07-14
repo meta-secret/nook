@@ -385,7 +385,7 @@ pub fn add_sentinel_genesis_participant_payload_with_label(
     let participant_index = session.participants.len();
     add_sentinel_genesis_participant_payload(session, payload_json)?;
     if !participant_label.is_empty() {
-        session.participants[participant_index].label = participant_label.to_owned();
+        participant_label.clone_into(&mut session.participants[participant_index].label);
     }
     Ok(())
 }
