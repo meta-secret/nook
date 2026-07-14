@@ -272,6 +272,11 @@ test.describe('vault architecture modes', () => {
       throw new Error('Sentinel heading and progress must have layout boxes')
     }
     expect(headingBox.y).toBeLessThan(progressBox.y)
+    expect(headingBox.y).toBeLessThan(96)
+    expect(headingBox.height).toBeLessThan(64)
+    expect(
+      progressBox.y - (headingBox.y + headingBox.height),
+    ).toBeLessThanOrEqual(24)
     await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(0)
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),

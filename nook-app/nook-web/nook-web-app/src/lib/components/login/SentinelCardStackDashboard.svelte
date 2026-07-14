@@ -258,18 +258,18 @@
     class="pointer-events-none fixed inset-0 opacity-45 [background-image:radial-gradient(#a9b8c5_1px,transparent_1px)] [background-size:22px_22px]"
   ></div>
 
-  <section class="relative mx-auto max-w-7xl px-6 py-24 sm:px-10">
+  <section class="relative mx-auto max-w-7xl px-6 pt-20 pb-12 sm:px-10">
     <header data-testid="sentinel-dashboard-heading">
       <p
         class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
       >
         {vault.t('login.sentinel_card_stack_eyebrow')}
       </p>
-      <h1 class="mt-4 text-4xl font-semibold tracking-[0.18em]">SENTINEL</h1>
+      <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
     </header>
 
     <ol
-      class="mt-8 mb-12 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
+      class="mt-5 mb-8 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
       data-testid="sentinel-onboarding-progress"
     >
       {#each [vault.t('login.sentinel_onboarding_step_keys'), vault.t('login.sentinel_onboarding_step_shares'), vault.t('login.sentinel_onboarding_step_devices'), vault.t('login.sentinel_onboarding_step_build')] as label, index (label)}
