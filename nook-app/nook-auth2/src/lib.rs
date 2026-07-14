@@ -32,6 +32,7 @@ pub use auth::device_key_protection::{
     resolve_passkey_registration, resolve_passkey_registration_for_mode,
     serialize_wrapped_device_identity, unlock_passkey_device_identity,
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
+    wrap_existing_device_identity_with_passkey,
 };
 pub use auth::enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,

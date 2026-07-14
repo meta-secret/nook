@@ -56,6 +56,7 @@ describe('extension pairing approved message', () => {
       isExtensionPairingApprovedMessage({
         type: 'nook:extension-pairing-approved',
         payload: {
+          vaultType: 'simple',
           deviceId: 'device-1',
           deviceLabel: 'Nook Extension',
           vaultStoreId: 'store-1',
@@ -68,8 +69,27 @@ describe('extension pairing approved message', () => {
     ).toBe(true)
   })
 
+  test('rejects Sentinel grants before extension persistence', () => {
+    expect(
+      isExtensionPairingApprovedMessage({
+        type: 'nook:extension-pairing-approved',
+        payload: {
+          vaultType: 'sentinel',
+          deviceId: 'device-1',
+          deviceLabel: 'Forged Sentinel device',
+          vaultStoreId: 'store-1',
+          vaultName: 'Sentinel',
+          approvedAt: '2026-07-07T00:00:00.000Z',
+          scopes: ['vault-access'],
+          providers: [],
+        },
+      }),
+    ).toBe(false)
+  })
+
   test('maps approved grants into extension-owned storage keys', () => {
     const items = extensionPairingGrantStorageItems({
+      vaultType: 'simple',
       deviceId: 'device-1',
       deviceLabel: 'Nook Extension',
       vaultStoreId: 'store-1',
@@ -91,7 +111,7 @@ describe('extension pairing approved message', () => {
       deviceLabel: 'Nook Extension',
       pairedVaults: ['Personal'],
       selectedVaultName: 'Personal',
-      syncStatus: '2 sync providers granted',
+      syncProviderCount: 2,
     })
   })
 })

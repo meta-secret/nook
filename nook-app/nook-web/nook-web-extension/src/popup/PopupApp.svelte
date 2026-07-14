@@ -10,51 +10,14 @@
     generateSuggestedPassword,
     setupExtensionDeviceProtection,
   } from '../lib/nook-wasm'
+  import {
+    normalizeExtensionSetupState,
+    type ExtensionConsentScope,
+    type ExtensionSetupState,
+  } from './setup-state'
 
   const setupStorageKey = 'nook:extension-setup'
-  const extensionConnectUrl = 'https://nokey.sh/extension-connect'
-
-  type ExtensionConsentScope =
-    | 'vault-access'
-    | 'password-filling'
-    | 'sync-provider-credentials'
-
-  type ExtensionSetupState =
-    | { status: 'not-set-up'; deviceLabel: string }
-    | { status: 'protecting'; deviceLabel: string }
-    | {
-        status: 'pairing'
-        deviceLabel: string
-        deviceId: string
-        devicePublicKey: string
-        deviceSigningPublicKey: string
-        requestNonce: string
-        requestUrl: string
-        requestedScopes: ExtensionConsentScope[]
-      }
-    | {
-        status: 'pairing-failed'
-        deviceLabel: string
-        message: string
-      }
-    | {
-        status: 'locked'
-        deviceLabel: string
-        pairedVaults: string[]
-        selectedVaultName?: string | undefined
-      }
-    | {
-        status: 'ready'
-        deviceLabel: string
-        pairedVaults: string[]
-        selectedVaultName?: string | undefined
-        syncStatus: string
-      }
-    | {
-        status: 'revoked'
-        deviceLabel: string
-        message: string
-      }
+  const extensionConnectUrl = 'https://simple.nokey.sh/extension-connect'
 
   type ScanState =
     | { status: 'loading'; tabTitle: string }
@@ -78,26 +41,12 @@
   })
   let setupAttemptId = 0
 
-  const statusText = $derived(setupState.status.replaceAll('-', ' '))
+  const statusText = $derived(
+    i18n.t(`extension.setup.status_${setupState.status.replaceAll('-', '_')}`),
+  )
 
   function defaultDeviceLabel() {
-    return 'Nook Extension - this browser profile'
-  }
-
-  function isStringArray(value: unknown): value is string[] {
-    return Array.isArray(value) && value.every((item) => typeof item === 'string')
-  }
-
-  function isConsentScope(value: unknown): value is ExtensionConsentScope {
-    return (
-      value === 'vault-access' ||
-      value === 'password-filling' ||
-      value === 'sync-provider-credentials'
-    )
-  }
-
-  function isConsentScopeArray(value: unknown): value is ExtensionConsentScope[] {
-    return Array.isArray(value) && value.every(isConsentScope)
+    return i18n.t('extension.setup.profile_title')
   }
 
   function requestedConsentScopes(): ExtensionConsentScope[] {
@@ -138,71 +87,19 @@
     return url.toString()
   }
 
-  function isExtensionSetupState(
-    value: unknown,
-  ): value is ExtensionSetupState {
-    if (typeof value !== 'object' || !value || !('status' in value)) {
-      return false
-    }
-
-    const candidate = value as Record<string, unknown>
-    if (typeof candidate.deviceLabel !== 'string') {
-      return false
-    }
-
-    if (
-      candidate.status === 'not-set-up' ||
-      candidate.status === 'protecting'
-    ) {
-      return true
-    }
-
-    if (candidate.status === 'pairing') {
-      return (
-        typeof candidate.deviceId === 'string' &&
-        typeof candidate.devicePublicKey === 'string' &&
-        typeof candidate.deviceSigningPublicKey === 'string' &&
-        typeof candidate.requestNonce === 'string' &&
-        typeof candidate.requestUrl === 'string' &&
-        isConsentScopeArray(candidate.requestedScopes)
-      )
-    }
-
-    if (
-      candidate.status === 'pairing-failed' ||
-      candidate.status === 'revoked'
-    ) {
-      return typeof candidate.message === 'string'
-    }
-
-    if (candidate.status === 'locked') {
-      return (
-        isStringArray(candidate.pairedVaults) &&
-        (candidate.selectedVaultName === undefined ||
-          typeof candidate.selectedVaultName === 'string')
-      )
-    }
-
-    if (candidate.status === 'ready') {
-      return (
-        isStringArray(candidate.pairedVaults) &&
-        (candidate.selectedVaultName === undefined ||
-          typeof candidate.selectedVaultName === 'string') &&
-        typeof candidate.syncStatus === 'string'
-      )
-    }
-
-    return false
-  }
-
   function readSetupState(): Promise<ExtensionSetupState> {
     return new Promise((resolve) => {
       chrome.storage.local.get(setupStorageKey, (items) => {
         const value = items[setupStorageKey]
+        const normalized = normalizeExtensionSetupState(value)
+        if (normalized?.migrated) {
+          chrome.storage.local.set({ [setupStorageKey]: normalized.state })
+        }
         resolve(
-          isExtensionSetupState(value)
-            ? value
-            : { status: 'not-set-up', deviceLabel: defaultDeviceLabel() },
+          normalized?.state ?? {
+            status: 'not-set-up',
+            deviceLabel: defaultDeviceLabel(),
+          },
         )
       })
     })
@@ -318,7 +215,7 @@
         message:
           error instanceof Error
             ? error.message
-            : 'Passkey setup failed before the extension could pair.',
+            : i18n.t('extension.setup.passkey_setup_failed'),
       })
     }
   }
@@ -378,12 +275,12 @@
 
   <section class="extension-state" aria-live="polite">
     <div>
-      <span class="metric-label">Extension state</span>
+      <span class="metric-label">{i18n.t('extension.setup.state')}</span>
       <strong data-testid="extension-setup-state">{statusText}</strong>
     </div>
     {#if setupState.status === 'ready' || setupState.status === 'locked'}
       <div>
-        <span class="metric-label">Vaults</span>
+        <span class="metric-label">{i18n.t('extension.setup.vaults')}</span>
         <strong>{setupState.pairedVaults.length}</strong>
       </div>
     {/if}
@@ -391,12 +288,8 @@
 
   {#if setupState.status === 'not-set-up'}
     <section class="setup-panel">
-      <h2>Connect Nook</h2>
-      <p>
-        This creates a separate passkey-protected extension device for this
-        browser profile. The extension will not reuse the device key from an open
-        nokey.sh tab.
-      </p>
+      <h2>{i18n.t('extension.setup.connect_nook')}</h2>
+      <p>{i18n.t('extension.setup.simple_device_description')}</p>
       <button
         class="primary-button"
         type="button"
@@ -405,37 +298,33 @@
           void startExtensionSetup()
         }}
       >
-        Set up extension
+        {i18n.t('extension.setup.set_up_extension')}
       </button>
     </section>
   {:else if setupState.status === 'protecting'}
     <section class="setup-panel">
-      <h2>Protect this extension</h2>
-      <p>
-        Creating this extension's own device key and protecting it with this
-        browser profile's passkey before pairing with nokey.sh.
-      </p>
+      <h2>{i18n.t('extension.setup.protect_title')}</h2>
+      <p>{i18n.t('extension.setup.protect_description')}</p>
       <button class="primary-button" type="button" disabled>
-        Waiting for passkey
+        {i18n.t('extension.setup.waiting_for_passkey')}
       </button>
       <button class="secondary-button" type="button" onclick={resetSetup}>
-        Start over
+        {i18n.t('extension.setup.start_over')}
       </button>
     </section>
   {:else if setupState.status === 'pairing'}
     <section class="setup-panel">
-      <h2>Pair with nokey.sh</h2>
-      <p>
-        Open nokey.sh with this extension device request, unlock your vault, then
-        approve vault access, password filling, and sync-provider credential
-        access.
-      </p>
+      <h2>{i18n.t('extension.setup.pair_simple_title')}</h2>
+      <p>{i18n.t('extension.setup.pair_simple_description')}</p>
       <p class="request-detail">
-        Device request: <code>{setupState.deviceId}</code>
+        {i18n.t('extension.setup.device_request')}:
+        <code>{setupState.deviceId}</code>
       </p>
       <ul class="scope-list">
         {#each setupState.requestedScopes as scope}
-          <li>{scope.replaceAll('-', ' ')}</li>
+          <li>
+            {i18n.t(`extension.setup.scope_${scope.replaceAll('-', '_')}`)}
+          </li>
         {/each}
       </ul>
       <button
@@ -444,45 +333,55 @@
         data-testid="open-extension-connect-btn"
         onclick={openExtensionConnect}
       >
-        Open nokey.sh
+        {i18n.t('extension.setup.open_simple_vault')}
       </button>
     </section>
   {:else if setupState.status === 'pairing-failed'}
     <section class="setup-panel warning">
-      <h2>Pairing failed</h2>
+      <h2>{i18n.t('extension.setup.pairing_failed')}</h2>
       <p>{setupState.message}</p>
       <button class="secondary-button" type="button" onclick={resetSetup}>
-        Reset setup
+        {i18n.t('extension.setup.reset_setup')}
       </button>
     </section>
   {:else if setupState.status === 'locked'}
     <section class="setup-panel">
-      <h2>Extension locked</h2>
-      <p>
-        This extension is paired as a durable Nook device. Unlock with passkey
-        before vaults, sync providers, or filling actions are available.
-      </p>
+      <h2>{i18n.t('extension.setup.locked_title')}</h2>
+      <p>{i18n.t('extension.setup.locked_description')}</p>
       <button class="primary-button" type="button" disabled>
-        Unlock pending
+        {i18n.t('extension.setup.unlock_pending')}
       </button>
     </section>
   {:else if setupState.status === 'revoked'}
     <section class="setup-panel warning">
-      <h2>Extension revoked</h2>
+      <h2>{i18n.t('extension.setup.revoked_title')}</h2>
       <p>{setupState.message}</p>
       <button class="primary-button" type="button" onclick={resetSetup}>
-        Pair again
+        {i18n.t('extension.setup.pair_again')}
       </button>
     </section>
   {:else}
     <section class="vault-panel">
       <div>
-        <span class="metric-label">Selected vault</span>
-        <strong>{setupState.selectedVaultName ?? 'Default vault'}</strong>
+        <span class="metric-label"
+          >{i18n.t('extension.setup.selected_vault')}</span
+        >
+        <strong
+          >{setupState.selectedVaultName ??
+            i18n.t('extension.setup.default_vault')}</strong
+        >
       </div>
       <div>
-        <span class="metric-label">Sync</span>
-        <strong>{setupState.syncStatus}</strong>
+        <span class="metric-label">{i18n.t('extension.setup.sync')}</span>
+        <strong>
+          {setupState.syncProviderCount === 0
+            ? i18n.t('extension.setup.vault_access_granted')
+            : setupState.syncProviderCount === 1
+              ? i18n.t('extension.setup.one_sync_provider_granted')
+              : i18n.t('extension.setup.sync_providers_granted', {
+                  count: String(setupState.syncProviderCount),
+                })}
+        </strong>
       </div>
     </section>
 
@@ -491,8 +390,7 @@
         <span class="metric-label"
           >{i18n.t('extension.popup.password_fields')}</span
         >
-        <strong
-          data-testid="password-field-count"
+        <strong data-testid="password-field-count"
           >{scanState.status === 'ready'
             ? scanState.summary.passwordFieldCount
             : '-'}</strong
@@ -502,8 +400,7 @@
         <span class="metric-label"
           >{i18n.t('extension.popup.login_fields')}</span
         >
-        <strong
-          data-testid="username-field-count"
+        <strong data-testid="username-field-count"
           >{scanState.status === 'ready'
             ? scanState.summary.usernameFieldCount
             : '-'}</strong

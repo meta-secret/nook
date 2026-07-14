@@ -4,7 +4,7 @@ import {
   loadAuthProviders,
   NookVaultManager,
   saveAuthProviders,
-} from '$lib/nook-wasm/nook_wasm'
+} from '$app-wasm'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager

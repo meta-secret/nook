@@ -3,6 +3,8 @@ export {}
 import { summarizePasswordForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isScanPasswordFieldsMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
 
+const SENTINEL_ORIGIN = 'https://sentinel.nokey.sh'
+
 let pendingScan: number | undefined
 
 function sendSummary() {
@@ -30,20 +32,22 @@ function scheduleScan() {
   }, 150)
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (isScanPasswordFieldsMessage(message)) {
-    const summary = summarizePasswordForms()
-    sendResponse({ ok: true, summary })
+if (location.origin !== SENTINEL_ORIGIN) {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (isScanPasswordFieldsMessage(message)) {
+      const summary = summarizePasswordForms()
+      sendResponse({ ok: true, summary })
+      return false
+    }
+
     return false
-  }
+  })
 
-  return false
-})
+  sendSummary()
 
-sendSummary()
-
-const observer = new MutationObserver(scheduleScan)
-observer.observe(document.documentElement, {
-  childList: true,
-  subtree: true,
-})
+  const observer = new MutationObserver(scheduleScan)
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
+}

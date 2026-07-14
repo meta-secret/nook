@@ -22,6 +22,7 @@ mod connect;
 mod device_protection;
 mod diagnostics;
 mod event_log;
+mod migration;
 mod multi_device;
 mod password;
 mod secrets;
@@ -196,6 +197,7 @@ impl SyncOutboxState {
 // Session state of our secret vault.
 #[wasm_bindgen]
 pub struct NookVaultManager {
+    pub(in crate::manager) application: nook_core::VaultApplication,
     pub(in crate::manager) storage: StorageSession,
     pub(in crate::manager) vault: VaultSessionState,
     pub(in crate::manager) device: DeviceSessionState,
@@ -214,6 +216,10 @@ pub struct NookVaultManager {
     pub(in crate::manager) sentinel_unlock: Option<nook_core::SentinelUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
+    pub(in crate::manager) migration_request_json: String,
+    pub(in crate::manager) migration_transport_identity: Option<nook_core::DeviceIdentity>,
+    pub(in crate::manager) migration_payload: Option<nook_core::VaultMigrationPayload>,
+    pub(in crate::manager) migration_passkey_ready: bool,
 }
 
 impl Drop for NookVaultManager {
@@ -226,6 +232,10 @@ impl Drop for NookVaultManager {
         self.pending_sentinel_genesis_request = None;
         self.sentinel_unlock = None;
         self.sync_outbox.reset();
+        self.migration_request_json.clear();
+        self.migration_transport_identity = None;
+        self.migration_payload = None;
+        self.migration_passkey_ready = false;
     }
 }
 
@@ -234,6 +244,7 @@ impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
+            application: crate::application::compiled_vault_application(),
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),
@@ -243,12 +254,21 @@ impl NookVaultManager {
             pending_sentinel_genesis_request: None,
             sentinel_unlock: None,
             sync_outbox: SyncOutboxState::default(),
+            migration_request_json: String::new(),
+            migration_transport_identity: None,
+            migration_payload: None,
+            migration_passkey_ready: false,
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn storage_mode(&self) -> String {
         self.storage.mode.to_string()
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultApplication)]
+    pub fn vault_application(&self) -> String {
+        self.application.as_str().to_owned()
     }
 
     #[wasm_bindgen(getter, js_name = vaultStoreId)]
@@ -273,6 +293,9 @@ impl NookVaultManager {
             .map_err(|error| JsError::new(&error.to_string()))?;
         architecture
             .validate()
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        self.application
+            .validate_session_access(architecture.vault_type)
             .map_err(|error| JsError::new(&error.to_string()))?;
         if !self.vault.store_id.is_empty() && architecture != self.vault.architecture {
             return Err(JsError::new(
@@ -419,15 +442,20 @@ impl NookVaultManager {
     /// blindly is unsafe: GitHub is eventually-consistent, so a poll can
     /// race with our own write and return the pre-write YAML, which
     /// would clobber a freshly-set password envelope back to keys mode.
-    pub(in crate::manager) fn capture_vault_unlock(&mut self, content: &str) {
-        if let Ok(metadata) = nook_core::capture_vault_unlock_from_content(content) {
-            self.vault.unlock = metadata.unlock;
-            self.vault.password_entries = metadata.password_entries;
-            self.vault.store_id = metadata.store_id;
-            self.vault.vault_name = Some(metadata.vault_name);
-            self.vault.vault_version = metadata.version;
-            self.vault.architecture = metadata.architecture;
-        }
+    pub(in crate::manager) fn capture_vault_unlock(
+        &mut self,
+        content: &str,
+    ) -> Result<(), NookError> {
+        let metadata = nook_core::capture_vault_unlock_from_content(content)?;
+        self.application
+            .validate_session_access(metadata.architecture.vault_type)?;
+        self.vault.unlock = metadata.unlock;
+        self.vault.password_entries = metadata.password_entries;
+        self.vault.store_id = metadata.store_id;
+        self.vault.vault_name = Some(metadata.vault_name);
+        self.vault.vault_version = metadata.version;
+        self.vault.architecture = metadata.architecture;
+        Ok(())
     }
 
     pub(in crate::manager) fn apply_vault_keys(

@@ -36,11 +36,15 @@ root/
     │   ├── Taskfile.yml  (web-family task include)
     │   ├── .task/        (web, extension, and wasm task includes)
     │   ├── nook-web-app/
+    │   ├── nook-vault-simple/
+    │   ├── nook-vault-sentinel/
     │   ├── nook-web-extension/
     │   └── nook-web-shared/
 +-------------------------------------------------------------+
-|                      nook-web-app                           |
-|             (Vite + Svelte 5 + TypeScript UI)               |
+|      nook-vault-simple       |      nook-vault-sentinel     |
+|  (independent Simple app)    |  (independent Sentinel app)  |
++-------------------------------------------------------------+
+|             nook-web-app (site + migration broker)          |
 +-------------------------------------------------------------+
 |                    nook-web-extension                       |
 |       (Manifest V3 extension UI, service worker, scripts)   |
@@ -105,9 +109,23 @@ root/
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
-### D. `nook-web/nook-web-app` (The Web Presentation Layer)
+### D. Isolated vault applications (The Web Presentation Layer)
 
-- **Svelte 5 components:** Layout, forms, vault list UI.
+- **`nook-vault-simple`:** fixed Simple capability, Simple-only local registry,
+  create/import/open/manage flows, and the extension-consent route.
+- **`nook-vault-sentinel`:** fixed Sentinel capability, Sentinel-only local
+  registry, genesis/quorum/import/open/manage flows, and no extension route or
+  extension approval WASM export.
+- **`nook-web-app`:** public `nokey.sh` site, locked destination-bound legacy
+  migration broker, and unified local/e2e harness. It is not a universal
+  production vault artifact.
+- **Origin boundary:** each production app uses its own origin-scoped IndexedDB,
+  WebAuthn RP ID (`simple.nokey.sh` or `sentinel.nokey.sh`), session state,
+  security headers, Cloudflare Pages project, and compile-time Rust/WASM
+  `VaultApplication` capability.
+
+- **Svelte 5 components:** Shared layout and forms are consumed by separate
+  project entrypoints; TypeScript visibility never authorizes a vault type.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
 - **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
 - **`passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. Rust/WASM builds the PRF option payloads; TypeScript invokes `navigator.credentials`, extracts the returned PRF output, and performs no encryption.
@@ -120,20 +138,24 @@ root/
 ### D2. `nook-web/nook-web-shared` (Shared TypeScript/Svelte Source)
 
 - **Source-only package:** Shared TypeScript helpers and small Svelte presentation
-  primitives that are safe for both `nook-web-app` and `nook-web-extension`.
+  primitives that are safe for the two vault apps and the browser extension.
 - **No ownership of domain policy:** Shared TS/Svelte code may coordinate UI,
   browser-page scanning, message DTOs, or wrapper helpers around WASM exports,
   but it must not own vault format logic, crypto, validation, password
   generation, or secret search. Those remain in `nook-core` and are exposed
   through `nook-wasm`.
-- **No generated artifacts:** Generated WASM bindings continue to live under
-  `nook-web/nook-web-app/src/lib/nook-wasm`; extension builds may import them
-  explicitly from the sealed Docker image.
+- **Capability-specific generated artifacts:** generated WASM bindings live
+  under `nook-web-shared/src/vault-app/lib/nook-wasm-*`; Simple, Sentinel,
+  extension, and legacy-migration builds each consume only their matching
+  compile-time capability surface.
 
 ### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
 
 - **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web/nook-web-extension/dist`; source lives under `nook-app/nook-web/nook-web-extension/src`.
-- **Separate product surface:** Popup UI, service worker, content scripts, and future autofill flows stay out of `nook-web` so extension-only browser privileges and page-injection code do not leak into the web app.
+- **Simple-only product surface:** Popup UI, service worker, content scripts,
+  and future autofill flows pair only through `simple.nokey.sh`. The manifest
+  and runtime guard exclude `sentinel.nokey.sh`, and Rust rejects Sentinel
+  extension approval.
 - **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 

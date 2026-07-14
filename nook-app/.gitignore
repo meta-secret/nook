@@ -1,8 +1,11 @@
 target/
 
 nook-web/nook-web-app/node_modules/
+nook-web/node_modules
 nook-web/nook-web-app/dist/
 nook-web/nook-web-app/dist-prod/
+nook-web/nook-vault-simple/dist/
+nook-web/nook-vault-sentinel/dist/
 nook-web/nook-web-app/test-results/
 nook-web/nook-web-app/package-lock.json
 nook-web/nook-web-app/src/lib/nook-wasm/

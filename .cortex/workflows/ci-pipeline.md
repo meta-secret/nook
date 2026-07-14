@@ -6,9 +6,9 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt WASM, wasm-bindgen/web unit tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
-| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt capability-specific WASM, web/unit tests, all three web builds, Cloudflare preview with `/simple/` + `/sentinel/`, `github-pages` deployment status | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
+| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → **squash merge** or manual handoff (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
@@ -27,7 +27,9 @@ flowchart LR
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
-  release_yml --> pages[GitHub Pages stable]
+  release_yml --> pages[GitHub Pages public site]
+  release_yml --> simple_cf[Cloudflare Simple Vault]
+  release_yml --> sentinel_cf[Cloudflare Sentinel Vault]
 
   cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
   nightly --> e2e_live[sync-live e2e]
@@ -40,7 +42,8 @@ flowchart LR
 
 Production releases use immutable semantic-version tags. The tag records the
 exact source commit; the GitHub Release records that the tagged build passed the
-production gate and was deployed to `nokey.sh`.
+production gate and was deployed atomically as the public `nokey.sh` site plus
+the `simple.nokey.sh` and `sentinel.nokey.sh` vault applications.
 
 Preferred release flow:
 
@@ -269,11 +272,13 @@ research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
 the independent Rust and web caches from GHCR. Main pushes separate commit-tagged
 Rust/WASM and web-dependency cache images after green verify and deploys the active development channel to Cloudflare
 Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
-`release.yml` runs the main-equivalent gate without
-pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages
-for stable `nokey.sh`, and publishes the GitHub Release only after deployment
-succeeds. The extra latency is acceptable for background work and keeps it from
-consuming the Nook runner pool.
+`release.yml` runs the main-equivalent gate without pushing the toolchain,
+deploys an immutable semantic-version tag to GitHub Pages for the public
+`nokey.sh` site and to independent Cloudflare Pages projects for Simple and
+Sentinel, then verifies app identity, security headers, exact commit, and
+extension-route presence/absence before publishing the GitHub Release. The
+extra latency is acceptable for background work and keeps it from consuming
+the Nook runner pool.
 
 Main's cache publish must authenticate immediately before the GHCR
 `toolchain-push` bake group. The legacy group name now fans out to independent

@@ -299,6 +299,33 @@ pub fn finish_passkey_wrapped_device_identity(
     })
 }
 
+/// Wrap an already-enrolled device identity under a newly-created origin-bound
+/// passkey. This is used only by the legacy-origin migration ceremony so vault
+/// membership does not silently change when moving to an isolated app origin.
+pub fn wrap_existing_device_identity_with_passkey(
+    credential_id: &[u8],
+    user_handle: &[u8],
+    prf_input: &[u8],
+    prf_output: &[u8],
+    identity_secret: &DeviceIdentitySecret,
+) -> DeviceKeyProtectionResult<PasskeyDeviceIdentityMaterial> {
+    validate_recovery_inputs(user_handle, prf_output)?;
+    let identity = DeviceIdentity::from_secret_str(identity_secret)
+        .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
+    let record = passkey_wrapped_device_identity_record(
+        credential_id,
+        user_handle,
+        prf_input,
+        prf_output,
+        identity_secret,
+    )?;
+    Ok(PasskeyDeviceIdentityMaterial {
+        device_id: identity.device_id().to_string(),
+        identity_secret: identity_secret.clone(),
+        record,
+    })
+}
+
 pub fn passkey_assertion_request(
     record: &WrappedDeviceIdentity,
 ) -> DeviceKeyProtectionResult<PasskeyAssertionRequest> {

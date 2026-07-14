@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildEnrollmentLink } from '$lib/enrollment-code'
+import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment-code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
@@ -11,7 +11,7 @@ import {
   peekEnrollmentEntryId,
   peekEnrollmentEntryLabel,
   peekEnrollmentIssuedAt,
-} from '$lib/nook-wasm/nook_wasm'
+} from '$app-wasm'
 
 await initNookWasm()
 
@@ -40,6 +40,21 @@ function decodeOuterJson(code: string): Record<string, unknown> {
 }
 
 describe('enrollment-code links', () => {
+  test('isolated applications generate links at their own root', () => {
+    expect(enrollmentAppRootUrl('https://simple.nokey.sh', 'simple')).toBe(
+      'https://simple.nokey.sh/',
+    )
+    expect(enrollmentAppRootUrl('https://sentinel.nokey.sh/', 'sentinel')).toBe(
+      'https://sentinel.nokey.sh/',
+    )
+  })
+
+  test('the unified development application keeps its /app route', () => {
+    expect(
+      enrollmentAppRootUrl('https://nokey.sh', 'unified-development'),
+    ).toBe('https://nokey.sh/app/')
+  })
+
   test('buildEnrollmentLink wraps the raw code in a hash URL', async () => {
     const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
     expect(buildEnrollmentLink(code, 'https://nook.example')).toBe(

@@ -1,0 +1,10 @@
+**/dist
+**/dist-prod
+**/node_modules
+nook-web-shared/src/vault-app/lib/nook-wasm
+nook-web-shared/src/vault-app/lib/nook-wasm-extension
+nook-web-shared/src/vault-app/lib/nook-wasm-migration
+nook-web-shared/src/vault-app/lib/nook-wasm-sentinel
+nook-web-shared/src/vault-app/lib/nook-wasm-simple
+**/test-results
+**/playwright-report

@@ -2,7 +2,10 @@ import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const wasmPath = join(process.cwd(), 'src/lib/nook-wasm/nook_wasm_bg.wasm')
+const wasmPath = join(
+  process.cwd(),
+  '../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+)
 const originalFetch = globalThis.fetch?.bind(globalThis)
 
 Object.defineProperty(WebAssembly, 'instantiateStreaming', {
@@ -12,7 +15,7 @@ Object.defineProperty(WebAssembly, 'instantiateStreaming', {
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input.toString()
-  if (url.endsWith('/src/lib/nook-wasm/nook_wasm_bg.wasm')) {
+  if (url.endsWith('/nook-wasm/nook_wasm_bg.wasm')) {
     return new Response(readFileSync(wasmPath), {
       headers: { 'Content-Type': 'application/wasm' },
     })

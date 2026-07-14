@@ -98,7 +98,7 @@ impl NookVaultManager {
         }
 
         // First boot for this session — adopt the remote unlock mode.
-        self.capture_vault_unlock(&content);
+        self.capture_vault_unlock(&content)?;
         self.vault.last_synced_content = content.clone();
         let status = access_status_for_vault_content(&content, &identity)?;
         let _ = self
@@ -172,7 +172,7 @@ impl NookVaultManager {
         // First boot for this session — adopt the remote unlock mode so
         // the mode-aware branches below see the right variant.
         if !content.trim().is_empty() {
-            self.capture_vault_unlock(&content);
+            self.capture_vault_unlock(&content)?;
         }
 
         let event_log_only_remote = self
@@ -230,7 +230,7 @@ impl NookVaultManager {
                 }) => {
                     self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
                     self.vault.meta = meta;
-                    self.capture_vault_unlock(&cache);
+                    self.capture_vault_unlock(&cache)?;
                     self.sync_events_from_current_provider().await?;
                     self.apply_event_projection_to_session().await?;
                     Ok(())

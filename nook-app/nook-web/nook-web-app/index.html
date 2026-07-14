@@ -1040,7 +1040,12 @@
           <span class="protocol-tag">LOCAL_FIRST</span>
         </a>
         <nav aria-label="Public pages" data-i18n-aria-label="nav.label">
-          <a href="/app/" data-i18n="nav.open_app">Open app</a>
+          <a href="https://simple.nokey.sh/" data-i18n="nav.open_simple"
+            >Simple Vault</a
+          >
+          <a href="https://sentinel.nokey.sh/" data-i18n="nav.open_sentinel"
+            >Sentinel Vault</a
+          >
           <a href="#architecture" data-i18n="nav.architecture">Architecture</a>
           <a href="#cryptography" data-i18n="nav.cryptography">Cryptography</a>
           <a href="/privacy.html" data-i18n="nav.privacy">Privacy</a>
@@ -1118,10 +1123,17 @@
             <div class="actions">
               <a
                 class="button primary"
-                href="/app/"
-                data-testid="hero-cta-primary"
-                data-i18n="hero.open_nook"
-                >Open Nook</a
+                href="https://simple.nokey.sh/"
+                data-testid="hero-cta-simple"
+                data-i18n="hero.open_simple"
+                >Open Simple Vault</a
+              >
+              <a
+                class="button secondary"
+                href="https://sentinel.nokey.sh/"
+                data-testid="hero-cta-sentinel"
+                data-i18n="hero.open_sentinel"
+                >Open Sentinel Vault</a
               >
               <a
                 class="button secondary"
@@ -1437,7 +1449,12 @@
       <footer>
         <span>CLIENT_SIDE_ENCRYPTION · NO_CENTRAL_ACCOUNT_SERVICE</span>
         <div class="footer-links">
-          <a href="/app/" data-i18n="nav.open_nook">Open Nook</a>
+          <a href="https://simple.nokey.sh/" data-i18n="nav.open_simple"
+            >Simple Vault</a
+          >
+          <a href="https://sentinel.nokey.sh/" data-i18n="nav.open_sentinel"
+            >Sentinel Vault</a
+          >
           <a href="/privacy.html" data-i18n="nav.privacy">Privacy</a>
           <a href="/terms.html" data-i18n="nav.terms">Terms</a>
           <a href="https://github.com/meta-secret/nook">GitHub</a>
@@ -1456,6 +1473,8 @@
           'nav.label': 'Public pages',
           'nav.open_app': 'Open app',
           'nav.open_nook': 'Open Nook',
+          'nav.open_simple': 'Simple Vault',
+          'nav.open_sentinel': 'Sentinel Vault',
           'nav.architecture': 'Architecture',
           'nav.cryptography': 'Cryptography',
           'nav.privacy': 'Privacy',
@@ -1466,6 +1485,8 @@
           'hero.lead':
             'Nook is a passwordless, local first, decentralized secrets manager. Your vault is encrypted before it leaves the browser, replicated only through storage you choose, and opened only by identities you authorize.',
           'hero.open_nook': 'Open Nook',
+          'hero.open_simple': 'Open Simple Vault',
+          'hero.open_sentinel': 'Open Sentinel Vault',
           'hero.inspect_architecture': 'Inspect the architecture',
           'capsule.label':
             'Encrypted Nook vault capsule protected by a device identity and immutable event log',
@@ -1528,6 +1549,8 @@
           'nav.label': 'Публичные страницы',
           'nav.open_app': 'Открыть Nook',
           'nav.open_nook': 'Открыть Nook',
+          'nav.open_simple': 'Простой сейф',
+          'nav.open_sentinel': 'Сейф Sentinel',
           'nav.architecture': 'Архитектура',
           'nav.cryptography': 'Криптография',
           'nav.privacy': 'Конфиденциальность',
@@ -1538,6 +1561,8 @@
           'hero.lead':
             'Nook — passwordless, local-first, децентрализованный менеджер секретов. Ваш vault шифруется ещё в браузере, реплицируется только через выбранное вами хранилище и открывается лишь identities, которым вы дали доступ.',
           'hero.open_nook': 'Открыть Nook',
+          'hero.open_simple': 'Открыть простой сейф',
+          'hero.open_sentinel': 'Открыть сейф Sentinel',
           'hero.inspect_architecture': 'Исследовать архитектуру',
           'capsule.label':
             'Зашифрованная капсула Nook, защищённая device identity и immutable event log',

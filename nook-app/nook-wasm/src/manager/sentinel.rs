@@ -670,7 +670,7 @@ impl NookVaultManager {
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        self.capture_vault_unlock(content);
+        self.capture_vault_unlock(content)?;
         let format = nook_core::detect_stored_format(content)?;
         let stored_records = nook_core::deserialize_stored(content, format)?;
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&stored_records);

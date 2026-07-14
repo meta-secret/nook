@@ -14,7 +14,7 @@ import {
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
   translateFromCatalog as wasmTranslateFromCatalog,
   type NookAppLocale,
-} from '../../../nook-web-app/src/lib/nook-wasm/nook_wasm'
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm-extension/nook_wasm'
 
 let initPromise: Promise<unknown> | undefined
 

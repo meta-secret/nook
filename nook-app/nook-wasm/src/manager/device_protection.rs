@@ -317,7 +317,7 @@ fn passkey_mode_from_device_mode(
 }
 
 impl NookVaultManager {
-    async fn save_passkey_material(
+    pub(in crate::manager) async fn save_passkey_material(
         &mut self,
         material: &nook_core::PasskeyDeviceIdentityMaterial,
     ) -> Result<String, NookError> {

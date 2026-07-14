@@ -11,7 +11,7 @@ import { extensionPairingGrantStorageItems } from './pairing-grants'
 function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
   if (!sender.url) return false
   try {
-    return new URL(sender.url).origin === 'https://nokey.sh'
+    return new URL(sender.url).origin === 'https://simple.nokey.sh'
   } catch {
     return false
   }
@@ -28,6 +28,17 @@ function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
   }
 }
 
+function hasPairingApprovedType(
+  message: unknown,
+): message is { type: 'nook:extension-pairing-approved' } {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:extension-pairing-approved'
+  )
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason !== 'install') {
     return
@@ -39,6 +50,14 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (
+    hasPairingApprovedType(message) &&
+    !isExtensionPairingApprovedMessage(message)
+  ) {
+    sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
+    return false
+  }
+
   if (!isRuntimeMessage(message)) {
     return false
   }

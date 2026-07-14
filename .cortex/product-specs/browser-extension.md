@@ -7,9 +7,14 @@ temporary view into the open `nokey.sh` page and must not scrape the web app's
 IndexedDB. The extension has its own extension-owned storage, its own Nook device
 identity, and its own passkey-protected device-key state.
 
-`nokey.sh` remains the full settings, recovery, and grant-management surface.
+`simple.nokey.sh` remains the full settings, recovery, and grant-management surface.
 The extension can fill passwords and sync authorized vault data after pairing,
-but device approval, grant rotation, and revocation are managed from `nokey.sh`.
+but device approval, grant rotation, and revocation are managed from `simple.nokey.sh`.
+
+The extension is a Simple Vault capability. It must never pair with, receive a
+grant from, inject a content script into, or open a Sentinel Vault. Sentinel
+extension approval is rejected by the compiled Rust/WASM application boundary,
+not merely hidden by the UI.
 
 ## First-Run Goals
 
@@ -17,8 +22,8 @@ but device approval, grant rotation, and revocation are managed from `nokey.sh`.
   browser profile.
 - Require passkey/device authorization before extension storage can hold a
   wrapped device identity, encrypted vault copy, or sealed sync-provider rows.
-- Pair only through `https://nokey.sh/extension-connect`.
-- Require normal `nokey.sh` unlock before approving the extension device.
+- Pair only through `https://simple.nokey.sh/extension-connect`.
+- Require normal `simple.nokey.sh` unlock before approving the extension device.
 - Show explicit consent scopes for vault access, password filling, and
   sync-provider credential access.
 - Explain that closing `nokey.sh` after pairing does not remove extension access;
@@ -48,7 +53,7 @@ and auth-envelope behavior.
 |---|---|---|
 | Not set up | No extension device identity is authorized. | `Connect Nook`, with copy that setup creates a passkey-protected extension device. |
 | Protect this extension | Device identity setup is in progress, but not paired to a vault. | Passkey authorization copy, device-label preview, and no vault/filling actions. |
-| Pair with nokey.sh | Extension has a protected device identity and pairing request. | `Open nokey.sh`, pointing to `https://nokey.sh/extension-connect` with a request nonce and scopes. |
+| Pair with Simple Vault | Extension has a protected device identity and pairing request. | `Open Simple Vault`, pointing to `https://simple.nokey.sh/extension-connect` with a request nonce and scopes. |
 | Pairing failed | The handoff failed or was denied. | Specific failure reason, retry, and reset setup options. |
 | Locked | Extension is paired but the device identity is not authorized in this popup session. | Unlock with passkey before showing vaults, sync providers, or fill actions. |
 | Ready | Extension is paired and passkey-authorized. | Paired vault list, selected vault, current-page fill actions, and sync status. |
@@ -59,10 +64,10 @@ page-fill actions in any state before `Locked -> Ready`.
 
 ## Pairing Handoff
 
-When the extension reaches `Pair with nokey.sh`, it opens exactly:
+When the extension reaches `Pair with Simple Vault`, it opens exactly:
 
 ```text
-https://nokey.sh/extension-connect
+https://simple.nokey.sh/extension-connect
 ```
 
 The request payload must include:
@@ -75,12 +80,12 @@ The request payload must include:
 - return channel information for the extension.
 
 The web app rejects missing, expired, replayed, or malformed pairing requests.
-If the user is not unlocked, `nokey.sh` shows the normal passkey/device gate and
+If the user is not unlocked, `simple.nokey.sh` shows the normal passkey/device gate and
 vault login before the consent screen.
 
 ## Consent Screen
 
-`nokey.sh` shows a consent screen before adding the extension as a vault device.
+`simple.nokey.sh` shows a consent screen before adding the extension as a vault device.
 The screen says that Nook is adding an extension/browser-profile device, not
 sharing the current page session.
 
@@ -134,7 +139,7 @@ Revoked extension device:
   metadata to explain the revoked label and offer a fresh pairing.
 
 Rotation:
-: `nokey.sh` can rotate or remove the extension device grant from the device
+: `simple.nokey.sh` can rotate or remove the extension device grant from the device
   settings surface. After rotation, the extension must re-pair as a new device.
 
 ## Implementation Boundary

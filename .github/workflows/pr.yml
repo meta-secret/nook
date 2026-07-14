@@ -93,7 +93,8 @@ jobs:
           retries: 3
           script: |
             const marker = '### Preview deployed'
-            const body = `${marker}\n\n${process.env.PREVIEW_URL}`
+            const root = process.env.PREVIEW_URL.replace(/\/$/, '')
+            const body = `${marker}\n\n- Unified test harness: ${root}/\n- Simple Vault artifact: ${root}/simple/\n- Sentinel Vault artifact: ${root}/sentinel/`
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,

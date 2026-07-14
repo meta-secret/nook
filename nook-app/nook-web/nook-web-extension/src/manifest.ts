@@ -20,6 +20,7 @@ export type ExtensionManifest = {
   }
   content_scripts: Array<{
     matches: string[]
+    exclude_matches: string[]
     js: string[]
     run_at: 'document_idle'
   }>
@@ -62,12 +63,13 @@ export function createManifest(version: string): ExtensionManifest {
     content_scripts: [
       {
         matches: ['<all_urls>'],
+        exclude_matches: ['https://sentinel.nokey.sh/*'],
         js: ['content/autofill.js'],
         run_at: 'document_idle',
       },
     ],
     externally_connectable: {
-      matches: ['https://nokey.sh/*'],
+      matches: ['https://simple.nokey.sh/*'],
     },
     icons: iconSet,
     permissions: ['activeTab', 'storage'],

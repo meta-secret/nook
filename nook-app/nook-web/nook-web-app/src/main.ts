@@ -1,6 +1,6 @@
 import { mount } from 'svelte'
-import './app.css'
-import App from './App.svelte'
+import '$vault-shared/app.css'
+import App from '$vault-shared/App.svelte'
 
 mount(App, {
   target: document.getElementById('app')!,

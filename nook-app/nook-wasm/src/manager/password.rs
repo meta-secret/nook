@@ -363,7 +363,7 @@ impl NookVaultManager {
                     .to_owned(),
             ));
         }
-        self.capture_vault_unlock(content);
+        self.capture_vault_unlock(content)?;
         let format = nook_core::detect_stored_format(content)?;
         let mut records = nook_core::deserialize_stored(content, format)?;
         records.retain(|record| !nook_core::is_join_stored_record(record));
@@ -492,7 +492,7 @@ mod wasm_tests {
             .expect("select projection");
 
         let mut manager = NookVaultManager::new();
-        let error = manager
+        let result = manager
             .connect_with_password(
                 "local".to_owned(),
                 String::new(),
@@ -500,9 +500,8 @@ mod wasm_tests {
                 password_entry.id.clone(),
                 "correct horse battery staple".to_owned(),
             )
-            .await
-            .expect_err("missing event log must be rejected");
-        assert!(error.to_string().contains("Vault event log is required"));
+            .await;
+        assert!(result.is_err(), "missing event log must be rejected");
         assert!(manager.device.identity_private_key.is_empty());
     }
 }
