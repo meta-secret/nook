@@ -244,28 +244,36 @@
   data-sentinel-dashboard-focus
   tabindex="-1"
 >
-  {#if status === 'idle'}
-    <button
-      class="fixed top-5 left-5 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md sm:left-10"
-      data-testid="sentinel-dashboard-back"
-      onclick={onBack}
-    >
-      <ArrowLeft class="size-4" aria-hidden="true" />
-      {vault.t('login.sentinel_dashboard_change')}
-    </button>
-  {/if}
   <div
     class="pointer-events-none fixed inset-0 opacity-45 [background-image:radial-gradient(#a9b8c5_1px,transparent_1px)] [background-size:22px_22px]"
   ></div>
 
-  <section class="relative mx-auto max-w-7xl px-6 pt-20 pb-12 sm:px-10">
-    <header data-testid="sentinel-dashboard-heading">
-      <p
-        class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
-      >
-        {vault.t('login.sentinel_card_stack_eyebrow')}
-      </p>
-      <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
+  <section
+    class="relative mx-auto max-w-7xl px-6 pt-8 pb-12 sm:px-10 sm:pt-10"
+  >
+    <header
+      class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="sentinel-dashboard-heading"
+    >
+      <div data-testid="sentinel-dashboard-brand">
+        <p
+          class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
+        >
+          {vault.t('login.sentinel_card_stack_eyebrow')}
+        </p>
+        <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
+      </div>
+
+      {#if status === 'idle'}
+        <button
+          class="flex h-10 shrink-0 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
+          data-testid="sentinel-dashboard-back"
+          onclick={onBack}
+        >
+          <ArrowLeft class="size-4" aria-hidden="true" />
+          {vault.t('login.sentinel_dashboard_change')}
+        </button>
+      {/if}
     </header>
 
     <ol

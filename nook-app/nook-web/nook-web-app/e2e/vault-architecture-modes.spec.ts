@@ -262,21 +262,31 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-create-keys'),
     ).toBeVisible()
-    const headingBox = await page
-      .getByTestId('sentinel-dashboard-heading')
+    const brandBox = await page
+      .getByTestId('sentinel-dashboard-brand')
+      .boundingBox()
+    const backButtonBox = await page
+      .getByTestId('sentinel-dashboard-back')
       .boundingBox()
     const progressBox = await page
       .getByTestId('sentinel-onboarding-progress')
       .boundingBox()
-    if (!headingBox || !progressBox) {
-      throw new Error('Sentinel heading and progress must have layout boxes')
+    if (!brandBox || !backButtonBox || !progressBox) {
+      throw new Error('Sentinel masthead and progress must have layout boxes')
     }
-    expect(headingBox.y).toBeLessThan(progressBox.y)
-    expect(headingBox.y).toBeLessThan(96)
-    expect(headingBox.height).toBeLessThan(64)
+    expect(brandBox.y).toBeLessThan(progressBox.y)
+    expect(brandBox.y).toBeLessThan(96)
+    expect(brandBox.height).toBeLessThan(64)
     expect(
-      progressBox.y - (headingBox.y + headingBox.height),
+      progressBox.y - (brandBox.y + brandBox.height),
     ).toBeLessThanOrEqual(24)
+    expect(backButtonBox.x).toBeGreaterThan(brandBox.x + brandBox.width)
+    expect(
+      Math.abs(
+        backButtonBox.y + backButtonBox.height / 2 -
+          (brandBox.y + brandBox.height / 2),
+      ),
+    ).toBeLessThan(8)
     await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(0)
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
