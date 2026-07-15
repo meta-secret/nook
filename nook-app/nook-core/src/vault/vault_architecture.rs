@@ -519,7 +519,7 @@ pub fn provider_replication_capability(
                     provider_type: provider_type.as_str().to_owned(),
                     oauth_preset: Some(preset.as_str().to_owned()),
                     supports_personal: true,
-                    supports_shared: false,
+                    supports_shared: true,
                     shared_joiner_identity: None,
                 },
             }
@@ -765,14 +765,13 @@ mod tests {
             Some(SharedJoinerIdentityKind::Email)
         );
 
-        assert!(
-            validate_provider_replication(
-                StorageProviderType::OauthFile,
-                Some(OauthFilePreset::ICloud),
-                ReplicationType::Shared,
-            )
-            .is_err()
-        );
+        let icloud = validate_provider_replication(
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::ICloud),
+            ReplicationType::Shared,
+        )
+        .unwrap();
+        assert_eq!(icloud.shared_joiner_identity, None);
     }
 
     #[test]
@@ -827,14 +826,12 @@ mod tests {
             validate_architecture_for_provider(&sentinel_shared, StorageProviderType::Github, None)
                 .is_err()
         );
-        assert!(
-            validate_architecture_for_provider(
-                &sentinel_shared,
-                StorageProviderType::OauthFile,
-                Some(OauthFilePreset::ICloud),
-            )
-            .is_err()
-        );
+        validate_architecture_for_provider(
+            &sentinel_shared,
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::ICloud),
+        )
+        .unwrap();
     }
 
     #[test]

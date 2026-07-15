@@ -1,8 +1,8 @@
-//! iCloud `CloudKit` private-database adapter for immutable event records.
+//! iCloud `CloudKit` private/shared-database adapter for immutable event records.
 
 use crate::NookError;
 use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
-use nook_core::{EventId, VaultEvent};
+use nook_core::{EventId, ICloudEventTarget, ICloudShareRole, VaultEvent};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -52,10 +52,38 @@ struct ICloudRecordsResponse {
     continuation_marker: Option<String>,
 }
 
-fn icloud_database_url(path: &str) -> String {
+fn icloud_database_url(target: &ICloudEventTarget, path: &str) -> String {
+    let database = match target {
+        ICloudEventTarget::Private
+        | ICloudEventTarget::Shared(nook_core::ICloudSharedTarget {
+            role: ICloudShareRole::Owner,
+            ..
+        }) => "private",
+        ICloudEventTarget::Shared(nook_core::ICloudSharedTarget {
+            role: ICloudShareRole::Participant,
+            ..
+        }) => "shared",
+    };
     format!(
-        "https://api.apple-cloudkit.com/database/1/{ICLOUD_CONTAINER_ID}/{ICLOUD_ENVIRONMENT}/private/{path}"
+        "https://api.apple-cloudkit.com/database/1/{ICLOUD_CONTAINER_ID}/{ICLOUD_ENVIRONMENT}/{database}/{path}"
     )
+}
+
+fn icloud_zone_id(target: &ICloudEventTarget) -> Option<serde_json::Value> {
+    match target {
+        ICloudEventTarget::Private => None,
+        ICloudEventTarget::Shared(shared) => Some(json!({
+            "zoneName": shared.zone_name,
+            "ownerRecordName": shared.owner_record_name,
+        })),
+    }
+}
+
+fn with_icloud_zone(mut body: serde_json::Value, target: &ICloudEventTarget) -> serde_json::Value {
+    if let Some(zone_id) = icloud_zone_id(target) {
+        body["zoneID"] = zone_id;
+    }
+    body
 }
 
 fn icloud_auth_query(web_auth_token: &str) -> [(&'static str, String); 2] {
@@ -191,6 +219,7 @@ fn event_id_from_record(record: &ICloudRecord) -> Option<String> {
 
 async fn lookup_vault_record(
     web_auth_token: &str,
+    target: &ICloudEventTarget,
     record_name: &str,
 ) -> Result<Option<ICloudRecord>, NookError> {
     const OPERATION: &str = "lookup";
@@ -204,11 +233,14 @@ async fn lookup_vault_record(
         "CloudKit lookup prepared"
     );
     let client = reqwest::Client::new();
-    let body = json!({
-        "records": [{ "recordName": record_name }]
-    });
+    let body = with_icloud_zone(
+        json!({
+            "records": [{ "recordName": record_name }]
+        }),
+        target,
+    );
     let mut request = client
-        .post(icloud_database_url(PATH))
+        .post(icloud_database_url(target, PATH))
         .header("Content-Type", "application/json");
     for (name, value) in icloud_auth_query(web_auth_token) {
         request = request.query(&[(name, value)]);
@@ -238,12 +270,16 @@ async fn lookup_vault_record(
 
 async fn lookup_record(
     web_auth_token: &str,
+    target: &ICloudEventTarget,
     record_name: &str,
 ) -> Result<Option<ICloudRecord>, NookError> {
-    lookup_vault_record(web_auth_token, record_name).await
+    lookup_vault_record(web_auth_token, target, record_name).await
 }
 
-pub(crate) async fn list_icloud_event_ids(web_auth_token: &str) -> Result<Vec<String>, NookError> {
+pub(crate) async fn list_icloud_event_ids(
+    web_auth_token: &str,
+    target: &ICloudEventTarget,
+) -> Result<Vec<String>, NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let client = reqwest::Client::new();
     let mut event_ids = Vec::new();
@@ -252,12 +288,15 @@ pub(crate) async fn list_icloud_event_ids(web_auth_token: &str) -> Result<Vec<St
     const PATH: &str = "records/query";
 
     loop {
-        let mut body = json!({
-            "query": {
-                "recordType": ICLOUD_EVENT_RECORD_TYPE,
-            },
-            "resultsLimit": 200,
-        });
+        let mut body = with_icloud_zone(
+            json!({
+                "query": {
+                    "recordType": ICLOUD_EVENT_RECORD_TYPE,
+                },
+                "resultsLimit": 200,
+            }),
+            target,
+        );
         if let Some(marker) = continuation_marker.as_deref() {
             body["continuationMarker"] = json!(marker);
         }
@@ -273,7 +312,7 @@ pub(crate) async fn list_icloud_event_ids(web_auth_token: &str) -> Result<Vec<St
             "CloudKit event query prepared"
         );
         let mut request = client
-            .post(icloud_database_url(PATH))
+            .post(icloud_database_url(target, PATH))
             .header("Content-Type", "application/json");
         for (name, value) in icloud_auth_query(token.as_ref()) {
             request = request.query(&[(name, value)]);
@@ -321,6 +360,7 @@ pub(crate) async fn list_icloud_event_ids(web_auth_token: &str) -> Result<Vec<St
 
 pub(crate) async fn fetch_icloud_event(
     web_auth_token: &str,
+    target: &ICloudEventTarget,
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
@@ -331,7 +371,7 @@ pub(crate) async fn fetch_icloud_event(
         record_name,
         "CloudKit event fetch started"
     );
-    let record = lookup_record(token.as_ref(), &record_name)
+    let record = lookup_record(token.as_ref(), target, &record_name)
         .await?
         .ok_or_else(|| {
             NookError::ICloud(format!("CloudKit event record {record_name} is missing."))
@@ -377,12 +417,13 @@ fn existing_icloud_event_matches(
 
 async fn confirm_icloud_create_conflict_matches(
     token: &str,
+    target: &ICloudEventTarget,
     event_id: &EventId,
     record_name: &str,
     bytes: &[u8],
     expected_event: &VaultEvent,
 ) -> Result<bool, NookError> {
-    if let Some(existing) = lookup_record(token, record_name).await? {
+    if let Some(existing) = lookup_record(token, target, record_name).await? {
         let (matches, existing_len) =
             existing_icloud_event_matches(&existing, bytes, expected_event);
         if matches {
@@ -407,12 +448,13 @@ async fn confirm_icloud_create_conflict_matches(
 
 async fn return_if_existing_icloud_event_matches(
     token: &str,
+    target: &ICloudEventTarget,
     event_id: &EventId,
     record_name: &str,
     bytes: &[u8],
     expected_event: &VaultEvent,
 ) -> Result<bool, NookError> {
-    if let Some(existing) = lookup_record(token, record_name).await? {
+    if let Some(existing) = lookup_record(token, target, record_name).await? {
         let (matches, existing_len) =
             existing_icloud_event_matches(&existing, bytes, expected_event);
         if matches {
@@ -440,8 +482,37 @@ async fn return_if_existing_icloud_event_matches(
     Ok(false)
 }
 
+fn icloud_event_create_body(
+    target: &ICloudEventTarget,
+    event_id: &EventId,
+    record_name: &str,
+    content: &str,
+) -> serde_json::Value {
+    let mut record = json!({
+        "recordType": ICLOUD_EVENT_RECORD_TYPE,
+        "recordName": record_name,
+        "fields": {
+            ICLOUD_EVENT_ID_FIELD: { "value": event_id.as_str() },
+            ICLOUD_CONTENT_FIELD: { "value": content }
+        }
+    });
+    if let ICloudEventTarget::Shared(shared) = target {
+        record["parent"] = json!({ "recordName": shared.root_record_name });
+    }
+    with_icloud_zone(
+        json!({
+            "operations": [{
+                "operationType": "create",
+                "record": record
+            }]
+        }),
+        target,
+    )
+}
+
 pub(crate) async fn put_icloud_event_if_absent(
     web_auth_token: &str,
+    target: &ICloudEventTarget,
     event_id: &EventId,
     bytes: &[u8],
 ) -> Result<(), NookError> {
@@ -460,6 +531,7 @@ pub(crate) async fn put_icloud_event_if_absent(
 
     if return_if_existing_icloud_event_matches(
         token.as_ref(),
+        target,
         event_id,
         &record_name,
         bytes,
@@ -470,19 +542,7 @@ pub(crate) async fn put_icloud_event_if_absent(
         return Ok(());
     }
 
-    let body = json!({
-        "operations": [{
-            "operationType": "create",
-            "record": {
-                "recordType": ICLOUD_EVENT_RECORD_TYPE,
-                "recordName": record_name,
-                "fields": {
-                    ICLOUD_EVENT_ID_FIELD: { "value": event_id.as_str() },
-                    ICLOUD_CONTENT_FIELD: { "value": content }
-                }
-            }
-        }]
-    });
+    let body = icloud_event_create_body(target, event_id, &record_name, content);
     let client = reqwest::Client::new();
     const OPERATION: &str = "modify";
     const PATH: &str = "records/modify";
@@ -497,7 +557,7 @@ pub(crate) async fn put_icloud_event_if_absent(
         "CloudKit event create prepared"
     );
     let mut request = client
-        .post(icloud_database_url(PATH))
+        .post(icloud_database_url(target, PATH))
         .header("Content-Type", "application/json");
     for (name, value) in icloud_auth_query(token.as_ref()) {
         request = request.query(&[(name, value)]);
@@ -529,6 +589,7 @@ pub(crate) async fn put_icloud_event_if_absent(
         );
         if confirm_icloud_create_conflict_matches(
             token.as_ref(),
+            target,
             event_id,
             &record_name,
             bytes,
@@ -544,4 +605,77 @@ pub(crate) async fn put_icloud_event_if_absent(
     }
 
     Err(icloud_error(status, &body))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nook_core::ICloudSharedTarget;
+
+    fn shared_target(role: ICloudShareRole) -> ICloudEventTarget {
+        ICloudEventTarget::Shared(
+            ICloudSharedTarget::new(
+                role,
+                "shared-zone",
+                "owner-record",
+                "shared-root",
+                "share-guid",
+            )
+            .expect("shared target should be valid"),
+        )
+    }
+
+    #[test]
+    fn shared_database_scope_depends_on_account_role() {
+        assert!(
+            icloud_database_url(&ICloudEventTarget::Private, "records/query")
+                .contains("/private/records/query")
+        );
+        assert!(
+            icloud_database_url(&shared_target(ICloudShareRole::Owner), "records/query")
+                .contains("/private/records/query")
+        );
+        assert!(
+            icloud_database_url(
+                &shared_target(ICloudShareRole::Participant),
+                "records/query"
+            )
+            .contains("/shared/records/query")
+        );
+    }
+
+    #[test]
+    fn shared_event_create_is_scoped_to_the_shared_root_hierarchy() {
+        let target = shared_target(ICloudShareRole::Participant);
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))
+            .expect("event id should be valid");
+        let body =
+            icloud_event_create_body(&target, &event_id, "nook-event-test", "encrypted-event");
+
+        assert_eq!(body["zoneID"]["zoneName"], "shared-zone");
+        assert_eq!(body["zoneID"]["ownerRecordName"], "owner-record");
+        assert_eq!(
+            body["operations"][0]["record"]["parent"]["recordName"],
+            "shared-root"
+        );
+        assert_eq!(
+            body["operations"][0]["record"]["fields"][ICLOUD_CONTENT_FIELD]["value"],
+            "encrypted-event"
+        );
+    }
+
+    #[test]
+    fn private_event_create_keeps_the_existing_default_zone_shape() {
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))
+            .expect("event id should be valid");
+        let body = icloud_event_create_body(
+            &ICloudEventTarget::Private,
+            &event_id,
+            "nook-event-test",
+            "encrypted-event",
+        );
+
+        assert!(body.get("zoneID").is_none());
+        assert!(body["operations"][0]["record"].get("parent").is_none());
+    }
 }

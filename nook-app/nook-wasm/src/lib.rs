@@ -452,6 +452,54 @@ pub fn set_google_drive_provider_mode(
     ))?)
 }
 
+#[wasm_bindgen(js_name = setICloudProviderMode)]
+pub fn set_icloud_provider_mode(
+    config: JsValue,
+    mode: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let config: nook_core::OAuthFileConfigData = serde_wasm_bindgen::from_value(config)?;
+    let mode = nook_core::ICloudMode::parse(mode)?;
+    Ok(to_js_value(&nook_core::set_icloud_provider_mode(
+        &config, mode,
+    ))?)
+}
+
+#[wasm_bindgen(js_name = createICloudSharedStorageTarget)]
+pub fn create_icloud_shared_storage_target(
+    role: &str,
+    zone_name: &str,
+    owner_record_name: &str,
+    root_record_name: &str,
+    short_guid: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    let role = match role.trim() {
+        "owner" => nook_core::ICloudShareRole::Owner,
+        "participant" => nook_core::ICloudShareRole::Participant,
+        other => {
+            return Err(wasm_bindgen::JsError::new(&format!(
+                "Unknown iCloud share role: {other}"
+            )));
+        }
+    };
+    Ok(nook_core::ICloudSharedTarget::new(
+        role,
+        zone_name,
+        owner_record_name,
+        root_record_name,
+        short_guid,
+    )?
+    .to_storage_id()?)
+}
+
+#[wasm_bindgen(js_name = parseICloudSharedStorageTarget)]
+pub fn parse_icloud_shared_storage_target(
+    storage_target_id: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    Ok(to_js_value(
+        &nook_core::ICloudSharedTarget::from_storage_id(storage_target_id)?,
+    )?)
+}
+
 #[wasm_bindgen(js_name = defaultVaultArchitecture)]
 pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
     Ok(to_js_value(&nook_core::VaultArchitecture::default())?)

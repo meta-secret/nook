@@ -11,12 +11,13 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, EnrollmentProvider, GithubPatMask,
-    GithubSyncTarget, GoogleDriveMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
-    OnboardingType, ProviderReplicationCapability, ReplicationType, StorageMode,
-    StorageProviderType, SyncProviderTarget, VaultArchitecture, format_drive_storage_ref_raw,
-    mask_github_pat, provider_replication_capability, storage_mode_for_provider,
-    sync_provider_default_label, sync_provider_target_key, validate_github_pat,
-    validate_github_repo_name, validate_oauth_access_token, validate_provider_replication,
+    GithubSyncTarget, GoogleDriveMode, ICloudMode, LocalFolderSyncTarget, OauthFilePreset,
+    OauthFileSyncTarget, OnboardingType, ProviderReplicationCapability, ReplicationType,
+    StorageMode, StorageProviderType, SyncProviderTarget, VaultArchitecture,
+    format_drive_storage_ref_raw, mask_github_pat, provider_replication_capability,
+    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
+    validate_github_pat, validate_github_repo_name, validate_oauth_access_token,
+    validate_provider_replication,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -48,6 +49,23 @@ pub struct OAuthFileConfigData {
     /// providers leave this unset and continue using `drive.appdata`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub folder_id: Option<String>,
+    /// Explicit iCloud provider mode. Legacy rows remain private.
+    #[serde(
+        default,
+        rename = "iCloudMode",
+        alias = "icloudMode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub icloud_mode: Option<ICloudMode>,
+    /// Opaque, validated `ICloudSharedTarget` storage id. It contains `CloudKit`
+    /// share/zone routing only and never contains an account credential.
+    #[serde(
+        default,
+        rename = "iCloudShareTarget",
+        alias = "icloudShareTarget",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub icloud_share_target: Option<String>,
 }
 
 impl OAuthFileConfigData {
@@ -61,6 +79,35 @@ impl OAuthFileConfigData {
             }
         })
     }
+
+    #[must_use]
+    pub fn resolved_icloud_mode(&self) -> ICloudMode {
+        self.icloud_mode.unwrap_or_else(|| {
+            if non_empty(self.icloud_share_target.as_deref()).is_some() {
+                ICloudMode::Shared
+            } else {
+                ICloudMode::Private
+            }
+        })
+    }
+}
+
+/// Switch iCloud storage mode without carrying an auth token or `CloudKit`
+/// share target issued for the previous mode into the new connection.
+#[must_use]
+pub fn set_icloud_provider_mode(
+    config: &OAuthFileConfigData,
+    mode: ICloudMode,
+) -> OAuthFileConfigData {
+    let mut switched = config.clone();
+    switched.icloud_mode = Some(mode);
+    switched.access_token.clear();
+    switched.refresh_token = None;
+    switched.expires_at = None;
+    switched.account_email = None;
+    switched.file_id = None;
+    switched.icloud_share_target = None;
+    switched
 }
 
 /// Switch Google Drive storage mode without carrying an OAuth token issued for
@@ -246,6 +293,12 @@ pub fn storage_args_for_provider(
                             .ok_or(ValidationError::SharedStorageTargetRequired)?
                     )
                 }
+                (Some(OauthFilePreset::ICloud), Some(oauth))
+                    if oauth.resolved_icloud_mode() == ICloudMode::Shared =>
+                {
+                    non_empty(oauth.icloud_share_target.as_deref())
+                        .ok_or(ValidationError::SharedStorageTargetRequired)?
+                }
                 _ => oauth
                     .and_then(|oauth| non_empty(oauth.file_id.as_deref()))
                     .unwrap_or_default(),
@@ -300,9 +353,12 @@ pub fn provider_onboarding_type(
     let provider_type = StorageProviderType::parse(&provider.provider_type)?;
     let provider_uses_shared_target = if provider_type == StorageProviderType::OauthFile {
         provider.oauth_file.as_ref().is_some_and(|oauth| {
-            OauthFilePreset::parse(&oauth.preset)
-                .is_ok_and(|preset| preset == OauthFilePreset::GoogleDrive)
-                && oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared
+            OauthFilePreset::parse(&oauth.preset).is_ok_and(|preset| match preset {
+                OauthFilePreset::GoogleDrive => {
+                    oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared
+                }
+                OauthFilePreset::ICloud => oauth.resolved_icloud_mode() == ICloudMode::Shared,
+            })
         })
     } else {
         false
@@ -379,32 +435,44 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
                 })
             }
         },
-        OnboardingType::SharedProviderGrant => Ok(EnrollmentProvider::SharedProviderGrant {
-            sync_provider_type: capability.provider_type,
-            oauth_preset: capability.oauth_preset,
-            joiner_identity_kind: capability
-                .shared_joiner_identity
-                .map_or_else(|| "email".to_owned(), |kind| kind.as_str().to_owned()),
-            joiner_identity: shared_joiner_identity
+        OnboardingType::SharedProviderGrant => {
+            let oauth = provider.oauth_file.as_ref();
+            let preset = oauth
+                .map(|config| OauthFilePreset::parse(&config.preset))
+                .transpose()?;
+            let storage_target_id = shared_storage_target_id
                 .map(str::trim)
-                .filter(|identity| !identity.is_empty())
-                .ok_or(ValidationError::SharedJoinerIdentityRequired)?
-                .to_owned(),
-            storage_target_id: Some(
-                shared_storage_target_id
-                    .map(str::trim)
-                    .filter(|id| !id.is_empty())
-                    .map(str::to_owned)
-                    .or_else(|| {
-                        provider
-                            .oauth_file
-                            .as_ref()
-                            .and_then(|oauth| oauth.folder_id.clone())
-                            .filter(|id| !id.trim().is_empty())
-                    })
-                    .ok_or(ValidationError::SharedStorageTargetRequired)?,
-            ),
-        }),
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned)
+                .or_else(|| match preset {
+                    Some(OauthFilePreset::GoogleDrive) => oauth
+                        .and_then(|config| config.folder_id.clone())
+                        .filter(|id| !id.trim().is_empty()),
+                    Some(OauthFilePreset::ICloud) => oauth
+                        .and_then(|config| config.icloud_share_target.clone())
+                        .filter(|id| !id.trim().is_empty()),
+                    None => None,
+                })
+                .ok_or(ValidationError::SharedStorageTargetRequired)?;
+            match preset {
+                Some(OauthFilePreset::ICloud) => {
+                    Ok(EnrollmentProvider::ICloudShared { storage_target_id })
+                }
+                _ => Ok(EnrollmentProvider::SharedProviderGrant {
+                    sync_provider_type: capability.provider_type,
+                    oauth_preset: capability.oauth_preset,
+                    joiner_identity_kind: capability
+                        .shared_joiner_identity
+                        .map_or_else(|| "email".to_owned(), |kind| kind.as_str().to_owned()),
+                    joiner_identity: shared_joiner_identity
+                        .map(str::trim)
+                        .filter(|identity| !identity.is_empty())
+                        .ok_or(ValidationError::SharedJoinerIdentityRequired)?
+                        .to_owned(),
+                    storage_target_id: Some(storage_target_id),
+                }),
+            }
+        }
     }
 }
 
@@ -575,15 +643,24 @@ fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
             },
         }),
         _ => match &provider.oauth_file {
-            Some(oauth) => SyncProviderTarget::OauthFile(OauthFileSyncTarget {
-                preset: OauthFilePreset::parse(&oauth.preset)
-                    .unwrap_or(OauthFilePreset::GoogleDrive),
-                file_id: oauth.file_id.clone(),
-                folder_id: oauth.folder_id.clone(),
-                file_name: oauth.file_name.clone(),
-                account_email: oauth.account_email.clone(),
-                access_token: Some(oauth.access_token.clone()),
-            }),
+            Some(oauth) => {
+                let preset =
+                    OauthFilePreset::parse(&oauth.preset).unwrap_or(OauthFilePreset::GoogleDrive);
+                SyncProviderTarget::OauthFile(OauthFileSyncTarget {
+                    preset,
+                    file_id: if preset == OauthFilePreset::ICloud
+                        && oauth.resolved_icloud_mode() == ICloudMode::Shared
+                    {
+                        oauth.icloud_share_target.clone()
+                    } else {
+                        oauth.file_id.clone()
+                    },
+                    folder_id: oauth.folder_id.clone(),
+                    file_name: oauth.file_name.clone(),
+                    account_email: oauth.account_email.clone(),
+                    access_token: Some(oauth.access_token.clone()),
+                })
+            }
             None => SyncProviderTarget::Empty,
         },
     }
@@ -696,6 +773,9 @@ pub fn migrate_provider_fields(
                         expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
                         file_id: existing.and_then(|oauth| oauth.file_id.clone()),
                         folder_id: existing.and_then(|oauth| oauth.folder_id.clone()),
+                        icloud_mode: existing.and_then(|oauth| oauth.icloud_mode),
+                        icloud_share_target: existing
+                            .and_then(|oauth| oauth.icloud_share_target.clone()),
                         account_email: existing.and_then(|oauth| oauth.account_email.clone()),
                         drive_mode: if is_google {
                             Some(existing.map_or(GoogleDriveMode::Private, |oauth| {
@@ -1050,6 +1130,8 @@ mod tests {
             account_email: Some("owner@example.com".to_owned()),
             drive_mode: Some(GoogleDriveMode::Private),
             folder_id: None,
+            icloud_mode: None,
+            icloud_share_target: None,
         };
         let switched = set_google_drive_provider_mode(&config, GoogleDriveMode::Shared);
         assert_eq!(switched.drive_mode, Some(GoogleDriveMode::Shared));
@@ -1602,5 +1684,44 @@ mod tests {
             ),
             Err(ValidationError::SharedStorageTargetRequired)
         );
+    }
+
+    #[test]
+    fn shared_icloud_onboarding_carries_target_without_owner_credentials() {
+        let target = crate::ICloudSharedTarget::new(
+            crate::ICloudShareRole::Owner,
+            "zone",
+            "owner",
+            "root",
+            "guid",
+        )
+        .unwrap()
+        .to_storage_id()
+        .unwrap();
+        let mut icloud = oauth_provider("icloud", "icloud", None, "nook-events");
+        let oauth = icloud.oauth_file.as_mut().unwrap();
+        oauth.icloud_mode = Some(ICloudMode::Shared);
+        oauth.icloud_share_target = Some(target.clone());
+
+        let wire = serde_json::to_value(&icloud).unwrap();
+        assert_eq!(wire["oauthFile"]["iCloudMode"], "shared");
+        assert_eq!(wire["oauthFile"]["iCloudShareTarget"], target);
+        let icloud: StorageProviderData = serde_json::from_value(wire).unwrap();
+
+        assert_eq!(
+            provider_onboarding_type(&icloud, &VaultArchitecture::default()),
+            Ok(OnboardingType::SharedProviderGrant)
+        );
+        assert_eq!(
+            enrollment_provider_for_architecture(&icloud, &VaultArchitecture::default(), None)
+                .unwrap(),
+            EnrollmentProvider::ICloudShared {
+                storage_target_id: target.clone(),
+            }
+        );
+        let args = storage_args_for_provider(&icloud).unwrap();
+        assert_eq!(args.mode, "icloud");
+        assert_eq!(args.pat, "token");
+        assert_eq!(args.repo, format!("{target}\tnook-events"));
     }
 }

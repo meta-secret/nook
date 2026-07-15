@@ -16,6 +16,11 @@ import {
   requestGoogleDriveSharedAccess,
 } from "$lib/google-oauth";
 import {
+  acceptICloudSharedVault,
+  oauthTokensToICloudConfig,
+  requestICloudWebAuthToken,
+} from "$lib/icloud-oauth";
+import {
   prepareSharedStorageGrant,
   providerOnboardingType,
 } from "$lib/vault-architecture";
@@ -274,7 +279,7 @@ function applySavedEnrollmentProvider(
 function findSharedGrantProvider(
   providers: StorageProvider[],
   preset: string,
-  folderId?: string,
+  storageTargetId?: string,
 ): StorageProvider | undefined {
   const withToken = providers.filter(
     (provider) =>
@@ -282,11 +287,13 @@ function findSharedGrantProvider(
       provider.oauthFile?.preset === preset &&
       Boolean(provider.oauthFile.accessToken?.trim()),
   );
-  if (folderId) {
-    const matchingFolder = withToken.find(
-      (provider) => provider.oauthFile?.folderId === folderId,
+  if (storageTargetId) {
+    const matchingTarget = withToken.find(
+      (provider) =>
+        provider.oauthFile?.folderId === storageTargetId ||
+        provider.oauthFile?.iCloudShareTarget === storageTargetId,
     );
-    if (matchingFolder) return matchingFolder;
+    if (matchingTarget) return matchingTarget;
   }
   return withToken[0];
 }
@@ -341,9 +348,13 @@ export async function connectWithEnrollmentCode(
     } else if (payload.provider.isSharedProviderGrant) {
       const preset = (payload.provider.oauthPreset ??
         "google-drive") as OAuthFilePreset;
-      const folderId = payload.provider.sharedStorageTargetId?.trim();
+      const storageTargetId = payload.provider.sharedStorageTargetId?.trim();
       await state.loadProviders();
-      let provider = findSharedGrantProvider(state.providers, preset, folderId);
+      let provider = findSharedGrantProvider(
+        state.providers,
+        preset,
+        storageTargetId,
+      );
       if (!provider && preset === "google-drive") {
         if (!isGoogleOAuthConfigured()) {
           throw new Error(state.t("provider_setup.google_oauth_unconfigured"));
@@ -354,7 +365,7 @@ export async function connectWithEnrollmentCode(
         const oauthFile = oauthTokensToConfig(tokens, {
           preset: "google-drive",
           accessToken: tokens.accessToken,
-          folderId: folderId || undefined,
+          folderId: storageTargetId || undefined,
           fileName: "nook-events",
         });
         provider = {
@@ -365,15 +376,50 @@ export async function connectWithEnrollmentCode(
           createdAt: isoTimestamp(),
         };
       }
+      if (preset === "icloud") {
+        if (!storageTargetId) {
+          throw new Error(
+            state.t("provider_setup.icloud_shared_target_required"),
+          );
+        }
+        const existingToken = provider?.oauthFile?.accessToken?.trim();
+        const tokens = existingToken
+          ? {
+              accessToken: existingToken,
+              accountName: provider?.oauthFile?.accountEmail,
+            }
+          : await requestICloudWebAuthToken();
+        const accepted = await acceptICloudSharedVault(storageTargetId);
+        provider = {
+          id: provider?.id ?? "enrollment-shared-icloud",
+          type: "oauth-file",
+          label: provider?.label ?? state.t("provider_picker.icloud"),
+          oauthFile: oauthTokensToICloudConfig(tokens, {
+            ...(provider?.oauthFile ?? {
+              preset: "icloud",
+              accessToken: tokens.accessToken,
+            }),
+            iCloudMode: "shared",
+            iCloudShareTarget: accepted.storageTargetId,
+            fileName: provider?.oauthFile?.fileName ?? "nook-events",
+          }),
+          createdAt: provider?.createdAt ?? isoTimestamp(),
+        };
+      }
       if (!provider) {
         throw new Error(
           "Shared-provider enrollment requires this browser to have matching provider access before connecting.",
         );
       }
-      if (folderId && provider.oauthFile && !provider.oauthFile.folderId) {
+      if (
+        storageTargetId &&
+        preset === "google-drive" &&
+        provider.oauthFile &&
+        !provider.oauthFile.folderId
+      ) {
         provider = {
           ...provider,
-          oauthFile: { ...provider.oauthFile, folderId },
+          oauthFile: { ...provider.oauthFile, folderId: storageTargetId },
         };
       }
       applySavedEnrollmentProvider(state, provider);
@@ -531,7 +577,10 @@ export async function issueEnrollmentCode(
     const usesSharedProviderGrant =
       providerOnboardingType(selectedProvider, state.vaultArchitecture) ===
       "shared-provider-grant";
-    if (usesSharedProviderGrant && !sharedJoinerIdentity) {
+    const usesSharedICloud =
+      usesSharedProviderGrant &&
+      selectedProvider.oauthFile?.preset === "icloud";
+    if (usesSharedProviderGrant && !usesSharedICloud && !sharedJoinerIdentity) {
       throw new Error(
         state.t("errors.validation.shared_joiner_identity_required"),
       );
@@ -549,55 +598,73 @@ export async function issueEnrollmentCode(
     let sharedStorageTargetId: string | undefined;
     let enrollmentProviderRow = selectedProvider;
     if (usesSharedProviderGrant) {
-      const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
-      const grant = await prepareSharedStorageGrant({
-        providerType: selectedProvider.type,
-        oauthPreset: selectedProvider.oauthFile?.preset,
-        joinerIdentityKind: "email",
-        joinerIdentity: sharedJoinerIdentity,
-        storageTargetHint:
-          selectedProvider.oauthFile?.fileName ??
-          selectedProvider.githubRepo ??
-          undefined,
-        storageTargetId: selectedProvider.oauthFile?.folderId,
-        accessToken,
-      });
-      if (grant.kind === "unsupported") {
-        throw new Error(state.t(grant.reasonKey));
-      }
-      if (grant.kind === "granted") {
-        sharedStorageTargetId = grant.storageTargetId;
-        state.sharedGrantInstructions = state.t(grant.note, {
-          email: sharedJoinerIdentity,
-          folder: grant.storageTargetName ?? grant.storageTargetId,
+      if (usesSharedICloud) {
+        sharedStorageTargetId =
+          selectedProvider.oauthFile?.iCloudShareTarget?.trim();
+        if (!sharedStorageTargetId) {
+          throw new Error(
+            state.t("provider_setup.icloud_shared_target_required"),
+          );
+        }
+      } else {
+        const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
+        const grant = await prepareSharedStorageGrant({
+          providerType: selectedProvider.type,
+          oauthPreset: selectedProvider.oauthFile?.preset,
+          joinerIdentityKind: "email",
+          joinerIdentity: sharedJoinerIdentity,
+          storageTargetHint:
+            selectedProvider.oauthFile?.fileName ??
+            selectedProvider.githubRepo ??
+            undefined,
+          storageTargetId: selectedProvider.oauthFile?.folderId,
+          accessToken,
         });
-      } else if (grant.kind === "manual-grant-required") {
-        sharedStorageTargetId = grant.storageTargetId;
-        state.sharedGrantInstructions = state.t(grant.instructionsKey, {
-          email: grant.joinerIdentity,
-          folder:
-            grant.storageTargetName ?? grant.storageTargetId ?? "shared folder",
-        });
-      }
-      if (sharedStorageTargetId && selectedProvider.oauthFile) {
-        const updatedOauth = {
-          ...selectedProvider.oauthFile,
-          driveMode: "shared" as const,
-          folderId: sharedStorageTargetId,
-          fileName: selectedProvider.oauthFile.fileName,
-        };
-        enrollmentProviderRow = {
-          ...selectedProvider,
-          oauthFile: updatedOauth,
-        };
-        state.oauthFile = updatedOauth;
-        state.providers = state.providers.map((row) =>
-          row.id === selectedProvider.id ? enrollmentProviderRow : row,
-        );
-        await state.persistProviders();
+        if (grant.kind === "unsupported") {
+          throw new Error(state.t(grant.reasonKey));
+        }
+        if (grant.kind === "granted") {
+          sharedStorageTargetId = grant.storageTargetId;
+          state.sharedGrantInstructions = state.t(grant.note, {
+            email: sharedJoinerIdentity,
+            folder: grant.storageTargetName ?? grant.storageTargetId,
+          });
+        } else if (grant.kind === "manual-grant-required") {
+          sharedStorageTargetId = grant.storageTargetId;
+          state.sharedGrantInstructions = state.t(grant.instructionsKey, {
+            email: grant.joinerIdentity,
+            folder:
+              grant.storageTargetName ??
+              grant.storageTargetId ??
+              "shared folder",
+          });
+        }
+        if (sharedStorageTargetId && selectedProvider.oauthFile) {
+          const updatedOauth = {
+            ...selectedProvider.oauthFile,
+            driveMode: "shared" as const,
+            folderId: sharedStorageTargetId,
+            fileName: selectedProvider.oauthFile.fileName,
+          };
+          enrollmentProviderRow = {
+            ...selectedProvider,
+            oauthFile: updatedOauth,
+          };
+          state.oauthFile = updatedOauth;
+          state.providers = state.providers.map((row) =>
+            row.id === selectedProvider.id ? enrollmentProviderRow : row,
+          );
+          await state.persistProviders();
 
-        // A shared grant is not usable until the target contains the current
-        // vault event log. Await the Rust/WASM fan-out before emitting the code.
+          // A shared grant is not usable until the target contains the current
+          // vault event log. Await the Rust/WASM fan-out before emitting the code.
+          const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
+          await state.enqueueStorage(() =>
+            state.manager!.flushEventOutboxForProvider(...targetArgs),
+          );
+        }
+      }
+      if (usesSharedICloud) {
         const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
         await state.enqueueStorage(() =>
           state.manager!.flushEventOutboxForProvider(...targetArgs),
@@ -607,7 +674,9 @@ export async function issueEnrollmentCode(
     const provider = enrollmentProviderForArchitecture(
       enrollmentProviderRow,
       state.vaultArchitecture,
-      usesSharedProviderGrant ? sharedJoinerIdentity : undefined,
+      usesSharedProviderGrant && !usesSharedICloud
+        ? sharedJoinerIdentity
+        : undefined,
       sharedStorageTargetId,
     );
     const payload = new NookEnrollmentIssueInput(

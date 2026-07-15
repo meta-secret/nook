@@ -45,6 +45,23 @@ function githubProvider(): StorageProvider {
   }
 }
 
+function sharedICloudProvider(): StorageProvider {
+  return {
+    id: 'icloud-shared-1',
+    type: 'oauth-file',
+    label: 'iCloud',
+    oauthFile: {
+      preset: 'icloud',
+      accessToken: 'cloudkit-web-token',
+      fileName: 'nook-events',
+      iCloudMode: 'shared',
+      iCloudShareTarget:
+        'icloud-share-v1:{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}',
+    },
+    createdAt: '2026-07-14T00:00:00.000Z',
+  }
+}
+
 describe('vault architecture adapter', () => {
   test('defaults select the simple personal standard vault', () => {
     expect(defaultVaultArchitecture()).toEqual({
@@ -193,5 +210,32 @@ describe('vault architecture adapter', () => {
     )
     expect(enrollmentProvider.oauthAccessToken).toBeUndefined()
     expect(enrollmentProvider.oauthRefreshToken).toBeUndefined()
+  })
+
+  test('shared iCloud enrollment sends only the CloudKit target', () => {
+    const provider = sharedICloudProvider()
+    const architecture = defaultVaultArchitecture()
+    expect(providerReplicationCapability(provider)).toMatchObject({
+      providerType: 'oauth-file',
+      oauthPreset: 'icloud',
+      supportsPersonal: true,
+      supportsShared: true,
+    })
+    expect(providerOnboardingType(provider, architecture)).toBe(
+      'shared-provider-grant',
+    )
+    const enrollmentProvider = enrollmentProviderForArchitecture(
+      provider,
+      architecture,
+      undefined,
+      undefined,
+    )
+    expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.oauthPreset).toBe('icloud')
+    expect(enrollmentProvider.sharedJoinerIdentity).toBeUndefined()
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      provider.oauthFile?.iCloudShareTarget,
+    )
+    expect(enrollmentProvider.oauthAccessToken).toBeUndefined()
   })
 })

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  acceptICloudSharedVault,
+  createICloudSharedVault,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
   prepareICloudSignInControl,
@@ -31,8 +33,155 @@ describe('icloud-oauth', () => {
       fileId: undefined,
       fileName: undefined,
       accountEmail: 'Apple User',
+      iCloudMode: 'private',
+      iCloudShareTarget: undefined,
       refreshToken: undefined,
       expiresAt: undefined,
+    })
+  })
+
+  describe('shared CloudKit target', () => {
+    beforeEach(() => {
+      resetICloudAuthStateForTests()
+      sessionStorage.clear()
+      vi.stubGlobal('CloudKit', {
+        configure: vi.fn(),
+        getDefaultContainer: vi.fn(),
+      })
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+      sessionStorage.clear()
+    })
+
+    it('creates a private custom zone and a private account share for the owner', async () => {
+      vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+        '11111111-1111-4111-8111-111111111111',
+      )
+      const saveRecordZones = vi.fn().mockResolvedValue({})
+      const saveRecords = vi.fn().mockResolvedValue({
+        records: [
+          {
+            recordType: 'NookVault',
+            recordName: 'nook-root-11111111-1111-4111-8111-111111111111',
+            shortGUID: 'share-guid',
+          },
+        ],
+      })
+      const shareWithUI = vi.fn().mockResolvedValue({})
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth: vi.fn().mockResolvedValue({
+          userRecordName: 'owner-record',
+        }),
+        whenUserSignsIn: vi.fn(),
+        privateCloudDatabase: {
+          saveRecordZones,
+          saveRecords,
+          shareWithUI,
+        },
+      })
+
+      const target = await createICloudSharedVault('nook-events')
+
+      expect(saveRecordZones).toHaveBeenCalledWith(
+        'nook-shared-11111111-1111-4111-8111-111111111111',
+      )
+      expect(saveRecords).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordType: 'NookVault',
+          createShortGUID: true,
+        }),
+        {
+          zoneID: 'nook-shared-11111111-1111-4111-8111-111111111111',
+        },
+      )
+      expect(shareWithUI).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shareTitle: 'nook-events',
+          supportedAccess: ['PRIVATE'],
+          supportedPermissions: ['READ_WRITE'],
+        }),
+      )
+      expect(target).toMatchObject({
+        role: 'owner',
+        ownerRecordName: 'owner-record',
+        rootRecordName: 'nook-root-11111111-1111-4111-8111-111111111111',
+        shortGuid: 'share-guid',
+      })
+      expect(target.storageTargetId).toContain('icloud-share-v1:')
+      expect(target.storageTargetId).not.toContain('ck-web-auth-token')
+    })
+
+    it('accepts the share and persists participant shared-database routing', async () => {
+      const fetchRecordInfos = vi.fn().mockResolvedValue({
+        results: [{ participantStatus: 'INVITED' }],
+      })
+      const acceptShares = vi.fn().mockResolvedValue({
+        results: [
+          {
+            zoneID: {
+              zoneName: 'shared-zone',
+              ownerRecordName: 'owner-record',
+            },
+            rootRecordName: 'shared-root',
+          },
+        ],
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth: vi.fn(),
+        whenUserSignsIn: vi.fn(),
+        acceptShares,
+        fetchRecordInfos,
+      })
+
+      const target = await acceptICloudSharedVault(
+        'https://www.icloud.com/share/share-guid',
+      )
+
+      expect(fetchRecordInfos).toHaveBeenCalledWith(['share-guid'])
+      expect(acceptShares).toHaveBeenCalledWith(['share-guid'])
+      expect(target).toMatchObject({
+        role: 'participant',
+        zoneName: 'shared-zone',
+        ownerRecordName: 'owner-record',
+        rootRecordName: 'shared-root',
+        shortGuid: 'share-guid',
+      })
+      expect(target.storageTargetId).toContain('icloud-share-v1:')
+      expect(target.storageTargetId).not.toContain('ck-web-auth-token')
+    })
+
+    it('reuses metadata for a share this account already accepted', async () => {
+      const acceptShares = vi.fn()
+      const fetchRecordInfos = vi.fn().mockResolvedValue({
+        results: [
+          {
+            participantStatus: 'ACCEPTED',
+            zoneID: {
+              zoneName: 'shared-zone',
+              ownerRecordName: 'owner-record',
+            },
+            rootRecordName: 'shared-root',
+          },
+        ],
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth: vi.fn(),
+        whenUserSignsIn: vi.fn(),
+        acceptShares,
+        fetchRecordInfos,
+      })
+
+      await expect(
+        acceptICloudSharedVault('share-guid'),
+      ).resolves.toMatchObject({
+        role: 'participant',
+        zoneName: 'shared-zone',
+        rootRecordName: 'shared-root',
+      })
+      expect(acceptShares).not.toHaveBeenCalled()
     })
   })
 

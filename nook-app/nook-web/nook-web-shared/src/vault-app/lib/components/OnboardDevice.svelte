@@ -160,6 +160,10 @@
   const usesSharedProviderGrant = $derived(
     derivedOnboardingType === 'shared-provider-grant',
   )
+  const requiresSharedJoinerIdentity = $derived(
+    usesSharedProviderGrant &&
+      selectedProvider?.oauthFile?.preset !== 'icloud',
+  )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
       undefined,
@@ -287,7 +291,7 @@
       localError = vault.t('onboard_device.enter_pw_err')
       return
     }
-    if (usesSharedProviderGrant && !vault.sharedJoinerIdentity.trim()) {
+    if (requiresSharedJoinerIdentity && !vault.sharedJoinerIdentity.trim()) {
       localError = vault.t('onboard_device.shared_identity_required')
       return
     }
@@ -801,7 +805,7 @@
             )}
           </p>
 
-          {#if usesSharedProviderGrant}
+          {#if requiresSharedJoinerIdentity}
             <div class="space-y-1.5">
               <label
                 for="shared-joiner-identity"

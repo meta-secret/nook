@@ -135,6 +135,13 @@ a visible folder and the following grant flow:
 
 This provider-account flow must not be used as Sentinel membership or quorum.
 
+iCloud exposes the same provider-level private/shared choice through CloudKit
+rather than a directory ACL. The owner creates a custom-zone root share, and a
+participant accepts its stable share identifier with a separate Apple sign-in.
+The persisted provider target carries CloudKit zone/root routing but no account
+credential. Owners route event I/O through the private database; participants
+route the same hierarchy through the shared database.
+
 ## Web Boundary
 
 Svelte may render vault type, Sentinel policy, ceremony progress, and provider

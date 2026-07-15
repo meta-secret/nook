@@ -218,6 +218,9 @@ test.describe('Google Drive provider modes', () => {
       await expect(
         collaborator.getByTestId('enrollment-scan-panel'),
       ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      await expect(
+        collaborator.getByTestId('enrollment-icloud-auth-toggle'),
+      ).toBeVisible()
       await collaborator
         .getByTestId('enrollment-password-input')
         .fill(VAULT_PASSWORD)
@@ -230,6 +233,51 @@ test.describe('Google Drive provider modes', () => {
       await collaborator.close()
       await collaboratorContext.close()
     }
+  })
+})
+
+test.describe('iCloud provider modes', () => {
+  test('switches from private CloudKit storage to a shared target', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const container = {
+        setUpAuth: async () => undefined,
+        whenUserSignsIn: () => new Promise(() => {}),
+      }
+      ;(
+        window as typeof window & {
+          CloudKit?: {
+            configure: () => void
+            getDefaultContainer: () => typeof container
+          }
+        }
+      ).CloudKit = {
+        configure: () => {},
+        getDefaultContainer: () => container,
+      }
+    })
+    await page.goto('/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+
+    await openLoginProviderSetup(page)
+    await page.getByTestId('provider-option-icloud').click()
+    await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+
+    await page.getByTestId('icloud-mode-shared').click()
+
+    await expect(page.getByTestId('icloud-mode-shared')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
   })
 })
 

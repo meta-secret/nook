@@ -50,6 +50,8 @@ interface OAuthFileConfig {
   accountEmail?: string
   driveMode?: 'private' | 'shared' // Google Drive only; absent legacy rows migrate
   folderId?: string               // shared mode only; stable Drive parent id
+  iCloudMode?: 'private' | 'shared' // iCloud only; absent legacy rows are private
+  iCloudShareTarget?: string        // versioned non-secret share/zone/root target
 }
 ```
 
@@ -90,6 +92,16 @@ even when the vault's legacy/default `replication_type` is `personal`. The
 joining browser signs into its own Google account and saves its own token. The
 owner may grant that account access to the already-persisted folder, but
 onboarding must not create a replacement folder or transfer owner credentials.
+
+**iCloud modes:** Private mode preserves the legacy default private CloudKit
+database behavior. Shared mode creates a custom private record zone and a
+shareable root record. The owner accesses that hierarchy through the private
+database; after accepting the share, each participant accesses it through their
+shared database. Every event record is parented to the shared root. The saved
+`iCloudShareTarget` contains only the stable short GUID, zone owner/name, root
+record name, and owner/participant routing role. Enrollment copies that target,
+never the owner's CloudKit web-auth token; the recipient signs into Apple and
+accepts the share with their own account before sync.
 
 **Local-folder provider availability:** Local backup uses the browser File
 System Access directory API (`showDirectoryPicker`) and persisted structured

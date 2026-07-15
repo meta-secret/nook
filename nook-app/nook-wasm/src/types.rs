@@ -31,6 +31,7 @@ export type NookStorageProviderType =
 
 export type NookOAuthFilePreset = 'google-drive' | 'icloud';
 export type NookGoogleDriveMode = 'private' | 'shared';
+export type NookICloudMode = 'private' | 'shared';
 
 export interface NookOAuthFileConfig {
   preset: NookOAuthFilePreset;
@@ -43,6 +44,9 @@ export interface NookOAuthFileConfig {
   driveMode?: NookGoogleDriveMode;
   /** Shared-mode My Drive folder id (`drive.file` + `drive.readonly`). */
   folderId?: string;
+  iCloudMode?: NookICloudMode;
+  /** Non-secret serialized CloudKit share/zone routing target. */
+  iCloudShareTarget?: string;
 }
 
 export interface NookLocalFolderProviderConfig {
@@ -648,6 +652,12 @@ impl NookEnrollmentProvider {
         })
     }
 
+    #[wasm_bindgen(js_name = iCloudShared)]
+    #[must_use]
+    pub fn icloud_shared(storage_target_id: String) -> Self {
+        Self(nook_core::EnrollmentProvider::ICloudShared { storage_target_id })
+    }
+
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
         Self(provider)
     }
@@ -663,7 +673,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::Local => nook_core::StorageProviderType::Local,
             nook_core::EnrollmentProvider::Github { .. } => nook_core::StorageProviderType::Github,
             nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => {
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => {
                 nook_core::StorageProviderType::OauthFile
             }
         }
@@ -675,6 +686,7 @@ impl NookEnrollmentProvider {
         matches!(
             self.0,
             nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+                | nook_core::EnrollmentProvider::ICloudShared { .. }
         )
     }
 
@@ -684,7 +696,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::Github { pat, .. } => Some(pat.clone()),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -694,7 +707,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::Github { repo, .. } => Some(repo.clone()),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -705,6 +719,7 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::SharedProviderGrant { oauth_preset, .. } => {
                 oauth_preset.clone()
             }
+            nook_core::EnrollmentProvider::ICloudShared { .. } => Some("icloud".to_owned()),
             nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
                 None
             }
@@ -719,7 +734,8 @@ impl NookEnrollmentProvider {
             }
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -729,7 +745,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::OauthFile { refresh_token, .. } => refresh_token.clone(),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -739,7 +756,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::OauthFile { expires_at, .. } => expires_at.clone(),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -749,7 +767,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::OauthFile { file_id, .. } => file_id.clone(),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -759,7 +778,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::OauthFile { file_name, .. } => file_name.clone(),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -769,7 +789,8 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::OauthFile { account_email, .. } => account_email.clone(),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -782,7 +803,8 @@ impl NookEnrollmentProvider {
             } => Some(joiner_identity_kind.clone()),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::OauthFile { .. } => None,
+            | nook_core::EnrollmentProvider::OauthFile { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -794,7 +816,8 @@ impl NookEnrollmentProvider {
             } => Some(joiner_identity.clone()),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::OauthFile { .. } => None,
+            | nook_core::EnrollmentProvider::OauthFile { .. }
+            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
         }
     }
 
@@ -804,6 +827,9 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::SharedProviderGrant {
                 storage_target_id, ..
             } => storage_target_id.clone(),
+            nook_core::EnrollmentProvider::ICloudShared { storage_target_id } => {
+                Some(storage_target_id.clone())
+            }
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
             | nook_core::EnrollmentProvider::OauthFile { .. } => None,

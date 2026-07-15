@@ -16,12 +16,14 @@ import {
   saveAuthProviders as saveAuthProvidersWasm,
   sealAuthProvidersForDevicePublicKey as sealAuthProvidersForDevicePublicKeyWasm,
   setGoogleDriveProviderMode as setGoogleDriveProviderModeWasm,
+  setICloudProviderMode as setICloudProviderModeWasm,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookAuthProvidersSnapshot,
   type NookLoadedAuthProviders,
   type NookLocalAuthProviderSnapshot,
   type NookLocalFolderProviderConfig,
   type NookGoogleDriveMode,
+  type NookICloudMode,
   type NookOAuthFileConfig,
   type NookOAuthFilePreset,
   type NookStorageProvider,
@@ -34,6 +36,7 @@ await initNookWasm();
 export type StorageProviderType = NookStorageProviderType;
 export type OAuthFilePreset = NookOAuthFilePreset;
 export type GoogleDriveMode = NookGoogleDriveMode;
+export type ICloudMode = NookICloudMode;
 export type OAuthFileConfig = NookOAuthFileConfig;
 export type LocalFolderConfig = NookLocalFolderProviderConfig;
 export type StorageProvider = NookStorageProvider;
@@ -66,6 +69,13 @@ export function setGoogleDriveProviderMode(
     toPlain(config),
     mode,
   ) as OAuthFileConfig;
+}
+
+export function setICloudProviderMode(
+  config: OAuthFileConfig,
+  mode: ICloudMode,
+): OAuthFileConfig {
+  return setICloudProviderModeWasm(toPlain(config), mode) as OAuthFileConfig;
 }
 
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
