@@ -102,16 +102,16 @@ tasks:
         if [ "$(uname -s)" = Darwin ]; then
           bind_ip=127.0.0.1;
         else
-          bind_ip="$({{.DOCKER}} network inspect bridge | jq -r '\''.[0].IPAM.Config[0].Gateway'\'')";
+          bind_ip="$({{.DOCKER}} network inspect bridge | awk -F\" '\''/\"Gateway\":/ { print $4; exit }'\'')";
         fi;
         test -n "$bind_ip" && [ "$bind_ip" != null ];
         config="image=$image;volume=$volume;bind=$bind_ip;port=$port;maxmemory=$maxmemory";
         if {{.DOCKER}} container inspect "$name" >/dev/null 2>&1; then
-          existing="$({{.DOCKER}} container inspect "$name" | jq -r '\''.[0].Config.Labels["org.meta-secret.nook.sccache-redis.config"] // ""'\'')";
+          existing="$({{.DOCKER}} container inspect "$name" | awk -F\" '\''/\"org.meta-secret.nook.sccache-redis.config\":/ { print $4; exit }'\'')";
           if [ "$existing" != "$config" ]; then
             echo "task sccache:ensure: replacing stale $name configuration";
             {{.DOCKER}} rm -f "$name" >/dev/null;
-          elif [ "$({{.DOCKER}} container inspect "$name" | jq -r '\''.[0].State.Running'\'')" != true ]; then
+          elif [ "$({{.DOCKER}} container inspect "$name" | awk '\''/\"Running\":/ { gsub(/,/, "", $2); print $2; exit }'\'')" != true ]; then
             {{.DOCKER}} start "$name" >/dev/null;
           fi;
         fi;

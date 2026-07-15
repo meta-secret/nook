@@ -31,6 +31,10 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
         !app_tasks.contains("--publish \"0.0.0.0:"),
         "the compiler cache must never publish Redis on every host interface"
     );
+    assert!(
+        !app_tasks.contains("| jq"),
+        "sccache bootstrap must not add jq to the host prerequisites"
+    );
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("\"host.docker.internal\" = \"host-gateway\""));
