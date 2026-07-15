@@ -1,0 +1,76 @@
+# Event-driven continuation for PRs opened by Nook's hosted agents.
+#
+# The implementation/fix job exits after opening a marked PR. This workflow is
+# woken by PR-head changes and by completion of Nook's own PR/Web research
+# workflows. It never subscribes to Codex or another external review/check.
+
+name: Agent PR monitor
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: [PR, Web research]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    agent-pr-monitor-${{
+      github.event.pull_request.number ||
+      github.event.workflow_run.pull_requests[0].number ||
+      github.run_id
+    }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Evaluate exact-head readiness
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0].number != null)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      deployments: read
+      issues: write
+      pull-requests: write
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      PR_NUMBER: >-
+        ${{
+          github.event.pull_request.number ||
+          github.event.workflow_run.pull_requests[0].number
+        }}
+    steps:
+      # pull_request_target is safe here because only default-branch monitor code
+      # is checked out; no PR-controlled code or action is executed with the PAT.
+      - name: Checkout trusted monitor
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: agentic-ai/ci-agent/package-lock.json
+
+      - name: Build monitor
+        working-directory: agentic-ai/ci-agent
+        run: npm ci && npm run build
+
+      - name: Evaluate event and squash-merge when ready
+        working-directory: agentic-ai/ci-agent
+        env:
+          # The PAT is intentional: merges performed by GITHUB_TOKEN do not
+          # trigger the normal main workflow. It also matches agent-created PRs.
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+        run: node dist/main/main.js pr-event

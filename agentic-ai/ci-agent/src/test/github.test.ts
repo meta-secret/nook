@@ -6,6 +6,7 @@ import type { Octokit } from "@octokit/rest";
 import {
   assertNoPendingPrFeedback,
   requiredPrCheckNames,
+  requiredPrWorkflows,
   waitForPrChecks,
 } from "../main/github.js";
 
@@ -28,30 +29,51 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ]),
     ["Build and deploy research catalog", "Verify and preview"],
   );
+  assert.deepEqual(requiredPrWorkflows(["nook-app/nook-core/src/lib.rs"]), [
+    {
+      checkName: "Verify and preview",
+      workflowFile: "pr.yml",
+      workflowName: "PR",
+    },
+  ]);
 });
 
-test("waitForPrChecks ignores pending external checks", async () => {
+test("waitForPrChecks ignores external checks and accepts a completed repository run", async () => {
   const octokit = mockOctokit({
     files: ["nook-app/nook-core/src/lib.rs"],
-    checkRuns: [
-      checkRun("Codex", "in_progress"),
-      checkRun("Verify and preview", "completed", "success"),
-    ],
+    workflowRuns: [workflowRun(41, "completed", "success")],
   });
 
-  await waitForPrChecks(octokit, repoRef, 347, 0, 1_000);
+  await waitForPrChecks(octokit, repoRef, 347, { discoveryTimeoutMs: 100 });
 });
 
 test("waitForPrChecks fails a repository-owned check", async () => {
   const octokit = mockOctokit({
     files: ["nook-app/nook-core/src/lib.rs"],
-    checkRuns: [checkRun("Verify and preview", "completed", "failure")],
+    workflowRuns: [workflowRun(42, "completed", "failure")],
   });
 
   await assert.rejects(
-    waitForPrChecks(octokit, repoRef, 347, 0, 1_000),
-    /repository-owned checks failed/,
+    waitForPrChecks(octokit, repoRef, 347, { discoveryTimeoutMs: 100 }),
+    /completed with failure/,
   );
+});
+
+test("waitForPrChecks delegates an active repository run to the event watcher", async () => {
+  const watched: number[] = [];
+  const octokit = mockOctokit({
+    files: ["nook-app/nook-core/src/lib.rs"],
+    workflowRuns: [workflowRun(43, "in_progress")],
+  });
+
+  await waitForPrChecks(octokit, repoRef, 347, {
+    discoveryTimeoutMs: 100,
+    watcher: async (_repo, runId) => {
+      watched.push(runId);
+    },
+  });
+
+  assert.deepEqual(watched, [43]);
 });
 
 test("assertNoPendingPrFeedback ignores repository status comments", async () => {
@@ -83,7 +105,7 @@ test("assertNoPendingPrFeedback blocks unresolved review threads", async () => {
 
 type MockOptions = {
   files?: string[];
-  checkRuns?: Array<ReturnType<typeof checkRun>>;
+  workflowRuns?: Array<ReturnType<typeof workflowRun>>;
   issueComments?: Array<{ body: string }>;
   reviews?: Array<{ commit_id: string; state: string; body: string }>;
   unresolvedThreads?: number;
@@ -104,8 +126,10 @@ function mockOctokit(options: MockOptions): Octokit {
     rest: {
       pulls,
       issues,
-      checks: {
-        listForRef: async () => ({ data: { check_runs: options.checkRuns ?? [] } }),
+      actions: {
+        listWorkflowRuns: async () => ({
+          data: { workflow_runs: options.workflowRuns ?? [] },
+        }),
       },
     },
     paginate: async (
@@ -128,15 +152,17 @@ function mockOctokit(options: MockOptions): Octokit {
   return octokit as unknown as Octokit;
 }
 
-function checkRun(
-  name: string,
+function workflowRun(
+  id: number,
   status: "queued" | "in_progress" | "completed",
   conclusion?: string,
 ) {
   return {
-    name,
+    id,
     status,
-    conclusion,
-    app: { slug: name === "Codex" ? "codex" : "github-actions" },
+    conclusion: conclusion ?? null,
+    created_at: "2026-07-15T00:00:00Z",
+    head_sha: "head-sha",
+    pull_requests: [{ number: 347 }],
   };
 }

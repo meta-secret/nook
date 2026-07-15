@@ -8,12 +8,14 @@ ARG NODE_IMAGE=node:24-bookworm-slim
 ARG TASK_VERSION=3.42.1
 ARG DOCKER_STATIC_VERSION=27.5.1
 ARG BUILDX_VERSION=0.35.0
+ARG GH_CLI_VERSION=2.74.2
 
 FROM ${NODE_IMAGE}
 
 ARG TASK_VERSION
 ARG DOCKER_STATIC_VERSION
 ARG BUILDX_VERSION
+ARG GH_CLI_VERSION
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -40,6 +42,14 @@ RUN mkdir -p /usr/local/lib/docker/cli-plugins \
 
 RUN curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin "v${TASK_VERSION}" \
     && task --version
+
+# The PR monitor delegates the long wait to GitHub CLI's run watcher. This
+# removes the agent's API polling loop and wakes it only when the selected
+# repository-owned workflow changes state.
+RUN curl -fsSL \
+      "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" \
+    | tar xz --strip-components=2 -C /usr/local/bin "gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" \
+    && gh --version
 
 WORKDIR /opt/ci-agent
 

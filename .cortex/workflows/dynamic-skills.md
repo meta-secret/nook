@@ -81,5 +81,6 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/ARCHITECTURE.md`](../ARCHITECTURE.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run the smallest meaningful local validation first, then `task check` before
-   push for implementation tasks.
+6. Run the smallest meaningful local validation first. For implementation
+   tasks, push the coherent iteration before `task check`, then run the required
+   local gate while `task pr:monitor PR=<number>` watches repository CI.

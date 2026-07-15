@@ -15,9 +15,11 @@ handoff:
    the feature branch with focused local checks while iterating.
 3. **Push and create/update the PR** — push a coherent commit and open the PR;
    later fixes update that same PR.
-4. **Monitor Nook's applicable PR test checks** — normally `PR / Verify and
-   preview`, plus `Web research / Build and deploy research catalog` when
-   web-research paths change. Never monitor or wait for an external review or check.
+4. **Preflight and event-watch Nook's applicable PR test checks** — run `task
+   pr:preflight PR=<number>` followed by `task pr:monitor PR=<number>` for
+   normally `PR / Verify and preview`, plus `Web research / Build and deploy
+   research catalog` when web-research paths change. Never monitor or wait for
+   an external review or check.
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for
    web/e2e failures, fix locally, push the completed fix, and re-watch the
    repository-owned check until green.
@@ -107,6 +109,10 @@ Never request or wait for Codex or another external reviewer. Automatic reviews
 may produce useful comments, but they are optional and non-blocking. See
 [code-review.md](code-review.md).
 
+There is no review-batching grace period: snapshot whatever feedback already
+exists at this boundary, handle it, and continue. In particular, do not wait for
+Codex Cloud review to begin or finish.
+
 ### 5. Local checks
 
 **Remote PR CI is cache-warm but still a full validation gate.** `pr.yml` uses
@@ -156,6 +162,7 @@ After a remote failure, fix the root cause, push the completed fix, and run
 | When                            | Command                                 | Why                                                        |
 | ------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
 | While debugging e2e             | `E2E_SPEC=… task web:test:e2e:file`     | Fast feedback — one spec, not the full suite               |
+| Extension/package iteration     | `task extension:check:fast`             | Host-cached extension security and build checks            |
 | Final validation boundary       | `git push` / `gh pr create`            | Start remote CI before long local checks                   |
 | Normal final local gate         | `task check` (+ scoped e2e when needed) | Cached local Docker; runs in parallel with remote CI       |
 | Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr:e2e` | Explicit full local-provider or web + extension e2e        |
@@ -205,13 +212,15 @@ that can remain blocked on external services. If neither repository workflow
 applies to the changed paths, there is no remote check to wait for.
 
 ```bash
-head_sha="$(gh pr view <number> --json headRefOid --jq .headRefOid)"
-pr_run_id="$(gh run list --workflow PR --commit "$head_sha" \
-  --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$pr_run_id" # repeat the current-head lookup if the applicable run is not indexed yet
-gh run watch "$pr_run_id" --exit-status
-# Repeat with --workflow "Web research" when web-research paths changed.
+task pr:preflight PR=<number>
+task pr:monitor PR=<number>
 ```
+
+`pr:monitor` performs a bounded lookup while GitHub indexes the exact-head run,
+then delegates the long wait to `gh run watch`. The agent itself has no status
+polling loop, and only the path-applicable `PR` and `Web research` workflows are
+selected. Codex and every other external review/check are absent from the
+monitor contract.
 
 Do not request, poll, or wait for Codex, Claude, Cursor, CodeRabbit, or any other
 external review/check/deployment. Do not add a grace period after the Nook PR
@@ -239,12 +248,8 @@ merge or enable auto-merge until this freshness check passes:
 ```bash
 git merge origin/main --no-edit
 git push origin HEAD
-head_sha="$(gh pr view <number> --json headRefOid --jq .headRefOid)"
-pr_run_id="$(gh run list --workflow PR --commit "$head_sha" \
-  --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$pr_run_id" # repeat the current-head lookup if the applicable run is not indexed yet
-gh run watch "$pr_run_id" --exit-status
-# Repeat with --workflow "Web research" when web-research paths changed.
+task pr:monitor PR=<number>
+task pr:ready PR=<number>
 ```
 
 ### 6.1. Address review comments

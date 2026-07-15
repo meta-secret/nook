@@ -36,6 +36,22 @@ describe('extension origin isolation', () => {
           matches.includes(environment.sentinel),
         ),
       ).toBe(false)
+      const broadScripts = manifest.content_scripts.filter(({ matches }) =>
+        matches.includes('<all_urls>'),
+      )
+      expect(broadScripts.length).toBeGreaterThan(0)
+      expect(
+        broadScripts.every(({ exclude_matches }) =>
+          exclude_matches.includes(simpleMatch),
+        ),
+      ).toBe(true)
+      expect(
+        manifest.content_scripts.some(
+          ({ matches, exclude_matches }) =>
+            matches.includes(simpleMatch) &&
+            !exclude_matches.includes(simpleMatch),
+        ),
+      ).toBe(true)
     })
   }
 

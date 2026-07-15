@@ -274,12 +274,16 @@ task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
 task extension:build       # browser extension package
+task extension:check:fast  # host-cached extension format/unit/manifest/security gate
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
 task extension:install:hosted PR=410 # verify and install an isolated hosted PR build
 task extension:run:chrome CHANNEL=dev # launch a hosted build in an isolated Chrome profile
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile
 task ci:pr                 # fast local mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
+task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
+task pr:monitor PR=410     # event-watch repository workflows only; never waits for Codex
+task pr:ready PR=410       # machine-readable final merge-readiness assertion
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
 ```

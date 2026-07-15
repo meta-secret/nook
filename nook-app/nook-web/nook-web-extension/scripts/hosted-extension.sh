@@ -149,7 +149,11 @@ validate_extracted_manifest() {
       and (.key | type == "string" and length > 0)
       and .externally_connectable.matches == [$simple]
       and any(.content_scripts[]; .matches == [$simple])
-      and all(.content_scripts[]; .exclude_matches | index($simple) != null)
+      and all(.content_scripts[];
+        if (.matches | index("<all_urls>") != null)
+        then .exclude_matches | index($simple) != null
+        else true
+        end)
       and all(.content_scripts[]; .exclude_matches | index($sentinel) != null)
       and all(.content_scripts[]; .exclude_matches | index($production_sentinel) != null)
       and all(.content_scripts[]; .matches | index($sentinel) == null)

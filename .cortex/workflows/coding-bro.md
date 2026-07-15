@@ -25,16 +25,18 @@ Default PR-first loop:
    focused local checks while iterating.
 3. **Push and create/update the PR** — once the branch has a coherent commit,
    push it and open the PR; subsequent fixes update the same PR.
-4. **Monitor Nook's applicable PR test checks** — normally `PR / Verify and
-   preview`, plus `Web research / Build and deploy research catalog` when
-   web-research paths change.
+4. **Preflight and event-watch Nook's applicable PR test checks** — run `task
+   pr:preflight PR=<number>`, then `task pr:monitor PR=<number>` for normally `PR
+   / Verify and preview`, plus `Web research / Build and deploy research catalog`
+   when web-research paths change. The monitor delegates long-lived state
+   tracking to exact workflow-run watchers instead of an agent polling loop.
 5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
    logs for web/e2e failures, fix locally, push the completed fix, and re-watch
    the refreshed repository-owned check.
 6. **Address comments already present** — reply to actionable human, Codex, and
    automated review comments with the fix, validation, or no-change rationale
    before resolving/considering them complete. Never wait for new feedback.
-7. **Merge when ready** — when the branch is current, Nook's applicable
+7. **Merge when ready** — require `task pr:ready PR=<number>`, then when the branch is current, Nook's applicable
    repository-owned PR test checks are green, and actionable comments currently present are
    handled, squash-merge the PR if the user asked for merge-on-green. Never
    delay for an external review, check, deployment, or service.
@@ -88,7 +90,8 @@ Default agent flow:
 2. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
 3. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
 4. **Validate locally in parallel** — immediately run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e:pr` or `task ci:pr:e2e` when web/vault/sync flows change.
-5. **Monitor only Nook's applicable PR test checks** — normally `PR / Verify and
+5. **Event-watch only Nook's applicable PR test checks** — run `task
+   pr:monitor PR=<number>` for normally `PR / Verify and
    preview`, plus `Web research / Build and deploy research catalog` for
    web-research paths. Never request, poll,
    monitor, or wait for Codex or another external service. See
@@ -221,6 +224,7 @@ Scoped subsets when the touch surface is narrow:
 ```bash
 task web:check && task web:test    # web-only
 task rust:test                     # nook-core + nook-auth2 only
+task extension:check:fast          # host-cached extension security/build checks
 ```
 
 **E2e during fix/debug — one spec at a time.** Do not wait for the full suite while iterating. Run the failing or touched spec only:
@@ -258,13 +262,7 @@ gh run view <run-id> --log-failed   # CI job output
 # For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
 task ci:pr                          # full PR mirror (no browser e2e)
-# fix, push the completed fix, and run the local gate while CI refreshes
-head_sha="$(gh pr view <number> --json headRefOid --jq .headRefOid)"
-pr_run_id="$(gh run list --workflow PR --commit "$head_sha" \
-  --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$pr_run_id" # repeat the current-head lookup if the applicable run is not indexed yet
-gh run watch "$pr_run_id" --exit-status
-# Repeat with --workflow "Web research" when web-research paths changed.
+task pr:monitor PR=<number>         # exact-head repository workflows only
 ```
 
 `task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. The automatic full browser gate is main-only (`task ci:main`).
@@ -298,12 +296,8 @@ Include scoped e2e or `task ci:pr:e2e` when the touch surface warrants it (see s
 ```bash
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
-head_sha="$(gh pr view <number> --json headRefOid --jq .headRefOid)"
-pr_run_id="$(gh run list --workflow PR --commit "$head_sha" \
-  --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$pr_run_id" # repeat the current-head lookup if the applicable run is not indexed yet
-gh run watch "$pr_run_id" --exit-status
-# Repeat with --workflow "Web research" when web-research paths changed.
+task pr:preflight PR=<number>
+task pr:monitor PR=<number>
 ```
 
 Before every merge attempt, verify the PR branch is current with the latest base
@@ -320,12 +314,8 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 # If the branch is behind origin/main:
 git merge origin/main --no-edit
 git push origin HEAD
-head_sha="$(gh pr view <number> --json headRefOid --jq .headRefOid)"
-pr_run_id="$(gh run list --workflow PR --commit "$head_sha" \
-  --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$pr_run_id" # repeat the current-head lookup if the applicable run is not indexed yet
-gh run watch "$pr_run_id" --exit-status
-# Repeat with --workflow "Web research" when web-research paths changed.
+task pr:monitor PR=<number>
+task pr:ready PR=<number>
 ```
 
 ### 11 — Merge

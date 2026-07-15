@@ -178,13 +178,34 @@ jobs:
             echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
             exit 1
           fi
-          EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
-          EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
-          EXPECTED_EXTENSION_COMMIT="${{ github.event.pull_request.head.sha }}" \
-          EXPECTED_EXTENSION_SITE_URL="$site_url/" \
-          EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
-          EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
-            bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
+          extension_verified=false
+          last_extension_output=''
+          for attempt in $(seq 1 12); do
+            set +e
+            last_extension_output="$(
+              EXTENSION_METADATA_URL="$site_url/downloads/extension.json?nook_commit=${{ github.event.pull_request.head.sha }}" \
+              EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
+              EXPECTED_EXTENSION_COMMIT="${{ github.event.pull_request.head.sha }}" \
+              EXPECTED_EXTENSION_SITE_URL="$site_url/" \
+              EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
+              EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
+                bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh 2>&1
+            )"
+            extension_status=$?
+            set -e
+            if [ "$extension_status" -eq 0 ]; then
+              printf '%s\n' "$last_extension_output"
+              extension_verified=true
+              break
+            fi
+            echo "Waiting for exact-head extension metadata (attempt $attempt/12)"
+            sleep 5
+          done
+          if [ "$extension_verified" != true ]; then
+            printf '%s\n' "$last_extension_output" >&2
+            echo "::error::Extension metadata did not converge to the exact PR head"
+            exit 1
+          fi
           echo "site_url=$site_url" >> "$GITHUB_OUTPUT"
           echo "simple_url=$simple_url" >> "$GITHUB_OUTPUT"
           echo "sentinel_url=$sentinel_url" >> "$GITHUB_OUTPUT"

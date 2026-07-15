@@ -27,6 +27,18 @@ tasks:
       - task: docker:task
         vars: { TASK: _extension:check }
 
+  extension:check:fast:
+    desc: Run host-cached extension format, unit/manifest, shell, and hosted-launcher checks without building WASM or Docker.
+    preconditions:
+      - sh: test -x "{{.WEB_ROOT}}/node_modules/.bin/tsc"
+        msg: Run `cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile` once to seed host web dependencies.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run format:check
+      - cd "{{.EXTENSION_ROOT}}" && bun test scripts src/lib
+      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
+      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
+      - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
+
   extension:test:e2e:
     desc: Run browser extension Playwright e2e in Docker.
     deps:

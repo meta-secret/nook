@@ -58,6 +58,13 @@ cat > "$fixture/archive/manifest.json" <<'EOF'
   "content_scripts": [{
     "matches": ["https://pr-410.nokey-simple.pages.dev/*"],
     "exclude_matches": [
+      "https://sentinel.nokey.sh/*",
+      "https://pr-410.nokey-sentinel.pages.dev/*"
+    ],
+    "js": ["service-worker.js"]
+  }, {
+    "matches": ["<all_urls>"],
+    "exclude_matches": [
       "https://pr-410.nokey-simple.pages.dev/*",
       "https://sentinel.nokey.sh/*",
       "https://pr-410.nokey-sentinel.pages.dev/*"
