@@ -55,7 +55,7 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
 
       - name: Preflight, check, build, and e2e
-        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} WASM_BUILD_MODE=dev
+        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
         env:
           CI: true
           GIT_COMMIT_ID: ${{ github.sha }}
@@ -72,7 +72,7 @@ jobs:
         run: |
           # ci:main prepared the sealed image; deploy it without a second setup/bake.
           set +e
-          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
+          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
           status=$?
           set -e
           echo "$out"
