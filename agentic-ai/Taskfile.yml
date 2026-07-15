@@ -3,12 +3,98 @@ version: '3'
 vars:
   CI_AGENT_DIR: agentic-ai/ci-agent
   CI_AGENT_IMAGE: '{{default "nook-ci-agent:local" .CI_AGENT_IMAGE}}'
+  META_AGENT_DIR: agentic-ai/meta-agent
   # Host Docker socket (sibling containers via sock — not DinD). Override on unusual setups.
   DOCKER_SOCK: '{{default "/var/run/docker.sock" .DOCKER_SOCK}}'
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
+  meta-agent:check:
+    desc: Run meta-agent Rust format, Clippy, and unit tests on the host.
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - cargo fmt --manifest-path {{.META_AGENT_DIR}}/Cargo.toml --all -- --check
+      - cargo clippy --manifest-path {{.META_AGENT_DIR}}/Cargo.toml --locked --all-targets -- -D warnings
+      - cargo test --manifest-path {{.META_AGENT_DIR}}/Cargo.toml --locked
+
+  meta-agent:build:
+    desc: Build the meta-agent host CLI in release mode.
+    dir: '{{.ROOT_DIR}}'
+    sources:
+      - agentic-ai/meta-agent/Cargo.toml
+      - agentic-ai/meta-agent/Cargo.lock
+      - agentic-ai/meta-agent/src/**/*
+    generates:
+      - agentic-ai/meta-agent/target/release/meta-agent
+    cmds:
+      - cargo build --manifest-path {{.META_AGENT_DIR}}/Cargo.toml --locked --release
+
+  meta-agent:plan:
+    desc: Convert PROMPT into a validated local feature DAG using embedded Codex crates.
+    silent: true
+    requires:
+      vars:
+        - PROMPT
+    vars:
+      REPO_ROOT:
+        sh: 'git rev-parse --show-toplevel'
+      FEATURE_OUTPUT_ROOT: '{{default "agentic-ai/meta-agent/target/features" .FEATURE_OUTPUT_ROOT}}'
+      META_AGENT_MODEL: '{{default "gpt-5.6-luna" .META_AGENT_MODEL}}'
+      META_AGENT_REASONING_EFFORT: '{{default "low" .META_AGENT_REASONING_EFFORT}}'
+    env:
+      META_AGENT_PROMPT: '{{.PROMPT}}'
+      META_AGENT_OUTPUT_ROOT: '{{.FEATURE_OUTPUT_ROOT}}'
+      META_AGENT_SELECTED_MODEL: '{{.META_AGENT_MODEL}}'
+      META_AGENT_SELECTED_REASONING_EFFORT: '{{.META_AGENT_REASONING_EFFORT}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        repo_root="{{.REPO_ROOT}}";
+        args=(plan --repo-root "$repo_root" --output-root "$META_AGENT_OUTPUT_ROOT");
+        args+=(--model "$META_AGENT_SELECTED_MODEL" --reasoning-effort "$META_AGENT_SELECTED_REASONING_EFFORT");
+        printf "%s\n" "$META_AGENT_PROMPT" | cargo run --quiet --manifest-path "$repo_root/agentic-ai/meta-agent/Cargo.toml" --locked -- "${args[@]}"'
+
+  meta-agent:validate:
+    desc: Validate FEATURE and print its dependency/resource-safe execution batches.
+    silent: true
+    requires:
+      vars:
+        - FEATURE
+    vars:
+      REPO_ROOT:
+        sh: 'git rev-parse --show-toplevel'
+    env:
+      META_AGENT_FEATURE: '{{.FEATURE}}'
+    cmds:
+      - >-
+        cargo run --quiet --manifest-path "{{.REPO_ROOT}}/agentic-ai/meta-agent/Cargo.toml" --locked -- validate "$META_AGENT_FEATURE"
+
+  meta-agent:execute:
+    desc: Execute FEATURE as a dependency/resource-safe graph of embedded Codex agents.
+    silent: true
+    requires:
+      vars:
+        - FEATURE
+    vars:
+      REPO_ROOT:
+        sh: 'git rev-parse --show-toplevel'
+      META_AGENT_MODEL: '{{default "gpt-5.6-luna" .META_AGENT_MODEL}}'
+      META_AGENT_REASONING_EFFORT: '{{default "low" .META_AGENT_REASONING_EFFORT}}'
+    env:
+      META_AGENT_FEATURE: '{{.FEATURE}}'
+      META_AGENT_SELECTED_MODEL: '{{.META_AGENT_MODEL}}'
+      META_AGENT_SELECTED_REASONING_EFFORT: '{{.META_AGENT_REASONING_EFFORT}}'
+    cmds:
+      - >-
+        cargo run --quiet
+        --manifest-path "{{.REPO_ROOT}}/agentic-ai/meta-agent/Cargo.toml"
+        --locked
+        -- execute "$META_AGENT_FEATURE"
+        --repo-root "{{.REPO_ROOT}}"
+        --model "$META_AGENT_SELECTED_MODEL"
+        --reasoning-effort "$META_AGENT_SELECTED_REASONING_EFFORT"
+
   ci-agent:install:
     internal: true
     dir: '{{.CI_AGENT_DIR}}'

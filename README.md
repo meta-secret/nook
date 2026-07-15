@@ -167,6 +167,7 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
 | `nook-web-app` | Public site and unified local e2e harness |
 | `nook-web-extension` | Simple-only Manifest V3 integration: toolbar-to-vault, website consent, and contextual site widget |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
+| `agentic-ai/meta-agent` | Rust CLI that plans validated task DAGs and executes safe waves with embedded Codex agents |
 
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
@@ -177,6 +178,7 @@ Deeper documentation lives in [`.cortex/`](.cortex/):
 - [Password manager](.cortex/product-specs/password-manager.md)
 - [Decentralized multi-device auth](.cortex/product-specs/decentralized-auth.md)
 - [Engineering principles](.cortex/design-docs/core-beliefs.md)
+- [Meta-agent feature DAG](.cortex/design-docs/meta-agent-feature-dag.md)
 - [Agent map](.cortex/AGENTS.md)
 
 ## Run locally
@@ -185,9 +187,27 @@ Prerequisites:
 
 - Docker with Buildx
 - [Task](https://taskfile.dev/)
+- Rust 1.96 and existing Codex authentication under `CODEX_HOME` for `meta-agent:*` commands
 
-The root `Taskfile.yml` is the repository entrypoint. All compile, test, and
-package installs run inside the project container.
+The root `Taskfile.yml` is the repository entrypoint. Application compile,
+test, and package-install commands run inside project containers. Meta-agent
+commands are included from `agentic-ai/Taskfile.yml` and run as host processes
+with one lockfile-resolved OpenAI Codex Rust facade from `main`, so they can use the current worktree and
+existing Codex authentication directly without starting a Codex subprocess.
+
+Plan a large coding feature as a dependency and resource-aware task DAG after authenticating Codex on the host:
+
+```sh
+task meta-agent:plan PROMPT='Describe the feature and its required outcome'
+task meta-agent:validate FEATURE=agentic-ai/meta-agent/target/features/<feature-id>
+task meta-agent:execute FEATURE=agentic-ai/meta-agent/target/features/<feature-id>
+```
+
+The generated `feature.yaml`, parent `feature.md`, and child `<task-id>.md` files
+stay under the ignored `agentic-ai/meta-agent/target/features/` tree for local
+review. Execution starts independent tasks concurrently, waits for successful
+completion, and then unlocks their dependents. It modifies the current worktree
+but does not publish GitHub issues or create commits or branches.
 
 ```sh
 task web:dev

@@ -1,0 +1,41 @@
+name: Meta-agent
+
+on:
+  pull_request:
+    paths:
+      - agentic-ai/meta-agent/**
+      - agentic-ai/Taskfile.yml
+      - .github/workflows/meta-agent.yml
+  push:
+    branches:
+      - main
+    paths:
+      - agentic-ai/meta-agent/**
+      - agentic-ai/Taskfile.yml
+      - .github/workflows/meta-agent.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meta-agent-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Rust format, Clippy, and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: clippy,rustfmt
+
+      - name: Check meta-agent
+        run: task meta-agent:check

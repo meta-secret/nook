@@ -11,7 +11,7 @@ includes:
     taskfile: nook-app/Taskfile.yml
     flatten: true
   agentic-ai:
-    taskfile: .task/agentic-ai.yml
+    taskfile: agentic-ai/Taskfile.yml
     flatten: true
   ai-debug:
     taskfile: .task/ai-debug.yml

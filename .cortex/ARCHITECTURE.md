@@ -11,12 +11,15 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 root/
 ├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
+├── agentic-ai/
+│   ├── Taskfile.yml      (host meta-agent and containerized CI-agent commands)
+│   ├── ci-agent/         (Cursor-based implementation and CI repair harness)
+│   └── meta-agent/       (Rust feature-DAG planner/executor with embedded Codex crates)
 ├── preflight/            (standalone Rust tests for whole-repository invariants)
 │   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
 │   ├── Dockerfile
 │   └── tests/
-├── .task/
-│   └── agentic-ai.yml    (repo-level agent tooling)
+├── .task/                (remaining repo-level task includes)
 └── nook-app/
     ├── Taskfile.yml      (app command surface)
     ├── .task/            (cross-package app and CI task includes)
@@ -282,6 +285,7 @@ members:  members_key-encrypted catalog entries
 
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentic-ai/meta-agent` | `task meta-agent:check` — host Rust format, Clippy, and behavior tests for DAG validation, concurrent execution, failure blocking, resource-aware scheduling, and artifact generation |
 | `preflight` | `task preflight` — standalone Rust tests for whole-repository invariants; runs before app setup in PR/main CI                                                                                            |
 | `nook-core` / `nook-auth2` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web/nook-web-app`  | Playwright e2e: `task web:test:e2e` (main stub gate and explicit PR validation), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
@@ -295,6 +299,8 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 ## 7. The Engineering Harness
 
 All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload over trusted `https://localhost:<port>` using ignored TLS material in `.nook/https/`) and `task wasm:build:fast` (mounted no-opt WASM regeneration). `task web:https:setup` builds and runs the pinned repository `mkcert` container; only the final CA trust operation runs on the host because the browser consumes the host trust store. Playwright and CI keep their isolated loopback-HTTP transport when real passkey/OAuth/provider ceremonies are not under test.
+
+Repository agent tooling lives under `agentic-ai/` and is exposed through `agentic-ai/Taskfile.yml`, which the root Taskfile includes. The Rust `meta-agent` embeds OpenAI Codex through one lockfile-resolved `codex-core-api` dependency from `main` and uses its `ThreadManager` and `CodexThread` directly, sharing the current worktree, Git metadata, `CODEX_HOME` authentication, and artifact filesystem without a CLI parser, Codex subprocess, app-server transport, Docker mounts, or socket access. `task meta-agent:plan` inspects a developer prompt with an ephemeral read-only Codex session and writes one validated feature directory. `task meta-agent:execute` parses that directory's mandatory `depends_on` DAG, starts independent workspace-write Codex threads concurrently, serializes read/write resource conflicts, and unlocks descendants only after every prerequisite explicitly reports completion. Workers modify the shared worktree but may not mutate Git state. Its artifact and scheduling contract is documented in [meta-agent-feature-dag.md](design-docs/meta-agent-feature-dag.md).
 
 ### Split Rust/WASM and web images
 
@@ -328,7 +334,7 @@ The old combined `nook-web` filesystem was about 9 GB because it inherited warm 
 
 **There is no remote BuildKit cache fallback.** Persistent delivery runners reuse local layers through PR → main → release. GitHub-hosted background jobs build cold. Retired registry manifests, target snapshots, commit images, cache-publish groups, and GHCR login plumbing must not return.
 
-Docker bake orchestration is app-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl` plus package-local bake files under `nook-app/**/docker-bake.hcl` to `docker buildx bake`, while the root `Taskfile.yml` includes those app commands for repo-root usage. The Taskfile passes bake files as absolute paths, grants buildx read access to the repo root, and sets every source target context to the repo root so local and self-hosted runner buildx versions resolve paths the same way. During the host handoff it grants write access only to the current commit/invocation artifact directory, then read access only to that directory for the web solve. The main Docker build context remains the repository root, so the sealed app image can copy root workflow files (`Taskfile.yml`, `.task/agentic-ai.yml`, docs, and CI helper scripts) as well as `nook-app`.
+Docker bake orchestration is app-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl` plus package-local bake files under `nook-app/**/docker-bake.hcl` to `docker buildx bake`, while the root `Taskfile.yml` includes those app commands for repo-root usage. The Taskfile passes bake files as absolute paths, grants buildx read access to the repo root, and sets every source target context to the repo root so local and self-hosted runner buildx versions resolve paths the same way. During the host handoff it grants write access only to the current commit/invocation artifact directory, then read access only to that directory for the web solve. The main Docker build context remains the repository root, so the sealed app image can copy root workflow files (`Taskfile.yml`, `agentic-ai/Taskfile.yml`, docs, and CI helper scripts) as well as `nook-app`.
 
 ### Docker cache model
 
