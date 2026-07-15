@@ -3,6 +3,7 @@ import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
   NookEnrollmentIssueInput,
+  OnboardingType,
   StorageProviderType,
   decryptEnrollmentPayload,
   enrollmentProviderForArchitecture,
@@ -356,7 +357,7 @@ export async function connectWithEnrollmentCode(
       state.githubRepo = githubRepo;
       state.loginSetupType = "github";
       enrollmentStorageArgs = ["github", githubPat, githubRepo];
-    } else if (payload.provider.isSharedProviderGrant) {
+    } else if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
       const preset = (payload.provider.oauthPreset ??
         "google-drive") as OAuthFilePreset;
       const storageTargetId = payload.provider.sharedStorageTargetId?.trim();

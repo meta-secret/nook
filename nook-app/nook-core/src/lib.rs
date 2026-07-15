@@ -142,12 +142,12 @@ pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
     bind_google_drive_shared_folder, draft_storage_args, enrollment_provider_for_architecture,
-    enrollment_provider_for_architecture_with_storage_target, ensure_local_provider_row,
-    find_duplicate_sync_provider, localize_provider_label, migrate_provider_fields,
-    normalize_auth_snapshot, provider_onboarding_type, provider_replication_capability_for_row,
-    provider_storage_detail, provider_target_key, seed_provider_from_legacy_storage,
-    set_google_drive_provider_mode, set_icloud_provider_mode, storage_args_for_provider,
-    validate_provider_row_replication, vault_storage_args,
+    enrollment_provider_for_architecture_with_storage_target, enrollment_provider_onboarding_type,
+    ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,
+    migrate_provider_fields, normalize_auth_snapshot, provider_onboarding_type,
+    provider_replication_capability_for_row, provider_storage_detail, provider_target_key,
+    seed_provider_from_legacy_storage, set_google_drive_provider_mode, set_icloud_provider_mode,
+    storage_args_for_provider, validate_provider_row_replication, vault_storage_args,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,

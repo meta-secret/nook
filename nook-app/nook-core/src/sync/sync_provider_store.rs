@@ -404,6 +404,22 @@ pub fn provider_onboarding_type(
     })
 }
 
+/// Resolve the onboarding ceremony encoded by an enrollment provider payload.
+///
+/// Credential-bearing provider variants are restricted to trusted-device
+/// onboarding. Shared-target variants contain no provider credential fields and
+/// always require the joining device to authenticate independently.
+#[must_use]
+pub const fn enrollment_provider_onboarding_type(provider: &EnrollmentProvider) -> OnboardingType {
+    match provider {
+        EnrollmentProvider::Local
+        | EnrollmentProvider::Github { .. }
+        | EnrollmentProvider::OauthFile { .. } => OnboardingType::PersonalCredentialTransfer,
+        EnrollmentProvider::SharedProviderGrant { .. }
+        | EnrollmentProvider::ICloudShared { .. } => OnboardingType::SharedProviderGrant,
+    }
+}
+
 pub fn enrollment_provider_for_architecture(
     provider: &StorageProviderData,
     architecture: &VaultArchitecture,
@@ -1750,6 +1766,41 @@ mod tests {
             ),
             Err(ValidationError::SharedStorageTargetRequired)
         );
+    }
+
+    #[test]
+    fn enrollment_payload_variants_define_the_onboarding_credential_policy() {
+        let personal = EnrollmentProvider::OauthFile {
+            preset: "google-drive".to_owned(),
+            access_token: "owner-token".to_owned(),
+            refresh_token: Some("owner-refresh".to_owned()),
+            expires_at: None,
+            file_id: Some("private-file".to_owned()),
+            file_name: Some("nook-events".to_owned()),
+            account_email: Some("owner@example.com".to_owned()),
+        };
+        assert_eq!(
+            enrollment_provider_onboarding_type(&personal),
+            OnboardingType::PersonalCredentialTransfer
+        );
+
+        let shared = EnrollmentProvider::SharedProviderGrant {
+            sync_provider_type: "oauth-file".to_owned(),
+            oauth_preset: Some("google-drive".to_owned()),
+            joiner_identity_kind: "email".to_owned(),
+            joiner_identity: "joiner@example.com".to_owned(),
+            storage_target_id: Some("shared-folder".to_owned()),
+        };
+        assert_eq!(
+            enrollment_provider_onboarding_type(&shared),
+            OnboardingType::SharedProviderGrant
+        );
+
+        let serialized = serde_json::to_value(shared).unwrap();
+        assert_eq!(serialized["storage_target_id"], "shared-folder");
+        assert!(serialized.get("access_token").is_none());
+        assert!(serialized.get("refresh_token").is_none());
+        assert!(serialized.get("pat").is_none());
     }
 
     #[test]

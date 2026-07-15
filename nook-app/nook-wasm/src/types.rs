@@ -690,6 +690,12 @@ impl NookEnrollmentProvider {
         )
     }
 
+    #[wasm_bindgen(getter, js_name = onboardingType)]
+    #[must_use]
+    pub fn onboarding_type(&self) -> nook_core::OnboardingType {
+        nook_core::enrollment_provider_onboarding_type(&self.0)
+    }
+
     #[wasm_bindgen(getter, js_name = githubPat)]
     pub fn github_pat(&self) -> Option<String> {
         match &self.0 {
@@ -1005,6 +1011,12 @@ impl NookDecryptedEnrollmentPayload {
     #[wasm_bindgen(getter)]
     pub fn provider(&self) -> NookEnrollmentProvider {
         self.provider.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = onboardingType)]
+    #[must_use]
+    pub fn onboarding_type(&self) -> nook_core::OnboardingType {
+        self.provider.onboarding_type()
     }
 
     #[wasm_bindgen(getter, js_name = entryId)]
