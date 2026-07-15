@@ -2198,10 +2198,12 @@ export class VaultState {
       this.secrets = raw as NookSecretRecord[];
       await this.refreshReplacementConflicts();
       this.scheduleFanOutSyncAfterLocalSave();
-      this.showSuccess("Secret conflict resolved.");
+      this.showSuccess(this.t("toasts.secret_conflict_resolved"));
     } catch (error: unknown) {
       this.errorMsg =
-        error instanceof Error ? error.message : "Could not resolve conflict.";
+        error instanceof Error
+          ? error.message
+          : this.t("errors.conflict_resolution_failed");
     } finally {
       this.isSaving = false;
     }
@@ -2307,7 +2309,7 @@ export class VaultState {
       !provider ||
       storageProviderKind(provider.type) === NookStorageProviderKind.Local
     ) {
-      throw new Error("Choose a cloud sync provider.");
+      throw new Error(this.t("errors.cloud_sync_provider_required"));
     }
     return provider.id;
   }

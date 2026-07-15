@@ -127,6 +127,7 @@
             </ul>
             {#if section.diagram}
               <HelpMermaidDiagram
+                {vault}
                 source={section.diagram(vault.t)}
                 sectionId={section.id}
                 theme={colorMode}
@@ -138,7 +139,7 @@
 
       <nav
         class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground"
-        aria-label="Legal"
+        aria-label={vault.t('legal.documents_label')}
       >
         <a
           href={appPath('/privacy.html')}

@@ -1,11 +1,14 @@
 <script lang="ts">
   import { renderMermaidDiagram, type MermaidTheme } from '$lib/mermaid-diagram'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     source,
     sectionId,
     theme = 'dark',
   }: {
+    vault: VaultState
     source: string
     sectionId: string
     theme?: MermaidTheme
@@ -34,7 +37,7 @@
   class="help-mermaid mt-2 overflow-x-auto rounded-md border border-border/60 bg-background/80 p-2"
   data-testid="help-diagram-{sectionId}"
   role="img"
-  aria-label="Architecture diagram"
+  aria-label={vault.t('help.diagram.label')}
 >
   {#if svgHtml}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->

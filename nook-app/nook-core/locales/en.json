@@ -19,7 +19,9 @@
     "lock_vault": "Lock vault",
     "switch_vault": "Switch vault",
     "copy": "Copy",
-    "copied": "Copied"
+    "copied": "Copied",
+    "dismiss_success": "Dismiss success message",
+    "dismiss_error": "Dismiss error message"
   },
   "session": {
     "lock_desc": "Clear decrypted secrets from memory and return to the login screen. Your encrypted vault and sync providers stay on this device.",
@@ -328,6 +330,12 @@
     "secret_data_placeholder": "Enter password or key",
     "show_value": "Show value",
     "hide_value": "Hide value",
+    "copy_website_url": "Copy website URL",
+    "copy_username": "Copy username",
+    "copy_secret": "Copy secret",
+    "copy_expiration_date": "Copy expiration date",
+    "copy_account_name": "Copy account name",
+    "copy_note": "Copy note",
     "copied": "Copied!",
     "copy": "Copy",
     "of": "of",
@@ -435,6 +443,7 @@
     "in_this_guide": "In this guide",
     "jump_to_section": "Jump to section…",
     "diagram": {
+      "label": "Architecture diagram",
       "device": "This browser (working copy)",
       "local_projection": "Local encrypted projection",
       "event_store": "Event store",
@@ -504,7 +513,10 @@
   },
   "legal": {
     "privacy_policy": "Privacy Policy",
-    "terms_of_service": "Terms of Service"
+    "terms_of_service": "Terms of Service",
+    "manager_description": "Nook open-source password manager",
+    "documents_label": "Legal documents",
+    "source": "Source on GitHub"
   },
   "device_protection": {
     "step_label": "Device setup · Step 1 of 2",
@@ -641,6 +653,18 @@
       "unknown_storage_mode": "Unknown storage mode: {mode}"
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
+    "engine_loading": "Vault engine is still loading. Try again in a moment.",
+    "engine_unavailable": "Vault engine is not available. Refresh the page and try again.",
+    "manager_uninitialized": "Vault manager is not initialized.",
+    "local_backup_folder_required": "Choose a local backup folder before syncing.",
+    "connection_in_progress": "Connection already in progress.",
+    "vault_password_required": "Choose a vault password to unlock.",
+    "cloud_sync_provider_required": "Choose a cloud sync provider.",
+    "github_credentials_required": "Configure GitHub credentials before unlocking.",
+    "vault_selection_failed": "Failed to select vault.",
+    "vault_creation_failed": "Failed to create local vault.",
+    "vault_rename_failed": "Failed to rename vault.",
+    "conflict_resolution_failed": "Could not resolve conflict.",
     "device_protection": {
       "authorization_required": "Authorize before using this browser's device key."
     },
@@ -923,6 +947,7 @@
     "vault_renamed": "Vault renamed.",
     "github_connected": "Connected to GitHub. Encryption key is stored locally in this browser.",
     "google_drive_connected": "Connected to Google Drive. Encryption key is stored locally in this browser.",
+    "secret_conflict_resolved": "Secret conflict resolved.",
     "local_folder_connected": "Connected local backup folder.",
     "password_updated": "Vault password updated.",
     "password_removed": "Vault password removed.",
@@ -1281,6 +1306,10 @@
     "github_title": "Nook on GitHub — open source",
     "github_aria": "Nook is open source on GitHub",
     "back": "Back",
-    "help": "Help"
+    "help": "Help",
+    "secret_sync_conflicts": "Secret sync conflicts need resolution",
+    "security_conflict": "Security conflict detected",
+    "conflict_original": "Original: {id}",
+    "conflict_keep": "Keep {id}"
   }
 }

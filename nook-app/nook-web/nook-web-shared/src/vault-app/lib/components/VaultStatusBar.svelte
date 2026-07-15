@@ -311,7 +311,7 @@
           <button
             type="button"
             class="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary"
-            aria-label="Dismiss success"
+            aria-label={vault ? vault.t('common.dismiss_success') : 'Dismiss success message'}
             data-testid="dismiss-success-btn"
             onclick={onDismissSuccess}
           >
@@ -333,7 +333,7 @@
           <button
             type="button"
             class="shrink-0 rounded p-0.5 text-destructive/70 hover:text-destructive"
-            aria-label="Dismiss error"
+            aria-label={vault ? vault.t('common.dismiss_error') : 'Dismiss error message'}
             data-testid="dismiss-error-btn"
             onclick={onDismissError}
           >

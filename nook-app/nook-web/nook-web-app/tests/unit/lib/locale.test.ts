@@ -16,6 +16,31 @@ beforeAll(async () => {
 })
 
 describe('locale', () => {
+  test('English and Russian catalogs expose the same translation keys', () => {
+    const flatten = (value: unknown, prefix = ''): Record<string, string> => {
+      if (typeof value === 'string') return { [prefix]: value }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new TypeError(`Expected a translation object at ${prefix}`)
+      }
+      return Object.entries(value).reduce<Record<string, string>>(
+        (keys, [key, child]) => ({
+          ...keys,
+          ...flatten(child, prefix ? `${prefix}.${key}` : key),
+        }),
+        {},
+      )
+    }
+
+    const english = flatten(JSON.parse(getTranslationCatalog('en')))
+    const russian = flatten(JSON.parse(getTranslationCatalog('ru')))
+
+    expect(Object.keys(russian).sort()).toEqual(Object.keys(english).sort())
+    for (const key of Object.keys(english)) {
+      expect(russian[key], `ru:${key}`).toBeTypeOf('string')
+      expect(russian[key], `ru:${key}`).not.toBe('')
+    }
+  })
+
   test('parseAppLocale accepts only supported values', () => {
     expect(parseAppLocale('en')).toBe('en')
     expect(parseAppLocale('ru')).toBe('ru')
@@ -57,6 +82,52 @@ describe('locale', () => {
           'provider_picker.unsupported_replication_desc',
         ),
       ).toBeTypeOf('string')
+    }
+  })
+
+  test('catalogs include vault feedback and accessibility strings', () => {
+    const keys = [
+      'common.dismiss_success',
+      'common.dismiss_error',
+      'errors.validation.oauth_access_token_empty',
+      'errors.google_sign_in_required',
+      'errors.engine_loading',
+      'errors.engine_unavailable',
+      'errors.manager_uninitialized',
+      'errors.local_backup_folder_required',
+      'errors.connection_in_progress',
+      'errors.vault_password_required',
+      'errors.cloud_sync_provider_required',
+      'errors.github_credentials_required',
+      'errors.vault_selection_failed',
+      'errors.vault_creation_failed',
+      'errors.vault_rename_failed',
+      'errors.conflict_resolution_failed',
+      'toasts.google_drive_connected',
+      'toasts.secret_conflict_resolved',
+      'app.secret_sync_conflicts',
+      'app.security_conflict',
+      'app.conflict_original',
+      'app.conflict_keep',
+      'help.diagram.label',
+      'legal.manager_description',
+      'legal.documents_label',
+      'legal.source',
+      'vault.copy_website_url',
+      'vault.copy_username',
+      'vault.copy_secret',
+      'vault.copy_expiration_date',
+      'vault.copy_account_name',
+      'vault.copy_note',
+    ]
+
+    for (const locale of ['en', 'ru'] as const) {
+      const catalog = getTranslationCatalog(locale)
+      for (const key of keys) {
+        expect(lookupTranslation(catalog, key), `${locale}:${key}`).toBeTypeOf(
+          'string',
+        )
+      }
     }
   })
 

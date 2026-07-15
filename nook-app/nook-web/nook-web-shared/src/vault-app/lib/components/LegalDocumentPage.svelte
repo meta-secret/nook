@@ -10,11 +10,14 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import { appPath, legalPageForId, type LegalPageId } from '$lib/legal-content'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     pageId,
     onClose,
   }: {
+    vault: VaultState
     pageId: LegalPageId
     onClose: () => void
   } = $props()
@@ -45,7 +48,7 @@
             {page.title}
           </CardTitle>
           <CardDescription class="text-pretty text-xs leading-snug">
-            Nook open-source password manager
+            {vault.t('legal.manager_description')}
           </CardDescription>
         </div>
         <Button
@@ -57,7 +60,7 @@
           onclick={onClose}
         >
           <ChevronLeft class="size-3.5" />
-          Back
+          {vault.t('common.back')}
         </Button>
       </div>
     </CardHeader>
@@ -67,7 +70,7 @@
 
       <nav
         class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-4 text-xs text-muted-foreground"
-        aria-label="Legal documents"
+        aria-label={vault.t('legal.documents_label')}
       >
         <a
           href={appPath(otherPage.path)}
@@ -83,7 +86,7 @@
           rel="noreferrer"
           class="underline-offset-4 hover:text-foreground hover:underline"
         >
-          Source on GitHub
+          {vault.t('legal.source')}
         </a>
       </nav>
     </CardContent>

@@ -66,7 +66,8 @@ export async function selectVaultForUnlock(
     await state.refreshPasswordEntriesList();
     state.localLoginPrepared = true;
   } catch (e: unknown) {
-    state.errorMsg = e instanceof Error ? e.message : "Failed to select vault.";
+    state.errorMsg =
+      e instanceof Error ? e.message : state.t("errors.vault_selection_failed");
   } finally {
     state.isVerifying = false;
   }
@@ -77,7 +78,7 @@ export async function createLocalVaultWithDeviceKeys(
   label?: string,
 ): Promise<void> {
   if (!state.manager) {
-    state.errorMsg = "Vault engine is not available.";
+    state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
   if (state.isVerifying) return;
@@ -132,7 +133,7 @@ export async function createLocalVaultWithDeviceKeys(
   } catch (e: unknown) {
     state.isAuthenticated = false;
     const message =
-      e instanceof Error ? e.message : "Failed to create local vault.";
+      e instanceof Error ? e.message : state.t("errors.vault_creation_failed");
     log.warn("local vault create failed", { error: message });
     state.errorMsg = message;
   } finally {
@@ -165,7 +166,8 @@ export async function renameLocalVaultLabel(
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t("toasts.vault_renamed"));
   } catch (e: unknown) {
-    state.errorMsg = e instanceof Error ? e.message : "Failed to rename vault.";
+    state.errorMsg =
+      e instanceof Error ? e.message : state.t("errors.vault_rename_failed");
   } finally {
     state.isVerifying = false;
   }
@@ -176,7 +178,7 @@ export async function createLocalVault(
   password: string,
 ): Promise<void> {
   if (!state.manager) {
-    state.errorMsg = "Vault engine is not available.";
+    state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
   if (state.isVerifying) return;

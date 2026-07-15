@@ -141,11 +141,11 @@ export async function syncLocalFolderProvider(
 ): Promise<void> {
   const manager = state.manager;
   if (!manager) {
-    throw new Error("Vault manager is not initialized.");
+    throw new Error(state.t("errors.manager_uninitialized"));
   }
   const handleId = provider.localFolder?.handleId;
   if (!handleId) {
-    throw new Error("Choose a local backup folder before syncing.");
+    throw new Error(state.t("errors.local_backup_folder_required"));
   }
   const localYaml = (await state.enqueueStorage(() =>
     manager.syncLocalFolderProvider(handleId),
@@ -433,7 +433,7 @@ export async function resolveSyncConflictImportRemote(
       );
     } else {
       if (!state.manager) {
-        throw new Error("Vault manager is not initialized.");
+        throw new Error(state.t("errors.manager_uninitialized"));
       }
       const provider = state.providers.find(
         (p) => p.id === conflict.providerId,

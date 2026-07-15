@@ -16,18 +16,17 @@ const log = createLogger("connect");
 
 export async function loadDb(state: VaultState) {
   if (state.isInitializing) {
-    state.errorMsg = "Vault engine is still loading. Try again in a moment.";
+    state.errorMsg = state.t("errors.engine_loading");
     return;
   }
 
   if (!state.manager) {
-    state.errorMsg =
-      "Vault engine is not available. Refresh the page and try again.";
+    state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
 
   if (state.isVerifying) {
-    state.errorMsg = "Connection already in progress.";
+    state.errorMsg = state.t("errors.connection_in_progress");
     return;
   }
 
