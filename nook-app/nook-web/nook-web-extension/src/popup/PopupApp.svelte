@@ -19,10 +19,12 @@
     i18n,
     isConnected,
     protectionStatus,
+    activeSessionDevice,
   }: {
     i18n: ExtensionI18n
     isConnected: boolean
     protectionStatus: ExtensionDeviceProtectionStatus
+    activeSessionDevice?: ExtensionDeviceProtectionResult
   } = $props()
 
   function initialProtectionStatus(): PopupProtectionStatus {
@@ -80,6 +82,10 @@
       },
     )
   }
+
+  $effect(() => {
+    if (activeSessionDevice) beginPairing(activeSessionDevice)
+  })
 
   async function runDeviceAction(
     action: () => Promise<ExtensionDeviceProtectionResult>,

@@ -23,6 +23,51 @@ import {
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
 
+const extensionSessionDocument = 'offscreen/session.html'
+let extensionSessionDocumentCreation: Promise<void> | undefined
+
+async function ensureExtensionSessionDocument(): Promise<void> {
+  extensionSessionDocumentCreation ??= chrome.offscreen
+    .createDocument({
+      url: extensionSessionDocument,
+      reasons: ['WORKERS'],
+      justification:
+        'Keep a user-authorized extension device identity in memory for a 15-minute session.',
+    })
+    .catch((error: unknown) => {
+      // Manifest V3 permits only one offscreen document. A restarted service
+      // worker may race with the existing session document; it is safe to use
+      // that already-open document.
+      if (error instanceof Error && error.message.includes('single offscreen')) {
+        return
+      }
+      throw error
+    })
+  return extensionSessionDocumentCreation
+}
+
+function isExtensionSessionExpiryMessage(
+  message: unknown,
+): message is { type: 'nook:extension-session-expired' } {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:extension-session-expired'
+  )
+}
+
+function isExtensionSessionEnsureMessage(
+  message: unknown,
+): message is { type: 'nook:ensure-extension-session-runtime' } {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:ensure-extension-session-runtime'
+  )
+}
+
 function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
@@ -159,6 +204,30 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isExtensionSessionEnsureMessage(message)) {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void ensureExtensionSessionDocument()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false, reason: 'session-runtime-failed' }))
+    return true
+  }
+
+  if (isExtensionSessionExpiryMessage(message)) {
+    if (
+      sender.id !== chrome.runtime.id ||
+      !sender.url?.endsWith(`/${extensionSessionDocument}`)
+    ) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    extensionSessionDocumentCreation = undefined
+    void chrome.offscreen.closeDocument().then(() => sendResponse({ ok: true }))
+    return true
+  }
+
   if (
     hasPairingApprovedType(message) &&
     !isExtensionPairingApprovedMessage(message)
