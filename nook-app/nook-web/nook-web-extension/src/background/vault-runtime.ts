@@ -1,6 +1,4 @@
-import type {
-  ExtensionEventLogRecord,
-} from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import initNookWasm, {
   configureVaultApplication,
   NookVaultManager,
@@ -19,7 +17,9 @@ function ensureExtensionWasm(): Promise<unknown> {
   return initPromise
 }
 
-function isImportedEventLogState(value: unknown): value is ImportedEventLogState {
+function isImportedEventLogState(
+  value: unknown,
+): value is ImportedEventLogState {
   if (typeof value !== 'object' || value === null) return false
   const status = value as Record<string, unknown>
   return (

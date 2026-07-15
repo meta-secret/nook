@@ -153,10 +153,7 @@ await Promise.all([
   buildEntrypoint('src/content/simple-vault-bridge.ts', 'content'),
 ])
 
-await Promise.all([
-  buildSveltePage('popup'),
-  buildChromeLocales(),
-])
+await Promise.all([buildSveltePage('popup'), buildChromeLocales()])
 
 await writeFile(
   join(distDir, 'manifest.json'),
@@ -166,10 +163,7 @@ await writeFile(
 await Promise.all([
   copyStaticFile(join(webRoot, 'public/favicon.png'), 'icons/nook.png'),
   copyStaticFile(
-    join(
-      sharedRoot,
-      'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
-    ),
+    join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
     'background/nook_wasm_bg.wasm',
   ),
 ])
