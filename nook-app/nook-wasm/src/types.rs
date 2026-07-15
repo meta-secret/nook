@@ -426,6 +426,25 @@ impl NookPasskeySetup {
             &self.prf_input,
         )
     }
+
+    /// Build browser registration options with the label chosen by the caller.
+    /// The browser ceremony remains in the presentation layer; this only
+    /// prepares the typed `WebAuthn` request from Rust-owned setup material.
+    #[wasm_bindgen(js_name = creationOptionsWithLabel)]
+    pub fn creation_options_with_label(
+        &self,
+        rp_id: &str,
+        rp_name: &str,
+        passkey_label: &str,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
+        crate::passkey_browser::creation_options(
+            rp_id,
+            rp_name,
+            passkey_label,
+            &self.user_handle,
+            &self.prf_input,
+        )
+    }
 }
 
 #[wasm_bindgen]

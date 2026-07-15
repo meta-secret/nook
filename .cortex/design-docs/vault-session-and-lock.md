@@ -114,6 +114,15 @@ unlock. Create and Import replace the open/unlock controls while selected.
 
 Lock is the safe “step away from this browser” action — analogous to logging out of a password manager while keeping the encrypted database file.
 
+### Extension device session
+
+The browser extension has a separate, revocable device identity. After its
+passkey or PIN authorization, an offscreen extension document keeps that
+identity in WASM memory for a fixed 15-minute session so reopening the toolbar
+popup does not repeat the ceremony. It never persists the decrypted identity,
+PIN, or passkey PRF output to `chrome.storage`; expiry or browser shutdown
+zeroizes the manager and requires authorization again.
+
 ---
 
 ## 3. Multiple vaults on one browser (#120)
