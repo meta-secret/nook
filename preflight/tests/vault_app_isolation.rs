@@ -209,11 +209,12 @@ fn development_cloudflare_deploy_preserves_isolated_origins() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     for required in [
-        "deploy nokey-sh main nook-app/nook-web/nook-web-app/dist/site",
+        "deploy nokey-sh development nook-app/nook-web/nook-web-app/dist/site",
         "deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist",
         "deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist",
         "CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh",
         "CI_MAIN_SENTINEL_DOMAIN: sentinel.dev.nokey.sh",
+        "site_pages_host=\"development.nokey-sh.pages.dev\"",
         "simple_pages_host=\"development.nokey-simple.pages.dev\"",
         "sentinel_pages_host=\"development.nokey-sentinel.pages.dev\"",
         "grep -Fq '<title>Nook — Keys, not accounts</title>'",

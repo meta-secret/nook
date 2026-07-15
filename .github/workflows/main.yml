@@ -101,9 +101,9 @@ jobs:
             echo "$output=$url" >> "$GITHUB_OUTPUT"
           }
 
-          # Keep the public site's production branch as Main. Vault apps use a stable
-          # non-production branch alias so production and development stay isolated.
-          deploy nokey-sh main nook-app/nook-web/nook-web-app/dist/site site_pages_url Site
+          # Every development surface uses the stable non-production branch alias so
+          # the main-channel build cannot replace the public production deployment.
+          deploy nokey-sh development nook-app/nook-web/nook-web-app/dist/site site_pages_url Site
           deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist simple_pages_url Simple
           deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist sentinel_pages_url Sentinel
 
@@ -145,7 +145,7 @@ jobs:
             printf '%s' "$response"
           }
 
-          site_pages_host="$(node -e 'const p = new URL(process.argv[1]).hostname.split("."); if (p.length > 3) p.shift(); console.log(p.join("."));' "$SITE_PAGES_URL")"
+          site_pages_host="development.nokey-sh.pages.dev"
           simple_pages_host="development.nokey-simple.pages.dev"
           sentinel_pages_host="development.nokey-sentinel.pages.dev"
           zone_name="nokey.sh"
