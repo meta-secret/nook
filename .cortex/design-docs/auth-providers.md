@@ -176,11 +176,18 @@ Event-log sync is in `nook-app/nook-core/src`. UI uses the local
 
 Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
 Identity Services in the browser; the current Google web client is configured
-for `http://localhost:5173`, `https://simple.nokey.sh`,
+for `https://localhost:5173`, `https://simple.nokey.sh`,
 `https://sentinel.nokey.sh`, and `https://dev.nokey.sh`. Nook's CloudKit JS
 token must likewise register the two production vault origins and the
 development origin. `https://nokey.sh` is the public product site, not a
 production vault or provider-callback origin.
+
+The interactive development origins are `https://localhost:5173` and the
+multi-worktree fallback `https://localhost:5175`; they must be registered
+explicitly in both provider consoles. `task web:dev` creates a trusted local
+certificate through the repository's pinned `mkcert` Docker image. Loopback HTTP remains an internal
+Playwright transport only and does not represent the provider-enabled manual
+development environment.
 
 Google/Auth Platform branding should use `https://nokey.sh/` as the public app
 home page. The root path is the crawlable product and branding page; the vault

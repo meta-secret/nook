@@ -256,6 +256,29 @@ impl NookVaultManager {
         serde_wasm_bindgen::to_value(&merged).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    #[wasm_bindgen(js_name = importExtensionEventLogRecords)]
+    pub async fn import_extension_event_log_records_js(
+        &mut self,
+        expected_store_id: &str,
+        expected_device_id: &str,
+        expected_device_public_key: &str,
+        expected_device_signing_public_key: &str,
+        records: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let records =
+            serde_wasm_bindgen::from_value(records).map_err(|e| JsError::new(&e.to_string()))?;
+        let status = self
+            .import_extension_event_log_records(
+                expected_store_id,
+                expected_device_id,
+                expected_device_public_key,
+                expected_device_signing_public_key,
+                records,
+            )
+            .await?;
+        serde_wasm_bindgen::to_value(&status).map_err(|e| JsError::new(&e.to_string()))
+    }
+
     #[wasm_bindgen(js_name = syncLocalFolderProvider)]
     pub async fn sync_local_folder_provider_js(
         &mut self,

@@ -13,7 +13,6 @@
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
-  import ExtensionConnectStart from '$lib/components/ExtensionConnectStart.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
@@ -37,7 +36,6 @@
   import { isAppLogsPath } from '$lib/app-logs-api'
   import {
     extensionConnectRequestFromLocation,
-    extensionRuntimeIdFromLocation,
     isExtensionConnectPath,
     type ExtensionConnectRequest,
   } from '$lib/extension-connect'
@@ -93,11 +91,6 @@
       ? extensionConnectRequestFromLocation(window.location)
       : undefined,
   )
-  let extensionRuntimeId = $state<string | undefined>(
-    typeof window !== 'undefined' && SUPPORTS_EXTENSION
-      ? extensionRuntimeIdFromLocation(window.location)
-      : undefined,
-  )
   let sentinelInvitationRequest = $state(
     typeof window !== 'undefined' && APP_KIND !== 'simple'
       ? consumeSentinelGenesisRequestFromLocation()
@@ -122,9 +115,6 @@
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
     extensionConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
-      : undefined
-    extensionRuntimeId = SUPPORTS_EXTENSION
-      ? extensionRuntimeIdFromLocation(window.location)
       : undefined
     if (APP_KIND !== 'simple') {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
@@ -168,7 +158,6 @@
     appLogsPage = false
     extensionConnectRoute = false
     extensionConnectRequest = undefined
-    extensionRuntimeId = undefined
   }
 
   function navigateToSiblingApp(event: MouseEvent) {
@@ -251,7 +240,9 @@
       document.title = 'Approve extension · Nook'
       return
     }
-    document.title = IS_SENTINEL_APP ? 'Nook Sentinel Vault' : 'Nook Simple Vault'
+    document.title = IS_SENTINEL_APP
+      ? 'Nook Sentinel Vault'
+      : 'Nook Simple Vault'
   })
 
   async function handleUnlock() {
@@ -584,12 +575,6 @@
             onDismissError={() => vault.dismissError()}
           />
         </div>
-      {:else if extensionConnectRoute && !extensionConnectRequest && extensionRuntimeId}
-        <ExtensionConnectStart
-          {vault}
-          {extensionRuntimeId}
-          onClose={navigateHome}
-        />
       {:else if extensionConnectRoute && !extensionConnectRequest}
         <section
           class="mx-auto max-w-2xl rounded-xl border border-destructive/30 bg-card p-4 shadow-sm sm:p-5"
@@ -612,15 +597,6 @@
         </section>
       {:else if !vault.isAuthenticated}
         <div class="space-y-6">
-          {#if extensionConnectRequest}
-            <div class="mx-auto w-full max-w-2xl">
-              <ExtensionConnectConsent
-                {vault}
-                request={extensionConnectRequest}
-                onClose={navigateHome}
-              />
-            </div>
-          {/if}
           {#if vault.deviceProtectionReady || showLoginWithoutPasskey || existingVaultNeedsDeviceUnlock}
             {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock}
               <LoginGate

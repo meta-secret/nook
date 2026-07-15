@@ -1,3 +1,9 @@
+import {
+  DEFAULT_SIMPLE_VAULT_URL,
+  sentinelVaultMatchPatterns,
+  simpleVaultMatchPattern,
+} from './lib/simple-vault-target'
+
 type ManifestIconSet = Record<'16' | '32' | '48' | '128', string>
 
 export type ExtensionManifest = {
@@ -10,6 +16,7 @@ export type ExtensionManifest = {
   action: {
     default_title: string
     default_icon: ManifestIconSet
+    default_popup: 'popup/index.html'
   }
   background: {
     service_worker: string
@@ -39,7 +46,11 @@ const iconSet: ManifestIconSet = {
   '128': 'icons/nook.png',
 }
 
-export function createManifest(version: string): ExtensionManifest {
+export function createManifest(
+  version: string,
+  simpleVaultBaseUrl = DEFAULT_SIMPLE_VAULT_URL,
+): ExtensionManifest {
+  const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
   return {
     manifest_version: 3,
     default_locale: 'en',
@@ -51,6 +62,7 @@ export function createManifest(version: string): ExtensionManifest {
     action: {
       default_title: 'Nook',
       default_icon: iconSet,
+      default_popup: 'popup/index.html',
     },
     background: {
       service_worker: 'background/service-worker.js',
@@ -64,15 +76,21 @@ export function createManifest(version: string): ExtensionManifest {
       {
         matches: ['<all_urls>'],
         exclude_matches: [
-          'https://simple.nokey.sh/*',
-          'https://sentinel.nokey.sh/*',
+          simpleVaultMatch,
+          ...sentinelVaultMatchPatterns(simpleVaultBaseUrl),
         ],
         js: ['content/autofill.js'],
         run_at: 'document_idle',
       },
+      {
+        matches: [simpleVaultMatch],
+        exclude_matches: sentinelVaultMatchPatterns(simpleVaultBaseUrl),
+        js: ['content/simple-vault-bridge.js'],
+        run_at: 'document_idle',
+      },
     ],
     externally_connectable: {
-      matches: ['https://simple.nokey.sh/*'],
+      matches: [simpleVaultMatch],
     },
     icons: iconSet,
     permissions: ['activeTab', 'storage'],

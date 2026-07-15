@@ -50,6 +50,7 @@ jobs:
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
         env:
           CI: true
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev/simple/
 
       # The verified image already contains the Rust coverage artifacts produced by the graph
       # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.

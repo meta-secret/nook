@@ -5,7 +5,7 @@
  * callback or backend token exchange.
  *
  * Google Cloud Console → Credentials → OAuth client (Web application):
- * - Authorized JavaScript origins: http://localhost:5173, https://nokey.sh,
+ * - Authorized JavaScript origins: https://localhost:5173, https://nokey.sh,
  *   https://simple.nokey.sh, https://sentinel.nokey.sh, https://dev.nokey.sh
  * - OAuth consent screen scopes:
  *   - Private provider mode: https://www.googleapis.com/auth/drive.appdata

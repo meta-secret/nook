@@ -10,6 +10,13 @@ import { createServer, type Server } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  belongsToSentinelVault,
+  belongsToSimpleVault,
+  DEFAULT_SIMPLE_VAULT_URL,
+  normalizeSimpleVaultBaseUrl,
+  simpleVaultUrl,
+} from '../src/lib/simple-vault-target'
 
 type TestServer = {
   origin: string
@@ -22,6 +29,16 @@ const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const setupStorageKey = 'nook:extension-setup'
 const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
+const syntheticEventLogRecords = [
+  {
+    eventId: 'event-e2e',
+    path: 'events/event-e2e.yaml',
+    event: { schema_version: 1 },
+  },
+]
+const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
+  process.env.NOOK_SIMPLE_VAULT_URL || DEFAULT_SIMPLE_VAULT_URL,
+)
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
@@ -141,7 +158,7 @@ async function sendExternalMessage(
   )
 }
 
-test('opens Simple Vault, renders the site widget, and starts website-driven pairing', async ({
+test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -149,7 +166,7 @@ test('opens Simple Vault, renders the site widget, and starts website-driven pai
   const manifest = JSON.parse(
     await readFile(path.join(extensionDir, 'manifest.json'), 'utf8'),
   ) as { action?: { default_popup?: string } }
-  expect(manifest.action?.default_popup).toBeUndefined()
+  expect(manifest.action?.default_popup).toBe('popup/index.html')
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')
@@ -164,22 +181,77 @@ test('opens Simple Vault, renders the site widget, and starts website-driven pai
     ],
   })
 
-  await context.route('https://simple.nokey.sh/**', (route) =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: '<!doctype html><html><body><h1>Simple Vault</h1></body></html>',
-    }),
-  )
-  await context.route('https://sentinel.nokey.sh/**', (route) =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: '<form><input autocomplete="username"><input type="password"></form>',
-    }),
-  )
+  await context.route('**/*', (route) => {
+    const url = route.request().url()
+    if (belongsToSimpleVault(simpleVaultBaseUrl, url)) {
+      return route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body><h1>Simple Vault</h1></body></html>',
+      })
+    }
+    if (belongsToSentinelVault(simpleVaultBaseUrl, url)) {
+      return route.fulfill({
+        contentType: 'text/html',
+        body: '<form><input autocomplete="username"><input type="password"></form>',
+      })
+    }
+    return route.continue()
+  })
 
   try {
     const worker = await getServiceWorker(context)
     const extensionId = new URL(worker.url()).host
+
+    const popupPage = await context.newPage()
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+    await expect(popupPage.getByTestId('device-mode-select')).toHaveValue(
+      'standard',
+    )
+    await expect(
+      popupPage.getByTestId('device-protection-setup-btn'),
+    ).toHaveText('Create new passkey')
+    await expect(
+      popupPage.getByTestId('device-protection-use-existing-choice'),
+    ).toBeVisible()
+
+    const openedConnectPage = context.waitForEvent('page')
+    expect(
+      await popupPage.evaluate(
+        () =>
+          new Promise<unknown>((resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: 'nook:begin-extension-pairing',
+                payload: {
+                  deviceId: 'device-popup-e2e',
+                  devicePublicKey: 'age1popup',
+                  deviceSigningPublicKey: 'popup-signing-key',
+                  deviceLabel: 'Nook Extension - Chromium test profile',
+                },
+              },
+              resolve,
+            )
+          }),
+      ),
+    ).toEqual({ ok: true })
+    const simplePage = await openedConnectPage
+    await expect(simplePage).toHaveURL((url) => {
+      const expected = new URL(
+        simpleVaultUrl(simpleVaultBaseUrl, 'extension-connect'),
+      )
+      return (
+        url.origin === expected.origin &&
+        url.pathname === expected.pathname &&
+        url.searchParams.get('extension_id') === extensionId &&
+        url.searchParams.get('device_id') === 'device-popup-e2e' &&
+        url.searchParams.get('device_public_key') === 'age1popup' &&
+        url.searchParams.get('device_signing_public_key') ===
+          'popup-signing-key' &&
+        url.searchParams.get('nonce') !== null &&
+        url.searchParams.get('scopes') === 'vault-access,password-filling'
+      )
+    })
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
@@ -189,35 +261,22 @@ test('opens Simple Vault, renders the site widget, and starts website-driven pai
 
     const openedVault = context.waitForEvent('page')
     await widget.getByRole('button', { name: 'Open vault' }).click()
-    await expect(await openedVault).toHaveURL('https://simple.nokey.sh/')
+    await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
 
     const sentinelPage = await context.newPage()
-    await sentinelPage.goto('https://sentinel.nokey.sh/')
+    const sentinelUrl = simpleVaultBaseUrl.includes('/simple/')
+      ? simpleVaultBaseUrl.replace('/simple/', '/sentinel/')
+      : 'https://sentinel.nokey.sh/'
+    await sentinelPage.goto(sentinelUrl)
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
-
-    const simplePage = await context.newPage()
-    await simplePage.goto(
-      `https://simple.nokey.sh/extension-connect?extension_id=${extensionId}`,
-    )
-    const protectionPagePromise = context.waitForEvent('page')
-    expect(
-      await sendExternalMessage(simplePage, extensionId, {
-        type: 'nook:start-extension-pairing',
-      }),
-    ).toEqual({ ok: true })
-    const protectionPage = await protectionPagePromise
-    await expect(protectionPage).toHaveURL(
-      `chrome-extension://${extensionId}/connect/index.html`,
-    )
-    await expect(
-      protectionPage.getByTestId('protect-browser-access-btn'),
-    ).toBeVisible()
 
     const forgedGrant = {
       type: 'nook:extension-pairing-approved',
       payload: {
         vaultType: 'sentinel',
         deviceId: 'sentinel-device-e2e',
+        devicePublicKey: 'age1sentinel',
+        deviceSigningPublicKey: 'sentinel-signing-key',
         deviceLabel: 'Forged Sentinel device',
         vaultStoreId: 'sentinel-store-e2e',
         vaultName: 'Sentinel safe',
@@ -225,6 +284,7 @@ test('opens Simple Vault, renders the site widget, and starts website-driven pai
         scopes: ['vault-access'],
         providers: [],
       },
+      eventLogRecords: syntheticEventLogRecords,
     }
     expect(
       await sendExternalMessage(simplePage, extensionId, forgedGrant),
@@ -235,6 +295,8 @@ test('opens Simple Vault, renders the site widget, and starts website-driven pai
       payload: {
         vaultType: 'simple',
         deviceId: 'device-e2e',
+        devicePublicKey: 'age1extension',
+        deviceSigningPublicKey: 'extension-signing-key',
         deviceLabel: 'Nook Extension - Chromium test profile',
         vaultStoreId: 'store-e2e',
         vaultName: 'Personal',
@@ -242,19 +304,23 @@ test('opens Simple Vault, renders the site widget, and starts website-driven pai
         scopes: ['vault-access', 'password-filling'],
         providers: [],
       },
+      eventLogRecords: syntheticEventLogRecords,
     }
     expect(
       await sendExternalMessage(simplePage, extensionId, approvedGrant),
-    ).toEqual({ ok: true })
+    ).toEqual({ ok: false, reason: 'event-log-import-failed' })
 
-    await expect
-      .poll(async () => {
-        const storage = await readExtensionStorage(context)
-        return Boolean(
-          storage[pairingGrantStorageKey] && storage[setupStorageKey],
-        )
-      })
-      .toBe(true)
+    const storage = await readExtensionStorage(context)
+    expect(storage[pairingGrantStorageKey]).toBeUndefined()
+    expect(storage[setupStorageKey]).toBeUndefined()
+
+    const connectedPopupPage = await context.newPage()
+    await connectedPopupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html`,
+    )
+    await expect(
+      connectedPopupPage.getByTestId('extension-device-setup'),
+    ).toBeVisible()
   } finally {
     await context.close()
     await loginServer.close()

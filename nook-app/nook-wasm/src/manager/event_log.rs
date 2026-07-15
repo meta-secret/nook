@@ -51,6 +51,15 @@ pub(in crate::manager) struct EventLogStorageRecord {
     pub event: VaultEvent,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::manager) struct ExtensionEventLogImportStatus {
+    pub vault_store_id: String,
+    pub event_count: usize,
+    pub heads: Vec<String>,
+    pub access_granted: bool,
+}
+
 impl NookVaultManager {
     fn validate_event_record_id(
         expected_event_id: &EventId,
@@ -610,6 +619,81 @@ impl NookVaultManager {
         }
 
         self.export_event_log_records().await
+    }
+
+    /// Import the website's encrypted event-log projection for the extension.
+    ///
+    /// The caller transports bytes only. Rust owns every trust decision: the
+    /// application capability, protected local device identity, canonical event
+    /// ids/signatures, vault store id, and current (non-revoked) device grant.
+    pub(in crate::manager) async fn import_extension_event_log_records(
+        &mut self,
+        expected_store_id: &str,
+        expected_device_id: &str,
+        expected_device_public_key: &str,
+        expected_device_signing_public_key: &str,
+        records: Vec<ExternalEventLogRecord>,
+    ) -> Result<ExtensionEventLogImportStatus, NookError> {
+        if crate::application::configured_vault_application()
+            != nook_core::VaultApplication::Extension
+        {
+            return Err(NookError::Database(
+                "Extension event-log import requires the extension application capability."
+                    .to_owned(),
+            ));
+        }
+        if records.is_empty() {
+            return Err(NookError::Database(
+                "Extension event-log import requires at least one event.".to_owned(),
+            ));
+        }
+
+        let expected_store_id = nook_core::StoreId::parse(expected_store_id)?;
+        let expected_device_id = nook_core::DeviceId::parse(expected_device_id)?;
+        let expected_device_public_key =
+            nook_core::DevicePublicKey::parse(expected_device_public_key)?;
+        let expected_device_signing_public_key =
+            nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
+        let (stored_device_id, _) = crate::storage::indexed_db::load_wrapped_device_identity()
+            .await?
+            .ok_or_else(|| {
+                NookError::IndexedDb(
+                    "Extension device protection must be configured before vault import."
+                        .to_owned(),
+                )
+            })?;
+        if stored_device_id != expected_device_id.as_str() {
+            return Err(NookError::Decryption(
+                "Approved extension device does not match the protected local identity.".to_owned(),
+            ));
+        }
+
+        let merged = self.sync_external_event_log_records(records).await?;
+        if self.vault.store_id != expected_store_id.as_str() {
+            return Err(NookError::Database(format!(
+                "Approved vault store_id {} does not match imported store_id {}.",
+                expected_store_id.as_str(),
+                self.vault.store_id
+            )));
+        }
+
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        let has_active_grant = nook_core::event_graph_has_active_device_access(
+            &graph,
+            &expected_device_id,
+            &expected_device_public_key,
+            &expected_device_signing_public_key,
+        )?;
+        let auth_id = nook_core::dec_auth_id_from_public_key(&expected_device_public_key)?;
+        let has_device_envelope = self.vault.meta.auth.contains_key(&auth_id);
+
+        Ok(ExtensionEventLogImportStatus {
+            vault_store_id: self.vault.store_id.clone(),
+            event_count: merged.len(),
+            heads: self.event_log.heads.clone(),
+            access_granted: has_active_grant && has_device_envelope,
+        })
     }
 
     pub(in crate::manager) async fn sync_local_folder_provider(

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
-  import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
+  import type {
+    ExtensionEventLogRecord,
+    ExtensionPairingApprovedMessage,
+  } from '$web-shared/extension/runtime-messages'
   import {
     loadAuthProviders,
     sealAuthProvidersForDevicePublicKey,
@@ -49,6 +52,7 @@
     providers: StorageProvider[],
     vaultStoreId: string,
     vaultName: string,
+    eventLogRecords: ExtensionEventLogRecord[],
   ): Promise<void> {
     const runtime = (
       globalThis as typeof globalThis & {
@@ -76,6 +80,8 @@
       payload: {
         vaultType: 'simple',
         deviceId: request.deviceId,
+        devicePublicKey: request.devicePublicKey,
+        deviceSigningPublicKey: request.deviceSigningPublicKey,
         deviceLabel: request.deviceLabel,
         vaultStoreId,
         vaultName,
@@ -83,6 +89,7 @@
         scopes: request.scopes,
         providers,
       },
+      eventLogRecords,
     }
 
     return new Promise((resolve, reject) => {
@@ -143,11 +150,15 @@
           },
         ).providers
       }
+      const eventLogRecords = (await vault.enqueueStorage(() =>
+        vault.manager!.exportEventLogRecords(),
+      )) as ExtensionEventLogRecord[]
       try {
         await sendGrantToExtension(
           grantedProviders,
           vaultStoreId,
           activeVaultName(),
+          eventLogRecords,
         )
       } catch (caught) {
         handoffError =

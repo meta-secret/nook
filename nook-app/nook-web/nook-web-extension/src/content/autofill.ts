@@ -1,10 +1,12 @@
 export {}
 
 import { summarizePasswordForms } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  isRuntimeSentinelVaultUrl,
+  isRuntimeSimpleVaultUrl,
+} from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
-const SIMPLE_ORIGIN = 'https://simple.nokey.sh'
-const SENTINEL_ORIGIN = 'https://sentinel.nokey.sh'
 
 let pendingScan: number | undefined
 let widgetHost: HTMLElement | undefined
@@ -96,7 +98,10 @@ function scheduleScan() {
   }, 150)
 }
 
-if (location.origin !== SIMPLE_ORIGIN && location.origin !== SENTINEL_ORIGIN) {
+if (
+  !isRuntimeSimpleVaultUrl(location.href) &&
+  !isRuntimeSentinelVaultUrl(location.href)
+) {
   renderWidget()
 
   const observer = new MutationObserver(scheduleScan)

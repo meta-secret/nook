@@ -25,6 +25,12 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport(
         'google-drive',
+        loc('https://localhost:5173', 'localhost'),
+      ).supported,
+    ).toBe(true)
+    expect(
+      resolveOAuthOriginSupport(
+        'google-drive',
         loc('http://localhost:5173', 'localhost'),
       ).supported,
     ).toBe(true)
@@ -36,7 +42,7 @@ describe('oauth origin support', () => {
     ).toBe(true)
   })
 
-  test('allows the configured iCloud stable and development origins', () => {
+  test('allows the configured iCloud stable, development, and local HTTPS origins', () => {
     expect(
       resolveOAuthOriginSupport('icloud', loc('https://nokey.sh', 'nokey.sh'))
         .supported,
@@ -45,6 +51,18 @@ describe('oauth origin support', () => {
       resolveOAuthOriginSupport(
         'icloud',
         loc('https://dev.nokey.sh', 'dev.nokey.sh'),
+      ).supported,
+    ).toBe(true)
+    expect(
+      resolveOAuthOriginSupport(
+        'icloud',
+        loc('https://localhost:5173', 'localhost'),
+      ).supported,
+    ).toBe(true)
+    expect(
+      resolveOAuthOriginSupport(
+        'icloud',
+        loc('https://localhost:5175', 'localhost'),
       ).supported,
     ).toBe(true)
   })

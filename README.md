@@ -177,8 +177,11 @@ package installs run inside the project container.
 task web:dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) for the landing page, or
-[http://localhost:5173/app/](http://localhost:5173/app/) for the unified local
+The first run builds a pinned `mkcert` utility container, writes ignored TLS
+material under `.nook/https/`, and asks the host OS to trust that local CA for
+the browser. Open
+[https://localhost:5173](https://localhost:5173) for the landing page, or
+[https://localhost:5173/app/](https://localhost:5173/app/) for the unified local
 test harness. The production builds are `bun run build` inside
 `nook-vault-simple` and `nook-vault-sentinel`; they never use a hostname flag to
 select a vault type.
@@ -242,7 +245,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 task check                 # format, lint, tests, coverage floor, builds
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
-task web:dev               # local Vite development server
+task web:dev               # trusted-HTTPS local Vite development server
 task web:test              # web unit tests
 task web:test:e2e:pr       # fast Playwright subset (IndexedDB / local provider)
 task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
