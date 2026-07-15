@@ -119,23 +119,51 @@ validate_archive() {
   ' "$listing" || { fail 'extension ZIP contains an unsafe or duplicate path'; return 1; }
 }
 
+extension_id_from_manifest_key() {
+  local manifest_key="$1"
+  local digest
+  digest="$(
+    printf '%s' "$manifest_key" \
+      | openssl base64 -d -A 2>/dev/null \
+      | openssl dgst -sha256 2>/dev/null \
+      | awk '{print $NF}'
+  )"
+  case "$digest" in
+    *[!0-9a-f]*|'') fail 'extension manifest key is not valid base64 key material'; return 1 ;;
+  esac
+  [ "${#digest}" -eq 64 ] || { fail 'could not derive extension id from manifest key'; return 1; }
+  printf '%s' "${digest%${digest#????????????????????????????????}}" | tr '0123456789abcdef' 'abcdefghijklmnop'
+}
+
 validate_extracted_manifest() {
   local manifest="$1"
+  local expected_extension_id="$2"
   local simple_match="${EXPECTED_SIMPLE_VAULT_URL}*"
   local sentinel_match="${EXPECTED_SENTINEL_VAULT_URL}*"
+  local production_sentinel_match='https://sentinel.nokey.sh/*'
   jq -e \
     --arg simple "$simple_match" \
     --arg sentinel "$sentinel_match" \
+    --arg production_sentinel "$production_sentinel_match" \
     '.manifest_version == 3
       and (.key | type == "string" and length > 0)
       and .externally_connectable.matches == [$simple]
       and any(.content_scripts[]; .matches == [$simple])
       and all(.content_scripts[]; .exclude_matches | index($sentinel) != null)
-      and all(.content_scripts[]; .matches | index($sentinel) == null)' \
+      and all(.content_scripts[]; .exclude_matches | index($production_sentinel) != null)
+      and all(.content_scripts[]; .matches | index($sentinel) == null)
+      and all(.content_scripts[]; .matches | index($production_sentinel) == null)' \
     "$manifest" >/dev/null || {
       fail 'extension manifest is not exclusively bound to the selected Simple Vault deployment'
       return 1
     }
+  local manifest_key actual_extension_id
+  manifest_key="$(jq -er '.key' "$manifest")"
+  actual_extension_id="$(extension_id_from_manifest_key "$manifest_key")"
+  [ "$actual_extension_id" = "$expected_extension_id" ] || {
+    fail "extension manifest key derives $actual_extension_id, metadata declares $expected_extension_id"
+    return 1
+  }
 }
 
 activate_release() {
@@ -158,6 +186,7 @@ install_hosted_extension() {
   configure_install_paths
   command -v curl >/dev/null 2>&1 || fail 'curl is required'
   command -v jq >/dev/null 2>&1 || fail 'jq is required'
+  command -v openssl >/dev/null 2>&1 || fail 'openssl is required'
   command -v unzip >/dev/null 2>&1 || fail 'unzip is required'
 
   local tmp_dir=''
@@ -175,12 +204,13 @@ install_hosted_extension() {
 
   curl "${curl_args[@]}" "$METADATA_URL" -o "$metadata"
   validate_metadata "$metadata"
-  local archive_name expected_sha download_url checksum_url commit actual_sha
+  local archive_name expected_sha download_url checksum_url commit actual_sha expected_extension_id
   archive_name="$(jq -er '.archive' "$metadata")"
   expected_sha="$(jq -er '.sha256' "$metadata")"
   download_url="$(jq -er '.download_url' "$metadata")"
   checksum_url="$(jq -er '.checksum_url' "$metadata")"
   commit="$(jq -er '.commit' "$metadata")"
+  expected_extension_id="$(jq -er '.extension_id' "$metadata")"
 
   curl "${curl_args[@]}" "$download_url" -o "$archive"
   actual_sha="$(sha256_file "$archive")"
@@ -204,7 +234,7 @@ install_hosted_extension() {
       fail 'extension ZIP extracted a symbolic link'
       return 1
     fi
-    validate_extracted_manifest "$stage_dir/manifest.json"
+    validate_extracted_manifest "$stage_dir/manifest.json" "$expected_extension_id"
     mv "$stage_dir" "$release_dir"
     stage_dir=''
   fi
@@ -219,7 +249,6 @@ launch_browser() {
   local binary=''
   local app_name=''
   local env_name=''
-  [ "$(uname -s)" = 'Darwin' ] || { fail 'browser launching is currently supported on macOS'; return 1; }
   profile_dir="$(profile_dir_for "$browser")"
   mkdir -p "$profile_dir"
   chmod 700 "$profile_dir"
@@ -242,6 +271,10 @@ launch_browser() {
     [ -x "$binary" ] || { fail "$env_name is not executable: $binary"; return 1; }
     nohup "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank >/dev/null 2>&1 </dev/null &
   else
+    [ "$(uname -s)" = 'Darwin' ] || {
+      fail "automatic $app_name discovery is supported only on macOS; set $env_name to its executable"
+      return 1
+    }
     [ -d "/Applications/$app_name.app" ] || {
       fail "$app_name is not installed in /Applications; set $env_name to its executable"
       return 1

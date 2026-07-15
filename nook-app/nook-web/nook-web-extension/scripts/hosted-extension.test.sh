@@ -53,11 +53,14 @@ cat > "$fixture/archive/manifest.json" <<'EOF'
   "manifest_version": 3,
   "name": "Nook test",
   "version": "1.0.0",
-  "key": "test-key",
+  "key": "dGVzdC1rZXk=",
   "externally_connectable": {"matches": ["https://pr-410.nokey-simple.pages.dev/*"]},
   "content_scripts": [{
     "matches": ["https://pr-410.nokey-simple.pages.dev/*"],
-    "exclude_matches": ["https://pr-410.nokey-sentinel.pages.dev/*"],
+    "exclude_matches": [
+      "https://sentinel.nokey.sh/*",
+      "https://pr-410.nokey-sentinel.pages.dev/*"
+    ],
     "js": ["service-worker.js"]
   }]
 }
@@ -65,6 +68,7 @@ EOF
 printf 'worker\n' > "$fixture/archive/service-worker.js"
 (cd "$fixture/archive" && zip -q "$fixture/extension.zip" manifest.json service-worker.js)
 digest="$(sha256_file "$fixture/extension.zip")"
+extension_id="$(extension_id_from_manifest_key 'dGVzdC1rZXk=')"
 commit='0123456789abcdef0123456789abcdef01234567'
 archive_name='nook-passwords-pr-410.zip'
 cat > "$fixture/metadata.json" <<EOF
@@ -75,7 +79,7 @@ cat > "$fixture/metadata.json" <<EOF
   "manifest_version": "1.0.0",
   "commit": "$commit",
   "simple_vault_url": "https://pr-410.nokey-simple.pages.dev/",
-  "extension_id": "abcdefghijklmnopabcdefghijklmnop",
+  "extension_id": "$extension_id",
   "archive": "$archive_name",
   "download_url": "https://pr-410.nokey-sh.pages.dev/downloads/$archive_name",
   "checksum_url": "https://pr-410.nokey-sh.pages.dev/downloads/$archive_name.sha256",
@@ -83,6 +87,15 @@ cat > "$fixture/metadata.json" <<EOF
 }
 EOF
 printf '%s  %s\n' "$digest" "$archive_name" > "$fixture/checksum"
+
+CHANNEL='' PR=410 resolve_selection
+validate_extracted_manifest "$fixture/archive/manifest.json" "$extension_id"
+missing_production_sentinel="$fixture/missing-production-sentinel.json"
+jq '(.content_scripts[].exclude_matches) -= ["https://sentinel.nokey.sh/*"]' \
+  "$fixture/archive/manifest.json" > "$missing_production_sentinel"
+expect_failure validate_extracted_manifest "$missing_production_sentinel" "$extension_id"
+expect_failure validate_extracted_manifest \
+  "$fixture/archive/manifest.json" 'abcdefghijklmnopabcdefghijklmnop'
 
 FAKE_METADATA="$fixture/metadata.json"
 FAKE_ARCHIVE="$fixture/extension.zip"
@@ -144,5 +157,16 @@ mkdir -p "$fixture/invalid"
 printf 'missing manifest\n' > "$fixture/invalid/readme.txt"
 (cd "$fixture/invalid" && zip -q "$fixture/invalid.zip" readme.txt)
 expect_failure validate_archive "$fixture/invalid.zip" "$fixture/invalid.list"
+
+fake_browser="$fixture/chrome"
+cat > "$fake_browser" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$fake_browser"
+uname() { printf 'Linux\n'; }
+CHROME_BIN="$fake_browser" launch_browser chrome "$installed" >/dev/null
+unset -f uname
+[ -d "$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" ]
 
 printf 'Hosted extension launcher tests passed.\n'
