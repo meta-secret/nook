@@ -37,9 +37,9 @@ jobs:
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    # PR validation is latency-sensitive and benefits from the Nook runners'
-    # warm Docker/BuildKit cache. Long-running AI jobs stay on ubuntu-latest.
-    runs-on: nook
+    # Benchmark arm: use a fresh GitHub-hosted VM to compare the same PR gate
+    # against the normal cache-warm self-hosted Nook runner path.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
