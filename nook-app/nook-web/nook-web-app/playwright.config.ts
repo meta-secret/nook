@@ -68,9 +68,6 @@ const SYNC_PROVIDER_SPECS = [
   'remote-vault-recovery-sync.spec.ts',
 ] as const
 
-/** All local-provider e2e — main CI and local full runs. */
-const E2E_SPECS = [...PR_SPECS, ...SYNC_PROVIDER_SPECS] as const
-
 /** Real sync provider API — nightly / manual only. */
 const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
 
