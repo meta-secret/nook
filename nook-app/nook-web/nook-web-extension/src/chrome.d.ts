@@ -14,6 +14,8 @@ declare namespace chrome {
     const lastError: { message?: string } | undefined
     const id: string
 
+    function getURL(path: string): string
+
     function sendMessage<TResponse = unknown>(
       message: unknown,
       callback?: (response: TResponse) => void,
@@ -46,6 +48,25 @@ declare namespace chrome {
 
   namespace i18n {
     function getUILanguage(): string
+    function getMessage(messageName: string): string
+  }
+
+  namespace action {
+    const onClicked: {
+      addListener(listener: (tab: tabs.Tab) => void): void
+    }
+  }
+
+  namespace windows {
+    type CreateData = {
+      url: string
+      type?: 'normal' | 'popup' | 'panel' | 'detached_panel'
+      width?: number
+      height?: number
+      focused?: boolean
+    }
+
+    function create(createData: CreateData, callback?: () => void): void
   }
 
   namespace tabs {

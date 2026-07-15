@@ -1,25 +1,9 @@
-import type { PasswordFormSummary } from './password-forms'
-
-export type { PasswordFormSummary } from './password-forms'
-
-export type TabPasswordFormSummary = PasswordFormSummary & {
-  tabId: number
-  url?: string
-  title?: string
+export type OpenSimpleVaultMessage = {
+  type: 'nook:open-simple-vault'
 }
 
-export type PasswordFieldsDetectedMessage = {
-  type: 'nook:password-fields-detected'
-  payload: PasswordFormSummary
-}
-
-export type GetTabSummaryMessage = {
-  type: 'nook:get-tab-summary'
-  tabId: number
-}
-
-export type ScanPasswordFieldsMessage = {
-  type: 'nook:scan-password-fields'
+export type StartExtensionPairingMessage = {
+  type: 'nook:start-extension-pairing'
 }
 
 export type ExtensionPairingApprovedGrant = {
@@ -39,33 +23,32 @@ export type ExtensionPairingApprovedMessage = {
 }
 
 export type RuntimeMessage =
-  | PasswordFieldsDetectedMessage
-  | GetTabSummaryMessage
-  | ScanPasswordFieldsMessage
+  | OpenSimpleVaultMessage
+  | StartExtensionPairingMessage
   | ExtensionPairingApprovedMessage
-
-export type ScanPasswordFieldsResponse = {
-  ok: boolean
-  summary?: PasswordFormSummary
-}
-
-export function tabStorageKey(tabId: number) {
-  return `tab:${tabId}:password-form-summary`
-}
 
 export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
   return (
+    !!message &&
     typeof message === 'object' &&
-    message !== null &&
     'type' in message &&
     typeof message.type === 'string'
   )
 }
 
-export function isScanPasswordFieldsMessage(
+export function isOpenSimpleVaultMessage(
   message: unknown,
-): message is ScanPasswordFieldsMessage {
-  return isRuntimeMessage(message) && message.type === 'nook:scan-password-fields'
+): message is OpenSimpleVaultMessage {
+  return isRuntimeMessage(message) && message.type === 'nook:open-simple-vault'
+}
+
+export function isStartExtensionPairingMessage(
+  message: unknown,
+): message is StartExtensionPairingMessage {
+  return (
+    isRuntimeMessage(message) &&
+    message.type === 'nook:start-extension-pairing'
+  )
 }
 
 export function isExtensionPairingApprovedMessage(
@@ -75,7 +58,7 @@ export function isExtensionPairingApprovedMessage(
     !isRuntimeMessage(message) ||
     message.type !== 'nook:extension-pairing-approved' ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
-    (message as { payload?: unknown }).payload === null
+    !(message as { payload?: unknown }).payload
   ) {
     return false
   }

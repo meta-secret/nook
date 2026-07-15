@@ -124,25 +124,28 @@
           request.deviceLabel,
         ),
       )
-      const authProviders = await vault.enqueueStorage(() =>
-        loadAuthProviders(vault.manager!),
-      )
       const vaultStoreId =
         vault.activeVaultStoreId ??
         (await vault.enqueueStorage(() => vault.manager!.vaultStoreId))
-      const grantedProviders = authProviders.providers.filter(
-        (provider) => !provider.storeId || provider.storeId === vaultStoreId,
-      )
-      const sealedGrant = sealAuthProvidersForDevicePublicKey(
-        request.devicePublicKey,
-        {
-          providers: grantedProviders,
-          activeVaultStoreId: vaultStoreId,
-        },
-      )
+      let grantedProviders: StorageProvider[] = []
+      if (request.scopes.includes('sync-provider-credentials')) {
+        const authProviders = await vault.enqueueStorage(() =>
+          loadAuthProviders(vault.manager!),
+        )
+        const matchingProviders = authProviders.providers.filter(
+          (provider) => !provider.storeId || provider.storeId === vaultStoreId,
+        )
+        grantedProviders = sealAuthProvidersForDevicePublicKey(
+          request.devicePublicKey,
+          {
+            providers: matchingProviders,
+            activeVaultStoreId: vaultStoreId,
+          },
+        ).providers
+      }
       try {
         await sendGrantToExtension(
-          sealedGrant.providers,
+          grantedProviders,
           vaultStoreId,
           activeVaultName(),
         )

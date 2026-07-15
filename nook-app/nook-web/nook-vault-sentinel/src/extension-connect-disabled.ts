@@ -11,6 +11,10 @@ export const extensionConnectRequestFromLocation: (
   location: Location,
 ) => undefined = () => undefined;
 
+export const extensionRuntimeIdFromLocation: (
+  location: Location,
+) => undefined = () => undefined;
+
 export function scopeLabel(): never {
   throw new Error("errors.validation.sentinel_extension_forbidden");
 }

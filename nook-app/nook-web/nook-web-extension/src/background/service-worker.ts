@@ -2,27 +2,48 @@ export {}
 
 import {
   isExtensionPairingApprovedMessage,
-  isRuntimeMessage,
-  tabStorageKey,
-  type TabPasswordFormSummary,
+  isOpenSimpleVaultMessage,
+  isStartExtensionPairingMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
-import { extensionPairingGrantStorageItems } from './pairing-grants'
+import {
+  extensionPairingGrantStorageItems,
+  setupStorageKey,
+} from './pairing-grants'
+
+const SIMPLE_VAULT_URL = 'https://simple.nokey.sh/'
+
+function openSimpleVault(path = ''): void {
+  chrome.tabs.create({ url: new URL(path, SIMPLE_VAULT_URL).toString() })
+}
+
+function openExtensionPairing(): void {
+  const url = new URL('/extension-connect', SIMPLE_VAULT_URL)
+  url.searchParams.set('extension_id', chrome.runtime.id)
+  openSimpleVault(`${url.pathname}${url.search}`)
+}
+
+function openDeviceProtectionWindow(
+  sendResponse: (response: unknown) => void,
+): void {
+  chrome.windows.create(
+    {
+      url: chrome.runtime.getURL('connect/index.html'),
+      type: 'popup',
+      width: 460,
+      height: 560,
+      focused: true,
+    },
+    () => {
+      const message = chrome.runtime.lastError?.message
+      sendResponse(message ? { ok: false, reason: message } : { ok: true })
+    },
+  )
+}
 
 function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
   if (!sender.url) return false
   try {
     return new URL(sender.url).origin === 'https://simple.nokey.sh'
-  } catch {
-    return false
-  }
-}
-
-function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
-  if (!sender.url) return false
-  try {
-    return (
-      new URL(sender.url).origin === `chrome-extension://${chrome.runtime.id}`
-    )
   } catch {
     return false
   }
@@ -49,6 +70,23 @@ chrome.runtime.onInstalled.addListener((details) => {
   })
 })
 
+chrome.action.onClicked.addListener(() => {
+  chrome.storage.local.get(setupStorageKey, (items) => {
+    const setup = items[setupStorageKey]
+    const paired =
+      !!setup &&
+      typeof setup === 'object' &&
+      'status' in setup &&
+      (setup.status === 'ready' || setup.status === 'locked')
+
+    if (paired) {
+      openSimpleVault()
+      return
+    }
+    openExtensionPairing()
+  })
+})
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
     hasPairingApprovedType(message) &&
@@ -58,12 +96,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false
   }
 
-  if (!isRuntimeMessage(message)) {
-    return false
-  }
-
   if (isExtensionPairingApprovedMessage(message)) {
-    if (!isExtensionPageSender(sender)) {
+    if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
     }
@@ -77,35 +111,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (message.type === 'nook:password-fields-detected') {
-    const tabId = sender.tab?.id
-    if (typeof tabId !== 'number') {
-      sendResponse({ ok: false, reason: 'missing-tab' })
-      return false
-    }
-
-    const summary: TabPasswordFormSummary = {
-      ...message.payload,
-      tabId,
-      url: sender.tab?.url,
-      title: sender.tab?.title,
-    }
-
-    chrome.storage.local.set({ [tabStorageKey(tabId)]: summary }, () => {
-      sendResponse({ ok: true })
-    })
-
-    return true
-  }
-
-  if (message.type === 'nook:get-tab-summary') {
-    chrome.storage.local.get(tabStorageKey(message.tabId), (items) => {
-      sendResponse({
-        ok: true,
-        summary: items[tabStorageKey(message.tabId)] ?? null,
-      })
-    })
-    return true
+  if (isOpenSimpleVaultMessage(message) && typeof sender.tab?.id === 'number') {
+    openSimpleVault()
+    sendResponse({ ok: true })
+    return false
   }
 
   return false
@@ -113,6 +122,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
+    if (isStartExtensionPairingMessage(message) && isNokeySender(sender)) {
+      openDeviceProtectionWindow(sendResponse)
+      return true
+    }
+
     if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
       sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
       return false

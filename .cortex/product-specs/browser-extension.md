@@ -1,150 +1,134 @@
 # Browser Extension Product Spec
 
-Status: Draft for #236.
+Status: Active direction for #234, #235, #237, and #244.
 
-`nook-web-extension` is a permissioned vault and filling companion. It is not a
-temporary view into the open `nokey.sh` page and must not scrape the web app's
-IndexedDB. The extension has its own extension-owned storage, its own Nook device
-identity, and its own passkey-protected device-key state.
+`nook-web-extension` is the browser integration for Simple Vault. It does not
+duplicate the vault application UI. Clicking the extension opens
+`https://simple.nokey.sh`, which remains the only surface for creating,
+importing, unlocking, browsing, editing, recovering, and administering vaults.
 
-`simple.nokey.sh` remains the full settings, recovery, and grant-management surface.
-The extension can fill passwords and sync authorized vault data after pairing,
-but device approval, grant rotation, and revocation are managed from `simple.nokey.sh`.
+The extension owns browser-only responsibilities:
+
+- detecting login opportunities;
+- rendering a small contextual Nook widget on sites;
+- requesting domain matches from its background/WASM runtime;
+- filling a credential after explicit user action;
+- offering to save or update a credential by opening Simple Vault;
+- maintaining separately revocable extension device state and, once #244 is
+  complete, an encrypted extension-owned vault projection for independent fill.
 
 The extension is a Simple Vault capability. It must never pair with, receive a
-grant from, inject a content script into, or open a Sentinel Vault. Sentinel
-extension approval is rejected by the compiled Rust/WASM application boundary,
-not merely hidden by the UI.
+grant from, inject a content script into, or open Sentinel Vault. Rust/WASM
+application capability checks enforce the vault-type boundary.
 
-## First-Run Goals
+## Product Boundary
 
-- Make clear that setup creates a separate browser-extension device for this
-  browser profile.
-- Require passkey/device authorization before extension storage can hold a
-  wrapped device identity, encrypted vault copy, or sealed sync-provider rows.
-- Pair only through `https://simple.nokey.sh/extension-connect`.
-- Require normal `simple.nokey.sh` unlock before approving the extension device.
-- Show explicit consent scopes for vault access, password filling, and
-  sync-provider credential access.
-- Explain that closing `nokey.sh` after pairing does not remove extension access;
-  the extension remains an authorized device until revoked or rotated.
+| Surface | Responsibility |
+|---|---|
+| `simple.nokey.sh` | Complete vault UI, unlock, consent, device management, recovery, and settings |
+| Extension toolbar action | Open Simple Vault; open browser-access setup when the extension is not paired |
+| Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization |
+| In-page widget | Contextual open/unlock/select/fill/save actions only |
+| Content script | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials |
 
-## Device Identity Decision
+“No extension UI” means no second vault-management UI. A one-time,
+extension-origin device-protection window remains necessary because WebAuthn
+cannot run in a Manifest V3 service worker. That window contains only the
+passkey action required to protect the extension device key, then returns to
+Simple Vault for consent.
 
-The extension creates its own Nook device identity instead of reusing the
-`nokey.sh` browser device private key, even when both live in the same browser
-profile.
+## First Run And Approval
 
-This gives users and the app:
+1. The user clicks the extension toolbar button.
+2. The extension opens `https://simple.nokey.sh/extension-connect` with its
+   runtime id.
+3. Simple Vault explains browser access and asks the installed extension to
+   start device protection.
+4. A small extension-origin window creates the separate extension device and
+   protects its private key using WebAuthn PRF through Rust/WASM.
+5. That window returns to `simple.nokey.sh/extension-connect` with the protected
+   device request.
+6. The user creates, imports, or unlocks the full Simple vault on the website.
+7. Simple Vault shows explicit consent and approves the extension as a vault
+   device through the Rust/WASM authorization boundary.
+8. The extension receives only the approved, sealed grant and becomes a
+   separately recognizable and revocable device.
 
-- a distinct approval and revocation boundary;
-- a recognizable device label in the device list;
-- separate extension storage and passkey authorization;
-- a smaller blast radius if extension storage or permissions are compromised.
+The website origin is a transport and UI boundary, not cryptographic authority
+by itself. An unlocked, authorized vault device creates the approval event.
 
-The extension device private key follows the same protection model as the web
-app device key: TypeScript performs the browser WebAuthn ceremony, while
-Rust/WASM owns option construction, PRF validation, key wrapping, persistence,
-and auth-envelope behavior.
+## Toolbar Behavior
 
-## Extension Popup States
+- Unpaired extension: open the browser-access setup route.
+- Paired extension: open the Simple Vault home route.
+- Never open a miniature vault popup.
+- Management actions originating from the widget open the corresponding Simple
+  Vault route rather than recreating that interface in the extension.
 
-| State | Meaning | Primary UI |
-|---|---|---|
-| Not set up | No extension device identity is authorized. | `Connect Nook`, with copy that setup creates a passkey-protected extension device. |
-| Protect this extension | Device identity setup is in progress, but not paired to a vault. | Passkey authorization copy, device-label preview, and no vault/filling actions. |
-| Pair with Simple Vault | Extension has a protected device identity and pairing request. | `Open Simple Vault`, pointing to `https://simple.nokey.sh/extension-connect` with a request nonce and scopes. |
-| Pairing failed | The handoff failed or was denied. | Specific failure reason, retry, and reset setup options. |
-| Locked | Extension is paired but the device identity is not authorized in this popup session. | Unlock with passkey before showing vaults, sync providers, or fill actions. |
-| Ready | Extension is paired and passkey-authorized. | Paired vault list, selected vault, current-page fill actions, and sync status. |
-| Revoked | `nokey.sh` has revoked or rotated the extension device grant. | Explain that filling is disabled and offer to pair again. |
+## In-Page Widget
 
-The extension must not show decrypted vault values, sync-provider credentials, or
-page-fill actions in any state before `Locked -> Ready`.
+When a likely login flow is present, the content script may show a compact Nook
+widget near the top-right of the viewport.
 
-## Pairing Handoff
+The widget must:
 
-When the extension reaches `Pair with Simple Vault`, it opens exactly:
+- be visibly Nook-owned and keyboard accessible;
+- support dismissal without blocking the host page;
+- never request a vault password, recovery secret, or provider credential;
+- never silently fill or submit;
+- show only contextual accounts returned by the background/WASM boundary;
+- open a browser-native or extension-controlled authorization surface when the
+  extension is locked;
+- open Simple Vault for full search, creation, editing, and settings.
 
-```text
-https://simple.nokey.sh/extension-connect
-```
+An injected DOM widget is not a trusted place for primary authentication because
+the host page can imitate it. Passkey authorization stays browser-native or in
+an extension-controlled top-level window.
 
-The request payload must include:
+## Device And Storage Boundary
 
-- a high-entropy nonce or request id;
-- extension device public identity;
-- requested scopes;
-- suggested device label;
-- browser, profile, platform, and extension version metadata;
-- return channel information for the extension.
+The extension creates its own Nook device identity instead of reusing or
+scraping the `simple.nokey.sh` browser device private key. This provides a
+distinct approval/revocation boundary and limits compromise blast radius.
 
-The web app rejects missing, expired, replayed, or malformed pairing requests.
-If the user is not unlocked, `simple.nokey.sh` shows the normal passkey/device gate and
-vault login before the consent screen.
+TypeScript performs browser ceremonies and message transport. Rust/WASM owns
+device option construction, PRF validation, key wrapping, authorization
+envelopes, vault validation, domain matching, and secret selection.
 
-## Consent Screen
+Before #244 is complete, pairing metadata is not equivalent to an independently
+usable vault. The durable implementation must import an encrypted vault
+projection and sealed provider rows into extension-owned IndexedDB. No
+decrypted vault values or provider credentials may be stored in
+`chrome.storage.local`, exposed to content scripts, or written to logs.
 
-`simple.nokey.sh` shows a consent screen before adding the extension as a vault device.
-The screen says that Nook is adding an extension/browser-profile device, not
-sharing the current page session.
+## Consent
 
-Consent includes:
+Consent is shown only on `simple.nokey.sh` after normal vault unlock. User-facing
+permissions describe actions instead of implementation details:
 
-- selected vaults;
-- vault access;
-- password filling on visited pages;
-- sync-provider credential access, called out separately from vault access;
-- device label preview;
-- where to revoke later.
+- suggest logins for the current website;
+- fill a selected login;
+- offer to save new or changed credentials;
+- optionally synchronize the encrypted local extension state in the background.
 
-Sync-provider credentials are granted only when explicitly selected. Secret
-provider fields are resealed for the extension device before persistence in
-extension-owned IndexedDB. Content scripts and page DOM state never receive
-decrypted provider credentials.
+Background sync-provider access is separate and opt-in. Provider secrets are
+re-sealed for the extension device before leaving the approving vault session.
 
-## Device Labels
+## Revocation And Failure
 
-The default label should be recognizable later in device settings:
+- Closing the setup window leaves the extension unpaired; the toolbar returns
+  to browser-access setup.
+- A denied or malformed request adds no device and transfers no vault state.
+- Revocation clears plaintext sessions, disables matching/filling, and retains
+  only non-sensitive metadata needed to explain the state.
+- Rotation requires a new device request and approval.
+- Sentinel requests fail in Rust/WASM even if UI or transport guards regress.
 
-```text
-Nook Extension - <Browser> profile on <OS>
-```
+## Delivery Slices
 
-Examples:
-
-- `Nook Extension - Chrome profile on macOS`
-- `Nook Extension - Brave profile on Windows`
-- `Nook Extension - Firefox profile on Linux`
-
-If the browser profile name is unavailable, omit it rather than guessing.
-
-## Failure And Recovery
-
-Denied permission:
-: Keep the protected extension device only if setup finished; let the user retry
-  pairing or reset extension setup.
-
-Closed tab:
-: Leave the extension in `Pair with nokey.sh` and show that no vault was added.
-
-Invalid pairing request:
-: Show `Pairing failed`, discard the request nonce, and require a fresh handoff.
-
-Passkey failure:
-: Stay locked or unpaired. Do not load vault data or provider credentials.
-
-Revoked extension device:
-: Clear plaintext sessions, disable filling, and show `Revoked`. Keep enough
-  metadata to explain the revoked label and offer a fresh pairing.
-
-Rotation:
-: `simple.nokey.sh` can rotate or remove the extension device grant from the device
-  settings surface. After rotation, the extension must re-pair as a new device.
-
-## Implementation Boundary
-
-This spec intentionally defines the first-run UX and product-security semantics.
-Follow-up implementation work must add the actual pairing handshake, extension
-device identity persistence, auth envelope creation, sealed provider transfer,
-and web-app consent route.
+- This direction removes the vault popup, makes the toolbar open Simple Vault,
+  moves setup initiation to the website, and establishes the in-page widget.
+- #244 owns encrypted vault import, extension unlock, sealed provider storage,
+  and independent sync after the website closes.
+- #237 owns matched-account selection and explicit fill behavior once the
+  extension runtime can query its authorized encrypted state.

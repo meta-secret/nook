@@ -78,6 +78,16 @@ export function extensionConnectRequestFromLocation(
   };
 }
 
+export function extensionRuntimeIdFromLocation(
+  location: Location,
+): string | undefined {
+  if (!isExtensionConnectPath(location.pathname)) return undefined;
+  const extensionRuntimeId = new URLSearchParams(location.search)
+    .get("extension_id")
+    ?.trim();
+  return extensionRuntimeId || undefined;
+}
+
 export function scopeLabel(scope: ExtensionConnectScope): string {
   if (scope === "vault-access") return "Vault access";
   if (scope === "password-filling") return "Password filling";

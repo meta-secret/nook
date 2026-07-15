@@ -158,10 +158,14 @@ root/
 ### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
 
 - **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web/nook-web-extension/dist`; source lives under `nook-app/nook-web/nook-web-extension/src`.
-- **Simple-only product surface:** Popup UI, service worker, content scripts,
-  and future autofill flows pair only through `simple.nokey.sh`. The manifest
-  and runtime guard exclude `sentinel.nokey.sh`, and Rust rejects Sentinel
-  extension approval.
+- **Simple Vault owns the UI:** The toolbar opens `simple.nokey.sh`; the
+  extension contains no duplicate vault-management popup. Its visible surfaces
+  are the contextual in-page authentication widget and a one-time
+  extension-origin passkey window required to protect the extension device.
+- **Simple-only product surface:** The service worker, content scripts, and
+  future autofill flows pair only through `simple.nokey.sh`. The manifest and
+  runtime guard exclude both Nook vault origins from widget injection, and Rust
+  rejects Sentinel extension approval.
 - **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   extensionConnectRequestFromLocation,
+  extensionRuntimeIdFromLocation,
   isExtensionConnectPath,
 } from '$lib/extension-connect'
 import { isExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
@@ -47,6 +48,23 @@ describe('extension connect route parsing', () => {
     )
 
     expect(request).toBeUndefined()
+  })
+
+  test('recognizes website-driven extension setup links', () => {
+    const location = locationFromUrl(
+      'https://simple.nokey.sh/extension-connect?extension_id=ext-123',
+    )
+
+    expect(extensionConnectRequestFromLocation(location)).toBeUndefined()
+    expect(extensionRuntimeIdFromLocation(location)).toBe('ext-123')
+  })
+
+  test('rejects extension ids outside the canonical connect route', () => {
+    expect(
+      extensionRuntimeIdFromLocation(
+        locationFromUrl('https://simple.nokey.sh/?extension_id=ext-123'),
+      ),
+    ).toBeUndefined()
   })
 })
 

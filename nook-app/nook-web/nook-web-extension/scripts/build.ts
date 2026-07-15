@@ -1,4 +1,11 @@
-import { copyFile, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -9,6 +16,7 @@ const projectRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(projectRoot, '..')
 const webRoot = join(webGroupRoot, 'nook-web-app')
 const sharedRoot = join(webGroupRoot, 'nook-web-shared')
+const coreLocalesRoot = join(webGroupRoot, '..', 'nook-core', 'locales')
 const distDir = join(projectRoot, 'dist')
 const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 
@@ -63,7 +71,7 @@ async function importWebDependency<TModule>(specifier: string) {
   return import(pathToFileURL(resolved).href) as Promise<TModule>
 }
 
-async function buildPopup() {
+async function buildConnectPage() {
   const { build: viteBuild } =
     await importWebDependency<typeof import('vite')>('vite')
   const { svelte } = await importWebDependency<
@@ -71,18 +79,18 @@ async function buildPopup() {
   >('@sveltejs/vite-plugin-svelte')
 
   await viteBuild({
-    root: join(projectRoot, 'src/popup'),
+    root: join(projectRoot, 'src/connect'),
     configFile: false,
     base: './',
     publicDir: false,
     plugins: [svelte()],
     build: {
-      outDir: join(distDir, 'popup'),
+      outDir: join(distDir, 'connect'),
       emptyOutDir: true,
       minify: false,
       sourcemap: true,
       rollupOptions: {
-        input: join(projectRoot, 'src/popup/index.html'),
+        input: join(projectRoot, 'src/connect/index.html'),
       },
     },
     resolve: {
@@ -94,6 +102,35 @@ async function buildPopup() {
   })
 }
 
+type NookLocaleCatalog = {
+  extension: {
+    widget: {
+      open_vault: string
+      dismiss: string
+    }
+  }
+}
+
+async function buildChromeLocales() {
+  await Promise.all(
+    ['en', 'ru'].map(async (locale) => {
+      const catalog = JSON.parse(
+        await readFile(join(coreLocalesRoot, `${locale}.json`), 'utf8'),
+      ) as NookLocaleCatalog
+      const messages = {
+        widgetOpenVault: { message: catalog.extension.widget.open_vault },
+        widgetDismiss: { message: catalog.extension.widget.dismiss },
+      }
+      const localeDir = join(distDir, '_locales', locale)
+      await mkdir(localeDir, { recursive: true })
+      await writeFile(
+        join(localeDir, 'messages.json'),
+        `${JSON.stringify(messages, undefined, 2)}\n`,
+      )
+    }),
+  )
+}
+
 await ensureNodeModulesLink()
 await rm(distDir, { force: true, recursive: true })
 await mkdir(distDir, { recursive: true })
@@ -103,7 +140,7 @@ await Promise.all([
   buildEntrypoint('src/content/autofill.ts', 'content'),
 ])
 
-await buildPopup()
+await Promise.all([buildConnectPage(), buildChromeLocales()])
 
 await writeFile(
   join(distDir, 'manifest.json'),

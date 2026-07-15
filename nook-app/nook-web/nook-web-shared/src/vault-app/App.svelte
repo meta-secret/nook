@@ -13,6 +13,7 @@
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
+  import ExtensionConnectStart from '$lib/components/ExtensionConnectStart.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
@@ -36,6 +37,7 @@
   import { isAppLogsPath } from '$lib/app-logs-api'
   import {
     extensionConnectRequestFromLocation,
+    extensionRuntimeIdFromLocation,
     isExtensionConnectPath,
     type ExtensionConnectRequest,
   } from '$lib/extension-connect'
@@ -91,6 +93,11 @@
       ? extensionConnectRequestFromLocation(window.location)
       : undefined,
   )
+  let extensionRuntimeId = $state<string | undefined>(
+    typeof window !== 'undefined' && SUPPORTS_EXTENSION
+      ? extensionRuntimeIdFromLocation(window.location)
+      : undefined,
+  )
   let sentinelInvitationRequest = $state(
     typeof window !== 'undefined' && APP_KIND !== 'simple'
       ? consumeSentinelGenesisRequestFromLocation()
@@ -115,6 +122,9 @@
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
     extensionConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
+      : undefined
+    extensionRuntimeId = SUPPORTS_EXTENSION
+      ? extensionRuntimeIdFromLocation(window.location)
       : undefined
     if (APP_KIND !== 'simple') {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
@@ -158,6 +168,7 @@
     appLogsPage = false
     extensionConnectRoute = false
     extensionConnectRequest = undefined
+    extensionRuntimeId = undefined
   }
 
   function navigateToSiblingApp(event: MouseEvent) {
@@ -573,19 +584,22 @@
             onDismissError={() => vault.dismissError()}
           />
         </div>
+      {:else if extensionConnectRoute && !extensionConnectRequest && extensionRuntimeId}
+        <ExtensionConnectStart
+          {vault}
+          {extensionRuntimeId}
+          onClose={navigateHome}
+        />
       {:else if extensionConnectRoute && !extensionConnectRequest}
         <section
           class="mx-auto max-w-2xl rounded-xl border border-destructive/30 bg-card p-4 shadow-sm sm:p-5"
           data-testid="extension-connect-invalid"
         >
           <h1 class="text-lg font-semibold text-foreground">
-            Invalid extension request
+            {vault.t('extension.connect.invalid_title')}
           </h1>
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Open this pairing screen from the Nook extension after its passkey
-            setup finishes. The request must include the extension device id,
-            encryption key, signing key, extension id, nonce, and requested
-            access.
+            {vault.t('extension.connect.invalid_description')}
           </p>
           <Button
             type="button"
@@ -593,7 +607,7 @@
             class="mt-4"
             onclick={navigateHome}
           >
-            Return to Nook
+            {vault.t('extension.connect.return_to_nook')}
           </Button>
         </section>
       {:else if !vault.isAuthenticated}

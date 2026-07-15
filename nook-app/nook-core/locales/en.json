@@ -1156,6 +1156,9 @@
       "simple_device_description": "This creates a separate passkey-protected extension device for this browser profile. The extension never reuses the device key from an open Simple Vault tab and can pair only with simple.nokey.sh.",
       "protect_title": "Protect this extension",
       "protect_description": "Nook is creating this extension's own device key and protecting it with this browser profile's passkey before pairing with simple.nokey.sh.",
+      "browser_access_title": "Protect browser access",
+      "browser_access_description": "This one-time window protects the extension device. Your complete vault stays on simple.nokey.sh.",
+      "protect_browser_access": "Protect browser access",
       "waiting_for_passkey": "Waiting for passkey",
       "start_over": "Start over",
       "pair_simple_title": "Pair with Simple Vault",
@@ -1180,6 +1183,23 @@
       "one_sync_provider_granted": "1 sync provider granted",
       "sync_providers_granted": "{count} sync providers granted"
     },
+    "connect": {
+      "title": "Use Nook on websites",
+      "description": "Keep the complete vault on simple.nokey.sh and allow this browser extension to provide Nook where you sign in.",
+      "device_protection": "The extension remains a separately revocable Nook device. A short browser window protects its device key with a passkey; it does not contain a second vault interface.",
+      "messaging_unavailable": "The Nook extension could not be reached from this browser.",
+      "start_failed": "The extension could not start browser access setup.",
+      "protection_opened": "Finish passkey protection in the small Nook window. It will return here for vault approval.",
+      "starting": "Opening protection…",
+      "continue": "Enable browser access",
+      "invalid_title": "Invalid extension request",
+      "invalid_description": "Open this page from the installed Nook extension. A valid request must identify the extension or include its protected device request.",
+      "return_to_nook": "Return to Nook"
+    },
+    "widget": {
+      "open_vault": "Open vault",
+      "dismiss": "Dismiss Nook"
+    },
     "consent": {
       "title": "Approve Nook extension",
       "description": "This adds a separate passkey-protected extension device to the unlocked Simple vault. The extension remains a permissioned filling companion; Sentinel Vault never participates.",
@@ -1196,9 +1216,9 @@
       "handoff_failed": "Extension approved, but the browser handoff failed.",
       "handoff_failed_detail": "Extension approved, but the browser handoff failed: {error}",
       "approved": "Extension device approved.",
-      "approved_reopen": "Extension device approved. Reopen the extension if pairing did not update.",
+      "approved_reopen": "Extension device approved. Reopen Nook if browser access did not update.",
       "approval_failed": "Failed to approve extension device.",
-      "approved_return": "Extension approved. You can return to the browser extension.",
+      "approved_return": "Browser access approved. You can close this window or return to your vault.",
       "approving": "Approving…",
       "approve": "Approve extension"
     },

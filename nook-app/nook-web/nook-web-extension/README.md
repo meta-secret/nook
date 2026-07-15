@@ -1,17 +1,18 @@
 # Nook Browser Extension
 
-`nook-web-extension` is the browser-extension package for Nook. It is intentionally
-separate from `nook-web` so the extension can grow extension-specific surfaces
-such as content scripts, autofill, and background coordination without coupling
-those concerns to the web app shell.
+`nook-web-extension` is Nook's browser-integration package. The toolbar opens
+`https://simple.nokey.sh`, which owns the complete vault interface. The
+extension contains browser-only behavior: the in-page Nook widget, autofill DOM
+integration, background coordination, and a one-time extension-origin passkey
+window for protecting its separately revocable device identity.
 
 The extension first-run model is specified in
 [`.cortex/product-specs/browser-extension.md`](../../../.cortex/product-specs/browser-extension.md).
-The short version: the extension becomes its own passkey-protected Nook device
-and pairs only through `https://simple.nokey.sh/extension-connect`; it does not
-borrow or scrape the Simple web app device key. Sentinel Vault is excluded by
-the extension manifest, runtime content-script guard, pairing DTO validation,
-and Rust/WASM capability checks.
+The extension becomes its own passkey-protected Nook device and pairs only
+through website-driven consent at `https://simple.nokey.sh/extension-connect`;
+it does not borrow or scrape the Simple web app device key. It intentionally has
+no miniature vault popup. Sentinel Vault is excluded by the manifest, runtime
+guard, pairing validation, and Rust/WASM capability checks.
 
 Build it through Docker-backed Taskfile commands from the repo root or `nook-app/`:
 

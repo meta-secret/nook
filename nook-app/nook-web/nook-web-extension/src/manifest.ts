@@ -2,13 +2,13 @@ type ManifestIconSet = Record<'16' | '32' | '48' | '128', string>
 
 export type ExtensionManifest = {
   manifest_version: 3
+  default_locale: 'en'
   name: string
   short_name: string
   description: string
   version: string
   action: {
     default_title: string
-    default_popup: string
     default_icon: ManifestIconSet
   }
   background: {
@@ -42,6 +42,7 @@ const iconSet: ManifestIconSet = {
 export function createManifest(version: string): ExtensionManifest {
   return {
     manifest_version: 3,
+    default_locale: 'en',
     name: 'Nook Passwords',
     short_name: 'Nook',
     description:
@@ -49,7 +50,6 @@ export function createManifest(version: string): ExtensionManifest {
     version,
     action: {
       default_title: 'Nook',
-      default_popup: 'popup/index.html',
       default_icon: iconSet,
     },
     background: {
@@ -63,7 +63,10 @@ export function createManifest(version: string): ExtensionManifest {
     content_scripts: [
       {
         matches: ['<all_urls>'],
-        exclude_matches: ['https://sentinel.nokey.sh/*'],
+        exclude_matches: [
+          'https://simple.nokey.sh/*',
+          'https://sentinel.nokey.sh/*',
+        ],
         js: ['content/autofill.js'],
         run_at: 'document_idle',
       },
