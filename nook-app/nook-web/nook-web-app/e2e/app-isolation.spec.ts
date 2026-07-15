@@ -119,9 +119,19 @@ test('keeps extension routing and local session behavior app-specific', async ({
   const extensionContext = await browser.newContext()
   const extensionPage = await extensionContext.newPage()
   await extensionPage.goto(new URL(page.url()).origin)
-  await expect(
-    extensionPage.getByTestId('login-create-vault-chooser'),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect
+    .poll(
+      () =>
+        extensionPage.evaluate(
+          () =>
+            Boolean(
+              (window as Window & { __nookVault?: DebugVault }).__nookVault
+                ?.manager,
+            ),
+        ),
+      { timeout: UI_TIMEOUT_MS },
+    )
+    .toBe(true)
   const extensionDevice = await extensionPage.evaluate(async () => {
     const manager = (window as Window & { __nookVault?: DebugVault })
       .__nookVault?.manager
