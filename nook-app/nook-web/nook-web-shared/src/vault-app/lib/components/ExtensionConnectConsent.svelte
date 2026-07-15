@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
-  import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
+  import type {
+    ExtensionEventLogRecord,
+    ExtensionPairingApprovedMessage,
+  } from '$web-shared/extension/runtime-messages'
   import {
     loadAuthProviders,
     sealAuthProvidersForDevicePublicKey,
@@ -49,6 +52,7 @@
     providers: StorageProvider[],
     vaultStoreId: string,
     vaultName: string,
+    eventLogRecords: ExtensionEventLogRecord[],
   ): Promise<void> {
     const runtime = (
       globalThis as typeof globalThis & {
@@ -76,6 +80,8 @@
       payload: {
         vaultType: 'simple',
         deviceId: request.deviceId,
+        devicePublicKey: request.devicePublicKey,
+        deviceSigningPublicKey: request.deviceSigningPublicKey,
         deviceLabel: request.deviceLabel,
         vaultStoreId,
         vaultName,
@@ -83,6 +89,7 @@
         scopes: request.scopes,
         providers,
       },
+      eventLogRecords,
     }
 
     return new Promise((resolve, reject) => {
@@ -124,27 +131,34 @@
           request.deviceLabel,
         ),
       )
-      const authProviders = await vault.enqueueStorage(() =>
-        loadAuthProviders(vault.manager!),
-      )
       const vaultStoreId =
         vault.activeVaultStoreId ??
         (await vault.enqueueStorage(() => vault.manager!.vaultStoreId))
-      const grantedProviders = authProviders.providers.filter(
-        (provider) => !provider.storeId || provider.storeId === vaultStoreId,
-      )
-      const sealedGrant = sealAuthProvidersForDevicePublicKey(
-        request.devicePublicKey,
-        {
-          providers: grantedProviders,
-          activeVaultStoreId: vaultStoreId,
-        },
-      )
+      let grantedProviders: StorageProvider[] = []
+      if (request.scopes.includes('sync-provider-credentials')) {
+        const authProviders = await vault.enqueueStorage(() =>
+          loadAuthProviders(vault.manager!),
+        )
+        const matchingProviders = authProviders.providers.filter(
+          (provider) => !provider.storeId || provider.storeId === vaultStoreId,
+        )
+        grantedProviders = sealAuthProvidersForDevicePublicKey(
+          request.devicePublicKey,
+          {
+            providers: matchingProviders,
+            activeVaultStoreId: vaultStoreId,
+          },
+        ).providers
+      }
+      const eventLogRecords = (await vault.enqueueStorage(() =>
+        vault.manager!.exportEventLogRecords(),
+      )) as ExtensionEventLogRecord[]
       try {
         await sendGrantToExtension(
-          sealedGrant.providers,
+          grantedProviders,
           vaultStoreId,
           activeVaultName(),
+          eventLogRecords,
         )
       } catch (caught) {
         handoffError =

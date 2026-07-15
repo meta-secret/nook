@@ -29,6 +29,7 @@ vars:
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
+  DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -49,6 +50,7 @@ vars:
   VITE_BASE: '{{default "/" .VITE_BASE}}'
   VITE_SITE_URL: '{{default "" .VITE_SITE_URL}}'
   VITE_PUBLIC_APP_URL: '{{default "" .VITE_PUBLIC_APP_URL}}'
+  NOOK_SIMPLE_VAULT_URL: '{{default "https://simple.nokey.sh/" .NOOK_SIMPLE_VAULT_URL}}'
   VITE_SIMPLE_APP_URL: '{{default "" .VITE_SIMPLE_APP_URL}}'
   VITE_SENTINEL_APP_URL: '{{default "" .VITE_SENTINEL_APP_URL}}'
   VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
@@ -92,6 +94,7 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
     cmds:

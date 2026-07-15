@@ -13,6 +13,7 @@ FROM web-base AS nook-web
 ARG VITE_BASE=/
 ARG VITE_SITE_URL=
 ARG VITE_PUBLIC_APP_URL=
+ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
 ARG VITE_SIMPLE_APP_URL=
 ARG VITE_SENTINEL_APP_URL=
 
@@ -56,7 +57,8 @@ RUN cd nook-app/nook-web/nook-web-app \
     VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
     VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
     bun run build
-RUN cd nook-app/nook-web/nook-web-extension && bun run build
+RUN cd nook-app/nook-web/nook-web-extension \
+    && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" bun run build
 
 # No ENTRYPOINT: the image is sealed (source + web deps + generated WASM baked in), so `docker run`
 # invokes the task command directly (e.g. `docker run <img> task check`).

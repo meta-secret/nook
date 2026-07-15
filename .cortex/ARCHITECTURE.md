@@ -158,12 +158,33 @@ root/
 ### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
 
 - **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web/nook-web-extension/dist`; source lives under `nook-app/nook-web/nook-web-extension/src`.
-- **Simple-only product surface:** Popup UI, service worker, content scripts,
-  and future autofill flows pair only through `simple.nokey.sh`. The manifest
-  and runtime guard exclude `sentinel.nokey.sh`, and Rust rejects Sentinel
-  extension approval.
+- **Simple Vault owns the vault UI:** Before pairing, the toolbar popup contains
+  only the standard extension-origin device-protection widget. Creating,
+  recovering, or unlocking that identity sends its public keys directly to the
+  environment-configured Simple Vault consent route. The extension contains no
+  duplicate vault-management popup, website-first enable page, or second setup
+  window. Its other visible surface is the contextual in-page authentication
+  widget.
+- **Environment target:** `NOOK_SIMPLE_VAULT_URL` is sealed into the extension
+  bundle and manifest. Production uses `simple.nokey.sh`; PR previews use their
+  `/simple/` artifact; local development can supply a local URL. Shared preview
+  hosts remain path-isolated, so `/sentinel/` cannot use the Simple extension
+  messaging boundary.
+- **Simple-only product surface:** The service worker, content scripts, and
+  future autofill flows pair only through `simple.nokey.sh`. The manifest and
+  runtime guard exclude both Nook vault origins from widget injection, and Rust
+  rejects Sentinel extension approval.
 - **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
+- **Local projection bridge:** Simple Vault publishes its canonical encrypted,
+  signed event log after local mutations and provider pulls. A content script
+  restricted to the configured Simple origin transports that snapshot to the
+  service worker; Rust/WASM validates canonical ids/signatures, store identity,
+  the extension's protected device id, current approval, and revocation before
+  persisting an extension-origin IndexedDB projection. `chrome.storage.local`
+  contains connection metadata only. Sync providers complement this bridge for
+  changes originating on other devices; they are not required for same-browser
+  website/extension coherence.
 
 ### F. `nook-web/nook-web-research` (Isolated UI Experiments)
 
@@ -267,7 +288,7 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload) and `task wasm:build:fast` (mounted no-opt WASM regeneration).
+All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload over trusted `https://localhost:<port>` using ignored TLS material in `.nook/https/`) and `task wasm:build:fast` (mounted no-opt WASM regeneration). `task web:https:setup` builds and runs the pinned repository `mkcert` container; only the final CA trust operation runs on the host because the browser consumes the host trust store. Playwright and CI keep their isolated loopback-HTTP transport when real passkey/OAuth/provider ceremonies are not under test.
 
 ### Split Rust/WASM and web images
 

@@ -183,18 +183,66 @@ tasks:
         vars: { TASK: _web:lint }
 
   web:dev:
-    desc: Start the Svelte dev server in Docker.
+    desc: Start the trusted-HTTPS Svelte dev server in Docker.
     deps:
       - setup:rust:browser
+      - web:https:setup
     cmds:
       - task: docker:web:dev
 
   web:dev:fast:
-    desc: Start the Svelte dev server in Docker with a no-opt wasm build (local iteration).
+    desc: Start the trusted-HTTPS Svelte dev server in Docker with a no-opt wasm build (local iteration).
     deps:
       - setup:rust:browser
+      - web:https:setup
     cmds:
       - task: docker:web:dev:fast
+
+  web:https:setup:
+    desc: Generate localhost TLS material in Docker and trust its CA on the host.
+    deps:
+      - web:https:generate
+    status:
+      - >-
+        bash -c 'set -euo pipefail;
+        case "$(uname -s)" in
+          Darwin) security verify-cert -c "{{.REPO_ROOT}}/.nook/https/localhost.pem" -p ssl -s localhost >/dev/null 2>&1 ;;
+          Linux) openssl verify -CApath /etc/ssl/certs "{{.REPO_ROOT}}/.nook/https/localhost.pem" >/dev/null 2>&1 ;;
+          *) exit 1 ;;
+        esac'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        ca="{{.REPO_ROOT}}/.nook/https/rootCA.pem";
+        case "$(uname -s)" in
+          Darwin) security add-trusted-cert -r trustRoot -k "$HOME/Library/Keychains/login.keychain-db" "$ca" ;;
+          Linux)
+            sudo cp "$ca" /usr/local/share/ca-certificates/nook-localhost-mkcert.crt;
+            sudo update-ca-certificates ;;
+          *) echo "Unsupported host for local certificate trust: $(uname -s)" >&2; exit 1 ;;
+        esac'
+
+  web:https:generate:
+    desc: Build the pinned mkcert container and generate ignored localhost TLS material.
+    status:
+      - test -s "{{.REPO_ROOT}}/.nook/https/rootCA.pem"
+      - test -s "{{.REPO_ROOT}}/.nook/https/localhost.pem"
+      - test -s "{{.REPO_ROOT}}/.nook/https/localhost-key.pem"
+    cmds:
+      - mkdir -p "{{.REPO_ROOT}}/.nook/https"
+      - >-
+        {{.DOCKER}} build
+        --file "{{.REPO_ROOT}}/nook-app/docker/mkcert.Dockerfile"
+        --tag "{{.DOCKER_MKCERT_IMAGE}}"
+        "{{.REPO_ROOT}}"
+      - >-
+        {{.DOCKER}} run --rm
+        -e CAROOT=/certs
+        -v "{{.REPO_ROOT}}/.nook/https:/certs"
+        "{{.DOCKER_MKCERT_IMAGE}}"
+        -cert-file /certs/localhost.pem
+        -key-file /certs/localhost-key.pem
+        localhost 127.0.0.1 ::1
 
   _web:install:
     desc: Sync web dependencies after package.json or bun.lock changes.

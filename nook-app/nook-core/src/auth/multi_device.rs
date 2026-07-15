@@ -152,6 +152,53 @@ pub fn materialize_vault_meta_from_graph(
     Ok(())
 }
 
+/// Return whether the event graph currently grants a device access to a Simple
+/// vault. The event log is the authorization source of truth: an old encrypted
+/// auth envelope must not keep an extension active after `DeviceRevoked`.
+pub fn event_graph_has_active_device_access(
+    graph: &crate::vault_event_graph::EventGraph,
+    expected_device_id: &crate::DeviceId,
+    expected_public_key: &crate::DevicePublicKey,
+    expected_signing_public_key: &crate::DeviceSigningPublicKey,
+) -> nook_auth2::MultiDeviceResult<bool> {
+    let derived_device_id = nook_auth2::device_id_from_public_key(expected_public_key)?;
+    if &derived_device_id != expected_device_id {
+        return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+            "Extension device_id does not match its encryption public key.".to_owned(),
+        ));
+    }
+
+    let mut active = false;
+    let order = graph
+        .topological_order()
+        .map_err(|error| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
+    for event_id in order {
+        let event = graph.get(&event_id).ok_or_else(|| {
+            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
+                "Missing event {event_id} in graph."
+            ))
+        })?;
+        for operation in &event.body.operations {
+            match operation {
+                VaultOperation::JoinApproved {
+                    device_id,
+                    encryption_public_key,
+                    signing_public_key,
+                    ..
+                } if device_id == expected_device_id => {
+                    active = encryption_public_key == expected_public_key
+                        && signing_public_key == expected_signing_public_key;
+                }
+                VaultOperation::DeviceRevoked { device_id } if device_id == expected_device_id => {
+                    active = false;
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(active)
+}
+
 /// Rebuild encrypted `members:` rows after quorum unlock of an event-only
 /// Sentinel vault. Public event roster entries are retained before unlock; the
 /// reconstructed members key turns them back into the canonical encrypted
@@ -180,7 +227,36 @@ pub fn sentinel_member_records_from_public_roster(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{MemberLabel, SigningIdentity};
+    use crate::{
+        EventGraph, EventId, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
+        VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+    };
+
+    fn signed_event(
+        signing: &SigningIdentity,
+        store_id: &StoreId,
+        parents: Vec<EventId>,
+        operations: Vec<VaultOperation>,
+        timestamp: &str,
+    ) -> VaultEvent {
+        VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store_id.clone(),
+                actor_id: signing.actor_id().unwrap(),
+                actor_signing_public_key: Some(signing.public_key()),
+                parents,
+                created_at: IsoTimestamp::parse(timestamp).unwrap(),
+                key_epoch: EventId::from_sha256_hex(
+                    crate::sha256_hex(store_id.as_str().as_bytes()).as_str(),
+                )
+                .unwrap(),
+                operations,
+            },
+            signing.signing_key(),
+        )
+        .unwrap()
+    }
 
     #[test]
     fn sentinel_event_materialization_retains_complete_public_roster() {
@@ -224,6 +300,91 @@ mod tests {
                 .unwrap()
                 .label,
             "Renamed"
+        );
+    }
+
+    #[test]
+    fn extension_access_follows_approval_and_revocation_events() {
+        let owner = DeviceIdentity::generate().unwrap();
+        let extension = DeviceIdentity::generate().unwrap();
+        let (signing, _) = SigningIdentity::generate().unwrap();
+        let keys = crate::generate_vault_keys().unwrap();
+        let auth =
+            crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key).unwrap();
+        let envelopes = crate::parse_auth_envelopes(auth.value.as_str()).unwrap();
+        let store_id = crate::generate_store_id().unwrap();
+        let mut graph = EventGraph::new();
+        let approval = signed_event(
+            &signing,
+            &store_id,
+            vec![],
+            vec![
+                VaultOperation::VaultImported {
+                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    secrets: vec![],
+                    password_entries: vec![],
+                },
+                VaultOperation::JoinApproved {
+                    device_id: extension.device_id().clone(),
+                    encryption_public_key: extension.public_key(),
+                    signing_public_key: signing.public_key(),
+                    label: MemberLabel::from_trusted("Browser extension".to_owned()),
+                    secrets_key_ciphertext: envelopes.secrets_key,
+                    members_key_ciphertext: envelopes.members_key,
+                },
+            ],
+            "2026-07-14T00:00:00Z",
+        );
+        let approval_id = approval.id().unwrap();
+        graph.insert(approval, store_id.as_str()).unwrap();
+
+        assert!(
+            event_graph_has_active_device_access(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &signing.public_key(),
+            )
+            .unwrap()
+        );
+        let (other_signing, _) = SigningIdentity::generate().unwrap();
+        assert!(
+            !event_graph_has_active_device_access(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &other_signing.public_key(),
+            )
+            .unwrap()
+        );
+        assert!(
+            event_graph_has_active_device_access(
+                &graph,
+                owner.device_id(),
+                &owner.public_key(),
+                &signing.public_key(),
+            )
+            .is_ok_and(|active| !active)
+        );
+
+        let revocation = signed_event(
+            &signing,
+            &store_id,
+            vec![approval_id],
+            vec![VaultOperation::DeviceRevoked {
+                device_id: extension.device_id().clone(),
+            }],
+            "2026-07-14T00:01:00Z",
+        );
+        graph.insert(revocation, store_id.as_str()).unwrap();
+        assert!(
+            !event_graph_has_active_device_access(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &signing.public_key(),
+            )
+            .unwrap()
         );
     }
 }
