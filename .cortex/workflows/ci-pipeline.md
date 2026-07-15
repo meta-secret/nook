@@ -289,10 +289,12 @@ manifest, or publishes cache layers. The persistent `nook` runners reuse only
 their local BuildKit content store across the PR → main → release chain. This is
 an explicit reliability boundary: cache restoration must never block validation
 on a remote blob or registry session. `main.yml` attaches and upserts the three
-custom domains, points the vault domains at the `development` branch aliases,
-and verifies landing-only routing, app identity markers, security headers, and
-the Simple/Sentinel extension boundary. It records one `development` deployment
-whose primary URL is `https://dev.nokey.sh/` and whose payload contains all
+custom domains, points the landing and both vault domains at their projects'
+`development` branch aliases so the main-channel build cannot replace a
+production deployment, and verifies landing-only routing, app identity markers,
+security headers, and the Simple/Sentinel extension boundary. It records one
+`development` deployment whose primary URL is `https://dev.nokey.sh/` and whose
+payload contains all
 three origins. Before live probes, the workflow purges the affected URLs so a
 cached fallback cannot survive a deployment switch.
 
