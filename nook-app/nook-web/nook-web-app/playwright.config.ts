@@ -15,6 +15,16 @@ process.env.VITE_VAULT_IDLE_WARNING_MS ??= '0'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
+const configuredWorkers = Number.parseInt(
+  process.env.PLAYWRIGHT_WORKERS ?? '',
+  10,
+)
+const workers =
+  Number.isSafeInteger(configuredWorkers) && configuredWorkers > 0
+    ? configuredWorkers
+    : isCi
+      ? 2
+      : undefined
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const distDir = path.join(rootDir, 'dist')
@@ -58,9 +68,6 @@ const SYNC_PROVIDER_SPECS = [
   'remote-vault-recovery-sync.spec.ts',
 ] as const
 
-/** All local-provider e2e — main CI and local full runs. */
-const E2E_SPECS = [...PR_SPECS, ...SYNC_PROVIDER_SPECS] as const
-
 /** Real sync provider API — nightly / manual only. */
 const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
 
@@ -80,10 +87,10 @@ const webServerCommand = usePreviewServer
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
-  // CI runners can expose enough CPUs for Playwright to overwhelm the single
-  // preview server while every fresh context fetches and compiles the large
-  // WASM bundle. Keep limited parallelism so responses are not aborted.
-  workers: isCi ? 2 : undefined,
+  // Each Task entry point selects a group-specific worker budget. Do not map
+  // all runner CPUs here: fresh contexts concurrently fetch and compile the
+  // large WASM bundle through one preview server.
+  workers,
   maxFailures: isCi ? 1 : undefined,
   retries: isCi ? 2 : 0,
   globalTimeout: isCi ? 45 * 60_000 : undefined,
@@ -127,13 +134,13 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'e2e',
-      testMatch: specPaths(E2E_SPECS),
+      name: 'stable',
+      testMatch: specPaths(PR_SPECS),
       fullyParallel: true,
     },
     {
-      name: 'e2e-pr',
-      testMatch: specPaths(PR_SPECS),
+      name: 'unstable',
+      testMatch: specPaths(SYNC_PROVIDER_SPECS),
       fullyParallel: true,
     },
     {

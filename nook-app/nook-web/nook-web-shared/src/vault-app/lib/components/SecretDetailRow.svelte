@@ -152,6 +152,8 @@
           aria-label={revealSecrets[item.id]
             ? vault.t('vault.hide_value')
             : vault.t('vault.show_value')}
+          aria-pressed={Boolean(revealSecrets[item.id])}
+          data-testid="reveal-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
           {#if revealSecrets[item.id]}<EyeOff class="size-3.5" />{:else}<Eye
@@ -171,6 +173,7 @@
           type="button"
           onclick={() => void onDeleteSecret(item.id)}
           aria-label={vault.t('common.delete')}
+          data-testid="delete-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <Trash2 class="size-3.5" />

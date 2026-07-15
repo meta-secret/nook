@@ -39,8 +39,8 @@ not recover on its own.
 ## 3. E2e tests
 
 - **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
-- Full stub Playwright (`e2e` project): `task web:test:e2e` — all stub specs including sync; runs on main CI and explicitly for PR validation.
-- Fast subset Playwright (`e2e-pr` project): `task web:test:e2e:pr` — manual/debug-only subset for vault CRUD, login, legal pages (no sync HTTP).
+- Full stub Playwright: `task web:test:e2e` — runs the `stable` IndexedDB group at 6 workers, then the provider/sync `unstable` group at 4; runs on main CI and explicitly for PR validation.
+- Stable subset Playwright (`stable` project): `task web:test:e2e:pr` — 6-worker manual/debug subset for vault CRUD, login, and legal pages (no sync HTTP).
 - Mounted dev servers publish container port `5173` on `WEB_DEV_PORT` (default
   `5173`). In the multi-worktree repo, use an unused host port such as
   `WEB_DEV_PORT=5175 task web:dev:fast`; never stop another worktree's container
