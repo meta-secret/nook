@@ -85,9 +85,7 @@ import {
   type VaultArchitecture,
   type VaultType,
 } from "$lib/vault-architecture";
-import {
-  publishExtensionEventLogUpdate,
-} from "$web-shared/extension/event-log-bridge";
+import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 
 import * as localeActions from "$lib/vault/locale";
