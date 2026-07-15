@@ -1215,7 +1215,10 @@ export class VaultState {
       await this.continueInitializationAfterDeviceUnlock();
       this.deviceProtectionStatus = "unlocked";
     } catch (error) {
-      if (this.deviceProtectionStatus === "unlocked" || deviceIdentityUnlocked) {
+      if (
+        this.deviceProtectionStatus === "unlocked" ||
+        deviceIdentityUnlocked
+      ) {
         void this.lockDeviceProtection();
       }
       this.errorMsg =
