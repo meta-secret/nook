@@ -289,6 +289,23 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
+fn pr_retries_only_the_known_transient_buildkit_lease_loss() {
+    let root = repository_root();
+    let pr = read(&root, ".github/workflows/pr.yml");
+    for required in [
+        "for attempt in 1 2; do",
+        "status=\"${PIPESTATUS[0]}\"",
+        "unable to lease content: lease does not exist",
+        "Retrying once after transient BuildKit lease loss",
+    ] {
+        assert!(
+            pr.contains(required),
+            "PR workflow missing bounded BuildKit retry contract: {required}"
+        );
+    }
+}
+
+#[test]
 fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() {
     let root = repository_root();
     let workflow = read(&root, ".github/workflows/rust-dependency-updates.yml");

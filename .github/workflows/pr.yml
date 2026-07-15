@@ -51,14 +51,31 @@ jobs:
       # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
       # path and makes a cold Rust cache slower than the former combined build.
       - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
-        run: >-
-          task ci:pr
-          VITE_BASE=/
-          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
-          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-          WASM_BUILD_MODE=dev
+        run: |
+          set -euo pipefail
+          for attempt in 1 2; do
+            log="$RUNNER_TEMP/ci-pr-attempt-$attempt.log"
+            set +e
+            task ci:pr \
+              VITE_BASE=/ \
+              VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
+              VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
+              VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
+              VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
+              WASM_BUILD_MODE=dev 2>&1 | tee "$log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 1 ] && grep -Fq \
+              'unable to lease content: lease does not exist' "$log"; then
+              echo "::warning::Retrying once after transient BuildKit lease loss"
+              docker buildx inspect --bootstrap >/dev/null || true
+              continue
+            fi
+            exit "$status"
+          done
         env:
           CI: true
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
