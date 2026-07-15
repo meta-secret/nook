@@ -59,6 +59,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        --add-host host.docker.internal:host-gateway
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -74,6 +75,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        --add-host host.docker.internal:host-gateway
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -89,6 +91,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        --add-host host.docker.internal:host-gateway
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
@@ -179,6 +182,8 @@ tasks:
 
   docker:coverage:export:
     desc: Run coverage-gated nook-core + nook-auth2 unit tests and export their artifacts (no app image export).
+    deps:
+      - sccache:ensure
     vars:
       COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
     cmds:
@@ -201,6 +206,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        --add-host host.docker.internal:host-gateway
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
@@ -223,6 +229,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        --add-host host.docker.internal:host-gateway
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"

@@ -4,6 +4,7 @@
 
 // Rust dependency cache (cargo-chef cook + fetch). Base for both native and wasm builders.
 target "builder-deps" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "builder-deps"
@@ -15,6 +16,7 @@ target "builder-deps" {
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
 target "builder-debug" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "builder-debug"
@@ -28,6 +30,7 @@ target "builder-debug" {
 // Small local-output target for the rare case where a commit-keyed main coverage artifact is
 // unavailable. It reuses builder-debug's cached Rust layers without exporting the full app image.
 target "coverage-export" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "coverage-export"

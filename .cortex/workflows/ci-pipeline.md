@@ -294,6 +294,12 @@ layers survive the PR -> main -> release chain instead of being downloaded again
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent PR, main, and release jobs may share BuildKit cache
 layers, but must never replace one another's runtime image between build and deploy.
+`task setup` also ensures the host's Docker-host-only Redis-backed `sccache`
+service is running. It reuses compatible crate outputs when an exact BuildKit
+layer misses; it does not replace cargo-chef, transfer data between runners, or
+change the build result when empty. Linux publishes Redis only on the Docker
+bridge gateway and maps `host.docker.internal` to `host-gateway`; Docker Desktop
+publishes only on host loopback using the same in-container hostname.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
 Main deploys `dist/site`, Simple, and Sentinel independently to
@@ -351,6 +357,10 @@ only removes dangling images while `docker system df` includes tagged images
 that no container uses in its reclaimable estimate. That estimate can exceed
 the image-store total because shared image layers are counted for each image; it
 is not a physical-byte reclamation guarantee.
+The running `nook-sccache-redis` service and its attached AOF volume are retained
+by that prune. Redis bounds itself with `SCCACHE_REDIS_MAXMEMORY` (8 GiB by
+default) and `allkeys-lru`, so compiler-cache growth is controlled independently
+of BuildKit cleanup.
 
 ### CI verification — always check app logs
 

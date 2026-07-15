@@ -24,6 +24,9 @@ FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS rust-base
 ARG TASK_VERSION=3.42.1
 ARG WASM_PACK_VERSION=0.15.0
 ARG LLVM_COV_VERSION=0.8.7
+ARG SCCACHE_VERSION=0.16.0
+ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
+ARG SCCACHE_REDIS_PORT=6380
 # Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
 # Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
 # avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
@@ -34,6 +37,12 @@ ARG BINARYEN_VERSION=122
 # the slim web image.
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
+ENV RUSTC_WRAPPER=/usr/local/bin/sccache
+ENV SCCACHE_REDIS_ENDPOINT=redis://host.docker.internal:${SCCACHE_REDIS_PORT}
+ENV SCCACHE_REDIS_KEY_PREFIX=nook
+# Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the
+# short-lived local sccache daemons isolated even while their Redis storage is shared.
+ENV SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -64,6 +73,18 @@ RUN curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/versio
     && wasm-opt --version
 
 RUN curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+RUN curl -fsSL \
+      "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      -o /tmp/sccache.tar.gz \
+    && echo "${SCCACHE_SHA256}  /tmp/sccache.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/sccache.tar.gz -C /tmp \
+    && install -m 0755 \
+      "/tmp/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache" \
+      /usr/local/bin/sccache \
+    && rm -rf /tmp/sccache.tar.gz \
+      "/tmp/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl" \
+    && sccache --version
 
 COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 

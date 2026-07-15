@@ -4,6 +4,7 @@
 // store (platform is always amd64).
 
 target "builder-wasm" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-wasm/Dockerfile"
   target     = "builder-wasm"
@@ -28,6 +29,7 @@ target "rust-format-check" {
 
 // Small scratch output exported to the host between the parallel prepare phase and slim web build.
 target "web-artifacts" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-wasm/Dockerfile"
   target     = "web-artifacts"
@@ -42,6 +44,7 @@ target "web-artifacts" {
 
 // Source-sealed Rust runtime used only by explicit rust/wasm Task commands.
 target "_nook-rust-common" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-wasm/Dockerfile"
   target     = "nook-rust"
@@ -56,6 +59,7 @@ target "_nook-rust-common" {
 
 // Manual browser-wasm test image; Playwright is deliberately absent from the common Rust branch.
 target "_nook-rust-browser-common" {
+  inherits   = ["_sccache-network"]
   context    = "."
   dockerfile = "nook-app/nook-wasm/Dockerfile"
   target     = "nook-rust-browser"
