@@ -34,6 +34,18 @@ for (const root of [simpleRoot, sentinelRoot]) {
 if (existsSync(join(webRoot, 'nook-web-app/dist/site/migration.html'))) {
   throw new Error('Public site artifact contains a retired migration broker.')
 }
+const siteNotFoundHtml = await readFile(
+  join(webRoot, 'nook-web-app/dist/site/404.html'),
+  'utf8',
+)
+if (
+  !siteNotFoundHtml.includes('<h1>404</h1>') ||
+  siteNotFoundHtml.includes('Nook — Keys, not accounts')
+) {
+  throw new Error(
+    'Public site artifact must provide a dedicated static not-found page.',
+  )
+}
 
 const simpleHtml = await readFile(join(simpleRoot, 'dist/index.html'), 'utf8')
 const sentinelHtml = await readFile(

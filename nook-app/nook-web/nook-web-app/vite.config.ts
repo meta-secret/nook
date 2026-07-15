@@ -21,6 +21,19 @@ const COMMON_APP_SPA_PATHS = new Set([
 ])
 const NOT_FOUND_PATHS = new Set(['/schema.xml'])
 const APP_SHELL_ALIASES = ['app-logs', 'extension-connect', 'logs']
+const STATIC_NOT_FOUND_DOCUMENT = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>404</title>
+  </head>
+  <body>
+    <main><h1>404</h1></main>
+  </body>
+</html>
+`
 
 function routeSpaRequestsToApp(
   server: ViteDevServer | PreviewServer,
@@ -74,6 +87,7 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
       const outDir = join(process.cwd(), outputDirectory)
       if (appKind === 'site') {
         copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
+        writeFileSync(join(outDir, '404.html'), STATIC_NOT_FOUND_DOCUMENT)
         return
       }
       const appShell = join(outDir, 'app/index.html')
