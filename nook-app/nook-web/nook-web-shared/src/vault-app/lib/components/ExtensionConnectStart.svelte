@@ -14,7 +14,7 @@
   } = $props()
 
   type StartState = 'idle' | 'starting' | 'opened' | 'failed'
-  let state = $state<StartState>('idle')
+  let startStatus = $state<StartState>('idle')
   let error = $state('')
 
   function requestDeviceProtection() {
@@ -34,12 +34,12 @@
     ).chrome?.runtime
 
     if (!runtime?.sendMessage) {
-      state = 'failed'
+      startStatus = 'failed'
       error = vault.t('extension.connect.messaging_unavailable')
       return
     }
 
-    state = 'starting'
+    startStatus = 'starting'
     error = ''
     runtime.sendMessage(
       extensionRuntimeId,
@@ -47,7 +47,7 @@
       (response) => {
         const runtimeError = runtime.lastError?.message
         if (runtimeError) {
-          state = 'failed'
+          startStatus = 'failed'
           error = runtimeError
           return
         }
@@ -57,10 +57,10 @@
           'ok' in response &&
           (response as { ok?: unknown }).ok === true
         ) {
-          state = 'opened'
+          startStatus = 'opened'
           return
         }
-        state = 'failed'
+        startStatus = 'failed'
         error = vault.t('extension.connect.start_failed')
       },
     )
@@ -96,14 +96,14 @@
     </p>
   </div>
 
-  {#if state === 'opened'}
+  {#if startStatus === 'opened'}
     <p
       class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-protection-opened"
     >
       {vault.t('extension.connect.protection_opened')}
     </p>
-  {:else if state === 'failed'}
+  {:else if startStatus === 'failed'}
     <p
       class="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
       role="alert"
@@ -118,11 +118,11 @@
     </Button>
     <Button
       type="button"
-      disabled={state === 'starting' || state === 'opened'}
+      disabled={startStatus === 'starting' || startStatus === 'opened'}
       data-testid="start-extension-pairing-btn"
       onclick={requestDeviceProtection}
     >
-      {state === 'starting'
+      {startStatus === 'starting'
         ? vault.t('extension.connect.starting')
         : vault.t('extension.connect.continue')}
     </Button>
