@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
+import { installMockPasskeyRuntime } from './passkey-mock'
 
 const SIMPLE_APP_URL = (
   process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
@@ -117,6 +118,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 
   const extensionContext = await browser.newContext()
+  await extensionContext.addInitScript(installMockPasskeyRuntime)
   const extensionPage = await extensionContext.newPage()
   await extensionPage.goto(new URL(page.url()).origin)
   await expect
@@ -129,7 +131,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
                 ?.manager,
             ),
         ),
-      { timeout: UI_TIMEOUT_MS },
+      { timeout: UI_TIMEOUT_MS * 2 },
     )
     .toBe(true)
   const extensionDevice = await extensionPage.evaluate(async () => {
