@@ -397,6 +397,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
 fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     let root = repository_root();
     for workflow in [
+        ".github/workflows/pr.yml",
         ".github/workflows/main.yml",
         ".github/workflows/release.yml",
     ] {
@@ -405,6 +406,15 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
             content.contains("runs-on: nook"),
             "{workflow} must reuse the persistent delivery runner's Docker layers"
         );
+        for run_scoped_image in [
+            "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
+            "DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+        ] {
+            assert!(
+                content.contains(run_scoped_image),
+                "{workflow} must isolate its loaded runtime image: {run_scoped_image}"
+            );
+        }
     }
 
     let bake = read(&root, "nook-app/docker-bake.hcl");

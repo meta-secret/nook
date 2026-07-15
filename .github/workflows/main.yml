@@ -29,6 +29,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
+  DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
   CI_MAIN_DEV_DOMAIN: dev.nokey.sh
   CI_MAIN_DEV_URL: https://dev.nokey.sh
   CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh

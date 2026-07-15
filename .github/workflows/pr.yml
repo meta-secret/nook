@@ -29,6 +29,10 @@ concurrency:
   group: pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+env:
+  DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
+  DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+
 jobs:
   verify:
     name: Verify and preview

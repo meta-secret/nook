@@ -271,6 +271,9 @@ must still be addressed, but no external status may delay merge or handoff.
 **Delivery jobs are cache-warm.** PR verification, main, and release use the
 persistent self-hosted `nook` runner, so the Rust target and other local BuildKit
 layers survive the PR -> main -> release chain instead of being downloaded again.
+Each workflow run and retry loads its sealed web and e2e results under run-scoped
+Docker image tags; concurrent PR, main, and release jobs may share BuildKit cache
+layers, but must never replace one another's runtime image between build and deploy.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
 Main deploys `dist/site`, Simple, and Sentinel independently to
