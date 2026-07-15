@@ -32,17 +32,24 @@ Build it through Docker-backed Taskfile commands from the repo root or `nook-app
 task extension:build
 ```
 
-The target defaults to production. Override it for a PR or local development
-build; path prefixes are preserved:
+The target and extension identity default to production. CI selects the
+matching target and deterministic identity for PR and development deployments.
+Override both values for an ad hoc PR build, or use the local task:
 
 ```bash
-NOOK_SIMPLE_VAULT_URL=https://pr-391.nook-1n8.pages.dev/simple/ task extension:build
+NOOK_SIMPLE_VAULT_URL=https://pr-408.nokey-simple.pages.dev/ \
+  NOOK_EXTENSION_CHANNEL=pr-408 task extension:build
 task extension:build:localhost
 ```
 
-PR CI supplies its deterministic `pr-<number>` Simple artifact automatically.
-The current `dev.nokey.sh` deployment is landing-only, so development extension
-builds should target the local Simple Vault server rather than that hostname.
+PR CI publishes the ZIP at
+`https://pr-<number>.nokey-sh.pages.dev/downloads/nook-passwords-pr-<number>.zip`.
+Main publishes the development ZIP at
+`https://dev.nokey.sh/downloads/nook-passwords-dev.zip`, paired only with
+`https://simple.dev.nokey.sh/`. Production releases publish a versioned ZIP at
+`https://nokey.sh/downloads/` and attach the same bytes to the GitHub Release.
+Every channel also exposes `/downloads/extension.json` and the archive's
+`.sha256` file.
 
 The build writes a Manifest V3 extension bundle to `nook-app/nook-web/nook-web-extension/dist` inside
 the sealed Docker image. Use `task docker:extract:extension` to copy that bundle
@@ -73,8 +80,10 @@ task extension:test:e2e
 
 Chrome and Brave do not support installing an unsigned local extension by copying
 files into their profile-managed extension directories. For local development,
-load the `current` directory manually once from `chrome://extensions` or
-`brave://extensions`, or launch an isolated dev browser profile with:
+or for a downloaded PR/development ZIP, unzip it and select the directory with
+**Load unpacked** in `chrome://extensions` or `brave://extensions`. The local
+install task maintains a stable `current` directory, and the launch tasks can
+open an isolated developer profile automatically:
 
 ```bash
 task extension:run:chrome

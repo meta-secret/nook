@@ -251,14 +251,14 @@ if (!contentScript.includes('isRuntimeSentinelVaultUrl(location.href)')) {
 
 const previewManifest = createManifest(
   '1.0.0',
-  'https://pr-391.nook-1n8.pages.dev/simple/',
+  'https://pr-391.nokey-simple.pages.dev/',
 )
 if (
   previewManifest.action.default_popup !== 'popup/index.html' ||
   previewManifest.externally_connectable.matches[0] !==
-    'https://pr-391.nook-1n8.pages.dev/simple/*' ||
+    'https://pr-391.nokey-simple.pages.dev/*' ||
   !previewManifest.content_scripts[0]?.exclude_matches.includes(
-    'https://pr-391.nook-1n8.pages.dev/sentinel/*',
+    'https://pr-391.nokey-sentinel.pages.dev/*',
   )
 ) {
   throw new Error('Extension preview target is not path-isolated by app.')

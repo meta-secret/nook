@@ -16,6 +16,7 @@ tasks:
       # NOOK_SIMPLE_VAULT_URL before setup seals the Docker image.
       - >-
         NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
+        NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:build
 
   extension:check:
@@ -92,6 +93,7 @@ tasks:
       # See extension:build:localhost: this must be present when the nested setup task starts.
       - >-
         NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
+        NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:local
 
   extension:run:chrome:

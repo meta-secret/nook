@@ -13,6 +13,8 @@ export type ExtensionManifest = {
   short_name: string
   description: string
   version: string
+  version_name?: string
+  key?: string
   action: {
     default_title: string
     default_icon: ManifestIconSet
@@ -49,16 +51,25 @@ const iconSet: ManifestIconSet = {
 export function createManifest(
   version: string,
   simpleVaultBaseUrl = DEFAULT_SIMPLE_VAULT_URL,
+  deployment?: {
+    key: string
+    name: string
+    shortName: string
+    versionName: string
+  },
 ): ExtensionManifest {
   const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
   return {
     manifest_version: 3,
     default_locale: 'en',
-    name: 'Nook Passwords',
-    short_name: 'Nook',
+    name: deployment?.name ?? 'Nook Passwords',
+    short_name: deployment?.shortName ?? 'Nook',
     description:
       'Nook browser companion for password form detection and future autofill.',
     version,
+    ...(deployment
+      ? { key: deployment.key, version_name: deployment.versionName }
+      : {}),
     action: {
       default_title: 'Nook',
       default_icon: iconSet,

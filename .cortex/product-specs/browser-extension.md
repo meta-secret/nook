@@ -77,9 +77,19 @@ by itself. An unlocked, authorized vault device creates the approval event.
 The Simple Vault base URL is build-selected rather than hard-coded:
 
 - production: `https://simple.nokey.sh/`;
-- PR preview: the PR deployment's `/simple/` artifact;
-- local/development: `https://localhost:5173/`, served with the repository's
-  locally trusted development certificate.
+- development: `https://simple.dev.nokey.sh/`;
+- PR preview: `https://pr-<number>.nokey-simple.pages.dev/`;
+- local: `https://localhost:5173/`, served with the repository's locally
+  trusted development certificate.
+
+The production, development, local, and each per-PR build have distinct,
+deterministic extension ids. Rebuilding one channel preserves its
+extension-origin IndexedDB and passkey RP identity; switching channels cannot
+reuse extension-private state. The sealed image publishes the tested bundle as
+a root-level ZIP plus `extension.json` metadata and a SHA-256 checksum under the
+matching site deployment's `/downloads/` path. PR and development bundles are
+unsigned developer artifacts and must be unzipped and loaded through the
+browser's extension developer mode.
 
 Interactive local development uses HTTPS so passkeys, CloudKit, OAuth, and
 extension-to-site messaging run under production-like secure-context rules.
@@ -89,9 +99,9 @@ extension RP ID; the Simple Vault website supplies `localhost` explicitly.
 Internal Playwright tests may continue to use loopback HTTP when real browser
 identity and provider ceremonies are stubbed.
 
-On shared PR/development origins, the manifest and runtime authorization guard
-the `/simple/` path. A `/sentinel/` page on the same origin cannot message or
-approve the extension.
+The manifest and runtime authorization bind each deployed extension to the
+matching isolated Simple origin. Sentinel origins cannot message or approve the
+extension.
 
 ## In-Page Widget
 

@@ -71,6 +71,10 @@ jobs:
         env:
           CI: true
           GIT_COMMIT_ID: ${{ github.sha }}
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
       - name: Deploy isolated development applications to Cloudflare Pages
         id: deploy-dev
@@ -270,9 +274,17 @@ jobs:
             echo "::error::Development domains must serve isolated landing, Simple, and Sentinel applications"
             exit 1
           fi
+          EXTENSION_METADATA_URL="https://$DEV_DOMAIN/downloads/extension.json" \
+          EXPECTED_EXTENSION_CHANNEL="development" \
+          EXPECTED_EXTENSION_COMMIT="${{ github.sha }}" \
+          EXPECTED_EXTENSION_SITE_URL="https://$DEV_DOMAIN/" \
+          EXPECTED_SIMPLE_VAULT_URL="https://$SIMPLE_DOMAIN/" \
+          EXPECTED_SENTINEL_VAULT_URL="https://$SENTINEL_DOMAIN/" \
+            bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
           echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
           echo "simple_url=https://$SIMPLE_DOMAIN/" >> "$GITHUB_OUTPUT"
           echo "sentinel_url=https://$SENTINEL_DOMAIN/" >> "$GITHUB_OUTPUT"
+          echo "extension_url=https://$DEV_DOMAIN/downloads/nook-passwords-dev.zip" >> "$GITHUB_OUTPUT"
 
       - name: Record development deployment
         uses: actions/github-script@v9
@@ -280,6 +292,7 @@ jobs:
           DEV_URL: ${{ steps.configure-dev-domain.outputs.dev_url }}
           SIMPLE_URL: ${{ steps.configure-dev-domain.outputs.simple_url }}
           SENTINEL_URL: ${{ steps.configure-dev-domain.outputs.sentinel_url }}
+          EXTENSION_URL: ${{ steps.configure-dev-domain.outputs.extension_url }}
           SITE_PAGES_URL: ${{ steps.deploy-dev.outputs.site_pages_url }}
           SIMPLE_PAGES_URL: ${{ steps.deploy-dev.outputs.simple_pages_url }}
           SENTINEL_PAGES_URL: ${{ steps.deploy-dev.outputs.sentinel_pages_url }}
@@ -299,6 +312,7 @@ jobs:
                 dev_url: process.env.DEV_URL,
                 simple_url: process.env.SIMPLE_URL,
                 sentinel_url: process.env.SENTINEL_URL,
+                extension_url: process.env.EXTENSION_URL,
                 site_pages_url: process.env.SITE_PAGES_URL,
                 simple_pages_url: process.env.SIMPLE_PAGES_URL,
                 sentinel_pages_url: process.env.SENTINEL_PAGES_URL,

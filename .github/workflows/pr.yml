@@ -61,7 +61,10 @@ jobs:
           WASM_BUILD_MODE=dev
         env:
           CI: true
-          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev/simple/
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
       # The verified image already contains the Rust coverage artifacts produced by the graph
       # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.
@@ -175,9 +178,17 @@ jobs:
             echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
             exit 1
           fi
+          EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
+          EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
+          EXPECTED_EXTENSION_COMMIT="${{ github.event.pull_request.head.sha }}" \
+          EXPECTED_EXTENSION_SITE_URL="$site_url/" \
+          EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
+          EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
+            bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
           echo "site_url=$site_url" >> "$GITHUB_OUTPUT"
           echo "simple_url=$simple_url" >> "$GITHUB_OUTPUT"
           echo "sentinel_url=$sentinel_url" >> "$GITHUB_OUTPUT"
+          echo "extension_url=$site_url/downloads/nook-passwords-pr-$pr.zip" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
         if: steps.deploy.outcome == 'success' && steps.deploy-isolated.outcome == 'success'
@@ -187,6 +198,7 @@ jobs:
           SITE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.site_url }}
           SIMPLE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.simple_url }}
           SENTINEL_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.sentinel_url }}
+          EXTENSION_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.extension_url }}
         with:
           retries: 3
           script: |
@@ -195,7 +207,8 @@ jobs:
             const site = process.env.SITE_PREVIEW_URL.replace(/\/$/, '')
             const simple = process.env.SIMPLE_PREVIEW_URL.replace(/\/$/, '')
             const sentinel = process.env.SENTINEL_PREVIEW_URL.replace(/\/$/, '')
-            const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/`
+            const extension = process.env.EXTENSION_PREVIEW_URL
+            const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/\n- Browser extension: ${extension}`
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -227,6 +240,7 @@ jobs:
           UNIFIED_PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
           SIMPLE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.simple_url }}
           SENTINEL_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.sentinel_url }}
+          EXTENSION_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.extension_url }}
         with:
           retries: 3
           script: |
@@ -251,6 +265,7 @@ jobs:
                 unified_preview_url: process.env.UNIFIED_PREVIEW_URL,
                 simple_preview_url: process.env.SIMPLE_PREVIEW_URL,
                 sentinel_preview_url: process.env.SENTINEL_PREVIEW_URL,
+                extension_preview_url: process.env.EXTENSION_PREVIEW_URL,
               },
             })
 

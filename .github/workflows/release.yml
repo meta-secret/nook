@@ -121,6 +121,12 @@ jobs:
           WASM_BUILD_MODE=prod
         env:
           CI: true
+          GIT_COMMIT_ID: ${{ steps.release.outputs.sha }}
+          NOOK_SIMPLE_VAULT_URL: https://simple.nokey.sh/
+          NOOK_EXTENSION_CHANNEL: production
+          NOOK_EXTENSION_VERSION: ${{ steps.release.outputs.version }}
+          NOOK_EXTENSION_COMMIT: ${{ steps.release.outputs.sha }}
+          NOOK_EXTENSION_SITE_URL: https://nokey.sh/
 
       - name: Create immutable release tag
         if: steps.release.outputs.tag_exists != 'true'
@@ -265,6 +271,18 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
+      - name: Verify production browser extension deployment
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          EXTENSION_METADATA_URL="https://nokey.sh/downloads/extension.json" \
+          EXPECTED_EXTENSION_CHANNEL="production" \
+          EXPECTED_EXTENSION_COMMIT="$RELEASE_SHA" \
+          EXPECTED_EXTENSION_SITE_URL="https://nokey.sh/" \
+          EXPECTED_SIMPLE_VAULT_URL="https://simple.nokey.sh/" \
+          EXPECTED_SENTINEL_VAULT_URL="https://sentinel.nokey.sh/" \
+            bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
+
       - name: Publish GitHub Release
         uses: actions/github-script@v9
         env:
@@ -274,26 +292,87 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('node:fs')
+            const path = require('node:path')
+            const crypto = require('node:crypto')
             const tag = process.env.RELEASE_TAG
             const sha = process.env.RELEASE_SHA
             const prerelease = process.env.IS_PRERELEASE === 'true'
 
+            let release
             try {
-              await github.rest.repos.getReleaseByTag({ ...context.repo, tag })
-              core.info(`GitHub Release ${tag} already exists; leaving it unchanged.`)
-              return
+              release = (await github.rest.repos.getReleaseByTag({ ...context.repo, tag })).data
+              core.info(`GitHub Release ${tag} already exists; verifying immutable assets.`)
             } catch (error) {
               if (error.status !== 404) throw error
+              // Fail instead of silently creating a release from a missing/movable tag.
+              await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` })
+              release = (await github.rest.repos.createRelease({
+                ...context.repo,
+                tag_name: tag,
+                target_commitish: sha,
+                name: tag,
+                generate_release_notes: true,
+                prerelease,
+                make_latest: prerelease ? 'false' : 'true',
+              })).data
             }
 
-            // Fail instead of silently creating a release from a missing/movable tag.
-            await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` })
-            await github.rest.repos.createRelease({
+            const downloads = path.join(
+              process.cwd(),
+              'nook-app/nook-web/nook-web-app/dist/site/downloads',
+            )
+            const metadata = JSON.parse(
+              fs.readFileSync(path.join(downloads, 'extension.json'), 'utf8'),
+            )
+            const assetPaths = [
+              path.join(downloads, metadata.archive),
+              path.join(downloads, 'extension.json'),
+              path.join(downloads, `${metadata.archive}.sha256`),
+            ]
+            const assets = (await github.rest.repos.listReleaseAssets({
               ...context.repo,
-              tag_name: tag,
-              target_commitish: sha,
-              name: tag,
-              generate_release_notes: true,
-              prerelease,
-              make_latest: prerelease ? 'false' : 'true',
-            })
+              release_id: release.id,
+              per_page: 100,
+            })).data
+
+            for (const assetPath of assetPaths) {
+              const name = path.basename(assetPath)
+              const data = fs.readFileSync(assetPath)
+              const digest = crypto.createHash('sha256').update(data).digest('hex')
+              const existing = assets.find((asset) => asset.name === name)
+              if (existing) {
+                const response = await github.request(
+                  'GET /repos/{owner}/{repo}/releases/assets/{asset_id}',
+                  {
+                    ...context.repo,
+                    asset_id: existing.id,
+                    headers: { accept: 'application/octet-stream' },
+                  },
+                )
+                const existingDigest = crypto
+                  .createHash('sha256')
+                  .update(Buffer.from(response.data))
+                  .digest('hex')
+                if (existingDigest !== digest) {
+                  throw new Error(`Immutable release asset ${name} differs from the tested build.`)
+                }
+                core.info(`Verified existing release asset ${name}.`)
+                continue
+              }
+              await github.rest.repos.uploadReleaseAsset({
+                ...context.repo,
+                release_id: release.id,
+                name,
+                data,
+                headers: {
+                  'content-type': name.endsWith('.zip')
+                    ? 'application/zip'
+                    : name.endsWith('.json')
+                      ? 'application/json'
+                      : 'text/plain',
+                  'content-length': data.length,
+                },
+              })
+              core.info(`Uploaded release asset ${name}.`)
+            }
