@@ -12,12 +12,12 @@ use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, EnrollmentProvider, GithubPatMask,
     GithubSyncTarget, GoogleDriveMode, ICloudMode, ICloudSharedTarget, LocalFolderSyncTarget,
-    OauthFilePreset, OauthFileSyncTarget, OnboardingType, ProviderReplicationCapability,
-    ReplicationType, StorageMode, StorageProviderType, SyncProviderTarget, VaultArchitecture,
-    format_drive_storage_ref_raw, mask_github_pat, provider_replication_capability,
-    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
-    validate_github_pat, validate_github_repo_name, validate_oauth_access_token,
-    validate_provider_replication,
+    OauthFilePreset, OauthFileSyncTarget, OnboardingType, PersonalEnrollmentProvider,
+    ProviderReplicationCapability, ReplicationType, SharedEnrollmentProvider, StorageMode,
+    StorageProviderType, SyncProviderTarget, VaultArchitecture, format_drive_storage_ref_raw,
+    mask_github_pat, provider_replication_capability, storage_mode_for_provider,
+    sync_provider_default_label, sync_provider_target_key, validate_github_pat,
+    validate_github_repo_name, validate_oauth_access_token, validate_provider_replication,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -412,11 +412,10 @@ pub fn provider_onboarding_type(
 #[must_use]
 pub const fn enrollment_provider_onboarding_type(provider: &EnrollmentProvider) -> OnboardingType {
     match provider {
-        EnrollmentProvider::Local
-        | EnrollmentProvider::Github { .. }
-        | EnrollmentProvider::OauthFile { .. } => OnboardingType::PersonalCredentialTransfer,
-        EnrollmentProvider::SharedProviderGrant { .. }
-        | EnrollmentProvider::ICloudShared { .. } => OnboardingType::SharedProviderGrant,
+        EnrollmentProvider::PersonalCredentialTransfer(_) => {
+            OnboardingType::PersonalCredentialTransfer
+        }
+        EnrollmentProvider::SharedProviderGrant(_) => OnboardingType::SharedProviderGrant,
     }
 }
 
@@ -439,85 +438,94 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
     shared_joiner_identity: Option<&str>,
     shared_storage_target_id: Option<&str>,
 ) -> ValidationResult<EnrollmentProvider> {
-    let onboarding_type = provider_onboarding_type(provider, architecture)?;
-    let effective_replication = match onboarding_type {
-        OnboardingType::PersonalCredentialTransfer => ReplicationType::Personal,
-        OnboardingType::SharedProviderGrant => ReplicationType::Shared,
-    };
-    let capability = validate_provider_row_replication(provider, effective_replication)?;
+    match provider_onboarding_type(provider, architecture)? {
+        OnboardingType::PersonalCredentialTransfer => {
+            personal_enrollment_provider(provider).map(EnrollmentProvider::personal)
+        }
+        OnboardingType::SharedProviderGrant => {
+            shared_enrollment_provider(provider, shared_joiner_identity, shared_storage_target_id)
+                .map(EnrollmentProvider::shared)
+        }
+    }
+}
+
+/// Build only the credential-bearing enrollment typestate. Its return value
+/// cannot be wrapped as a shared-provider payload.
+fn personal_enrollment_provider(
+    provider: &StorageProviderData,
+) -> ValidationResult<PersonalEnrollmentProvider> {
+    validate_provider_row_replication(provider, ReplicationType::Personal)?;
     let provider_type = StorageProviderType::parse(&provider.provider_type)?;
-    match onboarding_type {
-        OnboardingType::PersonalCredentialTransfer => match provider_type {
-            StorageProviderType::Local | StorageProviderType::LocalFolder => {
-                Ok(EnrollmentProvider::Local)
-            }
-            StorageProviderType::Github => Ok(EnrollmentProvider::Github {
-                pat: validate_github_pat(provider.github_pat.as_deref().unwrap_or_default())?
-                    .as_str()
-                    .to_owned(),
-                repo: validate_github_repo_name(
-                    provider.github_repo.as_deref().unwrap_or_default(),
-                )?
+    match provider_type {
+        StorageProviderType::Local | StorageProviderType::LocalFolder => {
+            Ok(PersonalEnrollmentProvider::local())
+        }
+        StorageProviderType::Github => Ok(PersonalEnrollmentProvider::github(
+            validate_github_pat(provider.github_pat.as_deref().unwrap_or_default())?
                 .as_str()
                 .to_owned(),
-            }),
-            StorageProviderType::OauthFile => {
-                let oauth = provider
-                    .oauth_file
-                    .as_ref()
-                    .ok_or(ValidationError::OauthAccessTokenEmpty)?;
-                let preset = OauthFilePreset::parse(&oauth.preset)?;
-                Ok(EnrollmentProvider::OauthFile {
-                    preset: preset.as_str().to_owned(),
-                    access_token: validate_oauth_access_token(&oauth.access_token)?
-                        .as_str()
-                        .to_owned(),
-                    refresh_token: oauth.refresh_token.clone(),
-                    expires_at: oauth.expires_at.clone(),
-                    file_id: oauth.file_id.clone(),
-                    file_name: oauth.file_name.clone(),
-                    account_email: oauth.account_email.clone(),
-                })
-            }
-        },
-        OnboardingType::SharedProviderGrant => {
-            let oauth = provider.oauth_file.as_ref();
-            let preset = oauth
-                .map(|config| OauthFilePreset::parse(&config.preset))
-                .transpose()?;
-            let storage_target_id = shared_storage_target_id
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
-                .map(str::to_owned)
-                .or_else(|| match preset {
-                    Some(OauthFilePreset::GoogleDrive) => oauth
-                        .and_then(|config| config.folder_id.clone())
-                        .filter(|id| !id.trim().is_empty()),
-                    Some(OauthFilePreset::ICloud) => oauth
-                        .and_then(|config| config.icloud_share_target.clone())
-                        .filter(|id| !id.trim().is_empty()),
-                    None => None,
-                })
-                .ok_or(ValidationError::SharedStorageTargetRequired)?;
-            match preset {
-                Some(OauthFilePreset::ICloud) => {
-                    Ok(EnrollmentProvider::ICloudShared { storage_target_id })
-                }
-                _ => Ok(EnrollmentProvider::SharedProviderGrant {
-                    sync_provider_type: capability.provider_type,
-                    oauth_preset: capability.oauth_preset,
-                    joiner_identity_kind: capability
-                        .shared_joiner_identity
-                        .map_or_else(|| "email".to_owned(), |kind| kind.as_str().to_owned()),
-                    joiner_identity: shared_joiner_identity
-                        .map(str::trim)
-                        .filter(|identity| !identity.is_empty())
-                        .ok_or(ValidationError::SharedJoinerIdentityRequired)?
-                        .to_owned(),
-                    storage_target_id: Some(storage_target_id),
-                }),
-            }
+            validate_github_repo_name(provider.github_repo.as_deref().unwrap_or_default())?
+                .as_str()
+                .to_owned(),
+        )),
+        StorageProviderType::OauthFile => {
+            let oauth = provider
+                .oauth_file
+                .as_ref()
+                .ok_or(ValidationError::OauthAccessTokenEmpty)?;
+            let preset = OauthFilePreset::parse(&oauth.preset)?;
+            Ok(PersonalEnrollmentProvider::oauth_file(
+                preset.as_str().to_owned(),
+                validate_oauth_access_token(&oauth.access_token)?
+                    .as_str()
+                    .to_owned(),
+                oauth.refresh_token.clone(),
+                oauth.expires_at.clone(),
+                oauth.file_id.clone(),
+                oauth.file_name.clone(),
+                oauth.account_email.clone(),
+            ))
         }
+    }
+}
+
+/// Build only the credential-free shared-provider typestate. Even though the
+/// saved row contains this browser's credential for grant preparation, this
+/// return type has no credential fields or credential-bearing constructors.
+fn shared_enrollment_provider(
+    provider: &StorageProviderData,
+    shared_joiner_identity: Option<&str>,
+    shared_storage_target_id: Option<&str>,
+) -> ValidationResult<SharedEnrollmentProvider> {
+    validate_provider_row_replication(provider, ReplicationType::Shared)?;
+    let oauth = provider.oauth_file.as_ref();
+    let preset = oauth
+        .map(|config| OauthFilePreset::parse(&config.preset))
+        .transpose()?;
+    let storage_target_id = shared_storage_target_id
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .or_else(|| match preset {
+            Some(OauthFilePreset::GoogleDrive) => oauth
+                .and_then(|config| config.folder_id.clone())
+                .filter(|id| !id.trim().is_empty()),
+            Some(OauthFilePreset::ICloud) => oauth
+                .and_then(|config| config.icloud_share_target.clone())
+                .filter(|id| !id.trim().is_empty()),
+            None => None,
+        })
+        .ok_or(ValidationError::SharedStorageTargetRequired)?;
+    match preset {
+        Some(OauthFilePreset::ICloud) => Ok(SharedEnrollmentProvider::icloud(storage_target_id)),
+        _ => Ok(SharedEnrollmentProvider::google_drive(
+            shared_joiner_identity
+                .map(str::trim)
+                .filter(|identity| !identity.is_empty())
+                .ok_or(ValidationError::SharedJoinerIdentityRequired)?
+                .to_owned(),
+            storage_target_id,
+        )),
     }
 }
 
@@ -1709,28 +1717,25 @@ mod tests {
         .unwrap();
         assert_eq!(
             granted,
-            EnrollmentProvider::SharedProviderGrant {
-                sync_provider_type: "oauth-file".to_owned(),
-                oauth_preset: Some("google-drive".to_owned()),
-                joiner_identity_kind: "email".to_owned(),
-                joiner_identity: "joiner@example.com".to_owned(),
-                storage_target_id: Some("shared-folder-xyz".to_owned()),
-            }
+            EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
+                "joiner@example.com".to_owned(),
+                "shared-folder-xyz".to_owned(),
+            ))
         );
 
         let personal = VaultArchitecture::default();
         let provider = enrollment_provider_for_architecture(&gdrive, &personal, None).unwrap();
         assert_eq!(
             provider,
-            EnrollmentProvider::OauthFile {
-                preset: "google-drive".to_owned(),
-                access_token: "token".to_owned(),
-                refresh_token: None,
-                expires_at: None,
-                file_id: Some("file-123".to_owned()),
-                file_name: Some("nook.yaml".to_owned()),
-                account_email: None,
-            }
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
+                "google-drive".to_owned(),
+                "token".to_owned(),
+                None,
+                None,
+                Some("file-123".to_owned()),
+                Some("nook.yaml".to_owned()),
+                None,
+            ))
         );
 
         let mut shared_gdrive = gdrive.clone();
@@ -1748,13 +1753,10 @@ mod tests {
                 Some("joiner@example.com")
             )
             .unwrap(),
-            EnrollmentProvider::SharedProviderGrant {
-                sync_provider_type: "oauth-file".to_owned(),
-                oauth_preset: Some("google-drive".to_owned()),
-                joiner_identity_kind: "email".to_owned(),
-                joiner_identity: "joiner@example.com".to_owned(),
-                storage_target_id: Some("persisted-shared-folder".to_owned()),
-            }
+            EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
+                "joiner@example.com".to_owned(),
+                "persisted-shared-folder".to_owned(),
+            ))
         );
 
         shared_gdrive.oauth_file.as_mut().unwrap().folder_id = None;
@@ -1770,37 +1772,36 @@ mod tests {
 
     #[test]
     fn enrollment_payload_variants_define_the_onboarding_credential_policy() {
-        let personal = EnrollmentProvider::OauthFile {
-            preset: "google-drive".to_owned(),
-            access_token: "owner-token".to_owned(),
-            refresh_token: Some("owner-refresh".to_owned()),
-            expires_at: None,
-            file_id: Some("private-file".to_owned()),
-            file_name: Some("nook-events".to_owned()),
-            account_email: Some("owner@example.com".to_owned()),
-        };
+        let personal = EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
+            "google-drive".to_owned(),
+            "owner-token".to_owned(),
+            Some("owner-refresh".to_owned()),
+            None,
+            Some("private-file".to_owned()),
+            Some("nook-events".to_owned()),
+            Some("owner@example.com".to_owned()),
+        ));
         assert_eq!(
             enrollment_provider_onboarding_type(&personal),
             OnboardingType::PersonalCredentialTransfer
         );
 
-        let shared = EnrollmentProvider::SharedProviderGrant {
-            sync_provider_type: "oauth-file".to_owned(),
-            oauth_preset: Some("google-drive".to_owned()),
-            joiner_identity_kind: "email".to_owned(),
-            joiner_identity: "joiner@example.com".to_owned(),
-            storage_target_id: Some("shared-folder".to_owned()),
-        };
+        let shared = EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
+            "joiner@example.com".to_owned(),
+            "shared-folder".to_owned(),
+        ));
         assert_eq!(
             enrollment_provider_onboarding_type(&shared),
             OnboardingType::SharedProviderGrant
         );
 
         let serialized = serde_json::to_value(shared).unwrap();
-        assert_eq!(serialized["storage_target_id"], "shared-folder");
-        assert!(serialized.get("access_token").is_none());
-        assert!(serialized.get("refresh_token").is_none());
-        assert!(serialized.get("pat").is_none());
+        assert_eq!(serialized["onboardingType"], "shared-provider-grant");
+        assert_eq!(serialized["provider"]["storage_target_id"], "shared-folder");
+        let serialized = serialized.to_string();
+        assert!(!serialized.contains("access_token"));
+        assert!(!serialized.contains("refresh_token"));
+        assert!(!serialized.contains("pat"));
     }
 
     #[test]
@@ -1853,9 +1854,7 @@ mod tests {
         assert_eq!(
             enrollment_provider_for_architecture(&icloud, &VaultArchitecture::default(), None)
                 .unwrap(),
-            EnrollmentProvider::ICloudShared {
-                storage_target_id: target.clone(),
-            }
+            EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(target.clone()))
         );
         let args = storage_args_for_provider(&icloud).unwrap();
         assert_eq!(args.mode, "icloud");

@@ -602,13 +602,17 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(js_name = local)]
     #[must_use]
     pub fn local() -> Self {
-        Self(nook_core::EnrollmentProvider::Local)
+        Self(nook_core::EnrollmentProvider::personal(
+            nook_core::PersonalEnrollmentProvider::local(),
+        ))
     }
 
     #[wasm_bindgen(js_name = github)]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
-        Self(nook_core::EnrollmentProvider::Github { pat, repo })
+        Self(nook_core::EnrollmentProvider::personal(
+            nook_core::PersonalEnrollmentProvider::github(pat, repo),
+        ))
     }
 
     #[wasm_bindgen(js_name = oauthFile)]
@@ -623,15 +627,17 @@ impl NookEnrollmentProvider {
         file_name: Option<String>,
         account_email: Option<String>,
     ) -> Self {
-        Self(nook_core::EnrollmentProvider::OauthFile {
-            preset,
-            access_token,
-            refresh_token,
-            expires_at,
-            file_id,
-            file_name,
-            account_email,
-        })
+        Self(nook_core::EnrollmentProvider::personal(
+            nook_core::PersonalEnrollmentProvider::oauth_file(
+                preset,
+                access_token,
+                refresh_token,
+                expires_at,
+                file_id,
+                file_name,
+                account_email,
+            ),
+        ))
     }
 
     #[wasm_bindgen(js_name = sharedProviderGrant)]
@@ -643,19 +649,23 @@ impl NookEnrollmentProvider {
         joiner_identity: String,
         storage_target_id: Option<String>,
     ) -> Self {
-        Self(nook_core::EnrollmentProvider::SharedProviderGrant {
-            sync_provider_type,
-            oauth_preset,
-            joiner_identity_kind,
-            joiner_identity,
-            storage_target_id,
-        })
+        Self(nook_core::EnrollmentProvider::shared(
+            nook_core::SharedEnrollmentProvider::legacy_google_drive(
+                sync_provider_type,
+                oauth_preset,
+                joiner_identity_kind,
+                joiner_identity,
+                storage_target_id,
+            ),
+        ))
     }
 
     #[wasm_bindgen(js_name = iCloudShared)]
     #[must_use]
     pub fn icloud_shared(storage_target_id: String) -> Self {
-        Self(nook_core::EnrollmentProvider::ICloudShared { storage_target_id })
+        Self(nook_core::EnrollmentProvider::shared(
+            nook_core::SharedEnrollmentProvider::icloud(storage_target_id),
+        ))
     }
 
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
@@ -669,12 +679,21 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = "type")]
     #[must_use]
     pub fn provider_type(&self) -> nook_core::StorageProviderType {
-        match self.0 {
-            nook_core::EnrollmentProvider::Local => nook_core::StorageProviderType::Local,
-            nook_core::EnrollmentProvider::Github { .. } => nook_core::StorageProviderType::Github,
-            nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => {
+        match &self.0 {
+            nook_core::EnrollmentProvider::PersonalCredentialTransfer(provider) => {
+                match provider.data() {
+                    nook_core::PersonalEnrollmentProviderData::Local => {
+                        nook_core::StorageProviderType::Local
+                    }
+                    nook_core::PersonalEnrollmentProviderData::Github { .. } => {
+                        nook_core::StorageProviderType::Github
+                    }
+                    nook_core::PersonalEnrollmentProviderData::OauthFile { .. } => {
+                        nook_core::StorageProviderType::OauthFile
+                    }
+                }
+            }
+            nook_core::EnrollmentProvider::SharedProviderGrant(_) => {
                 nook_core::StorageProviderType::OauthFile
             }
         }
@@ -685,8 +704,7 @@ impl NookEnrollmentProvider {
     pub fn is_shared_provider_grant(&self) -> bool {
         matches!(
             self.0,
-            nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-                | nook_core::EnrollmentProvider::ICloudShared { .. }
+            nook_core::EnrollmentProvider::SharedProviderGrant(_)
         )
     }
 
@@ -698,147 +716,133 @@ impl NookEnrollmentProvider {
 
     #[wasm_bindgen(getter, js_name = githubPat)]
     pub fn github_pat(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::Github { pat, .. } => Some(pat.clone()),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::Github { pat, .. }) => {
+                Some(pat.clone())
+            }
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = githubRepo)]
     pub fn github_repo(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::Github { repo, .. } => Some(repo.clone()),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::Github { repo, .. }) => {
+                Some(repo.clone())
+            }
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthPreset)]
     pub fn oauth_preset(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { preset, .. } => Some(preset.clone()),
-            nook_core::EnrollmentProvider::SharedProviderGrant { oauth_preset, .. } => {
-                oauth_preset.clone()
+        match (&self.0.personal_data(), &self.0.shared_data()) {
+            (Some(nook_core::PersonalEnrollmentProviderData::OauthFile { preset, .. }), _) => {
+                Some(preset.clone())
             }
-            nook_core::EnrollmentProvider::ICloudShared { .. } => Some("icloud".to_owned()),
-            nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
-                None
+            (
+                _,
+                Some(nook_core::SharedEnrollmentProviderData::GoogleDrive { oauth_preset, .. }),
+            ) => oauth_preset.clone(),
+            (_, Some(nook_core::SharedEnrollmentProviderData::ICloud { .. })) => {
+                Some("icloud".to_owned())
             }
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthAccessToken)]
     pub fn oauth_access_token(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { access_token, .. } => {
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::OauthFile { access_token, .. }) => {
                 Some(access_token.clone())
             }
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthRefreshToken)]
     pub fn oauth_refresh_token(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { refresh_token, .. } => refresh_token.clone(),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::OauthFile {
+                refresh_token, ..
+            }) => refresh_token.clone(),
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthExpiresAt)]
     pub fn oauth_expires_at(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { expires_at, .. } => expires_at.clone(),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::OauthFile { expires_at, .. }) => {
+                expires_at.clone()
+            }
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthFileId)]
     pub fn oauth_file_id(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { file_id, .. } => file_id.clone(),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::OauthFile { file_id, .. }) => {
+                file_id.clone()
+            }
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthFileName)]
     pub fn oauth_file_name(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { file_name, .. } => file_name.clone(),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::OauthFile { file_name, .. }) => {
+                file_name.clone()
+            }
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthAccountEmail)]
     pub fn oauth_account_email(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::OauthFile { account_email, .. } => account_email.clone(),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::SharedProviderGrant { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+        match self.0.personal_data() {
+            Some(nook_core::PersonalEnrollmentProviderData::OauthFile {
+                account_email, ..
+            }) => account_email.clone(),
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentityKind)]
     pub fn shared_joiner_identity_kind(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::SharedProviderGrant {
+        match self.0.shared_data() {
+            Some(nook_core::SharedEnrollmentProviderData::GoogleDrive {
                 joiner_identity_kind,
                 ..
-            } => Some(joiner_identity_kind.clone()),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+            }) => Some(joiner_identity_kind.clone()),
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
     pub fn shared_joiner_identity(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::SharedProviderGrant {
+        match self.0.shared_data() {
+            Some(nook_core::SharedEnrollmentProviderData::GoogleDrive {
                 joiner_identity, ..
-            } => Some(joiner_identity.clone()),
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::OauthFile { .. }
-            | nook_core::EnrollmentProvider::ICloudShared { .. } => None,
+            }) => Some(joiner_identity.clone()),
+            _ => None,
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedStorageTargetId)]
     pub fn shared_storage_target_id(&self) -> Option<String> {
-        match &self.0 {
-            nook_core::EnrollmentProvider::SharedProviderGrant {
-                storage_target_id, ..
-            } => storage_target_id.clone(),
-            nook_core::EnrollmentProvider::ICloudShared { storage_target_id } => {
+        match self.0.shared_data() {
+            Some(nook_core::SharedEnrollmentProviderData::GoogleDrive {
+                storage_target_id,
+                ..
+            }) => storage_target_id.clone(),
+            Some(nook_core::SharedEnrollmentProviderData::ICloud { storage_target_id }) => {
                 Some(storage_target_id.clone())
             }
-            nook_core::EnrollmentProvider::Local
-            | nook_core::EnrollmentProvider::Github { .. }
-            | nook_core::EnrollmentProvider::OauthFile { .. } => None,
+            None => None,
         }
     }
 }
