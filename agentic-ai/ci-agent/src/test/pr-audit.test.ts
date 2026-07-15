@@ -3,13 +3,43 @@ import test from "node:test";
 
 import type { Octokit } from "@octokit/rest";
 
-import { buildPrAudit, isTrustedAgentHead } from "../main/pr-audit.js";
+import {
+  buildPrAudit,
+  isAwaitingRepositoryEvent,
+  isTrustedAgentHead,
+} from "../main/pr-audit.js";
 
 test("event monitor accepts only same-repository agent branches", () => {
   assert.equal(isTrustedAgentHead("meta-secret/nook", "codex/fast-monitor", "meta-secret/nook"), true);
   assert.equal(isTrustedAgentHead("meta-secret/nook", "agent/issue-410", "meta-secret/nook"), true);
   assert.equal(isTrustedAgentHead("fork/nook", "codex/fast-monitor", "meta-secret/nook"), false);
   assert.equal(isTrustedAgentHead("meta-secret/nook", "feature/manual", "meta-secret/nook"), false);
+});
+
+test("event monitor defers missing deployment only while the PR workflow is pending", () => {
+  const pendingWorkflow = {
+    checkName: "Verify and preview",
+    workflowFile: "pr.yml",
+    workflowName: "PR",
+    conclusion: null,
+    runId: 41,
+    status: "in_progress",
+    url: null,
+  };
+  assert.equal(
+    isAwaitingRepositoryEvent({
+      reasons: ["PR run is in_progress", "exact-head github-pages deployment is not successful"],
+      requiredWorkflows: [pendingWorkflow],
+    }),
+    true,
+  );
+  assert.equal(
+    isAwaitingRepositoryEvent({
+      reasons: ["PR run concluded failure", "exact-head github-pages deployment is not successful"],
+      requiredWorkflows: [{ ...pendingWorkflow, conclusion: "failure", status: "completed" }],
+    }),
+    false,
+  );
 });
 
 const repoRef = { owner: "meta-secret", repo: "nook" };

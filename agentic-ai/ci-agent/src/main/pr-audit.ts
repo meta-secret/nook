@@ -120,7 +120,7 @@ export async function runPrEvent(): Promise<void> {
     console.log(`Squash-merged agent-managed PR #${prNumber}`);
     return;
   }
-  if (audit.reasons.every(isTransientEventReason)) {
+  if (isAwaitingRepositoryEvent(audit)) {
     console.log(
       `PR #${prNumber} is awaiting another repository-owned workflow event: ${audit.reasons.join("; ")}`,
     );
@@ -333,6 +333,21 @@ function isTransientEventReason(reason: string): boolean {
     reason.includes("run is not indexed for the current head") ||
     reason.includes("run is queued") ||
     reason.includes("run is in_progress")
+  );
+}
+
+export function isAwaitingRepositoryEvent(
+  audit: Pick<PrAudit, "reasons" | "requiredWorkflows">,
+): boolean {
+  const mainWorkflowPending = audit.requiredWorkflows.some(
+    (workflow) =>
+      workflow.workflowFile === "pr.yml" &&
+      (workflow.runId === null || workflow.status !== "completed"),
+  );
+  return audit.reasons.every(
+    (reason) =>
+      isTransientEventReason(reason) ||
+      (mainWorkflowPending && reason === "exact-head github-pages deployment is not successful"),
   );
 }
 
