@@ -293,8 +293,11 @@ landing artifact and production canonical URLs used by `nokey.sh`; the dev host
 is a delivery channel, not a second SEO origin. `main.yml` deploys only the
 landing subdirectory, ensures the Cloudflare Pages custom domain exists,
 verifies the preconfigured Cloudflare DNS CNAME, confirms that `/` serves the
-landing page while `/site/` returns `404`, and records a `development`
-deployment status whose URL is `https://dev.nokey.sh/`.
+landing page while `/site/`, `/simple/`, and `/sentinel/` return `404`, and
+records a `development` deployment status whose URL is
+`https://dev.nokey.sh/`. Before each live probe, the workflow purges those four
+public URLs so a cached fallback from the previous Pages deployment cannot
+survive or be repopulated while the custom hostname switches deployments.
 
 **Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
 
@@ -352,7 +355,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NOOK_GITHUB_PAT`                                   | sync-live e2e, nightly ci-fix PR/push, and agent-implement PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
-| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; PR CI then records that preview as a successful `github-pages` GitHub deployment for ruleset enforcement                                         |
+| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy and main development deploy/domain verification. The token requires account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`; main purges stale development routes before live verification. PR CI records its preview as a successful `github-pages` deployment for ruleset enforcement. |
 | `GITHUB_TOKEN`                                      | PR comments, deployment records, nook-core + nook-auth2 coverage comment                                                                                             |
 | `CURSOR_API_KEY`                                    | nightly ci-fix agent (`e2e-nightly.yml`) and `agent-implement.yml`                                                                                                 |
 
