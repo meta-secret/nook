@@ -357,6 +357,9 @@ test('hands an unlocked extension identity to the active Simple Vault tab only',
               message?.type !== 'nook:extension-device-identity-handoff') return
           document.body.dataset.identityReceived = String(Boolean(message.payload?.identitySecret))
           document.body.dataset.signingReceived = String(Boolean(message.payload?.signingSeed))
+          document.body.dataset.handoffCount = String(
+            Number(document.body.dataset.handoffCount || '0') + 1
+          )
           window.postMessage({
             type: 'nook:extension-device-identity-handoff-result',
             requestId: message.requestId,
@@ -448,6 +451,17 @@ test('hands an unlocked extension identity to the active Simple Vault tab only',
       'true',
     )
     await expect.poll(() => popupPage.isClosed()).toBe(true)
+
+    const secondPopupPage = await context.newPage()
+    await secondPopupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html`,
+    )
+    await simplePage.bringToFront()
+    await secondPopupPage.getByTestId('unlock-simple-vault-btn').click()
+    await expect
+      .poll(() => simplePage.locator('body').getAttribute('data-handoff-count'))
+      .toBe('2')
+    await expect.poll(() => secondPopupPage.isClosed()).toBe(true)
   } finally {
     await context.close()
   }

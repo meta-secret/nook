@@ -184,14 +184,14 @@
       }
     }
     colorScheme.addEventListener('change', handleColorSchemeChange)
-    // Only one handoff can be processed at a time. The listener is removed
-    // after a successful unlock so a captured MessageEvent cannot be replayed.
+    // Keep the listener for later lock/unlock cycles, while rejecting duplicate
+    // request ids and concurrent handoffs within this mounted page session.
     let extensionHandoffInProgress = false
+    const processedExtensionHandoffs = new Set<string>()
     const handleExtensionDeviceIdentityHandoff = (
       event: MessageEvent<unknown>,
     ) => {
       if (
-        extensionHandoffInProgress ||
         !SUPPORTS_EXTENSION ||
         event.source !== window ||
         event.origin !== window.location.origin ||
@@ -200,6 +200,25 @@
         return
       }
       const handoff = event.data
+      if (
+        extensionHandoffInProgress ||
+        processedExtensionHandoffs.has(handoff.requestId)
+      ) {
+        window.postMessage(
+          {
+            type: 'nook:extension-device-identity-handoff-result',
+            requestId: handoff.requestId,
+            ok: false,
+          },
+          window.location.origin,
+        )
+        return
+      }
+      processedExtensionHandoffs.add(handoff.requestId)
+      if (processedExtensionHandoffs.size > 32) {
+        const oldest = processedExtensionHandoffs.values().next().value
+        if (oldest) processedExtensionHandoffs.delete(oldest)
+      }
       extensionHandoffInProgress = true
       const unlock = vault.unlockWithExtensionDeviceIdentity(
         handoff.payload.identitySecret,
@@ -217,12 +236,6 @@
             },
             window.location.origin,
           )
-          if (ok) {
-            window.removeEventListener(
-              'message',
-              handleExtensionDeviceIdentityHandoff,
-            )
-          }
         })
         .finally(() => {
           extensionHandoffInProgress = false
