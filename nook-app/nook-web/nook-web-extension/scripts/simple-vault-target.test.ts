@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   matchingSentinelVaultBaseUrl,
   sentinelVaultMatchPatterns,
-} from './simple-vault-target'
+} from '../src/lib/simple-vault-target'
 
 describe('Sentinel deployment exclusions', () => {
   test('derives the isolated production and development Sentinel origins', () => {

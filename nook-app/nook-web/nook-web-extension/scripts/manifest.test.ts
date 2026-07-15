@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createManifest } from './manifest'
+import { createManifest } from '../src/manifest'
 
 const environments = [
   {
