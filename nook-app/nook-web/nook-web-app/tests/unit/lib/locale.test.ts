@@ -17,10 +17,7 @@ beforeAll(async () => {
 
 describe('locale', () => {
   test('English and Russian catalogs expose the same translation keys', () => {
-    const flatten = (
-      value: unknown,
-      prefix = '',
-    ): Record<string, string> => {
+    const flatten = (value: unknown, prefix = ''): Record<string, string> => {
       if (typeof value === 'string') return { [prefix]: value }
       if (!value || typeof value !== 'object' || Array.isArray(value)) {
         throw new TypeError(`Expected a translation object at ${prefix}`)

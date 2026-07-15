@@ -66,7 +66,8 @@ export async function selectVaultForUnlock(
     await state.refreshPasswordEntriesList();
     state.localLoginPrepared = true;
   } catch (e: unknown) {
-    state.errorMsg = e instanceof Error ? e.message : state.t("errors.vault_selection_failed");
+    state.errorMsg =
+      e instanceof Error ? e.message : state.t("errors.vault_selection_failed");
   } finally {
     state.isVerifying = false;
   }
@@ -165,7 +166,8 @@ export async function renameLocalVaultLabel(
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t("toasts.vault_renamed"));
   } catch (e: unknown) {
-    state.errorMsg = e instanceof Error ? e.message : state.t("errors.vault_rename_failed");
+    state.errorMsg =
+      e instanceof Error ? e.message : state.t("errors.vault_rename_failed");
   } finally {
     state.isVerifying = false;
   }

@@ -21,8 +21,7 @@ export async function loadDb(state: VaultState) {
   }
 
   if (!state.manager) {
-    state.errorMsg =
-      state.t("errors.engine_unavailable");
+    state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
 
