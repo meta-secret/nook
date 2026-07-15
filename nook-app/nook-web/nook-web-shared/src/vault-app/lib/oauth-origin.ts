@@ -9,6 +9,8 @@ export type OAuthOriginSupport = {
 type BrowserLocation = Pick<Location, "origin" | "hostname">;
 
 const GOOGLE_AUTHORIZED_ORIGINS = new Set([
+  "https://localhost:5173",
+  "https://localhost:5175",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "https://simple.nokey.sh",
@@ -17,6 +19,8 @@ const GOOGLE_AUTHORIZED_ORIGINS = new Set([
   "https://sentinel.dev.nokey.sh",
 ]);
 const ICLOUD_AUTHORIZED_ORIGINS = new Set([
+  "https://localhost:5173",
+  "https://localhost:5175",
   "https://simple.nokey.sh",
   "https://sentinel.nokey.sh",
   "https://simple.dev.nokey.sh",

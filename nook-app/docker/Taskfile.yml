@@ -13,6 +13,7 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
@@ -27,6 +28,7 @@ tasks:
         -e VITE_BASE="{{.VITE_BASE}}"
         -e VITE_SITE_URL="{{.VITE_SITE_URL}}"
         -e VITE_PUBLIC_APP_URL="{{.VITE_PUBLIC_APP_URL}}"
+        -e NOOK_SIMPLE_VAULT_URL="{{.NOOK_SIMPLE_VAULT_URL}}"
         -e VITE_SIMPLE_APP_URL="{{.VITE_SIMPLE_APP_URL}}"
         -e VITE_SENTINEL_APP_URL="{{.VITE_SENTINEL_APP_URL}}"
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
@@ -102,6 +104,7 @@ tasks:
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
@@ -116,6 +119,7 @@ tasks:
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
+        -e NOOK_SIMPLE_VAULT_URL="{{.NOOK_SIMPLE_VAULT_URL}}"
         -e VITE_SITE_URL="{{.VITE_SITE_URL}}"
         -e VITE_SIMPLE_APP_URL="{{.VITE_SIMPLE_APP_URL}}"
         -e VITE_SENTINEL_APP_URL="{{.VITE_SENTINEL_APP_URL}}"
@@ -202,6 +206,9 @@ tasks:
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
+        -e NOOK_LOCAL_HTTPS=1
+        -e NOOK_LOCAL_HTTPS_CERT_PATH=/meta-secret/nook/.nook/https/localhost.pem
+        -e NOOK_LOCAL_HTTPS_KEY_PATH=/meta-secret/nook/.nook/https/localhost-key.pem
         -p "{{.WEB_DEV_PORT}}:5173"
         -v "{{.REPO_ROOT}}:/meta-secret/nook"
         -v /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
@@ -221,6 +228,9 @@ tasks:
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE=dev
         -e VITE_BASE="{{.VITE_BASE}}"
+        -e NOOK_LOCAL_HTTPS=1
+        -e NOOK_LOCAL_HTTPS_CERT_PATH=/meta-secret/nook/.nook/https/localhost.pem
+        -e NOOK_LOCAL_HTTPS_KEY_PATH=/meta-secret/nook/.nook/https/localhost-key.pem
         -p "{{.WEB_DEV_PORT}}:5173"
         -v "{{.REPO_ROOT}}:/meta-secret/nook"
         -v /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules

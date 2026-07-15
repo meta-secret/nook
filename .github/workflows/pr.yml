@@ -29,6 +29,10 @@ concurrency:
   group: pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+env:
+  DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
+  DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+
 jobs:
   verify:
     name: Verify and preview
@@ -57,6 +61,7 @@ jobs:
           WASM_BUILD_MODE=dev
         env:
           CI: true
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev/simple/
 
       # The verified image already contains the Rust coverage artifacts produced by the graph
       # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.

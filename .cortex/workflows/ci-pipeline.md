@@ -291,6 +291,9 @@ must still be addressed, but no external status may delay merge or handoff.
 **Delivery jobs are cache-warm.** PR verification, main, and release use the
 persistent self-hosted `nook` runner, so the Rust target and other local BuildKit
 layers survive the PR -> main -> release chain instead of being downloaded again.
+Each workflow run and retry loads its sealed web and e2e results under run-scoped
+Docker image tags; concurrent PR, main, and release jobs may share BuildKit cache
+layers, but must never replace one another's runtime image between build and deploy.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
 Main deploys `dist/site`, Simple, and Sentinel independently to
@@ -309,10 +312,12 @@ manifest, or publishes cache layers. The persistent `nook` runners reuse only
 their local BuildKit content store across the PR → main → release chain. This is
 an explicit reliability boundary: cache restoration must never block validation
 on a remote blob or registry session. `main.yml` attaches and upserts the three
-custom domains, points the vault domains at the `development` branch aliases,
-and verifies landing-only routing, app identity markers, security headers, and
-the Simple/Sentinel extension boundary. It records one `development` deployment
-whose primary URL is `https://dev.nokey.sh/` and whose payload contains all
+custom domains, points the landing and both vault domains at their projects'
+`development` branch aliases so the main-channel build cannot replace a
+production deployment, and verifies landing-only routing, app identity markers,
+security headers, and the Simple/Sentinel extension boundary. It records one
+`development` deployment whose primary URL is `https://dev.nokey.sh/` and whose
+payload contains all
 three origins. Before live probes, the workflow purges the affected URLs so a
 cached fallback cannot survive a deployment switch.
 

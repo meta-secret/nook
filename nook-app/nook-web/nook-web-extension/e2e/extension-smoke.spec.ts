@@ -1,25 +1,26 @@
 import {
+  chromium,
   expect,
   test,
-  chromium,
   type BrowserContext,
   type Page,
 } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  belongsToSentinelVault,
+  belongsToSimpleVault,
+  DEFAULT_SIMPLE_VAULT_URL,
+  normalizeSimpleVaultBaseUrl,
+  simpleVaultUrl,
+} from '../src/lib/simple-vault-target'
 
 type TestServer = {
   origin: string
   close: () => Promise<void>
-}
-
-type StoredPasswordSummary = {
-  passwordFieldCount?: number
-  usernameFieldCount?: number
-  formCount?: number
 }
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -28,6 +29,16 @@ const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const setupStorageKey = 'nook:extension-setup'
 const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
+const syntheticEventLogRecords = [
+  {
+    eventId: 'event-e2e',
+    path: 'events/event-e2e.yaml',
+    event: { schema_version: 1 },
+  },
+]
+const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
+  process.env.NOOK_SIMPLE_VAULT_URL || DEFAULT_SIMPLE_VAULT_URL,
+)
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
@@ -40,9 +51,7 @@ async function startLoginServer(): Promise<TestServer> {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     response.end(`<!doctype html>
       <html>
-        <head>
-          <title>Nook extension e2e login</title>
-        </head>
+        <head><title>Nook extension e2e login</title></head>
         <body>
           <main>
             <h1>Sign in</h1>
@@ -61,7 +70,7 @@ async function startLoginServer(): Promise<TestServer> {
   })
 
   const address = server.address()
-  if (typeof address !== 'object' || address === null) {
+  if (typeof address !== 'object' || !address) {
     throw new Error('Expected the login server to listen on a TCP port')
   }
 
@@ -84,12 +93,10 @@ function closeServer(server: Server) {
 }
 
 async function getServiceWorker(context: BrowserContext) {
-  const existingWorker = context.serviceWorkers()[0]
-  if (existingWorker) {
-    return existingWorker
-  }
-
-  return context.waitForEvent('serviceworker', { timeout: 15_000 })
+  return (
+    context.serviceWorkers()[0] ??
+    (await context.waitForEvent('serviceworker', { timeout: 15_000 }))
+  )
 }
 
 async function readExtensionStorage(context: BrowserContext) {
@@ -102,108 +109,64 @@ async function readExtensionStorage(context: BrowserContext) {
             storage: {
               local: {
                 get(
-                  keys: null,
+                  keys: undefined,
                   callback: (items: Record<string, unknown>) => void,
                 ): void
               }
             }
           }
         }
-
-        browserGlobal.chrome.storage.local.get(null, resolve)
+        browserGlobal.chrome.storage.local.get(undefined, resolve)
       }),
   )
 }
 
-async function hasStoredLoginSummary(context: BrowserContext) {
-  const storage = await readExtensionStorage(context)
-  return Object.values(storage).some((value) => {
-    const summary = value as StoredPasswordSummary
-    return (
-      summary.passwordFieldCount === 1 &&
-      summary.usernameFieldCount === 1 &&
-      summary.formCount === 1
-    )
-  })
-}
-
-async function storedLoginSummaryCount(context: BrowserContext) {
-  const storage = await readExtensionStorage(context)
-  return Object.values(storage).filter((value) => {
-    const summary = value as StoredPasswordSummary
-    return (
-      summary.passwordFieldCount === 1 &&
-      summary.usernameFieldCount === 1 &&
-      summary.formCount === 1
-    )
-  }).length
-}
-
-async function sendRuntimeMessageFromPopup(popupPage: Page, message: unknown) {
-  return popupPage.evaluate(
-    (runtimeMessage) =>
+async function sendExternalMessage(
+  page: Page,
+  extensionId: string,
+  message: unknown,
+) {
+  return page.evaluate(
+    ({ runtimeId, runtimeMessage }) =>
       new Promise<unknown>((resolve, reject) => {
-        const browserGlobal = globalThis as unknown as {
-          chrome: {
-            runtime: {
+        const browserGlobal = globalThis as typeof globalThis & {
+          chrome?: {
+            runtime?: {
               lastError?: { message?: string }
               sendMessage(
+                extensionId: string,
                 message: unknown,
                 callback: (response?: unknown) => void,
               ): void
             }
           }
         }
-
-        browserGlobal.chrome.runtime.sendMessage(runtimeMessage, (response) => {
-          if (browserGlobal.chrome.runtime.lastError?.message) {
-            reject(new Error(browserGlobal.chrome.runtime.lastError.message))
+        const runtime = browserGlobal.chrome?.runtime
+        if (!runtime) {
+          reject(new Error('Extension messaging is unavailable.'))
+          return
+        }
+        runtime.sendMessage(runtimeId, runtimeMessage, (response) => {
+          if (runtime.lastError?.message) {
+            reject(new Error(runtime.lastError.message))
             return
           }
           resolve(response)
         })
       }),
-    message,
+    { runtimeId: extensionId, runtimeMessage: message },
   )
 }
 
-async function sendPairingGrantFromPopup(popupPage: Page) {
-  const message: ExtensionPairingApprovedMessage = {
-    type: 'nook:extension-pairing-approved',
-    payload: {
-      vaultType: 'simple',
-      deviceId: 'device-e2e',
-      deviceLabel: 'Nook Extension - Chromium test profile',
-      vaultStoreId: 'store-e2e',
-      vaultName: 'Personal',
-      approvedAt: '2026-07-07T00:00:00.000Z',
-      scopes: ['vault-access', 'password-filling', 'sync-provider-credentials'],
-      providers: [
-        {
-          id: 'local-e2e',
-          type: 'local',
-          label: 'This device',
-          createdAt: '2026-07-07T00:00:00.000Z',
-        },
-      ],
-    },
-  }
-
-  const response = await sendRuntimeMessageFromPopup(popupPage, message)
-  if (
-    typeof response !== 'object' ||
-    response === null ||
-    !('ok' in response) ||
-    (response as { ok?: unknown }).ok !== true
-  ) {
-    throw new Error('Pairing grant was not accepted by extension.')
-  }
-}
-
-test('loads the extension and scans a login form from the popup', async ({
+test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const manifest = JSON.parse(
+    await readFile(path.join(extensionDir, 'manifest.json'), 'utf8'),
+  ) as { action?: { default_popup?: string } }
+  expect(manifest.action?.default_popup).toBe('popup/index.html')
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')
@@ -218,123 +181,146 @@ test('loads the extension and scans a login form from the popup', async ({
     ],
   })
 
-  try {
-    const loginPage = await context.newPage()
-    await loginPage.goto(`${loginServer.origin}/login`)
-    await expect(loginPage.getByLabel('Email')).toBeVisible()
-    await expect(loginPage.getByLabel('Password')).toBeVisible()
-
-    await expect
-      .poll(() => hasStoredLoginSummary(context), {
-        message: 'content script stores the login form summary',
+  await context.route('**/*', (route) => {
+    const url = route.request().url()
+    if (belongsToSimpleVault(simpleVaultBaseUrl, url)) {
+      return route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body><h1>Simple Vault</h1></body></html>',
       })
-      .toBe(true)
-
-    await context.route('https://sentinel.nokey.sh/**', (route) =>
-      route.fulfill({
+    }
+    if (belongsToSentinelVault(simpleVaultBaseUrl, url)) {
+      return route.fulfill({
         contentType: 'text/html',
         body: '<form><input autocomplete="username"><input type="password"></form>',
-      }),
-    )
-    const sentinelPage = await context.newPage()
-    await sentinelPage.goto('https://sentinel.nokey.sh/')
-    await sentinelPage.waitForTimeout(300)
-    expect(await storedLoginSummaryCount(context)).toBe(1)
+      })
+    }
+    return route.continue()
+  })
 
-    const serviceWorker = await getServiceWorker(context)
-    const extensionId = new URL(serviceWorker.url()).host
-    expect(extensionId).not.toHaveLength(0)
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
 
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    await expect(popupPage.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(
-      popupPage.getByRole('heading', { name: 'Nook', exact: true }),
-    ).toBeVisible()
-    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
-      'not set up',
+    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+    await expect(popupPage.getByTestId('device-mode-select')).toHaveValue(
+      'standard',
     )
     await expect(
-      popupPage.getByText('separate passkey-protected extension device'),
+      popupPage.getByTestId('device-protection-setup-btn'),
+    ).toHaveText('Create new passkey')
+    await expect(
+      popupPage.getByTestId('device-protection-use-existing-choice'),
     ).toBeVisible()
-    await expect(popupPage.getByTestId('set-up-extension-btn')).toBeVisible()
 
-    const forgedSentinelResponse = await sendRuntimeMessageFromPopup(
-      popupPage,
-      {
-        type: 'nook:extension-pairing-approved',
-        payload: {
-          vaultType: 'sentinel',
-          deviceId: 'sentinel-device-e2e',
-          deviceLabel: 'Forged Sentinel device',
-          vaultStoreId: 'sentinel-store-e2e',
-          vaultName: 'Sentinel safe',
-          approvedAt: '2026-07-07T00:00:00.000Z',
-          scopes: ['vault-access'],
-          providers: [],
-        },
-      },
-    )
-    expect(forgedSentinelResponse).toEqual({
-      ok: false,
-      reason: 'invalid-pairing-grant',
-    })
+    const openedConnectPage = context.waitForEvent('page')
     expect(
-      (await readExtensionStorage(context))[
-        'nook:extension-pairing-grant:sentinel-store-e2e'
-      ],
-    ).toBeUndefined()
-
-    await sendPairingGrantFromPopup(popupPage)
-    await expect
-      .poll(async () => {
-        const storage = await readExtensionStorage(context)
-        return Boolean(
-          storage[pairingGrantStorageKey] && storage[setupStorageKey],
-        )
-      })
-      .toBe(true)
-
-    await popupPage.reload()
-    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
-      'ready',
-    )
-    await expect(popupPage.getByText('Personal')).toBeVisible()
-    await expect(popupPage.getByText('1 sync provider granted')).toBeVisible()
-    await expect(
-      popupPage.getByRole('button', { name: 'Scan active tab' }),
-    ).toBeVisible()
-    await expect(popupPage.getByText('Password fields')).toBeVisible()
-    await expect(popupPage.getByText('Login fields')).toBeVisible()
-    await expect(popupPage.getByText('Forms')).toBeVisible()
-
-    await popupPage.evaluate(() => {
-      localStorage.setItem('nook_locale', 'ru')
-    })
-    await popupPage.reload()
-    await expect(popupPage.locator('html')).toHaveAttribute('lang', 'ru')
-    await expect(
-      popupPage.getByRole('button', { name: 'Сканировать активную вкладку' }),
-    ).toBeVisible()
-    await expect(popupPage.getByText('Поля пароля')).toBeVisible()
-    await expect(popupPage.getByText('Поля логина')).toBeVisible()
-    await expect(popupPage.getByText('Формы')).toBeVisible()
-
-    await loginPage.bringToFront()
-    await popupPage.evaluate(() => {
-      document
-        .querySelector<HTMLButtonElement>('[data-testid="scan-active-tab"]')
-        ?.click()
+      await popupPage.evaluate(
+        () =>
+          new Promise<unknown>((resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: 'nook:begin-extension-pairing',
+                payload: {
+                  deviceId: 'device-popup-e2e',
+                  devicePublicKey: 'age1popup',
+                  deviceSigningPublicKey: 'popup-signing-key',
+                  deviceLabel: 'Nook Extension - Chromium test profile',
+                },
+              },
+              resolve,
+            )
+          }),
+      ),
+    ).toEqual({ ok: true })
+    const simplePage = await openedConnectPage
+    await expect(simplePage).toHaveURL((url) => {
+      const expected = new URL(
+        simpleVaultUrl(simpleVaultBaseUrl, 'extension-connect'),
+      )
+      return (
+        url.origin === expected.origin &&
+        url.pathname === expected.pathname &&
+        url.searchParams.get('extension_id') === extensionId &&
+        url.searchParams.get('device_id') === 'device-popup-e2e' &&
+        url.searchParams.get('device_public_key') === 'age1popup' &&
+        url.searchParams.get('device_signing_public_key') ===
+          'popup-signing-key' &&
+        url.searchParams.get('nonce') !== null &&
+        url.searchParams.get('scopes') === 'vault-access,password-filling'
+      )
     })
 
-    await expect(popupPage.getByTestId('password-field-count')).toHaveText('1')
-    await expect(popupPage.getByTestId('username-field-count')).toHaveText('1')
-    await expect(popupPage.getByTestId('form-count')).toHaveText('1')
-    await expect(popupPage.getByText('Nook нашел поля пароля')).toBeVisible()
-    await expect(popupPage.getByText('Предложенный пароль')).toBeVisible()
-    await expect(popupPage.getByTestId('suggested-password')).toContainText(
-      /[A-Za-z0-9]/,
+    const loginPage = await context.newPage()
+    await loginPage.goto(`${loginServer.origin}/login`)
+    const widget = loginPage.locator('#nook-auth-widget')
+    await expect(widget).toBeVisible()
+    await expect(widget.getByText('Open vault')).toBeVisible()
+
+    const openedVault = context.waitForEvent('page')
+    await widget.getByRole('button', { name: 'Open vault' }).click()
+    await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
+
+    const sentinelPage = await context.newPage()
+    const sentinelUrl = simpleVaultBaseUrl.includes('/simple/')
+      ? simpleVaultBaseUrl.replace('/simple/', '/sentinel/')
+      : 'https://sentinel.nokey.sh/'
+    await sentinelPage.goto(sentinelUrl)
+    await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
+
+    const forgedGrant = {
+      type: 'nook:extension-pairing-approved',
+      payload: {
+        vaultType: 'sentinel',
+        deviceId: 'sentinel-device-e2e',
+        devicePublicKey: 'age1sentinel',
+        deviceSigningPublicKey: 'sentinel-signing-key',
+        deviceLabel: 'Forged Sentinel device',
+        vaultStoreId: 'sentinel-store-e2e',
+        vaultName: 'Sentinel safe',
+        approvedAt: '2026-07-07T00:00:00.000Z',
+        scopes: ['vault-access'],
+        providers: [],
+      },
+      eventLogRecords: syntheticEventLogRecords,
+    }
+    expect(
+      await sendExternalMessage(simplePage, extensionId, forgedGrant),
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+
+    const approvedGrant: ExtensionPairingApprovedMessage = {
+      type: 'nook:extension-pairing-approved',
+      payload: {
+        vaultType: 'simple',
+        deviceId: 'device-e2e',
+        devicePublicKey: 'age1extension',
+        deviceSigningPublicKey: 'extension-signing-key',
+        deviceLabel: 'Nook Extension - Chromium test profile',
+        vaultStoreId: 'store-e2e',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-07T00:00:00.000Z',
+        scopes: ['vault-access', 'password-filling'],
+        providers: [],
+      },
+      eventLogRecords: syntheticEventLogRecords,
+    }
+    expect(
+      await sendExternalMessage(simplePage, extensionId, approvedGrant),
+    ).toEqual({ ok: false, reason: 'event-log-import-failed' })
+
+    const storage = await readExtensionStorage(context)
+    expect(storage[pairingGrantStorageKey]).toBeUndefined()
+    expect(storage[setupStorageKey]).toBeUndefined()
+
+    const connectedPopupPage = await context.newPage()
+    await connectedPopupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html`,
     )
+    await expect(
+      connectedPopupPage.getByTestId('extension-device-setup'),
+    ).toBeVisible()
   } finally {
     await context.close()
     await loginServer.close()

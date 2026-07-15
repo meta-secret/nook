@@ -15,6 +15,10 @@ variable "VITE_PUBLIC_APP_URL" {
   default = ""
 }
 
+variable "NOOK_SIMPLE_VAULT_URL" {
+  default = "https://simple.nokey.sh/"
+}
+
 variable "VITE_SIMPLE_APP_URL" {
   default = ""
 }
@@ -37,11 +41,12 @@ target "_nook-web-common" {
   target     = "nook-web"
   platforms  = ["linux/amd64"]
   args = {
-    VITE_BASE             = VITE_BASE
-    VITE_SITE_URL         = VITE_SITE_URL
-    VITE_PUBLIC_APP_URL   = VITE_PUBLIC_APP_URL
-    VITE_SIMPLE_APP_URL   = VITE_SIMPLE_APP_URL
-    VITE_SENTINEL_APP_URL = VITE_SENTINEL_APP_URL
+    VITE_BASE               = VITE_BASE
+    VITE_SITE_URL           = VITE_SITE_URL
+    VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
+    NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
+    VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
+    VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
   }
   contexts = {
     web-base      = "target:web-base"

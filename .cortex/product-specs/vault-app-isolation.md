@@ -56,11 +56,11 @@ Production releases publish `nokey.sh` as the public site and deploy the two
 vault projects to separate Cloudflare Pages projects. Release automation
 attaches and verifies both custom domains and their proxied CNAME records.
 
-Main deploys the same three artifacts independently. The vault custom domains
-point to the `development` branch aliases of their production Pages projects,
-so Main cannot replace either project's production branch. PRs deploy branch
-`pr-<number>` to all three projects and expose only Cloudflare-native aliases;
-they do not create branded DNS records.
+Main deploys the same three artifacts independently. The landing and both vault
+custom domains point to the `development` branch aliases of their Pages
+projects, so Main cannot replace any project's production branch. PRs deploy
+branch `pr-<number>` to all three projects and expose only Cloudflare-native
+aliases; they do not create branded DNS records.
 
 The release gate verifies the app-kind marker, CSP and anti-sniffing headers,
 exact release commit, a working Simple extension route, and a `404` response for

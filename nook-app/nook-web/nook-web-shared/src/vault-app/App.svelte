@@ -240,7 +240,9 @@
       document.title = 'Approve extension · Nook'
       return
     }
-    document.title = IS_SENTINEL_APP ? 'Nook Sentinel Vault' : 'Nook Simple Vault'
+    document.title = IS_SENTINEL_APP
+      ? 'Nook Sentinel Vault'
+      : 'Nook Simple Vault'
   })
 
   async function handleUnlock() {
@@ -579,13 +581,10 @@
           data-testid="extension-connect-invalid"
         >
           <h1 class="text-lg font-semibold text-foreground">
-            Invalid extension request
+            {vault.t('extension.connect.invalid_title')}
           </h1>
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Open this pairing screen from the Nook extension after its passkey
-            setup finishes. The request must include the extension device id,
-            encryption key, signing key, extension id, nonce, and requested
-            access.
+            {vault.t('extension.connect.invalid_description')}
           </p>
           <Button
             type="button"
@@ -593,20 +592,11 @@
             class="mt-4"
             onclick={navigateHome}
           >
-            Return to Nook
+            {vault.t('extension.connect.return_to_nook')}
           </Button>
         </section>
       {:else if !vault.isAuthenticated}
         <div class="space-y-6">
-          {#if extensionConnectRequest}
-            <div class="mx-auto w-full max-w-2xl">
-              <ExtensionConnectConsent
-                {vault}
-                request={extensionConnectRequest}
-                onClose={navigateHome}
-              />
-            </div>
-          {/if}
           {#if vault.deviceProtectionReady || showLoginWithoutPasskey || existingVaultNeedsDeviceUnlock}
             {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock}
               <LoginGate

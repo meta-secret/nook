@@ -85,6 +85,8 @@ import {
   type VaultArchitecture,
   type VaultType,
 } from "$lib/vault-architecture";
+import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
+import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
@@ -1811,6 +1813,7 @@ export class VaultState {
     this.sessionExpiredByIdle = false;
     this.refreshVaultArchitectureFromManager();
     vaultLog.info("vault session unlocked", { secrets: this.secrets.length });
+    void this.publishExtensionEventLogUpdate();
   }
 
   clearUnlockedSession() {
@@ -2018,6 +2021,7 @@ export class VaultState {
       if (this.isAuthenticated) {
         await this.hydrateMultiDeviceState();
       }
+      await this.publishExtensionEventLogUpdate();
       this.lastSyncedAt = new SvelteDate();
     } catch {
       // Background sync should not interrupt the UI.
@@ -2062,6 +2066,7 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
+    await this.publishExtensionEventLogUpdate();
     if (!this.deviceProtectionReady) return;
     if (this.syncProviders.length === 0) {
       await this.flushRemoteEventOutboxNow();
@@ -2070,6 +2075,22 @@ export class VaultState {
     for (const provider of this.syncProviders) {
       if (this.syncBlocked) break;
       await this.flushRemoteEventOutboxNow(provider);
+    }
+  }
+
+  async publishExtensionEventLogUpdate(): Promise<void> {
+    if (!this.manager) return;
+    try {
+      const vaultStoreId =
+        this.activeVaultStoreId ??
+        (await this.enqueueStorage(() => this.manager!.vaultStoreId));
+      const eventLogRecords = (await this.enqueueStorage(() =>
+        this.manager!.exportEventLogRecords(),
+      )) as ExtensionEventLogRecord[];
+      publishExtensionEventLogUpdate(vaultStoreId, eventLogRecords);
+    } catch {
+      // The extension bridge is optional and must never make a vault save fail.
+      vaultLog.warn("extension event-log notification failed");
     }
   }
 

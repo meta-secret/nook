@@ -1,443 +1,339 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
-  import type {
-    PasswordFormSummary,
-    ScanPasswordFieldsResponse,
-  } from '../../../nook-web-shared/src/extension/runtime-messages'
   import type { ExtensionI18n } from '../lib/i18n'
   import {
-    generateSuggestedPassword,
-    setupExtensionDeviceProtection,
+    createExtensionPasskey,
+    createExtensionPin,
+    recoverExtensionPasskey,
+    unlockExtensionPasskey,
+    unlockExtensionPin,
+    type ExtensionDeviceMode,
+    type ExtensionDeviceProtectionResult,
+    type ExtensionDeviceProtectionStatus,
   } from '../lib/nook-wasm'
-  import {
-    normalizeExtensionSetupState,
-    type ExtensionConsentScope,
-    type ExtensionSetupState,
-  } from './setup-state'
 
-  const setupStorageKey = 'nook:extension-setup'
-  const extensionConnectUrl = 'https://simple.nokey.sh/extension-connect'
+  type PopupProtectionStatus = ExtensionDeviceProtectionStatus | 'pin-setup'
 
-  type ScanState =
-    | { status: 'loading'; tabTitle: string }
-    | { status: 'unavailable'; tabTitle: string; message: string }
-    | {
-        status: 'ready'
-        tabTitle: string
-        summary: PasswordFormSummary
-        generatedPassword?: string | undefined
-      }
+  let {
+    i18n,
+    isConnected,
+    protectionStatus,
+  }: {
+    i18n: ExtensionI18n
+    isConnected: boolean
+    protectionStatus: ExtensionDeviceProtectionStatus
+  } = $props()
 
-  let { i18n }: { i18n: ExtensionI18n } = $props()
-
-  let setupState = $state<ExtensionSetupState>({
-    status: 'not-set-up',
-    deviceLabel: defaultDeviceLabel(),
-  })
-  let scanState = $state<ScanState>({
-    status: 'loading',
-    tabTitle: '',
-  })
-  let setupAttemptId = 0
-
-  const statusText = $derived(
-    i18n.t(`extension.setup.status_${setupState.status.replaceAll('-', '_')}`),
-  )
-
-  function defaultDeviceLabel() {
-    return i18n.t('extension.setup.profile_title')
+  function initialProtectionStatus(): PopupProtectionStatus {
+    return protectionStatus
   }
 
-  function requestedConsentScopes(): ExtensionConsentScope[] {
-    return ['vault-access', 'password-filling', 'sync-provider-credentials']
-  }
+  let status = $state<PopupProtectionStatus>(initialProtectionStatus())
+  let busy = $state(false)
+  let error = $state('')
+  let passkeyLabel = $state('')
+  let deviceMode = $state<ExtensionDeviceMode>('standard')
+  let pin = $state('')
+  let pinConfirm = $state('')
 
-  function randomNonce() {
-    if (typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID()
+  const needsSetup = $derived(status === 'missing' || status === 'plaintext')
+
+  function errorMessage(caught: unknown, fallbackKey: string): string {
+    if (!(caught instanceof Error)) return i18n.t(fallbackKey)
+    if (caught.message.includes('PASSKEY_CEREMONY_NOT_ALLOWED')) {
+      return i18n.t(fallbackKey)
     }
-    const bytes = new Uint8Array(16)
-    crypto.getRandomValues(bytes)
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
-      '',
-    )
+    return caught.message
   }
 
-  function extensionConnectRequestUrl(input: {
-    deviceId: string
-    devicePublicKey: string
-    deviceSigningPublicKey: string
-    extensionRuntimeId: string
-    deviceLabel: string
-    requestNonce: string
-    requestedScopes: ExtensionConsentScope[]
-  }) {
-    const url = new URL(extensionConnectUrl)
-    url.searchParams.set('device_id', input.deviceId)
-    url.searchParams.set('device_public_key', input.devicePublicKey)
-    url.searchParams.set(
-      'device_signing_public_key',
-      input.deviceSigningPublicKey,
-    )
-    url.searchParams.set('extension_id', input.extensionRuntimeId)
-    url.searchParams.set('device_label', input.deviceLabel)
-    url.searchParams.set('nonce', input.requestNonce)
-    url.searchParams.set('scopes', input.requestedScopes.join(','))
-    return url.toString()
-  }
-
-  function readSetupState(): Promise<ExtensionSetupState> {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(setupStorageKey, (items) => {
-        const value = items[setupStorageKey]
-        const normalized = normalizeExtensionSetupState(value)
-        if (normalized?.migrated) {
-          chrome.storage.local.set({ [setupStorageKey]: normalized.state })
+  function openSimpleVault(): void {
+    error = ''
+    chrome.runtime.sendMessage(
+      { type: 'nook:open-simple-vault' },
+      (response: { ok?: boolean } | undefined) => {
+        if (chrome.runtime.lastError || response?.ok !== true) {
+          error = i18n.t('extension.connect.start_failed')
+          return
         }
-        resolve(
-          normalized?.state ?? {
-            status: 'not-set-up',
-            deviceLabel: defaultDeviceLabel(),
-          },
-        )
-      })
-    })
+        window.close()
+      },
+    )
   }
 
-  function writeSetupState(nextState: ExtensionSetupState) {
-    setupState = nextState
-    chrome.storage.local.set({ [setupStorageKey]: nextState })
-  }
-
-  function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
-    return new Promise((resolve) => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        resolve(tabs[0])
-      })
-    })
-  }
-
-  function scanTab(tabId: number): Promise<ScanPasswordFieldsResponse> {
-    return new Promise((resolve) => {
-      chrome.tabs.sendMessage<ScanPasswordFieldsResponse>(
-        tabId,
-        { type: 'nook:scan-password-fields' },
-        (response) => {
-          if (chrome.runtime.lastError || !response) {
-            resolve({ ok: false })
-            return
-          }
-
-          resolve(response)
-        },
-      )
-    })
-  }
-
-  async function loadPopup() {
-    scanState = {
-      status: 'loading',
-      tabTitle: i18n.t('extension.popup.checking_this_page'),
-    }
-
-    const activeTab = await queryActiveTab()
-    const tabTitle = activeTab?.title ?? i18n.t('extension.popup.current_page')
-
-    if (typeof activeTab?.id !== 'number') {
-      scanState = {
-        status: 'unavailable',
-        tabTitle,
-        message: i18n.t('extension.popup.open_web_page'),
-      }
-      return
-    }
-
-    const response = await scanTab(activeTab.id)
-
-    if (!response.ok || !response.summary) {
-      scanState = {
-        status: 'unavailable',
-        tabTitle,
-        message: i18n.t('extension.popup.cannot_inspect_page'),
-      }
-      return
-    }
-
-    scanState = {
-      status: 'ready',
-      tabTitle,
-      summary: response.summary,
-    }
-
-    if (response.summary.passwordFieldCount > 0) {
-      scanState = {
-        ...scanState,
-        generatedPassword: await generateSuggestedPassword(),
-      }
-    }
-  }
-
-  async function startExtensionSetup() {
-    const attemptId = setupAttemptId + 1
-    setupAttemptId = attemptId
-    writeSetupState({
-      status: 'protecting',
-      deviceLabel: setupState.deviceLabel,
-    })
-
-    try {
-      const device = await setupExtensionDeviceProtection()
-      if (attemptId !== setupAttemptId) return
-      const requestedScopes = requestedConsentScopes()
-      const requestNonce = randomNonce()
-      writeSetupState({
-        status: 'pairing',
-        deviceLabel: setupState.deviceLabel,
-        deviceId: device.deviceId,
-        devicePublicKey: device.devicePublicKey,
-        deviceSigningPublicKey: device.deviceSigningPublicKey,
-        requestNonce,
-        requestUrl: extensionConnectRequestUrl({
+  function beginPairing(device: ExtensionDeviceProtectionResult): void {
+    chrome.runtime.sendMessage(
+      {
+        type: 'nook:begin-extension-pairing',
+        payload: {
           ...device,
-          extensionRuntimeId: chrome.runtime.id,
-          deviceLabel: setupState.deviceLabel,
-          requestNonce,
-          requestedScopes,
-        }),
-        requestedScopes,
-      })
-    } catch (error) {
-      if (attemptId !== setupAttemptId) return
-      writeSetupState({
-        status: 'pairing-failed',
-        deviceLabel: setupState.deviceLabel,
-        message:
-          error instanceof Error
-            ? error.message
-            : i18n.t('extension.setup.passkey_setup_failed'),
-      })
+          deviceLabel: i18n.t('extension.setup.profile_title'),
+        },
+      },
+      (response: { ok?: boolean } | undefined) => {
+        busy = false
+        if (chrome.runtime.lastError || response?.ok !== true) {
+          error = i18n.t('extension.connect.start_failed')
+          return
+        }
+        window.close()
+      },
+    )
+  }
+
+  async function runDeviceAction(
+    action: () => Promise<ExtensionDeviceProtectionResult>,
+    fallbackKey = 'extension.setup.passkey_setup_failed',
+  ): Promise<void> {
+    busy = true
+    error = ''
+    try {
+      beginPairing(await action())
+    } catch (caught) {
+      busy = false
+      if (
+        caught instanceof Error &&
+        (caught.message.includes('PASSKEY_UNAVAILABLE') ||
+          caught.message.includes('PASSKEY_PRF_UNAVAILABLE'))
+      ) {
+        status = 'pin-setup'
+        error = i18n.t(
+          caught.message.includes('PASSKEY_UNAVAILABLE')
+            ? 'device_protection.passkey_unavailable_pin_fallback_ready'
+            : 'device_protection.pin_fallback_ready',
+        )
+        return
+      }
+      error = errorMessage(caught, fallbackKey)
     }
   }
 
-  function resetSetup() {
-    setupAttemptId += 1
-    writeSetupState({
-      status: 'not-set-up',
-      deviceLabel: defaultDeviceLabel(),
-    })
+  function createPasskey(): void {
+    void runDeviceAction(
+      () => createExtensionPasskey(passkeyLabel, deviceMode),
+      'device_protection.passkey_create_not_allowed',
+    )
   }
 
-  function openExtensionConnect() {
-    chrome.tabs.create({
-      url:
-        setupState.status === 'pairing'
-          ? setupState.requestUrl
-          : extensionConnectUrl,
-    })
+  function useExistingPasskey(): void {
+    void runDeviceAction(
+      recoverExtensionPasskey,
+      'device_protection.passkey_recovery_not_allowed',
+    )
   }
 
-  onMount(() => {
-    void (async () => {
-      setupState = await readSetupState()
-      if (setupState.status === 'ready') {
-        await loadPopup()
-      }
-    })()
-  })
+  function unlockPasskey(): void {
+    void runDeviceAction(
+      unlockExtensionPasskey,
+      'device_protection.passkey_unlock_not_allowed',
+    )
+  }
+
+  function createPin(): void {
+    if (pin !== pinConfirm) {
+      error = i18n.t('device_protection.pin_mismatch')
+      return
+    }
+    void runDeviceAction(() => createExtensionPin(pin))
+  }
+
+  function unlockPin(): void {
+    void runDeviceAction(() => unlockExtensionPin(pin))
+  }
 </script>
 
-<main class="popup-shell">
-  <header class="popup-header">
+{#if isConnected}
+  <main class="connected-shell">
     <NookIcon src="../icons/nook.png" alt="" class="popup-logo" />
-    <div>
-      <h1>Nook</h1>
-      <p>
-        {setupState.status === 'ready'
-          ? scanState.tabTitle || i18n.t('extension.popup.checking_this_page')
-          : setupState.deviceLabel}
-      </p>
-    </div>
-    {#if setupState.status === 'ready'}
-      <button
-        class="scan-button"
-        type="button"
-        data-testid="scan-active-tab"
-        aria-label={i18n.t('extension.popup.scan_active_tab')}
-        onclick={() => {
-          void loadPopup()
-        }}
-      >
-        {i18n.t('extension.popup.scan')}
-      </button>
+    <button
+      type="button"
+      data-testid="open-simple-vault-btn"
+      onclick={openSimpleVault}
+    >
+      {i18n.t('extension.setup.open_simple_vault')}
+    </button>
+    {#if error}
+      <p class="error-message" role="alert">{error}</p>
     {/if}
-  </header>
-
-  <section class="extension-state" aria-live="polite">
-    <div>
-      <span class="metric-label">{i18n.t('extension.setup.state')}</span>
-      <strong data-testid="extension-setup-state">{statusText}</strong>
-    </div>
-    {#if setupState.status === 'ready' || setupState.status === 'locked'}
-      <div>
-        <span class="metric-label">{i18n.t('extension.setup.vaults')}</span>
-        <strong>{setupState.pairedVaults.length}</strong>
-      </div>
-    {/if}
-  </section>
-
-  {#if setupState.status === 'not-set-up'}
-    <section class="setup-panel">
-      <h2>{i18n.t('extension.setup.connect_nook')}</h2>
-      <p>{i18n.t('extension.setup.simple_device_description')}</p>
-      <button
-        class="primary-button"
-        type="button"
-        data-testid="set-up-extension-btn"
-        onclick={() => {
-          void startExtensionSetup()
-        }}
-      >
-        {i18n.t('extension.setup.set_up_extension')}
-      </button>
-    </section>
-  {:else if setupState.status === 'protecting'}
-    <section class="setup-panel">
-      <h2>{i18n.t('extension.setup.protect_title')}</h2>
-      <p>{i18n.t('extension.setup.protect_description')}</p>
-      <button class="primary-button" type="button" disabled>
-        {i18n.t('extension.setup.waiting_for_passkey')}
-      </button>
-      <button class="secondary-button" type="button" onclick={resetSetup}>
-        {i18n.t('extension.setup.start_over')}
-      </button>
-    </section>
-  {:else if setupState.status === 'pairing'}
-    <section class="setup-panel">
-      <h2>{i18n.t('extension.setup.pair_simple_title')}</h2>
-      <p>{i18n.t('extension.setup.pair_simple_description')}</p>
-      <p class="request-detail">
-        {i18n.t('extension.setup.device_request')}:
-        <code>{setupState.deviceId}</code>
-      </p>
-      <ul class="scope-list">
-        {#each setupState.requestedScopes as scope}
-          <li>
-            {i18n.t(`extension.setup.scope_${scope.replaceAll('-', '_')}`)}
-          </li>
-        {/each}
-      </ul>
-      <button
-        class="primary-button"
-        type="button"
-        data-testid="open-extension-connect-btn"
-        onclick={openExtensionConnect}
-      >
-        {i18n.t('extension.setup.open_simple_vault')}
-      </button>
-    </section>
-  {:else if setupState.status === 'pairing-failed'}
-    <section class="setup-panel warning">
-      <h2>{i18n.t('extension.setup.pairing_failed')}</h2>
-      <p>{setupState.message}</p>
-      <button class="secondary-button" type="button" onclick={resetSetup}>
-        {i18n.t('extension.setup.reset_setup')}
-      </button>
-    </section>
-  {:else if setupState.status === 'locked'}
-    <section class="setup-panel">
-      <h2>{i18n.t('extension.setup.locked_title')}</h2>
-      <p>{i18n.t('extension.setup.locked_description')}</p>
-      <button class="primary-button" type="button" disabled>
-        {i18n.t('extension.setup.unlock_pending')}
-      </button>
-    </section>
-  {:else if setupState.status === 'revoked'}
-    <section class="setup-panel warning">
-      <h2>{i18n.t('extension.setup.revoked_title')}</h2>
-      <p>{setupState.message}</p>
-      <button class="primary-button" type="button" onclick={resetSetup}>
-        {i18n.t('extension.setup.pair_again')}
-      </button>
-    </section>
-  {:else}
-    <section class="vault-panel">
-      <div>
-        <span class="metric-label"
-          >{i18n.t('extension.setup.selected_vault')}</span
-        >
-        <strong
-          >{setupState.selectedVaultName ??
-            i18n.t('extension.setup.default_vault')}</strong
-        >
-      </div>
-      <div>
-        <span class="metric-label">{i18n.t('extension.setup.sync')}</span>
-        <strong>
-          {setupState.syncProviderCount === 0
-            ? i18n.t('extension.setup.vault_access_granted')
-            : setupState.syncProviderCount === 1
-              ? i18n.t('extension.setup.one_sync_provider_granted')
-              : i18n.t('extension.setup.sync_providers_granted', {
-                  count: String(setupState.syncProviderCount),
-                })}
-        </strong>
-      </div>
-    </section>
-
-    <section class="status-panel" aria-live="polite">
-      <div>
-        <span class="metric-label"
-          >{i18n.t('extension.popup.password_fields')}</span
-        >
-        <strong data-testid="password-field-count"
-          >{scanState.status === 'ready'
-            ? scanState.summary.passwordFieldCount
-            : '-'}</strong
-        >
-      </div>
-      <div>
-        <span class="metric-label"
-          >{i18n.t('extension.popup.login_fields')}</span
-        >
-        <strong data-testid="username-field-count"
-          >{scanState.status === 'ready'
-            ? scanState.summary.usernameFieldCount
-            : '-'}</strong
-        >
-      </div>
-      <div>
-        <span class="metric-label">{i18n.t('extension.popup.forms')}</span>
-        <strong data-testid="form-count"
-          >{scanState.status === 'ready'
-            ? scanState.summary.formCount
-            : '-'}</strong
-        >
-      </div>
-    </section>
-
-    {#if scanState.status === 'loading'}
-      <p class="status-message">
-        {i18n.t('extension.popup.scanning_active_tab')}
-      </p>
-    {:else if scanState.status === 'unavailable'}
-      <p class="status-message">{scanState.message}</p>
-    {:else if scanState.summary.passwordFieldCount > 0}
-      <p class="status-message">
-        {i18n.t('extension.popup.found_password_fields')}
-      </p>
-      {#if scanState.generatedPassword}
-        <section class="password-suggestion">
-          <span>{i18n.t('extension.popup.suggested_password')}</span>
-          <code data-testid="suggested-password"
-            >{scanState.generatedPassword}</code
-          >
-        </section>
+  </main>
+{:else}
+  <main class="device-setup" data-testid="extension-device-setup">
+    <p class="step-label">{i18n.t('device_protection.step_label')}</p>
+    <div class="shield-icon" aria-hidden="true">
+      {#if needsSetup || status === 'pin-setup'}
+        <ShieldCheck size={26} />
+      {:else}
+        <KeyRound size={25} />
       {/if}
+    </div>
+    <h1>{i18n.t('device_protection.title')}</h1>
+    <p class="description">
+      {i18n.t(
+        status === 'passkey' || status === 'unlocked'
+          ? 'device_protection.unlock_description'
+          : status === 'pin'
+            ? 'device_protection.pin_unlock_description'
+            : status === 'pin-setup'
+              ? 'device_protection.pin_setup_description'
+              : 'device_protection.setup_description',
+      )}
+    </p>
+
+    {#if status === 'pin-setup'}
+      <div class="field-group">
+        <label for="device-protection-pin">
+          {i18n.t('device_protection.pin_label')}
+        </label>
+        <input
+          id="device-protection-pin"
+          type="password"
+          inputmode="numeric"
+          autocomplete="new-password"
+          bind:value={pin}
+          disabled={busy}
+          data-testid="device-protection-pin-input"
+        />
+      </div>
+      <div class="field-group">
+        <label for="device-protection-pin-confirm">
+          {i18n.t('device_protection.pin_confirm_label')}
+        </label>
+        <input
+          id="device-protection-pin-confirm"
+          type="password"
+          inputmode="numeric"
+          autocomplete="new-password"
+          bind:value={pinConfirm}
+          disabled={busy}
+          data-testid="device-protection-pin-confirm"
+        />
+      </div>
+      <p class="field-hint">
+        {i18n.t('device_protection.pin_security_note')}
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        data-testid="device-protection-pin-setup-btn"
+        onclick={createPin}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('device_protection.pin_setup_action')}
+      </button>
+    {:else if needsSetup}
+      <div class="field-group">
+        <label for="device-protection-mode">
+          {i18n.t('device_protection.mode_group_label')}
+        </label>
+        <select
+          id="device-protection-mode"
+          bind:value={deviceMode}
+          disabled={busy}
+          data-testid="device-mode-select"
+        >
+          <option value="standard">
+            {i18n.t('device_protection.mode_standard_title')}
+          </option>
+          <option value="anti-hacker">
+            {i18n.t('device_protection.mode_anti_hacker_title')}
+          </option>
+        </select>
+        <p class="field-hint">
+          {i18n.t(
+            deviceMode === 'standard'
+              ? 'device_protection.mode_standard_description'
+              : 'device_protection.mode_anti_hacker_description',
+          )}
+        </p>
+      </div>
+
+      <div class="field-group">
+        <label for="device-protection-label">
+          {i18n.t('device_protection.passkey_label')}
+        </label>
+        <input
+          id="device-protection-label"
+          type="text"
+          autocomplete="off"
+          placeholder={i18n.t('device_protection.passkey_label_placeholder')}
+          bind:value={passkeyLabel}
+          disabled={busy}
+          data-testid="device-protection-label-input"
+        />
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        data-testid="device-protection-setup-btn"
+        onclick={createPasskey}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('device_protection.setup_action')}
+      </button>
+
+      <div class="divider">
+        <span></span>
+        <small>{i18n.t('device_protection.existing_passkey_alternative')}</small
+        >
+        <span></span>
+      </div>
+      <button
+        type="button"
+        class="secondary-button"
+        disabled={busy}
+        data-testid="device-protection-use-existing-choice"
+        onclick={useExistingPasskey}
+      >
+        {i18n.t('device_protection.existing_passkey_alternative_action')}
+      </button>
+    {:else if status === 'pin'}
+      <div class="field-group">
+        <label for="device-protection-pin">
+          {i18n.t('device_protection.pin_label')}
+        </label>
+        <input
+          id="device-protection-pin"
+          type="password"
+          inputmode="numeric"
+          autocomplete="current-password"
+          bind:value={pin}
+          disabled={busy}
+          data-testid="device-protection-pin-unlock-input"
+        />
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        data-testid="device-protection-pin-unlock-btn"
+        onclick={unlockPin}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('device_protection.pin_unlock_action')}
+      </button>
     {:else}
-      <p class="status-message">
-        {i18n.t('extension.popup.no_password_fields')}
+      <button
+        type="button"
+        disabled={busy}
+        data-testid="device-protection-unlock-btn"
+        onclick={unlockPasskey}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('device_protection.unlock_action')}
+      </button>
+    {/if}
+
+    {#if error}
+      <p
+        class="error-message"
+        role="alert"
+        data-testid="device-protection-error"
+      >
+        {error}
       </p>
     {/if}
-  {/if}
-</main>
+  </main>
+{/if}
