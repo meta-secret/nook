@@ -150,23 +150,45 @@ jobs:
             exit 1
           fi
 
+          purge_body="$(
+            jq -nc \
+              --arg root "https://$DEV_DOMAIN/" \
+              --arg site "https://$DEV_DOMAIN/site/" \
+              --arg simple "https://$DEV_DOMAIN/simple/" \
+              --arg sentinel "https://$DEV_DOMAIN/sentinel/" \
+              '{files: [$root, $site, $simple, $sentinel]}'
+          )"
+
           root_body="$(mktemp)"
           trap 'rm -f "$root_body"' EXIT
           verified=false
           for attempt in $(seq 1 30); do
+            # The custom hostname can still point at the previous Pages
+            # deployment briefly. Purge before every probe so an old SPA
+            # fallback cannot repopulate the cache for the rest of the loop.
+            if ! api_json -X POST \
+              --data "$purge_body" \
+              "https://api.cloudflare.com/client/v4/zones/$zone_id/purge_cache" >/dev/null; then
+              echo "::error::CLOUD_FLARE_PAGES_TOKEN must grant Cache Purge for $zone_name"
+              exit 1
+            fi
             root_status="$(curl -sS -o "$root_body" -w '%{http_code}' "https://$DEV_DOMAIN/" || true)"
             site_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/site/" || true)"
+            simple_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/simple/" || true)"
+            sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/sentinel/" || true)"
             if [ "$root_status" = "200" ] \
               && grep -Fq '<title>Nook — Keys, not accounts</title>' "$root_body" \
-              && [ "$site_status" = "404" ]; then
+              && [ "$site_status" = "404" ] \
+              && [ "$simple_status" = "404" ] \
+              && [ "$sentinel_status" = "404" ]; then
               verified=true
               break
             fi
-            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status)"
+            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status, /simple/=$simple_status, /sentinel/=$sentinel_status)"
             sleep 10
           done
           if [ "$verified" != true ]; then
-            echo "::error::dev.nokey.sh must serve the landing page at / and return 404 for /site/"
+            echo "::error::dev.nokey.sh must serve only the landing page at /"
             exit 1
           fi
           echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
