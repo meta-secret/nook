@@ -81,17 +81,71 @@ jobs:
           url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
           echo "preview_url=$url" >> "$GITHUB_OUTPUT"
 
+      - name: Deploy and verify production-shaped site preview
+        id: deploy-site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}-site
+          CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site
+        run: |
+          set +e
+          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
+          status=$?
+          set -e
+          echo "$out"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Cloudflare production-shaped preview deploy failed (exit $status)"
+            exit "$status"
+          fi
+          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
+          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+          if [ -z "$url" ]; then
+            echo "::error::Cloudflare production-shaped preview did not emit a URL"
+            exit 1
+          fi
+
+          verified=false
+          for attempt in $(seq 1 12); do
+            root_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/" || true)"
+            site_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/site/" || true)"
+            simple_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/simple/deep/link" || true)"
+            sentinel_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/sentinel/" || true)"
+            app_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/app/" || true)"
+            alias_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/extension-connect.html" || true)"
+            cache_control="$({ curl --connect-timeout 3 --max-time 5 -sS -D - -o /dev/null "$url/site/" || true; } | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol:[[:space:]]*//p' | tail -1)"
+            if [ "$root_status" = "200" ] \
+              && [ "$site_status" = "404" ] \
+              && [ "$simple_status" = "404" ] \
+              && [ "$sentinel_status" = "404" ] \
+              && [ "$app_status" = "404" ] \
+              && [ "$alias_status" = "404" ] \
+              && printf '%s' "$cache_control" | grep -Fq 'no-store'; then
+              verified=true
+              break
+            fi
+            echo "Waiting for production-shaped preview (attempt $attempt/12; root=$root_status, /site/=$site_status, /simple/deep/link=$simple_status, /sentinel/=$sentinel_status, /app/=$app_status, /extension-connect.html=$alias_status, cache-control=$cache_control)"
+            sleep 5
+          done
+          if [ "$verified" != true ]; then
+            echo "::error::Production-shaped preview must serve the site root and reject retired app routes"
+            exit 1
+          fi
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+
       - name: Comment preview URL on PR
-        if: steps.deploy.outcome == 'success'
+        if: steps.deploy.outcome == 'success' && steps.deploy-site.outcome == 'success'
         uses: actions/github-script@v9
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
+          SITE_PREVIEW_URL: ${{ steps.deploy-site.outputs.preview_url }}
         with:
           retries: 3
           script: |
             const marker = '### Preview deployed'
             const root = process.env.PREVIEW_URL.replace(/\/$/, '')
-            const body = `${marker}\n\n- Unified test harness: ${root}/\n- Simple Vault artifact: ${root}/simple/\n- Sentinel Vault artifact: ${root}/sentinel/`
+            const site = process.env.SITE_PREVIEW_URL.replace(/\/$/, '')
+            const body = `${marker}\n\n- Unified test harness: ${root}/\n- Production-shaped site: ${site}/\n- Simple Vault artifact: ${root}/simple/\n- Sentinel Vault artifact: ${root}/sentinel/`
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -116,10 +170,11 @@ jobs:
             }
 
       - name: Record github-pages deployment
-        if: steps.deploy.outcome == 'success'
+        if: steps.deploy.outcome == 'success' && steps.deploy-site.outcome == 'success'
         uses: actions/github-script@v9
         env:
-          PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
+          PREVIEW_URL: ${{ steps.deploy-site.outputs.preview_url }}
+          UNIFIED_PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         with:
           retries: 3
           script: |
@@ -141,6 +196,7 @@ jobs:
               payload: {
                 pull_request: context.payload.pull_request.number,
                 preview_url: previewUrl,
+                unified_preview_url: process.env.UNIFIED_PREVIEW_URL,
               },
             })
 

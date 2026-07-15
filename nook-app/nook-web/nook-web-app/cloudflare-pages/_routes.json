@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "include": [
+    "/site",
+    "/site/*",
+    "/simple",
+    "/simple/*",
+    "/sentinel",
+    "/sentinel/*",
+    "/app",
+    "/app/*",
+    "/app-logs",
+    "/app-logs/*",
+    "/app-logs.html",
+    "/logs",
+    "/logs/*",
+    "/logs.html",
+    "/extension-connect",
+    "/extension-connect/*",
+    "/extension-connect.html"
+  ],
+  "exclude": []
+}
