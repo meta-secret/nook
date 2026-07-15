@@ -94,7 +94,6 @@ tasks:
         -e AGENT_BRANCH
         -e CI_AGENT_PROMPT_FILE
         -e CI_FIX_LABEL
-        -e CI_FIX_CHECKS_DISCOVERY_TIMEOUT_MS
         -e CI_AGENT_TIMEOUT_MS
         -e CI_AGENT_HEARTBEAT_MS
         -e CI_AGENT_LOG_LEVEL
@@ -161,7 +160,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
 
   pr:monitor:
-    desc: Event-watch only applicable repository-owned PR workflows; never wait for external reviews (PR=<number>).
+    desc: Arm hosted event continuation, print one audit, and exit without polling or waiting for external reviews (PR=<number>).
     requires:
       vars: [PR]
     cmds:

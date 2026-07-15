@@ -15,17 +15,17 @@ handoff:
    the feature branch with focused local checks while iterating.
 3. **Push and create/update the PR** — push a coherent commit and open the PR;
    later fixes update that same PR.
-4. **Preflight and event-watch Nook's applicable PR test checks** — run `task
+4. **Preflight and arm Nook's event continuation** — run `task
    pr:preflight PR=<number>` followed by `task pr:monitor PR=<number>` for
    normally `PR / Verify and preview`, plus `Web research / Build and deploy
    research catalog` when web-research paths change. Never monitor or wait for
    an external review or check.
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for
-   web/e2e failures, fix locally, push the completed fix, and re-watch the
-   repository-owned check until green.
+   web/e2e failures, fix locally, and push the completed fix; the synchronize
+   event re-evaluates the repository-owned check.
 6. **Address comments already present** — reply to actionable human, Codex, and
    automated comments with the fix, validation, or no-change rationale, then
-   push any needed changes and re-watch Nook's applicable PR test checks. Do not wait for
+   push any needed changes and let Nook's event continuation re-evaluate. Do not wait for
    new comments or another review cycle.
 7. **Merge when ready and green** — after the branch is current with
    `origin/main`, Nook's applicable repository-owned PR test checks are green, and actionable
@@ -216,11 +216,11 @@ task pr:preflight PR=<number>
 task pr:monitor PR=<number>
 ```
 
-`pr:monitor` performs a bounded lookup while GitHub indexes the exact-head run,
-then delegates the long wait to `gh run watch`. The agent itself has no status
-polling loop, and only the path-applicable `PR` and `Web research` workflows are
-selected. Codex and every other external review/check are absent from the
-monitor contract.
+`pr:monitor` marks a trusted same-repository `agent/`, `fix/`, or `codex/` PR,
+prints one exact-head audit, and exits. GitHub's `pull_request_target` and
+`workflow_run` events own all later continuation and squash-merge readiness.
+No agent process or CLI watcher polls status. Codex and every other external
+review/check are absent from the monitor contract.
 
 Do not request, poll, or wait for Codex, Claude, Cursor, CodeRabbit, or any other
 external review/check/deployment. Do not add a grace period after the Nook PR
@@ -242,7 +242,7 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 ```
 
 If the branch is behind `origin/main`, merge the base branch into the PR branch,
-push, then re-watch Nook's applicable PR workflows from the new head SHA. Do not attempt to
+push; the synchronize event re-evaluates Nook's workflows from the new head SHA. Do not attempt to
 merge or enable auto-merge until this freshness check passes:
 
 ```bash

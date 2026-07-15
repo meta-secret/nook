@@ -282,7 +282,7 @@ task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Bra
 task ci:pr                 # fast local mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
-task pr:monitor PR=410     # event-watch repository workflows only; never waits for Codex
+task pr:monitor PR=410     # arm hosted event continuation and exit; never polls or waits for Codex
 task pr:ready PR=410       # machine-readable final merge-readiness assertion
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses

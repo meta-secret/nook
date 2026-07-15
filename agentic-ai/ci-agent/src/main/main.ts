@@ -6,8 +6,7 @@ import { runCiImplement } from "./implement.js";
 import { loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
-import { createOctokit, parseRepository, waitForPrChecks } from "./github.js";
-import { runPrAudit, runPrEvent } from "./pr-audit.js";
+import { runPrAudit, runPrEvent, runPrMonitor } from "./pr-audit.js";
 
 async function runAgentCommand(): Promise<void> {
   const config = loadConfig();
@@ -34,15 +33,9 @@ async function main(): Promise<void> {
     case "implement":
       await runCiImplement();
       break;
-    case "pr-monitor": {
-      const repository = process.env.GITHUB_REPOSITORY?.trim();
-      const prNumber = Number(process.env.PR_NUMBER?.trim());
-      if (!repository || !Number.isInteger(prNumber) || prNumber <= 0) {
-        throw new Error("GITHUB_REPOSITORY and positive PR_NUMBER are required");
-      }
-      await waitForPrChecks(createOctokit(), parseRepository(repository), prNumber);
+    case "pr-monitor":
+      await runPrMonitor();
       break;
-    }
     case "pr-preflight":
       await runPrAudit(false);
       break;

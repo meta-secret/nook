@@ -3,8 +3,8 @@
 ## Purpose
 
 Minimize agent wall time by batching feedback, parallelizing final validation,
-and delegating repository-check waiting to an event watcher instead of an
-agent-owned polling loop.
+and delegating repository-check continuation to GitHub events instead of a
+long-lived agent or CLI polling loop.
 
 ## Problem Pattern
 
@@ -17,11 +17,11 @@ exact-head deployment requirements are then discovered only at merge time.
 
 Run `task pr:preflight PR=<number>` as soon as a PR exists. Use focused checks
 while editing, then commit and push the coherent iteration before starting the
-long local gate. Run local validation while `task pr:monitor PR=<number>` watches
-only Nook's applicable repository-owned workflows. The monitor performs only a
-bounded run-registration lookup; long-lived state tracking belongs to `gh run
-watch`, so the agent wakes on workflow output/completion rather than polling the
-API itself.
+long local gate. Run `task pr:monitor PR=<number>` once to arm a trusted
+same-repository agent PR and print its current audit; the command exits
+immediately. Long-lived state transitions belong exclusively to the hosted
+`pull_request_target` / `workflow_run` continuation, so neither an agent process
+nor a CLI watcher polls the API.
 
 Inspect feedback that is already present exactly once at the readiness boundary.
 Never request, poll, or wait for Codex Cloud or another external review, and do
@@ -45,8 +45,8 @@ Does not apply to:
 ## Examples
 
 - Before: query `gh pr view` every 30 seconds and keep checking Codex status.
-- After: `task pr:monitor PR=410` selects exact-head Nook runs and blocks on
-  their event watcher; Codex is never selected.
+- After: `task pr:monitor PR=410` arms the hosted event continuation, prints one
+  exact-head snapshot, and exits; Codex is never selected.
 - Before: discover conversation-resolution and stale-base requirements after a
   failed merge command.
 - After: `task pr:preflight PR=410` reports policy, base divergence, runs,
@@ -57,7 +57,7 @@ Does not apply to:
 - [ ] Establish the branch and PR path from current `origin/main`.
 - [ ] Run focused checks while iterating.
 - [ ] Commit and push before required full local validation.
-- [ ] Run local validation and `task pr:monitor` concurrently.
+- [ ] Arm `task pr:monitor`, then run local validation while GitHub events own continuation.
 - [ ] Inspect only feedback already present; never wait for new external review.
 - [ ] Run `task pr:ready` on the exact head.
 - [ ] Squash merge and report duration.

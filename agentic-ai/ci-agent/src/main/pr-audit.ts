@@ -57,6 +57,39 @@ export async function runPrAudit(requireReady: boolean): Promise<void> {
   }
 }
 
+export async function runPrMonitor(): Promise<void> {
+  const repository = process.env.GITHUB_REPOSITORY?.trim();
+  if (!repository) {
+    throw new Error("GITHUB_REPOSITORY is required");
+  }
+  const prNumber = readPrNumber();
+  const octokit = createOctokit();
+  const repoRef = parseRepository(repository);
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner: repoRef.owner,
+    repo: repoRef.repo,
+    pull_number: prNumber,
+  });
+  if (!isTrustedAgentHead(pr.head.repo?.full_name, pr.head.ref, repository)) {
+    throw new Error(
+      `PR #${prNumber} must use a same-repository agent/, fix/, or codex/ branch`,
+    );
+  }
+  if (!(pr.body ?? "").includes(AGENT_MANAGED_PR_MARKER)) {
+    await octokit.rest.pulls.update({
+      owner: repoRef.owner,
+      repo: repoRef.repo,
+      pull_number: prNumber,
+      body: `${pr.body ?? ""}\n\n${AGENT_MANAGED_PR_MARKER}`.trim(),
+    });
+  }
+  console.log(
+    `Armed event-driven monitoring for PR #${prNumber}; this command exits without waiting or polling`,
+  );
+  const audit = await buildPrAudit(octokit, repoRef, prNumber);
+  console.log(JSON.stringify(audit, null, 2));
+}
+
 export async function runPrEvent(): Promise<void> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   if (!repository) {
@@ -70,9 +103,7 @@ export async function runPrEvent(): Promise<void> {
     repo: repoRef.repo,
     pull_number: prNumber,
   });
-  const trustedHead =
-    pr.head.repo?.full_name === repository &&
-    (pr.head.ref.startsWith("agent/") || pr.head.ref.startsWith("fix/"));
+  const trustedHead = isTrustedAgentHead(pr.head.repo?.full_name, pr.head.ref, repository);
   if (!(pr.body ?? "").includes(AGENT_MANAGED_PR_MARKER) || !trustedHead) {
     console.log(`PR #${prNumber} is not agent-managed; ignoring event`);
     return;
@@ -302,5 +333,16 @@ function isTransientEventReason(reason: string): boolean {
     reason.includes("run is not indexed for the current head") ||
     reason.includes("run is queued") ||
     reason.includes("run is in_progress")
+  );
+}
+
+export function isTrustedAgentHead(
+  headRepository: string | undefined,
+  headBranch: string,
+  repository: string,
+): boolean {
+  return (
+    headRepository === repository &&
+    ["agent/", "fix/", "codex/"].some((prefix) => headBranch.startsWith(prefix))
   );
 }

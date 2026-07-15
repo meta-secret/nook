@@ -1,5 +1,4 @@
 import { Octokit } from "@octokit/rest";
-import { spawn } from "node:child_process";
 
 import { createLogger } from "./logger.js";
 
@@ -124,7 +123,6 @@ export async function commentOnIssue(
   });
 }
 
-const DEFAULT_CHECKS_TIMEOUT_MS = 45 * 60 * 1000;
 const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
 
@@ -161,211 +159,6 @@ export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
 
 export function requiredPrCheckNames(paths: string[]): string[] {
   return requiredPrWorkflows(paths).map((workflow) => workflow.checkName);
-}
-
-export type WorkflowRunWatcher = (
-  repoRef: RepoRef,
-  runId: number,
-  workflowName: string,
-) => Promise<void>;
-
-type WaitForPrChecksOptions = {
-  discoveryTimeoutMs?: number;
-  watcher?: WorkflowRunWatcher;
-};
-
-export async function waitForPrChecks(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-  options: WaitForPrChecksOptions = {},
-): Promise<void> {
-  log.info(`Arming event-driven monitor for PR #${prNumber} repository-owned workflows`);
-  const { owner, repo } = repoRef;
-  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-    owner,
-    repo,
-    pull_number: prNumber,
-    per_page: 100,
-  });
-  const requiredWorkflows = requiredPrWorkflows(files.map((file) => file.filename));
-  if (requiredWorkflows.length === 0) {
-    log.info(`PR #${prNumber} has no applicable repository-owned remote check`);
-    return;
-  }
-
-  log.info(
-    `PR #${prNumber} requires: ${requiredWorkflows.map((workflow) => workflow.workflowName).join(", ")}`,
-  );
-  const discoveryTimeoutMs = positiveNumber(
-    options.discoveryTimeoutMs ?? Number(process.env.CI_FIX_CHECKS_DISCOVERY_TIMEOUT_MS),
-    60_000,
-  );
-  const watcher = options.watcher ?? watchWorkflowRun;
-
-  for (let headChange = 0; headChange < 10; headChange += 1) {
-    const { data: pr } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-    });
-    const headSha = pr.head.sha;
-    const runs = await discoverWorkflowRuns(
-      octokit,
-      repoRef,
-      prNumber,
-      headSha,
-      requiredWorkflows,
-      discoveryTimeoutMs,
-    );
-    const outcomes = await Promise.allSettled(
-      runs.map(async ({ workflow, run }) => {
-        if (run.status === "completed") {
-          if (run.conclusion !== "success") {
-            throw new Error(
-              `${workflow.workflowName} run ${run.id} completed with ${run.conclusion ?? "unknown"}`,
-            );
-          }
-          log.info(`${workflow.workflowName} run ${run.id} already passed`);
-          return;
-        }
-        log.info(`Watching ${workflow.workflowName} run ${run.id}; no agent polling loop`);
-        await watcher(repoRef, run.id, workflow.workflowName);
-      }),
-    );
-
-    const { data: currentPr } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-    });
-    if (currentPr.head.sha !== headSha) {
-      log.info(`PR #${prNumber} head changed; re-arming for ${currentPr.head.sha}`);
-      continue;
-    }
-
-    const failed = outcomes.find(
-      (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
-    );
-    if (failed) {
-      throw failed.reason;
-    }
-    log.info(`PR #${prNumber} repository-owned workflows passed on ${headSha}`);
-    return;
-  }
-
-  throw new Error(`PR #${prNumber} head changed too many times while monitoring`);
-}
-
-type WorkflowRunSummary = {
-  conclusion: string | null;
-  created_at: string;
-  head_sha: string;
-  id: number;
-  status: string;
-};
-
-async function discoverWorkflowRuns(
-  octokit: Octokit,
-  { owner, repo }: RepoRef,
-  prNumber: number,
-  headSha: string,
-  workflows: RequiredPrWorkflow[],
-  timeoutMs: number,
-): Promise<Array<{ workflow: RequiredPrWorkflow; run: WorkflowRunSummary }>> {
-  const started = Date.now();
-  let delayMs = 500;
-  while (Date.now() - started <= timeoutMs) {
-    const discovered = await Promise.all(
-      workflows.map(async (workflow) => {
-        const { data } = await octokit.rest.actions.listWorkflowRuns({
-          owner,
-          repo,
-          workflow_id: workflow.workflowFile,
-          event: "pull_request",
-          head_sha: headSha,
-          per_page: 20,
-        });
-        const run = data.workflow_runs.find(
-          (candidate) =>
-            candidate.head_sha === headSha &&
-            (candidate.pull_requests ?? []).some(
-              (pullRequest) => pullRequest.number === prNumber,
-            ),
-        );
-        return run
-          ? {
-              workflow,
-              run: {
-                conclusion: run.conclusion,
-                created_at: run.created_at,
-                head_sha: run.head_sha,
-                id: run.id,
-                status: run.status ?? "unknown",
-              },
-            }
-          : null;
-      }),
-    );
-    if (discovered.every((entry) => entry !== null)) {
-      return discovered;
-    }
-    await sleep(Math.min(delayMs, Math.max(0, timeoutMs - (Date.now() - started))));
-    delayMs = Math.min(delayMs * 2, 8_000);
-  }
-
-  throw new Error(
-    `PR #${prNumber} repository-owned workflow run was not indexed within ${Math.round(timeoutMs / 1000)}s`,
-  );
-}
-
-async function watchWorkflowRun(
-  { owner, repo }: RepoRef,
-  runId: number,
-  workflowName: string,
-): Promise<void> {
-  const timeoutMs = positiveNumber(
-    Number(process.env.CI_FIX_CHECKS_TIMEOUT_MS),
-    DEFAULT_CHECKS_TIMEOUT_MS,
-  );
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      "gh",
-      ["run", "watch", String(runId), "--exit-status", "--repo", `${owner}/${repo}`],
-      {
-        env: { ...process.env, GH_TOKEN: resolveGitHubToken() },
-        stdio: "inherit",
-      },
-    );
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(
-        new Error(
-          `${workflowName} run ${runId} timed out after ${Math.round(timeoutMs / 60000)}m`,
-        ),
-      );
-    }, timeoutMs);
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.once("exit", (code, signal) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(
-        new Error(
-          `${workflowName} run ${runId} watcher exited with ${code ?? signal ?? "unknown"}`,
-        ),
-      );
-    });
-  });
-}
-
-function positiveNumber(value: number, fallback: number): number {
-  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 type ReviewThreadPage = {
@@ -515,10 +308,6 @@ function isNotFound(err: unknown): boolean {
     "status" in err &&
     (err as { status: number }).status === 404
   );
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isWebResearchPath(path: string): boolean {

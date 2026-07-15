@@ -8,7 +8,7 @@ name: Agent PR monitor
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   workflow_run:
     workflows: [PR, Web research]
     types: [completed]

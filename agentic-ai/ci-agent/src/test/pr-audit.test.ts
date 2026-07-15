@@ -3,7 +3,14 @@ import test from "node:test";
 
 import type { Octokit } from "@octokit/rest";
 
-import { buildPrAudit } from "../main/pr-audit.js";
+import { buildPrAudit, isTrustedAgentHead } from "../main/pr-audit.js";
+
+test("event monitor accepts only same-repository agent branches", () => {
+  assert.equal(isTrustedAgentHead("meta-secret/nook", "codex/fast-monitor", "meta-secret/nook"), true);
+  assert.equal(isTrustedAgentHead("meta-secret/nook", "agent/issue-410", "meta-secret/nook"), true);
+  assert.equal(isTrustedAgentHead("fork/nook", "codex/fast-monitor", "meta-secret/nook"), false);
+  assert.equal(isTrustedAgentHead("meta-secret/nook", "feature/manual", "meta-secret/nook"), false);
+});
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
