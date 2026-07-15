@@ -900,6 +900,9 @@ export async function waitForEngine(page: Page) {
 
 async function assertGithubConnected(page: Page) {
   await assertNoVaultErrors(page, { allowTransient: true })
+  if (!(await page.getByTestId('vault-panel').isVisible())) {
+    await page.getByTestId('vault-secrets-tab').click()
+  }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -1057,9 +1060,8 @@ export async function connectGithubVault(
     await stub.install(page, { repoName })
   }
   await page.goto('/app/')
-  await setupGithubProvider(page, pat, repoName)
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
+  await createLocalVaultOnLogin(page)
+  await connectGithubSyncProviderFromSettings(page, repoName, pat)
   if (stub) {
     await expect
       .poll(
@@ -1101,9 +1103,8 @@ export async function connectGoogleDriveVault(
     await stub.install(page, { fileName })
   }
   await page.goto('/app/')
-  await setupGoogleDriveProvider(page, fileName)
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
+  await createLocalVaultOnLogin(page)
+  await connectGoogleDriveSyncProviderFromSettings(page, fileName, accessToken)
   await waitForSyncRemoteVaultState(
     stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,

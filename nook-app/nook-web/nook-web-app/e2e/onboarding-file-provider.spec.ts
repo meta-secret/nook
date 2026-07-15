@@ -5,6 +5,7 @@ import {
   assertVaultReady,
   clearBrowserVault,
   connectGoogleDriveGenesisDevice,
+  createLocalVaultOnLogin,
   createIsolatedContext,
   disableVaultIdleLock,
   expandSettingsSection,
@@ -129,7 +130,10 @@ test.describe('Google Drive provider modes', () => {
     await clearBrowserVault(owner)
     await owner.reload()
 
-    await openLoginProviderSetup(owner)
+    await createLocalVaultOnLogin(owner, 'Shared Drive vault')
+    await openStorageSettings(owner)
+    await expandSettingsSection(owner, 'storage')
+    await owner.getByTestId('add-provider-btn').first().click()
     await owner.getByTestId('provider-option-oauth-file').click()
     await expect(owner.getByTestId('google-oauth-setup')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -178,6 +182,7 @@ test.describe('Google Drive provider modes', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(0)
+    await owner.getByTestId('vault-secrets-tab').click()
 
     const secretKey = uniqueSecretKey('shared-drive-onboard')
     const secretValue = 'shared-without-owner-google-credentials'

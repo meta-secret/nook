@@ -424,9 +424,13 @@ export async function connectAndSyncStagedProvider(
   if (state.isVerifying) return;
   state.isVerifying = true;
   try {
-    if (state.stagedRemoteStorageArgs()) {
+    const stagedRemoteArgs = state.stagedRemoteStorageArgs();
+    if (stagedRemoteArgs) {
       const reconcileOutcome = await state.reconcileStagedRemoteWithLocal();
       if (reconcileOutcome === "skip") return;
+      const accessStatus =
+        await state.assessVaultConnectStatus(stagedRemoteArgs);
+      if (await state.handleRemoteVaultAssessStatus(accessStatus)) return;
     }
 
     const saved = await state.ensureProviderSaved();
@@ -440,6 +444,10 @@ export async function connectAndSyncStagedProvider(
       state.errorMsg = "Choose a cloud sync provider.";
       return;
     }
+    // Push the authenticated local event set first. The WASM boundary guards
+    // store identity before writing, so an empty provider is seeded while a
+    // different-vault provider still fails closed during the sync below.
+    await state.flushRemoteEventOutboxNow(provider);
     await state.syncProviderById(provider.id, {
       quiet: true,
       propagateError: true,
