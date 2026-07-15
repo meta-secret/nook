@@ -47,12 +47,24 @@ describe('shared enrollment provider selection', () => {
     ).toBe('matching')
   })
 
-  test('flushes only an automatic Drive grant with a usable token', () => {
+  test('flushes every created Drive target when the owner token is usable', () => {
     expect(
       shouldFlushSharedDriveGrant(
         {
           kind: 'granted',
           note: 'architecture_modes.shared_grant_created',
+          storageTargetId: 'folder-required',
+        },
+        'token-owner',
+      ),
+    ).toBe(true)
+    expect(
+      shouldFlushSharedDriveGrant(
+        {
+          kind: 'manual-grant-required',
+          instructionsKey:
+            'architecture_modes.shared_grant_manual_instructions',
+          joinerIdentity: 'joiner@example.com',
           storageTargetId: 'folder-required',
         },
         'token-owner',
