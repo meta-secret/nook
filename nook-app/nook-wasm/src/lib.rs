@@ -674,6 +674,12 @@ async fn create_and_grant_drive_folder(
 /// Validate a shared-grant request, then (for Google Drive) grant the persisted
 /// folder or create one when no target exists. Falls back to
 /// `ManualGrantRequired` when the Drive API fails or no owner token is supplied.
+fn is_google_drive_shared_grant_request(provider_type: &str, oauth_preset: Option<&str>) -> bool {
+    let oauth_preset = oauth_preset.unwrap_or_default().trim();
+    provider_type.trim() == "oauth-file"
+        && (oauth_preset.is_empty() || oauth_preset == "google-drive")
+}
+
 #[wasm_bindgen(js_name = prepareSharedStorageGrant)]
 pub async fn prepare_shared_storage_grant(
     request: JsValue,
@@ -692,13 +698,10 @@ pub async fn prepare_shared_storage_grant(
                 .as_deref()
                 .map(str::trim)
                 .filter(|token| !token.is_empty());
-            let is_gdrive = request.provider_type.trim() == "oauth-file"
-                && request
-                    .oauth_preset
-                    .as_deref()
-                    .unwrap_or("google-drive")
-                    .trim()
-                    == "google-drive";
+            let is_gdrive = is_google_drive_shared_grant_request(
+                &request.provider_type,
+                request.oauth_preset.as_deref(),
+            );
             match (token, is_gdrive) {
                 (Some(access_token), true) => {
                     if let Some(folder_id) = storage_target_id
@@ -1425,5 +1428,24 @@ mod wasm_tests {
             NookStorageProviderTypeUtil::value(NookStorageProviderKind::LocalFolder),
             "local-folder"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_google_drive_shared_grant_request;
+
+    #[test]
+    fn legacy_empty_oauth_preset_is_a_google_drive_grant() {
+        assert!(is_google_drive_shared_grant_request("oauth-file", None));
+        assert!(is_google_drive_shared_grant_request("oauth-file", Some("")));
+        assert!(is_google_drive_shared_grant_request(
+            "oauth-file",
+            Some("google-drive")
+        ));
+        assert!(!is_google_drive_shared_grant_request(
+            "oauth-file",
+            Some("icloud")
+        ));
     }
 }

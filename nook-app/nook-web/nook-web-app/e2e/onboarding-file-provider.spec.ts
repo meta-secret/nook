@@ -7,6 +7,7 @@ import {
   connectGoogleDriveGenesisDevice,
   createIsolatedContext,
   disableVaultIdleLock,
+  expandSettingsSection,
   installGoogleOAuthMock,
   openLoginProviderSetup,
   openOnboardDevicePanel,
@@ -229,6 +230,11 @@ test.describe('Google Drive provider modes', () => {
       await assertVaultReady(collaborator)
       await waitForSecretOnDevice(collaborator, secretKey)
       expect(await revealSecretValue(collaborator, secretKey)).toBe(secretValue)
+      await openStorageSettings(collaborator)
+      await expandSettingsSection(collaborator, 'storage')
+      await expect(
+        collaborator.getByTestId('settings-provider-oauth-file'),
+      ).toBeVisible()
     } finally {
       await collaborator.close()
       await collaboratorContext.close()

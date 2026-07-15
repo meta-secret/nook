@@ -276,7 +276,7 @@ function applySavedEnrollmentProvider(
   state.oauthFile = undefined;
 }
 
-function findSharedGrantProvider(
+export function findSharedGrantProvider(
   providers: StorageProvider[],
   preset: string,
   storageTargetId?: string,
@@ -288,12 +288,11 @@ function findSharedGrantProvider(
       Boolean(provider.oauthFile.accessToken?.trim()),
   );
   if (storageTargetId) {
-    const matchingTarget = withToken.find(
+    return withToken.find(
       (provider) =>
         provider.oauthFile?.folderId === storageTargetId ||
         provider.oauthFile?.iCloudShareTarget === storageTargetId,
     );
-    if (matchingTarget) return matchingTarget;
   }
   return withToken[0];
 }
@@ -355,6 +354,7 @@ export async function connectWithEnrollmentCode(
         preset,
         storageTargetId,
       );
+      let sharedProviderNeedsSave = false;
       if (!provider && preset === "google-drive") {
         if (!isGoogleOAuthConfigured()) {
           throw new Error(state.t("provider_setup.google_oauth_unconfigured"));
@@ -375,6 +375,7 @@ export async function connectWithEnrollmentCode(
           oauthFile,
           createdAt: isoTimestamp(),
         };
+        sharedProviderNeedsSave = true;
       }
       if (preset === "icloud") {
         if (!storageTargetId) {
@@ -405,6 +406,7 @@ export async function connectWithEnrollmentCode(
           }),
           createdAt: provider?.createdAt ?? isoTimestamp(),
         };
+        sharedProviderNeedsSave = provider.id === "enrollment-shared-icloud";
       }
       if (!provider) {
         throw new Error(
@@ -423,6 +425,9 @@ export async function connectWithEnrollmentCode(
         };
       }
       applySavedEnrollmentProvider(state, provider);
+      if (sharedProviderNeedsSave) {
+        state.loginSetupType = "oauth-file";
+      }
       enrollmentStorageArgs = state.providerWasmArgs(provider);
     } else if (payload.provider.type === StorageProviderType.OauthFile) {
       const oauthProvider: StorageProvider = {
