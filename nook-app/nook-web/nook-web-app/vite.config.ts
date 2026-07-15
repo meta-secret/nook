@@ -12,6 +12,10 @@ import {
 
 const viteBase =
   typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
+const simpleAppUrl =
+  process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
+const sentinelAppUrl =
+  process.env.VITE_SENTINEL_APP_URL?.trim() || 'https://sentinel.nokey.sh'
 
 const COMMON_APP_SPA_PATHS = new Set([
   '/app-logs',
@@ -21,6 +25,31 @@ const COMMON_APP_SPA_PATHS = new Set([
 ])
 const NOT_FOUND_PATHS = new Set(['/schema.xml'])
 const APP_SHELL_ALIASES = ['app-logs', 'extension-connect', 'logs']
+const STATIC_NOT_FOUND_DOCUMENT = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>404</title>
+  </head>
+  <body>
+    <main><h1>404</h1></main>
+  </body>
+</html>
+`
+
+/** Point landing calls-to-action at the vault apps in the same deployment channel. */
+function deploymentChannelLinks(): Plugin {
+  return {
+    name: 'deployment-channel-links',
+    transformIndexHtml(html) {
+      return html
+        .replaceAll('https://simple.nokey.sh', simpleAppUrl)
+        .replaceAll('https://sentinel.nokey.sh', sentinelAppUrl)
+    },
+  }
+}
 
 function requiredEnvironmentPath(
   env: Record<string, string>,
@@ -85,6 +114,15 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
       const outDir = join(process.cwd(), outputDirectory)
       if (appKind === 'site') {
         copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
+        writeFileSync(join(outDir, '404.html'), STATIC_NOT_FOUND_DOCUMENT)
+        copyFileSync(
+          join(process.cwd(), 'cloudflare-pages/legacy-route-worker.js'),
+          join(outDir, '_worker.js'),
+        )
+        copyFileSync(
+          join(process.cwd(), 'cloudflare-pages/_routes.json'),
+          join(outDir, '_routes.json'),
+        )
         return
       }
       const appShell = join(outDir, 'app/index.html')
@@ -180,6 +218,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       tailwindcss(),
       svelte(),
+      deploymentChannelLinks(),
       spaFallback(appKind, outputDirectory),
       seoStaticFiles(outputDirectory),
     ],

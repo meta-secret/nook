@@ -519,7 +519,7 @@ pub fn provider_replication_capability(
                     provider_type: provider_type.as_str().to_owned(),
                     oauth_preset: Some(preset.as_str().to_owned()),
                     supports_personal: true,
-                    supports_shared: false,
+                    supports_shared: true,
                     shared_joiner_identity: None,
                 },
             }
@@ -567,6 +567,10 @@ pub struct SharedStorageGrantRequest {
     pub joiner_identity: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_target_hint: Option<String>,
+    /// Existing shareable storage target. When present, grant this target
+    /// instead of creating a replacement directory for each onboarding code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_target_id: Option<String>,
     /// Owner OAuth access token (WASM Drive grant only; ignored by Rust).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub access_token: Option<String>,
@@ -668,7 +672,12 @@ pub fn prepare_shared_storage_grant(
     Ok(SharedStorageGrantOutcome::ManualGrantRequired {
         instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
         joiner_identity: identity.to_owned(),
-        storage_target_id: None,
+        storage_target_id: request
+            .storage_target_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|target| !target.is_empty())
+            .map(str::to_owned),
         storage_target_name: None,
     })
 }
@@ -756,14 +765,13 @@ mod tests {
             Some(SharedJoinerIdentityKind::Email)
         );
 
-        assert!(
-            validate_provider_replication(
-                StorageProviderType::OauthFile,
-                Some(OauthFilePreset::ICloud),
-                ReplicationType::Shared,
-            )
-            .is_err()
-        );
+        let icloud = validate_provider_replication(
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::ICloud),
+            ReplicationType::Shared,
+        )
+        .unwrap();
+        assert_eq!(icloud.shared_joiner_identity, None);
     }
 
     #[test]
@@ -818,14 +826,12 @@ mod tests {
             validate_architecture_for_provider(&sentinel_shared, StorageProviderType::Github, None)
                 .is_err()
         );
-        assert!(
-            validate_architecture_for_provider(
-                &sentinel_shared,
-                StorageProviderType::OauthFile,
-                Some(OauthFilePreset::ICloud),
-            )
-            .is_err()
-        );
+        validate_architecture_for_provider(
+            &sentinel_shared,
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::ICloud),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1010,6 +1016,7 @@ mod tests {
             joiner_identity_kind: SharedJoinerIdentityKind::Email,
             joiner_identity: "joiner@example.com".to_owned(),
             storage_target_hint: None,
+            storage_target_id: None,
             access_token: Some("ya29.owner-token".to_owned()),
         };
         let outcome = prepare_shared_storage_grant(&request).unwrap();
@@ -1019,6 +1026,20 @@ mod tests {
                 instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
                 storage_target_id: None,
+                storage_target_name: None,
+            }
+        );
+
+        let existing_target = SharedStorageGrantRequest {
+            storage_target_id: Some("folder-existing".to_owned()),
+            ..request.clone()
+        };
+        assert_eq!(
+            prepare_shared_storage_grant(&existing_target).unwrap(),
+            SharedStorageGrantOutcome::ManualGrantRequired {
+                instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: Some("folder-existing".to_owned()),
                 storage_target_name: None,
             }
         );

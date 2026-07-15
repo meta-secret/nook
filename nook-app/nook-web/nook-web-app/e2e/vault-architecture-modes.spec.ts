@@ -591,7 +591,7 @@ test.describe('vault architecture modes', () => {
     await expect(github).toBeDisabled()
     await expect(github).toContainText('selected replication mode')
     await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
-    await expect(page.getByTestId('provider-option-icloud')).toBeDisabled()
+    await expect(page.getByTestId('provider-option-icloud')).toBeEnabled()
     await assertGroupsDoNotOverlap(page, [
       'provider-option-github',
       'provider-option-oauth-file',

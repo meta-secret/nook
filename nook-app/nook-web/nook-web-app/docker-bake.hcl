@@ -19,6 +19,14 @@ variable "NOOK_SIMPLE_VAULT_URL" {
   default = "https://simple.nokey.sh/"
 }
 
+variable "VITE_SIMPLE_APP_URL" {
+  default = ""
+}
+
+variable "VITE_SENTINEL_APP_URL" {
+  default = ""
+}
+
 // Set by `task setup` to the commit-scoped, invocation-isolated directory exported by the
 // web-artifacts target. The default keeps `bake --print` usable; a direct nook-web build without the
 // prepare phase fails on the missing /nook-wasm artifact instead of silently using stale generated
@@ -33,10 +41,12 @@ target "_nook-web-common" {
   target     = "nook-web"
   platforms  = ["linux/amd64"]
   args = {
-    VITE_BASE           = VITE_BASE
-    VITE_SITE_URL       = VITE_SITE_URL
-    VITE_PUBLIC_APP_URL = VITE_PUBLIC_APP_URL
-    NOOK_SIMPLE_VAULT_URL = NOOK_SIMPLE_VAULT_URL
+    VITE_BASE               = VITE_BASE
+    VITE_SITE_URL           = VITE_SITE_URL
+    VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
+    NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
+    VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
+    VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
   }
   contexts = {
     web-base      = "target:web-base"

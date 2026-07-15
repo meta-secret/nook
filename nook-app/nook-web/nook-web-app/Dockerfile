@@ -14,6 +14,8 @@ ARG VITE_BASE=/
 ARG VITE_SITE_URL=
 ARG VITE_PUBLIC_APP_URL=
 ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
+ARG VITE_SIMPLE_APP_URL=
+ARG VITE_SENTINEL_APP_URL=
 
 WORKDIR /meta-secret/nook
 
@@ -52,6 +54,8 @@ RUN cd nook-app/nook-web/nook-web-app \
     && VITE_BASE="${VITE_BASE}" \
     VITE_SITE_URL="${VITE_SITE_URL}" \
     VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
+    VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+    VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
     bun run build
 RUN cd nook-app/nook-web/nook-web-extension \
     && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" bun run build

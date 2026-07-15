@@ -51,6 +51,8 @@ vars:
   VITE_SITE_URL: '{{default "" .VITE_SITE_URL}}'
   VITE_PUBLIC_APP_URL: '{{default "" .VITE_PUBLIC_APP_URL}}'
   NOOK_SIMPLE_VAULT_URL: '{{default "https://simple.nokey.sh/" .NOOK_SIMPLE_VAULT_URL}}'
+  VITE_SIMPLE_APP_URL: '{{default "" .VITE_SIMPLE_APP_URL}}'
+  VITE_SENTINEL_APP_URL: '{{default "" .VITE_SENTINEL_APP_URL}}'
   VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
   WEB_DEV_PORT: '{{default "5173" .WEB_DEV_PORT}}'
 
@@ -93,6 +95,8 @@ tasks:
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
       NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
+      VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
+      VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
     cmds:
       # buildx bake can flake when parallel targets load the same Dockerfile (e.g. builder-deps +
       # builder-debug both use nook-app/nook-core/Dockerfile) — retry before failing CI on a transient parse error.

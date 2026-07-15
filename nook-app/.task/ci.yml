@@ -193,6 +193,10 @@ tasks:
         project="${CF_PAGES_PROJECT_NAME:-nook}";
         production_branch="${CF_PAGES_PRODUCTION_BRANCH:-main}";
         deploy_dir="${CF_PAGES_DIST_DIR:-{{.WEB_ROOT}}/dist}";
+        case "$deploy_dir" in
+          /*) ;;
+          *) deploy_dir="{{.REPO_ROOT}}/$deploy_dir" ;;
+        esac;
         if [ ! -d "$deploy_dir" ]; then
           echo "error: Cloudflare Pages deploy directory not found: $deploy_dir" >&2;
           exit 1;

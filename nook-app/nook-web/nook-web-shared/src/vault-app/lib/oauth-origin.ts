@@ -13,20 +13,21 @@ const GOOGLE_AUTHORIZED_ORIGINS = new Set([
   "https://localhost:5175",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-  "https://nokey.sh",
   "https://simple.nokey.sh",
   "https://sentinel.nokey.sh",
-  "https://dev.nokey.sh",
+  "https://simple.dev.nokey.sh",
+  "https://sentinel.dev.nokey.sh",
 ]);
 const ICLOUD_AUTHORIZED_ORIGINS = new Set([
   "https://localhost:5173",
   "https://localhost:5175",
-  "https://nokey.sh",
   "https://simple.nokey.sh",
   "https://sentinel.nokey.sh",
-  "https://dev.nokey.sh",
+  "https://simple.dev.nokey.sh",
+  "https://sentinel.dev.nokey.sh",
 ]);
-const CLOUDFLARE_PR_PREVIEW_HOST = /^pr-\d+\.nook-1n8\.pages\.dev$/i;
+const CLOUDFLARE_PR_PREVIEW_HOST =
+  /^pr-\d+\.(?:nook-1n8|nokey-(?:sh|simple|sentinel))\.pages\.dev$/i;
 
 function currentLocation(): BrowserLocation | undefined {
   return typeof window === "undefined" ? undefined : window.location;

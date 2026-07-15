@@ -7,6 +7,11 @@
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
 import {
+  default as initNookWasm,
+  createICloudSharedStorageTarget,
+  parseICloudSharedStorageTarget,
+} from "$app-wasm";
+import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
@@ -22,6 +27,7 @@ const log = createLogger("icloud-oauth");
 export type ICloudOAuthTokens = {
   accessToken: string;
   accountName?: string;
+  userRecordName?: string;
 };
 
 type ICloudWebAuthTokenRequestOptions = {
@@ -30,8 +36,54 @@ type ICloudWebAuthTokenRequestOptions = {
 };
 
 type CloudKitUserIdentity = {
+  userRecordName?: string;
   nameComponents?: { givenName?: string; familyName?: string };
   lookupInfo?: { emailAddress?: string };
+};
+
+type CloudKitZoneID = {
+  zoneName: string;
+  ownerRecordName?: string;
+};
+
+type CloudKitRecord = {
+  recordType: string;
+  recordName: string;
+  recordChangeTag?: string;
+  createShortGUID?: boolean;
+  shortGUID?: string;
+  fields?: Record<string, { value: unknown }>;
+};
+
+type CloudKitRecordsResponse = {
+  records: CloudKitRecord[];
+};
+
+type CloudKitRecordInfo = {
+  zoneID?: CloudKitZoneID;
+  rootRecordName?: string;
+  rootRecord?: CloudKitRecord;
+  participantStatus?: "INVITED" | "ACCEPTED" | "REMOVED" | "UNKNOWN";
+};
+
+type CloudKitRecordInfosResponse = {
+  results: CloudKitRecordInfo[];
+};
+
+type CloudKitDatabase = {
+  saveRecordZones: (zones: CloudKitZoneID[]) => Promise<unknown>;
+  saveRecords: (
+    records: CloudKitRecord | CloudKitRecord[],
+    options: { zoneID: string | CloudKitZoneID },
+  ) => Promise<CloudKitRecordsResponse>;
+  shareWithUI: (options: {
+    record: CloudKitRecord;
+    zoneID: string | CloudKitZoneID;
+    shareTitle: string;
+    shareType: string;
+    supportedAccess: Array<"PRIVATE" | "PUBLIC">;
+    supportedPermissions: Array<"READ_WRITE" | "READ_ONLY">;
+  }) => Promise<unknown>;
 };
 
 type CloudKitAuthError = {
@@ -74,6 +126,13 @@ type CloudKitContainer = {
     persist?: boolean;
   }) => Promise<CloudKitUserIdentity | undefined>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
+  fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
+  acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
+  fetchRecordInfos?: (
+    shortGUIDs: string[],
+  ) => Promise<CloudKitRecordInfosResponse>;
+  privateCloudDatabase?: CloudKitDatabase;
+  sharedCloudDatabase?: CloudKitDatabase;
 };
 
 type CloudKitAuthTokenStore = {
@@ -641,7 +700,7 @@ function cloudKitAuthErrorMessage(error: unknown): string {
     value.includes("UNKNOWN_ERROR"),
   );
   if (isUnknownCloudKitError) {
-    return "Apple CloudKit returned UNKNOWN_ERROR during sign-in. Check that the iCloud API token is enabled for this production container and that https://nokey.sh is an allowed web origin.";
+    return "Apple CloudKit returned UNKNOWN_ERROR during sign-in. Check that the iCloud API token is enabled for this container and that the current browser origin is allowed.";
   }
   return (
     details.reason ??
@@ -760,6 +819,18 @@ export async function prepareICloudSignInControl(): Promise<void> {
   log.info("CloudKit sign-in control prepare started");
   await initICloudAuth();
   const container = window.CloudKit!.getDefaultContainer();
+  const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
+  const existingControl = mount?.querySelector(
+    'button, [role="button"], iframe, a, .apple-auth-button',
+  );
+  if (
+    authSetupPromise &&
+    !authSetupUserIdentity &&
+    !readStoredWebAuthToken() &&
+    !existingControl
+  ) {
+    authSetupPromise = undefined;
+  }
   try {
     await setUpCloudKitAuth(container);
     log.info("CloudKit sign-in control ready", {
@@ -817,9 +888,186 @@ function requireStoredWebAuthToken(
     throw new Error("iCloud sign-in did not return a web auth token.");
   }
   const accountName = accountNameFromIdentity(identity);
-  return accountName
-    ? { accessToken: token, accountName }
-    : { accessToken: token };
+  return {
+    accessToken: token,
+    ...(accountName ? { accountName } : {}),
+    ...(identity?.userRecordName
+      ? { userRecordName: identity.userRecordName }
+      : {}),
+  };
+}
+
+export type ICloudSharedStorageTarget = {
+  role: "owner" | "participant";
+  zoneName: string;
+  ownerRecordName: string;
+  rootRecordName: string;
+  shortGuid: string;
+  storageTargetId: string;
+};
+
+function normalizedICloudShortGuid(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("provider_setup.icloud_shared_link_required");
+  }
+  if (trimmed.startsWith("icloud-share-v1:")) {
+    const target = parseICloudSharedStorageTarget(trimmed) as {
+      shortGuid?: string;
+    };
+    if (target.shortGuid?.trim()) return target.shortGuid.trim();
+  }
+  try {
+    const url = new URL(trimmed);
+    const candidate = url.pathname.split("/").filter(Boolean).at(-1);
+    if (candidate) return candidate;
+  } catch {
+    // A raw short GUID is also a valid input.
+  }
+  return trimmed;
+}
+
+function requireCloudKitRecordInfo(
+  response: CloudKitRecordInfosResponse,
+): Required<Pick<CloudKitRecordInfo, "zoneID" | "rootRecordName">> {
+  const info = response.results[0];
+  const zoneID = info?.zoneID;
+  const rootRecordName =
+    info?.rootRecordName?.trim() || info?.rootRecord?.recordName?.trim();
+  if (
+    !zoneID?.zoneName?.trim() ||
+    !zoneID.ownerRecordName?.trim() ||
+    !rootRecordName
+  ) {
+    throw new Error("provider_setup.icloud_shared_location_missing");
+  }
+  return { zoneID, rootRecordName };
+}
+
+/** Create a shareable CloudKit root hierarchy in the owner's private DB. */
+export async function createICloudSharedVault(
+  title: string,
+): Promise<ICloudSharedStorageTarget> {
+  await initICloudAuth();
+  await initNookWasm();
+  const container = window.CloudKit!.getDefaultContainer();
+  const setupIdentity =
+    authSetupUserIdentity ?? (await setUpCloudKitAuth(container));
+  const identity =
+    setupIdentity ?? (await container.fetchCurrentUserIdentity?.());
+  const ownerRecordName = identity?.userRecordName?.trim();
+  if (!ownerRecordName) {
+    throw new Error("provider_setup.icloud_shared_sign_in_first");
+  }
+  const suffix = crypto.randomUUID();
+  const zoneName = `nook-shared-${suffix}`;
+  const rootRecordName = `nook-root-${suffix}`;
+  const database = container.privateCloudDatabase;
+  if (!database) {
+    throw new Error("provider_setup.icloud_shared_create_failed");
+  }
+  await database.saveRecordZones([{ zoneName }]);
+  const saved = await database.saveRecords(
+    {
+      // Reuse the deployed NookVault record type as the share root; shared
+      // mode must not depend on an undeployed CloudKit production schema.
+      recordType: "NookVault",
+      recordName: rootRecordName,
+      createShortGUID: true,
+      fields: { content: { value: "" } },
+    },
+    { zoneID: zoneName },
+  );
+  const root = saved.records[0];
+  const shortGuid = root?.shortGUID?.trim();
+  if (!root || !shortGuid) {
+    throw new Error("provider_setup.icloud_shared_identifier_missing");
+  }
+  await database.shareWithUI({
+    record: root,
+    zoneID: zoneName,
+    shareTitle: title.trim() || "Nook",
+    shareType: "com.meta-secret.nook.vault",
+    supportedAccess: ["PRIVATE"],
+    supportedPermissions: ["READ_WRITE"],
+  });
+  return {
+    role: "owner",
+    zoneName,
+    ownerRecordName,
+    rootRecordName,
+    shortGuid,
+    storageTargetId: createICloudSharedStorageTarget(
+      "owner",
+      zoneName,
+      ownerRecordName,
+      rootRecordName,
+      shortGuid,
+    ),
+  };
+}
+
+/** Accept a share with the recipient's account and return shared-DB routing. */
+export async function acceptICloudSharedVault(
+  shareReference: string,
+): Promise<ICloudSharedStorageTarget> {
+  await initICloudAuth();
+  await initNookWasm();
+  const container = window.CloudKit!.getDefaultContainer();
+  const encodedTarget = shareReference.trim().startsWith("icloud-share-v1:")
+    ? (parseICloudSharedStorageTarget(shareReference.trim()) as {
+        role: "owner" | "participant";
+        zoneName: string;
+        ownerRecordName: string;
+        rootRecordName: string;
+        shortGuid: string;
+      })
+    : undefined;
+  const shortGuid = normalizedICloudShortGuid(shareReference);
+  const identity =
+    authSetupUserIdentity ?? (await container.fetchCurrentUserIdentity?.());
+  if (
+    encodedTarget &&
+    identity?.userRecordName?.trim() === encodedTarget.ownerRecordName.trim()
+  ) {
+    const storageTargetId = createICloudSharedStorageTarget(
+      "owner",
+      encodedTarget.zoneName,
+      encodedTarget.ownerRecordName,
+      encodedTarget.rootRecordName,
+      encodedTarget.shortGuid,
+    );
+    return { ...encodedTarget, role: "owner", storageTargetId };
+  }
+  if (!container.acceptShares || !container.fetchRecordInfos) {
+    throw new Error("provider_setup.icloud_shared_connect_failed");
+  }
+  let current: CloudKitRecordInfosResponse | undefined;
+  try {
+    current = await container.fetchRecordInfos([shortGuid]);
+  } catch {
+    // Acceptance remains authoritative; preview lookup can fail independently.
+  }
+  const response =
+    current?.results[0]?.participantStatus === "ACCEPTED"
+      ? current
+      : await container.acceptShares([shortGuid]);
+  const { zoneID, rootRecordName } = requireCloudKitRecordInfo(response);
+  const ownerRecordName = zoneID.ownerRecordName!;
+  return {
+    role: "participant",
+    zoneName: zoneID.zoneName,
+    ownerRecordName,
+    rootRecordName,
+    shortGuid,
+    storageTargetId: createICloudSharedStorageTarget(
+      "participant",
+      zoneID.zoneName,
+      ownerRecordName,
+      rootRecordName,
+      shortGuid,
+    ),
+  };
 }
 
 function cloudKitCurrentUserURL(): string {
@@ -850,7 +1098,7 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
   }
   if (body.serverErrorCode === "AUTHENTICATION_FAILED") {
     throw new Error(
-      "Apple rejected the iCloud API token for this container. Check the CloudKit production API token and allowed origin https://nokey.sh.",
+      "Apple rejected the iCloud API token for this container. Check the CloudKit production API token and the current browser origin.",
     );
   }
   throw new Error(
@@ -1079,6 +1327,11 @@ export async function requestICloudWebAuthToken(
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
   }
 
+  if (!userIdentity && readStoredWebAuthToken()) {
+    log.info("CloudKit direct token request reused stored token");
+    return requireStoredWebAuthToken();
+  }
+
   if (!userIdentity) {
     await waitForCloudKitSignIn(container, options.signInTimeoutMs, options);
   }
@@ -1099,6 +1352,10 @@ export function oauthTokensToICloudConfig(
     fileId: existing?.fileId,
     fileName: existing?.fileName,
     accountEmail: tokens.accountName ?? existing?.accountEmail,
+    iCloudMode:
+      existing?.iCloudMode ??
+      (existing?.iCloudShareTarget?.trim() ? "shared" : "private"),
+    iCloudShareTarget: existing?.iCloudShareTarget,
     refreshToken: existing?.refreshToken,
     expiresAt: existing?.expiresAt,
   };

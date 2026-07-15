@@ -741,7 +741,11 @@ impl NookVaultManager {
                     .await?
             }
             nook_core::StorageMode::ICloud => {
-                list_icloud_event_ids(&self.storage.access_token).await?
+                list_icloud_event_ids(
+                    &self.storage.access_token,
+                    &self.storage.icloud_event_target,
+                )
+                .await?
             }
             nook_core::StorageMode::Local => Vec::new(),
         };
@@ -770,7 +774,12 @@ impl NookVaultManager {
                 .await
             }
             nook_core::StorageMode::ICloud => {
-                fetch_icloud_event(&self.storage.access_token, event_id).await
+                fetch_icloud_event(
+                    &self.storage.access_token,
+                    &self.storage.icloud_event_target,
+                    event_id,
+                )
+                .await
             }
             nook_core::StorageMode::Local => Ok(Vec::new()),
         }
@@ -800,7 +809,13 @@ impl NookVaultManager {
             .await
             .map(|_| ()),
             nook_core::StorageMode::ICloud => {
-                put_icloud_event_if_absent(&self.storage.access_token, event_id, bytes).await
+                put_icloud_event_if_absent(
+                    &self.storage.access_token,
+                    &self.storage.icloud_event_target,
+                    event_id,
+                    bytes,
+                )
+                .await
             }
             nook_core::StorageMode::Local => Ok(()),
         }

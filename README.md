@@ -26,6 +26,11 @@ live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are independent
 applications and browser origins, not modes in one production app. The browser
 extension can pair only with Simple Vault.
 
+The Main channel mirrors that split at [dev.nokey.sh](https://dev.nokey.sh),
+[simple.dev.nokey.sh](https://simple.dev.nokey.sh), and
+[sentinel.dev.nokey.sh](https://sentinel.dev.nokey.sh). Pull requests use
+Cloudflare's native `pr-<number>.<project>.pages.dev` branch aliases.
+
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
 > not use it as the only copy of important credentials or recovery phrases.
@@ -49,7 +54,11 @@ Nook uses device keys instead:
 
 GitHub, Google Drive, iCloud, and local-folder sync are available today. Google
 Drive can use either private app data or a folder shared across Google
-accounts. Proton Drive, Cloudflare R2, and other providers are planned.
+accounts. iCloud can likewise use a private CloudKit database or a CloudKit
+share across Apple accounts. Shared-provider enrollment transfers only the
+stable folder/share target; each browser signs into its provider independently
+and keeps its own OAuth or CloudKit web-auth token.
+Proton Drive, Cloudflare R2, and other providers are planned.
 
 One important trade-off: if you lose every approved device (and any recovery
 path you configured), you lose the vault. Approve at least two devices.

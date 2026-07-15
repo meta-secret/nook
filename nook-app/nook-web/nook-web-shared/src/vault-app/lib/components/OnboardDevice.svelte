@@ -35,6 +35,7 @@
     firstCompatibleProvider,
     onboardingType,
     providerCapabilityLabelKey,
+    providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
 
@@ -104,9 +105,6 @@
   )
   const showSetup = $derived(setupType !== undefined)
   const addingProvider = $derived(addProviderOpen || showSetup)
-  const derivedOnboardingType = $derived(
-    onboardingType(vault.vaultArchitecture),
-  )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === 'sentinel',
   )
@@ -153,6 +151,18 @@
   const selectedProvider = $derived(
     syncProviders.find((provider) => provider.id === effectiveProviderId) ??
       undefined,
+  )
+  const derivedOnboardingType = $derived(
+    selectedProvider
+      ? providerOnboardingType(selectedProvider, vault.vaultArchitecture)
+      : onboardingType(vault.vaultArchitecture),
+  )
+  const usesSharedProviderGrant = $derived(
+    derivedOnboardingType === 'shared-provider-grant',
+  )
+  const requiresSharedJoinerIdentity = $derived(
+    usesSharedProviderGrant &&
+      selectedProvider?.oauthFile?.preset !== 'icloud',
   )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
@@ -281,10 +291,7 @@
       localError = vault.t('onboard_device.enter_pw_err')
       return
     }
-    if (
-      vault.vaultArchitecture.replication_type === 'shared' &&
-      !vault.sharedJoinerIdentity.trim()
-    ) {
+    if (requiresSharedJoinerIdentity && !vault.sharedJoinerIdentity.trim()) {
       localError = vault.t('onboard_device.shared_identity_required')
       return
     }
@@ -789,16 +796,29 @@
             />
           </div>
 
-          <p
-            class="text-xs text-muted-foreground"
-            data-testid="onboarding-type-label"
+          <div
+            class="rounded-md border border-border bg-muted/20 px-3 py-2.5"
+            data-testid="onboarding-type-summary"
           >
-            {vault.t(
-              `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
-            )}
-          </p>
+            <p
+              class="text-xs font-medium text-foreground"
+              data-testid="onboarding-type-label"
+            >
+              {vault.t(
+                `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
+              )}
+            </p>
+            <p
+              class="mt-1 text-xs text-muted-foreground text-pretty"
+              data-testid="onboarding-type-description"
+            >
+              {vault.t(
+                `architecture_modes.onboarding_type_${derivedOnboardingType}_description`,
+              )}
+            </p>
+          </div>
 
-          {#if vault.vaultArchitecture.replication_type === 'shared'}
+          {#if requiresSharedJoinerIdentity}
             <div class="space-y-1.5">
               <label
                 for="shared-joiner-identity"
