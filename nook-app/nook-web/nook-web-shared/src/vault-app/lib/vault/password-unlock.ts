@@ -306,7 +306,7 @@ export function shouldFlushSharedDriveGrant(
   grant: SharedStorageGrantOutcome,
   accessToken?: string,
 ): boolean {
-  return grant.kind === "granted" && Boolean(accessToken?.trim());
+  return grant.kind !== "unsupported" && Boolean(accessToken?.trim());
 }
 
 async function localVaultHasPasswordEntries(
@@ -672,8 +672,9 @@ export async function issueEnrollmentCode(
           await state.persistProviders();
 
           if (shouldFlushSharedDriveGrant(grant, accessToken)) {
-            // An automatic grant is not usable until the target contains the
-            // current vault event log. Await Rust/WASM fan-out before issuing.
+            // The target is not usable until it contains the current vault
+            // event log, even when collaborator access needs manual completion.
+            // Await Rust/WASM fan-out before issuing the enrollment code.
             const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
             await state.enqueueStorage(() =>
               state.manager!.flushEventOutboxForProvider(...targetArgs),
