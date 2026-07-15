@@ -128,11 +128,19 @@ test('keeps extension routing and local session behavior app-specific', async ({
     const manager = (window as Window & { __nookVault?: DebugVault })
       .__nookVault?.manager
     if (!manager) throw new Error('Extension device manager unavailable')
-    return {
-      deviceId: manager.device_id,
-      devicePublicKey: manager.device_public_key,
-      deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
+    let lastError = 'Extension device identity unavailable'
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try {
+        const deviceId = manager.device_id
+        const devicePublicKey = manager.device_public_key
+        const deviceSigningPublicKey = await manager.deviceSigningPublicKey()
+        return { deviceId, devicePublicKey, deviceSigningPublicKey }
+      } catch (caught) {
+        lastError = caught instanceof Error ? caught.message : String(caught)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
     }
+    throw new Error(lastError)
   })
   await extensionContext.close()
   await page.goto(
