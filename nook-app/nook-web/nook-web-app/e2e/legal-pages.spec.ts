@@ -4,6 +4,17 @@ import { expect, test } from './fixtures'
 // artifact at /site. The default local Vite server serves the same public
 // surface at /, so Playwright config supplies the matching path.
 const PUBLIC_SITE_PATH = process.env.NOOK_E2E_PUBLIC_SITE_PATH ?? ''
+const deploymentUrl = (configured: string | undefined, fallback: string) =>
+  (configured?.trim() || fallback).replace(/\/+$/, '')
+const SITE_URL = deploymentUrl(process.env.VITE_SITE_URL, 'https://nokey.sh')
+const SIMPLE_APP_URL = deploymentUrl(
+  process.env.VITE_SIMPLE_APP_URL,
+  'https://simple.nokey.sh',
+)
+const SENTINEL_APP_URL = deploymentUrl(
+  process.env.VITE_SENTINEL_APP_URL,
+  'https://sentinel.nokey.sh',
+)
 
 test.describe('legal pages', () => {
   test('serves static privacy policy at /privacy.html', async ({ page }) => {
@@ -61,11 +72,11 @@ test.describe('legal pages', () => {
     })
     await expect(page.getByTestId('hero-cta-simple')).toHaveAttribute(
       'href',
-      'https://simple.nokey.sh/',
+      `${SIMPLE_APP_URL}/`,
     )
     await expect(page.getByTestId('hero-cta-sentinel')).toHaveAttribute(
       'href',
-      'https://sentinel.nokey.sh/',
+      `${SENTINEL_APP_URL}/`,
     )
     await expect(page.getByTestId('hero-cta-secondary')).toHaveCount(0)
     await expect(page.locator('#architecture')).toHaveCount(1)
@@ -294,14 +305,14 @@ test.describe('legal pages', () => {
     const robots = await robotsResponse.text()
     expect(robots).toContain('Allow: /$')
     expect(robots).toContain('Disallow: /app/')
-    expect(robots).toContain('Sitemap: https://nokey.sh/sitemap.xml')
+    expect(robots).toContain(`Sitemap: ${SITE_URL}/sitemap.xml`)
 
     const sitemapResponse = await request.get(`${PUBLIC_SITE_PATH}/sitemap.xml`)
     expect(sitemapResponse.ok()).toBe(true)
     const sitemap = await sitemapResponse.text()
-    expect(sitemap).toContain('<loc>https://nokey.sh/</loc>')
-    expect(sitemap).toContain('<loc>https://nokey.sh/privacy.html</loc>')
-    expect(sitemap).toContain('<loc>https://nokey.sh/terms.html</loc>')
+    expect(sitemap).toContain(`<loc>${SITE_URL}/</loc>`)
+    expect(sitemap).toContain(`<loc>${SITE_URL}/privacy.html</loc>`)
+    expect(sitemap).toContain(`<loc>${SITE_URL}/terms.html</loc>`)
     expect(sitemap).not.toContain('/app/</loc>')
 
     const obsoleteSchemaResponse = await request.get(
