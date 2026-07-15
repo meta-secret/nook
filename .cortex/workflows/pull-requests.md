@@ -163,6 +163,13 @@ After a remote failure, fix the root cause, push the completed fix, and run
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
+Workflow cancellation must follow the scopes in
+[ci-pipeline.md § Workflow concurrency policy](ci-pipeline.md#workflow-concurrency-policy).
+PR validation cancels only an older run for the same PR; unrelated PRs keep
+independent required checks. Any cancellable live-provider job must also keep
+its external-resource cleanup in a separate `if: always()` step so an
+interrupted test process cannot leak provider state.
+
 ### 5.1. Local e2e (debug and final validation)
 
 PR CI intentionally omits browser e2e; `main.yml` is the automatic full-suite gate after merge. Use a single spec while debugging, then run the full project or `task ci:pr:e2e` explicitly before merge for changes that touch:
