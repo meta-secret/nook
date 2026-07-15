@@ -88,6 +88,14 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
       if (appKind === 'site') {
         copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
         writeFileSync(join(outDir, '404.html'), STATIC_NOT_FOUND_DOCUMENT)
+        copyFileSync(
+          join(process.cwd(), 'cloudflare-pages/legacy-route-worker.js'),
+          join(outDir, '_worker.js'),
+        )
+        copyFileSync(
+          join(process.cwd(), 'cloudflare-pages/_routes.json'),
+          join(outDir, '_routes.json'),
+        )
         return
       }
       const appShell = join(outDir, 'app/index.html')

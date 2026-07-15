@@ -1,11 +1,13 @@
 import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { createManifest } from '../../nook-web-extension/src/manifest'
 
 const webRoot = resolve(import.meta.dir, '../..')
 const simpleRoot = join(webRoot, 'nook-vault-simple')
 const sentinelRoot = join(webRoot, 'nook-vault-sentinel')
+const siteRoot = join(webRoot, 'nook-web-app/dist/site')
 
 async function filesBelow(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -31,13 +33,10 @@ for (const root of [simpleRoot, sentinelRoot]) {
     )
   }
 }
-if (existsSync(join(webRoot, 'nook-web-app/dist/site/migration.html'))) {
+if (existsSync(join(siteRoot, 'migration.html'))) {
   throw new Error('Public site artifact contains a retired migration broker.')
 }
-const siteNotFoundHtml = await readFile(
-  join(webRoot, 'nook-web-app/dist/site/404.html'),
-  'utf8',
-)
+const siteNotFoundHtml = await readFile(join(siteRoot, '404.html'), 'utf8')
 if (
   !siteNotFoundHtml.includes('<h1>404</h1>') ||
   siteNotFoundHtml.includes('Nook — Keys, not accounts')
@@ -45,6 +44,78 @@ if (
   throw new Error(
     'Public site artifact must provide a dedicated static not-found page.',
   )
+}
+
+const expectedLegacyRoutes = [
+  '/site',
+  '/site/*',
+  '/simple',
+  '/simple/*',
+  '/sentinel',
+  '/sentinel/*',
+]
+const pagesRoutes = JSON.parse(
+  await readFile(join(siteRoot, '_routes.json'), 'utf8'),
+) as { version?: number; include?: string[]; exclude?: string[] }
+if (
+  pagesRoutes.version !== 1 ||
+  JSON.stringify(pagesRoutes.include) !==
+    JSON.stringify(expectedLegacyRoutes) ||
+  JSON.stringify(pagesRoutes.exclude) !== '[]'
+) {
+  throw new Error(
+    'Public site artifact must invoke its Pages Function only for retired app routes.',
+  )
+}
+
+type PagesWorker = {
+  fetch(
+    request: Request,
+    env: { ASSETS: { fetch(request: Request): Promise<Response> } },
+  ): Promise<Response>
+}
+const workerUrl = `${pathToFileURL(join(siteRoot, '_worker.js')).href}?verify=${Date.now()}`
+const pagesWorker = (await import(workerUrl)).default as PagesWorker
+let staticAssetRequests = 0
+const workerEnv = {
+  ASSETS: {
+    async fetch(): Promise<Response> {
+      staticAssetRequests += 1
+      return new Response('asset')
+    },
+  },
+}
+for (const path of [
+  '/site',
+  '/site/deep/link',
+  '/simple/',
+  '/sentinel/deep/link',
+]) {
+  const response = await pagesWorker.fetch(
+    new Request(`https://dev.nokey.sh${path}`),
+    workerEnv,
+  )
+  if (
+    response.status !== 404 ||
+    response.headers.get('Cache-Control') !== 'no-store'
+  ) {
+    throw new Error(`Pages Function must return an uncached 404 for ${path}.`)
+  }
+}
+if (staticAssetRequests !== 0) {
+  throw new Error('Retired app routes must not reach Pages static assets.')
+}
+for (const path of ['/', '/sitemap.xml']) {
+  const response = await pagesWorker.fetch(
+    new Request(`https://dev.nokey.sh${path}`),
+    workerEnv,
+  )
+  if (response.status !== 200) {
+    throw new Error(`Pages Function must delegate ${path} to static assets.`)
+  }
+}
+if (staticAssetRequests !== 2) {
+  throw new Error('Public landing routes must remain static asset requests.')
 }
 
 const simpleHtml = await readFile(join(simpleRoot, 'dist/index.html'), 'utf8')
