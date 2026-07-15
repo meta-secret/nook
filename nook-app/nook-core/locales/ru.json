@@ -19,7 +19,9 @@
     "lock_vault": "Заблокировать сейф",
     "switch_vault": "Сменить сейф",
     "copy": "Копировать",
-    "copied": "Скопировано"
+    "copied": "Скопировано",
+    "dismiss_success": "Закрыть сообщение об успехе",
+    "dismiss_error": "Закрыть сообщение об ошибке"
   },
   "session": {
     "lock_desc": "Удалить расшифрованные секреты из памяти и вернуться на экран входа. Зашифрованный сейф и провайдеры синхронизации останутся на этом устройстве.",
@@ -695,6 +697,8 @@
     "local_loaded": "Сейф загружен.",
     "vault_renamed": "Сейф переименован.",
     "github_connected": "Подключено к GitHub. Ключ шифрования сохранен локально в этом браузере.",
+    "google_drive_connected": "Подключено к Google Drive. Ключ шифрования сохранен локально в этом браузере.",
+    "secret_conflict_resolved": "Конфликт секретов разрешён.",
     "local_folder_connected": "Локальная папка резервной копии подключена.",
     "password_updated": "Пароль от сейфа обновлен.",
     "password_removed": "Пароль от сейфа удален.",
@@ -879,8 +883,22 @@
       "secret_data_required": "Значение секрета обязательно для заполнения.",
       "bip39_empty": "Сид-фраза обязательна.",
       "bip39_invalid": "Недействительная BIP39 сид-фраза.",
-      "unknown_storage_mode": "Неизвестный режим хранилища: {mode}"
+      "unknown_storage_mode": "Неизвестный режим хранилища: {mode}",
+      "oauth_access_token_empty": "Войдите через Google, чтобы подключить Google Drive."
     },
+    "google_sign_in_required": "Войдите через Google перед разблокировкой.",
+    "engine_loading": "Движок сейфа ещё загружается. Повторите попытку через мгновение.",
+    "engine_unavailable": "Движок сейфа недоступен. Обновите страницу и повторите попытку.",
+    "manager_uninitialized": "Диспетчер сейфа не инициализирован.",
+    "local_backup_folder_required": "Выберите папку локальной резервной копии перед синхронизацией.",
+    "connection_in_progress": "Подключение уже выполняется.",
+    "vault_password_required": "Выберите пароль сейфа для разблокировки.",
+    "cloud_sync_provider_required": "Выберите облачного провайдера синхронизации.",
+    "github_credentials_required": "Настройте учётные данные GitHub перед разблокировкой.",
+    "vault_selection_failed": "Не удалось выбрать сейф.",
+    "vault_creation_failed": "Не удалось создать локальный сейф.",
+    "vault_rename_failed": "Не удалось переименовать сейф.",
+    "conflict_resolution_failed": "Не удалось разрешить конфликт.",
     "device_protection": {
       "authorization_required": "Подтвердите доступ перед использованием ключа этого браузера."
     },
@@ -1088,7 +1106,11 @@
     "github_title": "Nook на GitHub — открытый исходный код",
     "github_aria": "Nook — открытый исходный код на GitHub",
     "back": "Назад",
-    "help": "Справка"
+    "help": "Справка",
+    "secret_sync_conflicts": "Конфликты синхронизации секретов требуют разрешения",
+    "security_conflict": "Обнаружен конфликт безопасности",
+    "conflict_original": "Исходный: {id}",
+    "conflict_keep": "Оставить {id}"
   },
   "help": {
     "title": "Ваш сейф и необязательные реплики",
@@ -1097,6 +1119,7 @@
     "in_this_guide": "В этом руководстве",
     "jump_to_section": "Перейти к разделу…",
     "diagram": {
+      "label": "Схема архитектуры",
       "device": "Этот браузер (рабочая копия)",
       "local_projection": "Локальная зашифрованная проекция",
       "event_store": "Журнал событий",
@@ -1273,6 +1296,9 @@
   },
   "legal": {
     "privacy_policy": "Политика конфиденциальности",
-    "terms_of_service": "Условия обслуживания"
+    "terms_of_service": "Условия обслуживания",
+    "manager_description": "Открытый менеджер паролей Nook",
+    "documents_label": "Юридические документы",
+    "source": "Исходный код на GitHub"
   }
 }

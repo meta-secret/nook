@@ -149,7 +149,9 @@
         <button
           type="button"
           onclick={() => onToggleReveal(item.id)}
-          aria-label={revealSecrets[item.id] ? 'Hide secret' : 'Show secret'}
+          aria-label={revealSecrets[item.id]
+            ? vault.t('vault.hide_value')
+            : vault.t('vault.show_value')}
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
           {#if revealSecrets[item.id]}<EyeOff class="size-3.5" />{:else}<Eye
@@ -159,7 +161,7 @@
         <button
           type="button"
           onclick={() => onEditItem(item)}
-          aria-label="Edit item"
+          aria-label={vault.t('common.edit')}
           data-testid="edit-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
@@ -168,7 +170,7 @@
         <button
           type="button"
           onclick={() => void onDeleteSecret(item.id)}
-          aria-label="Delete item"
+          aria-label={vault.t('common.delete')}
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <Trash2 class="size-3.5" />
@@ -195,7 +197,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label="Copy website URL"
+                  aria-label={vault.t('common.copy')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -221,7 +223,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.username, item.id, 'username')}
-                  aria-label="Copy username"
+                  aria-label={vault.t('common.copy')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-username`}<Check
@@ -249,7 +251,7 @@
                 type="button"
                 onclick={() =>
                   void onCopyToClipboard(item.password, item.id, 'secret')}
-                aria-label="Copy secret"
+                aria-label={vault.t('common.copy')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -287,7 +289,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label="Copy website URL"
+                  aria-label={vault.t('common.copy')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -321,7 +323,7 @@
                     item.id,
                     'secret',
                   )}
-                aria-label="Copy secret"
+                aria-label={vault.t('common.copy')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -346,7 +348,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.expiresAt, item.id, 'expires')}
-                  aria-label="Copy expiration date"
+                  aria-label={vault.t('common.copy')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-expires`}<Check
@@ -372,7 +374,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.name, item.id, 'name')}
-                  aria-label="Copy account name"
+                  aria-label={vault.t('common.copy')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-name`}<Check
@@ -392,7 +394,7 @@
                 type="button"
                 onclick={() =>
                   void onCopyToClipboard(item.seed, item.id, 'secret')}
-                aria-label="Copy secret"
+                aria-label={vault.t('common.copy')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -432,7 +434,7 @@
                 type="button"
                 onclick={() =>
                   void onCopyToClipboard(item.note, item.id, 'secret')}
-                aria-label="Copy note"
+                aria-label={vault.t('common.copy')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check

@@ -436,7 +436,7 @@ export async function connectAndSyncStagedProvider(
       state.syncProviders[state.syncProviders.length - 1] ??
       state.providers[state.providers.length - 1];
     if (!provider || provider.type === "local") {
-      state.errorMsg = "Choose a cloud sync provider.";
+      state.errorMsg = state.t("errors.cloud_sync_provider_required");
       return;
     }
     await state.syncProviderById(provider.id, {

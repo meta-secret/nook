@@ -554,7 +554,7 @@
       {#if logsPage}
         <LogsPage onClose={navigateHome} />
       {:else if legalPage}
-        <LegalDocumentPage pageId={legalPage} onClose={navigateHome} />
+        <LegalDocumentPage {vault} pageId={legalPage} onClose={navigateHome} />
       {:else if vault.helpOpen}
         <div class="space-y-4">
           <HelpPage {vault} onClose={() => vault.closeHelp()} {colorMode} />
@@ -907,12 +907,14 @@
           vault.securityConflicts.length > 0 ? 'bottom-32' : 'bottom-4'
         }`}
       >
-        <p class="font-medium">Secret sync conflicts need resolution</p>
+        <p class="font-medium">{vault.t('app.secret_sync_conflicts')}</p>
         <div class="mt-3 space-y-3">
           {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
             <div class="rounded border border-amber-400/30 p-3">
               <p class="text-amber-100">
-                Original: {shortId(conflict.oldSecretId)}
+                {vault.t('app.conflict_original', {
+                  id: shortId(conflict.oldSecretId),
+                })}
               </p>
               <div class="mt-2 flex flex-wrap gap-2">
                 {#each conflictCandidates(conflict.candidatesJson) as candidate (candidate.secretId)}
@@ -926,7 +928,9 @@
                         candidate.secretId,
                       )}
                   >
-                    Keep {shortId(candidate.secretId)}
+                    {vault.t('app.conflict_keep', {
+                      id: shortId(candidate.secretId),
+                    })}
                   </Button>
                 {/each}
               </div>
@@ -940,7 +944,7 @@
       <div
         class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-red-500/50 bg-red-950/95 p-4 text-sm text-red-50 shadow-lg"
       >
-        <p class="font-medium">Security conflict detected</p>
+        <p class="font-medium">{vault.t('app.security_conflict')}</p>
         <div class="mt-2 space-y-2 text-red-100">
           {#each vault.securityConflicts as conflict (conflict.eventsJson)}
             <p>{conflictReasons(conflict.reasonsJson)}</p>

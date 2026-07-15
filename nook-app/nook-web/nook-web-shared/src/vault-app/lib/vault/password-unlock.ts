@@ -173,7 +173,7 @@ export async function unlockWithPassword(
   password: string,
 ): Promise<void> {
   if (!state.manager) {
-    state.errorMsg = "Vault engine is not available.";
+    state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
   if (state.isVerifying) return;
@@ -186,12 +186,12 @@ export async function unlockWithPassword(
     state.errorMsg =
       state.storageMode === "oauth-file"
         ? state.t("errors.google_sign_in_required")
-        : "Configure GitHub credentials before unlocking.";
+        : state.t("errors.github_credentials_required");
     return;
   }
   await state.ensureOAuthTokensFresh();
   if (!entryId.trim()) {
-    state.errorMsg = "Choose a vault password to unlock.";
+    state.errorMsg = state.t("errors.vault_password_required");
     return;
   }
   state.errorMsg = "";
@@ -331,7 +331,7 @@ export async function connectWithEnrollmentCode(
   password = "",
 ): Promise<void> {
   if (!state.manager) {
-    state.errorMsg = "Vault engine is not available.";
+    state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
   state.errorMsg = "";
