@@ -288,9 +288,9 @@ No delivery workflow logs into GHCR for BuildKit, imports a registry cache
 manifest, or publishes cache layers. The persistent `nook` runners reuse only
 their local BuildKit content store across the PR → main → release chain. This is
 an explicit reliability boundary: cache restoration must never block validation
-on a remote blob or registry session. The `task ci:main` gate builds the
-development artifact with `VITE_SITE_URL=https://dev.nokey.sh` and
-`VITE_PUBLIC_APP_URL=https://dev.nokey.sh`. `main.yml` then deploys only the
+on a remote blob or registry session. The `task ci:main` gate builds the same
+landing artifact and production canonical URLs used by `nokey.sh`; the dev host
+is a delivery channel, not a second SEO origin. `main.yml` deploys only the
 landing subdirectory, ensures the Cloudflare Pages custom domain exists,
 verifies the preconfigured Cloudflare DNS CNAME, confirms that `/` serves the
 landing page while `/site/` returns `404`, and records a `development`
