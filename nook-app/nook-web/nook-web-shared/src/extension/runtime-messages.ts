@@ -52,9 +52,16 @@ export type ExtensionLocalEventLogUpdatedMessage = {
  */
 export type ExtensionDeviceIdentityHandoffMessage = {
   type: 'nook:extension-device-identity-handoff'
+  requestId: string
   payload: {
     identitySecret: string
   }
+}
+
+export type ExtensionDeviceIdentityHandoffResultMessage = {
+  type: 'nook:extension-device-identity-handoff-result'
+  requestId: string
+  ok: boolean
 }
 
 export type RuntimeMessage =
@@ -63,6 +70,7 @@ export type RuntimeMessage =
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
   | ExtensionDeviceIdentityHandoffMessage
+  | ExtensionDeviceIdentityHandoffResultMessage
 
 function isExtensionEventLogRecord(
   value: unknown,
@@ -201,7 +209,21 @@ export function isExtensionDeviceIdentityHandoffMessage(
   }
   const payload = (message as { payload: Record<string, unknown> }).payload
   return (
+    typeof (message as { requestId?: unknown }).requestId === 'string' &&
+    (message as { requestId: string }).requestId.length > 0 &&
     typeof payload.identitySecret === 'string' &&
     payload.identitySecret.length > 0
+  )
+}
+
+export function isExtensionDeviceIdentityHandoffResultMessage(
+  message: unknown,
+): message is ExtensionDeviceIdentityHandoffResultMessage {
+  return (
+    isRuntimeMessage(message) &&
+    message.type === 'nook:extension-device-identity-handoff-result' &&
+    typeof (message as { requestId?: unknown }).requestId === 'string' &&
+    (message as { requestId: string }).requestId.length > 0 &&
+    typeof (message as { ok?: unknown }).ok === 'boolean'
   )
 }

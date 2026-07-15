@@ -165,6 +165,7 @@ await Promise.all([
   buildEntrypoint('src/background/service-worker.ts', 'background'),
   buildEntrypoint('src/content/autofill.ts', 'content'),
   buildEntrypoint('src/content/simple-vault-bridge.ts', 'content'),
+  buildEntrypoint('src/offscreen/session.ts', 'offscreen'),
 ])
 
 await Promise.all([buildSveltePage('popup'), buildChromeLocales()])
@@ -186,8 +187,16 @@ await writeFile(
 await Promise.all([
   copyStaticFile(join(webRoot, 'public/favicon.png'), 'icons/nook.png'),
   copyStaticFile(
+    join(projectRoot, 'src/offscreen/session.html'),
+    'offscreen/session.html',
+  ),
+  copyStaticFile(
     join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
     'background/nook_wasm_bg.wasm',
+  ),
+  copyStaticFile(
+    join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
+    'offscreen/nook_wasm_bg.wasm',
   ),
 ])
 

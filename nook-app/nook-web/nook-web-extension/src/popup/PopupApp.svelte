@@ -5,11 +5,10 @@
   import {
     createExtensionPasskey,
     createExtensionPin,
+    extensionIdentityHandoff,
     recoverExtensionPasskey,
     unlockExtensionPasskey,
-    unlockExtensionPasskeyForHandoff,
     unlockExtensionPin,
-    unlockExtensionPinForHandoff,
     type ExtensionDeviceMode,
     type ExtensionDeviceProtectionResult,
     type ExtensionDeviceProtectionStatus,
@@ -22,10 +21,12 @@
     i18n,
     isConnected,
     protectionStatus,
+    activeSessionDevice,
   }: {
     i18n: ExtensionI18n
     isConnected: boolean
     protectionStatus: ExtensionDeviceProtectionStatus
+    activeSessionDevice?: ExtensionDeviceProtectionResult
   } = $props()
 
   function initialProtectionStatus(): PopupProtectionStatus {
@@ -84,6 +85,7 @@
         tab.id!,
         {
           type: 'nook:extension-device-identity-handoff',
+          requestId: crypto.randomUUID(),
           payload: handoff,
         },
         (response: { ok?: boolean } | undefined) => {
@@ -103,15 +105,16 @@
   }
 
   function unlockConnectedVault(): void {
-    const action =
-      status === 'pin'
-        ? () => unlockExtensionPinForHandoff(pin)
-        : unlockExtensionPasskeyForHandoff
     void (async () => {
       busy = true
       error = ''
       try {
-        await handoffToActiveSimpleVault(await action())
+        if (status === 'pin') {
+          await unlockExtensionPin(pin)
+        } else if (status !== 'unlocked') {
+          await unlockExtensionPasskey()
+        }
+        await handoffToActiveSimpleVault(await extensionIdentityHandoff())
         window.close()
       } catch (caught) {
         error = errorMessage(caught, 'extension.unlock.handoff_failed')
@@ -140,6 +143,10 @@
       },
     )
   }
+
+  $effect(() => {
+    if (activeSessionDevice) beginPairing(activeSessionDevice)
+  })
 
   async function runDeviceAction(
     action: () => Promise<ExtensionDeviceProtectionResult>,

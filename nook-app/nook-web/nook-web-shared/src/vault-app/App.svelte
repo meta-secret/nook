@@ -184,15 +184,14 @@
       }
     }
     colorScheme.addEventListener('change', handleColorSchemeChange)
-    // A handoff is deliberately one-shot.  Besides keeping the private key
-    // ephemeral, consuming the listener before starting the async unlock
-    // prevents a replayed MessageEvent from queueing a second unlock attempt.
-    let extensionHandoffConsumed = false
+    // Only one handoff can be processed at a time. The listener is removed
+    // after a successful unlock so a captured MessageEvent cannot be replayed.
+    let extensionHandoffInProgress = false
     const handleExtensionDeviceIdentityHandoff = (
       event: MessageEvent<unknown>,
     ) => {
       if (
-        extensionHandoffConsumed ||
+        extensionHandoffInProgress ||
         !SUPPORTS_EXTENSION ||
         event.source !== window ||
         event.origin !== window.location.origin ||
@@ -200,14 +199,28 @@
       ) {
         return
       }
-      extensionHandoffConsumed = true
-      window.removeEventListener(
-        'message',
-        handleExtensionDeviceIdentityHandoff,
-      )
-      void vault.unlockWithExtensionDeviceIdentity(
-        event.data.payload.identitySecret,
-      )
+      extensionHandoffInProgress = true
+      void vault
+        .unlockWithExtensionDeviceIdentity(event.data.payload.identitySecret)
+        .then((ok) => {
+          window.postMessage(
+            {
+              type: 'nook:extension-device-identity-handoff-result',
+              requestId: event.data.requestId,
+              ok,
+            },
+            window.location.origin,
+          )
+          if (ok) {
+            window.removeEventListener(
+              'message',
+              handleExtensionDeviceIdentityHandoff,
+            )
+          }
+        })
+        .finally(() => {
+          extensionHandoffInProgress = false
+        })
     }
 
     window.addEventListener('message', handleExtensionDeviceIdentityHandoff)
@@ -247,7 +260,10 @@
       void vault.lockDeviceProtection()
       window.removeEventListener('popstate', syncRoute)
       window.removeEventListener('hashchange', syncRoute)
-      window.removeEventListener('message', handleExtensionDeviceIdentityHandoff)
+      window.removeEventListener(
+        'message',
+        handleExtensionDeviceIdentityHandoff,
+      )
       colorScheme.removeEventListener('change', handleColorSchemeChange)
     }
   })

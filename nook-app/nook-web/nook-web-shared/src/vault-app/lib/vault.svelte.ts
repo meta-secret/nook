@@ -1202,7 +1202,7 @@ export class VaultState {
   }
 
   async unlockWithExtensionDeviceIdentity(identitySecret: string) {
-    if (!this.manager || this.isVerifying || this.isInitializing) return;
+    if (!this.manager || this.isVerifying || this.isInitializing) return false;
     this.isVerifying = true;
     this.errorMsg = "";
     let deviceIdentityUnlocked = false;
@@ -1214,6 +1214,7 @@ export class VaultState {
       this.deviceAuthorizationInProgress = true;
       await this.continueInitializationAfterDeviceUnlock();
       this.deviceProtectionStatus = "unlocked";
+      return true;
     } catch (error) {
       if (
         this.deviceProtectionStatus === "unlocked" ||
@@ -1225,6 +1226,7 @@ export class VaultState {
         error instanceof Error
           ? error.message
           : this.t("extension.unlock.handoff_failed");
+      return false;
     } finally {
       // Strings cannot be zeroized in JavaScript; dropping this reference as
       // soon as the Rust/WASM boundary accepts it keeps the handoff ephemeral.

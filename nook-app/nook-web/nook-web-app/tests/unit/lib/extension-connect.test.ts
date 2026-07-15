@@ -142,12 +142,14 @@ describe('extension pairing approved message', () => {
     expect(
       isExtensionDeviceIdentityHandoffMessage({
         type: 'nook:extension-device-identity-handoff',
+        requestId: 'handoff-1',
         payload: { identitySecret: 'AGE-SECRET-KEY-EXAMPLE' },
       }),
     ).toBe(true)
     expect(
       isExtensionDeviceIdentityHandoffMessage({
         type: 'nook:extension-device-identity-handoff',
+        requestId: 'handoff-2',
         payload: { identitySecret: '' },
       }),
     ).toBe(false)

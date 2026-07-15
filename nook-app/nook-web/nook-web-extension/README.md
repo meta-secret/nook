@@ -8,6 +8,12 @@ the complete vault interface. The extension contains browser-only behavior:
 device protection, the in-page Nook widget, autofill DOM integration, and
 background coordination.
 
+After a passkey or PIN authorization, the extension keeps its decrypted device
+identity only in an offscreen extension document for 15 minutes. Reopening the
+toolbar popup during that window resumes pairing without another prompt. The
+identity is never written to `chrome.storage`; the session is cleared when the
+timer expires or the browser closes.
+
 The extension first-run model is specified in
 [`.cortex/product-specs/browser-extension.md`](../../../.cortex/product-specs/browser-extension.md).
 The extension becomes its own passkey-protected Nook device and pairs only

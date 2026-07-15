@@ -6,6 +6,8 @@ import {
 import { initializeExtensionI18n } from '../lib/i18n'
 import {
   extensionDeviceProtectionStatus,
+  extensionSessionDevice,
+  type ExtensionDeviceProtectionResult,
   type ExtensionDeviceProtectionStatus,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
@@ -33,6 +35,10 @@ async function main() {
   ])
   let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
   protectionStatus = await extensionDeviceProtectionStatus()
+  let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
+  if (!isConnected && protectionStatus === 'unlocked') {
+    activeSessionDevice = await extensionSessionDevice()
+  }
 
   mount(PopupApp, {
     target,
@@ -40,6 +46,7 @@ async function main() {
       i18n,
       isConnected,
       protectionStatus,
+      activeSessionDevice,
     },
   })
 }

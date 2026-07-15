@@ -46,6 +46,16 @@ declare namespace chrome {
     }
   }
 
+  namespace offscreen {
+    function createDocument(options: {
+      url: string
+      reasons: Array<'WORKERS'>
+      justification: string
+    }): Promise<void>
+
+    function closeDocument(): Promise<void>
+  }
+
   namespace i18n {
     function getUILanguage(): string
     function getMessage(messageName: string): string
