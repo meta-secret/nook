@@ -7,6 +7,7 @@ import {
   firstCompatibleProvider,
   onboardingType,
   providerCapabilityLabelKey,
+  providerOnboardingType,
   providerReplicationCapability,
   providerSupportsReplication,
   validateProviderReplication,
@@ -164,5 +165,33 @@ describe('vault architecture adapter', () => {
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
+  })
+
+  test('shared Drive provider mode overrides personal credential transfer', () => {
+    const architecture = defaultVaultArchitecture()
+    const provider: StorageProvider = {
+      ...googleDriveProvider(),
+      oauthFile: {
+        ...googleDriveProvider().oauthFile!,
+        driveMode: 'shared',
+        folderId: 'persisted-shared-folder',
+      },
+    }
+
+    expect(providerOnboardingType(provider, architecture)).toBe(
+      'shared-provider-grant',
+    )
+    const enrollmentProvider = enrollmentProviderForArchitecture(
+      provider,
+      architecture,
+      'joiner@example.com',
+      undefined,
+    )
+    expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      'persisted-shared-folder',
+    )
+    expect(enrollmentProvider.oauthAccessToken).toBeUndefined()
+    expect(enrollmentProvider.oauthRefreshToken).toBeUndefined()
   })
 })

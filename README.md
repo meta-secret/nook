@@ -49,7 +49,9 @@ Nook uses device keys instead:
 
 GitHub, Google Drive, iCloud, and local-folder sync are available today. Google
 Drive can use either private app data or a folder shared across Google
-accounts. Proton Drive, Cloudflare R2, and other providers are planned.
+accounts. Shared-folder enrollment transfers only the stable folder reference;
+each browser signs into Google independently and keeps its own OAuth token.
+Proton Drive, Cloudflare R2, and other providers are planned.
 
 One important trade-off: if you lose every approved device (and any recovery
 path you configured), you lose the vault. Approve at least two devices.

@@ -83,6 +83,14 @@ for their own Google account. Switching modes clears the scope-bound token and
 target in Rust before the user signs in again; it never reuses an app-data token
 for a shared folder or vice versa.
 
+**Shared-provider onboarding:** The selected provider target determines the
+handoff. A shared Google Drive row persists its stable `folderId`; enrollment
+codes carry that folder id and never the owner's OAuth access or refresh token,
+even when the vault's legacy/default `replication_type` is `personal`. The
+joining browser signs into its own Google account and saves its own token. The
+owner may grant that account access to the already-persisted folder, but
+onboarding must not create a replacement folder or transfer owner credentials.
+
 **Local-folder provider availability:** Local backup uses the browser File
 System Access directory API (`showDirectoryPicker`) and persisted structured
 clone directory handles. The provider picker must gate this option with

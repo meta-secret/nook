@@ -35,6 +35,7 @@
     firstCompatibleProvider,
     onboardingType,
     providerCapabilityLabelKey,
+    providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
 
@@ -104,9 +105,6 @@
   )
   const showSetup = $derived(setupType !== undefined)
   const addingProvider = $derived(addProviderOpen || showSetup)
-  const derivedOnboardingType = $derived(
-    onboardingType(vault.vaultArchitecture),
-  )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === 'sentinel',
   )
@@ -153,6 +151,14 @@
   const selectedProvider = $derived(
     syncProviders.find((provider) => provider.id === effectiveProviderId) ??
       undefined,
+  )
+  const derivedOnboardingType = $derived(
+    selectedProvider
+      ? providerOnboardingType(selectedProvider, vault.vaultArchitecture)
+      : onboardingType(vault.vaultArchitecture),
+  )
+  const usesSharedProviderGrant = $derived(
+    derivedOnboardingType === 'shared-provider-grant',
   )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
@@ -281,10 +287,7 @@
       localError = vault.t('onboard_device.enter_pw_err')
       return
     }
-    if (
-      vault.vaultArchitecture.replication_type === 'shared' &&
-      !vault.sharedJoinerIdentity.trim()
-    ) {
+    if (usesSharedProviderGrant && !vault.sharedJoinerIdentity.trim()) {
       localError = vault.t('onboard_device.shared_identity_required')
       return
     }
@@ -798,7 +801,7 @@
             )}
           </p>
 
-          {#if vault.vaultArchitecture.replication_type === 'shared'}
+          {#if usesSharedProviderGrant}
             <div class="space-y-1.5">
               <label
                 for="shared-joiner-identity"

@@ -12,11 +12,11 @@ use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, EnrollmentProvider, GithubPatMask,
     GithubSyncTarget, GoogleDriveMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
-    ProviderReplicationCapability, ReplicationType, StorageMode, StorageProviderType,
-    SyncProviderTarget, VaultArchitecture, format_drive_storage_ref_raw, mask_github_pat,
-    provider_replication_capability, storage_mode_for_provider, sync_provider_default_label,
-    sync_provider_target_key, validate_github_pat, validate_github_repo_name,
-    validate_oauth_access_token, validate_provider_replication,
+    OnboardingType, ProviderReplicationCapability, ReplicationType, StorageMode,
+    StorageProviderType, SyncProviderTarget, VaultArchitecture, format_drive_storage_ref_raw,
+    mask_github_pat, provider_replication_capability, storage_mode_for_provider,
+    sync_provider_default_label, sync_provider_target_key, validate_github_pat,
+    validate_github_repo_name, validate_oauth_access_token, validate_provider_replication,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -288,6 +288,37 @@ pub fn validate_provider_row_replication(
     validate_provider_replication(provider_type, oauth_preset, replication_type)
 }
 
+/// Resolve the enrollment handoff from both vault policy and the concrete
+/// provider target. A shared Google Drive folder always uses a target-only
+/// grant, even when the vault's legacy/default replication policy is personal;
+/// the owner's OAuth credential must never be transferred for a shared target.
+pub fn provider_onboarding_type(
+    provider: &StorageProviderData,
+    architecture: &VaultArchitecture,
+) -> ValidationResult<OnboardingType> {
+    architecture.validate()?;
+    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    let provider_uses_shared_target = if provider_type == StorageProviderType::OauthFile {
+        provider.oauth_file.as_ref().is_some_and(|oauth| {
+            OauthFilePreset::parse(&oauth.preset)
+                .is_ok_and(|preset| preset == OauthFilePreset::GoogleDrive)
+                && oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared
+        })
+    } else {
+        false
+    };
+    let effective_replication = if provider_uses_shared_target {
+        ReplicationType::Shared
+    } else {
+        architecture.replication_type
+    };
+    validate_provider_row_replication(provider, effective_replication)?;
+    Ok(match effective_replication {
+        ReplicationType::Personal => OnboardingType::PersonalCredentialTransfer,
+        ReplicationType::Shared => OnboardingType::SharedProviderGrant,
+    })
+}
+
 pub fn enrollment_provider_for_architecture(
     provider: &StorageProviderData,
     architecture: &VaultArchitecture,
@@ -307,10 +338,15 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
     shared_joiner_identity: Option<&str>,
     shared_storage_target_id: Option<&str>,
 ) -> ValidationResult<EnrollmentProvider> {
-    let capability = validate_provider_row_replication(provider, architecture.replication_type)?;
+    let onboarding_type = provider_onboarding_type(provider, architecture)?;
+    let effective_replication = match onboarding_type {
+        OnboardingType::PersonalCredentialTransfer => ReplicationType::Personal,
+        OnboardingType::SharedProviderGrant => ReplicationType::Shared,
+    };
+    let capability = validate_provider_row_replication(provider, effective_replication)?;
     let provider_type = StorageProviderType::parse(&provider.provider_type)?;
-    match architecture.replication_type {
-        ReplicationType::Personal => match provider_type {
+    match onboarding_type {
+        OnboardingType::PersonalCredentialTransfer => match provider_type {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
                 Ok(EnrollmentProvider::Local)
             }
@@ -343,7 +379,7 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
                 })
             }
         },
-        ReplicationType::Shared => Ok(EnrollmentProvider::SharedProviderGrant {
+        OnboardingType::SharedProviderGrant => Ok(EnrollmentProvider::SharedProviderGrant {
             sync_provider_type: capability.provider_type,
             oauth_preset: capability.oauth_preset,
             joiner_identity_kind: capability
@@ -1531,6 +1567,40 @@ mod tests {
                 file_name: Some("nook.yaml".to_owned()),
                 account_email: None,
             }
+        );
+
+        let mut shared_gdrive = gdrive.clone();
+        let shared_oauth = shared_gdrive.oauth_file.as_mut().unwrap();
+        shared_oauth.drive_mode = Some(GoogleDriveMode::Shared);
+        shared_oauth.folder_id = Some("persisted-shared-folder".to_owned());
+        assert_eq!(
+            provider_onboarding_type(&shared_gdrive, &personal),
+            Ok(OnboardingType::SharedProviderGrant)
+        );
+        assert_eq!(
+            enrollment_provider_for_architecture(
+                &shared_gdrive,
+                &personal,
+                Some("joiner@example.com")
+            )
+            .unwrap(),
+            EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: Some("persisted-shared-folder".to_owned()),
+            }
+        );
+
+        shared_gdrive.oauth_file.as_mut().unwrap().folder_id = None;
+        assert_eq!(
+            enrollment_provider_for_architecture(
+                &shared_gdrive,
+                &personal,
+                Some("joiner@example.com")
+            ),
+            Err(ValidationError::SharedStorageTargetRequired)
         );
     }
 }

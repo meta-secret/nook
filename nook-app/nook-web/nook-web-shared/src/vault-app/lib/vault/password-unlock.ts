@@ -15,7 +15,10 @@ import {
   oauthTokensToConfig,
   requestGoogleDriveSharedAccess,
 } from "$lib/google-oauth";
-import { prepareSharedStorageGrant } from "$lib/vault-architecture";
+import {
+  prepareSharedStorageGrant,
+  providerOnboardingType,
+} from "$lib/vault-architecture";
 import {
   isSentinelPasswordUnlockForbiddenError,
   isSentinelVault,
@@ -525,16 +528,17 @@ export async function issueEnrollmentCode(
     const githubPat = selectedProvider.githubPat?.trim() ?? "";
     const githubRepo = selectedProvider.githubRepo?.trim() ?? "";
     const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
-    const isSharedReplication =
-      state.vaultArchitecture.replication_type === "shared";
-    if (isSharedReplication && !sharedJoinerIdentity) {
+    const usesSharedProviderGrant =
+      providerOnboardingType(selectedProvider, state.vaultArchitecture) ===
+      "shared-provider-grant";
+    if (usesSharedProviderGrant && !sharedJoinerIdentity) {
       throw new Error(
         state.t("errors.validation.shared_joiner_identity_required"),
       );
     }
     if (
       selectedProvider.type === "github" &&
-      !isSharedReplication &&
+      !usesSharedProviderGrant &&
       (!githubPat || !githubRepo)
     ) {
       throw new Error(
@@ -544,7 +548,7 @@ export async function issueEnrollmentCode(
     state.sharedGrantInstructions = "";
     let sharedStorageTargetId: string | undefined;
     let enrollmentProviderRow = selectedProvider;
-    if (isSharedReplication) {
+    if (usesSharedProviderGrant) {
       const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
       const grant = await prepareSharedStorageGrant({
         providerType: selectedProvider.type,
@@ -555,6 +559,7 @@ export async function issueEnrollmentCode(
           selectedProvider.oauthFile?.fileName ??
           selectedProvider.githubRepo ??
           undefined,
+        storageTargetId: selectedProvider.oauthFile?.folderId,
         accessToken,
       });
       if (grant.kind === "unsupported") {
@@ -575,14 +580,11 @@ export async function issueEnrollmentCode(
         });
       }
       if (sharedStorageTargetId && selectedProvider.oauthFile) {
-        const storageTargetName =
-          grant.kind === "granted" || grant.kind === "manual-grant-required"
-            ? grant.storageTargetName
-            : undefined;
         const updatedOauth = {
           ...selectedProvider.oauthFile,
+          driveMode: "shared" as const,
           folderId: sharedStorageTargetId,
-          fileName: storageTargetName ?? selectedProvider.oauthFile.fileName,
+          fileName: selectedProvider.oauthFile.fileName,
         };
         enrollmentProviderRow = {
           ...selectedProvider,
@@ -605,7 +607,7 @@ export async function issueEnrollmentCode(
     const provider = enrollmentProviderForArchitecture(
       enrollmentProviderRow,
       state.vaultArchitecture,
-      isSharedReplication ? sharedJoinerIdentity : undefined,
+      usesSharedProviderGrant ? sharedJoinerIdentity : undefined,
       sharedStorageTargetId,
     );
     const payload = new NookEnrollmentIssueInput(

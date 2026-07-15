@@ -178,6 +178,31 @@ test.describe('Google Drive provider modes', () => {
       })
       .toBeGreaterThan(0)
 
+    const secretKey = uniqueSecretKey('shared-drive-onboard')
+    const secretValue = 'shared-without-owner-google-credentials'
+    await addSecret(owner, secretKey, secretValue)
+    await openStorageSettings(owner)
+    await addVaultPassword(owner, 'Shared Drive onboarding', VAULT_PASSWORD)
+    await openOnboardDevicePanel(owner)
+    await owner
+      .getByTestId('onboard-password-entry-list')
+      .getByRole('radio')
+      .first()
+      .click()
+    await expect(owner.getByTestId('onboarding-type-label')).toContainText(
+      'Shared provider grant',
+    )
+    await expect(
+      owner.getByTestId('shared-joiner-identity-input'),
+    ).toBeVisible()
+    await owner
+      .getByTestId('shared-joiner-identity-input')
+      .fill(collaboratorEmail)
+    const linkInput = await submitOnboardEnrollmentCode(owner, VAULT_PASSWORD)
+    const enrollmentLink = (await linkInput.inputValue()).trim()
+    expect(enrollmentLink).toContain('#enroll=')
+    expect(driveStub.getSharedFolders()).toHaveLength(1)
+
     const collaboratorContext = await createIsolatedContext(browser)
     const collaborator = await collaboratorContext.newPage()
     try {
@@ -188,22 +213,19 @@ test.describe('Google Drive provider modes', () => {
       })
       await collaborator.goto('/app/')
       await clearBrowserVault(collaborator)
-      await collaborator.reload()
-      await openLoginProviderSetup(collaborator)
-      await collaborator.getByTestId('provider-option-oauth-file').click()
-      await collaborator.getByTestId('google-drive-mode-shared').click()
-      await collaborator.getByTestId('google-sign-in-btn').click()
+      await collaborator.goto('about:blank')
+      await collaborator.goto(enrollmentLink)
       await expect(
-        collaborator.getByTestId('google-shared-folder-create-mode'),
+        collaborator.getByTestId('enrollment-scan-panel'),
       ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-      await collaborator.getByTestId('google-shared-folder-join-mode').click()
       await collaborator
-        .getByTestId('google-shared-folder-ref')
-        .fill(`https://drive.google.com/drive/folders/${sharedFolder.id}`)
-      await collaborator.getByTestId('google-use-shared-folder-btn').click()
-      await expect(
-        collaborator.getByTestId('connect-provider-btn'),
-      ).toBeEnabled()
+        .getByTestId('enrollment-password-input')
+        .fill(VAULT_PASSWORD)
+      await collaborator.getByTestId('submit-enrollment-code-btn').click()
+      await waitForVaultUnlocked(collaborator, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+      await assertVaultReady(collaborator)
+      await waitForSecretOnDevice(collaborator, secretKey)
+      expect(await revealSecretValue(collaborator, secretKey)).toBe(secretValue)
     } finally {
       await collaborator.close()
       await collaboratorContext.close()

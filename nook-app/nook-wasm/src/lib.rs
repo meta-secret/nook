@@ -475,6 +475,20 @@ pub fn vault_architecture_onboarding_type(
     Ok(architecture.onboarding_type().as_str().to_owned())
 }
 
+#[wasm_bindgen(js_name = providerOnboardingType)]
+pub fn provider_onboarding_type(
+    provider: JsValue,
+    architecture: JsValue,
+) -> Result<String, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    Ok(
+        nook_core::provider_onboarding_type(&provider, &architecture)?
+            .as_str()
+            .to_owned(),
+    )
+}
+
 #[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]
 pub fn vault_architecture_can_create_secret(
     architecture: JsValue,
@@ -527,9 +541,91 @@ pub fn enrollment_provider_for_architecture(
     ))
 }
 
-/// Validate a shared-grant request, then (for Google Drive) create a My Drive
-/// folder and share it with the joiner. Falls back to `ManualGrantRequired` when
-/// the Drive API fails or no owner access token is supplied.
+async fn grant_existing_drive_folder(
+    access_token: &str,
+    folder_id: String,
+    instructions_key: String,
+    joiner_identity: String,
+    storage_target_name: Option<String>,
+) -> nook_core::SharedStorageGrantOutcome {
+    match storage::drive_shared::share_folder_with_email(access_token, &folder_id, &joiner_identity)
+        .await
+    {
+        Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
+            note: "architecture_modes.shared_grant_success".to_owned(),
+            storage_target_id: folder_id,
+            storage_target_name,
+        },
+        Err(error) => {
+            tracing::warn!(
+                scope = "shared-storage-grant",
+                stage = "share-existing-folder",
+                error = %error,
+                "automatic shared storage grant failed; manual grant required"
+            );
+            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                instructions_key,
+                joiner_identity,
+                storage_target_id: Some(folder_id),
+                storage_target_name,
+            }
+        }
+    }
+}
+
+async fn create_and_grant_drive_folder(
+    access_token: &str,
+    folder_name: &str,
+    instructions_key: String,
+    joiner_identity: String,
+) -> nook_core::SharedStorageGrantOutcome {
+    let Ok((folder_id, created_name)) =
+        storage::drive_shared::create_shared_vault_folder(access_token, folder_name)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    scope = "shared-storage-grant",
+                    stage = "create-folder",
+                    error = %error,
+                    "automatic shared storage grant failed; manual grant required"
+                );
+            })
+    else {
+        return nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+            instructions_key,
+            joiner_identity,
+            storage_target_id: None,
+            storage_target_name: None,
+        };
+    };
+    match storage::drive_shared::share_folder_with_email(access_token, &folder_id, &joiner_identity)
+        .await
+    {
+        Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
+            note: "architecture_modes.shared_grant_success".to_owned(),
+            storage_target_id: folder_id,
+            storage_target_name: Some(created_name),
+        },
+        Err(error) => {
+            tracing::warn!(
+                scope = "shared-storage-grant",
+                stage = "share-folder",
+                error = %error,
+                "automatic shared storage grant failed; manual grant required"
+            );
+            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                instructions_key,
+                joiner_identity,
+                storage_target_id: Some(folder_id),
+                storage_target_name: Some(created_name),
+            }
+        }
+    }
+}
+
+/// Validate a shared-grant request, then (for Google Drive) grant the persisted
+/// folder or create one when no target exists. Falls back to
+/// `ManualGrantRequired` when the Drive API fails or no owner token is supplied.
 #[wasm_bindgen(js_name = prepareSharedStorageGrant)]
 pub async fn prepare_shared_storage_grant(
     request: JsValue,
@@ -557,61 +653,33 @@ pub async fn prepare_shared_storage_grant(
                     == "google-drive";
             match (token, is_gdrive) {
                 (Some(access_token), true) => {
-                    let folder_name = request
-                        .storage_target_hint
+                    if let Some(folder_id) = storage_target_id
                         .as_deref()
                         .map(str::trim)
-                        .filter(|name| !name.is_empty())
-                        .unwrap_or("Nook shared vault");
-                    match storage::drive_shared::create_shared_vault_folder(
-                        access_token,
-                        folder_name,
-                    )
-                    .await
+                        .filter(|target| !target.is_empty())
                     {
-                        Ok((folder_id, created_name)) => {
-                            match storage::drive_shared::share_folder_with_email(
-                                access_token,
-                                &folder_id,
-                                &joiner_identity,
-                            )
-                            .await
-                            {
-                                Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
-                                    note: "architecture_modes.shared_grant_success".to_owned(),
-                                    storage_target_id: folder_id,
-                                    storage_target_name: Some(created_name),
-                                },
-                                Err(error) => {
-                                    tracing::warn!(
-                                        scope = "shared-storage-grant",
-                                        stage = "share-folder",
-                                        error = %error,
-                                        "automatic shared storage grant failed; manual grant required"
-                                    );
-                                    nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
-                                        instructions_key,
-                                        joiner_identity,
-                                        storage_target_id: Some(folder_id),
-                                        storage_target_name: Some(created_name),
-                                    }
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            tracing::warn!(
-                                scope = "shared-storage-grant",
-                                stage = "create-folder",
-                                error = %error,
-                                "automatic shared storage grant failed; manual grant required"
-                            );
-                            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
-                                instructions_key,
-                                joiner_identity,
-                                storage_target_id,
-                                storage_target_name,
-                            }
-                        }
+                        grant_existing_drive_folder(
+                            access_token,
+                            folder_id.to_owned(),
+                            instructions_key,
+                            joiner_identity,
+                            storage_target_name,
+                        )
+                        .await
+                    } else {
+                        let folder_name = request
+                            .storage_target_hint
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|name| !name.is_empty())
+                            .unwrap_or("Nook shared vault");
+                        create_and_grant_drive_folder(
+                            access_token,
+                            folder_name,
+                            instructions_key,
+                            joiner_identity,
+                        )
+                        .await
                     }
                 }
                 _ => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
