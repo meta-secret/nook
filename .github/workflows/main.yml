@@ -136,7 +136,7 @@ jobs:
           test -n "$SENTINEL_PAGES_URL"
 
           api() {
-            curl -fsS \
+            curl -sS \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
               "$@"
@@ -155,43 +155,54 @@ jobs:
           simple_pages_host="development.nokey-simple.pages.dev"
           sentinel_pages_host="development.nokey-sentinel.pages.dev"
           zone_name="nokey.sh"
-          zone_id="$(api_json "https://api.cloudflare.com/client/v4/zones?name=$zone_name" | jq -er '.result[0].id')"
+          zone_id=""
 
           attach_domain() {
             project="$1"
             domain="$2"
-            domains="$(api_json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains")"
+            domains="$(api_json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains")" || return 1
             exists="$(printf '%s' "$domains" | jq -r --arg name "$domain" '[.result[]? | select(.name == $name)] | length')"
             if [ "$exists" = "0" ]; then
               api_json -X POST \
                 --data "$(jq -nc --arg name "$domain" '{name: $name}')" \
-                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains" >/dev/null
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains" >/dev/null || return 1
             fi
           }
 
           ensure_cname() {
             domain="$1"
             target="$2"
-            records="$(api_json "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$domain")"
+            records="$(api_json "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$domain")" || return 1
             record_id="$(printf '%s' "$records" | jq -r '.result[0].id // empty')"
             body="$(jq -nc --arg name "$domain" --arg content "$target" '{type: "CNAME", name: $name, content: $content, ttl: 1, proxied: true}')"
             if [ -n "$record_id" ]; then
               current_ok="$(printf '%s' "$records" | jq -r --arg content "$target" '.result[0] | .type == "CNAME" and .content == $content and .proxied == true')"
               if [ "$current_ok" != true ]; then
-                api_json -X PUT --data "$body" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" >/dev/null
+                api_json -X PUT --data "$body" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" >/dev/null || return 1
               fi
             else
-              api_json -X POST --data "$body" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" >/dev/null
+              api_json -X POST --data "$body" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" >/dev/null || return 1
             fi
           }
 
-          # Pages must know each hostname before DNS points a branch-specific custom domain at it.
-          attach_domain nokey-sh "$DEV_DOMAIN"
-          attach_domain nokey-simple "$SIMPLE_DOMAIN"
-          attach_domain nokey-sentinel "$SENTINEL_DOMAIN"
-          ensure_cname "$DEV_DOMAIN" "$site_pages_host"
-          ensure_cname "$SIMPLE_DOMAIN" "$simple_pages_host"
-          ensure_cname "$SENTINEL_DOMAIN" "$sentinel_pages_host"
+          # Reconcile established custom-domain infrastructure when the deployment token also has
+          # zone permissions. Live boundary verification below remains authoritative for the
+          # least-privilege Pages token used by CI.
+          zone_response=""
+          if zone_response="$(api_json "https://api.cloudflare.com/client/v4/zones?name=$zone_name")" \
+            && zone_id="$(printf '%s' "$zone_response" | jq -er '.result[0].id')"; then
+            if ! attach_domain nokey-sh "$DEV_DOMAIN" \
+              || ! attach_domain nokey-simple "$SIMPLE_DOMAIN" \
+              || ! attach_domain nokey-sentinel "$SENTINEL_DOMAIN" \
+              || ! ensure_cname "$DEV_DOMAIN" "$site_pages_host" \
+              || ! ensure_cname "$SIMPLE_DOMAIN" "$simple_pages_host" \
+              || ! ensure_cname "$SENTINEL_DOMAIN" "$sentinel_pages_host"; then
+              echo "::warning::Cloudflare custom-domain reconciliation was unavailable; verifying live domains"
+              zone_id=""
+            fi
+          else
+            echo "::warning::Cloudflare zone administration was unavailable; verifying live domains"
+          fi
 
           purge_body="$(
             jq -nc \
@@ -216,18 +227,19 @@ jobs:
             # The custom hostname can still point at the previous Pages
             # deployment briefly. Purge before every probe so an old SPA
             # fallback cannot repopulate the cache for the rest of the loop.
-            if ! api_json -X POST \
+            if [ -n "$zone_id" ] && ! api_json -X POST \
               --data "$purge_body" \
               "https://api.cloudflare.com/client/v4/zones/$zone_id/purge_cache" >/dev/null; then
-              echo "::error::CLOUD_FLARE_PAGES_TOKEN must grant Cache Purge for $zone_name"
-              exit 1
+              echo "::warning::Cloudflare cache purge was unavailable; switching to cache-busted probes"
+              zone_id=""
             fi
-            root_status="$(curl -sS -o "$root_body" -w '%{http_code}' "https://$DEV_DOMAIN/" || true)"
-            site_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/site/" || true)"
-            simple_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/simple/" || true)"
-            sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/sentinel/" || true)"
-            app_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/app/" || true)"
-            extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/extension-connect.html" || true)"
+            cache_bust="nook_commit=${{ github.sha }}&attempt=$attempt"
+            root_status="$(curl -sS -o "$root_body" -w '%{http_code}' "https://$DEV_DOMAIN/?$cache_bust" || true)"
+            site_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/site/?$cache_bust" || true)"
+            simple_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/simple/?$cache_bust" || true)"
+            sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/sentinel/?$cache_bust" || true)"
+            app_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/app/?$cache_bust" || true)"
+            extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/extension-connect.html?$cache_bust" || true)"
             site_ok=false
             if [ "$root_status" = "200" ] \
               && grep -Fq '<title>Nook — Keys, not accounts</title>' "$root_body" \
@@ -241,8 +253,8 @@ jobs:
               site_ok=true
             fi
 
-            simple_root_status="$(curl -sS -D "$headers" -o "$root_body" -w '%{http_code}' "https://$SIMPLE_DOMAIN/" || true)"
-            simple_extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$SIMPLE_DOMAIN/extension-connect" || true)"
+            simple_root_status="$(curl -sS -D "$headers" -o "$root_body" -w '%{http_code}' "https://$SIMPLE_DOMAIN/?$cache_bust" || true)"
+            simple_extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$SIMPLE_DOMAIN/extension-connect?$cache_bust" || true)"
             simple_ok=false
             if [ "$simple_root_status" = "200" ] \
               && grep -Fq '<meta name="nook-app-kind" content="simple"' "$root_body" \
@@ -252,8 +264,8 @@ jobs:
               simple_ok=true
             fi
 
-            sentinel_root_status="$(curl -sS -D "$headers" -o "$root_body" -w '%{http_code}' "https://$SENTINEL_DOMAIN/" || true)"
-            sentinel_extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$SENTINEL_DOMAIN/extension-connect" || true)"
+            sentinel_root_status="$(curl -sS -D "$headers" -o "$root_body" -w '%{http_code}' "https://$SENTINEL_DOMAIN/?$cache_bust" || true)"
+            sentinel_extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$SENTINEL_DOMAIN/extension-connect?$cache_bust" || true)"
             sentinel_ok=false
             if [ "$sentinel_root_status" = "200" ] \
               && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$root_body" \
@@ -274,7 +286,7 @@ jobs:
             echo "::error::Development domains must serve isolated landing, Simple, and Sentinel applications"
             exit 1
           fi
-          EXTENSION_METADATA_URL="https://$DEV_DOMAIN/downloads/extension.json" \
+          EXTENSION_METADATA_URL="https://$DEV_DOMAIN/downloads/extension.json?nook_commit=${{ github.sha }}" \
           EXPECTED_EXTENSION_CHANNEL="development" \
           EXPECTED_EXTENSION_COMMIT="${{ github.sha }}" \
           EXPECTED_EXTENSION_SITE_URL="https://$DEV_DOMAIN/" \
