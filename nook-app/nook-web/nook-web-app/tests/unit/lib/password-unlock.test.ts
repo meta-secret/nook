@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest'
 import type { StorageProvider } from '$lib/auth-providers'
-import { findSharedGrantProvider } from '$lib/vault/password-unlock'
+import {
+  findSharedGrantProvider,
+  shouldFlushSharedDriveGrant,
+} from '$lib/vault/password-unlock'
 
 function driveProvider(id: string, folderId: string): StorageProvider {
   return {
@@ -42,5 +45,30 @@ describe('shared enrollment provider selection', () => {
         'folder-required',
       )?.id,
     ).toBe('matching')
+  })
+
+  test('flushes only an automatic Drive grant with a usable token', () => {
+    expect(
+      shouldFlushSharedDriveGrant(
+        {
+          kind: 'granted',
+          note: 'architecture_modes.shared_grant_created',
+          storageTargetId: 'folder-required',
+        },
+        'token-owner',
+      ),
+    ).toBe(true)
+    expect(
+      shouldFlushSharedDriveGrant(
+        {
+          kind: 'manual-grant-required',
+          instructionsKey:
+            'architecture_modes.shared_grant_manual_instructions',
+          joinerIdentity: 'joiner@example.com',
+          storageTargetId: 'folder-required',
+        },
+        '',
+      ),
+    ).toBe(false)
   })
 })

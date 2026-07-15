@@ -27,6 +27,7 @@ import {
 import {
   prepareSharedStorageGrant,
   providerOnboardingType,
+  type SharedStorageGrantOutcome,
 } from "$lib/vault-architecture";
 import {
   isSentinelPasswordUnlockForbiddenError,
@@ -299,6 +300,13 @@ export function findSharedGrantProvider(
     );
   }
   return withToken[0];
+}
+
+export function shouldFlushSharedDriveGrant(
+  grant: SharedStorageGrantOutcome,
+  accessToken?: string,
+): boolean {
+  return grant.kind === "granted" && Boolean(accessToken?.trim());
 }
 
 async function localVaultHasPasswordEntries(
@@ -663,12 +671,14 @@ export async function issueEnrollmentCode(
           );
           await state.persistProviders();
 
-          // A shared grant is not usable until the target contains the current
-          // vault event log. Await the Rust/WASM fan-out before emitting the code.
-          const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
-          await state.enqueueStorage(() =>
-            state.manager!.flushEventOutboxForProvider(...targetArgs),
-          );
+          if (shouldFlushSharedDriveGrant(grant, accessToken)) {
+            // An automatic grant is not usable until the target contains the
+            // current vault event log. Await Rust/WASM fan-out before issuing.
+            const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
+            await state.enqueueStorage(() =>
+              state.manager!.flushEventOutboxForProvider(...targetArgs),
+            );
+          }
         }
       }
       if (usesSharedICloud) {

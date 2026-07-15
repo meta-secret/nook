@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, EnrollmentProvider, GithubPatMask,
-    GithubSyncTarget, GoogleDriveMode, ICloudMode, LocalFolderSyncTarget, OauthFilePreset,
-    OauthFileSyncTarget, OnboardingType, ProviderReplicationCapability, ReplicationType,
-    StorageMode, StorageProviderType, SyncProviderTarget, VaultArchitecture,
+    GithubSyncTarget, GoogleDriveMode, ICloudMode, ICloudSharedTarget, LocalFolderSyncTarget,
+    OauthFilePreset, OauthFileSyncTarget, OnboardingType, ProviderReplicationCapability,
+    ReplicationType, StorageMode, StorageProviderType, SyncProviderTarget, VaultArchitecture,
     format_drive_storage_ref_raw, mask_github_pat, provider_replication_capability,
     storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
     validate_github_pat, validate_github_repo_name, validate_oauth_access_token,
@@ -353,7 +353,21 @@ pub fn validate_provider_row_replication(
             .as_ref()
             .map(|oauth| oauth.preset.as_str()),
     )?;
-    validate_provider_replication(provider_type, oauth_preset, replication_type)
+    let capability = validate_provider_replication(provider_type, oauth_preset, replication_type)?;
+    if replication_type == ReplicationType::Shared && oauth_preset == Some(OauthFilePreset::ICloud)
+    {
+        let oauth = provider
+            .oauth_file
+            .as_ref()
+            .ok_or(ValidationError::SharedStorageTargetRequired)?;
+        if oauth.resolved_icloud_mode() != ICloudMode::Shared {
+            return Err(ValidationError::SharedStorageTargetRequired);
+        }
+        let storage_target = non_empty(oauth.icloud_share_target.as_deref())
+            .ok_or(ValidationError::SharedStorageTargetRequired)?;
+        ICloudSharedTarget::from_storage_id(&storage_target)?;
+    }
+    Ok(capability)
 }
 
 /// Resolve the enrollment handoff from both vault policy and the concrete
@@ -1734,6 +1748,27 @@ mod tests {
                 &personal,
                 Some("joiner@example.com")
             ),
+            Err(ValidationError::SharedStorageTargetRequired)
+        );
+    }
+
+    #[test]
+    fn private_icloud_row_is_not_ready_for_shared_replication() {
+        let mut icloud = oauth_provider("icloud", "icloud", None, "nook-events");
+        let oauth = icloud.oauth_file.as_mut().unwrap();
+        oauth.icloud_mode = Some(ICloudMode::Private);
+
+        assert!(validate_provider_row_replication(&icloud, ReplicationType::Personal).is_ok());
+        assert_eq!(
+            validate_provider_row_replication(&icloud, ReplicationType::Shared),
+            Err(ValidationError::SharedStorageTargetRequired)
+        );
+
+        let oauth = icloud.oauth_file.as_mut().unwrap();
+        oauth.icloud_mode = Some(ICloudMode::Shared);
+        oauth.icloud_share_target = Some("not-a-cloudkit-share-target".to_owned());
+        assert_eq!(
+            validate_provider_row_replication(&icloud, ReplicationType::Shared),
             Err(ValidationError::SharedStorageTargetRequired)
         );
     }

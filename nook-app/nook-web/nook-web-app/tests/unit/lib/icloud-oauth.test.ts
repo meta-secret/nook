@@ -85,9 +85,11 @@ describe('icloud-oauth', () => {
 
       const target = await createICloudSharedVault('nook-events')
 
-      expect(saveRecordZones).toHaveBeenCalledWith(
-        'nook-shared-11111111-1111-4111-8111-111111111111',
-      )
+      expect(saveRecordZones).toHaveBeenCalledWith([
+        {
+          zoneName: 'nook-shared-11111111-1111-4111-8111-111111111111',
+        },
+      ])
       expect(saveRecords).toHaveBeenCalledWith(
         expect.objectContaining({
           recordType: 'NookVault',
@@ -180,6 +182,33 @@ describe('icloud-oauth', () => {
         role: 'participant',
         zoneName: 'shared-zone',
         rootRecordName: 'shared-root',
+      })
+      expect(acceptShares).not.toHaveBeenCalled()
+    })
+
+    it('preserves owner private-database routing on owner-device enrollment', async () => {
+      const acceptShares = vi.fn()
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth: vi.fn().mockResolvedValue({
+          userRecordName: 'owner-record',
+        }),
+        whenUserSignsIn: vi.fn(),
+        fetchCurrentUserIdentity: vi.fn().mockResolvedValue({
+          userRecordName: 'owner-record',
+        }),
+        acceptShares,
+      })
+
+      const target = await acceptICloudSharedVault(
+        'icloud-share-v1:{"role":"owner","zoneName":"shared-zone","ownerRecordName":"owner-record","rootRecordName":"shared-root","shortGuid":"share-guid"}',
+      )
+
+      expect(target).toMatchObject({
+        role: 'owner',
+        zoneName: 'shared-zone',
+        ownerRecordName: 'owner-record',
+        rootRecordName: 'shared-root',
+        shortGuid: 'share-guid',
       })
       expect(acceptShares).not.toHaveBeenCalled()
     })

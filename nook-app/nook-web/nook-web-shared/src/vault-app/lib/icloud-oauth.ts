@@ -71,7 +71,7 @@ type CloudKitRecordInfosResponse = {
 };
 
 type CloudKitDatabase = {
-  saveRecordZones: (zones: string | string[]) => Promise<unknown>;
+  saveRecordZones: (zones: CloudKitZoneID[]) => Promise<unknown>;
   saveRecords: (
     records: CloudKitRecord | CloudKitRecord[],
     options: { zoneID: string | CloudKitZoneID },
@@ -966,7 +966,7 @@ export async function createICloudSharedVault(
   if (!database) {
     throw new Error("provider_setup.icloud_shared_create_failed");
   }
-  await database.saveRecordZones(zoneName);
+  await database.saveRecordZones([{ zoneName }]);
   const saved = await database.saveRecords(
     {
       // Reuse the deployed NookVault record type as the share root; shared
@@ -1014,7 +1014,31 @@ export async function acceptICloudSharedVault(
   await initICloudAuth();
   await initNookWasm();
   const container = window.CloudKit!.getDefaultContainer();
+  const encodedTarget = shareReference.trim().startsWith("icloud-share-v1:")
+    ? (parseICloudSharedStorageTarget(shareReference.trim()) as {
+        role: "owner" | "participant";
+        zoneName: string;
+        ownerRecordName: string;
+        rootRecordName: string;
+        shortGuid: string;
+      })
+    : undefined;
   const shortGuid = normalizedICloudShortGuid(shareReference);
+  const identity =
+    authSetupUserIdentity ?? (await container.fetchCurrentUserIdentity?.());
+  if (
+    encodedTarget &&
+    identity?.userRecordName?.trim() === encodedTarget.ownerRecordName.trim()
+  ) {
+    const storageTargetId = createICloudSharedStorageTarget(
+      "owner",
+      encodedTarget.zoneName,
+      encodedTarget.ownerRecordName,
+      encodedTarget.rootRecordName,
+      encodedTarget.shortGuid,
+    );
+    return { ...encodedTarget, role: "owner", storageTargetId };
+  }
   if (!container.acceptShares || !container.fetchRecordInfos) {
     throw new Error("provider_setup.icloud_shared_connect_failed");
   }

@@ -62,6 +62,19 @@ function sharedICloudProvider(): StorageProvider {
   }
 }
 
+function privateICloudProvider(): StorageProvider {
+  return {
+    ...sharedICloudProvider(),
+    id: 'icloud-private-1',
+    oauthFile: {
+      preset: 'icloud',
+      accessToken: 'cloudkit-web-token',
+      fileName: 'nook-events',
+      iCloudMode: 'private',
+    },
+  }
+}
+
 describe('vault architecture adapter', () => {
   test('defaults select the simple personal standard vault', () => {
     expect(defaultVaultArchitecture()).toEqual({
@@ -155,6 +168,22 @@ describe('vault architecture adapter', () => {
     expect(
       firstCompatibleProvider([github], 'shared', github.id),
     ).toBeUndefined()
+  })
+
+  test('private iCloud rows require shared setup before shared onboarding', () => {
+    const privateICloud = privateICloudProvider()
+    const sharedICloud = sharedICloudProvider()
+
+    expect(providerSupportsReplication(privateICloud, 'personal')).toBe(true)
+    expect(providerSupportsReplication(privateICloud, 'shared')).toBe(false)
+    expect(providerSupportsReplication(sharedICloud, 'shared')).toBe(true)
+    expect(
+      firstCompatibleProvider(
+        [privateICloud, sharedICloud],
+        'shared',
+        privateICloud.id,
+      )?.id,
+    ).toBe(sharedICloud.id)
   })
 
   test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
