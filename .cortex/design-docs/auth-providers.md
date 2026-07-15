@@ -94,9 +94,20 @@ owner may grant that account access to the already-persisted folder, but
 onboarding must not create a replacement folder or transfer owner credentials.
 The decrypted enrollment payload exposes the Rust-owned `OnboardingType`; the
 joiner dispatches on `PersonalCredentialTransfer` versus
-`SharedProviderGrant`. Shared-target provider variants cannot carry PAT, OAuth
-access-token, or refresh-token fields, so the credential-free rule is enforced
-by the payload shape rather than a TypeScript convention.
+`SharedProviderGrant`. Rust models those as sealed typestates:
+`TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local,
+GitHub, or credential-bearing OAuth data, while
+`TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google Drive
+folder grant or iCloud share target. The encrypted wire payload records the
+onboarding type beside its correspondingly typed provider data. A shared wire
+tag paired with the legacy OAuth shape fails deserialization, and legacy OAuth
+codes are classified as personal only. Shared-target types have no PAT, OAuth
+access-token, or refresh-token fields or constructors, so the credential-free
+rule is enforced by Rust construction and deserialization rather than a
+TypeScript convention or a late runtime branch. Core provider classification
+also terminates in separate `PersonalEnrollmentProvider` and
+`SharedEnrollmentProvider` builder functions; the shared builder's return type
+cannot return or be wrapped from the personal OAuth typestate.
 
 **iCloud modes:** Private mode preserves the legacy default private CloudKit
 database behavior. Shared mode creates a custom private record zone and a

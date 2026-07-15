@@ -9,6 +9,7 @@ use getrandom::getrandom;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256};
 use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, utf8_percent_encode};
 use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 
 use crate::errors::{EnrollmentError, EnrollmentResult};
 
@@ -46,9 +47,32 @@ const ENCODE_URI_COMPONENT: &AsciiSet = &CONTROLS
     .add(b'|')
     .add(b'}');
 
+/// Marker state for enrollment payloads that intentionally transfer the
+/// selected provider credential inside the encrypted enrollment code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PersonalCredentialTransfer;
+
+/// Marker state for enrollment payloads that carry only a shared provider
+/// target. There is deliberately no credential-bearing constructor for this
+/// state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SharedProviderGrant;
+
+mod enrollment_state_sealed {
+    pub trait Sealed {}
+}
+
+/// Sealed mapping from an onboarding typestate to the only provider data shape
+/// legal in that state.
+pub trait EnrollmentState:
+    enrollment_state_sealed::Sealed + std::fmt::Debug + Clone + PartialEq + Eq
+{
+    type Provider: std::fmt::Debug + Clone + PartialEq + Eq;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
-pub enum EnrollmentProvider {
+pub enum PersonalEnrollmentProviderData {
     Local,
     Github {
         pat: String,
@@ -69,8 +93,13 @@ pub enum EnrollmentProvider {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         account_email: Option<String>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum SharedEnrollmentProviderData {
     #[serde(rename = "shared-provider-grant")]
-    SharedProviderGrant {
+    GoogleDrive {
         sync_provider_type: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         oauth_preset: Option<String>,
@@ -86,9 +115,187 @@ pub enum EnrollmentProvider {
     /// stable share/zone location; the recipient authenticates with their own
     /// iCloud account before accepting it.
     #[serde(rename = "icloud-shared")]
-    ICloudShared {
-        storage_target_id: String,
-    },
+    ICloud { storage_target_id: String },
+}
+
+impl enrollment_state_sealed::Sealed for PersonalCredentialTransfer {}
+
+impl EnrollmentState for PersonalCredentialTransfer {
+    type Provider = PersonalEnrollmentProviderData;
+}
+
+impl enrollment_state_sealed::Sealed for SharedProviderGrant {}
+
+impl EnrollmentState for SharedProviderGrant {
+    type Provider = SharedEnrollmentProviderData;
+}
+
+/// A provider whose legal fields are selected by the compile-time onboarding
+/// state. The private fields prevent constructing a shared state from personal
+/// provider data (and therefore from OAuth/PAT credentials).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+#[serde(bound(
+    serialize = "State::Provider: Serialize",
+    deserialize = "State::Provider: Deserialize<'de>"
+))]
+pub struct TypedEnrollmentProvider<State: EnrollmentState> {
+    provider: State::Provider,
+    #[serde(skip)]
+    state: PhantomData<State>,
+}
+
+pub type PersonalEnrollmentProvider = TypedEnrollmentProvider<PersonalCredentialTransfer>;
+pub type SharedEnrollmentProvider = TypedEnrollmentProvider<SharedProviderGrant>;
+
+impl PersonalEnrollmentProvider {
+    #[must_use]
+    pub fn local() -> Self {
+        Self {
+            provider: PersonalEnrollmentProviderData::Local,
+            state: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn github(pat: String, repo: String) -> Self {
+        Self {
+            provider: PersonalEnrollmentProviderData::Github { pat, repo },
+            state: PhantomData,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn oauth_file(
+        preset: String,
+        access_token: String,
+        refresh_token: Option<String>,
+        expires_at: Option<String>,
+        file_id: Option<String>,
+        file_name: Option<String>,
+        account_email: Option<String>,
+    ) -> Self {
+        Self {
+            provider: PersonalEnrollmentProviderData::OauthFile {
+                preset,
+                access_token,
+                refresh_token,
+                expires_at,
+                file_id,
+                file_name,
+                account_email,
+            },
+            state: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub const fn data(&self) -> &PersonalEnrollmentProviderData {
+        &self.provider
+    }
+}
+
+impl SharedEnrollmentProvider {
+    /// Construct a shared Google Drive target. Credentials are not accepted by
+    /// this typestate constructor.
+    ///
+    /// ```compile_fail
+    /// use nook_auth2::SharedEnrollmentProvider;
+    /// SharedEnrollmentProvider::google_drive(
+    ///     "joiner@example.com".to_owned(),
+    ///     "shared-folder".to_owned(),
+    ///     "owner-oauth-token".to_owned(),
+    /// );
+    /// ```
+    #[must_use]
+    pub fn google_drive(joiner_identity: String, storage_target_id: String) -> Self {
+        Self {
+            provider: SharedEnrollmentProviderData::GoogleDrive {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity,
+                storage_target_id: Some(storage_target_id),
+            },
+            state: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_google_drive(
+        sync_provider_type: String,
+        oauth_preset: Option<String>,
+        joiner_identity_kind: String,
+        joiner_identity: String,
+        storage_target_id: Option<String>,
+    ) -> Self {
+        Self {
+            provider: SharedEnrollmentProviderData::GoogleDrive {
+                sync_provider_type,
+                oauth_preset,
+                joiner_identity_kind,
+                joiner_identity,
+                storage_target_id,
+            },
+            state: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn icloud(storage_target_id: String) -> Self {
+        Self {
+            provider: SharedEnrollmentProviderData::ICloud { storage_target_id },
+            state: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub const fn data(&self) -> &SharedEnrollmentProviderData {
+        &self.provider
+    }
+}
+
+/// Type-erased enrollment provider used at serialization and WASM boundaries.
+/// Each variant contains a provider already proven to be in the corresponding
+/// typestate, so a shared payload cannot contain personal credentials.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "onboardingType",
+    content = "provider",
+    rename_all = "kebab-case"
+)]
+pub enum EnrollmentProvider {
+    PersonalCredentialTransfer(PersonalEnrollmentProvider),
+    SharedProviderGrant(SharedEnrollmentProvider),
+}
+
+impl EnrollmentProvider {
+    #[must_use]
+    pub const fn personal(provider: PersonalEnrollmentProvider) -> Self {
+        Self::PersonalCredentialTransfer(provider)
+    }
+
+    #[must_use]
+    pub const fn shared(provider: SharedEnrollmentProvider) -> Self {
+        Self::SharedProviderGrant(provider)
+    }
+
+    #[must_use]
+    pub const fn personal_data(&self) -> Option<&PersonalEnrollmentProviderData> {
+        match self {
+            Self::PersonalCredentialTransfer(provider) => Some(provider.data()),
+            Self::SharedProviderGrant(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn shared_data(&self) -> Option<&SharedEnrollmentProviderData> {
+        match self {
+            Self::PersonalCredentialTransfer(_) => None,
+            Self::SharedProviderGrant(provider) => Some(provider.data()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +329,50 @@ pub struct EnrollmentCodeEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct EnrollmentProviderPayload {
     provider: EnrollmentProvider,
+}
+
+/// Compatibility decoder for enrollment codes issued before onboarding mode
+/// became an explicit wire field. A legacy OAuth provider is always classified
+/// as personal; it can never be reinterpreted as a shared provider grant.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+enum LegacyEnrollmentProvider {
+    Personal(PersonalEnrollmentProviderData),
+    Shared(SharedEnrollmentProviderData),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct LegacyEnrollmentProviderPayload {
+    provider: LegacyEnrollmentProvider,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+enum DecodableEnrollmentProviderPayload {
+    Typed(EnrollmentProviderPayload),
+    Legacy(LegacyEnrollmentProviderPayload),
+}
+
+impl DecodableEnrollmentProviderPayload {
+    fn into_provider(self) -> EnrollmentProvider {
+        match self {
+            Self::Typed(payload) => payload.provider,
+            Self::Legacy(payload) => match payload.provider {
+                LegacyEnrollmentProvider::Personal(provider) => {
+                    EnrollmentProvider::personal(TypedEnrollmentProvider {
+                        provider,
+                        state: PhantomData,
+                    })
+                }
+                LegacyEnrollmentProvider::Shared(provider) => {
+                    EnrollmentProvider::shared(TypedEnrollmentProvider {
+                        provider,
+                        state: PhantomData,
+                    })
+                }
+            },
+        }
+    }
 }
 
 pub fn encrypt_enrollment_payload(
@@ -190,12 +441,13 @@ pub fn decrypt_enrollment_payload(
     let plaintext = cipher
         .decrypt(&Array(iv), ciphertext.as_slice())
         .map_err(|_| EnrollmentError::WrongPassword)?;
-    let provider_payload: EnrollmentProviderPayload =
+    let provider_payload: DecodableEnrollmentProviderPayload =
         serde_json::from_slice(&plaintext).map_err(|_| EnrollmentError::WrongPassword)?;
-    validate_provider(&provider_payload.provider)?;
+    let provider = provider_payload.into_provider();
+    validate_provider(&provider)?;
 
     Ok(DecryptedEnrollmentPayload {
-        provider: provider_payload.provider,
+        provider,
         entry_id: envelope.entry_id,
         issued_at: envelope.issued_at,
     })
@@ -306,55 +558,59 @@ fn validate_envelope(envelope: &EnrollmentCodeEnvelope) -> EnrollmentResult<()> 
 
 fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
     match provider {
-        EnrollmentProvider::Local => Ok(()),
-        EnrollmentProvider::Github { pat, repo } => {
-            if pat.is_empty() || repo.is_empty() {
-                return Err(EnrollmentError::MalformedGithubProvider);
+        EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
+            PersonalEnrollmentProviderData::Local => Ok(()),
+            PersonalEnrollmentProviderData::Github { pat, repo } => {
+                if pat.is_empty() || repo.is_empty() {
+                    return Err(EnrollmentError::MalformedGithubProvider);
+                }
+                Ok(())
             }
-            Ok(())
-        }
-        EnrollmentProvider::OauthFile {
-            preset,
-            access_token,
-            ..
-        } => {
-            if !matches!(preset.as_str(), "google-drive" | "icloud")
-                || access_token.trim().is_empty()
-            {
-                return Err(EnrollmentError::MalformedOauthFileProvider);
+            PersonalEnrollmentProviderData::OauthFile {
+                preset,
+                access_token,
+                ..
+            } => {
+                if !matches!(preset.as_str(), "google-drive" | "icloud")
+                    || access_token.trim().is_empty()
+                {
+                    return Err(EnrollmentError::MalformedOauthFileProvider);
+                }
+                Ok(())
             }
-            Ok(())
-        }
-        EnrollmentProvider::SharedProviderGrant {
-            sync_provider_type,
-            oauth_preset,
-            joiner_identity_kind,
-            joiner_identity,
-            storage_target_id,
-        } => {
-            if sync_provider_type.trim() != "oauth-file"
-                || oauth_preset.as_deref().unwrap_or("google-drive") != "google-drive"
-                || joiner_identity_kind.trim() != "email"
-                || !is_plausible_email(joiner_identity)
-            {
-                return Err(EnrollmentError::MalformedSharedProviderGrant);
+        },
+        EnrollmentProvider::SharedProviderGrant(provider) => match provider.data() {
+            SharedEnrollmentProviderData::GoogleDrive {
+                sync_provider_type,
+                oauth_preset,
+                joiner_identity_kind,
+                joiner_identity,
+                storage_target_id,
+            } => {
+                if sync_provider_type.trim() != "oauth-file"
+                    || oauth_preset.as_deref().unwrap_or("google-drive") != "google-drive"
+                    || joiner_identity_kind.trim() != "email"
+                    || !is_plausible_email(joiner_identity)
+                {
+                    return Err(EnrollmentError::MalformedSharedProviderGrant);
+                }
+                if storage_target_id
+                    .as_deref()
+                    .is_none_or(|target| target.trim().is_empty())
+                {
+                    return Err(EnrollmentError::MalformedSharedProviderGrant);
+                }
+                Ok(())
             }
-            if storage_target_id
-                .as_deref()
-                .is_none_or(|target| target.trim().is_empty())
-            {
-                return Err(EnrollmentError::MalformedSharedProviderGrant);
+            SharedEnrollmentProviderData::ICloud { storage_target_id } => {
+                if storage_target_id.trim().is_empty()
+                    || !storage_target_id.trim().starts_with("icloud-share-v1:")
+                {
+                    return Err(EnrollmentError::MalformedSharedProviderGrant);
+                }
+                Ok(())
             }
-            Ok(())
-        }
-        EnrollmentProvider::ICloudShared { storage_target_id } => {
-            if storage_target_id.trim().is_empty()
-                || !storage_target_id.trim().starts_with("icloud-share-v1:")
-            {
-                return Err(EnrollmentError::MalformedSharedProviderGrant);
-            }
-            Ok(())
-        }
+        },
     }
 }
 
@@ -419,10 +675,10 @@ mod tests {
 
     fn github_payload() -> EnrollmentIssueInput {
         EnrollmentIssueInput {
-            provider: EnrollmentProvider::Github {
-                pat: "github_pat_11AAAAbbbbCCCC".to_owned(),
-                repo: "team-vault".to_owned(),
-            },
+            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+                "github_pat_11AAAAbbbbCCCC".to_owned(),
+                "team-vault".to_owned(),
+            )),
             entry_id: "entry-1".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         }
@@ -498,35 +754,35 @@ mod tests {
     #[test]
     fn preserves_local_provider() {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::Local,
+            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
             entry_id: "entry-local".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
         let code = encrypt_enrollment_payload(&input, "hunter2", "").unwrap();
         let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
-        assert_eq!(decrypted.provider, EnrollmentProvider::Local);
+        assert_eq!(
+            decrypted.provider,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
+        );
     }
 
     #[test]
     fn shared_provider_grant_roundtrips_without_provider_credentials() {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::SharedProviderGrant {
-                sync_provider_type: "oauth-file".to_owned(),
-                oauth_preset: Some("google-drive".to_owned()),
-                joiner_identity_kind: "email".to_owned(),
-                joiner_identity: "joiner@example.com".to_owned(),
-                storage_target_id: Some("shared-folder-abc".to_owned()),
-            },
+            provider: EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
+                "joiner@example.com".to_owned(),
+                "shared-folder-abc".to_owned(),
+            )),
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
         let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant").unwrap();
         let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
         assert_eq!(decrypted.provider, input.provider);
-        match &decrypted.provider {
-            EnrollmentProvider::SharedProviderGrant {
+        match decrypted.provider.shared_data() {
+            Some(SharedEnrollmentProviderData::GoogleDrive {
                 storage_target_id, ..
-            } => {
+            }) => {
                 assert_eq!(storage_target_id.as_deref(), Some("shared-folder-abc"));
             }
             other => panic!("expected shared grant, got {other:?}"),
@@ -540,6 +796,54 @@ mod tests {
     }
 
     #[test]
+    fn shared_typestate_wire_rejects_personal_oauth_provider_data() {
+        let provider = EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
+            "joiner@example.com".to_owned(),
+            "shared-folder-abc".to_owned(),
+        ));
+        let value = serde_json::to_value(EnrollmentProviderPayload { provider }).unwrap();
+        assert_eq!(value["provider"]["onboardingType"], "shared-provider-grant");
+        assert_eq!(
+            value["provider"]["provider"]["type"],
+            "shared-provider-grant"
+        );
+        let serialized = value.to_string();
+        assert!(!serialized.contains("access_token"));
+        assert!(!serialized.contains("refresh_token"));
+
+        let invalid = json!({
+            "provider": {
+                "onboardingType": "shared-provider-grant",
+                "provider": {
+                    "type": "oauth-file",
+                    "preset": "google-drive",
+                    "access_token": "owner-token"
+                }
+            }
+        });
+        assert!(serde_json::from_value::<EnrollmentProviderPayload>(invalid).is_err());
+    }
+
+    #[test]
+    fn legacy_oauth_wire_is_classified_as_personal_only() {
+        let legacy = json!({
+            "provider": {
+                "type": "oauth-file",
+                "preset": "google-drive",
+                "access_token": "legacy-owner-token"
+            }
+        });
+        let decoded: DecodableEnrollmentProviderPayload = serde_json::from_value(legacy).unwrap();
+        let provider = decoded.into_provider();
+        assert!(provider.shared_data().is_none());
+        assert!(matches!(
+            provider.personal_data(),
+            Some(PersonalEnrollmentProviderData::OauthFile { access_token, .. })
+                if access_token == "legacy-owner-token"
+        ));
+    }
+
+    #[test]
     fn shared_icloud_target_roundtrips_without_provider_credentials() {
         let storage_target_id = concat!(
             "icloud-share-v1:",
@@ -547,9 +851,9 @@ mod tests {
         )
         .to_owned();
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::ICloudShared {
-                storage_target_id: storage_target_id.clone(),
-            },
+            provider: EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
+                storage_target_id.clone(),
+            )),
             entry_id: "entry-icloud-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -563,13 +867,13 @@ mod tests {
     #[test]
     fn shared_provider_grant_rejects_missing_storage_target_id() {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::SharedProviderGrant {
-                sync_provider_type: "oauth-file".to_owned(),
-                oauth_preset: Some("google-drive".to_owned()),
-                joiner_identity_kind: "email".to_owned(),
-                joiner_identity: "joiner@example.com".to_owned(),
-                storage_target_id: None,
-            },
+            provider: EnrollmentProvider::shared(SharedEnrollmentProvider::legacy_google_drive(
+                "oauth-file".to_owned(),
+                Some("google-drive".to_owned()),
+                "email".to_owned(),
+                "joiner@example.com".to_owned(),
+                None,
+            )),
             entry_id: "entry-shared-legacy".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -582,15 +886,15 @@ mod tests {
     #[test]
     fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::OauthFile {
-                preset: "google-drive".to_owned(),
-                access_token: "ya29.secret".to_owned(),
-                refresh_token: Some("refresh.secret".to_owned()),
-                expires_at: Some("2026-07-09T00:00:00Z".to_owned()),
-                file_id: Some("drive-file-id".to_owned()),
-                file_name: Some("nook-backup.yaml".to_owned()),
-                account_email: Some("owner@example.com".to_owned()),
-            },
+            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
+                "google-drive".to_owned(),
+                "ya29.secret".to_owned(),
+                Some("refresh.secret".to_owned()),
+                Some("2026-07-09T00:00:00Z".to_owned()),
+                Some("drive-file-id".to_owned()),
+                Some("nook-backup.yaml".to_owned()),
+                Some("owner@example.com".to_owned()),
+            )),
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -605,15 +909,15 @@ mod tests {
     #[test]
     fn malformed_oauth_file_provider_has_provider_specific_error() {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::OauthFile {
-                preset: "unsupported".to_owned(),
-                access_token: String::new(),
-                refresh_token: None,
-                expires_at: None,
-                file_id: None,
-                file_name: None,
-                account_email: None,
-            },
+            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
+                "unsupported".to_owned(),
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )),
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -626,13 +930,13 @@ mod tests {
     #[test]
     fn shared_provider_grant_rejects_unsupported_identity() {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::SharedProviderGrant {
-                sync_provider_type: "github".to_owned(),
-                oauth_preset: None,
-                joiner_identity_kind: "email".to_owned(),
-                joiner_identity: "joiner@example.com".to_owned(),
-                storage_target_id: None,
-            },
+            provider: EnrollmentProvider::shared(SharedEnrollmentProvider::legacy_google_drive(
+                "github".to_owned(),
+                None,
+                "email".to_owned(),
+                "joiner@example.com".to_owned(),
+                None,
+            )),
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
