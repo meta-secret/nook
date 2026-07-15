@@ -142,6 +142,13 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&nonce=test-nonce&scopes=vault-access,password-filling`,
   )
+  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('unlock-vault-btn').click()
+  await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(page.getByRole('alert')).toContainText(
     'The extension did not accept the Simple Vault pairing grant.',
