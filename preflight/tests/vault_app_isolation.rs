@@ -205,12 +205,20 @@ fn development_and_release_wasm_build_modes_stay_separate() {
 }
 
 #[test]
-fn development_cloudflare_deploy_publishes_only_the_landing_root() {
+fn development_cloudflare_deploy_preserves_isolated_origins() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     for required in [
-        "CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site",
+        "deploy nokey-sh main nook-app/nook-web/nook-web-app/dist/site",
+        "deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist",
+        "deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist",
+        "CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh",
+        "CI_MAIN_SENTINEL_DOMAIN: sentinel.dev.nokey.sh",
+        "simple_pages_host=\"development.nokey-simple.pages.dev\"",
+        "sentinel_pages_host=\"development.nokey-sentinel.pages.dev\"",
         "grep -Fq '<title>Nook — Keys, not accounts</title>'",
+        "grep -Fq '<meta name=\"nook-app-kind\" content=\"simple\"'",
+        "grep -Fq '<meta name=\"nook-app-kind\" content=\"sentinel\"'",
         "zones/$zone_id/purge_cache",
         "https://$DEV_DOMAIN/site/",
         "https://$DEV_DOMAIN/simple/",
@@ -218,16 +226,19 @@ fn development_cloudflare_deploy_publishes_only_the_landing_root() {
         "[ \"$site_status\" = \"404\" ]",
         "[ \"$simple_status\" = \"404\" ]",
         "[ \"$sentinel_status\" = \"404\" ]",
+        "[ \"$simple_extension_status\" = \"200\" ]",
+        "[ \"$sentinel_extension_status\" = \"404\" ]",
     ] {
         assert!(
             main.contains(required),
-            "main development deployment is missing landing-only invariant: {required}"
+            "main development deployment is missing isolation invariant: {required}"
         );
     }
     assert!(
-        !main.contains("VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}")
-            && !main.contains("VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}"),
-        "the development deployment must preserve the landing site's production canonical URLs"
+        main.contains("VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}")
+            && main.contains("VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}")
+            && main.contains("VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}"),
+        "development artifacts must embed their stable isolated channel origins"
     );
 
     let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
@@ -419,7 +430,7 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     }
 
     let main = read(&root, ".github/workflows/main.yml");
-    assert!(main.contains("run: task ci:main "));
+    assert!(main.contains("          task ci:main\n"));
     for retired in ["ci:main:publish", "PUSH_TOOLCHAIN", "TOOLCHAIN_REGISTRY"] {
         assert!(
             !main.contains(retired),

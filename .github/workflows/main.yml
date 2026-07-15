@@ -31,7 +31,10 @@ concurrency:
 env:
   CI_MAIN_DEV_DOMAIN: dev.nokey.sh
   CI_MAIN_DEV_URL: https://dev.nokey.sh
-  CI_MAIN_CF_PAGES_PROJECT: nokey-sh
+  CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh
+  CI_MAIN_SIMPLE_URL: https://simple.dev.nokey.sh
+  CI_MAIN_SENTINEL_DOMAIN: sentinel.dev.nokey.sh
+  CI_MAIN_SENTINEL_URL: https://sentinel.dev.nokey.sh
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
 
@@ -55,53 +58,76 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
 
       - name: Preflight, check, build, and e2e
-        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
+        run: >-
+          task ci:main
+          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
+          WASM_BUILD_MODE=dev
         env:
           CI: true
           GIT_COMMIT_ID: ${{ github.sha }}
 
-      - name: Deploy development to Cloudflare Pages
+      - name: Deploy isolated development applications to Cloudflare Pages
         id: deploy-dev
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-          CF_PAGES_BRANCH: main
-          CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site
-          CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
-          CF_PAGES_PRODUCTION_BRANCH: main
         run: |
-          # ci:main prepared the sealed image; deploy it without a second setup/bake.
-          set +e
-          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
-          status=$?
-          set -e
-          echo "$out"
-          if [ "$status" -ne 0 ]; then
-            echo "::error::Cloudflare development deploy failed (exit $status)"
-            exit "$status"
-          fi
-          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
-          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
-          if [ -z "$url" ]; then
-            echo "::error::Cloudflare development deploy succeeded but did not emit deploy URL"
-            exit 1
-          fi
-          echo "pages_url=$url" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          deploy() {
+            project="$1"
+            branch="$2"
+            dist="$3"
+            output="$4"
+            label="$5"
+            set +e
+            out="$(CF_PAGES_PROJECT_NAME="$project" CF_PAGES_PRODUCTION_BRANCH=main CF_PAGES_BRANCH="$branch" CF_PAGES_DIST_DIR="$dist" task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
+            status=$?
+            set -e
+            echo "$out"
+            if [ "$status" -ne 0 ]; then
+              echo "::error::$label development deploy failed (exit $status)"
+              exit "$status"
+            fi
+            clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
+            url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+            if [ -z "$url" ]; then
+              echo "::error::$label development deploy did not emit a URL"
+              exit 1
+            fi
+            echo "$output=$url" >> "$GITHUB_OUTPUT"
+          }
 
-      - name: Verify dev.nokey.sh on Cloudflare Pages
+          # Keep the public site's production branch as Main. Vault apps use a stable
+          # non-production branch alias so production and development stay isolated.
+          deploy nokey-sh main nook-app/nook-web/nook-web-app/dist/site site_pages_url Site
+          deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist simple_pages_url Simple
+          deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist sentinel_pages_url Sentinel
+
+      - name: Configure and verify isolated development domains
         id: configure-dev-domain
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-          CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
           DEV_DOMAIN: ${{ env.CI_MAIN_DEV_DOMAIN }}
-          PAGES_URL: ${{ steps.deploy-dev.outputs.pages_url }}
+          SIMPLE_DOMAIN: ${{ env.CI_MAIN_SIMPLE_DOMAIN }}
+          SENTINEL_DOMAIN: ${{ env.CI_MAIN_SENTINEL_DOMAIN }}
+          SITE_PAGES_URL: ${{ steps.deploy-dev.outputs.site_pages_url }}
+          SIMPLE_PAGES_URL: ${{ steps.deploy-dev.outputs.simple_pages_url }}
+          SENTINEL_PAGES_URL: ${{ steps.deploy-dev.outputs.sentinel_pages_url }}
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$DEV_DOMAIN"
-          test -n "$PAGES_URL"
+          test -n "$SIMPLE_DOMAIN"
+          test -n "$SENTINEL_DOMAIN"
+          test -n "$SITE_PAGES_URL"
+          test -n "$SIMPLE_PAGES_URL"
+          test -n "$SENTINEL_PAGES_URL"
 
           api() {
             curl -fsS \
@@ -119,36 +145,47 @@ jobs:
             printf '%s' "$response"
           }
 
-          pages_host="$(
-            node -e 'const host = new URL(process.argv[1]).hostname.split("."); if (host.length > 3) host.shift(); console.log(host.join("."));' "$PAGES_URL"
-          )"
-          zone_name="${DEV_DOMAIN#*.}"
-          echo "Cloudflare Pages host: $pages_host"
-          echo "Cloudflare zone: $zone_name"
+          site_pages_host="$(node -e 'const p = new URL(process.argv[1]).hostname.split("."); if (p.length > 3) p.shift(); console.log(p.join("."));' "$SITE_PAGES_URL")"
+          simple_pages_host="development.nokey-simple.pages.dev"
+          sentinel_pages_host="development.nokey-sentinel.pages.dev"
+          zone_name="nokey.sh"
+          zone_id="$(api_json "https://api.cloudflare.com/client/v4/zones?name=$zone_name" | jq -er '.result[0].id')"
 
-          domain_json="$(api_json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PAGES_PROJECT_NAME/domains")"
-          domain_exists="$(printf '%s' "$domain_json" | jq -r --arg name "$DEV_DOMAIN" '[.result[]? | select(.name == $name)] | length')"
-          if [ "$domain_exists" = "0" ]; then
-            api_json -X POST \
-              --data "$(jq -nc --arg name "$DEV_DOMAIN" '{name: $name}')" \
-              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PAGES_PROJECT_NAME/domains" >/dev/null
-          fi
+          attach_domain() {
+            project="$1"
+            domain="$2"
+            domains="$(api_json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains")"
+            exists="$(printf '%s' "$domains" | jq -r --arg name "$domain" '[.result[]? | select(.name == $name)] | length')"
+            if [ "$exists" = "0" ]; then
+              api_json -X POST \
+                --data "$(jq -nc --arg name "$domain" '{name: $name}')" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains" >/dev/null
+            fi
+          }
 
-          zone_id="$(
-            api_json "https://api.cloudflare.com/client/v4/zones?name=$zone_name" \
-              | jq -er '.result[0].id'
-          )"
-          records_json="$(
-            api_json "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$DEV_DOMAIN"
-          )"
-          record_ok="$(
-            printf '%s' "$records_json" \
-              | jq -r --arg content "$pages_host" '[.result[]? | select(.type == "CNAME" and .content == $content)] | length'
-          )"
-          if [ "$record_ok" = "0" ]; then
-            echo "::error::Missing Cloudflare DNS record: create proxied CNAME $DEV_DOMAIN -> $pages_host"
-            exit 1
-          fi
+          ensure_cname() {
+            domain="$1"
+            target="$2"
+            records="$(api_json "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$domain")"
+            record_id="$(printf '%s' "$records" | jq -r '.result[0].id // empty')"
+            body="$(jq -nc --arg name "$domain" --arg content "$target" '{type: "CNAME", name: $name, content: $content, ttl: 1, proxied: true}')"
+            if [ -n "$record_id" ]; then
+              current_ok="$(printf '%s' "$records" | jq -r --arg content "$target" '.result[0] | .type == "CNAME" and .content == $content and .proxied == true')"
+              if [ "$current_ok" != true ]; then
+                api_json -X PUT --data "$body" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" >/dev/null
+              fi
+            else
+              api_json -X POST --data "$body" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" >/dev/null
+            fi
+          }
+
+          # Pages must know each hostname before DNS points a branch-specific custom domain at it.
+          attach_domain nokey-sh "$DEV_DOMAIN"
+          attach_domain nokey-simple "$SIMPLE_DOMAIN"
+          attach_domain nokey-sentinel "$SENTINEL_DOMAIN"
+          ensure_cname "$DEV_DOMAIN" "$site_pages_host"
+          ensure_cname "$SIMPLE_DOMAIN" "$simple_pages_host"
+          ensure_cname "$SENTINEL_DOMAIN" "$sentinel_pages_host"
 
           purge_body="$(
             jq -nc \
@@ -158,11 +195,16 @@ jobs:
               --arg sentinel "https://$DEV_DOMAIN/sentinel/" \
               --arg app "https://$DEV_DOMAIN/app/" \
               --arg extension "https://$DEV_DOMAIN/extension-connect.html" \
-              '{files: [$root, $site, $simple, $sentinel, $app, $extension]}'
+              --arg simple_root "https://$SIMPLE_DOMAIN/" \
+              --arg simple_extension "https://$SIMPLE_DOMAIN/extension-connect" \
+              --arg sentinel_root "https://$SENTINEL_DOMAIN/" \
+              --arg sentinel_extension "https://$SENTINEL_DOMAIN/extension-connect" \
+              '{files: [$root, $site, $simple, $sentinel, $app, $extension, $simple_root, $simple_extension, $sentinel_root, $sentinel_extension]}'
           )"
 
           root_body="$(mktemp)"
-          trap 'rm -f "$root_body"' EXIT
+          headers="$(mktemp)"
+          trap 'rm -f "$root_body" "$headers"' EXIT
           verified=false
           for attempt in $(seq 1 30); do
             # The custom hostname can still point at the previous Pages
@@ -180,30 +222,65 @@ jobs:
             sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/sentinel/" || true)"
             app_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/app/" || true)"
             extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/extension-connect.html" || true)"
+            site_ok=false
             if [ "$root_status" = "200" ] \
               && grep -Fq '<title>Nook — Keys, not accounts</title>' "$root_body" \
+              && grep -Fq "https://$SIMPLE_DOMAIN/" "$root_body" \
+              && grep -Fq "https://$SENTINEL_DOMAIN/" "$root_body" \
               && [ "$site_status" = "404" ] \
               && [ "$simple_status" = "404" ] \
               && [ "$sentinel_status" = "404" ] \
               && [ "$app_status" = "404" ] \
               && [ "$extension_status" = "404" ]; then
+              site_ok=true
+            fi
+
+            simple_root_status="$(curl -sS -D "$headers" -o "$root_body" -w '%{http_code}' "https://$SIMPLE_DOMAIN/" || true)"
+            simple_extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$SIMPLE_DOMAIN/extension-connect" || true)"
+            simple_ok=false
+            if [ "$simple_root_status" = "200" ] \
+              && grep -Fq '<meta name="nook-app-kind" content="simple"' "$root_body" \
+              && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+              && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+              && [ "$simple_extension_status" = "200" ]; then
+              simple_ok=true
+            fi
+
+            sentinel_root_status="$(curl -sS -D "$headers" -o "$root_body" -w '%{http_code}' "https://$SENTINEL_DOMAIN/" || true)"
+            sentinel_extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$SENTINEL_DOMAIN/extension-connect" || true)"
+            sentinel_ok=false
+            if [ "$sentinel_root_status" = "200" ] \
+              && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$root_body" \
+              && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+              && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+              && [ "$sentinel_extension_status" = "404" ]; then
+              sentinel_ok=true
+            fi
+
+            if [ "$site_ok" = true ] && [ "$simple_ok" = true ] && [ "$sentinel_ok" = true ]; then
               verified=true
               break
             fi
-            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status, /simple/=$simple_status, /sentinel/=$sentinel_status, /app/=$app_status, /extension-connect.html=$extension_status)"
+            echo "Waiting for isolated development domains (attempt $attempt/30; site=$root_status/$site_status/$simple_status/$sentinel_status/$app_status/$extension_status, simple=$simple_root_status/$simple_extension_status, sentinel=$sentinel_root_status/$sentinel_extension_status)"
             sleep 10
           done
           if [ "$verified" != true ]; then
-            echo "::error::dev.nokey.sh must serve only the landing page at /"
+            echo "::error::Development domains must serve isolated landing, Simple, and Sentinel applications"
             exit 1
           fi
           echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
+          echo "simple_url=https://$SIMPLE_DOMAIN/" >> "$GITHUB_OUTPUT"
+          echo "sentinel_url=https://$SENTINEL_DOMAIN/" >> "$GITHUB_OUTPUT"
 
       - name: Record development deployment
         uses: actions/github-script@v9
         env:
           DEV_URL: ${{ steps.configure-dev-domain.outputs.dev_url }}
-          PAGES_URL: ${{ steps.deploy-dev.outputs.pages_url }}
+          SIMPLE_URL: ${{ steps.configure-dev-domain.outputs.simple_url }}
+          SENTINEL_URL: ${{ steps.configure-dev-domain.outputs.sentinel_url }}
+          SITE_PAGES_URL: ${{ steps.deploy-dev.outputs.site_pages_url }}
+          SIMPLE_PAGES_URL: ${{ steps.deploy-dev.outputs.simple_pages_url }}
+          SENTINEL_PAGES_URL: ${{ steps.deploy-dev.outputs.sentinel_pages_url }}
         with:
           script: |
             const deployment = await github.rest.repos.createDeployment({
@@ -218,7 +295,11 @@ jobs:
               description: 'Development channel',
               payload: {
                 dev_url: process.env.DEV_URL,
-                pages_url: process.env.PAGES_URL,
+                simple_url: process.env.SIMPLE_URL,
+                sentinel_url: process.env.SENTINEL_URL,
+                site_pages_url: process.env.SITE_PAGES_URL,
+                simple_pages_url: process.env.SIMPLE_PAGES_URL,
+                sentinel_pages_url: process.env.SENTINEL_PAGES_URL,
               },
             })
 

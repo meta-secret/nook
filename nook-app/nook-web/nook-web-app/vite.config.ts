@@ -12,6 +12,10 @@ import {
 
 const viteBase =
   typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
+const simpleAppUrl =
+  process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
+const sentinelAppUrl =
+  process.env.VITE_SENTINEL_APP_URL?.trim() || 'https://sentinel.nokey.sh'
 
 const COMMON_APP_SPA_PATHS = new Set([
   '/app-logs',
@@ -34,6 +38,18 @@ const STATIC_NOT_FOUND_DOCUMENT = `<!doctype html>
   </body>
 </html>
 `
+
+/** Point landing calls-to-action at the vault apps in the same deployment channel. */
+function deploymentChannelLinks(): Plugin {
+  return {
+    name: 'deployment-channel-links',
+    transformIndexHtml(html) {
+      return html
+        .replaceAll('https://simple.nokey.sh', simpleAppUrl)
+        .replaceAll('https://sentinel.nokey.sh', sentinelAppUrl)
+    },
+  }
+}
 
 function routeSpaRequestsToApp(
   server: ViteDevServer | PreviewServer,
@@ -180,6 +196,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       tailwindcss(),
       svelte(),
+      deploymentChannelLinks(),
       spaFallback(appKind, outputDirectory),
       seoStaticFiles(outputDirectory),
     ],

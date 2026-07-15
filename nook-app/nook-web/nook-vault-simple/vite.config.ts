@@ -5,6 +5,9 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig, type Plugin } from "vitest/config";
 import { vaultAppHeaders } from "../nook-web-shared/src/vault-app/security-headers";
 
+const simpleAppUrl =
+  process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
+
 const spaPaths = new Set([
   "/app-logs",
   "/extension-connect",
@@ -50,9 +53,8 @@ export default defineConfig({
   define: {
     __NOOK_APP_KIND__: JSON.stringify("simple"),
     __NOOK_WASM_APPLICATION__: JSON.stringify("simple"),
-    "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(
-      "https://simple.nokey.sh",
-    ),
+    "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(simpleAppUrl),
+    "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
   },
   publicDir: new URL("../nook-web-app/public", import.meta.url).pathname,
   plugins: [tailwindcss(), svelte(), simpleSpa()],
