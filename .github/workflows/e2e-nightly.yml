@@ -22,9 +22,13 @@ jobs:
   sync-live:
     name: Live sync (${{ matrix.provider }})
     runs-on: ubuntu-latest
+    env:
+      NOOK_GITHUB_E2E_REPO: nook-e2e-nightly-${{ matrix.provider }}-${{ github.run_id }}
     concurrency:
       group: e2e-nightly-${{ matrix.provider }}
-      cancel-in-progress: false
+      # A newer provider run supersedes the live-sync build, but this job-level
+      # group deliberately leaves an already-running ci-fix agent alone.
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
@@ -44,10 +48,27 @@ jobs:
           NOOK_E2E_SYNC_PROVIDER: ${{ matrix.provider }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GOOGLE_E2E_ACCESS_TOKEN: ${{ secrets.NOOK_GOOGLE_E2E_ACCESS_TOKEN }}
-          NOOK_GITHUB_E2E_REPO: nook-e2e-nightly-${{ matrix.provider }}-${{ github.run_id }}
           NOOK_GITHUB_POLL_MS: '3000'
           NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
+
+      # `cancel-in-progress` interrupts the test container before its in-container
+      # deferred cleanup can run. Delete the known per-run repository from a
+      # separate always-run step so cancellation cannot leak live test repos.
+      - name: Clean up live-sync test repository
+        if: always()
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          script: |
+            const repo = process.env.NOOK_GITHUB_E2E_REPO
+            try {
+              await github.rest.repos.delete({ owner: context.repo.owner, repo })
+              core.info(`Deleted live-sync test repository: ${repo}`)
+            } catch (error) {
+              if (error.status !== 404) throw error
+              core.info(`Live-sync test repository already absent: ${repo}`)
+            }
 
   ci-fix:
     name: AI fix, PR, and merge

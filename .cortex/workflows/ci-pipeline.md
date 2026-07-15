@@ -37,6 +37,26 @@ flowchart LR
   cleanup --> docker_prune["docker system prune --volumes"]
 ```
 
+## Workflow concurrency policy
+
+Cancellation is scoped to work that a newer run actually supersedes. In
+particular, PR validation uses `pr-<number>`: a new commit cancels the older run
+for that PR, while separate PRs continue to receive independent required checks.
+Do not replace this with one global PR group; that would leave older PRs with a
+cancelled required check whenever another contributor pushes.
+
+| Workflow | Concurrency scope | Cancel active run? | Reason |
+| --- | --- | --- | --- |
+| PR | PR number | Yes | Only the newest commit on the same PR needs validation |
+| Main | `main` | Yes | A newer main deployment supersedes the older development deployment |
+| Manual PR e2e | PR number + suite | Yes | A repeated run of the same suite supersedes its older debug build |
+| Web research | PR number or ref | Yes | Keep only the newest build for the same preview or branch |
+| Nightly live sync | Provider job | Yes | Replace a superseded live-sync build without interrupting an active `ci-fix` job |
+| CI agent smoke | Global smoke group | Yes | Only the newest smoke result matters |
+| Agent implement | Issue number; manual runs are unique | No | It may already have pushed a branch or opened a PR |
+| Production release | Global production release group | No | Serialize stateful publication without interrupting a deploy |
+| Runner cleanup | Global cleanup group | No | Let an active Docker prune finish safely |
+
 ## Production release strategy
 
 Production releases use immutable semantic-version tags. The tag records the

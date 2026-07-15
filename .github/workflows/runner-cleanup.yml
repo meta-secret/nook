@@ -13,6 +13,7 @@ permissions:
 
 concurrency:
   group: runner-cleanup
+  # Let an active Docker prune finish instead of interrupting runner maintenance mid-operation.
   cancel-in-progress: false
 
 jobs:
