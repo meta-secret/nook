@@ -100,6 +100,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
 
 test('keeps extension routing and local session behavior app-specific', async ({
   page,
+  browser,
 }, testInfo) => {
   const isSimple = testInfo.project.name === 'simple-isolation'
   const extensionResponse = await page.request.get('/extension-connect')
@@ -115,16 +116,23 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await createLocalVaultOnLogin(page, 'Isolated Simple vault')
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 
-  const extensionDevice = await page.evaluate(async () => {
+  const extensionContext = await browser.newContext()
+  const extensionPage = await extensionContext.newPage()
+  await extensionPage.goto(new URL(page.url()).origin)
+  await expect(
+    extensionPage.getByTestId('login-create-vault-chooser'),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const extensionDevice = await extensionPage.evaluate(async () => {
     const manager = (window as Window & { __nookVault?: DebugVault })
       .__nookVault?.manager
-    if (!manager) throw new Error('Vault manager unavailable')
+    if (!manager) throw new Error('Extension device manager unavailable')
     return {
       deviceId: manager.deviceId,
       devicePublicKey: manager.devicePublicKey,
       deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
     }
   })
+  await extensionContext.close()
   await page.addInitScript(() => {
     Object.defineProperty(window, 'chrome', {
       configurable: true,
@@ -150,7 +158,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
     timeout: UI_TIMEOUT_MS,
   })
   await page.getByTestId('approve-extension-device-btn').click()
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(
+    page.getByTestId('extension-connect-consent').getByRole('alert'),
+  ).toContainText(
     'The extension did not accept the Simple Vault pairing grant.',
   )
   await expect(page.getByTestId('extension-connect-approved')).toHaveCount(0)
