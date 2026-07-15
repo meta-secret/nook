@@ -211,8 +211,13 @@ fn development_cloudflare_deploy_publishes_only_the_landing_root() {
     for required in [
         "CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site",
         "grep -Fq '<title>Nook — Keys, not accounts</title>'",
+        "zones/$zone_id/purge_cache",
         "https://$DEV_DOMAIN/site/",
+        "https://$DEV_DOMAIN/simple/",
+        "https://$DEV_DOMAIN/sentinel/",
         "[ \"$site_status\" = \"404\" ]",
+        "[ \"$simple_status\" = \"404\" ]",
+        "[ \"$sentinel_status\" = \"404\" ]",
     ] {
         assert!(
             main.contains(required),

@@ -150,23 +150,42 @@ jobs:
             exit 1
           fi
 
+          # A previous artifact may have cached an SPA fallback for these paths.
+          # Purge the public URLs so this deployment's landing-only routing is
+          # observable immediately instead of after the old cache TTL expires.
+          purge_body="$(
+            jq -nc \
+              --arg root "https://$DEV_DOMAIN/" \
+              --arg site "https://$DEV_DOMAIN/site/" \
+              --arg simple "https://$DEV_DOMAIN/simple/" \
+              --arg sentinel "https://$DEV_DOMAIN/sentinel/" \
+              '{files: [$root, $site, $simple, $sentinel]}'
+          )"
+          api_json -X POST \
+            --data "$purge_body" \
+            "https://api.cloudflare.com/client/v4/zones/$zone_id/purge_cache" >/dev/null
+
           root_body="$(mktemp)"
           trap 'rm -f "$root_body"' EXIT
           verified=false
           for attempt in $(seq 1 30); do
             root_status="$(curl -sS -o "$root_body" -w '%{http_code}' "https://$DEV_DOMAIN/" || true)"
             site_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/site/" || true)"
+            simple_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/simple/" || true)"
+            sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/sentinel/" || true)"
             if [ "$root_status" = "200" ] \
               && grep -Fq '<title>Nook — Keys, not accounts</title>' "$root_body" \
-              && [ "$site_status" = "404" ]; then
+              && [ "$site_status" = "404" ] \
+              && [ "$simple_status" = "404" ] \
+              && [ "$sentinel_status" = "404" ]; then
               verified=true
               break
             fi
-            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status)"
+            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status, /simple/=$simple_status, /sentinel/=$sentinel_status)"
             sleep 10
           done
           if [ "$verified" != true ]; then
-            echo "::error::dev.nokey.sh must serve the landing page at / and return 404 for /site/"
+            echo "::error::dev.nokey.sh must serve only the landing page at /"
             exit 1
           fi
           echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
