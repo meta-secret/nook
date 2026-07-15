@@ -53,6 +53,17 @@ const expectedLegacyRoutes = [
   '/simple/*',
   '/sentinel',
   '/sentinel/*',
+  '/app',
+  '/app/*',
+  '/app-logs',
+  '/app-logs/*',
+  '/app-logs.html',
+  '/logs',
+  '/logs/*',
+  '/logs.html',
+  '/extension-connect',
+  '/extension-connect/*',
+  '/extension-connect.html',
 ]
 const pagesRoutes = JSON.parse(
   await readFile(join(siteRoot, '_routes.json'), 'utf8'),
@@ -90,6 +101,14 @@ for (const path of [
   '/site/deep/link',
   '/simple/',
   '/sentinel/deep/link',
+  '/app/',
+  '/app/deep/link',
+  '/app-logs',
+  '/app-logs.html',
+  '/logs/deep/link',
+  '/logs.html',
+  '/extension-connect',
+  '/extension-connect.html',
 ]) {
   const response = await pagesWorker.fetch(
     new Request(`https://dev.nokey.sh${path}`),

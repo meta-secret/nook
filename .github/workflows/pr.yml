@@ -111,16 +111,20 @@ jobs:
             site_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/site/" || true)"
             simple_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/simple/deep/link" || true)"
             sentinel_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/sentinel/" || true)"
+            app_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/app/" || true)"
+            alias_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/extension-connect.html" || true)"
             cache_control="$({ curl --connect-timeout 3 --max-time 5 -sS -D - -o /dev/null "$url/site/" || true; } | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol:[[:space:]]*//p' | tail -1)"
             if [ "$root_status" = "200" ] \
               && [ "$site_status" = "404" ] \
               && [ "$simple_status" = "404" ] \
               && [ "$sentinel_status" = "404" ] \
+              && [ "$app_status" = "404" ] \
+              && [ "$alias_status" = "404" ] \
               && printf '%s' "$cache_control" | grep -Fq 'no-store'; then
               verified=true
               break
             fi
-            echo "Waiting for production-shaped preview (attempt $attempt/12; root=$root_status, /site/=$site_status, /simple/deep/link=$simple_status, /sentinel/=$sentinel_status, cache-control=$cache_control)"
+            echo "Waiting for production-shaped preview (attempt $attempt/12; root=$root_status, /site/=$site_status, /simple/deep/link=$simple_status, /sentinel/=$sentinel_status, /app/=$app_status, /extension-connect.html=$alias_status, cache-control=$cache_control)"
             sleep 5
           done
           if [ "$verified" != true ]; then

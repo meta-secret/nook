@@ -156,7 +156,9 @@ jobs:
               --arg site "https://$DEV_DOMAIN/site/" \
               --arg simple "https://$DEV_DOMAIN/simple/" \
               --arg sentinel "https://$DEV_DOMAIN/sentinel/" \
-              '{files: [$root, $site, $simple, $sentinel]}'
+              --arg app "https://$DEV_DOMAIN/app/" \
+              --arg extension "https://$DEV_DOMAIN/extension-connect.html" \
+              '{files: [$root, $site, $simple, $sentinel, $app, $extension]}'
           )"
 
           root_body="$(mktemp)"
@@ -176,15 +178,19 @@ jobs:
             site_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/site/" || true)"
             simple_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/simple/" || true)"
             sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/sentinel/" || true)"
+            app_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/app/" || true)"
+            extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/extension-connect.html" || true)"
             if [ "$root_status" = "200" ] \
               && grep -Fq '<title>Nook — Keys, not accounts</title>' "$root_body" \
               && [ "$site_status" = "404" ] \
               && [ "$simple_status" = "404" ] \
-              && [ "$sentinel_status" = "404" ]; then
+              && [ "$sentinel_status" = "404" ] \
+              && [ "$app_status" = "404" ] \
+              && [ "$extension_status" = "404" ]; then
               verified=true
               break
             fi
-            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status, /simple/=$simple_status, /sentinel/=$sentinel_status)"
+            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status, /simple/=$simple_status, /sentinel/=$sentinel_status, /app/=$app_status, /extension-connect.html=$extension_status)"
             sleep 10
           done
           if [ "$verified" != true ]; then
