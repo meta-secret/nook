@@ -35,6 +35,7 @@ tasks:
         -e CLOUDFLARE_API_TOKEN
         -e CLOUDFLARE_ACCOUNT_ID
         -e CF_PAGES_BRANCH
+        -e CF_PAGES_DIST_DIR
         -e CF_PAGES_PROJECT_NAME
         -e CF_PAGES_PRODUCTION_BRANCH
         -e GITHUB_TOKEN

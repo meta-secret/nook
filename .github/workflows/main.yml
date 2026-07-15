@@ -55,7 +55,7 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
 
       - name: Preflight, check, build, and e2e
-        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
+        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} WASM_BUILD_MODE=dev
         env:
           CI: true
           GIT_COMMIT_ID: ${{ github.sha }}
@@ -66,6 +66,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CF_PAGES_BRANCH: main
+          CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site
           CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
           CF_PAGES_PRODUCTION_BRANCH: main
         run: |
@@ -149,7 +150,25 @@ jobs:
             exit 1
           fi
 
-          curl --retry 30 --retry-all-errors --retry-delay 10 -fsSI "https://$DEV_DOMAIN/" >/dev/null
+          root_body="$(mktemp)"
+          trap 'rm -f "$root_body"' EXIT
+          verified=false
+          for attempt in $(seq 1 30); do
+            root_status="$(curl -sS -o "$root_body" -w '%{http_code}' "https://$DEV_DOMAIN/" || true)"
+            site_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEV_DOMAIN/site/" || true)"
+            if [ "$root_status" = "200" ] \
+              && grep -Fq '<title>Nook — Keys, not accounts</title>' "$root_body" \
+              && [ "$site_status" = "404" ]; then
+              verified=true
+              break
+            fi
+            echo "Waiting for landing-only deployment (attempt $attempt/30; root=$root_status, /site/=$site_status)"
+            sleep 10
+          done
+          if [ "$verified" != true ]; then
+            echo "::error::dev.nokey.sh must serve the landing page at / and return 404 for /site/"
+            exit 1
+          fi
           echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
 
       - name: Record development deployment

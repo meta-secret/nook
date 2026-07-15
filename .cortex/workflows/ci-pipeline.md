@@ -273,8 +273,11 @@ persistent self-hosted `nook` runner, so the Rust target and other local BuildKi
 layers survive the PR -> main -> release chain instead of being downloaded again.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
-Main deploys the active development channel to Cloudflare Pages for
-`dev.nokey.sh` from the same prepared image, without a second setup.
+Main deploys only the `nook-web-app/dist/site` landing artifact to the active
+Cloudflare Pages development channel at `dev.nokey.sh`, from the same prepared
+image and without a second setup. The combined `dist` tree is reserved for PR
+previews and local/e2e use; `/site/`, `/simple/`, and `/sentinel/` are not public
+development routes.
 `release.yml` runs the main-equivalent gate,
 deploys an immutable semantic-version tag to GitHub Pages for the public
 `nokey.sh` site and to independent Cloudflare Pages projects for Simple and
@@ -285,13 +288,13 @@ No delivery workflow logs into GHCR for BuildKit, imports a registry cache
 manifest, or publishes cache layers. The persistent `nook` runners reuse only
 their local BuildKit content store across the PR → main → release chain. This is
 an explicit reliability boundary: cache restoration must never block validation
-on a remote blob or registry session. After the `task ci:main` gate, `main.yml`
-deploys the Cloudflare artifact with
-`VITE_SITE_URL=https://dev.nokey.sh` and
-`VITE_PUBLIC_APP_URL=https://dev.nokey.sh`, ensures the Cloudflare Pages custom
-domain exists, verifies the preconfigured Cloudflare DNS CNAME and HTTPS
-response, and records a `development` deployment status whose URL is
-`https://dev.nokey.sh/`.
+on a remote blob or registry session. The `task ci:main` gate builds the
+development artifact with `VITE_SITE_URL=https://dev.nokey.sh` and
+`VITE_PUBLIC_APP_URL=https://dev.nokey.sh`. `main.yml` then deploys only the
+landing subdirectory, ensures the Cloudflare Pages custom domain exists,
+verifies the preconfigured Cloudflare DNS CNAME, confirms that `/` serves the
+landing page while `/site/` returns `404`, and records a `development`
+deployment status whose URL is `https://dev.nokey.sh/`.
 
 **Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
 
