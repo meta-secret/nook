@@ -9,7 +9,11 @@ import {
   encryptEnrollmentPayload,
   hasActiveLocalVault,
 } from "$app-wasm";
-import type { OAuthFilePreset, StorageProvider } from "$lib/auth-providers";
+import {
+  bindGoogleDriveSharedFolder,
+  type OAuthFilePreset,
+  type StorageProvider,
+} from "$lib/auth-providers";
 import {
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
@@ -575,15 +579,10 @@ export async function issueEnrollmentCode(
         });
       }
       if (sharedStorageTargetId && selectedProvider.oauthFile) {
-        const storageTargetName =
-          grant.kind === "granted" || grant.kind === "manual-grant-required"
-            ? grant.storageTargetName
-            : undefined;
-        const updatedOauth = {
-          ...selectedProvider.oauthFile,
-          folderId: sharedStorageTargetId,
-          fileName: storageTargetName ?? selectedProvider.oauthFile.fileName,
-        };
+        const updatedOauth = bindGoogleDriveSharedFolder(
+          selectedProvider.oauthFile,
+          sharedStorageTargetId,
+        );
         enrollmentProviderRow = {
           ...selectedProvider,
           oauthFile: updatedOauth,

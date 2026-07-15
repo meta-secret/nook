@@ -1,4 +1,5 @@
 import {
+  bindGoogleDriveSharedFolder as bindGoogleDriveSharedFolderWasm,
   deleteAuthProvidersDb as deleteAuthProvidersDbWasm,
   default as initNookWasm,
   defaultDriveBackupName,
@@ -65,6 +66,16 @@ export function setGoogleDriveProviderMode(
   return setGoogleDriveProviderModeWasm(
     toPlain(config),
     mode,
+  ) as OAuthFileConfig;
+}
+
+export function bindGoogleDriveSharedFolder(
+  config: OAuthFileConfig,
+  folderRef: string,
+): OAuthFileConfig {
+  return bindGoogleDriveSharedFolderWasm(
+    toPlain(config),
+    folderRef,
   ) as OAuthFileConfig;
 }
 

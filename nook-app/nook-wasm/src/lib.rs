@@ -452,6 +452,17 @@ pub fn set_google_drive_provider_mode(
     ))?)
 }
 
+#[wasm_bindgen(js_name = bindGoogleDriveSharedFolder)]
+pub fn bind_google_drive_shared_folder(
+    config: JsValue,
+    folder_ref: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let config: nook_core::OAuthFileConfigData = serde_wasm_bindgen::from_value(config)?;
+    Ok(to_js_value(&nook_core::bind_google_drive_shared_folder(
+        &config, folder_ref,
+    )?)?)
+}
+
 #[wasm_bindgen(js_name = defaultVaultArchitecture)]
 pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
     Ok(to_js_value(&nook_core::VaultArchitecture::default())?)

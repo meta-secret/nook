@@ -82,6 +82,21 @@ pub fn set_google_drive_provider_mode(
     switched
 }
 
+/// Bind an authenticated Google Drive provider to a shared folder without
+/// discarding its current OAuth credentials. The shared folder becomes the
+/// provider target, so any stale private app-data file id is removed.
+pub fn bind_google_drive_shared_folder(
+    config: &OAuthFileConfigData,
+    folder_ref: &str,
+) -> ValidationResult<OAuthFileConfigData> {
+    let folder_id = crate::normalize_google_drive_folder_ref(folder_ref)?;
+    let mut bound = config.clone();
+    bound.drive_mode = Some(GoogleDriveMode::Shared);
+    bound.folder_id = Some(folder_id.into_inner());
+    bound.file_id = None;
+    Ok(bound)
+}
+
 /// Browser-local File System Access folder handle metadata.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1024,6 +1039,41 @@ mod tests {
         assert_eq!(switched.file_id, None);
         assert_eq!(switched.folder_id, None);
         assert_eq!(switched.file_name.as_deref(), Some("nook-events"));
+    }
+
+    #[test]
+    fn binding_shared_drive_folder_preserves_credentials_and_internal_event_name() {
+        let config = OAuthFileConfigData {
+            preset: "google-drive".to_owned(),
+            access_token: "shared-token".to_owned(),
+            refresh_token: Some("refresh".to_owned()),
+            expires_at: Some("2026-07-14T00:00:00Z".to_owned()),
+            file_id: Some("stale-appdata-file".to_owned()),
+            file_name: Some("nook-events".to_owned()),
+            account_email: Some("owner@example.com".to_owned()),
+            drive_mode: Some(GoogleDriveMode::Private),
+            folder_id: None,
+        };
+
+        let bound = bind_google_drive_shared_folder(
+            &config,
+            "https://drive.google.com/drive/folders/folder-team",
+        )
+        .unwrap();
+
+        assert_eq!(bound.drive_mode, Some(GoogleDriveMode::Shared));
+        assert_eq!(bound.folder_id.as_deref(), Some("folder-team"));
+        assert_eq!(bound.file_id, None);
+        assert_eq!(bound.access_token, "shared-token");
+        assert_eq!(bound.refresh_token.as_deref(), Some("refresh"));
+        assert_eq!(bound.file_name.as_deref(), Some("nook-events"));
+
+        let mut provider = oauth_provider("drive", "google-drive", None, "nook-events");
+        provider.oauth_file = Some(bound);
+        assert_eq!(
+            storage_args_for_provider(&provider).unwrap().repo,
+            "shared:folder-team\tnook-events"
+        );
     }
 
     #[test]
