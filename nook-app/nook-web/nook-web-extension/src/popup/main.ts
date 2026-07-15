@@ -32,9 +32,7 @@ async function main() {
     isConnectedToSimpleVault(),
   ])
   let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
-  if (!isConnected) {
-    protectionStatus = await extensionDeviceProtectionStatus()
-  }
+  protectionStatus = await extensionDeviceProtectionStatus()
 
   mount(PopupApp, {
     target,

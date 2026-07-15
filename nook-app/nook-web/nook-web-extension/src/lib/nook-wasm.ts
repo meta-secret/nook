@@ -34,6 +34,10 @@ export type ExtensionDeviceProtectionResult = {
   deviceSigningPublicKey: string
 }
 
+type ExtensionDeviceIdentityHandoff = {
+  identitySecret: string
+}
+
 export type ExtensionDeviceProtectionStatus =
   | 'missing'
   | 'plaintext'
@@ -126,6 +130,31 @@ export async function unlockExtensionPin(
     await manager.unlockPinDeviceIdentity(pin)
     return deviceResult(manager)
   })
+}
+
+async function unlockedExtensionIdentityHandoff(
+  unlock: (manager: NookVaultManager) => Promise<void>,
+): Promise<ExtensionDeviceIdentityHandoff> {
+  return withDeviceManager(async (manager) => {
+    await unlock(manager)
+    return {
+      identitySecret: manager.exportExtensionDeviceIdentityForHandoff(),
+    }
+  })
+}
+
+export function unlockExtensionPasskeyForHandoff(): Promise<ExtensionDeviceIdentityHandoff> {
+  return unlockedExtensionIdentityHandoff((manager) =>
+    manager.unlockDeviceProtectionWithPasskey(''),
+  )
+}
+
+export function unlockExtensionPinForHandoff(
+  pin: string,
+): Promise<ExtensionDeviceIdentityHandoff> {
+  return unlockedExtensionIdentityHandoff((manager) =>
+    manager.unlockPinDeviceIdentity(pin),
+  )
 }
 
 export async function generateSuggestedPassword(

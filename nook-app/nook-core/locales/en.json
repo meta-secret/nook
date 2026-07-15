@@ -1192,6 +1192,11 @@
     "recently": "recently"
   },
   "extension": {
+    "unlock": {
+      "action": "Unlock Simple Vault on this tab",
+      "open_simple_vault_first": "Open your Simple Vault tab, then try again.",
+      "handoff_failed": "The extension could not unlock this Simple Vault tab."
+    },
     "manifest": {
       "name": "Nook Passwords",
       "description": "Nook browser companion for password form detection and future autofill.",

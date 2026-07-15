@@ -7,11 +7,14 @@
     createExtensionPin,
     recoverExtensionPasskey,
     unlockExtensionPasskey,
+    unlockExtensionPasskeyForHandoff,
     unlockExtensionPin,
+    unlockExtensionPinForHandoff,
     type ExtensionDeviceMode,
     type ExtensionDeviceProtectionResult,
     type ExtensionDeviceProtectionStatus,
   } from '../lib/nook-wasm'
+  import { isRuntimeSimpleVaultUrl } from '../lib/simple-vault-runtime'
 
   type PopupProtectionStatus = ExtensionDeviceProtectionStatus | 'pin-setup'
 
@@ -59,6 +62,63 @@
         window.close()
       },
     )
+  }
+
+  type ExtensionIdentityHandoff = {
+    identitySecret: string
+  }
+
+  async function handoffToActiveSimpleVault(
+    handoff: ExtensionIdentityHandoff,
+  ): Promise<void> {
+    const tab = await new Promise<chrome.tabs.Tab | undefined>((resolve) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        resolve(tabs[0])
+      })
+    })
+    if (!tab?.id || !tab.url || !isRuntimeSimpleVaultUrl(tab.url)) {
+      throw new Error(i18n.t('extension.unlock.open_simple_vault_first'))
+    }
+    await new Promise<void>((resolve, reject) => {
+      chrome.tabs.sendMessage(
+        tab.id!,
+        {
+          type: 'nook:extension-device-identity-handoff',
+          payload: handoff,
+        },
+        (response: { ok?: boolean } | undefined) => {
+          const runtimeError = chrome.runtime.lastError?.message
+          if (runtimeError) {
+            reject(new Error(runtimeError))
+            return
+          }
+          if (response?.ok === true) {
+            resolve()
+            return
+          }
+          reject(new Error(i18n.t('extension.unlock.handoff_failed')))
+        },
+      )
+    })
+  }
+
+  function unlockConnectedVault(): void {
+    const action =
+      status === 'pin'
+        ? () => unlockExtensionPinForHandoff(pin)
+        : unlockExtensionPasskeyForHandoff
+    void (async () => {
+      busy = true
+      error = ''
+      try {
+        await handoffToActiveSimpleVault(await action())
+        window.close()
+      } catch (caught) {
+        error = errorMessage(caught, 'extension.unlock.handoff_failed')
+      } finally {
+        busy = false
+      }
+    })()
   }
 
   function beginPairing(device: ExtensionDeviceProtectionResult): void {
@@ -145,13 +205,39 @@
 {#if isConnected}
   <main class="connected-shell">
     <NookIcon src="../icons/nook.png" alt="" class="popup-logo" />
-    <button
-      type="button"
-      data-testid="open-simple-vault-btn"
-      onclick={openSimpleVault}
-    >
-      {i18n.t('extension.setup.open_simple_vault')}
-    </button>
+    <div class="connected-actions">
+      <button
+        type="button"
+        data-testid="unlock-simple-vault-btn"
+        disabled={busy}
+        onclick={unlockConnectedVault}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('extension.unlock.action')}
+      </button>
+      <button
+        type="button"
+        class="secondary-button"
+        data-testid="open-simple-vault-btn"
+        onclick={openSimpleVault}
+      >
+        {i18n.t('extension.setup.open_simple_vault')}
+      </button>
+      {#if status === 'pin'}
+        <label for="extension-unlock-pin">
+          {i18n.t('device_protection.pin_label')}
+        </label>
+        <input
+          id="extension-unlock-pin"
+          type="password"
+          inputmode="numeric"
+          autocomplete="current-password"
+          bind:value={pin}
+          disabled={busy}
+        />
+      {/if}
+    </div>
     {#if error}
       <p class="error-message" role="alert">{error}</p>
     {/if}

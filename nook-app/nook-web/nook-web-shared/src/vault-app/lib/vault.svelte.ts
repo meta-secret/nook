@@ -1201,6 +1201,37 @@ export class VaultState {
     }
   }
 
+  async unlockWithExtensionDeviceIdentity(identitySecret: string) {
+    if (!this.manager || this.isVerifying || this.isInitializing) return;
+    this.isVerifying = true;
+    this.errorMsg = "";
+    let deviceIdentityUnlocked = false;
+    try {
+      await this.enqueueStorage(() =>
+        this.manager!.adoptExtensionDeviceIdentityForHandoff(identitySecret),
+      );
+      deviceIdentityUnlocked = true;
+      this.deviceAuthorizationInProgress = true;
+      await this.continueInitializationAfterDeviceUnlock();
+      this.deviceProtectionStatus = "unlocked";
+    } catch (error) {
+      if (this.deviceProtectionStatus === "unlocked" || deviceIdentityUnlocked) {
+        void this.lockDeviceProtection();
+      }
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : this.t("extension.unlock.handoff_failed");
+    } finally {
+      // Strings cannot be zeroized in JavaScript; dropping this reference as
+      // soon as the Rust/WASM boundary accepts it keeps the handoff ephemeral.
+      identitySecret = "";
+      this.deviceAuthorizationInProgress = false;
+      this.isVerifying = false;
+      this.isInitializing = false;
+    }
+  }
+
   async unlockPinDeviceProtection(pin: string) {
     if (!this.manager || this.isVerifying) return;
     this.isVerifying = true;

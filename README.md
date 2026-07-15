@@ -108,6 +108,9 @@ item, add a corrected copy and delete the old one.
 
 - Unlock with this browser's passkey/PIN-protected device keys, or use a backup
   password to open the encrypted local vault directly.
+- A paired Simple-only browser extension can unlock the active Simple Vault
+  tab with its already-authorized extension identity. The handoff stays in
+  memory and never enters the URL or browser history.
 - A backup-password session leaves the protected device identity and saved sync
   provider credentials locked. Authorize with the passkey or PIN when you want
   remote synchronization to resume.

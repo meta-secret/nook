@@ -1199,6 +1199,11 @@
     }
   },
   "extension": {
+    "unlock": {
+      "action": "Разблокировать Simple Vault на этой вкладке",
+      "open_simple_vault_first": "Откройте вкладку Simple Vault и повторите попытку.",
+      "handoff_failed": "Расширение не смогло разблокировать эту вкладку Simple Vault."
+    },
     "manifest": {
       "name": "Пароли Nook",
       "description": "Браузерное расширение Nook для поиска полей пароля и будущего автозаполнения.",

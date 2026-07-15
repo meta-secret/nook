@@ -45,11 +45,24 @@ export type ExtensionLocalEventLogUpdatedMessage = {
   }
 }
 
+/**
+ * A one-time, in-memory transfer from the extension's isolated world to the
+ * Simple Vault page. `identitySecret` is intentionally never serialized into
+ * a URL or browser storage.
+ */
+export type ExtensionDeviceIdentityHandoffMessage = {
+  type: 'nook:extension-device-identity-handoff'
+  payload: {
+    identitySecret: string
+  }
+}
+
 export type RuntimeMessage =
   | OpenSimpleVaultMessage
   | BeginExtensionPairingMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
+  | ExtensionDeviceIdentityHandoffMessage
 
 function isExtensionEventLogRecord(
   value: unknown,
@@ -172,5 +185,23 @@ export function isExtensionLocalEventLogUpdatedMessage(
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
     isExtensionEventLogRecords(payload.eventLogRecords)
+  )
+}
+
+export function isExtensionDeviceIdentityHandoffMessage(
+  message: unknown,
+): message is ExtensionDeviceIdentityHandoffMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-device-identity-handoff' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  return (
+    typeof payload.identitySecret === 'string' &&
+    payload.identitySecret.length > 0
   )
 }

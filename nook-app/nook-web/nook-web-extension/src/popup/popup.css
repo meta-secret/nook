@@ -33,6 +33,11 @@ body {
   color: #17201a;
 }
 
+.connected-actions {
+  display: grid;
+  gap: 8px;
+}
+
 .popup-logo {
   width: 38px;
   height: 38px;

@@ -39,6 +39,7 @@
     isExtensionConnectPath,
     type ExtensionConnectRequest,
   } from '$lib/extension-connect'
+  import { isExtensionDeviceIdentityHandoffMessage } from '$web-shared/extension/runtime-messages'
   import type { VaultItemType } from '$lib/nook'
   import { configuredVaultApplication } from '$app-wasm'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
@@ -183,6 +184,21 @@
       }
     }
     colorScheme.addEventListener('change', handleColorSchemeChange)
+    const handleExtensionDeviceIdentityHandoff = (event: MessageEvent<unknown>) => {
+      if (
+        !SUPPORTS_EXTENSION ||
+        event.source !== window ||
+        event.origin !== window.location.origin ||
+        !isExtensionDeviceIdentityHandoffMessage(event.data)
+      ) {
+        return
+      }
+      void vault.unlockWithExtensionDeviceIdentity(
+        event.data.payload.identitySecret,
+      )
+    }
+
+    window.addEventListener('message', handleExtensionDeviceIdentityHandoff)
     void vault.init()
 
     if (vault.runtimeConfig.exposeDebugHooks()) {
@@ -219,6 +235,7 @@
       void vault.lockDeviceProtection()
       window.removeEventListener('popstate', syncRoute)
       window.removeEventListener('hashchange', syncRoute)
+      window.removeEventListener('message', handleExtensionDeviceIdentityHandoff)
       colorScheme.removeEventListener('change', handleColorSchemeChange)
     }
   })

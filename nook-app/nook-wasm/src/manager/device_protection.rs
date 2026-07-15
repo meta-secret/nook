@@ -16,6 +16,50 @@ impl NookVaultManager {
         self.device.identity_private_key.zeroize();
     }
 
+    /// Export the unlocked extension identity for a single in-memory handoff to
+    /// the paired Simple Vault page. The caller must keep this value out of
+    /// durable browser storage and URLs.
+    #[wasm_bindgen(js_name = exportExtensionDeviceIdentityForHandoff)]
+    pub fn export_extension_device_identity_for_handoff(&self) -> Result<String, JsError> {
+        if self.application != nook_core::VaultApplication::Extension {
+            return Err(JsError::new(
+                "Extension device identity handoff requires the extension application capability.",
+            ));
+        }
+        Ok(self.device_identity()?.secret_string().into_inner())
+    }
+
+    /// Adopt the extension's already-unlocked identity for this in-memory
+    /// Simple Vault session. This intentionally does not write the identity to
+    /// the site's `IndexedDB`: it remains owned by the extension and is cleared
+    /// by the ordinary session lock path.
+    #[wasm_bindgen(js_name = adoptExtensionDeviceIdentityForHandoff)]
+    pub fn adopt_extension_device_identity_for_handoff(
+        &mut self,
+        mut identity_secret: String,
+    ) -> Result<(), JsError> {
+        if self.application != nook_core::VaultApplication::Simple
+            && self.application != nook_core::VaultApplication::UnifiedDevelopment
+        {
+            identity_secret.zeroize();
+            return Err(JsError::new(
+                "Extension device identity handoff requires the Simple Vault application capability.",
+            ));
+        }
+        let result = (|| -> Result<(String, String), JsError> {
+            let identity = nook_core::DeviceIdentity::from_secret_str(
+                &nook_core::DeviceIdentitySecret::parse(&identity_secret)?,
+            )?;
+            Ok((identity.device_id().to_string(), identity_secret.clone()))
+        })();
+        identity_secret.zeroize();
+        let (device_id, private_key) = result?;
+        self.device.identity_private_key.zeroize();
+        self.device.id = device_id;
+        self.device.identity_private_key = private_key;
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = deviceProtectionStatus)]
     pub async fn device_protection_status(&self) -> Result<String, JsError> {
         if !self.device.identity_private_key.is_empty() {
@@ -302,6 +346,46 @@ impl NookVaultManager {
         indexed_db::delete_device_identity_for_recovery().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NookVaultManager;
+
+    #[test]
+    fn extension_identity_handoff_is_memory_only_and_simple_only() {
+        let identity = nook_core::DeviceIdentity::generate().expect("identity");
+        let mut extension = NookVaultManager::new();
+        extension.application = nook_core::VaultApplication::Extension;
+        extension.device.id = identity.device_id().to_string();
+        extension.device.identity_private_key = identity.secret_string().into_inner();
+
+        let handoff = extension
+            .export_extension_device_identity_for_handoff()
+            .expect("extension handoff");
+
+        let mut simple = NookVaultManager::new();
+        simple.application = nook_core::VaultApplication::Simple;
+        simple
+            .adopt_extension_device_identity_for_handoff(handoff)
+            .expect("simple accepts handoff");
+        assert_eq!(simple.device.id, identity.device_id().as_str());
+        assert_eq!(
+            simple.device_identity().expect("identity").public_key(),
+            identity.public_key()
+        );
+
+        simple.lock_device_identity();
+        assert!(simple.device.identity_private_key.is_empty());
+
+        let mut sentinel = NookVaultManager::new();
+        sentinel.application = nook_core::VaultApplication::Sentinel;
+        assert!(
+            sentinel
+                .adopt_extension_device_identity_for_handoff(identity.secret_string().into_inner())
+                .is_err()
+        );
     }
 }
 

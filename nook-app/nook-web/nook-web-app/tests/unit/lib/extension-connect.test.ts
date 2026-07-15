@@ -5,6 +5,7 @@ import {
 } from '$lib/extension-connect'
 import {
   isBeginExtensionPairingMessage,
+  isExtensionDeviceIdentityHandoffMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
@@ -133,6 +134,21 @@ describe('extension pairing approved message', () => {
           vaultStoreId: 'store-1',
           eventLogRecords: [],
         },
+      }),
+    ).toBe(false)
+  })
+
+  test('accepts only a non-empty in-memory extension identity handoff', () => {
+    expect(
+      isExtensionDeviceIdentityHandoffMessage({
+        type: 'nook:extension-device-identity-handoff',
+        payload: { identitySecret: 'AGE-SECRET-KEY-EXAMPLE' },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionDeviceIdentityHandoffMessage({
+        type: 'nook:extension-device-identity-handoff',
+        payload: { identitySecret: '' },
       }),
     ).toBe(false)
   })
