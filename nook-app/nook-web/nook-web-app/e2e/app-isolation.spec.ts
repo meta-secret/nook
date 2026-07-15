@@ -135,20 +135,6 @@ test('keeps extension routing and local session behavior app-specific', async ({
     }
   })
   await extensionContext.close()
-  await page.addInitScript(() => {
-    Object.defineProperty(window, 'chrome', {
-      configurable: true,
-      value: {
-        runtime: {
-          sendMessage: (
-            _extensionId: string,
-            _message: unknown,
-            callback: (response: unknown) => void,
-          ) => callback({ ok: false }),
-        },
-      },
-    })
-  })
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&nonce=test-nonce&scopes=vault-access,password-filling`,
   )
@@ -158,6 +144,23 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await page.getByTestId('unlock-vault-btn').click()
   await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
+  })
+  await page.evaluate(() => {
+    const browserWindow = window as Window & {
+      chrome?: { runtime?: unknown }
+    }
+    const chrome = browserWindow.chrome ?? {}
+    Object.defineProperty(chrome, 'runtime', {
+      configurable: true,
+      value: {
+        sendMessage: (
+          _extensionId: string,
+          _message: unknown,
+          callback: (response: unknown) => void,
+        ) => callback({ ok: false }),
+      },
+    })
+    if (!browserWindow.chrome) browserWindow.chrome = chrome
   })
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(
