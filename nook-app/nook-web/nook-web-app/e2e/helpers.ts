@@ -158,6 +158,11 @@ export async function openLoginProviderSetup(page: Page) {
     .or(addBtn)
     .or(providerSetup)
     .or(page.getByTestId('provider-picker-list'))
+  const chooser = page.getByTestId('login-create-vault-chooser')
+
+  await expect(providerEntryPoint.or(chooser)).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 
   if (!(await providerEntryPoint.isVisible())) {
     await advanceCreateVaultWizardToFinalStep(page)
