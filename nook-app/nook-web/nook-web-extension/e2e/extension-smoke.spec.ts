@@ -10,6 +10,8 @@ import { createServer, type Server } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
+import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
+import { installMockPasskeyRuntime } from '../../nook-web-app/e2e/passkey-mock'
 import {
   belongsToSentinelVault,
   belongsToSimpleVault,
@@ -325,5 +327,73 @@ test('sets up the extension device first and sends its public keys to Simple Vau
   } finally {
     await context.close()
     await loginServer.close()
+  }
+})
+
+test('approves an extension device and imports the granted Simple Vault event log', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const userDataDir = testInfo.outputPath('chromium-profile')
+  await mkdir(userDataDir, { recursive: true })
+
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    executablePath: chromiumExecutablePath,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+    ],
+  })
+  await context.addInitScript(installMockPasskeyRuntime)
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const popupPage = await context.newPage()
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+
+    const openedConnectPage = context.waitForEvent('page')
+    await popupPage.getByTestId('device-protection-setup-btn').click()
+    const simplePage = await openedConnectPage
+    await expect(simplePage).toHaveURL((url) =>
+      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    )
+
+    await createLocalVaultOnLogin(
+      simplePage,
+      'Extension approval vault',
+      'extension-connect-consent',
+    )
+    await expect(
+      simplePage.getByTestId('extension-connect-consent'),
+    ).toBeVisible()
+
+    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await expect(
+      simplePage.getByTestId('extension-connect-approved'),
+    ).toBeVisible()
+
+    await expect
+      .poll(async () => {
+        const storage = await readExtensionStorage(context)
+        return storage[setupStorageKey]
+      })
+      .toMatchObject({
+        status: 'ready',
+        selectedVaultName: 'Extension approval vault',
+        eventCount: expect.any(Number),
+      })
+
+    const connectedPopupPage = await context.newPage()
+    await connectedPopupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html`,
+    )
+    await expect(
+      connectedPopupPage.getByTestId('open-simple-vault-btn'),
+    ).toBeVisible()
+  } finally {
+    await context.close()
   }
 })

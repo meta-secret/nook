@@ -193,6 +193,7 @@ export const openLegacyProviderSetup = openLoginProviderSetup
 export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
+  readyTestId = 'vault-panel',
 ) {
   const chooser = page.getByTestId('login-create-vault-chooser')
   await expect(chooser).toBeVisible({
@@ -228,11 +229,11 @@ export async function createLocalVaultOnLogin(
 
   // Deferred passkey: empty create may show the top-right overlay first.
   const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
-  const vaultPanel = page.getByTestId('vault-panel')
+  const readySurface = page.getByTestId(readyTestId)
   await expect
     .poll(
       async () =>
-        (await passkeyOverlay.isVisible()) || (await vaultPanel.isVisible()),
+        (await passkeyOverlay.isVisible()) || (await readySurface.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
@@ -246,7 +247,7 @@ export async function createLocalVaultOnLogin(
     }
   }
 
-  await expect(vaultPanel).toBeVisible({
+  await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await disableVaultIdleLock(page)
