@@ -275,6 +275,9 @@ task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
 task extension:build       # browser extension package
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
+task extension:install:hosted PR=410 # verify and install an isolated hosted PR build
+task extension:run:chrome CHANNEL=dev # launch a hosted build in an isolated Chrome profile
+task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile
 task ci:pr                 # fast local mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task docker:coverage:export  # coverage-only CI fallback (no app image export)

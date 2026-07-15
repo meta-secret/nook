@@ -78,20 +78,39 @@ Run the basic Chromium extension smoke with:
 task extension:test:e2e
 ```
 
-Chrome and Brave do not support installing an unsigned local extension by copying
-files into their profile-managed extension directories. For local development,
-or for a downloaded PR/development ZIP, unzip it and select the directory with
-**Load unpacked** in `chrome://extensions` or `brave://extensions`. The local
-install task maintains a stable `current` directory, and the launch tasks can
-open an isolated developer profile automatically:
+Chrome and Brave do not support silently installing an unsigned extension into
+a normal browser profile. The launch tasks therefore use stable, isolated Nook
+profiles and pass the verified directory through `--load-extension`. With no
+selector they build for trusted HTTPS localhost as before:
 
 ```bash
 task extension:run:chrome
 task extension:run:brave
 ```
 
-The browser launch tasks build the extension for
-`https://localhost:5173/`. Run `task web:dev` first so the trusted local
-certificate exists and the vault is available. Extension WebAuthn ceremonies
-omit the RP ID and let Chromium bind the credential to the extension origin;
-the website continues to use its HTTPS hostname as the RP ID.
+Run `task web:dev` first for that local flow. To download and launch an exact
+hosted deployment instead, select development, production, or a PR preview:
+
+```bash
+task extension:run:chrome CHANNEL=dev
+task extension:run:brave CHANNEL=prod
+task extension:run:chrome PR=410
+
+# Verify and install without opening a browser:
+task extension:install:hosted PR=410
+```
+
+The hosted installer follows redirects but fails on HTTP errors, validates the
+selected deployment's `extension.json`, downloads its ZIP and checksum, verifies
+SHA-256 before extraction, rejects unsafe archive paths, and atomically switches
+the channel's stable `current` symlink only after validation succeeds. Hosted
+installs live below
+`~/Library/Application Support/Nook/browser-extensions/nook-web-extension/hosted/`;
+profiles live below `~/Library/Application Support/Nook/browser-profiles/`.
+Development, production, and every PR number use different install and profile
+directories, so they cannot reuse extension state. Override the two roots with
+`NOOK_EXTENSION_RELEASE_DIR` and `NOOK_EXTENSION_PROFILE_ROOT` when needed.
+
+Extension WebAuthn ceremonies omit the RP ID and let Chromium bind the
+credential to the stable extension origin; the website continues to use its
+HTTPS hostname as the RP ID.

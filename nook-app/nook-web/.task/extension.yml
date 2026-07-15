@@ -96,12 +96,31 @@ tasks:
         NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:local
 
-  extension:run:chrome:
-    desc: Launch Google Chrome with the local unpacked extension in an isolated dev profile.
+  extension:install:hosted:
+    desc: Download, verify, and atomically install a hosted extension (CHANNEL=dev|prod or PR=<number>).
+    env:
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
     cmds:
-      - task: extension:install:localhost
+      - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" install
+
+  extension:test:hosted-launcher:
+    desc: Test hosted extension resolution, validation, and atomic installation without launching a browser.
+    cmds:
+      - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
+
+  extension:run:chrome:
+    desc: Launch Chrome with localhost by default, or a hosted build selected by CHANNEL=dev|prod or PR=<number>.
+    env:
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
+    cmds:
       - >-
         bash -c 'set -euo pipefail;
+        if [ -n "${CHANNEL:-}" ] || [ -n "${PR:-}" ]; then
+          exec bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" run chrome;
+        fi;
+        task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:localhost;
         extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
         profile_dir="${NOOK_CHROME_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/chrome-extension-dev}";
         mkdir -p "$profile_dir";
@@ -115,11 +134,17 @@ tasks:
         printf "Launched Chrome with %s\n" "$extension_dir";'
 
   extension:run:brave:
-    desc: Launch Brave with the local unpacked extension in an isolated dev profile.
+    desc: Launch Brave with localhost by default, or a hosted build selected by CHANNEL=dev|prod or PR=<number>.
+    env:
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
     cmds:
-      - task: extension:install:localhost
       - >-
         bash -c 'set -euo pipefail;
+        if [ -n "${CHANNEL:-}" ] || [ -n "${PR:-}" ]; then
+          exec bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" run brave;
+        fi;
+        task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:localhost;
         extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
         profile_dir="${NOOK_BRAVE_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/brave-extension-dev}";
         mkdir -p "$profile_dir";
@@ -141,6 +166,7 @@ tasks:
     desc: Type-check the browser extension; setup already validated and sealed its build.
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run check
+      - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
 
   _extension:test:e2e:
     desc: Run browser extension Playwright e2e.
