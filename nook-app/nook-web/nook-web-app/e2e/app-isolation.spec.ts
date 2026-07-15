@@ -143,6 +143,10 @@ test('keeps extension routing and local session behavior app-specific', async ({
     throw new Error(lastError)
   })
   await extensionContext.close()
+  await page.getByTestId('header-lock-vault-btn').click()
+  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&nonce=test-nonce&scopes=vault-access,password-filling`,
   )
