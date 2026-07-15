@@ -9,8 +9,8 @@ const SIMPLE_APP_URL = (
 type DebugVault = {
   manager?: {
     setVaultArchitectureJson(value: string): void
-    deviceId: string
-    devicePublicKey: string
+    device_id: string
+    device_public_key: string
     deviceSigningPublicKey(): Promise<string>
   }
 }
@@ -129,8 +129,8 @@ test('keeps extension routing and local session behavior app-specific', async ({
       .__nookVault?.manager
     if (!manager) throw new Error('Extension device manager unavailable')
     return {
-      deviceId: manager.deviceId,
-      devicePublicKey: manager.devicePublicKey,
+      deviceId: manager.device_id,
+      devicePublicKey: manager.device_public_key,
       deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
     }
   })
