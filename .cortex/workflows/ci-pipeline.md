@@ -57,8 +57,6 @@ cancelled required check whenever another contributor pushes.
 | Production release | Global production release group | No | Serialize stateful publication without interrupting a deploy |
 | Runner cleanup | Global cleanup group | No | Let an active Docker prune finish safely |
 
-The repository preflight suite enforces these scopes and cancellation choices.
-
 ## Production release strategy
 
 Production releases use immutable semantic-version tags. The tag records the
