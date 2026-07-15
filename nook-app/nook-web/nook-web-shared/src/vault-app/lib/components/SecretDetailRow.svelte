@@ -173,6 +173,7 @@
           type="button"
           onclick={() => void onDeleteSecret(item.id)}
           aria-label={vault.t('common.delete')}
+          data-testid="delete-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <Trash2 class="size-3.5" />
