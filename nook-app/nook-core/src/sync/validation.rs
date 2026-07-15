@@ -269,10 +269,13 @@ pub enum ICloudEventTarget {
 
 impl ICloudEventTarget {
     pub fn from_storage_id(value: &str) -> ValidationResult<Self> {
-        if value.trim().is_empty() {
-            Ok(Self::Private)
-        } else {
+        if value.trim().starts_with("icloud-share-v1:") {
             ICloudSharedTarget::from_storage_id(value).map(Self::Shared)
+        } else {
+            // Private CloudKit providers historically persisted an ordinary
+            // file/remote ref in this slot. Only the versioned share prefix
+            // opts a provider into shared-database routing.
+            Ok(Self::Private)
         }
     }
 }
@@ -1449,9 +1452,18 @@ mod tests {
             ICloudEventTarget::Private
         );
         assert_eq!(
+            ICloudEventTarget::from_storage_id("nook-events").unwrap(),
+            ICloudEventTarget::Private
+        );
+        assert_eq!(
+            ICloudEventTarget::from_storage_id("legacy-private-record-ref").unwrap(),
+            ICloudEventTarget::Private
+        );
+        assert_eq!(
             ICloudEventTarget::from_storage_id(&storage_id).unwrap(),
             ICloudEventTarget::Shared(owner)
         );
+        assert!(ICloudEventTarget::from_storage_id("icloud-share-v1:{}").is_err());
         assert!(ICloudSharedTarget::from_storage_id("icloud-share-v1:{}").is_err());
     }
 
