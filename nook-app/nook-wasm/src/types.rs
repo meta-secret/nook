@@ -5,6 +5,7 @@ use crate::NookSecretRecord;
 use crate::NookVaultManager;
 use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
+use zeroize::Zeroize;
 
 const DEFAULT_VAULT_IDLE_TIMEOUT_MS: u32 = 5 * 60_000;
 const DEFAULT_VAULT_IDLE_WARNING_MS: u32 = 30_000;
@@ -389,6 +390,44 @@ impl NookRuntimeConfig {
 pub struct NookPasskeySetup {
     user_handle: Vec<u8>,
     prf_input: Vec<u8>,
+}
+
+/// Ephemeral device material transferred from the extension to Simple Vault.
+/// The JS owner must call `free()` after copying the values into its one-shot
+/// runtime message.
+#[wasm_bindgen]
+pub struct NookExtensionIdentityHandoff {
+    identity_secret: String,
+    signing_seed: String,
+}
+
+impl NookExtensionIdentityHandoff {
+    pub(crate) fn new(identity_secret: String, signing_seed: String) -> Self {
+        Self {
+            identity_secret,
+            signing_seed,
+        }
+    }
+}
+
+impl Drop for NookExtensionIdentityHandoff {
+    fn drop(&mut self) {
+        self.identity_secret.zeroize();
+        self.signing_seed.zeroize();
+    }
+}
+
+#[wasm_bindgen]
+impl NookExtensionIdentityHandoff {
+    #[wasm_bindgen(getter, js_name = identitySecret)]
+    pub fn identity_secret(&self) -> String {
+        self.identity_secret.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = signingSeed)]
+    pub fn signing_seed(&self) -> String {
+        self.signing_seed.clone()
+    }
 }
 
 impl NookPasskeySetup {

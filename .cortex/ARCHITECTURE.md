@@ -166,11 +166,14 @@ root/
   window. Its other visible surface is the contextual in-page authentication
   widget.
 - **In-memory site unlock handoff:** Once paired, the user can unlock the
-  extension while the configured Simple Vault tab is active. Its identity is
-  transferred through the extension's tab/content-script bridge directly into
-  that page's Rust/WASM session; it is never placed in a URL, history entry,
-  page storage, or `chrome.storage`. Rust permits adoption only for the Simple
-  application capability, and the normal lock path clears it from memory.
+  extension while the configured Simple Vault tab is active. Its encryption
+  identity and event-signing identity are transferred through the extension's
+  tab/content-script bridge directly into that page's Rust/WASM session; they
+  are never placed in a URL, history entry, page storage, or `chrome.storage`.
+  Rust permits adoption only for the Simple application capability, and the
+  normal lock path clears both identities from memory. Site-origin provider
+  credentials remain sealed to the site's own identity and are not loaded by
+  this extension-backed session.
 - **Environment target:** `NOOK_SIMPLE_VAULT_URL` is sealed into the extension
   bundle and manifest. Production uses `simple.nokey.sh`, development uses
   `simple.dev.nokey.sh`, PR previews use their isolated

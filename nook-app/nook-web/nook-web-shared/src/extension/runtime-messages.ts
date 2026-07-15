@@ -47,14 +47,15 @@ export type ExtensionLocalEventLogUpdatedMessage = {
 
 /**
  * A one-time, in-memory transfer from the extension's isolated world to the
- * Simple Vault page. `identitySecret` is intentionally never serialized into
- * a URL or browser storage.
+ * Simple Vault page. The encryption and signing secrets are intentionally
+ * never serialized into a URL or browser storage.
  */
 export type ExtensionDeviceIdentityHandoffMessage = {
   type: 'nook:extension-device-identity-handoff'
   requestId: string
   payload: {
     identitySecret: string
+    signingSeed: string
   }
 }
 
@@ -212,7 +213,9 @@ export function isExtensionDeviceIdentityHandoffMessage(
     typeof (message as { requestId?: unknown }).requestId === 'string' &&
     (message as { requestId: string }).requestId.length > 0 &&
     typeof payload.identitySecret === 'string' &&
-    payload.identitySecret.length > 0
+    payload.identitySecret.length > 0 &&
+    typeof payload.signingSeed === 'string' &&
+    payload.signingSeed.length > 0
   )
 }
 

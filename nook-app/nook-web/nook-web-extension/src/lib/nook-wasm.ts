@@ -36,6 +36,7 @@ export type ExtensionDeviceProtectionResult = {
 
 type ExtensionDeviceIdentityHandoff = {
   identitySecret: string
+  signingSeed: string
 }
 
 export type ExtensionDeviceProtectionStatus =

@@ -861,7 +861,9 @@ export class VaultState {
     }
   }
 
-  private async continueInitializationAfterDeviceUnlock() {
+  private async continueInitializationAfterDeviceUnlock(options?: {
+    loadSiteProviders?: boolean;
+  }) {
     if (!this.manager) return;
     await this.initDeviceIdentity({ allowPendingAuthorization: true });
     if (
@@ -874,7 +876,9 @@ export class VaultState {
       );
       this.applySentinelGenesisFinalizeResult(rawResult);
     }
-    await this.loadProviders({ ensureLocalRow: true });
+    if (options?.loadSiteProviders !== false) {
+      await this.loadProviders({ ensureLocalRow: true });
+    }
     await localLoginActions.refreshLocalVaultCatalog(this);
     if (!this.activeVaultStoreId) {
       this.activeVaultStoreId = this.localVaults[0]?.storeId ?? undefined;
@@ -1201,18 +1205,29 @@ export class VaultState {
     }
   }
 
-  async unlockWithExtensionDeviceIdentity(identitySecret: string) {
+  async unlockWithExtensionDeviceIdentity(
+    identitySecret: string,
+    signingSeed: string,
+  ) {
     if (!this.manager || this.isVerifying || this.isInitializing) return false;
     this.isVerifying = true;
     this.errorMsg = "";
     let deviceIdentityUnlocked = false;
     try {
       await this.enqueueStorage(() =>
-        this.manager!.adoptExtensionDeviceIdentityForHandoff(identitySecret),
+        this.manager!.adoptExtensionDeviceIdentityForHandoff(
+          identitySecret,
+          signingSeed,
+        ),
       );
       deviceIdentityUnlocked = true;
       this.deviceAuthorizationInProgress = true;
-      await this.continueInitializationAfterDeviceUnlock();
+      // Provider credentials belong to the site's own protected identity.
+      // The extension identity may unlock the local vault, but must never be
+      // used to open or rewrite those origin-scoped credential envelopes.
+      await this.continueInitializationAfterDeviceUnlock({
+        loadSiteProviders: false,
+      });
       this.deviceProtectionStatus = "unlocked";
       return true;
     } catch (error) {
@@ -1231,6 +1246,7 @@ export class VaultState {
       // Strings cannot be zeroized in JavaScript; dropping this reference as
       // soon as the Rust/WASM boundary accepts it keeps the handoff ephemeral.
       identitySecret = "";
+      signingSeed = "";
       this.deviceAuthorizationInProgress = false;
       this.isVerifying = false;
       this.isInitializing = false;

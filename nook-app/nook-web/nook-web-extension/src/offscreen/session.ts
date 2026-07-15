@@ -213,13 +213,20 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await (await getManager()).unlockPinDeviceIdentity(pin)
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-export-identity-handoff':
-      return {
-        ok: true,
-        identitySecret: (
-          await getManager()
-        ).exportExtensionDeviceIdentityForHandoff(),
+    case 'nook:extension-session-export-identity-handoff': {
+      const handoff = await (
+        await getManager()
+      ).exportExtensionDeviceIdentityForHandoff()
+      try {
+        return {
+          ok: true,
+          identitySecret: handoff.identitySecret,
+          signingSeed: handoff.signingSeed,
+        }
+      } finally {
+        handoff.free()
       }
+    }
     default:
       return undefined
   }

@@ -67,6 +67,7 @@
 
   type ExtensionIdentityHandoff = {
     identitySecret: string
+    signingSeed: string
   }
 
   async function handoffToActiveSimpleVault(
@@ -114,7 +115,13 @@
         } else if (status !== 'unlocked') {
           await unlockExtensionPasskey()
         }
-        await handoffToActiveSimpleVault(await extensionIdentityHandoff())
+        const handoff = await extensionIdentityHandoff()
+        try {
+          await handoffToActiveSimpleVault(handoff)
+        } finally {
+          handoff.identitySecret = ''
+          handoff.signingSeed = ''
+        }
         window.close()
       } catch (caught) {
         error = errorMessage(caught, 'extension.unlock.handoff_failed')

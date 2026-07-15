@@ -201,8 +201,13 @@
       }
       const handoff = event.data
       extensionHandoffInProgress = true
-      void vault
-        .unlockWithExtensionDeviceIdentity(handoff.payload.identitySecret)
+      const unlock = vault.unlockWithExtensionDeviceIdentity(
+        handoff.payload.identitySecret,
+        handoff.payload.signingSeed,
+      )
+      handoff.payload.identitySecret = ''
+      handoff.payload.signingSeed = ''
+      void unlock
         .then((ok) => {
           window.postMessage(
             {

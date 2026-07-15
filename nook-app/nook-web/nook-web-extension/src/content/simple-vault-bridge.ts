@@ -38,11 +38,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     window.removeEventListener('message', handleResult)
     clearTimeout(timeout)
+    message.payload.identitySecret = ''
+    message.payload.signingSeed = ''
     sendResponse({ ok: event.data.ok })
   }
   window.addEventListener('message', handleResult)
   const timeout = window.setTimeout(() => {
     window.removeEventListener('message', handleResult)
+    message.payload.identitySecret = ''
+    message.payload.signingSeed = ''
     sendResponse({ ok: false })
   }, 15_000)
   window.postMessage(message, window.location.origin)

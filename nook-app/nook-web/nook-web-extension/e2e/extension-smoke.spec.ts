@@ -327,3 +327,128 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await loginServer.close()
   }
 })
+
+test('hands an unlocked extension identity to the active Simple Vault tab only', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const userDataDir = testInfo.outputPath('chromium-handoff-profile')
+  await mkdir(userDataDir, { recursive: true })
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    executablePath: chromiumExecutablePath,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+    ],
+  })
+
+  await context.route('**/*', (route) => {
+    if (!belongsToSimpleVault(simpleVaultBaseUrl, route.request().url())) {
+      return route.continue()
+    }
+    return route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><body><h1>Simple Vault</h1><script>
+        window.addEventListener('message', (event) => {
+          const message = event.data
+          if (event.source !== window || event.origin !== window.location.origin ||
+              message?.type !== 'nook:extension-device-identity-handoff') return
+          document.body.dataset.identityReceived = String(Boolean(message.payload?.identitySecret))
+          document.body.dataset.signingReceived = String(Boolean(message.payload?.signingSeed))
+          window.postMessage({
+            type: 'nook:extension-device-identity-handoff-result',
+            requestId: message.requestId,
+            ok: true,
+          }, window.location.origin)
+        })
+      </script></body></html>`,
+    })
+  })
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const bootstrapPage = await context.newPage()
+    await bootstrapPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html`,
+    )
+    const session = await bootstrapPage.evaluate(
+      () =>
+        new Promise<{ device?: { deviceId: string } }>((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            { type: 'nook:ensure-extension-session-runtime' },
+            (ready) => {
+              if (chrome.runtime.lastError || ready?.ok !== true) {
+                reject(
+                  new Error(
+                    chrome.runtime.lastError?.message ??
+                      'Extension session did not start.',
+                  ),
+                )
+                return
+              }
+              chrome.runtime.sendMessage(
+                {
+                  type: 'nook:extension-session-create-pin',
+                  payload: { pin: '246810' },
+                },
+                resolve,
+              )
+            },
+          )
+        }),
+    )
+    expect(session.device?.deviceId).toBeTruthy()
+    await bootstrapPage.close()
+    await worker.evaluate(
+      ({ key }) =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              [key]: {
+                status: 'ready',
+                deviceLabel: 'Nook Extension - handoff test',
+                pairedVaults: ['Personal'],
+                selectedVaultName: 'Personal',
+                syncProviderCount: 0,
+                eventCount: 1,
+                eventLogHeads: ['event-e2e'],
+                lastLocalSyncAt: new Date().toISOString(),
+              },
+            },
+            resolve,
+          )
+        }),
+      { key: setupStorageKey },
+    )
+
+    const simplePage = await context.newPage()
+    await simplePage.goto(simpleVaultBaseUrl)
+    const popupPage = await context.newPage()
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    const unlock = popupPage.getByTestId('unlock-simple-vault-btn')
+    await expect(unlock).toBeVisible()
+
+    // An extension page (or any other non-Simple active tab) is rejected.
+    await unlock.click()
+    await expect(popupPage.getByRole('alert')).toBeVisible()
+
+    // Reusing the already-unlocked extension session requires no site passkey.
+    await simplePage.bringToFront()
+    await unlock.click()
+    await expect
+      .poll(() =>
+        simplePage.locator('body').getAttribute('data-identity-received'),
+      )
+      .toBe('true')
+    await expect(simplePage.locator('body')).toHaveAttribute(
+      'data-signing-received',
+      'true',
+    )
+    await expect.poll(() => popupPage.isClosed()).toBe(true)
+  } finally {
+    await context.close()
+  }
+})

@@ -3,7 +3,7 @@
 use super::NookVaultManager;
 use crate::passkey_browser;
 use crate::storage::{auth_providers, indexed_db};
-use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
+use crate::{NookError, NookExtensionIdentityHandoff, NookPasskeySetup, NookPasskeyUnlockOptions};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::{Zeroize, Zeroizing};
@@ -40,15 +40,23 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = lockDeviceIdentity)]
     pub fn lock_device_identity(&mut self) {
         self.device.identity_private_key.zeroize();
+        self.event_log.signing_seed.zeroize();
     }
 
     /// Export the unlocked extension identity for a single in-memory handoff to
     /// the paired Simple Vault page. The caller must keep this value out of
     /// durable browser storage and URLs.
     #[wasm_bindgen(js_name = exportExtensionDeviceIdentityForHandoff)]
-    pub fn export_extension_device_identity_for_handoff(&self) -> Result<String, JsError> {
+    pub async fn export_extension_device_identity_for_handoff(
+        &mut self,
+    ) -> Result<NookExtensionIdentityHandoff, JsError> {
         ensure_extension_identity_handoff_source(self.application)?;
-        Ok(self.device_identity()?.secret_string().into_inner())
+        let identity_secret = self.device_identity()?.secret_string().into_inner();
+        self.ensure_signing_identity().await?;
+        Ok(NookExtensionIdentityHandoff::new(
+            identity_secret,
+            self.event_log.signing_seed.clone(),
+        ))
     }
 
     /// Adopt the extension's already-unlocked identity for this in-memory
@@ -59,22 +67,32 @@ impl NookVaultManager {
     pub fn adopt_extension_device_identity_for_handoff(
         &mut self,
         mut identity_secret: String,
+        mut signing_seed: String,
     ) -> Result<(), JsError> {
         if let Err(error) = ensure_extension_identity_handoff_target(self.application) {
             identity_secret.zeroize();
+            signing_seed.zeroize();
             return Err(error.into());
         }
-        let result = (|| -> Result<(String, String), JsError> {
+        let result = (|| -> Result<(String, String, String), JsError> {
             let identity = nook_core::DeviceIdentity::from_secret_str(
                 &nook_core::DeviceIdentitySecret::parse(&identity_secret)?,
             )?;
-            Ok((identity.device_id().to_string(), identity_secret.clone()))
+            nook_core::SigningIdentity::from_seed_hex_stored(&signing_seed)?;
+            Ok((
+                identity.device_id().to_string(),
+                identity_secret.clone(),
+                signing_seed.clone(),
+            ))
         })();
         identity_secret.zeroize();
-        let (device_id, private_key) = result?;
+        signing_seed.zeroize();
+        let (device_id, private_key, signing_seed) = result?;
         self.device.identity_private_key.zeroize();
+        self.event_log.signing_seed.zeroize();
         self.device.id = device_id;
         self.device.identity_private_key = private_key;
+        self.event_log.signing_seed = signing_seed;
         Ok(())
     }
 
@@ -379,23 +397,24 @@ mod tests {
         extension.device.id = identity.device_id().to_string();
         extension.device.identity_private_key = identity.secret_string().into_inner();
 
-        let handoff = extension
-            .export_extension_device_identity_for_handoff()
-            .expect("extension handoff");
+        let (_, signing_seed) = nook_core::SigningIdentity::generate().expect("signing identity");
+        let handoff = identity.secret_string().into_inner();
 
         let mut simple = NookVaultManager::new();
         simple.application = nook_core::VaultApplication::Simple;
         simple
-            .adopt_extension_device_identity_for_handoff(handoff)
+            .adopt_extension_device_identity_for_handoff(handoff, signing_seed.as_str().to_owned())
             .expect("simple accepts handoff");
         assert_eq!(simple.device.id, identity.device_id().as_str());
         assert_eq!(
             simple.device_identity().expect("identity").public_key(),
             identity.public_key()
         );
+        assert_eq!(simple.event_log.signing_seed, signing_seed.as_str());
 
         simple.lock_device_identity();
         assert!(simple.device.identity_private_key.is_empty());
+        assert!(simple.event_log.signing_seed.is_empty());
 
         let mut sentinel = NookVaultManager::new();
         sentinel.application = nook_core::VaultApplication::Sentinel;
