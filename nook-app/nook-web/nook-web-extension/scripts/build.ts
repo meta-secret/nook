@@ -15,6 +15,7 @@ import {
   DEFAULT_SIMPLE_VAULT_URL,
   normalizeSimpleVaultBaseUrl,
 } from '../src/lib/simple-vault-target'
+import { extensionChannelIdentity } from './channel-identity'
 
 const projectRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(projectRoot, '..')
@@ -29,6 +30,19 @@ const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
 const simpleVaultDefine = {
   __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
 }
+const deployment = extensionChannelIdentity(
+  process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production',
+)
+const requestedVersion =
+  process.env.NOOK_EXTENSION_VERSION?.trim() || packageJson.version
+const manifestVersion = requestedVersion.match(/^\d+\.\d+\.\d+/)?.[0]
+if (!manifestVersion) {
+  throw new Error('NOOK_EXTENSION_VERSION must begin with a semantic version.')
+}
+const commit = process.env.NOOK_EXTENSION_COMMIT?.trim()
+const versionName = commit
+  ? `${requestedVersion} (${deployment.channel}, ${commit.slice(0, 12)})`
+  : `${requestedVersion} (${deployment.channel})`
 
 async function ensureNodeModulesLink() {
   try {
@@ -157,7 +171,16 @@ await Promise.all([buildSveltePage('popup'), buildChromeLocales()])
 
 await writeFile(
   join(distDir, 'manifest.json'),
-  `${JSON.stringify(createManifest(packageJson.version, simpleVaultBaseUrl), null, 2)}\n`,
+  `${JSON.stringify(
+    createManifest(manifestVersion, simpleVaultBaseUrl, {
+      key: deployment.manifestKey,
+      name: deployment.name,
+      shortName: deployment.shortName,
+      versionName,
+    }),
+    null,
+    2,
+  )}\n`,
 )
 
 await Promise.all([

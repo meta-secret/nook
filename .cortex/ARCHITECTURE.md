@@ -166,15 +166,21 @@ root/
   window. Its other visible surface is the contextual in-page authentication
   widget.
 - **Environment target:** `NOOK_SIMPLE_VAULT_URL` is sealed into the extension
-  bundle and manifest. Production uses `simple.nokey.sh`; PR previews use their
-  `/simple/` artifact; local development can supply a local URL. Shared preview
-  hosts remain path-isolated, so `/sentinel/` cannot use the Simple extension
-  messaging boundary.
+  bundle and manifest. Production uses `simple.nokey.sh`, development uses
+  `simple.dev.nokey.sh`, PR previews use their isolated
+  `pr-<number>.nokey-simple.pages.dev` origin, and local development uses
+  trusted HTTPS localhost. Each channel has a distinct deterministic extension
+  id so extension-origin state and passkeys cannot cross environments.
+- **Deployment artifacts:** The sealed image packages the exact tested bundle
+  into the site artifact's `/downloads/` directory with `extension.json`
+  metadata and a SHA-256 checksum. PR and main workflows publish and verify the
+  preview/development ZIP; immutable releases publish the versioned production
+  ZIP through both `nokey.sh` and the GitHub Release.
 - **Simple-only product surface:** The service worker, content scripts, and
   future autofill flows pair only through `simple.nokey.sh`. The manifest and
   runtime guard exclude both Nook vault origins from widget injection, and Rust
   rejects Sentinel extension approval.
-- **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
+- **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 - **Local projection bridge:** Simple Vault publishes its canonical encrypted,
   signed event log after local mutations and provider pulls. A content script

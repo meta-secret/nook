@@ -1,7 +1,5 @@
 export const DEFAULT_SIMPLE_VAULT_URL = 'https://simple.nokey.sh/'
 
-const PRODUCTION_SENTINEL_MATCH = 'https://sentinel.nokey.sh/*'
-
 export function normalizeSimpleVaultBaseUrl(value: string): string {
   const url = new URL(value)
   const localHttp =
@@ -29,13 +27,30 @@ export function simpleVaultMatchPattern(baseUrl: string): string {
   return `${url.origin}${url.pathname}*`
 }
 
-export function sentinelVaultMatchPatterns(baseUrl: string): string[] {
+export function matchingSentinelVaultBaseUrl(
+  baseUrl: string,
+): string | undefined {
   const url = new URL(normalizeSimpleVaultBaseUrl(baseUrl))
-  const matches = [PRODUCTION_SENTINEL_MATCH]
+  if (url.hostname.startsWith('simple.')) {
+    return `${url.protocol}//sentinel.${url.hostname.slice('simple.'.length)}/`
+  }
+  if (url.hostname.includes('.nokey-simple.pages.dev')) {
+    return `${url.protocol}//${url.hostname.replace(
+      '.nokey-simple.pages.dev',
+      '.nokey-sentinel.pages.dev',
+    )}/`
+  }
   if (url.pathname.endsWith('/simple/')) {
     const sentinelPath = `${url.pathname.slice(0, -'/simple/'.length)}/sentinel/`
-    matches.push(`${url.origin}${sentinelPath.replace(/^\/\//, '/')}*`)
+    return `${url.origin}${sentinelPath.replace(/^\/\//, '/')}`
   }
+  return undefined
+}
+
+export function sentinelVaultMatchPatterns(baseUrl: string): string[] {
+  const matchingSentinel = matchingSentinelVaultBaseUrl(baseUrl)
+  const matches = ['https://sentinel.nokey.sh/*']
+  if (matchingSentinel) matches.push(`${matchingSentinel}*`)
   return [...new Set(matches)]
 }
 

@@ -16,6 +16,10 @@ ARG VITE_PUBLIC_APP_URL=
 ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
 ARG VITE_SIMPLE_APP_URL=
 ARG VITE_SENTINEL_APP_URL=
+ARG NOOK_EXTENSION_CHANNEL=production
+ARG NOOK_EXTENSION_VERSION=1.0.0
+ARG NOOK_EXTENSION_COMMIT=
+ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
 
 WORKDIR /meta-secret/nook
 
@@ -58,7 +62,16 @@ RUN cd nook-app/nook-web/nook-web-app \
     VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
     bun run build
 RUN cd nook-app/nook-web/nook-web-extension \
-    && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" bun run build
+    && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
+    NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
+    NOOK_EXTENSION_VERSION="${NOOK_EXTENSION_VERSION}" \
+    NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
+    bun run build \
+    && NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
+    NOOK_EXTENSION_VERSION="${NOOK_EXTENSION_VERSION}" \
+    NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
+    NOOK_EXTENSION_SITE_URL="${NOOK_EXTENSION_SITE_URL}" \
+    bun run package:deployment
 
 # No ENTRYPOINT: the image is sealed (source + web deps + generated WASM baked in), so `docker run`
 # invokes the task command directly (e.g. `docker run <img> task check`).

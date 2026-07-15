@@ -107,6 +107,7 @@ RUN apt-get update \
         git \
         jq \
         unzip \
+        zip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"

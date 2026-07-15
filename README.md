@@ -32,6 +32,11 @@ The Main channel mirrors that split at [dev.nokey.sh](https://dev.nokey.sh),
 [simple.dev.nokey.sh](https://simple.dev.nokey.sh), and
 [sentinel.dev.nokey.sh](https://sentinel.dev.nokey.sh). Pull requests use
 Cloudflare's native `pr-<number>.<project>.pages.dev` branch aliases.
+Each PR site publishes its matching browser-extension ZIP under `/downloads/`;
+main does the same at `dev.nokey.sh`, and immutable production releases publish
+the versioned ZIP at `nokey.sh` plus the GitHub Release. These unsigned website
+artifacts must be unzipped and loaded with browser Developer mode; marketplace
+installation is intentionally separate.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -269,6 +274,7 @@ task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
 task extension:build       # browser extension package
+task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
 task ci:pr                 # fast local mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task docker:coverage:export  # coverage-only CI fallback (no app image export)

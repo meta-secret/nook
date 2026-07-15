@@ -14,6 +14,7 @@ import {
   belongsToSentinelVault,
   belongsToSimpleVault,
   DEFAULT_SIMPLE_VAULT_URL,
+  matchingSentinelVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
   simpleVaultUrl,
 } from '../src/lib/simple-vault-target'
@@ -264,9 +265,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
 
     const sentinelPage = await context.newPage()
-    const sentinelUrl = simpleVaultBaseUrl.includes('/simple/')
-      ? simpleVaultBaseUrl.replace('/simple/', '/sentinel/')
-      : 'https://sentinel.nokey.sh/'
+    const sentinelUrl =
+      matchingSentinelVaultBaseUrl(simpleVaultBaseUrl) ??
+      'https://sentinel.nokey.sh/'
     await sentinelPage.goto(sentinelUrl)
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
 
