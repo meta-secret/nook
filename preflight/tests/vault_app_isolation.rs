@@ -286,6 +286,39 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
+fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() {
+    let root = repository_root();
+    let workflow = read(&root, ".github/workflows/rust-dependency-updates.yml");
+    for required in [
+        "- cron: '0 9 * * 1'",
+        "cargo install cargo-outdated --version 0.19.0 --locked",
+        "cargo outdated --workspace --root-deps-only --exit-code 1",
+        "check_manifest nook-app",
+        "check_manifest preflight",
+        "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
+        "task ci-agent:fix",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "dependency update workflow missing required contract: {required}"
+        );
+    }
+
+    let prompt = read(&root, ".github/prompts/rust-dependency-update-agent.md");
+    for required in [
+        "every `Cargo.toml` under `nook-app/`\n   and `preflight/`",
+        "all outdated direct Rust dependencies",
+        "WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000",
+        "every local-provider Playwright e2e spec, and the\n   extension e2e",
+    ] {
+        assert!(
+            prompt.contains(required),
+            "dependency update agent prompt missing required contract: {required}"
+        );
+    }
+}
+
+#[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     let root = repository_root();
     let dockerfile = read(&root, "nook-app/nook-core/Dockerfile");

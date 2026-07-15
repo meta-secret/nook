@@ -1,0 +1,113 @@
+# Weekly direct Rust dependency audit. When Cargo manifests are behind crates.io,
+# the existing CI agent updates them in a PR and validates the full deterministic
+# test suite before its normal repository-owned PR gate and squash merge.
+name: Rust dependency updates
+
+on:
+  schedule:
+    # GitHub cron is UTC. Keep this independent of the nightly live-sync e2e run.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-dependency-updates
+  # An agent may have already pushed a branch or opened a PR.
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit direct Cargo dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      outdated: ${{ steps.audit.outputs.outdated }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # cargo-outdated is an orchestration-only tool; application builds and
+      # validation remain inside the repository Docker Task targets.
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated --version 0.19.0 --locked
+
+      - name: Check every direct Cargo dependency
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          outdated=false
+
+          check_manifest() {
+            local directory="$1"
+            local status
+
+            set +e
+            (
+              cd "$directory"
+              cargo outdated --workspace --root-deps-only --exit-code 1
+            )
+            status=$?
+            set -e
+
+            case "$status" in
+              0)
+                echo "All direct dependencies are current in $directory."
+                ;;
+              1)
+                echo "Direct dependency updates are available in $directory."
+                outdated=true
+                ;;
+              *)
+                echo "cargo outdated failed in $directory (exit $status)." >&2
+                exit "$status"
+                ;;
+            esac
+          }
+
+          check_manifest nook-app
+          check_manifest preflight
+          echo "outdated=$outdated" >> "$GITHUB_OUTPUT"
+
+  update:
+    name: AI update, full test, PR, and merge
+    needs: audit
+    if: needs.audit.outputs.outdated == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+    env:
+      FIX_BRANCH: fix/rust-dependencies-${{ github.run_id }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
+      CI_FIX_LABEL: Rust dependency update
+      CI_AGENT_TIMEOUT_MS: '21600000'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Build split Rust/WASM and web images
+        run: task setup WASM_BUILD_MODE=prod
+
+      - name: Run dependency-update agent (Docker + docker.sock)
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          REPO_ROOT: ${{ github.workspace }}
+          VITE_BASE: /
+          WASM_BUILD_MODE: prod
+          VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+        run: task ci-agent:fix
