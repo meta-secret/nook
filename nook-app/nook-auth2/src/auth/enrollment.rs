@@ -82,6 +82,13 @@ pub enum EnrollmentProvider {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         storage_target_id: Option<String>,
     },
+    /// Credential-free `CloudKit` share handoff. The target contains only the
+    /// stable share/zone location; the recipient authenticates with their own
+    /// iCloud account before accepting it.
+    #[serde(rename = "icloud-shared")]
+    ICloudShared {
+        storage_target_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -340,6 +347,14 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
             }
             Ok(())
         }
+        EnrollmentProvider::ICloudShared { storage_target_id } => {
+            if storage_target_id.trim().is_empty()
+                || !storage_target_id.trim().starts_with("icloud-share-v1:")
+            {
+                return Err(EnrollmentError::MalformedSharedProviderGrant);
+            }
+            Ok(())
+        }
     }
 }
 
@@ -522,6 +537,27 @@ mod tests {
         assert!(!serialized.contains("ya29."));
         assert!(!serialized.contains("github_pat_"));
         assert!(!serialized.contains("hunter2"));
+    }
+
+    #[test]
+    fn shared_icloud_target_roundtrips_without_provider_credentials() {
+        let storage_target_id = concat!(
+            "icloud-share-v1:",
+            r#"{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}"#
+        )
+        .to_owned();
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::ICloudShared {
+                storage_target_id: storage_target_id.clone(),
+            },
+            entry_id: "entry-icloud-shared".to_owned(),
+            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+        };
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared iCloud").unwrap();
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
+        assert_eq!(decrypted.provider, input.provider);
+        assert!(!code.contains("web-auth-token"));
+        assert!(storage_target_id.contains("shortGuid"));
     }
 
     #[test]

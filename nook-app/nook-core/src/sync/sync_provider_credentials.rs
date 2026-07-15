@@ -180,6 +180,8 @@ mod tests {
                     file_id: None,
                     folder_id: None,
                     drive_mode: Some(crate::GoogleDriveMode::Private),
+                    icloud_mode: None,
+                    icloud_share_target: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: Some("me@example.com".to_owned()),
                 }),

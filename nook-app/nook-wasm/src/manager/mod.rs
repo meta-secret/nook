@@ -47,6 +47,8 @@ struct StorageSession {
     remote_path: String,
     /// Google Drive event parent: appDataFolder (personal) or shared folder id.
     drive_event_parent: nook_core::DriveEventParent,
+    /// `CloudKit` database/zone routing for private or shared iCloud providers.
+    icloud_event_target: nook_core::ICloudEventTarget,
     file_sha: Option<String>,
     /// Cached empty-repo listing from GitHub (`GET .../contents/` -> 404).
     github_root_empty: bool,
@@ -64,6 +66,7 @@ impl Default for StorageSession {
             remote_ref: String::new(),
             remote_path: String::new(),
             drive_event_parent: nook_core::DriveEventParent::AppDataFolder,
+            icloud_event_target: nook_core::ICloudEventTarget::Private,
             file_sha: None,
             github_root_empty: false,
             use_local_cache_for_connect: false,
@@ -556,6 +559,7 @@ impl NookVaultManager {
             nook_core::StorageMode::Local => {
                 self.storage.access_token = String::new();
                 self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
+                self.storage.icloud_event_target = nook_core::ICloudEventTarget::Private;
             }
             nook_core::StorageMode::Github => {
                 self.storage.access_token = nook_core::validate_github_pat(github_pat)?.to_string();
@@ -569,6 +573,7 @@ impl NookVaultManager {
                 self.storage.remote_ref = new_repo;
                 self.storage.remote_path.clear();
                 self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
+                self.storage.icloud_event_target = nook_core::ICloudEventTarget::Private;
                 let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
                 ensure_github_repo_exists(&self.storage.access_token, &self.storage.remote_ref)
                     .await?;
@@ -588,14 +593,21 @@ impl NookVaultManager {
                     nook_core::DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
                     nook_core::DriveEventParent::AppDataFolder => known_file_id,
                 };
+                self.storage.icloud_event_target = nook_core::ICloudEventTarget::Private;
             }
             nook_core::StorageMode::ICloud => {
                 self.storage.access_token =
                     nook_core::validate_oauth_access_token(github_pat)?.to_string();
-                let (_known_revision, file_name) =
+                let (known_target, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
                 self.storage.remote_path = file_name.to_string();
-                self.storage.remote_ref = file_name.to_string();
+                self.storage.icloud_event_target =
+                    nook_core::ICloudEventTarget::from_storage_id(&known_target)?;
+                self.storage.remote_ref = if known_target.is_empty() {
+                    file_name.to_string()
+                } else {
+                    known_target
+                };
                 self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
             }
         }

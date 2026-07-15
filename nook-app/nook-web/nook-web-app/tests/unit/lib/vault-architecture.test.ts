@@ -7,6 +7,7 @@ import {
   firstCompatibleProvider,
   onboardingType,
   providerCapabilityLabelKey,
+  providerOnboardingType,
   providerReplicationCapability,
   providerSupportsReplication,
   validateProviderReplication,
@@ -41,6 +42,36 @@ function githubProvider(): StorageProvider {
     githubRepo: 'nook-vault',
     githubPat: 'github_pat_test',
     createdAt: '2026-07-08T00:00:00.000Z',
+  }
+}
+
+function sharedICloudProvider(): StorageProvider {
+  return {
+    id: 'icloud-shared-1',
+    type: 'oauth-file',
+    label: 'iCloud',
+    oauthFile: {
+      preset: 'icloud',
+      accessToken: 'cloudkit-web-token',
+      fileName: 'nook-events',
+      iCloudMode: 'shared',
+      iCloudShareTarget:
+        'icloud-share-v1:{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}',
+    },
+    createdAt: '2026-07-14T00:00:00.000Z',
+  }
+}
+
+function privateICloudProvider(): StorageProvider {
+  return {
+    ...sharedICloudProvider(),
+    id: 'icloud-private-1',
+    oauthFile: {
+      preset: 'icloud',
+      accessToken: 'cloudkit-web-token',
+      fileName: 'nook-events',
+      iCloudMode: 'private',
+    },
   }
 }
 
@@ -139,6 +170,22 @@ describe('vault architecture adapter', () => {
     ).toBeUndefined()
   })
 
+  test('private iCloud rows require shared setup before shared onboarding', () => {
+    const privateICloud = privateICloudProvider()
+    const sharedICloud = sharedICloudProvider()
+
+    expect(providerSupportsReplication(privateICloud, 'personal')).toBe(true)
+    expect(providerSupportsReplication(privateICloud, 'shared')).toBe(false)
+    expect(providerSupportsReplication(sharedICloud, 'shared')).toBe(true)
+    expect(
+      firstCompatibleProvider(
+        [privateICloud, sharedICloud],
+        'shared',
+        privateICloud.id,
+      )?.id,
+    ).toBe(sharedICloud.id)
+  })
+
   test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
     const architecture: VaultArchitecture = {
       device_mode: 'standard',
@@ -164,5 +211,60 @@ describe('vault architecture adapter', () => {
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
+  })
+
+  test('shared Drive provider mode overrides personal credential transfer', () => {
+    const architecture = defaultVaultArchitecture()
+    const provider: StorageProvider = {
+      ...googleDriveProvider(),
+      oauthFile: {
+        ...googleDriveProvider().oauthFile!,
+        driveMode: 'shared',
+        folderId: 'persisted-shared-folder',
+      },
+    }
+
+    expect(providerOnboardingType(provider, architecture)).toBe(
+      'shared-provider-grant',
+    )
+    const enrollmentProvider = enrollmentProviderForArchitecture(
+      provider,
+      architecture,
+      'joiner@example.com',
+      undefined,
+    )
+    expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      'persisted-shared-folder',
+    )
+    expect(enrollmentProvider.oauthAccessToken).toBeUndefined()
+    expect(enrollmentProvider.oauthRefreshToken).toBeUndefined()
+  })
+
+  test('shared iCloud enrollment sends only the CloudKit target', () => {
+    const provider = sharedICloudProvider()
+    const architecture = defaultVaultArchitecture()
+    expect(providerReplicationCapability(provider)).toMatchObject({
+      providerType: 'oauth-file',
+      oauthPreset: 'icloud',
+      supportsPersonal: true,
+      supportsShared: true,
+    })
+    expect(providerOnboardingType(provider, architecture)).toBe(
+      'shared-provider-grant',
+    )
+    const enrollmentProvider = enrollmentProviderForArchitecture(
+      provider,
+      architecture,
+      undefined,
+      undefined,
+    )
+    expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.oauthPreset).toBe('icloud')
+    expect(enrollmentProvider.sharedJoinerIdentity).toBeUndefined()
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      provider.oauthFile?.iCloudShareTarget,
+    )
+    expect(enrollmentProvider.oauthAccessToken).toBeUndefined()
   })
 })

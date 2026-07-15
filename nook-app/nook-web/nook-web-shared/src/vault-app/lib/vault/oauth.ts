@@ -4,7 +4,9 @@ import {
   DEFAULT_DRIVE_BACKUP_NAME,
   findDuplicateSyncProvider,
   setGoogleDriveProviderMode,
+  setICloudProviderMode,
   type GoogleDriveMode,
+  type ICloudMode,
 } from "$lib/auth-providers";
 import { verifySharedGoogleDriveFolder } from "$app-wasm";
 import {
@@ -18,6 +20,8 @@ import {
   type GoogleOAuthTokens,
 } from "$lib/google-oauth";
 import {
+  acceptICloudSharedVault,
+  createICloudSharedVault,
   ensureValidICloudOAuthFileConfig,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
@@ -124,6 +128,78 @@ export function selectGoogleDriveMode(
   state.oauthFile = setGoogleDriveProviderMode(state.oauthFile, mode);
   state.sharedGrantInstructions = "";
   state.errorMsg = "";
+}
+
+export function selectICloudMode(state: VaultState, mode: ICloudMode): void {
+  if (!state.oauthFile || state.oauthFile.preset !== "icloud") return;
+  const current =
+    state.oauthFile.iCloudMode ??
+    (state.oauthFile.iCloudShareTarget?.trim() ? "shared" : "private");
+  if (current === mode) return;
+  state.oauthFile = setICloudProviderMode(state.oauthFile, mode);
+  state.sharedGrantInstructions = "";
+  state.errorMsg = "";
+}
+
+export async function createICloudSharedProvider(
+  state: VaultState,
+): Promise<void> {
+  if (!state.oauthFile?.accessToken?.trim()) {
+    throw new Error(state.t("provider_setup.icloud_shared_sign_in_first"));
+  }
+  let target;
+  try {
+    target = await createICloudSharedVault(
+      state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(
+      message.startsWith("provider_setup.")
+        ? state.t(message)
+        : state.t("provider_setup.icloud_shared_create_failed"),
+      { cause: error },
+    );
+  }
+  state.oauthFile = {
+    ...state.oauthFile,
+    iCloudMode: "shared",
+    iCloudShareTarget: target.storageTargetId,
+    fileId: undefined,
+  };
+  state.sharedGrantInstructions = state.t(
+    "provider_setup.icloud_shared_created",
+  );
+}
+
+export async function useICloudSharedProvider(
+  state: VaultState,
+  shareReference: string,
+): Promise<void> {
+  if (!state.oauthFile?.accessToken?.trim()) {
+    throw new Error(state.t("provider_setup.icloud_shared_sign_in_first"));
+  }
+  let target;
+  try {
+    target = await acceptICloudSharedVault(shareReference);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(
+      message.startsWith("provider_setup.")
+        ? state.t(message)
+        : state.t("provider_setup.icloud_shared_connect_failed"),
+      { cause: error },
+    );
+  }
+  state.oauthFile = {
+    ...state.oauthFile,
+    iCloudMode: "shared",
+    iCloudShareTarget: target.storageTargetId,
+    fileId: undefined,
+  };
+  state.sharedGrantInstructions = state.t(
+    "provider_setup.icloud_shared_connected",
+  );
 }
 
 export async function createGoogleSharedFolder(
@@ -328,6 +404,10 @@ async function applyICloudOAuthTokens(
     accessToken: tokens.accessToken,
     fileId: state.oauthFile?.fileId,
     folderId: state.oauthFile?.folderId,
+    iCloudMode:
+      state.oauthFile?.iCloudMode ??
+      (state.oauthFile?.iCloudShareTarget?.trim() ? "shared" : "private"),
+    iCloudShareTarget: state.oauthFile?.iCloudShareTarget,
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||

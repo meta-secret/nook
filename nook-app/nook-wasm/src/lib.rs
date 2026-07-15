@@ -452,6 +452,54 @@ pub fn set_google_drive_provider_mode(
     ))?)
 }
 
+#[wasm_bindgen(js_name = setICloudProviderMode)]
+pub fn set_icloud_provider_mode(
+    config: JsValue,
+    mode: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let config: nook_core::OAuthFileConfigData = serde_wasm_bindgen::from_value(config)?;
+    let mode = nook_core::ICloudMode::parse(mode)?;
+    Ok(to_js_value(&nook_core::set_icloud_provider_mode(
+        &config, mode,
+    ))?)
+}
+
+#[wasm_bindgen(js_name = createICloudSharedStorageTarget)]
+pub fn create_icloud_shared_storage_target(
+    role: &str,
+    zone_name: &str,
+    owner_record_name: &str,
+    root_record_name: &str,
+    short_guid: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    let role = match role.trim() {
+        "owner" => nook_core::ICloudShareRole::Owner,
+        "participant" => nook_core::ICloudShareRole::Participant,
+        other => {
+            return Err(wasm_bindgen::JsError::new(&format!(
+                "Unknown iCloud share role: {other}"
+            )));
+        }
+    };
+    Ok(nook_core::ICloudSharedTarget::new(
+        role,
+        zone_name,
+        owner_record_name,
+        root_record_name,
+        short_guid,
+    )?
+    .to_storage_id()?)
+}
+
+#[wasm_bindgen(js_name = parseICloudSharedStorageTarget)]
+pub fn parse_icloud_shared_storage_target(
+    storage_target_id: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    Ok(to_js_value(
+        &nook_core::ICloudSharedTarget::from_storage_id(storage_target_id)?,
+    )?)
+}
+
 #[wasm_bindgen(js_name = bindGoogleDriveSharedFolder)]
 pub fn bind_google_drive_shared_folder(
     config: JsValue,
@@ -484,6 +532,20 @@ pub fn vault_architecture_onboarding_type(
     let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
     architecture.validate()?;
     Ok(architecture.onboarding_type().as_str().to_owned())
+}
+
+#[wasm_bindgen(js_name = providerOnboardingType)]
+pub fn provider_onboarding_type(
+    provider: JsValue,
+    architecture: JsValue,
+) -> Result<String, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    Ok(
+        nook_core::provider_onboarding_type(&provider, &architecture)?
+            .as_str()
+            .to_owned(),
+    )
 }
 
 #[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]
@@ -538,9 +600,97 @@ pub fn enrollment_provider_for_architecture(
     ))
 }
 
-/// Validate a shared-grant request, then (for Google Drive) create a My Drive
-/// folder and share it with the joiner. Falls back to `ManualGrantRequired` when
-/// the Drive API fails or no owner access token is supplied.
+async fn grant_existing_drive_folder(
+    access_token: &str,
+    folder_id: String,
+    instructions_key: String,
+    joiner_identity: String,
+    storage_target_name: Option<String>,
+) -> nook_core::SharedStorageGrantOutcome {
+    match storage::drive_shared::share_folder_with_email(access_token, &folder_id, &joiner_identity)
+        .await
+    {
+        Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
+            note: "architecture_modes.shared_grant_success".to_owned(),
+            storage_target_id: folder_id,
+            storage_target_name,
+        },
+        Err(error) => {
+            tracing::warn!(
+                scope = "shared-storage-grant",
+                stage = "share-existing-folder",
+                error = %error,
+                "automatic shared storage grant failed; manual grant required"
+            );
+            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                instructions_key,
+                joiner_identity,
+                storage_target_id: Some(folder_id),
+                storage_target_name,
+            }
+        }
+    }
+}
+
+async fn create_and_grant_drive_folder(
+    access_token: &str,
+    folder_name: &str,
+    instructions_key: String,
+    joiner_identity: String,
+) -> nook_core::SharedStorageGrantOutcome {
+    let Ok((folder_id, created_name)) =
+        storage::drive_shared::create_shared_vault_folder(access_token, folder_name)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    scope = "shared-storage-grant",
+                    stage = "create-folder",
+                    error = %error,
+                    "automatic shared storage grant failed; manual grant required"
+                );
+            })
+    else {
+        return nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+            instructions_key,
+            joiner_identity,
+            storage_target_id: None,
+            storage_target_name: None,
+        };
+    };
+    match storage::drive_shared::share_folder_with_email(access_token, &folder_id, &joiner_identity)
+        .await
+    {
+        Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
+            note: "architecture_modes.shared_grant_success".to_owned(),
+            storage_target_id: folder_id,
+            storage_target_name: Some(created_name),
+        },
+        Err(error) => {
+            tracing::warn!(
+                scope = "shared-storage-grant",
+                stage = "share-folder",
+                error = %error,
+                "automatic shared storage grant failed; manual grant required"
+            );
+            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                instructions_key,
+                joiner_identity,
+                storage_target_id: Some(folder_id),
+                storage_target_name: Some(created_name),
+            }
+        }
+    }
+}
+
+/// Validate a shared-grant request, then (for Google Drive) grant the persisted
+/// folder or create one when no target exists. Falls back to
+/// `ManualGrantRequired` when the Drive API fails or no owner token is supplied.
+fn is_google_drive_shared_grant_request(provider_type: &str, oauth_preset: Option<&str>) -> bool {
+    let oauth_preset = oauth_preset.unwrap_or_default().trim();
+    provider_type.trim() == "oauth-file"
+        && (oauth_preset.is_empty() || oauth_preset == "google-drive")
+}
+
 #[wasm_bindgen(js_name = prepareSharedStorageGrant)]
 pub async fn prepare_shared_storage_grant(
     request: JsValue,
@@ -559,70 +709,39 @@ pub async fn prepare_shared_storage_grant(
                 .as_deref()
                 .map(str::trim)
                 .filter(|token| !token.is_empty());
-            let is_gdrive = request.provider_type.trim() == "oauth-file"
-                && request
-                    .oauth_preset
-                    .as_deref()
-                    .unwrap_or("google-drive")
-                    .trim()
-                    == "google-drive";
+            let is_gdrive = is_google_drive_shared_grant_request(
+                &request.provider_type,
+                request.oauth_preset.as_deref(),
+            );
             match (token, is_gdrive) {
                 (Some(access_token), true) => {
-                    let folder_name = request
-                        .storage_target_hint
+                    if let Some(folder_id) = storage_target_id
                         .as_deref()
                         .map(str::trim)
-                        .filter(|name| !name.is_empty())
-                        .unwrap_or("Nook shared vault");
-                    match storage::drive_shared::create_shared_vault_folder(
-                        access_token,
-                        folder_name,
-                    )
-                    .await
+                        .filter(|target| !target.is_empty())
                     {
-                        Ok((folder_id, created_name)) => {
-                            match storage::drive_shared::share_folder_with_email(
-                                access_token,
-                                &folder_id,
-                                &joiner_identity,
-                            )
-                            .await
-                            {
-                                Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
-                                    note: "architecture_modes.shared_grant_success".to_owned(),
-                                    storage_target_id: folder_id,
-                                    storage_target_name: Some(created_name),
-                                },
-                                Err(error) => {
-                                    tracing::warn!(
-                                        scope = "shared-storage-grant",
-                                        stage = "share-folder",
-                                        error = %error,
-                                        "automatic shared storage grant failed; manual grant required"
-                                    );
-                                    nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
-                                        instructions_key,
-                                        joiner_identity,
-                                        storage_target_id: Some(folder_id),
-                                        storage_target_name: Some(created_name),
-                                    }
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            tracing::warn!(
-                                scope = "shared-storage-grant",
-                                stage = "create-folder",
-                                error = %error,
-                                "automatic shared storage grant failed; manual grant required"
-                            );
-                            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
-                                instructions_key,
-                                joiner_identity,
-                                storage_target_id,
-                                storage_target_name,
-                            }
-                        }
+                        grant_existing_drive_folder(
+                            access_token,
+                            folder_id.to_owned(),
+                            instructions_key,
+                            joiner_identity,
+                            storage_target_name,
+                        )
+                        .await
+                    } else {
+                        let folder_name = request
+                            .storage_target_hint
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|name| !name.is_empty())
+                            .unwrap_or("Nook shared vault");
+                        create_and_grant_drive_folder(
+                            access_token,
+                            folder_name,
+                            instructions_key,
+                            joiner_identity,
+                        )
+                        .await
                     }
                 }
                 _ => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
@@ -1320,5 +1439,24 @@ mod wasm_tests {
             NookStorageProviderTypeUtil::value(NookStorageProviderKind::LocalFolder),
             "local-folder"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_google_drive_shared_grant_request;
+
+    #[test]
+    fn legacy_empty_oauth_preset_is_a_google_drive_grant() {
+        assert!(is_google_drive_shared_grant_request("oauth-file", None));
+        assert!(is_google_drive_shared_grant_request("oauth-file", Some("")));
+        assert!(is_google_drive_shared_grant_request(
+            "oauth-file",
+            Some("google-drive")
+        ));
+        assert!(!is_google_drive_shared_grant_request(
+            "oauth-file",
+            Some("icloud")
+        ));
     }
 }

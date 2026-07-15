@@ -55,6 +55,7 @@ import {
   wasmStorageModeForProvider,
   type LocalFolderConfig,
   type GoogleDriveMode,
+  type ICloudMode,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
@@ -453,9 +454,12 @@ export class VaultState {
         this.githubRepo,
         this.oauthFile?.preset ?? undefined,
         this.oauthFile?.accessToken ?? undefined,
-        this.oauthFile?.folderId?.trim()
-          ? `shared:${this.oauthFile.folderId.trim()}`
-          : (this.oauthFile?.fileId ?? undefined),
+        this.oauthFile?.preset === "icloud" &&
+          this.oauthFile.iCloudShareTarget?.trim()
+          ? this.oauthFile.iCloudShareTarget.trim()
+          : this.oauthFile?.folderId?.trim()
+            ? `shared:${this.oauthFile.folderId.trim()}`
+            : (this.oauthFile?.fileId ?? undefined),
         this.oauthFile?.fileName ?? undefined,
       ),
     );
@@ -580,6 +584,18 @@ export class VaultState {
 
   async useGoogleSharedFolder(folderRef: string): Promise<string> {
     return oauthActions.useGoogleSharedFolder(this, folderRef);
+  }
+
+  selectICloudMode(mode: ICloudMode): void {
+    oauthActions.selectICloudMode(this, mode);
+  }
+
+  async createICloudSharedProvider(): Promise<void> {
+    return oauthActions.createICloudSharedProvider(this);
+  }
+
+  async useICloudSharedProvider(shareReference: string): Promise<void> {
+    return oauthActions.useICloudSharedProvider(this, shareReference);
   }
 
   async prepareICloudSignIn(): Promise<void> {

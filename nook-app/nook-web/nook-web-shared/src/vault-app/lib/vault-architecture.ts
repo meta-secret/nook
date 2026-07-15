@@ -1,6 +1,7 @@
 import {
   defaultVaultArchitecture as wasmDefaultVaultArchitecture,
   prepareSharedStorageGrant as wasmPrepareSharedStorageGrant,
+  providerOnboardingType as wasmProviderOnboardingType,
   providerReplicationCapability as wasmProviderReplicationCapability,
   validateProviderReplication as wasmValidateProviderReplication,
   validateVaultArchitecture as wasmValidateVaultArchitecture,
@@ -61,6 +62,13 @@ function normalizeVaultArchitecture(
 
 export function onboardingType(architecture: VaultArchitecture): string {
   return wasmVaultArchitectureOnboardingType(architecture);
+}
+
+export function providerOnboardingType(
+  provider: StorageProvider,
+  architecture: VaultArchitecture,
+): string {
+  return wasmProviderOnboardingType(provider, architecture);
 }
 
 export function canCreateSecret(architecture: VaultArchitecture): boolean {
@@ -140,6 +148,7 @@ export type SharedStorageGrantRequest = {
   joinerIdentityKind: "email";
   joinerIdentity: string;
   storageTargetHint?: string;
+  storageTargetId?: string;
   accessToken?: string;
 };
 

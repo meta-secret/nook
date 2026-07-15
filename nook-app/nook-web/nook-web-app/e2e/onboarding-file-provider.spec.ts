@@ -7,6 +7,7 @@ import {
   connectGoogleDriveGenesisDevice,
   createIsolatedContext,
   disableVaultIdleLock,
+  expandSettingsSection,
   installGoogleOAuthMock,
   openLoginProviderSetup,
   openOnboardDevicePanel,
@@ -178,6 +179,31 @@ test.describe('Google Drive provider modes', () => {
       })
       .toBeGreaterThan(0)
 
+    const secretKey = uniqueSecretKey('shared-drive-onboard')
+    const secretValue = 'shared-without-owner-google-credentials'
+    await addSecret(owner, secretKey, secretValue)
+    await openStorageSettings(owner)
+    await addVaultPassword(owner, 'Shared Drive onboarding', VAULT_PASSWORD)
+    await openOnboardDevicePanel(owner)
+    await owner
+      .getByTestId('onboard-password-entry-list')
+      .getByRole('radio')
+      .first()
+      .click()
+    await expect(owner.getByTestId('onboarding-type-label')).toContainText(
+      'Shared provider grant',
+    )
+    await expect(
+      owner.getByTestId('shared-joiner-identity-input'),
+    ).toBeVisible()
+    await owner
+      .getByTestId('shared-joiner-identity-input')
+      .fill(collaboratorEmail)
+    const linkInput = await submitOnboardEnrollmentCode(owner, VAULT_PASSWORD)
+    const enrollmentLink = (await linkInput.inputValue()).trim()
+    expect(enrollmentLink).toContain('#enroll=')
+    expect(driveStub.getSharedFolders()).toHaveLength(1)
+
     const collaboratorContext = await createIsolatedContext(browser)
     const collaborator = await collaboratorContext.newPage()
     try {
@@ -188,26 +214,76 @@ test.describe('Google Drive provider modes', () => {
       })
       await collaborator.goto('/app/')
       await clearBrowserVault(collaborator)
-      await collaborator.reload()
-      await openLoginProviderSetup(collaborator)
-      await collaborator.getByTestId('provider-option-oauth-file').click()
-      await collaborator.getByTestId('google-drive-mode-shared').click()
-      await collaborator.getByTestId('google-sign-in-btn').click()
+      await collaborator.goto('about:blank')
+      await collaborator.goto(enrollmentLink)
       await expect(
-        collaborator.getByTestId('google-shared-folder-create-mode'),
+        collaborator.getByTestId('enrollment-scan-panel'),
       ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-      await collaborator.getByTestId('google-shared-folder-join-mode').click()
-      await collaborator
-        .getByTestId('google-shared-folder-ref')
-        .fill(`https://drive.google.com/drive/folders/${sharedFolder.id}`)
-      await collaborator.getByTestId('google-use-shared-folder-btn').click()
       await expect(
-        collaborator.getByTestId('connect-provider-btn'),
-      ).toBeEnabled()
+        collaborator.getByTestId('enrollment-icloud-auth-toggle'),
+      ).toBeVisible()
+      await collaborator
+        .getByTestId('enrollment-password-input')
+        .fill(VAULT_PASSWORD)
+      await collaborator.getByTestId('submit-enrollment-code-btn').click()
+      await waitForVaultUnlocked(collaborator, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+      await assertVaultReady(collaborator)
+      await waitForSecretOnDevice(collaborator, secretKey)
+      expect(await revealSecretValue(collaborator, secretKey)).toBe(secretValue)
+      await openStorageSettings(collaborator)
+      await expandSettingsSection(collaborator, 'storage')
+      await expect(
+        collaborator.getByTestId('settings-provider-oauth-file'),
+      ).toBeVisible()
     } finally {
       await collaborator.close()
       await collaboratorContext.close()
     }
+  })
+})
+
+test.describe('iCloud provider modes', () => {
+  test('switches from private CloudKit storage to a shared target', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const container = {
+        setUpAuth: async () => undefined,
+        whenUserSignsIn: () => new Promise(() => {}),
+      }
+      ;(
+        window as typeof window & {
+          CloudKit?: {
+            configure: () => void
+            getDefaultContainer: () => typeof container
+          }
+        }
+      ).CloudKit = {
+        configure: () => {},
+        getDefaultContainer: () => container,
+      }
+    })
+    await page.goto('/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+
+    await openLoginProviderSetup(page)
+    await page.getByTestId('provider-option-icloud').click()
+    await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+
+    await page.getByTestId('icloud-mode-shared').click()
+
+    await expect(page.getByTestId('icloud-mode-shared')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
   })
 })
 

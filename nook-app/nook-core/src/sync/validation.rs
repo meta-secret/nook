@@ -151,6 +151,135 @@ impl GoogleDriveMode {
     }
 }
 
+/// iCloud storage visibility selected for one provider connection.
+///
+/// Private providers continue to use the current user's default private
+/// `CloudKit` zone. Shared providers use a custom record hierarchy: owners write
+/// through their private database while participants write through their
+/// shared database with their own `CloudKit` web-auth token.
+#[wasm_bindgen]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ICloudMode {
+    #[default]
+    Private,
+    Shared,
+}
+
+impl ICloudMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Private => "private",
+            Self::Shared => "shared",
+        }
+    }
+
+    pub fn parse(value: &str) -> ValidationResult<Self> {
+        match value.trim() {
+            "" | "private" => Ok(Self::Private),
+            "shared" => Ok(Self::Shared),
+            other => Err(ValidationError::UnknownStorageMode {
+                mode: format!("icloud:{other}"),
+            }),
+        }
+    }
+}
+
+/// Which `CloudKit` database exposes a shared record hierarchy to this account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ICloudShareRole {
+    Owner,
+    Participant,
+}
+
+/// Stable, non-secret `CloudKit` location for one shared Nook event hierarchy.
+///
+/// This is persisted with the sync provider and copied through enrollment. It
+/// deliberately contains no `CloudKit` web-auth token; every account signs in
+/// independently. `short_guid` is the acceptance handle, while the zone/root
+/// fields route `CloudKit` Web Services after the share has been accepted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ICloudSharedTarget {
+    pub role: ICloudShareRole,
+    pub zone_name: String,
+    pub owner_record_name: String,
+    pub root_record_name: String,
+    pub short_guid: String,
+}
+
+impl ICloudSharedTarget {
+    pub fn new(
+        role: ICloudShareRole,
+        zone_name: &str,
+        owner_record_name: &str,
+        root_record_name: &str,
+        short_guid: &str,
+    ) -> ValidationResult<Self> {
+        fn required(value: &str) -> ValidationResult<String> {
+            let value = value.trim();
+            if value.is_empty() {
+                return Err(ValidationError::SharedStorageTargetRequired);
+            }
+            Ok(value.to_owned())
+        }
+
+        Ok(Self {
+            role,
+            zone_name: required(zone_name)?,
+            owner_record_name: required(owner_record_name)?,
+            root_record_name: required(root_record_name)?,
+            short_guid: required(short_guid)?,
+        })
+    }
+
+    /// Serialize the target into the opaque provider/enrollment storage id.
+    pub fn to_storage_id(&self) -> ValidationResult<String> {
+        serde_json::to_string(self)
+            .map(|target| format!("icloud-share-v1:{target}"))
+            .map_err(|_| ValidationError::SharedStorageTargetRequired)
+    }
+
+    pub fn from_storage_id(value: &str) -> ValidationResult<Self> {
+        let encoded = value
+            .trim()
+            .strip_prefix("icloud-share-v1:")
+            .ok_or(ValidationError::SharedStorageTargetRequired)?;
+        let target: Self = serde_json::from_str(encoded)
+            .map_err(|_| ValidationError::SharedStorageTargetRequired)?;
+        Self::new(
+            target.role,
+            &target.zone_name,
+            &target.owner_record_name,
+            &target.root_record_name,
+            &target.short_guid,
+        )
+    }
+}
+
+/// `CloudKit` routing for immutable event records.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub enum ICloudEventTarget {
+    #[default]
+    Private,
+    Shared(ICloudSharedTarget),
+}
+
+impl ICloudEventTarget {
+    pub fn from_storage_id(value: &str) -> ValidationResult<Self> {
+        if value.trim().starts_with("icloud-share-v1:") {
+            ICloudSharedTarget::from_storage_id(value).map(Self::Shared)
+        } else {
+            // Private CloudKit providers historically persisted an ordinary
+            // file/remote ref in this slot. Only the versioned share prefix
+            // opts a provider into shared-database routing.
+            Ok(Self::Private)
+        }
+    }
+}
+
 impl OauthFilePreset {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -1300,6 +1429,49 @@ mod tests {
             GoogleDriveMode::Shared
         );
         assert!(GoogleDriveMode::parse("public").is_err());
+    }
+
+    #[test]
+    fn icloud_shared_target_roundtrips_without_credentials() {
+        let owner = ICloudSharedTarget::new(
+            ICloudShareRole::Owner,
+            "nook-zone",
+            "owner-record",
+            "root-record",
+            "short-guid",
+        )
+        .unwrap();
+        let storage_id = owner.to_storage_id().unwrap();
+        assert!(storage_id.starts_with("icloud-share-v1:"));
+        assert_eq!(
+            ICloudSharedTarget::from_storage_id(&storage_id).unwrap(),
+            owner
+        );
+        assert_eq!(
+            ICloudEventTarget::from_storage_id("").unwrap(),
+            ICloudEventTarget::Private
+        );
+        assert_eq!(
+            ICloudEventTarget::from_storage_id("nook-events").unwrap(),
+            ICloudEventTarget::Private
+        );
+        assert_eq!(
+            ICloudEventTarget::from_storage_id("legacy-private-record-ref").unwrap(),
+            ICloudEventTarget::Private
+        );
+        assert_eq!(
+            ICloudEventTarget::from_storage_id(&storage_id).unwrap(),
+            ICloudEventTarget::Shared(owner)
+        );
+        assert!(ICloudEventTarget::from_storage_id("icloud-share-v1:{}").is_err());
+        assert!(ICloudSharedTarget::from_storage_id("icloud-share-v1:{}").is_err());
+    }
+
+    #[test]
+    fn icloud_mode_is_explicit_and_backward_compatible() {
+        assert_eq!(ICloudMode::parse("").unwrap(), ICloudMode::Private);
+        assert_eq!(ICloudMode::parse("shared").unwrap(), ICloudMode::Shared);
+        assert!(ICloudMode::parse("public").is_err());
     }
 
     #[test]
