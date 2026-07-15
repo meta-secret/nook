@@ -293,7 +293,7 @@
     </p>
   {/if}
 
-  {#if approved}
+  {#if approved && !handoffError}
     <p
       class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-approved"
