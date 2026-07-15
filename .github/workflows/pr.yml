@@ -39,6 +39,7 @@ jobs:
     if: github.event.action != 'closed'
     # Benchmark arm: use a fresh GitHub-hosted VM to compare the same PR gate
     # against the normal cache-warm self-hosted Nook runner path.
+    # Normal production configuration: runs-on: nook
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
