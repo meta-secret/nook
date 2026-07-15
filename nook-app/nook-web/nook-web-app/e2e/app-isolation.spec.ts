@@ -121,19 +121,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await extensionContext.addInitScript(installMockPasskeyRuntime)
   const extensionPage = await extensionContext.newPage()
   await extensionPage.goto(new URL(page.url()).origin)
-  await expect
-    .poll(
-      () =>
-        extensionPage.evaluate(
-          () =>
-            Boolean(
-              (window as Window & { __nookVault?: DebugVault }).__nookVault
-                ?.manager,
-            ),
-        ),
-      { timeout: UI_TIMEOUT_MS * 2 },
-    )
-    .toBe(true)
+  await expect(
+    extensionPage.getByTestId('login-create-vault-chooser'),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
   const extensionDevice = await extensionPage.evaluate(async () => {
     const manager = (window as Window & { __nookVault?: DebugVault })
       .__nookVault?.manager
