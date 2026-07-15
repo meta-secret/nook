@@ -39,17 +39,30 @@ test('exposes only the project capability and rejects the opposite vault type', 
     .toBe(expectedKind)
 
   if (isSimple) {
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
+    await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
+      'Open an existing vault',
+    )
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)
+    await page.getByTestId('get-started-path-simple').click()
+    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
   } else {
-    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
-    await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
+    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
+    await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
+      'Open an existing vault',
+    )
+    await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveAttribute(
       'href',
       `${SIMPLE_APP_URL}/`,
     )
+    await page.getByTestId('get-started-path-sentinel').click()
+    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
   }
 
   const oppositeArchitecture = isSimple
@@ -100,4 +113,23 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('vault-panel')).toBeVisible()
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+})
+
+test('opens the existing-vault workflow without starting creation', async ({
+  page,
+}, testInfo) => {
+  const expectedKind =
+    testInfo.project.name === 'simple-isolation' ? 'simple' : 'sentinel'
+
+  await page.getByTestId('login-connect-storage-btn').click()
+
+  await expect(page.locator('meta[name="nook-app-kind"]')).toHaveAttribute(
+    'content',
+    expectedKind,
+  )
+  await expect(page.getByTestId('login-provider-setup')).toBeVisible()
+  await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
+  await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
+  await expect(page.getByTestId('login-create-vault-chooser')).toHaveCount(0)
+  await expect(page.getByTestId('login-back-to-get-started')).toBeVisible()
 })

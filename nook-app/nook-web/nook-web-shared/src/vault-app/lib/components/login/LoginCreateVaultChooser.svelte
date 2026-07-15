@@ -142,21 +142,6 @@
   let importedParticipantResponse = $state('')
 
   $effect(() => {
-    if (
-      wizardStep !== 'choose' ||
-      sentinelInvitationRequest.trim() ||
-      sentinelOnboardingPackage.trim()
-    ) {
-      return
-    }
-    if (appKind === 'simple') {
-      chooseSimplePath()
-    } else if (appKind === 'sentinel') {
-      chooseSentinelCreatePath()
-    }
-  })
-
-  $effect(() => {
     if (sentinelOnboardingPackage.trim() && wizardStep === 'choose') {
       chosenPath = 'join'
       wizardStep = 'join'
@@ -278,10 +263,19 @@
   const generatedParticipantResponseLink = $derived(
     buildSentinelGenesisParticipantResponseLink(generatedParticipantResponse),
   )
-  const showImportFooter = $derived(
-    wizardStep === 'choose' ||
-      wizardStep === 'simple-create' ||
-      wizardStep === 'sentinel-dashboard',
+  const landingSupporting = $derived(
+    appKind === 'simple'
+      ? vault.t('login.landing_supporting_simple')
+      : appKind === 'sentinel'
+        ? vault.t('login.landing_supporting_sentinel')
+        : vault.t('login.landing_supporting'),
+  )
+  const existingVaultDescription = $derived(
+    appKind === 'simple'
+      ? vault.t('login.path_cloud_description_simple')
+      : appKind === 'sentinel'
+        ? vault.t('login.path_cloud_description_sentinel')
+        : vault.t('login.path_cloud_description'),
   )
 
   $effect(() => {
@@ -299,11 +293,10 @@
     }
   })
   const canGoBack = $derived(
-    appKind === 'unified-development' &&
-      (wizardStep === 'simple-create' ||
+    wizardStep === 'simple-create' ||
       wizardStep === 'sentinel-dashboard' ||
       wizardStep === 'sentinel-policy' ||
-      wizardStep === 'join'),
+      wizardStep === 'join',
   )
 
   const stepIndex = $derived.by(() => {
@@ -330,7 +323,7 @@
     if (chosenPath === 'join') {
       return [choose, vault.t('login.landing_step_join')]
     }
-    return [choose, vault.t('login.landing_step_create_or_configure')]
+    return [choose]
   })
 
   function portal(node: HTMLElement, enabled: boolean) {
@@ -712,7 +705,7 @@
         <p
           class="max-w-md text-base leading-7 text-muted-foreground text-pretty"
         >
-          {vault.t('login.landing_supporting')}
+          {landingSupporting}
         </p>
 
         <div
@@ -823,60 +816,100 @@
                             class="grid gap-2"
                             data-testid="get-started-path-list"
                           >
+                            {#if appKind !== 'sentinel'}
+                              <button
+                                type="button"
+                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
+                                data-testid="get-started-path-simple"
+                                disabled={isBusy}
+                                onclick={chooseSimplePath}
+                              >
+                                <span
+                                  class="grid size-9 place-items-center rounded-full border border-border bg-muted/30"
+                                >
+                                  <KeyRound class="size-4" />
+                                </span>
+                                <span class="min-w-0">
+                                  <span class="block text-sm font-semibold">
+                                    {vault.t(
+                                      'login.get_started_path_simple_title',
+                                    )}
+                                  </span>
+                                  <span
+                                    class="mt-1 block text-xs leading-snug text-muted-foreground"
+                                  >
+                                    {vault.t(
+                                      'login.get_started_path_simple_description',
+                                    )}
+                                  </span>
+                                </span>
+                                <ArrowRight
+                                  class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                                />
+                              </button>
+                            {/if}
+                            {#if appKind !== 'simple'}
+                              <button
+                                type="button"
+                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
+                                data-testid="get-started-path-sentinel"
+                                disabled={isBusy}
+                                onclick={chooseSentinelCreatePath}
+                              >
+                                <span
+                                  class="grid size-9 place-items-center rounded-full bg-foreground text-background"
+                                >
+                                  <Users class="size-4" />
+                                </span>
+                                <span class="min-w-0">
+                                  <span class="block text-sm font-semibold">
+                                    {vault.t(
+                                      'login.get_started_path_sentinel_title',
+                                    )}
+                                  </span>
+                                  <span
+                                    class="mt-1 block text-xs leading-snug text-muted-foreground"
+                                  >
+                                    {vault.t(
+                                      'login.get_started_path_sentinel_description',
+                                    )}
+                                  </span>
+                                </span>
+                                <ArrowRight
+                                  class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                                />
+                              </button>
+                            {/if}
+                          </div>
+
+                          <div class="pt-3" data-testid="login-path-cloud">
+                            <div
+                              class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
+                            >
+                              <span class="text-center text-xs">
+                                {vault.t('login.existing_vault_alternative')}
+                              </span>
+                            </div>
                             <button
                               type="button"
-                              class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
-                              data-testid="get-started-path-simple"
+                              class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
+                              data-testid="login-connect-storage-btn"
                               disabled={isBusy}
-                              onclick={chooseSimplePath}
+                              onclick={onConnectStorage}
                             >
                               <span
                                 class="grid size-9 place-items-center rounded-full border border-border bg-muted/30"
                               >
-                                <KeyRound class="size-4" />
+                                <Cloud class="size-4" />
                               </span>
                               <span class="min-w-0">
                                 <span class="block text-sm font-semibold">
-                                  {vault.t(
-                                    'login.get_started_path_simple_title',
-                                  )}
+                                  {vault.t('login.path_cloud_title')}
                                 </span>
                                 <span
                                   class="mt-1 block text-xs leading-snug text-muted-foreground"
                                 >
-                                  {vault.t(
-                                    'login.get_started_path_simple_description',
-                                  )}
-                                </span>
-                              </span>
-                              <ArrowRight
-                                class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                              />
-                            </button>
-                            <button
-                              type="button"
-                              class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
-                              data-testid="get-started-path-sentinel"
-                              disabled={isBusy}
-                              onclick={chooseSentinelCreatePath}
-                            >
-                              <span
-                                class="grid size-9 place-items-center rounded-full bg-foreground text-background"
-                              >
-                                <Users class="size-4" />
-                              </span>
-                              <span class="min-w-0">
-                                <span class="block text-sm font-semibold">
-                                  {vault.t(
-                                    'login.get_started_path_sentinel_title',
-                                  )}
-                                </span>
-                                <span
-                                  class="mt-1 block text-xs leading-snug text-muted-foreground"
-                                >
-                                  {vault.t(
-                                    'login.get_started_path_sentinel_description',
-                                  )}
+                                  {existingVaultDescription}
                                 </span>
                               </span>
                               <ArrowRight
@@ -1273,28 +1306,6 @@
             </div>
           {/if}
 
-          {#if showImportFooter}
-            <div class="pt-6" data-testid="login-path-cloud">
-              <div
-                class="flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
-              >
-                <span class="text-center text-xs">
-                  {vault.t('login.import_existing_alternative')}
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                class="mx-auto mt-2 flex text-foreground"
-                data-testid="login-connect-storage-btn"
-                disabled={isBusy}
-                onclick={onConnectStorage}
-              >
-                <Cloud class="size-4" />
-                {vault.t('login.path_cloud_btn')}
-              </Button>
-            </div>
-          {/if}
         </div>
       </div>
     </section>

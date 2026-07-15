@@ -239,7 +239,7 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
-    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
+    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
     await page.getByTestId('create-vault-wizard-back').click()
 
     await page.getByTestId('get-started-path-sentinel').click()
@@ -479,7 +479,7 @@ test.describe('vault architecture modes', () => {
     const chooser = page.getByTestId('login-create-vault-chooser')
     await expect(chooser).toContainText('Keys, not accounts.')
     await continueToPathChooser(page)
-    await expect(chooser).toContainText('Choose your vault')
+    await expect(chooser).toContainText('Create a new vault')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
       'Create simple vault',
     )
@@ -487,10 +487,10 @@ test.describe('vault architecture modes', () => {
       'Create Sentinel vault',
     )
     await expect(page.getByTestId('login-path-cloud')).toContainText(
-      'Import an existing Simple or Sentinel vault',
+      'Already have a vault?',
     )
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Import from sync provider',
+      'Open an existing vault',
     )
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
 
@@ -498,7 +498,7 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-option-ru').click()
 
     await expect(chooser).toContainText('Ключи, а не аккаунты.')
-    await expect(chooser).toContainText('Выберите сейф')
+    await expect(chooser).toContainText('Создать новый сейф')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
       'Создать простой сейф',
     )

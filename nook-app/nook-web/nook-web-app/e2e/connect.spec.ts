@@ -84,13 +84,15 @@ test.describe('vault connect flow', () => {
     await page.getByTestId('get-started-path-simple').click()
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
     await page.getByTestId('login-vault-name-input').fill('Workflow vault')
-    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
+    await expect(page.getByTestId('login-path-cloud')).toHaveCount(0)
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeEnabled()
+    await page.getByTestId('create-vault-wizard-back').click()
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
     await page.getByTestId('login-connect-storage-btn').click()
     await expect(page.getByTestId('login-provider-setup')).toBeVisible()
