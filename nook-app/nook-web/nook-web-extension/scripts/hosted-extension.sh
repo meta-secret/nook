@@ -149,6 +149,7 @@ validate_extracted_manifest() {
       and (.key | type == "string" and length > 0)
       and .externally_connectable.matches == [$simple]
       and any(.content_scripts[]; .matches == [$simple])
+      and all(.content_scripts[]; .exclude_matches | index($simple) != null)
       and all(.content_scripts[]; .exclude_matches | index($sentinel) != null)
       and all(.content_scripts[]; .exclude_matches | index($production_sentinel) != null)
       and all(.content_scripts[]; .matches | index($sentinel) == null)
@@ -164,6 +165,27 @@ validate_extracted_manifest() {
     fail "extension manifest key derives $actual_extension_id, metadata declares $expected_extension_id"
     return 1
   }
+}
+
+fetch_from_selected_origin() {
+  local url="$1"
+  local output="$2"
+  local effective_url
+  effective_url="$(
+    curl \
+      --location --fail --show-error --silent \
+      --proto '=https' --proto-redir '=https' \
+      --retry 4 --retry-all-errors --connect-timeout 10 --max-time 120 \
+      --output "$output" --write-out '%{url_effective}' \
+      "$url"
+  )"
+  case "$effective_url" in
+    "$EXTENSION_SITE_URL"*) ;;
+    *)
+      fail "download redirected outside the selected deployment: $effective_url"
+      return 1
+      ;;
+  esac
 }
 
 activate_release() {
@@ -197,12 +219,7 @@ install_hosted_extension() {
   local archive="$tmp_dir/extension.zip"
   local checksum="$tmp_dir/extension.sha256"
   local listing="$tmp_dir/archive.list"
-  local curl_args=(
-    --location --fail --show-error --silent
-    --retry 4 --retry-all-errors --connect-timeout 10 --max-time 120
-  )
-
-  curl "${curl_args[@]}" "$METADATA_URL" -o "$metadata"
+  fetch_from_selected_origin "$METADATA_URL" "$metadata"
   validate_metadata "$metadata"
   local archive_name expected_sha download_url checksum_url commit actual_sha expected_extension_id
   archive_name="$(jq -er '.archive' "$metadata")"
@@ -212,13 +229,13 @@ install_hosted_extension() {
   commit="$(jq -er '.commit' "$metadata")"
   expected_extension_id="$(jq -er '.extension_id' "$metadata")"
 
-  curl "${curl_args[@]}" "$download_url" -o "$archive"
+  fetch_from_selected_origin "$download_url" "$archive"
   actual_sha="$(sha256_file "$archive")"
   [ "$actual_sha" = "$expected_sha" ] || {
     fail "checksum mismatch for $download_url"
     return 1
   }
-  curl "${curl_args[@]}" "$checksum_url" -o "$checksum"
+  fetch_from_selected_origin "$checksum_url" "$checksum"
   grep -Fxq "$expected_sha  $archive_name" "$checksum" || {
     fail "checksum file from $checksum_url does not match metadata"
     return 1

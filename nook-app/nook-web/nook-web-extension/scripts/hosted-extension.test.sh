@@ -58,6 +58,7 @@ cat > "$fixture/archive/manifest.json" <<'EOF'
   "content_scripts": [{
     "matches": ["https://pr-410.nokey-simple.pages.dev/*"],
     "exclude_matches": [
+      "https://pr-410.nokey-simple.pages.dev/*",
       "https://sentinel.nokey.sh/*",
       "https://pr-410.nokey-sentinel.pages.dev/*"
     ],
@@ -94,6 +95,10 @@ missing_production_sentinel="$fixture/missing-production-sentinel.json"
 jq '(.content_scripts[].exclude_matches) -= ["https://sentinel.nokey.sh/*"]' \
   "$fixture/archive/manifest.json" > "$missing_production_sentinel"
 expect_failure validate_extracted_manifest "$missing_production_sentinel" "$extension_id"
+missing_simple="$fixture/missing-simple.json"
+jq '(.content_scripts[].exclude_matches) -= ["https://pr-410.nokey-simple.pages.dev/*"]' \
+  "$fixture/archive/manifest.json" > "$missing_simple"
+expect_failure validate_extracted_manifest "$missing_simple" "$extension_id"
 expect_failure validate_extracted_manifest \
   "$fixture/archive/manifest.json" 'abcdefghijklmnopabcdefghijklmnop'
 
@@ -103,9 +108,11 @@ FAKE_CHECKSUM="$fixture/checksum"
 curl() {
   local output=''
   local url=''
+  local write_out=''
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      -o) output="$2"; shift 2 ;;
+      -o|--output) output="$2"; shift 2 ;;
+      --write-out) write_out="$2"; shift 2 ;;
       http*) url="$1"; shift ;;
       *) shift ;;
     esac
@@ -116,9 +123,13 @@ curl() {
     *.zip) cp "$FAKE_ARCHIVE" "$output" ;;
     *) return 1 ;;
   esac
+  [ -z "$write_out" ] || printf '%s' "${FAKE_EFFECTIVE_URL:-$url}"
 }
 
 CHANNEL='' PR=410
+FAKE_EFFECTIVE_URL='https://redirect.invalid/extension.json'
+expect_failure fetch_from_selected_origin "$METADATA_URL" "$TEST_ROOT/redirected.json"
+unset FAKE_EFFECTIVE_URL
 installed="$(install_hosted_extension)"
 assert_equal "$installed" "$NOOK_EXTENSION_RELEASE_DIR/hosted/pr-410/current"
 [ -L "$installed" ]
