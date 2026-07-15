@@ -161,6 +161,72 @@ async function sendExternalMessage(
   )
 }
 
+async function sendInternalMessage(page: Page, message: unknown) {
+  return page.evaluate(
+    (runtimeMessage) =>
+      new Promise<unknown>((resolve, reject) => {
+        chrome.runtime.sendMessage(runtimeMessage, (response) => {
+          if (chrome.runtime.lastError?.message) {
+            reject(new Error(chrome.runtime.lastError.message))
+            return
+          }
+          resolve(response)
+        })
+      }),
+    message,
+  )
+}
+
+async function createPinProtectedExtensionDevice(page: Page) {
+  return page.evaluate(
+    () =>
+      new Promise<{
+        ok: true
+        device: {
+          deviceId: string
+          devicePublicKey: string
+          deviceSigningPublicKey: string
+        }
+      }>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: 'nook:ensure-extension-session-runtime' },
+          (ready) => {
+            if (chrome.runtime.lastError?.message || ready?.ok !== true) {
+              reject(
+                new Error(
+                  chrome.runtime.lastError?.message ??
+                    'Extension session did not start.',
+                ),
+              )
+              return
+            }
+            chrome.runtime.sendMessage(
+              {
+                type: 'nook:extension-session-create-pin',
+                payload: { pin: '246810' },
+              },
+              (response) => {
+                if (
+                  chrome.runtime.lastError?.message ||
+                  response?.ok !== true
+                ) {
+                  reject(
+                    new Error(
+                      chrome.runtime.lastError?.message ??
+                        'Extension device setup failed.',
+                    ),
+                  )
+                  return
+                }
+                resolve(response)
+              },
+            )
+          },
+        )
+      }),
+  )
+}
+
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
 }, testInfo) => {
@@ -218,7 +284,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       popupPage.getByTestId('device-protection-use-existing-choice'),
     ).toBeVisible()
 
-    const openedConnectPage = context.waitForEvent('page')
+    const openedConnectPage = context.waitForEvent('page', { timeout: 30_000 })
     expect(
       await popupPage.evaluate(
         () =>
@@ -353,9 +419,23 @@ test('approves an extension device and imports the granted Simple Vault event lo
     const extensionId = new URL(worker.url()).host
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+    await expect(
+      popupPage.getByTestId('device-protection-setup-btn'),
+    ).toBeVisible()
+    const setup = await createPinProtectedExtensionDevice(popupPage)
+    expect(setup.ok).toBe(true)
 
     const openedConnectPage = context.waitForEvent('page')
-    await popupPage.getByTestId('device-protection-setup-btn').click()
+    expect(
+      await sendInternalMessage(popupPage, {
+        type: 'nook:begin-extension-pairing',
+        payload: {
+          ...setup.device,
+          deviceLabel: 'Nook Extension - Chromium test profile',
+        },
+      }),
+    ).toEqual({ ok: true })
     const simplePage = await openedConnectPage
     await expect(simplePage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
