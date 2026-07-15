@@ -2431,7 +2431,11 @@ export async function revealSecretInRow(
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
     await toggle.click()
   }
-  await row.getByRole('button', { name: 'Show secret' }).click()
+  const revealButton = row.getByTestId('reveal-secret-btn')
+  await expect(revealButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  if ((await revealButton.getAttribute('aria-pressed')) !== 'true') {
+    await revealButton.click()
+  }
 }
 
 export async function selectLoginUnlockMethod(
