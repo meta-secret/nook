@@ -26,6 +26,16 @@ projects, WebAuthn relying-party origins, and IndexedDB origin storage. They
 share one audited, generated WASM package. Common Svelte presentation and typed
 browser adapters live under `nook-web-shared/src/vault-app`.
 
+The public site chooses the product, not the storage workflow. On an empty
+origin, the selected vault app presents **Create a new vault** and **Open an
+existing vault** as sibling intents. Creation stays within that app's fixed
+vault type; opening connects the sync provider that already holds a compatible
+encrypted vault. Provider import is never a later step inside new-vault
+creation, and the internal combined harness is not exposed as a universal
+production manager. Opening an existing vault fails closed when the selected
+provider is empty; only explicit creation or adding a provider to an
+authenticated vault may initialize empty provider storage with genesis state.
+
 ## Enforcement
 
 `VaultApplication` in `nook-core` owns the compatibility matrix. `nook-wasm` is

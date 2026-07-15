@@ -174,9 +174,9 @@ pub use vault_access_diagnostics::{
 pub use vault_architecture::{
     DeviceMode, OnboardingType, ProviderReplicationCapability, ReplicationType, SentinelPolicy,
     SharedJoinerIdentityKind, SharedStorageGrantOutcome, SharedStorageGrantRequest,
-    VaultApplication, VaultArchitecture, VaultType, prepare_shared_storage_grant,
-    provider_replication_capability, validate_architecture_for_provider,
-    validate_provider_replication,
+    VaultApplication, VaultArchitecture, VaultConnectIntent, VaultType,
+    prepare_shared_storage_grant, provider_replication_capability,
+    validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,

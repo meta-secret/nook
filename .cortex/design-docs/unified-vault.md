@@ -171,10 +171,12 @@ stateDiagram-v2
    the chosen setup) **before**
    passkey. Passkey/device protection runs when the user confirms Simple create,
    or first when unlocking an existing local vault. Then load the local cache.
-2. **First visit / GetStarted:** create a Simple vault locally (after deferred
-   passkey), start Sentinel genesis without configuring storage until the vault
-   is atomically created, **or** connect a
-   sync provider to import an existing vault. See
+2. **First visit / GetStarted:** after the public site selects Simple or
+   Sentinel, the isolated app presents **Create a new vault** and **Open an
+   existing vault** as sibling intents. Creation either creates a Simple vault
+   locally (after deferred passkey) or starts Sentinel genesis without storage
+   until the vault is atomically created. Opening connects a sync provider to
+   import an existing vault of the app's fixed type. See
    [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
    identity; user returns through the passkey gate ([vault-session-and-lock.md](vault-session-and-lock.md)).

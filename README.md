@@ -24,7 +24,9 @@ Everyday Simple vaults live at
 [simple.nokey.sh](https://simple.nokey.sh); quorum-protected Sentinel vaults
 live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are independent
 applications and browser origins, not modes in one production app. The browser
-extension can pair only with Simple Vault.
+extension can pair only with Simple Vault. After choosing the product, its
+first-device screen offers two separate intents: create a new vault, or connect
+the sync provider for an existing compatible vault.
 
 The Main channel mirrors that split at [dev.nokey.sh](https://dev.nokey.sh),
 [simple.dev.nokey.sh](https://simple.dev.nokey.sh), and

@@ -65,6 +65,35 @@ pub enum VaultType {
     Sentinel,
 }
 
+/// User intent at the boundary where a sync provider is first connected.
+///
+/// An empty provider may become a backup target for a vault the user is
+/// creating, but it must never satisfy an explicit request to open a vault
+/// that already exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultConnectIntent {
+    CreateNew,
+    OpenExisting,
+    AddSyncProvider,
+}
+
+impl VaultConnectIntent {
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "create-new" => Some(Self::CreateNew),
+            "open-existing" => Some(Self::OpenExisting),
+            "add-sync-provider" => Some(Self::AddSyncProvider),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn permits_empty_remote_genesis(self) -> bool {
+        matches!(self, Self::CreateNew | Self::AddSyncProvider)
+    }
+}
+
 /// Compile-time application capability presented to vault domain operations.
 ///
 /// Production browser artifacts use exactly one of `Simple`, `Sentinel`, or
@@ -1137,6 +1166,17 @@ mod tests {
                 application: "extension".to_owned(),
                 vault_type: "sentinel".to_owned(),
             })
+        );
+    }
+
+    #[test]
+    fn existing_vault_intent_rejects_empty_remote_genesis() {
+        assert!(VaultConnectIntent::CreateNew.permits_empty_remote_genesis());
+        assert!(VaultConnectIntent::AddSyncProvider.permits_empty_remote_genesis());
+        assert!(!VaultConnectIntent::OpenExisting.permits_empty_remote_genesis());
+        assert_eq!(
+            VaultConnectIntent::parse("open-existing"),
+            Some(VaultConnectIntent::OpenExisting)
         );
     }
 

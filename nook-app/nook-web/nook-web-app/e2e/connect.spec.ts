@@ -84,13 +84,15 @@ test.describe('vault connect flow', () => {
     await page.getByTestId('get-started-path-simple').click()
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
     await page.getByTestId('login-vault-name-input').fill('Workflow vault')
-    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
+    await expect(page.getByTestId('login-path-cloud')).toHaveCount(0)
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeEnabled()
+    await page.getByTestId('create-vault-wizard-back').click()
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
     await page.getByTestId('login-connect-storage-btn').click()
     await expect(page.getByTestId('login-provider-setup')).toBeVisible()
@@ -102,6 +104,34 @@ test.describe('vault connect flow', () => {
       'href',
       'https://github.com/meta-secret/nook',
     )
+  })
+
+  test('does not create a new vault when open existing finds an empty provider', async ({
+    page,
+  }) => {
+    await page.goto('/app/')
+    await openLoginProviderSetup(page)
+
+    const blocked = await page.evaluate(async () => {
+      const vault = (
+        window as Window & {
+          __nookVault?: {
+            handleRemoteVaultAssessStatus: (status: string) => Promise<boolean>
+          }
+        }
+      ).__nookVault
+      if (!vault) {
+        throw new Error('E2E vault state is not exposed')
+      }
+      return vault.handleRemoteVaultAssessStatus('remote_missing')
+    })
+
+    expect(blocked).toBe(true)
+    await expect(page.getByTestId('vault-error')).toContainText(
+      'No existing vault was found in this provider',
+    )
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
 
   test('shows login gate on first visit', async ({ page }) => {

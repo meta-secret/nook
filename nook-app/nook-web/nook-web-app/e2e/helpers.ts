@@ -149,20 +149,19 @@ export async function openLoginProviderSetup(page: Page) {
     return
   }
 
-  await advanceCreateVaultWizardToFinalStep(page)
-
   const connectBtn = page.getByTestId('login-connect-storage-btn')
   const legacyLink = page.getByTestId('login-use-storage-provider-link')
   const addBtn = page.getByTestId('add-provider-btn')
   const providerSetup = page.getByTestId('login-provider-setup')
+  const providerEntryPoint = connectBtn
+    .or(legacyLink)
+    .or(addBtn)
+    .or(providerSetup)
+    .or(page.getByTestId('provider-picker-list'))
 
-  await expect(
-    connectBtn
-      .or(legacyLink)
-      .or(addBtn)
-      .or(providerSetup)
-      .or(page.getByTestId('provider-picker-list')),
-  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await expect(providerEntryPoint.first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 
   if (await page.getByTestId('provider-picker-list').isVisible()) {
     return
