@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { SvelteSet } from 'svelte/reactivity'
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
   import { VaultState, type StartSentinelGenesisArgs } from '$lib/vault.svelte'
   import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
@@ -187,7 +188,7 @@
     // Keep the listener for later lock/unlock cycles, while rejecting duplicate
     // request ids and concurrent handoffs within this mounted page session.
     let extensionHandoffInProgress = false
-    const processedExtensionHandoffs = new Set<string>()
+    const processedExtensionHandoffs = new SvelteSet<string>()
     const handleExtensionDeviceIdentityHandoff = (
       event: MessageEvent<unknown>,
     ) => {
