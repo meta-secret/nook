@@ -796,14 +796,27 @@
             />
           </div>
 
-          <p
-            class="text-xs text-muted-foreground"
-            data-testid="onboarding-type-label"
+          <div
+            class="rounded-md border border-border bg-muted/20 px-3 py-2.5"
+            data-testid="onboarding-type-summary"
           >
-            {vault.t(
-              `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
-            )}
-          </p>
+            <p
+              class="text-xs font-medium text-foreground"
+              data-testid="onboarding-type-label"
+            >
+              {vault.t(
+                `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
+              )}
+            </p>
+            <p
+              class="mt-1 text-xs text-muted-foreground text-pretty"
+              data-testid="onboarding-type-description"
+            >
+              {vault.t(
+                `architecture_modes.onboarding_type_${derivedOnboardingType}_description`,
+              )}
+            </p>
+          </div>
 
           {#if requiresSharedJoinerIdentity}
             <div class="space-y-1.5">

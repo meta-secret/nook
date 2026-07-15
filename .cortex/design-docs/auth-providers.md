@@ -92,6 +92,11 @@ even when the vault's legacy/default `replication_type` is `personal`. The
 joining browser signs into its own Google account and saves its own token. The
 owner may grant that account access to the already-persisted folder, but
 onboarding must not create a replacement folder or transfer owner credentials.
+The decrypted enrollment payload exposes the Rust-owned `OnboardingType`; the
+joiner dispatches on `PersonalCredentialTransfer` versus
+`SharedProviderGrant`. Shared-target provider variants cannot carry PAT, OAuth
+access-token, or refresh-token fields, so the credential-free rule is enforced
+by the payload shape rather than a TypeScript convention.
 
 **iCloud modes:** Private mode preserves the legacy default private CloudKit
 database behavior. Shared mode creates a custom private record zone and a

@@ -1,5 +1,8 @@
 import { beforeAll, describe, expect, test } from 'vitest'
-import initNookWasm, { enrollmentProviderForArchitecture } from '$app-wasm'
+import initNookWasm, {
+  OnboardingType,
+  enrollmentProviderForArchitecture,
+} from '$app-wasm'
 import type { StorageProvider } from '$lib/auth-providers'
 import {
   canCreateSecret,
@@ -85,6 +88,20 @@ describe('vault architecture adapter', () => {
     expect(onboardingType(defaultVaultArchitecture())).toBe(
       'personal-credential-transfer',
     )
+  })
+
+  test('private provider enrollment exposes the credential-transfer mode', () => {
+    const enrollmentProvider = enrollmentProviderForArchitecture(
+      googleDriveProvider(),
+      defaultVaultArchitecture(),
+      undefined,
+      undefined,
+    )
+
+    expect(enrollmentProvider.onboardingType).toBe(
+      OnboardingType.PersonalCredentialTransfer,
+    )
+    expect(enrollmentProvider.oauthAccessToken).toBe('ya29.test')
   })
 
   test('sentinel vaults are gated until their policy is ready', () => {
@@ -210,6 +227,9 @@ describe('vault architecture adapter', () => {
       'shared-folder-abc',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.onboardingType).toBe(
+      OnboardingType.SharedProviderGrant,
+    )
     expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
   })
 
@@ -234,6 +254,9 @@ describe('vault architecture adapter', () => {
       undefined,
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.onboardingType).toBe(
+      OnboardingType.SharedProviderGrant,
+    )
     expect(enrollmentProvider.sharedStorageTargetId).toBe(
       'persisted-shared-folder',
     )
@@ -260,6 +283,9 @@ describe('vault architecture adapter', () => {
       undefined,
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.onboardingType).toBe(
+      OnboardingType.SharedProviderGrant,
+    )
     expect(enrollmentProvider.oauthPreset).toBe('icloud')
     expect(enrollmentProvider.sharedJoinerIdentity).toBeUndefined()
     expect(enrollmentProvider.sharedStorageTargetId).toBe(

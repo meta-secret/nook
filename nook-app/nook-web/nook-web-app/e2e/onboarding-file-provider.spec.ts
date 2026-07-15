@@ -194,6 +194,9 @@ test.describe('Google Drive provider modes', () => {
       'Shared provider grant',
     )
     await expect(
+      owner.getByTestId('onboarding-type-description'),
+    ).toContainText('signs in with their own provider identity')
+    await expect(
       owner.getByTestId('shared-joiner-identity-input'),
     ).toBeVisible()
     await owner
