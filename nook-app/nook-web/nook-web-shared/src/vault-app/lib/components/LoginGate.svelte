@@ -29,10 +29,7 @@
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { AppKind } from '$lib/app-kind'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
-  import {
-    peekEnrollmentEntryId,
-    peekEnrollmentEntryLabel,
-  } from '$app-wasm'
+  import { peekEnrollmentEntryId, peekEnrollmentEntryLabel } from '$app-wasm'
 
   let {
     vault,
@@ -268,6 +265,7 @@
       {sentinelOnboardingPackage}
       {onAcceptSentinelOnboardingPackage}
       onConnectStorage={() => {
+        vault.beginExistingVaultOpen()
         showProviderSetupLink = true
       }}
     />
@@ -363,6 +361,7 @@
             onChooseVault={(storeId) => vault.chooseLoginVault(storeId)}
             onCreateVault={onCreateDeviceVault}
             onConnectStorage={() => {
+              vault.beginExistingVaultOpen()
               showProviderSetupLink = true
             }}
           />
@@ -381,6 +380,7 @@
             onSwitchVault={() => vault.beginLoginVaultPicker()}
             onCreateAnotherVault={onCreateDeviceVault}
             onImportFromSync={() => {
+              vault.beginExistingVaultOpen()
               showProviderSetupLink = true
             }}
           />
@@ -470,6 +470,7 @@
               class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
               data-testid="login-back-to-get-started"
               onclick={() => {
+                vault.cancelExistingVaultOpen()
                 showProviderSetupLink = false
               }}
             >

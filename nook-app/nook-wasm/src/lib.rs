@@ -1051,6 +1051,16 @@ pub fn configured_vault_application_name() -> String {
         .to_owned()
 }
 
+/// Return the Rust-owned empty-provider policy for a first-connect intent.
+#[wasm_bindgen(js_name = vaultConnectIntentPermitsEmptyRemoteGenesis)]
+pub fn vault_connect_intent_permits_empty_remote_genesis(
+    intent_name: &str,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let intent = nook_core::VaultConnectIntent::parse(intent_name)
+        .ok_or_else(|| wasm_bindgen::JsError::new("Unknown vault connect intent"))?;
+    Ok(intent.permits_empty_remote_genesis())
+}
+
 /// Fail before persistence/session creation when encrypted vault content does
 /// not belong to this artifact's compile-time application capability.
 #[wasm_bindgen(js_name = validateVaultContentForApplication)]

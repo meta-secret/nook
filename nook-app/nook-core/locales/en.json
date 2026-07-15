@@ -810,6 +810,7 @@
     "sync_blocked_edits": "Resolve the sync conflict before changing secrets.",
     "sync_failed": "Sync failed for this provider.",
     "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",
+    "existing_vault_not_found": "No existing vault was found in this provider. Choose another provider, or go back and create a new vault.",
     "local_folder_choose_err": "Choose a local backup folder before connecting.",
     "local_folder_multiple_vaults_short": "Choose a folder with one vault backup before syncing.",
     "local_folder_multiple_vaults_title": "Folder has multiple vaults",

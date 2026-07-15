@@ -30,6 +30,7 @@ import {
   setVaultSessionLocked,
   stagedProviderLabel as wasmStagedProviderLabel,
   translateFromCatalog,
+  vaultConnectIntentPermitsEmptyRemoteGenesis,
   vaultContentHash,
   wasmStorageArgs as wasmStorageArgsCore,
   type NookLocalVaultEntry,
@@ -214,6 +215,7 @@ export class VaultState {
   localVaultPresent = $state(false);
   localLoginPrepared = $state(false);
   loginSetupType = $state<StorageProviderType | undefined>(undefined);
+  loginRequiresExistingVault = $state(false);
   addProviderOpen = $state(false);
 
   storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE);
@@ -1665,6 +1667,20 @@ export class VaultState {
     return providersActions.beginProviderSetup(this, type, oauthPreset);
   }
 
+  beginExistingVaultOpen() {
+    this.loginRequiresExistingVault = true;
+    this.remoteVaultRecoveryPrompt = "none";
+    this.pendingConnectRecovery = "none";
+    this.errorMsg = "";
+  }
+
+  cancelExistingVaultOpen() {
+    this.loginRequiresExistingVault = false;
+    this.remoteVaultRecoveryPrompt = "none";
+    this.pendingConnectRecovery = "none";
+    this.errorMsg = "";
+  }
+
   beginAddProvider() {
     return providersActions.beginAddProvider(this);
   }
@@ -1736,6 +1752,17 @@ export class VaultState {
       return true;
     }
     if (accessStatus === "remote_missing") {
+      const intent = this.loginRequiresExistingVault
+        ? "open-existing"
+        : this.isAuthenticated
+          ? "add-sync-provider"
+          : "create-new";
+      if (!vaultConnectIntentPermitsEmptyRemoteGenesis(intent)) {
+        this.remoteVaultRecoveryPrompt = "none";
+        this.pendingConnectRecovery = "none";
+        this.errorMsg = this.t("auth_storage.existing_vault_not_found");
+        return true;
+      }
       // Empty remote on first provider setup is normal — genesis runs on connect.
       if (this.loginSetupType !== undefined) {
         return false;

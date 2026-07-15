@@ -398,6 +398,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   }
 
   state.loginSetupType = undefined;
+  state.loginRequiresExistingVault = false;
   state.addProviderOpen = false;
   state.applyActiveProviderCredentials();
   await state.persistProviders();

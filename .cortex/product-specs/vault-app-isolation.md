@@ -32,7 +32,9 @@ existing vault** as sibling intents. Creation stays within that app's fixed
 vault type; opening connects the sync provider that already holds a compatible
 encrypted vault. Provider import is never a later step inside new-vault
 creation, and the internal combined harness is not exposed as a universal
-production manager.
+production manager. Opening an existing vault fails closed when the selected
+provider is empty; only explicit creation or adding a provider to an
+authenticated vault may initialize empty provider storage with genesis state.
 
 ## Enforcement
 
