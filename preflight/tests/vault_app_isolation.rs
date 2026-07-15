@@ -230,6 +230,12 @@ fn development_cloudflare_deploy_publishes_only_the_landing_root() {
         docker_tasks.contains("-e CF_PAGES_DIST_DIR"),
         "the selected Cloudflare artifact directory must reach the sealed deploy container"
     );
+
+    let ci_tasks = read(&root, "nook-app/.task/ci.yml");
+    assert!(
+        ci_tasks.contains("*) deploy_dir=\"{{.REPO_ROOT}}/$deploy_dir\" ;;"),
+        "repo-relative Cloudflare artifact directories must resolve from the repository root"
+    );
 }
 
 #[test]
