@@ -1,4 +1,5 @@
 import {
+  bindGoogleDriveSharedFolder as bindGoogleDriveSharedFolderWasm,
   deleteAuthProvidersDb as deleteAuthProvidersDbWasm,
   default as initNookWasm,
   defaultDriveBackupName,
@@ -76,6 +77,16 @@ export function setICloudProviderMode(
   mode: ICloudMode,
 ): OAuthFileConfig {
   return setICloudProviderModeWasm(toPlain(config), mode) as OAuthFileConfig;
+}
+
+export function bindGoogleDriveSharedFolder(
+  config: OAuthFileConfig,
+  folderRef: string,
+): OAuthFileConfig {
+  return bindGoogleDriveSharedFolderWasm(
+    toPlain(config),
+    folderRef,
+  ) as OAuthFileConfig;
 }
 
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */

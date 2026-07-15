@@ -9,7 +9,11 @@ import {
   encryptEnrollmentPayload,
   hasActiveLocalVault,
 } from "$app-wasm";
-import type { OAuthFilePreset, StorageProvider } from "$lib/auth-providers";
+import {
+  bindGoogleDriveSharedFolder,
+  type OAuthFilePreset,
+  type StorageProvider,
+} from "$lib/auth-providers";
 import {
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
@@ -645,12 +649,10 @@ export async function issueEnrollmentCode(
           });
         }
         if (sharedStorageTargetId && selectedProvider.oauthFile) {
-          const updatedOauth = {
-            ...selectedProvider.oauthFile,
-            driveMode: "shared" as const,
-            folderId: sharedStorageTargetId,
-            fileName: selectedProvider.oauthFile.fileName,
-          };
+          const updatedOauth = bindGoogleDriveSharedFolder(
+            selectedProvider.oauthFile,
+            sharedStorageTargetId,
+          );
           enrollmentProviderRow = {
             ...selectedProvider,
             oauthFile: updatedOauth,

@@ -205,6 +205,34 @@ fn development_and_release_wasm_build_modes_stay_separate() {
 }
 
 #[test]
+fn development_cloudflare_deploy_publishes_only_the_landing_root() {
+    let root = repository_root();
+    let main = read(&root, ".github/workflows/main.yml");
+    for required in [
+        "CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site",
+        "grep -Fq '<title>Nook — Keys, not accounts</title>'",
+        "https://$DEV_DOMAIN/site/",
+        "[ \"$site_status\" = \"404\" ]",
+    ] {
+        assert!(
+            main.contains(required),
+            "main development deployment is missing landing-only invariant: {required}"
+        );
+    }
+    assert!(
+        !main.contains("VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}")
+            && !main.contains("VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}"),
+        "the development deployment must preserve the landing site's production canonical URLs"
+    );
+
+    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    assert!(
+        docker_tasks.contains("-e CF_PAGES_DIST_DIR"),
+        "the selected Cloudflare artifact directory must reach the sealed deploy container"
+    );
+}
+
+#[test]
 fn main_failures_do_not_trigger_an_ai_repair_agent() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
