@@ -1,6 +1,10 @@
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 
+const SIMPLE_APP_URL = (
+  process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
+).replace(/\/+$/, '')
+
 type DebugVault = {
   manager?: {
     setVaultArchitectureJson(value: string): void
@@ -44,7 +48,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveAttribute(
       'href',
-      'https://simple.nokey.sh/',
+      `${SIMPLE_APP_URL}/`,
     )
   }
 
