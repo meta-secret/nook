@@ -180,7 +180,7 @@ root/
   future autofill flows pair only through `simple.nokey.sh`. The manifest and
   runtime guard exclude both Nook vault origins from widget injection, and Rust
   rejects Sentinel extension approval.
-- **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
+- **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading. `task extension:install:hosted` and the hosted `extension:run:*` variants verify deployment metadata and SHA-256, activate an immutable release atomically, and launch it only in a channel-specific isolated browser profile.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 - **Local projection bridge:** Simple Vault publishes its canonical encrypted,
   signed event log after local mutations and provider pulls. A content script

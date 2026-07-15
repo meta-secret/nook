@@ -90,6 +90,15 @@ a root-level ZIP plus `extension.json` metadata and a SHA-256 checksum under the
 matching site deployment's `/downloads/` path. PR and development bundles are
 unsigned developer artifacts and must be unzipped and loaded through the
 browser's extension developer mode.
+The supported developer launcher resolves hosted builds from that metadata,
+binds the archive and checksum URLs to the selected deployment origin, verifies
+SHA-256 before extraction, and activates a release atomically through a stable
+channel-specific path. It always launches with `--load-extension` and an
+isolated Nook browser profile. Development, production, and every PR number
+have separate install and profile directories; the launcher never modifies or
+silently installs into the user's normal browser profile. Failed downloads,
+metadata checks, checksum checks, or archive validation leave the prior active
+release unchanged.
 
 Interactive local development uses HTTPS so passkeys, CloudKit, OAuth, and
 extension-to-site messaging run under production-like secure-context rules.
