@@ -28,6 +28,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
+  DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
   CI_RELEASE_URL: https://nokey.sh
   CI_RELEASE_VITE_BASE: /
   CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS: "500"

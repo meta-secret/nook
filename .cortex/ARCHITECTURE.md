@@ -343,7 +343,7 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
 ### Sealed-image consequences
 
 - **Write-type tasks emit diffs, not host writes.** Web formatting runs in `nook-web:local`; Rust formatting and coverage updates run in `nook-rust:local`. Both source-sealed images print a `git diff` for application on the host.
-- **`dist` hand-off.** PR CI keeps the combined `dist` tree as an internal harness and independently deploys `dist/site`, Simple, and Sentinel to each project's `pr-<number>` branch alias; its GitHub deployment points at the isolated site. Main deploys the same artifacts independently, with vault domains targeting the projects' `development` branch aliases. Release extracts production artifacts with `task docker:extract:dist`.
+- **`dist` hand-off.** PR CI keeps the combined `dist` tree as an internal harness and independently deploys `dist/site`, Simple, and Sentinel to each project's `pr-<number>` branch alias; its GitHub deployment points at the isolated site. Main deploys the same artifacts independently, with the landing and both vault domains targeting their projects' `development` branch aliases. Release extracts production artifacts with `task docker:extract:dist`.
 
 ### Build & verify
 

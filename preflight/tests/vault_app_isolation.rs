@@ -229,11 +229,12 @@ fn development_cloudflare_deploy_preserves_isolated_origins() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     for required in [
-        "deploy nokey-sh main nook-app/nook-web/nook-web-app/dist/site",
+        "deploy nokey-sh development nook-app/nook-web/nook-web-app/dist/site",
         "deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist",
         "deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist",
         "CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh",
         "CI_MAIN_SENTINEL_DOMAIN: sentinel.dev.nokey.sh",
+        "site_pages_host=\"development.nokey-sh.pages.dev\"",
         "simple_pages_host=\"development.nokey-simple.pages.dev\"",
         "sentinel_pages_host=\"development.nokey-sentinel.pages.dev\"",
         "grep -Fq '<title>Nook — Keys, not accounts</title>'",
@@ -416,6 +417,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
 fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     let root = repository_root();
     for workflow in [
+        ".github/workflows/pr.yml",
         ".github/workflows/main.yml",
         ".github/workflows/release.yml",
     ] {
@@ -424,6 +426,15 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
             content.contains("runs-on: nook"),
             "{workflow} must reuse the persistent delivery runner's Docker layers"
         );
+        for run_scoped_image in [
+            "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
+            "DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+        ] {
+            assert!(
+                content.contains(run_scoped_image),
+                "{workflow} must isolate its loaded runtime image: {run_scoped_image}"
+            );
+        }
     }
 
     let bake = read(&root, "nook-app/docker-bake.hcl");
