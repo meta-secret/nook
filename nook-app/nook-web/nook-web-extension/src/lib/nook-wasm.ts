@@ -72,7 +72,9 @@ async function sessionMessage<T>(message: unknown): Promise<T> {
     type: 'nook:ensure-extension-session-runtime',
   })
   if (runtime.ok !== true) {
-    throw new Error(runtime.reason ?? 'Extension session runtime could not start.')
+    throw new Error(
+      runtime.reason ?? 'Extension session runtime could not start.',
+    )
   }
   const response = await runtimeMessage<{ ok?: boolean; error?: string } & T>(
     message,
@@ -104,10 +106,13 @@ function assertionUserHandle(credential: PublicKeyCredential): number[] {
 }
 
 function prfOutput(credential: PublicKeyCredential): number[] {
-  const prf = (credential as PublicKeyCredentialWithPrf)
-    .getClientExtensionResults().prf
+  const prf = (
+    credential as PublicKeyCredentialWithPrf
+  ).getClientExtensionResults().prf
   if (!prf?.enabled || !prf.results?.first) {
-    throw new Error('PASSKEY_PRF_UNAVAILABLE: The passkey did not return the required PRF output.')
+    throw new Error(
+      'PASSKEY_PRF_UNAVAILABLE: The passkey did not return the required PRF output.',
+    )
   }
   return bytes(prf.results.first)
 }
@@ -126,8 +131,14 @@ function passkeyError(error: unknown, action: 'create' | 'get'): Error {
 async function getPasskey(
   options: unknown,
 ): Promise<PublicKeyCredentialWithPrf> {
-  if (!window.isSecureContext || !window.PublicKeyCredential || !navigator.credentials) {
-    throw new Error('PASSKEY_UNAVAILABLE: Passkeys are not available in this browser.')
+  if (
+    !window.isSecureContext ||
+    !window.PublicKeyCredential ||
+    !navigator.credentials
+  ) {
+    throw new Error(
+      'PASSKEY_UNAVAILABLE: Passkeys are not available in this browser.',
+    )
   }
   try {
     const credential = await navigator.credentials.get(
@@ -145,8 +156,14 @@ async function getPasskey(
 async function createPasskey(
   options: unknown,
 ): Promise<PublicKeyCredentialWithPrf> {
-  if (!window.isSecureContext || !window.PublicKeyCredential || !navigator.credentials) {
-    throw new Error('PASSKEY_UNAVAILABLE: Passkeys are not available in this browser.')
+  if (
+    !window.isSecureContext ||
+    !window.PublicKeyCredential ||
+    !navigator.credentials
+  ) {
+    throw new Error(
+      'PASSKEY_UNAVAILABLE: Passkeys are not available in this browser.',
+    )
   }
   try {
     const credential = await navigator.credentials.create(
@@ -171,7 +188,9 @@ export async function extensionDeviceProtectionStatus(): Promise<ExtensionDevice
   throw new Error(`Unsupported extension device protection status: ${status}`)
 }
 
-export async function extensionSessionDevice(): Promise<ExtensionDeviceProtectionResult | undefined> {
+export async function extensionSessionDevice(): Promise<
+  ExtensionDeviceProtectionResult | undefined
+> {
   const response = await sessionMessage<
     SessionResponse<{
       status: ExtensionDeviceProtectionStatus
@@ -205,7 +224,9 @@ export async function createExtensionPasskey(
   )
   const asserted = await getPasskey(prfRequest)
   return (
-    await sessionMessage<SessionResponse<{ device: ExtensionDeviceProtectionResult }>>({
+    await sessionMessage<
+      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
+    >({
       type: 'nook:extension-session-finish-passkey-setup',
       payload: {
         credentialId: credentialId(created),
@@ -219,12 +240,16 @@ export async function createExtensionPasskey(
 }
 
 export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
-  const { options } = await sessionMessage<SessionResponse<{ options: unknown }>>({
+  const { options } = await sessionMessage<
+    SessionResponse<{ options: unknown }>
+  >({
     type: 'nook:extension-session-recovery-options',
   })
   const credential = await getPasskey(options)
   return (
-    await sessionMessage<SessionResponse<{ device: ExtensionDeviceProtectionResult }>>({
+    await sessionMessage<
+      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
+    >({
       type: 'nook:extension-session-recover-passkey',
       payload: {
         credentialId: credentialId(credential),
@@ -236,12 +261,16 @@ export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtecti
 }
 
 export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
-  const { options } = await sessionMessage<SessionResponse<{ options: unknown }>>({
+  const { options } = await sessionMessage<
+    SessionResponse<{ options: unknown }>
+  >({
     type: 'nook:extension-session-unlock-options',
   })
   const credential = await getPasskey(options)
   return (
-    await sessionMessage<SessionResponse<{ device: ExtensionDeviceProtectionResult }>>({
+    await sessionMessage<
+      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
+    >({
       type: 'nook:extension-session-unlock-passkey',
       payload: { prfOutput: prfOutput(credential) },
     })
@@ -252,7 +281,9 @@ export async function createExtensionPin(
   pin: string,
 ): Promise<ExtensionDeviceProtectionResult> {
   return (
-    await sessionMessage<SessionResponse<{ device: ExtensionDeviceProtectionResult }>>({
+    await sessionMessage<
+      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
+    >({
       type: 'nook:extension-session-create-pin',
       payload: { pin },
     })
@@ -263,7 +294,9 @@ export async function unlockExtensionPin(
   pin: string,
 ): Promise<ExtensionDeviceProtectionResult> {
   return (
-    await sessionMessage<SessionResponse<{ device: ExtensionDeviceProtectionResult }>>({
+    await sessionMessage<
+      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
+    >({
       type: 'nook:extension-session-unlock-pin',
       payload: { pin },
     })

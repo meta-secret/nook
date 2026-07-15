@@ -201,13 +201,15 @@ async function handleMessage(message: unknown): Promise<unknown> {
     }
     case 'nook:extension-session-create-pin': {
       const pin = messagePayload(message).pin
-      if (typeof pin !== 'string') throw new Error('Extension session received an invalid PIN.')
+      if (typeof pin !== 'string')
+        throw new Error('Extension session received an invalid PIN.')
       await (await getManager()).finishPinDeviceProtection(pin)
       return { ok: true, device: await activateSession() }
     }
     case 'nook:extension-session-unlock-pin': {
       const pin = messagePayload(message).pin
-      if (typeof pin !== 'string') throw new Error('Extension session received an invalid PIN.')
+      if (typeof pin !== 'string')
+        throw new Error('Extension session received an invalid PIN.')
       await (await getManager()).unlockPinDeviceIdentity(pin)
       return { ok: true, device: await activateSession() }
     }
@@ -217,7 +219,10 @@ async function handleMessage(message: unknown): Promise<unknown> {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || !messageType(message)?.startsWith('nook:extension-session-')) {
+  if (
+    sender.id !== chrome.runtime.id ||
+    !messageType(message)?.startsWith('nook:extension-session-')
+  ) {
     return false
   }
   void handleMessage(message)
@@ -225,7 +230,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     .catch((error: unknown) =>
       sendResponse({
         ok: false,
-        error: error instanceof Error ? error.message : 'Extension session failed.',
+        error:
+          error instanceof Error ? error.message : 'Extension session failed.',
       }),
     )
   return true
