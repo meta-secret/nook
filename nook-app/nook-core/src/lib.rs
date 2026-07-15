@@ -141,7 +141,7 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
-    draft_storage_args, enrollment_provider_for_architecture,
+    bind_google_drive_shared_folder, draft_storage_args, enrollment_provider_for_architecture,
     enrollment_provider_for_architecture_with_storage_target, ensure_local_provider_row,
     find_duplicate_sync_provider, localize_provider_label, migrate_provider_fields,
     normalize_auth_snapshot, provider_replication_capability_for_row, provider_storage_detail,

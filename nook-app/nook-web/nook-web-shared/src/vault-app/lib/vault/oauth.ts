@@ -1,5 +1,6 @@
 import type { VaultState } from "$lib/vault.svelte";
 import {
+  bindGoogleDriveSharedFolder,
   DEFAULT_DRIVE_BACKUP_NAME,
   findDuplicateSyncProvider,
   setGoogleDriveProviderMode,
@@ -151,12 +152,10 @@ export async function createGoogleSharedFolder(
   if (!grant.storageTargetId) {
     throw new Error(state.t("provider_setup.google_shared_create_failed"));
   }
-  state.oauthFile = {
-    ...state.oauthFile!,
-    driveMode: "shared",
-    folderId: grant.storageTargetId,
-    fileId: undefined,
-  };
+  state.oauthFile = bindGoogleDriveSharedFolder(
+    state.oauthFile!,
+    grant.storageTargetId,
+  );
   state.sharedGrantInstructions =
     grant.kind === "granted"
       ? state.t("provider_setup.google_shared_folder_created", {
@@ -196,12 +195,7 @@ export async function useGoogleSharedFolder(
     }
     throw error;
   }
-  state.oauthFile = {
-    ...state.oauthFile!,
-    driveMode: "shared",
-    folderId: folder.id,
-    fileId: undefined,
-  };
+  state.oauthFile = bindGoogleDriveSharedFolder(state.oauthFile!, folder.id);
   state.sharedGrantInstructions = state.t(
     "provider_setup.google_shared_folder_connected",
     { folder: folder.name },
