@@ -199,14 +199,15 @@
       ) {
         return
       }
+      const handoff = event.data
       extensionHandoffInProgress = true
       void vault
-        .unlockWithExtensionDeviceIdentity(event.data.payload.identitySecret)
+        .unlockWithExtensionDeviceIdentity(handoff.payload.identitySecret)
         .then((ok) => {
           window.postMessage(
             {
               type: 'nook:extension-device-identity-handoff-result',
-              requestId: event.data.requestId,
+              requestId: handoff.requestId,
               ok,
             },
             window.location.origin,
