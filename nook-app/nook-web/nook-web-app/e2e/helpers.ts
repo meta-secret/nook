@@ -3930,7 +3930,7 @@ export async function deleteSecret(
   await waitForSecretOnDevice(page, key, github)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  const deleteBtn = row.getByRole('button', { name: 'Delete item' })
+  const deleteBtn = row.getByTestId('delete-secret-btn')
   await expect(deleteBtn).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await deleteBtn.click()
   await expect(row).toHaveCount(0, { timeout: UI_TIMEOUT_MS })
