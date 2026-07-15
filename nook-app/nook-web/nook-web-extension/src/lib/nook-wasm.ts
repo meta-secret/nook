@@ -219,7 +219,7 @@ export async function createExtensionPasskey(
   const created = await createPasskey(setup.creationOptions)
   const prfRequest = buildPasskeyPrfRequestOptions(
     '',
-    credentialId(created),
+    new Uint8Array(credentialId(created)),
     new Uint8Array(setup.prfInput),
   )
   const asserted = await getPasskey(prfRequest)
