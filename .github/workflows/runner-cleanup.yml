@@ -30,7 +30,12 @@ jobs:
           set -euo pipefail
           # Keep one week of recent BuildKit/image state so PR -> main -> release can reuse the
           # expensive Rust and Chromium layers. The age filter still bounds long-term disk use.
-          output="$(docker system prune --all --force --volumes --filter until=168h)"
+          # Docker does not support combining the age filter with --volumes.
+          # Keep the age-bound cache/image cleanup, then remove unused volumes
+          # separately (Docker volume prune has no supported age filter).
+          system_output="$(docker system prune --all --force --filter until=168h)"
+          volume_output="$(docker volume prune --force)"
+          output="$(printf '%s\n\n%s' "$system_output" "$volume_output")"
           printf '%s\n' "$output"
           reclaimed="$(printf '%s\n' "$output" | awk -F': ' '/^Total reclaimed space:/ { print $2; found=1 } END { if (!found) print "unknown" }')"
 
