@@ -24,7 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     concurrency:
       group: e2e-nightly-${{ matrix.provider }}
-      cancel-in-progress: false
+      # A newer provider run supersedes the live-sync build, but this job-level
+      # group deliberately leaves an already-running ci-fix agent alone.
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:

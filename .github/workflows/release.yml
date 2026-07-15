@@ -25,6 +25,7 @@ permissions:
 
 concurrency:
   group: production-release
+  # Production publication is stateful; serialize releases without interrupting one mid-deploy.
   cancel-in-progress: false
 
 env:
