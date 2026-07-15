@@ -90,7 +90,6 @@ a root-level ZIP plus `extension.json` metadata and a SHA-256 checksum under the
 matching site deployment's `/downloads/` path. PR and development bundles are
 unsigned developer artifacts and must be unzipped and loaded through the
 browser's extension developer mode.
-
 The supported developer launcher resolves hosted builds from that metadata,
 binds the archive and checksum URLs to the selected deployment origin, verifies
 SHA-256 before extraction, and activates a release atomically through a stable
