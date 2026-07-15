@@ -8,6 +8,32 @@ use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::{Zeroize, Zeroizing};
 
+fn ensure_extension_identity_handoff_source(
+    application: nook_core::VaultApplication,
+) -> Result<(), NookError> {
+    if application == nook_core::VaultApplication::Extension {
+        return Ok(());
+    }
+    Err(NookError::Database(
+        "Extension device identity handoff requires the extension application capability."
+            .to_owned(),
+    ))
+}
+
+fn ensure_extension_identity_handoff_target(
+    application: nook_core::VaultApplication,
+) -> Result<(), NookError> {
+    if application == nook_core::VaultApplication::Simple
+        || application == nook_core::VaultApplication::UnifiedDevelopment
+    {
+        return Ok(());
+    }
+    Err(NookError::Database(
+        "Extension device identity handoff requires the Simple Vault application capability."
+            .to_owned(),
+    ))
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
@@ -21,11 +47,7 @@ impl NookVaultManager {
     /// durable browser storage and URLs.
     #[wasm_bindgen(js_name = exportExtensionDeviceIdentityForHandoff)]
     pub fn export_extension_device_identity_for_handoff(&self) -> Result<String, JsError> {
-        if self.application != nook_core::VaultApplication::Extension {
-            return Err(JsError::new(
-                "Extension device identity handoff requires the extension application capability.",
-            ));
-        }
+        ensure_extension_identity_handoff_source(self.application)?;
         Ok(self.device_identity()?.secret_string().into_inner())
     }
 
@@ -38,13 +60,9 @@ impl NookVaultManager {
         &mut self,
         mut identity_secret: String,
     ) -> Result<(), JsError> {
-        if self.application != nook_core::VaultApplication::Simple
-            && self.application != nook_core::VaultApplication::UnifiedDevelopment
-        {
+        if let Err(error) = ensure_extension_identity_handoff_target(self.application) {
             identity_secret.zeroize();
-            return Err(JsError::new(
-                "Extension device identity handoff requires the Simple Vault application capability.",
-            ));
+            return Err(error.into());
         }
         let result = (|| -> Result<(String, String), JsError> {
             let identity = nook_core::DeviceIdentity::from_secret_str(
@@ -351,7 +369,7 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
-    use super::NookVaultManager;
+    use super::{NookVaultManager, ensure_extension_identity_handoff_target};
 
     #[test]
     fn extension_identity_handoff_is_memory_only_and_simple_only() {
@@ -381,11 +399,7 @@ mod tests {
 
         let mut sentinel = NookVaultManager::new();
         sentinel.application = nook_core::VaultApplication::Sentinel;
-        assert!(
-            sentinel
-                .adopt_extension_device_identity_for_handoff(identity.secret_string().into_inner())
-                .is_err()
-        );
+        assert!(ensure_extension_identity_handoff_target(sentinel.application).is_err());
     }
 }
 

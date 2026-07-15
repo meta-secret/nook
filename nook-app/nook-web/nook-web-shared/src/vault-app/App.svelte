@@ -184,8 +184,15 @@
       }
     }
     colorScheme.addEventListener('change', handleColorSchemeChange)
-    const handleExtensionDeviceIdentityHandoff = (event: MessageEvent<unknown>) => {
+    // A handoff is deliberately one-shot.  Besides keeping the private key
+    // ephemeral, consuming the listener before starting the async unlock
+    // prevents a replayed MessageEvent from queueing a second unlock attempt.
+    let extensionHandoffConsumed = false
+    const handleExtensionDeviceIdentityHandoff = (
+      event: MessageEvent<unknown>,
+    ) => {
       if (
+        extensionHandoffConsumed ||
         !SUPPORTS_EXTENSION ||
         event.source !== window ||
         event.origin !== window.location.origin ||
@@ -193,6 +200,11 @@
       ) {
         return
       }
+      extensionHandoffConsumed = true
+      window.removeEventListener(
+        'message',
+        handleExtensionDeviceIdentityHandoff,
+      )
       void vault.unlockWithExtensionDeviceIdentity(
         event.data.payload.identitySecret,
       )
