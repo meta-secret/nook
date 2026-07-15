@@ -3,7 +3,8 @@
  *
  * CloudKit Console → Production → iCloud.metasecret.project.com:
  * - API token (Settings -> Tokens & Keys), allowed origins https://nokey.sh,
- *   https://simple.nokey.sh, https://sentinel.nokey.sh, and https://dev.nokey.sh
+ *   https://simple.nokey.sh, https://sentinel.nokey.sh,
+ *   https://simple.dev.nokey.sh, and https://sentinel.dev.nokey.sh
  * - Schema: NookVault record type with content (String), deployed to Production
  * - Sign in with Apple via CloudKit JS setUpAuth (Post Message callback)
  */

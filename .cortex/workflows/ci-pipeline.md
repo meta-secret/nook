@@ -6,8 +6,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt capability-specific WASM, web/unit tests, all three web builds, Cloudflare preview with `/simple/` + `/sentinel/`, `github-pages` deployment status | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, Cloudflare Pages deploy to development `dev.nokey.sh` | No |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, internal harness plus isolated native Pages aliases, `github-pages` deployment status | No |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On persistent `nook`: pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → **squash merge** or manual handoff (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -17,12 +17,12 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 ```mermaid
 flowchart LR
   PR[Pull request] --> pr_yml[pr.yml]
-  pr_yml --> preview[Cloudflare preview]
+  pr_yml --> preview[Cloudflare isolated aliases]
   pr_yml --> pr_deployment[github-pages deployment status]
 
   merge[Squash merge to main] --> main_yml[main.yml]
   main_yml --> main_verify[Verify + build + e2e]
-  main_yml --> cf_dev[Cloudflare Pages dev]
+  main_yml --> cf_dev[Cloudflare Pages isolated dev]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -273,11 +273,11 @@ persistent self-hosted `nook` runner, so the Rust target and other local BuildKi
 layers survive the PR -> main -> release chain instead of being downloaded again.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
-Main deploys only the `nook-web-app/dist/site` landing artifact to the active
-Cloudflare Pages development channel at `dev.nokey.sh`, from the same prepared
-image and without a second setup. The combined `dist` tree is reserved for PR
-previews and local/e2e use; `/site/`, `/simple/`, and `/sentinel/` are not public
-development routes.
+Main deploys `dist/site`, Simple, and Sentinel independently to
+`dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
+prepared image and without a second setup. The combined `dist` tree is reserved
+for the internal PR/local/e2e harness; `/site/`, `/simple/`, and `/sentinel/`
+are not routes on the public development landing origin.
 `release.yml` runs the main-equivalent gate,
 deploys an immutable semantic-version tag to GitHub Pages for the public
 `nokey.sh` site and to independent Cloudflare Pages projects for Simple and
@@ -288,16 +288,13 @@ No delivery workflow logs into GHCR for BuildKit, imports a registry cache
 manifest, or publishes cache layers. The persistent `nook` runners reuse only
 their local BuildKit content store across the PR → main → release chain. This is
 an explicit reliability boundary: cache restoration must never block validation
-on a remote blob or registry session. The `task ci:main` gate builds the same
-landing artifact and production canonical URLs used by `nokey.sh`; the dev host
-is a delivery channel, not a second SEO origin. `main.yml` deploys only the
-landing subdirectory, ensures the Cloudflare Pages custom domain exists,
-verifies the preconfigured Cloudflare DNS CNAME, confirms that `/` serves the
-landing page while `/site/`, `/simple/`, and `/sentinel/` return `404`, and
-records a `development` deployment status whose URL is
-`https://dev.nokey.sh/`. Before each live probe, the workflow purges those four
-public URLs so a cached fallback from the previous Pages deployment cannot
-survive or be repopulated while the custom hostname switches deployments.
+on a remote blob or registry session. `main.yml` attaches and upserts the three
+custom domains, points the vault domains at the `development` branch aliases,
+and verifies landing-only routing, app identity markers, security headers, and
+the Simple/Sentinel extension boundary. It records one `development` deployment
+whose primary URL is `https://dev.nokey.sh/` and whose payload contains all
+three origins. Before live probes, the workflow purges the affected URLs so a
+cached fallback cannot survive a deployment switch.
 
 **Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
 

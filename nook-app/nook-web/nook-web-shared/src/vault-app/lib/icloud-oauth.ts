@@ -700,7 +700,7 @@ function cloudKitAuthErrorMessage(error: unknown): string {
     value.includes("UNKNOWN_ERROR"),
   );
   if (isUnknownCloudKitError) {
-    return "Apple CloudKit returned UNKNOWN_ERROR during sign-in. Check that the iCloud API token is enabled for this production container and that https://nokey.sh is an allowed web origin.";
+    return "Apple CloudKit returned UNKNOWN_ERROR during sign-in. Check that the iCloud API token is enabled for this container and that the current browser origin is allowed.";
   }
   return (
     details.reason ??
@@ -1098,7 +1098,7 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
   }
   if (body.serverErrorCode === "AUTHENTICATION_FAILED") {
     throw new Error(
-      "Apple rejected the iCloud API token for this container. Check the CloudKit production API token and allowed origin https://nokey.sh.",
+      "Apple rejected the iCloud API token for this container. Check the CloudKit production API token and the current browser origin.",
     );
   }
   throw new Error(

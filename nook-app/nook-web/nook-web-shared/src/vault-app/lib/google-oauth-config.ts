@@ -6,7 +6,8 @@
  *
  * Google Cloud Console → Credentials → OAuth client (Web application):
  * - Authorized JavaScript origins: http://localhost:5173, https://nokey.sh,
- *   https://simple.nokey.sh, https://sentinel.nokey.sh, https://dev.nokey.sh
+ *   https://simple.nokey.sh, https://sentinel.nokey.sh,
+ *   https://simple.dev.nokey.sh, https://sentinel.dev.nokey.sh
  * - OAuth consent screen scopes:
  *   - Private provider mode: https://www.googleapis.com/auth/drive.appdata
  *   - Shared provider mode: https://www.googleapis.com/auth/drive.file

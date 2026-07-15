@@ -14,6 +14,12 @@ building blocks. They are not selectable modes inside one production web app.
 | Quorum safe | `nook-vault-sentinel` | `https://sentinel.nokey.sh` | Sentinel only; extension integration forbidden |
 | Browser companion | `nook-web-extension` | extension origin | Simple only |
 
+Main mirrors the same origin isolation at `dev.nokey.sh`,
+`simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`. Pull requests use native
+Pages branch aliases under the `nokey-sh`, `nokey-simple`, and
+`nokey-sentinel` projects. The combined `nook` preview remains an internal test
+harness, not a public application topology.
+
 The two vault apps have independent package manifests, HTML and TypeScript
 entrypoints, Vite configurations, output directories, Cloudflare Pages
 projects, WebAuthn relying-party origins, and IndexedDB origin storage. They
@@ -50,6 +56,12 @@ Production releases publish `nokey.sh` as the public site and deploy the two
 vault projects to separate Cloudflare Pages projects. Release automation
 attaches and verifies both custom domains and their proxied CNAME records.
 
+Main deploys the same three artifacts independently. The vault custom domains
+point to the `development` branch aliases of their production Pages projects,
+so Main cannot replace either project's production branch. PRs deploy branch
+`pr-<number>` to all three projects and expose only Cloudflare-native aliases;
+they do not create branded DNS records.
+
 The release gate verifies the app-kind marker, CSP and anti-sniffing headers,
 exact release commit, a working Simple extension route, and a `404` response for
 that route on Sentinel. Both vault artifacts are built from the same checkout
@@ -62,6 +74,8 @@ consoles must register both `https://simple.nokey.sh` and
 clients that are meant only for Simple must not register Sentinel. Wildcard
 subdomains do not satisfy browser OAuth origin checks. WebAuthn does not share
 an RP across the apps: each ceremony uses the current hostname as its RP ID.
+The two stable Main vault origins are registered with browser providers. PR
+aliases are deliberately provider-disabled and receive no OAuth credentials.
 
 Rollback is a new immutable release from the selected known-good commit; tags
 are never moved. Run the production release workflow with a new semantic

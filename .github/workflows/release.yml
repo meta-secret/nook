@@ -112,6 +112,8 @@ jobs:
           VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }}
           VITE_SITE_URL=${{ env.CI_RELEASE_URL }}
           VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}
+          VITE_SIMPLE_APP_URL=https://simple.nokey.sh
+          VITE_SENTINEL_APP_URL=https://sentinel.nokey.sh
           VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
           WASM_BUILD_MODE=prod
         env:

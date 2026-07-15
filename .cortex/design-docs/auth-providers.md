@@ -213,10 +213,11 @@ Event-log sync is in `nook-app/nook-core/src`. UI uses the local
 Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
 Identity Services in the browser; the current Google web client is configured
 for `http://localhost:5173`, `https://simple.nokey.sh`,
-`https://sentinel.nokey.sh`, and `https://dev.nokey.sh`. Nook's CloudKit JS
-token must likewise register the two production vault origins and the
-development origin. `https://nokey.sh` is the public product site, not a
-production vault or provider-callback origin.
+`https://sentinel.nokey.sh`, `https://simple.dev.nokey.sh`, and
+`https://sentinel.dev.nokey.sh`. Nook's CloudKit JS token must likewise
+register the two production vault origins and the two stable development vault
+origins. `https://nokey.sh` and `https://dev.nokey.sh` are public product sites,
+not vault or provider-callback origins.
 
 Google/Auth Platform branding should use `https://nokey.sh/` as the public app
 home page. The root path is the crawlable product and branding page; the vault
@@ -232,28 +233,24 @@ GitHub Pages can serve them directly without relying on the SPA router.
 disallowing private utility routes. Both vault applications emit `robots.txt`
 with `Disallow: /`.
 
-PR previews deploy to Cloudflare Pages aliases such as
-`https://pr-191.nook-1n8.pages.dev/`. The browser origin is the exact
-scheme/host/port tuple, for example `https://pr-191.nook-1n8.pages.dev`.
+PR previews deploy an internal unified harness plus isolated Cloudflare Pages
+branch aliases: `pr-191.nokey-sh.pages.dev`,
+`pr-191.nokey-simple.pages.dev`, and `pr-191.nokey-sentinel.pages.dev`. The
+browser origin is the exact scheme/host/port tuple.
 Google's Authorized JavaScript origins must be exact origins: they cannot
 include paths, query strings, fragments, or wildcard characters. A single PR
 origin can be added manually for a one-off test, but the PR pattern cannot be
-represented as `https://pr-*.nook-1n8.pages.dev`, and origin-sprawl should not be
+represented as `https://pr-*.nokey-simple.pages.dev`, and origin-sprawl should not be
 treated as a durable preview strategy. Apple CloudKit API tokens have the same
 practical constraint when allowed origins are restricted to specific domains.
 
 Current fallback: [`oauth-origin.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/oauth-origin.ts)
-detects Nook PR preview hosts (`pr-<number>.nook-1n8.pages.dev`) and disables
+detects both the internal harness and isolated Nook PR aliases and disables
 Google Drive / iCloud sign-in with a clear message. Reviewers can still test
 local, local-folder, and GitHub providers on PR previews. Google Drive browser
 OAuth should be tested on `https://simple.nokey.sh`,
-`https://sentinel.nokey.sh`, `https://dev.nokey.sh`, or local dev until preview
-hosting uses a registered stable origin. If a stable
-Cloudflare origin such as
-`https://nook-1n8.pages.dev` or `https://preview.nokey.sh` becomes the preview
-entry point, add that exact origin both in Google Cloud Console and in
-`oauth-origin.ts`; adding `https://nook-1n8.pages.dev` does not authorize
-subdomains like `https://pr-191.nook-1n8.pages.dev`.
+`https://sentinel.nokey.sh`, the matching `*.dev.nokey.sh` vault origin, or
+local dev. Per-PR aliases intentionally never receive provider credentials.
 
 For CloudKit JS diagnostics, a `421` response from `/public/users/caller`
 usually means CloudKit issued the unauthenticated web-auth challenge; it is not
@@ -267,7 +264,7 @@ rewriting the provider flow.
 When reproducing production auth from the shell, include the browser origin:
 
 ```sh
-curl -H 'Origin: https://nokey.sh' \
+curl -H 'Origin: https://simple.nokey.sh' \
   'https://api.apple-cloudkit.com/database/1/iCloud.metasecret.project.com/production/public/users/current?ckAPIToken=...'
 ```
 
@@ -282,7 +279,7 @@ the direct fallback window at the same time, so Brave uses the direct Web
 Services challenge as its primary sign-in path instead of forwarding the native
 CloudKit button click.
 
-Preferred future options:
+Alternative provider-preview options:
 
 | Option | Summary | Trade-off |
 |--------|---------|-----------|

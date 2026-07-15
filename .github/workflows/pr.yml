@@ -47,7 +47,14 @@ jobs:
       # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
       # path and makes a cold Rust cache slower than the former combined build.
       - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
-        run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
+        run: >-
+          task ci:pr
+          VITE_BASE=/
+          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          WASM_BUILD_MODE=dev
         env:
           CI: true
 
@@ -56,7 +63,7 @@ jobs:
       - name: Export Rust coverage from verified image
         run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy unified internal test harness
         id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
@@ -81,71 +88,109 @@ jobs:
           url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
           echo "preview_url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy and verify production-shaped site preview
-        id: deploy-site
+      - name: Deploy and verify isolated Pages previews
+        id: deploy-isolated
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-          CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}-site
-          CF_PAGES_DIST_DIR: nook-app/nook-web/nook-web-app/dist/site
+          CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}
         run: |
-          set +e
-          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
-          status=$?
-          set -e
-          echo "$out"
-          if [ "$status" -ne 0 ]; then
-            echo "::error::Cloudflare production-shaped preview deploy failed (exit $status)"
-            exit "$status"
-          fi
-          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
-          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
-          if [ -z "$url" ]; then
-            echo "::error::Cloudflare production-shaped preview did not emit a URL"
-            exit 1
-          fi
+          set -euo pipefail
+          pr="${{ github.event.pull_request.number }}"
+          site_url="https://pr-$pr.nokey-sh.pages.dev"
+          simple_url="https://pr-$pr.nokey-simple.pages.dev"
+          sentinel_url="https://pr-$pr.nokey-sentinel.pages.dev"
 
+          deploy() {
+            project="$1"
+            dist="$2"
+            label="$3"
+            set +e
+            out="$(CF_PAGES_PROJECT_NAME="$project" CF_PAGES_PRODUCTION_BRANCH=main CF_PAGES_DIST_DIR="$dist" task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
+            status=$?
+            set -e
+            echo "$out"
+            if [ "$status" -ne 0 ]; then
+              echo "::error::$label preview deploy failed (exit $status)"
+              exit "$status"
+            fi
+          }
+
+          deploy nokey-sh nook-app/nook-web/nook-web-app/dist/site Site
+          deploy nokey-simple nook-app/nook-web/nook-vault-simple/dist Simple
+          deploy nokey-sentinel nook-app/nook-web/nook-vault-sentinel/dist Sentinel
+
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          trap 'rm -f "$body" "$headers"' EXIT
           verified=false
-          for attempt in $(seq 1 12); do
-            root_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/" || true)"
-            site_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/site/" || true)"
-            simple_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/simple/deep/link" || true)"
-            sentinel_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/sentinel/" || true)"
-            app_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/app/" || true)"
-            alias_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/extension-connect.html" || true)"
-            cache_control="$({ curl --connect-timeout 3 --max-time 5 -sS -D - -o /dev/null "$url/site/" || true; } | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol:[[:space:]]*//p' | tail -1)"
-            if [ "$root_status" = "200" ] \
-              && [ "$site_status" = "404" ] \
-              && [ "$simple_status" = "404" ] \
-              && [ "$sentinel_status" = "404" ] \
-              && [ "$app_status" = "404" ] \
-              && [ "$alias_status" = "404" ] \
-              && printf '%s' "$cache_control" | grep -Fq 'no-store'; then
+          for attempt in $(seq 1 24); do
+            site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
+            retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
+            site_ok=false
+            if [ "$site_status" = "200" ] \
+              && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
+              && grep -Fq "$simple_url/" "$body" \
+              && grep -Fq "$sentinel_url/" "$body" \
+              && [ "$retired_status" = "404" ] \
+              && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
+              site_ok=true
+            fi
+
+            simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
+            simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
+            simple_ok=false
+            if [ "$simple_status" = "200" ] \
+              && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
+              && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+              && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+              && [ "$simple_extension" = "200" ]; then
+              simple_ok=true
+            fi
+
+            sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
+            sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
+            sentinel_ok=false
+            if [ "$sentinel_status" = "200" ] \
+              && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
+              && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+              && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+              && [ "$sentinel_extension" = "404" ]; then
+              sentinel_ok=true
+            fi
+
+            if [ "$site_ok" = true ] && [ "$simple_ok" = true ] && [ "$sentinel_ok" = true ]; then
               verified=true
               break
             fi
-            echo "Waiting for production-shaped preview (attempt $attempt/12; root=$root_status, /site/=$site_status, /simple/deep/link=$simple_status, /sentinel/=$sentinel_status, /app/=$app_status, /extension-connect.html=$alias_status, cache-control=$cache_control)"
+            echo "Waiting for isolated aliases (attempt $attempt/24; site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
             sleep 5
           done
           if [ "$verified" != true ]; then
-            echo "::error::Production-shaped preview must serve the site root and reject retired app routes"
+            echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
             exit 1
           fi
-          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+          echo "site_url=$site_url" >> "$GITHUB_OUTPUT"
+          echo "simple_url=$simple_url" >> "$GITHUB_OUTPUT"
+          echo "sentinel_url=$sentinel_url" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
-        if: steps.deploy.outcome == 'success' && steps.deploy-site.outcome == 'success'
+        if: steps.deploy.outcome == 'success' && steps.deploy-isolated.outcome == 'success'
         uses: actions/github-script@v9
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-          SITE_PREVIEW_URL: ${{ steps.deploy-site.outputs.preview_url }}
+          SITE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.site_url }}
+          SIMPLE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.simple_url }}
+          SENTINEL_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.sentinel_url }}
         with:
           retries: 3
           script: |
             const marker = '### Preview deployed'
             const root = process.env.PREVIEW_URL.replace(/\/$/, '')
             const site = process.env.SITE_PREVIEW_URL.replace(/\/$/, '')
-            const body = `${marker}\n\n- Unified test harness: ${root}/\n- Production-shaped site: ${site}/\n- Simple Vault artifact: ${root}/simple/\n- Sentinel Vault artifact: ${root}/sentinel/`
+            const simple = process.env.SIMPLE_PREVIEW_URL.replace(/\/$/, '')
+            const sentinel = process.env.SENTINEL_PREVIEW_URL.replace(/\/$/, '')
+            const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/`
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -170,11 +215,13 @@ jobs:
             }
 
       - name: Record github-pages deployment
-        if: steps.deploy.outcome == 'success' && steps.deploy-site.outcome == 'success'
+        if: steps.deploy.outcome == 'success' && steps.deploy-isolated.outcome == 'success'
         uses: actions/github-script@v9
         env:
-          PREVIEW_URL: ${{ steps.deploy-site.outputs.preview_url }}
+          PREVIEW_URL: ${{ steps.deploy-isolated.outputs.site_url }}
           UNIFIED_PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
+          SIMPLE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.simple_url }}
+          SENTINEL_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.sentinel_url }}
         with:
           retries: 3
           script: |
@@ -197,6 +244,8 @@ jobs:
                 pull_request: context.payload.pull_request.number,
                 preview_url: previewUrl,
                 unified_preview_url: process.env.UNIFIED_PREVIEW_URL,
+                simple_preview_url: process.env.SIMPLE_PREVIEW_URL,
+                sentinel_preview_url: process.env.SENTINEL_PREVIEW_URL,
               },
             })
 

@@ -13,13 +13,13 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport(
         'google-drive',
-        loc('https://nokey.sh', 'nokey.sh'),
+        loc('https://simple.nokey.sh', 'simple.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
         'google-drive',
-        loc('https://dev.nokey.sh', 'dev.nokey.sh'),
+        loc('https://sentinel.dev.nokey.sh', 'sentinel.dev.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
@@ -38,15 +38,29 @@ describe('oauth origin support', () => {
 
   test('allows the configured iCloud stable and development origins', () => {
     expect(
-      resolveOAuthOriginSupport('icloud', loc('https://nokey.sh', 'nokey.sh'))
-        .supported,
+      resolveOAuthOriginSupport(
+        'icloud',
+        loc('https://sentinel.nokey.sh', 'sentinel.nokey.sh'),
+      ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
         'icloud',
-        loc('https://dev.nokey.sh', 'dev.nokey.sh'),
+        loc('https://simple.dev.nokey.sh', 'simple.dev.nokey.sh'),
       ).supported,
     ).toBe(true)
+  })
+
+  test('does not authorize landing-only origins', () => {
+    for (const origin of ['https://nokey.sh', 'https://dev.nokey.sh']) {
+      const hostname = new URL(origin).hostname
+      expect(
+        resolveOAuthOriginSupport('google-drive', loc(origin, hostname)),
+      ).toMatchObject({ supported: false, reason: 'unregistered-origin' })
+      expect(
+        resolveOAuthOriginSupport('icloud', loc(origin, hostname)),
+      ).toMatchObject({ supported: false, reason: 'unregistered-origin' })
+    }
   })
 
   test('blocks Cloudflare PR preview origins with a preview reason', () => {
@@ -76,8 +90,18 @@ describe('oauth origin support', () => {
   })
 
   test('matches only Nook PR preview hosts', () => {
-    expect(isCloudflarePrPreviewHost('pr-191.nook-1n8.pages.dev')).toBe(true)
+    for (const hostname of [
+      'pr-191.nook-1n8.pages.dev',
+      'pr-191.nokey-sh.pages.dev',
+      'pr-191.nokey-simple.pages.dev',
+      'pr-191.nokey-sentinel.pages.dev',
+    ]) {
+      expect(isCloudflarePrPreviewHost(hostname)).toBe(true)
+    }
     expect(isCloudflarePrPreviewHost('preview.nook-1n8.pages.dev')).toBe(false)
+    expect(isCloudflarePrPreviewHost('pr-191-site.nokey-sh.pages.dev')).toBe(
+      false,
+    )
     expect(isCloudflarePrPreviewHost('pr-191.example.pages.dev')).toBe(false)
   })
 })
