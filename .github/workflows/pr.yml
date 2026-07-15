@@ -107,11 +107,11 @@ jobs:
 
           verified=false
           for attempt in $(seq 1 12); do
-            root_status="$(curl -sS -o /dev/null -w '%{http_code}' "$url/" || true)"
-            site_status="$(curl -sS -o /dev/null -w '%{http_code}' "$url/site/" || true)"
-            simple_status="$(curl -sS -o /dev/null -w '%{http_code}' "$url/simple/deep/link" || true)"
-            sentinel_status="$(curl -sS -o /dev/null -w '%{http_code}' "$url/sentinel/" || true)"
-            cache_control="$({ curl -sS -D - -o /dev/null "$url/site/" || true; } | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol:[[:space:]]*//p' | tail -1)"
+            root_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/" || true)"
+            site_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/site/" || true)"
+            simple_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/simple/deep/link" || true)"
+            sentinel_status="$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' "$url/sentinel/" || true)"
+            cache_control="$({ curl --connect-timeout 3 --max-time 5 -sS -D - -o /dev/null "$url/site/" || true; } | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol:[[:space:]]*//p' | tail -1)"
             if [ "$root_status" = "200" ] \
               && [ "$site_status" = "404" ] \
               && [ "$simple_status" = "404" ] \
