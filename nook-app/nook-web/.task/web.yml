@@ -46,7 +46,7 @@ tasks:
         vars: { TASK: _web:test }
 
   web:test:e2e:
-    desc: Run full local-provider Playwright e2e in Docker (e2e project; no PAT).
+    desc: Run full local-provider Playwright e2e in Docker (stable 6 workers, unstable 4; no PAT).
     deps:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
@@ -55,7 +55,7 @@ tasks:
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:parallel:
-    desc: Full local-provider Playwright e2e in Docker when wasm/dist already built (ci:pr/main).
+    desc: Full local-provider Playwright e2e when wasm/dist is built (stable 6 workers, unstable 4).
     deps:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
@@ -77,7 +77,7 @@ tasks:
           E2E_SPEC: "{{.E2E_SPEC}}"
 
   web:test:e2e:pr:
-    desc: Fast Playwright e2e-pr in Docker (IndexedDB specs only).
+    desc: Stable Playwright subset in Docker (IndexedDB specs, 6 workers).
     deps:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
@@ -95,7 +95,7 @@ tasks:
         vars: { TASK: _web:test:e2e:isolation }
 
   web:test:e2e:pr:parallel:
-    desc: Fast Playwright e2e-pr when wasm and e2e dist already built (manual/debug).
+    desc: Stable Playwright subset at 6 workers when wasm and e2e dist are built.
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:pr:parallel }
@@ -312,7 +312,7 @@ tasks:
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Full stub Playwright e2e, rebuilding the e2e dist only when its stamp is stale.
+    desc: Full stub Playwright e2e, with stable specs at 6 workers and sync specs at 4.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
@@ -320,7 +320,7 @@ tasks:
       VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
-      - echo "==> Playwright e2e project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
+      - echo "==> Playwright e2e groups (stable=6 workers, unstable=4 workers, CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
       - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun run test:e2e
 
@@ -352,11 +352,11 @@ tasks:
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:pr:parallel:
-    desc: Fast Playwright e2e-pr when wasm/dist already built (manual/debug).
+    desc: Stable Playwright subset at 6 workers when wasm/dist is built.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
     cmds:
-      - echo "==> Playwright e2e-pr project (CI=${CI:-}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
+      - echo "==> Playwright stable group (workers=6, CI=${CI:-}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:pr
 
   _web:test:e2e:pr:
