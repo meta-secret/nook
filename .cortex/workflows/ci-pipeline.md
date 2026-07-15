@@ -10,6 +10,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On persistent `nook`: pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens and squash-merges its PR | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → **squash merge** or manual handoff (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only) | No                                        |
@@ -174,6 +175,32 @@ the `e2e` list and thin live smoke specs to `e2e/live/`.
 Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults locally and override with `--workers=N` when you want more parallelism than the default. Spec files that need ordering use `test.describe.configure({ mode: 'serial' })` within the file only.
 
 `sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. Local e2e projects (`e2e`, `e2e-pr`) use `fullyParallel: true`.
+
+## Rust dependency updates
+
+[`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml)
+runs weekly and can be started manually. It installs the pinned
+`cargo-outdated` orchestration tool and runs it with `--workspace
+--root-deps-only` in both Rust roots: `nook-app/` and `preflight/`. Therefore
+the audit covers every direct library declared in their `Cargo.toml` manifests,
+not merely the current lockfile's transitive graph.
+
+If either audit reports a newer release, the workflow starts the existing
+isolated CI agent on `ubuntu-latest`. The agent updates **all** outdated direct
+Rust dependencies, makes compatibility fixes, commits lockfile updates, opens a
+PR, and runs this required full deterministic validation before the CI-agent
+harness opens the PR:
+
+```bash
+WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+```
+
+`ci:pr:e2e` includes repository preflight, Rust coverage/unit tests, WASM checks,
+web checks/unit tests/builds, the complete local-provider Playwright suite, and
+extension e2e. Credentialed real-provider `sync-live` e2e remains a separate
+nightly validation because it creates disposable external-provider state and
+requires provider secrets. The agent waits only for Nook's repository-owned PR
+checks and squash-merges once they pass.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
