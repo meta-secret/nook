@@ -38,4 +38,8 @@ describe('extension origin isolation', () => {
       ).toBe(false)
     })
   }
+
+  test('declares the offscreen permission for its memory-only device session', () => {
+    expect(createManifest('1.0.0').permissions).toContain('offscreen')
+  })
 })
