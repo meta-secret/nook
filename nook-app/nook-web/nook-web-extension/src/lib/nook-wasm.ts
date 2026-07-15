@@ -6,7 +6,6 @@ import {
 import {
   default as initNookWasm,
   configureVaultApplication,
-  buildPasskeyPrfRequestOptions,
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
   NookVaultManager,
@@ -19,17 +18,6 @@ import {
 
 let initPromise: Promise<unknown> | undefined
 
-type PrfResults = {
-  enabled?: boolean
-  results?: { first?: ArrayBuffer }
-}
-
-type CredentialWithPrf = PublicKeyCredential & {
-  getClientExtensionResults(): AuthenticationExtensionsClientOutputs & {
-    prf?: PrfResults
-  }
-}
-
 export type { NookAppLocale }
 
 export function ensureNookWasm() {
@@ -40,105 +28,104 @@ export function ensureNookWasm() {
   return initPromise
 }
 
-function requirePasskeySupport(): void {
-  if (
-    !window.isSecureContext ||
-    typeof PublicKeyCredential === 'undefined' ||
-    !navigator.credentials
-  ) {
-    throw new Error('Passkeys require a supported browser in a secure context.')
-  }
-}
-
-function prfOutput(
-  credential: CredentialWithPrf,
-  requireEnabled = false,
-): Uint8Array | undefined {
-  const prf = credential.getClientExtensionResults().prf
-  if (requireEnabled && prf?.enabled !== true) {
-    throw new Error(
-      'This authenticator does not support the WebAuthn PRF extension required to protect device keys.',
-    )
-  }
-  const first = prf?.results?.first
-  if (!first) return undefined
-  const bytes = ArrayBuffer.isView(first)
-    ? new Uint8Array(first.buffer, first.byteOffset, first.byteLength)
-    : new Uint8Array(first)
-  return Uint8Array.from(bytes)
-}
-
-async function evaluatePrf(
-  options: CredentialRequestOptions,
-): Promise<Uint8Array> {
-  const credential = (await navigator.credentials.get(options)) as
-    | CredentialWithPrf
-    | undefined
-
-  if (!credential) throw new Error('Passkey authorization was cancelled.')
-  const output = prfOutput(credential)
-  if (!output) {
-    throw new Error('The passkey did not return the required PRF output.')
-  }
-  return output
-}
-
 export type ExtensionDeviceProtectionResult = {
   deviceId: string
   devicePublicKey: string
   deviceSigningPublicKey: string
 }
 
-export async function setupExtensionDeviceProtection(): Promise<ExtensionDeviceProtectionResult> {
-  requirePasskeySupport()
+export type ExtensionDeviceProtectionStatus =
+  | 'missing'
+  | 'plaintext'
+  | 'passkey'
+  | 'pin'
+  | 'unlocked'
+
+export type ExtensionDeviceMode = 'standard' | 'anti-hacker'
+
+async function withDeviceManager<T>(
+  action: (manager: NookVaultManager) => Promise<T>,
+): Promise<T> {
   await ensureNookWasm()
-
   const manager = new NookVaultManager()
-  const setup = await manager.beginDeviceProtection()
-  const userHandle = new Uint8Array(setup.userHandle)
-  const input = new Uint8Array(setup.prfInput)
-  const creationOptions = setup.creationOptions(
-    location.hostname,
-    'Nook Extension',
-  ) as CredentialCreationOptions
-  let output: Uint8Array | undefined = undefined
-  let credentialId: Uint8Array | undefined = undefined
-
   try {
-    const credential = (await navigator.credentials.create(creationOptions)) as
-      | CredentialWithPrf
-      | undefined
-
-    if (!credential) throw new Error('Passkey creation was cancelled.')
-    output = prfOutput(credential, true)
-    credentialId = new Uint8Array(credential.rawId)
-    const requestOptions = buildPasskeyPrfRequestOptions(
-      location.hostname,
-      credentialId,
-      input,
-    ) as CredentialRequestOptions
-    if (!output) output = await evaluatePrf(requestOptions)
-
-    await manager.finishDeviceProtection(
-      credentialId,
-      userHandle,
-      input,
-      output,
-    )
-
-    return {
-      deviceId: manager.device_id,
-      devicePublicKey: manager.device_public_key,
-      deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
-    }
+    return await action(manager)
   } finally {
-    output?.fill(0)
-    credentialId?.fill(0)
-    input.fill(0)
-    userHandle.fill(0)
-    setup.free()
     manager.free()
   }
+}
+
+async function deviceResult(
+  manager: NookVaultManager,
+): Promise<ExtensionDeviceProtectionResult> {
+  return {
+    deviceId: manager.device_id,
+    devicePublicKey: manager.device_public_key,
+    deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
+  }
+}
+
+export async function extensionDeviceProtectionStatus(): Promise<ExtensionDeviceProtectionStatus> {
+  return withDeviceManager(async (manager) => {
+    const status = await manager.deviceProtectionStatus()
+    if (
+      status === 'missing' ||
+      status === 'plaintext' ||
+      status === 'passkey' ||
+      status === 'pin' ||
+      status === 'unlocked'
+    ) {
+      return status
+    }
+    throw new Error(`Unsupported extension device protection status: ${status}`)
+  })
+}
+
+export async function createExtensionPasskey(
+  passkeyLabel: string,
+  deviceMode: ExtensionDeviceMode,
+): Promise<ExtensionDeviceProtectionResult> {
+  return withDeviceManager(async (manager) => {
+    await manager.setupDeviceProtectionWithPasskeyMode(
+      '',
+      'Nook Extension',
+      passkeyLabel,
+      deviceMode,
+    )
+    return deviceResult(manager)
+  })
+}
+
+export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
+  return withDeviceManager(async (manager) => {
+    await manager.recoverDeviceProtectionWithPasskey('')
+    return deviceResult(manager)
+  })
+}
+
+export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
+  return withDeviceManager(async (manager) => {
+    await manager.unlockDeviceProtectionWithPasskey('')
+    return deviceResult(manager)
+  })
+}
+
+export async function createExtensionPin(
+  pin: string,
+): Promise<ExtensionDeviceProtectionResult> {
+  return withDeviceManager(async (manager) => {
+    await manager.finishPinDeviceProtection(pin)
+    return deviceResult(manager)
+  })
+}
+
+export async function unlockExtensionPin(
+  pin: string,
+): Promise<ExtensionDeviceProtectionResult> {
+  return withDeviceManager(async (manager) => {
+    await manager.unlockPinDeviceIdentity(pin)
+    return deviceResult(manager)
+  })
 }
 
 export async function generateSuggestedPassword(

@@ -3,9 +3,14 @@ import {
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
 } from '$lib/extension-connect'
-import { isExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  isBeginExtensionPairingMessage,
+  isExtensionLocalEventLogUpdatedMessage,
+  isExtensionPairingApprovedMessage,
+} from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantStorageItems,
+  isExtensionReadySetupState,
   pairingGrantStorageKey,
   setupStorageKey,
 } from '../../../../nook-web-extension/src/background/pairing-grants'
@@ -48,9 +53,27 @@ describe('extension connect route parsing', () => {
 
     expect(request).toBeUndefined()
   })
+
+  test('rejects the removed website-first setup link', () => {
+    expect(
+      extensionConnectRequestFromLocation(
+        locationFromUrl(
+          'https://simple.nokey.sh/extension-connect?extension_id=ext-123',
+        ),
+      ),
+    ).toBeUndefined()
+  })
 })
 
 describe('extension pairing approved message', () => {
+  const eventLogRecords = [
+    {
+      eventId: 'event-1',
+      path: 'events/event-1.yaml',
+      event: { schema_version: 1 },
+    },
+  ]
+
   test('accepts complete approved grants', () => {
     expect(
       isExtensionPairingApprovedMessage({
@@ -58,6 +81,8 @@ describe('extension pairing approved message', () => {
         payload: {
           vaultType: 'simple',
           deviceId: 'device-1',
+          devicePublicKey: 'age1device',
+          deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Nook Extension',
           vaultStoreId: 'store-1',
           vaultName: 'Personal',
@@ -65,6 +90,7 @@ describe('extension pairing approved message', () => {
           scopes: ['vault-access'],
           providers: [{ id: 'local-1', type: 'local' }],
         },
+        eventLogRecords,
       }),
     ).toBe(true)
   })
@@ -76,6 +102,8 @@ describe('extension pairing approved message', () => {
         payload: {
           vaultType: 'sentinel',
           deviceId: 'device-1',
+          devicePublicKey: 'age1device',
+          deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Forged Sentinel device',
           vaultStoreId: 'store-1',
           vaultName: 'Sentinel',
@@ -83,35 +111,130 @@ describe('extension pairing approved message', () => {
           scopes: ['vault-access'],
           providers: [],
         },
+        eventLogRecords,
+      }),
+    ).toBe(false)
+  })
+
+  test('accepts encrypted local event-log notifications and rejects empty snapshots', () => {
+    expect(
+      isExtensionLocalEventLogUpdatedMessage({
+        type: 'nook:extension-local-event-log-updated',
+        payload: {
+          vaultStoreId: 'store-1',
+          eventLogRecords,
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionLocalEventLogUpdatedMessage({
+        type: 'nook:extension-local-event-log-updated',
+        payload: {
+          vaultStoreId: 'store-1',
+          eventLogRecords: [],
+        },
       }),
     ).toBe(false)
   })
 
   test('maps approved grants into extension-owned storage keys', () => {
-    const items = extensionPairingGrantStorageItems({
-      vaultType: 'simple',
-      deviceId: 'device-1',
-      deviceLabel: 'Nook Extension',
-      vaultStoreId: 'store-1',
-      vaultName: 'Personal',
-      approvedAt: '2026-07-07T00:00:00.000Z',
-      scopes: ['vault-access', 'sync-provider-credentials'],
-      providers: [
-        { id: 'local-1', type: 'local' },
-        { id: 'gh-1', type: 'github' },
-      ],
-    })
+    const items = extensionPairingGrantStorageItems(
+      {
+        vaultType: 'simple',
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        vaultStoreId: 'store-1',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-07T00:00:00.000Z',
+        scopes: ['vault-access', 'sync-provider-credentials'],
+        providers: [
+          { id: 'local-1', type: 'local' },
+          { id: 'gh-1', type: 'github' },
+        ],
+      },
+      {
+        vaultStoreId: 'store-1',
+        eventCount: 3,
+        heads: ['event-3'],
+        accessGranted: true,
+      },
+    )
 
     expect(items[pairingGrantStorageKey('store-1')]).toMatchObject({
       deviceId: 'device-1',
       vaultStoreId: 'store-1',
+      syncProviderCount: 2,
     })
+    expect(items[pairingGrantStorageKey('store-1')]).not.toHaveProperty(
+      'providers',
+    )
     expect(items[setupStorageKey]).toEqual({
       status: 'ready',
       deviceLabel: 'Nook Extension',
       pairedVaults: ['Personal'],
       selectedVaultName: 'Personal',
       syncProviderCount: 2,
+      eventCount: 3,
+      eventLogHeads: ['event-3'],
+      lastLocalSyncAt: expect.any(String),
     })
+    expect(isExtensionReadySetupState(items[setupStorageKey])).toBe(true)
+  })
+
+  test('does not present incomplete or revoked setup as connected', () => {
+    expect(isExtensionReadySetupState(undefined)).toBe(false)
+    expect(
+      isExtensionReadySetupState({
+        status: 'ready',
+        deviceLabel: 'Nook Extension',
+        pairedVaults: [],
+        selectedVaultName: '',
+        syncProviderCount: 0,
+        eventCount: 0,
+        eventLogHeads: [],
+        lastLocalSyncAt: '',
+      }),
+    ).toBe(false)
+    expect(
+      isExtensionReadySetupState({
+        status: 'revoked',
+        deviceLabel: 'Nook Extension',
+        pairedVaults: ['Personal'],
+        selectedVaultName: 'Personal',
+        syncProviderCount: 0,
+        eventCount: 1,
+        eventLogHeads: ['event-1'],
+        lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('extension-owned pairing start', () => {
+  test('requires the complete extension device request', () => {
+    expect(
+      isBeginExtensionPairingMessage({
+        type: 'nook:begin-extension-pairing',
+        payload: {
+          deviceId: 'device-1',
+          devicePublicKey: 'age1device',
+          deviceSigningPublicKey: 'signing-key',
+          deviceLabel: 'Nook Extension',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isBeginExtensionPairingMessage({
+        type: 'nook:begin-extension-pairing',
+        payload: {
+          deviceId: 'device-1',
+          devicePublicKey: '',
+          deviceSigningPublicKey: 'signing-key',
+          deviceLabel: 'Nook Extension',
+        },
+      }),
+    ).toBe(false)
   })
 })

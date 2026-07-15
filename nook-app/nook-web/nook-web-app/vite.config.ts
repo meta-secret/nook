@@ -1,5 +1,5 @@
 import { defineConfig, type Plugin } from 'vitest/config'
-import { copyFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadEnv, type PreviewServer, type ViteDevServer } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
@@ -49,6 +49,17 @@ function deploymentChannelLinks(): Plugin {
         .replaceAll('https://sentinel.nokey.sh', sentinelAppUrl)
     },
   }
+}
+
+function requiredEnvironmentPath(
+  env: Record<string, string>,
+  name: string,
+): string {
+  const value = env[name]?.trim()
+  if (!value) {
+    throw new Error(`${name} is required when local HTTPS is enabled`)
+  }
+  return value
 }
 
 function routeSpaRequestsToApp(
@@ -174,6 +185,17 @@ function seoStaticFiles(outputDirectory: string): Plugin {
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const localHttps = env.NOOK_LOCAL_HTTPS === '1'
+  const https = localHttps
+    ? {
+        cert: readFileSync(
+          requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_CERT_PATH'),
+        ),
+        key: readFileSync(
+          requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
+        ),
+      }
+    : undefined
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
   const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'
@@ -224,6 +246,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      https,
       fs: {
         allow: ['../../..'],
       },

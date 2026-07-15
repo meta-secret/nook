@@ -1,16 +1,34 @@
-import { copyFile, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
 import { createManifest } from '../src/manifest'
+import {
+  DEFAULT_SIMPLE_VAULT_URL,
+  normalizeSimpleVaultBaseUrl,
+} from '../src/lib/simple-vault-target'
 
 const projectRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(projectRoot, '..')
 const webRoot = join(webGroupRoot, 'nook-web-app')
 const sharedRoot = join(webGroupRoot, 'nook-web-shared')
+const coreLocalesRoot = join(webGroupRoot, '..', 'nook-core', 'locales')
 const distDir = join(projectRoot, 'dist')
 const requireFromWeb = createRequire(join(webRoot, 'package.json'))
+const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
+  process.env.NOOK_SIMPLE_VAULT_URL?.trim() || DEFAULT_SIMPLE_VAULT_URL,
+)
+const simpleVaultDefine = {
+  __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
+}
 
 async function ensureNodeModulesLink() {
   try {
@@ -42,6 +60,7 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     minify: false,
     splitting: false,
     naming: '[name].js',
+    define: simpleVaultDefine,
   })
 
   if (!result.success) {
@@ -63,7 +82,7 @@ async function importWebDependency<TModule>(specifier: string) {
   return import(pathToFileURL(resolved).href) as Promise<TModule>
 }
 
-async function buildPopup() {
+async function buildSveltePage(page: 'popup') {
   const { build: viteBuild } =
     await importWebDependency<typeof import('vite')>('vite')
   const { svelte } = await importWebDependency<
@@ -71,18 +90,19 @@ async function buildPopup() {
   >('@sveltejs/vite-plugin-svelte')
 
   await viteBuild({
-    root: join(projectRoot, 'src/popup'),
+    root: join(projectRoot, `src/${page}`),
     configFile: false,
     base: './',
     publicDir: false,
     plugins: [svelte()],
+    define: simpleVaultDefine,
     build: {
-      outDir: join(distDir, 'popup'),
+      outDir: join(distDir, page),
       emptyOutDir: true,
       minify: false,
       sourcemap: true,
       rollupOptions: {
-        input: join(projectRoot, 'src/popup/index.html'),
+        input: join(projectRoot, `src/${page}/index.html`),
       },
     },
     resolve: {
@@ -94,6 +114,35 @@ async function buildPopup() {
   })
 }
 
+type NookLocaleCatalog = {
+  extension: {
+    widget: {
+      open_vault: string
+      dismiss: string
+    }
+  }
+}
+
+async function buildChromeLocales() {
+  await Promise.all(
+    ['en', 'ru'].map(async (locale) => {
+      const catalog = JSON.parse(
+        await readFile(join(coreLocalesRoot, `${locale}.json`), 'utf8'),
+      ) as NookLocaleCatalog
+      const messages = {
+        widgetOpenVault: { message: catalog.extension.widget.open_vault },
+        widgetDismiss: { message: catalog.extension.widget.dismiss },
+      }
+      const localeDir = join(distDir, '_locales', locale)
+      await mkdir(localeDir, { recursive: true })
+      await writeFile(
+        join(localeDir, 'messages.json'),
+        `${JSON.stringify(messages, undefined, 2)}\n`,
+      )
+    }),
+  )
+}
+
 await ensureNodeModulesLink()
 await rm(distDir, { force: true, recursive: true })
 await mkdir(distDir, { recursive: true })
@@ -101,17 +150,22 @@ await mkdir(distDir, { recursive: true })
 await Promise.all([
   buildEntrypoint('src/background/service-worker.ts', 'background'),
   buildEntrypoint('src/content/autofill.ts', 'content'),
+  buildEntrypoint('src/content/simple-vault-bridge.ts', 'content'),
 ])
 
-await buildPopup()
+await Promise.all([buildSveltePage('popup'), buildChromeLocales()])
 
 await writeFile(
   join(distDir, 'manifest.json'),
-  `${JSON.stringify(createManifest(packageJson.version), null, 2)}\n`,
+  `${JSON.stringify(createManifest(packageJson.version, simpleVaultBaseUrl), null, 2)}\n`,
 )
 
 await Promise.all([
   copyStaticFile(join(webRoot, 'public/favicon.png'), 'icons/nook.png'),
+  copyStaticFile(
+    join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
+    'background/nook_wasm_bg.wasm',
+  ),
 ])
 
 console.log(`Built Nook extension at ${distDir}`)

@@ -83,6 +83,9 @@ pub(crate) async fn signal_current_user_details(
     user_handle: &[u8],
     passkey_label: &str,
 ) {
+    if rp_id.trim().is_empty() {
+        return;
+    }
     let _ = try_signal_current_user_details(rp_id, user_handle, passkey_label).await;
 }
 
@@ -440,7 +443,7 @@ fn creation_options_struct(
     Ok(CredentialCreationOptions {
         public_key: PublicKeyCredentialCreationOptions {
             rp: PublicKeyCredentialRpEntity {
-                id: Some(rp_id.to_owned()),
+                id: optional_rp_id(rp_id),
                 name: rp_name.to_owned(),
             },
             user: PublicKeyCredentialUserEntity {
@@ -473,6 +476,11 @@ fn creation_options_struct(
             extensions: Some(prf_extension(prf_input, None)),
         },
     })
+}
+
+fn optional_rp_id(rp_id: &str) -> Option<String> {
+    let rp_id = rp_id.trim();
+    (!rp_id.is_empty()).then(|| rp_id.to_owned())
 }
 
 fn normalized_passkey_label(label: &str) -> String {
@@ -544,7 +552,7 @@ fn request_options_struct(
         public_key: PublicKeyCredentialRequestOptions {
             challenge: random_challenge()?.to_vec().into(),
             timeout: None,
-            rp_id: Some(rp_id.to_owned()),
+            rp_id: optional_rp_id(rp_id),
             allow_credentials: Some(vec![allow_credential]),
             user_verification: UserVerificationRequirement::Required,
             hints: None,
@@ -563,7 +571,7 @@ fn recovery_options_struct(
         public_key: PublicKeyCredentialRequestOptions {
             challenge: random_challenge()?.to_vec().into(),
             timeout: None,
-            rp_id: Some(rp_id.to_owned()),
+            rp_id: optional_rp_id(rp_id),
             allow_credentials: None,
             user_verification: UserVerificationRequirement::Required,
             hints: None,
@@ -658,6 +666,22 @@ mod tests {
                 .len(),
             32
         );
+    }
+
+    #[test]
+    fn blank_rp_id_uses_browser_origin_default() {
+        let creation =
+            creation_options_struct("", "Nook", "Browser extension", &[8; 32], &[9; 32]).unwrap();
+        let creation_json = to_json(&creation);
+        assert!(creation_json["publicKey"]["rp"].get("id").is_none());
+
+        let request = request_options_struct("", &[7; 32], &[9; 32]).unwrap();
+        let request_json = to_json(&request);
+        assert!(request_json["publicKey"].get("rpId").is_none());
+
+        let recovery = recovery_options_struct("", &[9; 32]).unwrap();
+        let recovery_json = to_json(&recovery);
+        assert!(recovery_json["publicKey"].get("rpId").is_none());
     }
 
     #[test]

@@ -10,7 +10,7 @@ agentic-ai/ci-agent/dist-test/
 
 .task/checksum/
 
-# Resolved toolchain image ref (written by task setup).
+# Generated local state: resolved toolchain image refs and trusted HTTPS material.
 .nook/
 
 # Local Playwright MCP screenshots, snapshots, console, and annotation output.

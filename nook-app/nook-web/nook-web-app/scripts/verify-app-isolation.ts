@@ -245,8 +245,23 @@ const contentScript = await readFile(
   join(webRoot, 'nook-web-extension/src/content/autofill.ts'),
   'utf8',
 )
-if (!contentScript.includes('location.origin !== SENTINEL_ORIGIN')) {
+if (!contentScript.includes('isRuntimeSentinelVaultUrl(location.href)')) {
   throw new Error('Extension content script lacks a Sentinel runtime guard.')
+}
+
+const previewManifest = createManifest(
+  '1.0.0',
+  'https://pr-391.nook-1n8.pages.dev/simple/',
+)
+if (
+  previewManifest.action.default_popup !== 'popup/index.html' ||
+  previewManifest.externally_connectable.matches[0] !==
+    'https://pr-391.nook-1n8.pages.dev/simple/*' ||
+  !previewManifest.content_scripts[0]?.exclude_matches.includes(
+    'https://pr-391.nook-1n8.pages.dev/sentinel/*',
+  )
+) {
+  throw new Error('Extension preview target is not path-isolated by app.')
 }
 
 console.log(
