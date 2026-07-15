@@ -159,6 +159,10 @@ a whole-build retry loop.
 | `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Isolate scheduled, manual, and research work from the delivery runner |
 | `runner-cleanup.yml` | `nook` | Maintain the self-hosted Docker cache and disk |
 
+The runner-cleanup workflow runs its age-filtered system prune separately from
+its unused-volume prune: Docker does not support its `until` filter together
+with `docker system prune --volumes`.
+
 ## Why local-provider e2e vs sync-live
 
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
