@@ -151,8 +151,16 @@ fn extension_and_release_contract_preserve_origin_isolation() {
         &root,
         "nook-app/nook-web/nook-web-extension/src/manifest.ts",
     );
-    assert!(manifest.contains("https://simple.nokey.sh/*"));
-    assert!(manifest.contains("exclude_matches: ['https://sentinel.nokey.sh/*']"));
+    assert!(manifest.contains("exclude_matches: ["));
+    for excluded_origin in [
+        "'https://simple.nokey.sh/*'",
+        "'https://sentinel.nokey.sh/*'",
+    ] {
+        assert!(
+            manifest.contains(excluded_origin),
+            "extension content scripts must exclude {excluded_origin}"
+        );
+    }
 
     let release = read(&root, ".github/workflows/release.yml");
     for required in [
