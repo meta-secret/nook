@@ -197,7 +197,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label={vault.t('common.copy')}
+                  aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -223,7 +223,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.username, item.id, 'username')}
-                  aria-label={vault.t('common.copy')}
+                  aria-label={vault.t('vault.copy_username')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-username`}<Check
@@ -251,7 +251,7 @@
                 type="button"
                 onclick={() =>
                   void onCopyToClipboard(item.password, item.id, 'secret')}
-                aria-label={vault.t('common.copy')}
+                aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -289,7 +289,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label={vault.t('common.copy')}
+                  aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -323,7 +323,7 @@
                     item.id,
                     'secret',
                   )}
-                aria-label={vault.t('common.copy')}
+                aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -348,7 +348,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.expiresAt, item.id, 'expires')}
-                  aria-label={vault.t('common.copy')}
+                  aria-label={vault.t('vault.copy_expiration_date')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-expires`}<Check
@@ -374,7 +374,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.name, item.id, 'name')}
-                  aria-label={vault.t('common.copy')}
+                  aria-label={vault.t('vault.copy_account_name')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-name`}<Check
@@ -394,7 +394,7 @@
                 type="button"
                 onclick={() =>
                   void onCopyToClipboard(item.seed, item.id, 'secret')}
-                aria-label={vault.t('common.copy')}
+                aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -434,7 +434,7 @@
                 type="button"
                 onclick={() =>
                   void onCopyToClipboard(item.note, item.id, 'secret')}
-                aria-label={vault.t('common.copy')}
+                aria-label={vault.t('vault.copy_note')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check

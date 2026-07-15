@@ -113,6 +113,12 @@ describe('locale', () => {
       'legal.manager_description',
       'legal.documents_label',
       'legal.source',
+      'vault.copy_website_url',
+      'vault.copy_username',
+      'vault.copy_secret',
+      'vault.copy_expiration_date',
+      'vault.copy_account_name',
+      'vault.copy_note',
     ]
 
     for (const locale of ['en', 'ru'] as const) {
