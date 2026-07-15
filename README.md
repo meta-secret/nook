@@ -207,6 +207,12 @@ files through a commit-scoped host directory with an isolated subdirectory per
 invocation, then builds a web-only image. Concurrent builds cannot consume each
 other's handoff, and Rust `target/` and the compiler toolchain never enter
 `nook-web:local`.
+Before Rust compilation, Task also idempotently starts a Docker-host-only
+`nook-sccache-redis` container. All short-lived Docker/BuildKit Rust compilers
+share that persistent Redis-backed `sccache`, so a dependency change that
+invalidates cargo-chef or Docker layers can still reuse compatible compiled
+crate artifacts. Override its defaults with `SCCACHE_REDIS_PORT`,
+`SCCACHE_REDIS_MAXMEMORY`, or `SCCACHE_REDIS_IMAGE`.
 Runtime containers receive an explicit 1,048,576 open-file limit; override it
 with `DOCKER_NOFILE_LIMIT` when needed.
 
@@ -264,6 +270,7 @@ task extension:build       # browser extension package
 task ci:pr                 # fast local mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
+task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
 ```
 
 Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
@@ -283,6 +290,15 @@ selected builder's local BuildKit content store. Workspace source is copied into
 the slim `nook-web:local` image (sealed image; no runtime bind mount except
 `task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a separate
 source-sealed Rust image on demand.
+
+Rust compilation has a second cache boundary below Docker layers: pinned
+`sccache` clients use one persistent, Docker-host-only Redis service per Docker
+host. On macOS the service binds to host loopback; on Linux it binds only to
+Docker's bridge-gateway interface. Build and runtime containers resolve the
+same `host.docker.internal` endpoint through Docker's `host-gateway` mapping.
+The service stores up to 8 GiB by default with LRU eviction and AOF
+persistence. It is an optimization only—Cargo, tests, and final linking remain
+the correctness boundary—and it never transfers cache data between machines.
 
 No BuildKit cache is imported from or exported to a registry. The persistent
 `nook` delivery runners reuse their local content store across PR, main, and

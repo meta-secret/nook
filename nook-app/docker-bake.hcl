@@ -38,6 +38,19 @@ variable "WASM_BUILD_MODE" {
   default = "dev"
 }
 
+variable "SCCACHE_REDIS_PORT" {
+  default = "6380"
+}
+
+target "_sccache-network" {
+  args = {
+    SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
+  }
+  extra-hosts = {
+    "host.docker.internal" = "host-gateway"
+  }
+}
+
 // Default: build the nook-web image (source-in-image) that `task` runs.
 group "default" {
   targets = ["nook-web"]

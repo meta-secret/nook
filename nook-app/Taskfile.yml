@@ -30,6 +30,13 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
+  # One persistent Redis cache per Docker host. BuildKit compilation steps reach it through the
+  # Docker host gateway; their short-lived local sccache daemons remain isolated by Unix sockets.
+  SCCACHE_REDIS_IMAGE: '{{default "redis:8.2.2-alpine" .SCCACHE_REDIS_IMAGE}}'
+  SCCACHE_REDIS_CONTAINER: '{{default "nook-sccache-redis" .SCCACHE_REDIS_CONTAINER}}'
+  SCCACHE_REDIS_VOLUME: '{{default "nook-sccache-redis" .SCCACHE_REDIS_VOLUME}}'
+  SCCACHE_REDIS_PORT: '{{default "6380" .SCCACHE_REDIS_PORT}}'
+  SCCACHE_REDIS_MAXMEMORY: '{{default "8gb" .SCCACHE_REDIS_MAXMEMORY}}'
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -45,6 +52,7 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
+    --set '*.args.SCCACHE_REDIS_PORT={{.SCCACHE_REDIS_PORT}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
@@ -80,9 +88,87 @@ tasks:
     cmds:
       - task: build
 
+  sccache:ensure:
+    desc: Ensure the persistent Docker-host-only Redis backend for Rust sccache is healthy.
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        name="{{.SCCACHE_REDIS_CONTAINER}}";
+        image="{{.SCCACHE_REDIS_IMAGE}}";
+        volume="{{.SCCACHE_REDIS_VOLUME}}";
+        port="{{.SCCACHE_REDIS_PORT}}";
+        maxmemory="{{.SCCACHE_REDIS_MAXMEMORY}}";
+        if [ "$(uname -s)" = Darwin ]; then
+          bind_ip=127.0.0.1;
+        else
+          bind_ip="$({{.DOCKER}} network inspect bridge | jq -r '\''.[0].IPAM.Config[0].Gateway'\'')";
+        fi;
+        test -n "$bind_ip" && [ "$bind_ip" != null ];
+        config="image=$image;volume=$volume;bind=$bind_ip;port=$port;maxmemory=$maxmemory";
+        if {{.DOCKER}} container inspect "$name" >/dev/null 2>&1; then
+          existing="$({{.DOCKER}} container inspect "$name" | jq -r '\''.[0].Config.Labels["org.meta-secret.nook.sccache-redis.config"] // ""'\'')";
+          if [ "$existing" != "$config" ]; then
+            echo "task sccache:ensure: replacing stale $name configuration";
+            {{.DOCKER}} rm -f "$name" >/dev/null;
+          elif [ "$({{.DOCKER}} container inspect "$name" | jq -r '\''.[0].State.Running'\'')" != true ]; then
+            {{.DOCKER}} start "$name" >/dev/null;
+          fi;
+        fi;
+        if ! {{.DOCKER}} container inspect "$name" >/dev/null 2>&1; then
+          if ! {{.DOCKER}} run --detach \
+            --name "$name" \
+            --restart unless-stopped \
+            --publish "$bind_ip:$port:6379" \
+            --label "org.meta-secret.nook.sccache-redis.config=$config" \
+            --volume "$volume:/data" \
+            "$image" \
+            redis-server \
+            --bind 0.0.0.0 \
+            --protected-mode no \
+            --appendonly yes \
+            --appendfsync everysec \
+            --maxmemory "$maxmemory" \
+            --maxmemory-policy allkeys-lru >/dev/null; then
+            {{.DOCKER}} container inspect "$name" >/dev/null 2>&1 || exit 1;
+          fi;
+        fi;
+        healthy=false;
+        for attempt in $(seq 1 30); do
+          if [ "$({{.DOCKER}} exec "$name" redis-cli ping 2>/dev/null || true)" = PONG ]; then
+            healthy=true;
+            break;
+          fi;
+          sleep 1;
+        done;
+        if [ "$healthy" != true ]; then
+          {{.DOCKER}} logs "$name";
+          echo "task sccache:ensure: Redis did not become healthy" >&2;
+          exit 1;
+        fi;
+        if [ "$({{.DOCKER}} run --rm --add-host host.docker.internal:host-gateway "$image" redis-cli -h host.docker.internal -p "$port" ping 2>/dev/null || true)" != PONG ]; then
+          echo "task sccache:ensure: build-container routing cannot reach Redis through host.docker.internal:$port" >&2;
+          exit 1;
+        fi;
+        echo "task sccache:ensure: $name is healthy on Docker-host address $bind_ip:$port"'
+
+  sccache:stats:
+    desc: Show shared Rust compiler-cache key and memory statistics.
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        name="{{.SCCACHE_REDIS_CONTAINER}}";
+        {{.DOCKER}} exec "$name" redis-cli DBSIZE;
+        {{.DOCKER}} exec "$name" redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
+        {{.DOCKER}} exec "$name" redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
     dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
     # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
     # generated WASM package + coverage files to a commit-scoped, invocation-isolated host directory.
     # Phase two consumes that tiny directory to build the web image; builder-wasm is never a
@@ -130,6 +216,8 @@ tasks:
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
     dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
     env:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
@@ -148,6 +236,8 @@ tasks:
   setup:rust:browser:
     desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.
     dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
     env:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'

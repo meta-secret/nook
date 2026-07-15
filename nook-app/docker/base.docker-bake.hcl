@@ -7,6 +7,9 @@ target "rust-base" {
   dockerfile = "nook-app/docker/base.Dockerfile"
   target     = "rust-base"
   platforms  = ["linux/amd64"]
+  args = {
+    SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
+  }
 }
 
 target "web-base" {
