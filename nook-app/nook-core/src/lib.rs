@@ -147,7 +147,7 @@ pub use password_envelope::{
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
     verify_password_entry,
 };
-pub use session::{ReplaceSecretInput, replace_secret};
+pub use session::{ReplaceSecretInput, replace_encrypted_secret, replace_secret};
 pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials, seal_provider_credentials,
     seal_provider_credentials_for_public_key,

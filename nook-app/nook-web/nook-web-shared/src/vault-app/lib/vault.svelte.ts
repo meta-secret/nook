@@ -263,6 +263,7 @@ export class VaultState {
   secretPageOffset = $state(0);
   secretPageSize = 50;
   secretQuery = $state("");
+  private secretPageGeneration = 0;
 
   errorMsg = $state("");
   successMsg = $state("");
@@ -1884,6 +1885,7 @@ export class VaultState {
   }
 
   clearUnlockedSession() {
+    this.secretPageGeneration += 1;
     this.stopIdleSessionTracking();
     this.stopVaultSync();
     this.isAuthenticated = false;
@@ -2444,6 +2446,7 @@ export class VaultState {
 
   async loadSecretPage(query: string, requestedOffset = 0) {
     if (!this.manager) return;
+    const generation = this.secretPageGeneration;
     const page = await this.enqueueStorage(() =>
       this.manager!.querySecretPage(
         query,
@@ -2455,6 +2458,10 @@ export class VaultState {
     let total = page.total;
     let offset = page.offset;
     page.free();
+    if (generation !== this.secretPageGeneration) {
+      for (const record of records) record.free();
+      return;
+    }
 
     if (records.length === 0 && total > 0 && offset >= total) {
       const lastOffset =
@@ -2466,6 +2473,10 @@ export class VaultState {
       total = lastPage.total;
       offset = lastPage.offset;
       lastPage.free();
+      if (generation !== this.secretPageGeneration) {
+        for (const record of records) record.free();
+        return;
+      }
     }
 
     for (const secret of this.secrets) secret.free();

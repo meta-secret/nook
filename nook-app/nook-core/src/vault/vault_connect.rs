@@ -118,6 +118,7 @@ pub fn unlock_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultRes
         return Err(crate::MultiDeviceError::SentinelCeremonyRequired.into());
     }
     let stored_records = deserialize_stored(content, format)?;
+    validate_user_secret_types(&stored_records)?;
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
     Ok(UnlockedVault {
@@ -125,6 +126,23 @@ pub fn unlock_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultRes
         secrets_key,
         members_key,
     })
+}
+
+fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()> {
+    for record in records {
+        if record.secret_type.is_none()
+            && matches!(
+                crate::VaultMetaRecord::classify(record),
+                crate::VaultMetaRecord::Secret(..)
+            )
+        {
+            return Err(crate::DatabaseError::MissingSecretType {
+                key: record.key.clone(),
+            }
+            .into());
+        }
+    }
+    Ok(())
 }
 
 /// Native/test helper: reconstruct a sentinel vault when enough participant
@@ -143,6 +161,7 @@ pub fn load_sentinel_vault(
         return Err(crate::MultiDeviceError::InvalidSentinelThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
+    validate_user_secret_types(&stored_records)?;
     architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_sentinel_vault_keys(&stored_records, identities)?;
     hydrate_loaded_vault(UnlockedVault {
@@ -163,6 +182,7 @@ pub fn load_sentinel_vault_from_opened(
         return Err(crate::MultiDeviceError::InvalidSentinelThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
+    validate_user_secret_types(&stored_records)?;
     architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_sentinel_vault_keys_from_opened(&stored_records, opened)?;
     hydrate_loaded_vault(UnlockedVault {
@@ -224,6 +244,25 @@ mod tests {
         generate_vault_keys, genesis_auth_record, genesis_members_records, load_sentinel_vault,
         serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_name_architecture,
     };
+
+    #[test]
+    fn encrypted_unlock_rejects_user_rows_without_a_secret_type() -> VaultResult<()> {
+        let record = StoredSecretRecord {
+            key: crate::SecretId::from_vault_record("secret_missing_type"),
+            secret_type: None,
+            value: crate::StoredRecordPayload::from_trusted(
+                "-----BEGIN AGE ENCRYPTED FILE-----\ninvalid".to_owned(),
+            ),
+        };
+
+        let error = validate_user_secret_types(&[record]).unwrap_err();
+
+        assert!(matches!(
+            error,
+            crate::VaultError::Database(crate::DatabaseError::MissingSecretType { .. })
+        ));
+        Ok(())
+    }
 
     #[test]
     fn empty_content_requires_genesis() -> VaultResult<()> {

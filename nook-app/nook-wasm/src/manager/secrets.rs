@@ -263,35 +263,18 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        nook_core::replace_encrypted_secret(
+            &mut self.vault.meta,
+            crypto,
+            &nook_core::ReplaceSecretInput {
+                old_id: &old_id,
+                new_id: &new_id,
+                secret_type,
+                data_yaml: &data,
+            },
+        )?;
         let validated_new = nook_core::validate_secret_id(&new_id)?;
         let validated_old = nook_core::validate_secret_id(&old_id)?;
-        if validated_old == validated_new {
-            return Err(nook_core::SessionError::ReplacementIdUnchanged.into());
-        }
-        if !self.vault.meta.secrets.contains_key(&validated_old) {
-            return Err(nook_core::SessionError::SecretNotFound {
-                id: validated_old.clone(),
-            }
-            .into());
-        }
-        if self.vault.meta.secrets.contains_key(&validated_new) {
-            return Err(nook_core::SessionError::SecretAlreadyExists {
-                id: validated_new.clone(),
-            }
-            .into());
-        }
-        nook_core::validate_secret_data(&data)?;
-        let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
-        typed_value.zeroize_plaintext();
-        let encrypted = crypto.encrypt_value(&data)?;
-        self.vault.meta.secrets.remove(&validated_old);
-        self.vault.meta.secrets.insert(
-            validated_new.clone(),
-            (
-                secret_type,
-                nook_core::StoredRecordPayload::from_age_armored(encrypted),
-            ),
-        );
         let ciphertext = self
             .vault
             .meta
