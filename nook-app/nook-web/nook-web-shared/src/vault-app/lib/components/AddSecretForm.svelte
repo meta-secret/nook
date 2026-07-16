@@ -81,6 +81,7 @@
   let authenticatorDigits = $state('6')
   let authenticatorPeriod = $state('30')
   let authenticatorBackupCodes = $state('')
+  let submitError = $state('')
 
   let genLength = $state(defaultPasswordGenerationOptions.length)
   let genUppercase = $state(defaultPasswordGenerationOptions.uppercase)
@@ -202,6 +203,7 @@
     authenticatorDigits = '6'
     authenticatorPeriod = '30'
     authenticatorBackupCodes = ''
+    submitError = ''
     showPasswordOptions = false
     showPasswordValue = false
   }
@@ -214,11 +216,18 @@
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
     if (!selectedType) return
+    submitError = ''
 
     if (selectedType === 'secure-note' && !noteBody.trim()) return
     if (selectedType === 'seed-phrase' && !seedPhraseValid) return
 
-    const dataYaml = buildSecretYaml(selectedType, secretFields())
+    let dataYaml: string
+    try {
+      dataYaml = buildSecretYaml(selectedType, secretFields())
+    } catch (error) {
+      submitError = error instanceof Error ? error.message : String(error)
+      return
+    }
 
     if (isEditMode && initialItem && onReplaceSecret) {
       await onReplaceSecret(initialItem.id, selectedType, dataYaml)
@@ -429,6 +438,16 @@
         </Button>
       </div>
     </div>
+
+    {#if submitError}
+      <p
+        class="text-sm text-destructive"
+        role="alert"
+        data-testid="secret-form-error"
+      >
+        {submitError}
+      </p>
+    {/if}
 
     {#if selectedType === 'login'}
       <div class="space-y-1.5">

@@ -80,6 +80,10 @@ fn field(record: &StringRecord, index: usize) -> String {
     record.get(index).unwrap_or_default().trim().to_owned()
 }
 
+fn password_field(record: &StringRecord, index: usize) -> String {
+    record.get(index).unwrap_or_default().to_owned()
+}
+
 fn optional_field(record: &StringRecord, index: Option<usize>) -> String {
     index.map_or_else(String::new, |index| field(record, index))
 }
@@ -99,7 +103,7 @@ fn convert_record(record: &StringRecord, columns: ChromePasswordColumns) -> Opti
     let name = optional_field(record, columns.name);
     let url = field(record, columns.url);
     let username = field(record, columns.username);
-    let password = field(record, columns.password);
+    let password = password_field(record, columns.password);
     let mut notes = optional_field(record, columns.note);
 
     if name.is_empty()
@@ -217,6 +221,18 @@ mod tests {
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.items.len(), 1);
         assert_eq!(plan.skipped_unsupported, 1);
+    }
+
+    #[test]
+    fn preserves_leading_and_trailing_password_whitespace() {
+        let csv = "url,username,password\nhttps://example.com,alice,\" secret \"\n";
+
+        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let SecretValue::Login(login) = &plan.items[0] else {
+            panic!("expected login");
+        };
+
+        assert_eq!(login.password, " secret ");
     }
 
     #[test]

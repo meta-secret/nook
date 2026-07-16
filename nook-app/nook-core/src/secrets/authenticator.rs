@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use std::collections::HashMap;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 const DEFAULT_DIGITS: u32 = 6;
 const DEFAULT_PERIOD: u64 = 30;
@@ -98,12 +98,12 @@ pub struct TotpSecret(String);
 
 impl TotpSecret {
     pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        let normalized = normalize_base32(value);
+        let mut normalized = Zeroizing::new(normalize_base32(value));
         let decoded = decode_base32(&normalized)?;
         if decoded.len() < MIN_SECRET_BYTES {
             return Err(ValidationError::AuthenticatorSecretInvalid);
         }
-        Ok(Self(normalized))
+        Ok(Self(std::mem::take(&mut *normalized)))
     }
 
     #[must_use]
@@ -111,14 +111,20 @@ impl TotpSecret {
         &self.0
     }
 
-    pub fn decoded(&self) -> Result<Vec<u8>, ValidationError> {
-        decode_base32(&self.0)
+    pub fn decoded(&self) -> Result<Zeroizing<Vec<u8>>, ValidationError> {
+        decode_base32(&self.0).map(Zeroizing::new)
     }
 }
 
 impl Zeroize for TotpSecret {
     fn zeroize(&mut self) {
         self.0.zeroize();
+    }
+}
+
+impl Drop for TotpSecret {
+    fn drop(&mut self) {
+        self.zeroize();
     }
 }
 

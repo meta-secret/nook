@@ -2498,14 +2498,16 @@ export class VaultState {
     if (!this.manager) {
       throw new Error("Vault manager is not initialized.");
     }
+    const unixSeconds = Math.floor(Date.now() / 1000);
     const result = await this.enqueueStorage(() =>
-      this.manager!.currentAuthenticatorCode(id, Math.floor(Date.now() / 1000)),
+      this.manager!.currentAuthenticatorCode(id, unixSeconds),
     );
     try {
       return {
         code: result.code,
         secondsRemaining: result.secondsRemaining,
         period: result.period,
+        expiresAtUnixSeconds: unixSeconds + result.secondsRemaining,
       };
     } finally {
       result.free();

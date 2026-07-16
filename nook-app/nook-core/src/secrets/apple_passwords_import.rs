@@ -76,6 +76,10 @@ fn field(record: &StringRecord, index: usize) -> String {
     record.get(index).unwrap_or_default().trim().to_owned()
 }
 
+fn password_field(record: &StringRecord, index: usize) -> String {
+    record.get(index).unwrap_or_default().to_owned()
+}
+
 fn optional_field(record: &StringRecord, index: Option<usize>) -> String {
     index.map_or_else(String::new, |index| field(record, index))
 }
@@ -98,7 +102,7 @@ fn convert_record(
     let title = field(record, columns.title);
     let url = field(record, columns.url);
     let username = field(record, columns.username);
-    let password = field(record, columns.password);
+    let password = password_field(record, columns.password);
     let mut notes = optional_field(record, columns.notes);
     let otp_auth = optional_field(record, columns.otp_auth);
 
@@ -262,6 +266,18 @@ mod tests {
         assert_eq!(plan.items.len(), 1);
         assert!(matches!(plan.items[0], SecretValue::Authenticator(_)));
         assert_eq!(plan.skipped_unsupported, 1);
+    }
+
+    #[test]
+    fn preserves_leading_and_trailing_password_whitespace() {
+        let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,\" secret \"\n";
+
+        let plan = plan_apple_passwords_import(csv).unwrap();
+        let SecretValue::Login(login) = &plan.items[0] else {
+            panic!("expected login");
+        };
+
+        assert_eq!(login.password, " secret ");
     }
 
     #[test]

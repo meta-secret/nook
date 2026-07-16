@@ -263,24 +263,32 @@ test.describe('local vault', () => {
     await page.getByTestId('item-type-authenticator').click()
     await page.getByTestId('authenticator-issuer').fill(issuer)
     await page.getByTestId('authenticator-account').fill(account)
-    await page.getByTestId('authenticator-secret').fill('JBSWY3DPEHPK3PXP')
+    await page.getByTestId('authenticator-secret').fill('not-valid!')
     await page
       .getByTestId('authenticator-backup-codes')
       .fill('backup-one\nbackup-two')
+    await page.getByTestId('save-secret-btn').click()
+    await expect(page.getByTestId('secret-form-error')).toBeVisible()
+
+    await page.getByTestId('authenticator-secret').fill('JBSWY3DPEHPK3PXP')
     await page.getByTestId('save-secret-btn').click()
 
     const row = page.getByTestId('secret-row').filter({ hasText: account })
     await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await row.getByTestId('secret-row-toggle').click()
     await expect(row.getByTestId('authenticator-current-code')).toHaveText(
-      /^\d{6}$/,
-      { timeout: UI_TIMEOUT_MS },
+      '••••••',
     )
     await expect(row.getByTestId('authenticator-backup-codes')).toContainText(
       '••••••••',
     )
 
     await revealSecretInRow(row)
+    await expect(row.getByTestId('authenticator-current-code')).toHaveText(
+      /^\d{6}$/,
+      { timeout: UI_TIMEOUT_MS },
+    )
+
     await expect(row.getByText('backup-one')).toBeVisible()
     await expect(row.getByText('backup-two')).toBeVisible()
     await expect(row.getByText('JBSWY3DPEHPK3PXP')).toBeVisible()

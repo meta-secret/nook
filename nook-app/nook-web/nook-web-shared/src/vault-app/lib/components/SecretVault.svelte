@@ -169,6 +169,15 @@
     )
     if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true }
+      if (
+        filteredItems.find((item) => item.id === id)?.type === 'authenticator'
+      ) {
+        await refreshAuthenticatorCode(id)
+      }
+    } else if (authenticatorCodes[id]) {
+      const nextCodes = { ...authenticatorCodes }
+      delete nextCodes[id]
+      authenticatorCodes = nextCodes
     }
   }
 
@@ -183,35 +192,35 @@
 
   async function refreshAuthenticatorCode(id: string) {
     const code = await vault.currentAuthenticatorCode(id)
+    if (decryptedSecrets[id] === undefined) return
     authenticatorCodes = { ...authenticatorCodes, [id]: code }
   }
 
   function toggleExpand(id: string) {
     const expanding = !expandedSecrets[id]
     expandedSecrets = { ...expandedSecrets, [id]: expanding }
-    if (
-      expanding &&
-      filteredItems.find((item) => item.id === id)?.type === 'authenticator'
-    ) {
-      void refreshAuthenticatorCode(id)
-    }
   }
 
   $effect(() => {
     const timer = setInterval(() => {
+      const now = Math.floor(Date.now() / 1000)
+      const nextCodes = { ...authenticatorCodes }
       for (const [id, current] of Object.entries(authenticatorCodes)) {
-        if (current.secondsRemaining <= 1) {
+        const secondsRemaining = Math.max(
+          0,
+          current.expiresAtUnixSeconds - now,
+        )
+        if (secondsRemaining === 0) {
+          delete nextCodes[id]
           void refreshAuthenticatorCode(id)
         } else {
-          authenticatorCodes = {
-            ...authenticatorCodes,
-            [id]: {
-              ...current,
-              secondsRemaining: current.secondsRemaining - 1,
-            },
+          nextCodes[id] = {
+            ...current,
+            secondsRemaining,
           }
         }
       }
+      authenticatorCodes = nextCodes
     }, 1000)
     return () => clearInterval(timer)
   })
