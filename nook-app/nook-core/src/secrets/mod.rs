@@ -7,6 +7,7 @@ pub(crate) mod bitwarden_import;
 pub(crate) mod chrome_passwords_import;
 pub(crate) mod lastpass_import;
 pub(crate) mod onepassword_import;
+pub(crate) mod passkey_authenticator;
 pub(crate) mod password;
 pub(crate) mod proton_pass_import;
 pub(crate) mod secret_fingerprint;

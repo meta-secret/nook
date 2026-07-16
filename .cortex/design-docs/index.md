@@ -8,6 +8,7 @@ This directory contains design specifications, architecture rationales, and core
 | [unified-vault.md](unified-vault.md) | Local-first vault, `vault_version` sync, conflict resolution | Implemented |
 | [vault-session-and-lock.md](vault-session-and-lock.md) | Lock session, vault vs sync providers, multi-vault model | Verified |
 | [auth-providers.md](auth-providers.md) | Login gate, sync provider persistence | Verified (migrating copy) |
+| [passkey-manager.md](passkey-manager.md) | Chromium website passkey provider, ceremony boundary, sync, and threat model | Implemented |
 | [secret-store-identity.md](secret-store-identity.md) | `store_id` logical vault identity, replication, `pk_id` rationale | Verified |
 | [vault-event-log.md](vault-event-log.md) | Immutable event log, causal DAG, projection (replaces scalar sync) | Implemented |
 | [vault-architecture-modes.md](vault-architecture-modes.md) | Device and vault access modes; replication is post-genesis storage | Design corrected; migration pending |

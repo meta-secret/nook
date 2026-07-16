@@ -7,6 +7,135 @@ use crate::NookVaultManager;
 use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookPasskeyAccount {
+    credential_id: String,
+    user_name: String,
+    user_display_name: String,
+}
+
+#[wasm_bindgen]
+impl NookPasskeyAccount {
+    pub(crate) fn from_core(value: &nook_core::PasskeySecret) -> Self {
+        Self {
+            credential_id: value.credential_id.clone(),
+            user_name: value.user_name.clone(),
+            user_display_name: value.user_display_name.clone(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = credentialId)]
+    pub fn credential_id(&self) -> String {
+        self.credential_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = userName)]
+    pub fn user_name(&self) -> String {
+        self.user_name.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = userDisplayName)]
+    pub fn user_display_name(&self) -> String {
+        self.user_display_name.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookPasskeyRegistration {
+    credential_id: String,
+    client_data_json: String,
+    attestation_object: String,
+}
+
+#[wasm_bindgen]
+impl NookPasskeyRegistration {
+    pub(crate) fn new(
+        credential_id: String,
+        client_data_json: String,
+        attestation_object: String,
+    ) -> Self {
+        Self {
+            credential_id,
+            client_data_json,
+            attestation_object,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = credentialId)]
+    pub fn credential_id(&self) -> String {
+        self.credential_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = clientDataJSON)]
+    pub fn client_data_json(&self) -> String {
+        self.client_data_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = attestationObject)]
+    pub fn attestation_object(&self) -> String {
+        self.attestation_object.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn transports(&self) -> Vec<String> {
+        vec!["internal".to_owned()]
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookPasskeyAssertion {
+    credential_id: String,
+    client_data_json: String,
+    authenticator_data: String,
+    signature: String,
+    user_handle: String,
+}
+
+#[wasm_bindgen]
+impl NookPasskeyAssertion {
+    pub(crate) fn new(
+        credential_id: String,
+        client_data_json: String,
+        authenticator_data: String,
+        signature: String,
+        user_handle: String,
+    ) -> Self {
+        Self {
+            credential_id,
+            client_data_json,
+            authenticator_data,
+            signature,
+            user_handle,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = credentialId)]
+    pub fn credential_id(&self) -> String {
+        self.credential_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = clientDataJSON)]
+    pub fn client_data_json(&self) -> String {
+        self.client_data_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = authenticatorData)]
+    pub fn authenticator_data(&self) -> String {
+        self.authenticator_data.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn signature(&self) -> String {
+        self.signature.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = userHandle)]
+    pub fn user_handle(&self) -> String {
+        self.user_handle.clone()
+    }
+}
+
 const DEFAULT_VAULT_IDLE_TIMEOUT_MS: u32 = 5 * 60_000;
 const DEFAULT_VAULT_IDLE_WARNING_MS: u32 = 30_000;
 const MIN_IDLE_TIMEOUT_MS: u32 = 1_000;

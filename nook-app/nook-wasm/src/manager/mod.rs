@@ -23,6 +23,7 @@ mod device_protection;
 mod diagnostics;
 mod event_log;
 mod multi_device;
+mod passkeys;
 mod password;
 mod secrets;
 mod sentinel;

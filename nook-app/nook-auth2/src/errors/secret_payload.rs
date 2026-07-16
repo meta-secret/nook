@@ -22,6 +22,15 @@ pub enum SecretPayloadError {
     #[error("Invalid secure note payload")]
     InvalidSecureNote(#[source] serde_yaml::Error),
 
+    #[error("Invalid passkey payload: {reason}")]
+    InvalidPasskey { reason: String },
+
+    #[error("Invalid passkey YAML payload")]
+    InvalidPasskeyYaml(#[source] serde_yaml::Error),
+
+    #[error("Passkeys must be created through the authenticated WebAuthn flow.")]
+    PasskeyCreationRequiresAuthenticator,
+
     #[error("Invalid authenticator payload")]
     InvalidAuthenticator(#[source] serde_yaml::Error),
 

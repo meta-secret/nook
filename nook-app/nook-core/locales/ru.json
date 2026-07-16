@@ -1354,6 +1354,7 @@
       "device_request": "Запрос устройства",
       "scope_vault_access": "доступ к сейфу",
       "scope_password_filling": "заполнение паролей",
+      "scope_passkey_management": "регистрация и вход с passkey",
       "scope_sync_provider_credentials": "учетные данные провайдеров синхронизации",
       "connect_simple_vault": "Подключить Simple Vault",
       "open_simple_vault": "Открыть Simple Vault",
@@ -1390,6 +1391,11 @@
       "open_vault": "Открыть сейф",
       "dismiss": "Скрыть Nook"
     },
+    "passkey": {
+      "save_title": "Сохранить passkey в Nook?",
+      "use_title": "Использовать passkey из Nook?",
+      "use_browser": "Использовать браузер или ключ безопасности"
+    },
     "consent": {
       "title": "Разрешить расширение Nook",
       "description": "Будет добавлено отдельное устройство расширения, защищенное passkey, в разблокированный Simple-сейф. Расширение остается помощником по заполнению с ограниченными правами; Sentinel Vault в этом не участвует.",
@@ -1399,6 +1405,7 @@
       "requested_access": "Запрошенный доступ",
       "scope_vault_access": "Доступ к сейфу",
       "scope_password_filling": "Заполнение паролей",
+      "scope_passkey_management": "Регистрация и вход с passkey",
       "scope_sync_provider_credentials": "Учетные данные провайдеров синхронизации",
       "unlock_first": "Сначала разблокируйте Simple Vault, затем разрешите это устройство расширения.",
       "messaging_unavailable": "Обмен сообщениями с расширением браузера недоступен.",

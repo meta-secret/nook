@@ -12,6 +12,7 @@ export const EXTENSION_CONNECT_PATH = "/extension-connect";
 export type ExtensionConnectScope =
   | "vault-access"
   | "password-filling"
+  | "passkey-management"
   | "sync-provider-credentials";
 
 type ExtensionIdentityRequestBase = {
@@ -40,6 +41,7 @@ export type PairedExtensionIdentityDiscovery =
 const validScopes = new Set<ExtensionConnectScope>([
   "vault-access",
   "password-filling",
+  "passkey-management",
   "sync-provider-credentials",
 ]);
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
@@ -197,12 +199,6 @@ export async function discoverPairedExtensionIdentity(
     if (result) return result;
   }
   return { status: "unavailable" };
-}
-
-export function scopeLabel(scope: ExtensionConnectScope): string {
-  if (scope === "vault-access") return "Vault access";
-  if (scope === "password-filling") return "Password filling";
-  return "Sync provider credentials";
 }
 
 type ExtensionIdentityHandoffResponse = {

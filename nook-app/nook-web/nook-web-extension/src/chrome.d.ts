@@ -2,6 +2,7 @@ declare namespace chrome {
   namespace runtime {
     type MessageSender = {
       tab?: tabs.Tab
+      frameId?: number
       id?: string
       url?: string
     }

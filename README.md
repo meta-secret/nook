@@ -15,8 +15,12 @@ choose, and opened only by identities you authorize.
 There is no Nook account. There is no master password. Approved devices unlock
 the vault.
 
-Store website logins, API keys, BIP39 seed phrases, Markdown secure notes, and
-Google Authenticator-compatible TOTP items with encrypted backup codes.
+Store website logins, API keys, BIP39 seed phrases, Markdown secure notes,
+Google Authenticator-compatible TOTP items with encrypted backup codes, and
+website passkeys. The Chromium extension can save and use passkeys from an
+approved, unlocked Simple Vault while preserving an explicit browser/security
+key fallback. Passkeys cannot be created from the generic item form; key
+generation, RP validation, signing, and counter updates stay in Rust/WASM.
 Existing Bitwarden logins and secure notes can be imported from a plaintext or
 password-protected encrypted Bitwarden JSON export; account-restricted exports
 are not portable. LastPass logins and secure notes can be imported from an
@@ -96,6 +100,7 @@ path you configured), you lose the vault. Approve at least two devices.
 | API key | Website URL, key, optional expiration date |
 | BIP39 seed phrase | Account name, seed phrase |
 | Secure note | Title, note (Markdown) |
+| Passkey | Website/RP and account metadata; encrypted ES256 credential |
 | Authenticator | Service, account, TOTP setup key or `otpauth://` URI, optional backup codes |
 
 Items are searchable. Secret values stay masked until revealed. Secure notes use

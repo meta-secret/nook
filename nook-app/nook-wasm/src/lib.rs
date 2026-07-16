@@ -22,7 +22,6 @@ mod sync_io;
 mod types;
 
 #[doc(hidden)]
-#[doc(hidden)]
 pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
 pub use manager::NookVaultManager;
@@ -30,9 +29,10 @@ pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
     NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
     NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookImportResult,
-    NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
-    NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
-    NookSecretPage, NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
+    NookJoinRequest, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration,
+    NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecretPage,
+    NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
     NookStorageProviderTypeUtil, NookTotpCode, NookVaultAccessReport, NookVaultMember,
     NookVaultSyncResult,
 };
@@ -1379,6 +1379,14 @@ impl NookSecretListItem {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = rpId)]
+    pub fn rp_id(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
+            _ => String::new(),
+        }
+    }
+
     #[wasm_bindgen(getter)]
     pub fn issuer(&self) -> String {
         match &self.item.data {
@@ -1387,10 +1395,28 @@ impl NookSecretListItem {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = passkeyUserName)]
+    pub fn passkey_user_name(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Passkey { user_name, .. } => user_name.clone(),
+            _ => String::new(),
+        }
+    }
+
     #[wasm_bindgen(getter)]
     pub fn account(&self) -> String {
         match &self.item.data {
             nook_core::SecretListItemData::Authenticator { account, .. } => account.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = passkeyUserDisplayName)]
+    pub fn passkey_user_display_name(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Passkey {
+                user_display_name, ..
+            } => user_display_name.clone(),
             _ => String::new(),
         }
     }
@@ -1540,6 +1566,14 @@ impl NookSecretRecord {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = rpId)]
+    pub fn rp_id(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Passkey(value) => value.rp_id.clone(),
+            _ => String::new(),
+        }
+    }
+
     #[wasm_bindgen(getter)]
     pub fn issuer(&self) -> String {
         match &self.record.data {
@@ -1548,10 +1582,26 @@ impl NookSecretRecord {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = passkeyUserName)]
+    pub fn passkey_user_name(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Passkey(value) => value.user_name.clone(),
+            _ => String::new(),
+        }
+    }
+
     #[wasm_bindgen(getter)]
     pub fn account(&self) -> String {
         match &self.record.data {
             nook_core::SecretValue::Authenticator(value) => value.account.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = passkeyUserDisplayName)]
+    pub fn passkey_user_display_name(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Passkey(value) => value.user_display_name.clone(),
             _ => String::new(),
         }
     }
@@ -1658,6 +1708,23 @@ mod wasm_tests {
         assert_eq!(item.website_url(), "https://example.com");
         assert_eq!(item.username(), "alice");
         assert_eq!(item.summary(), "alice");
+    }
+
+    #[wasm_bindgen_test]
+    fn passkey_list_item_exports_only_rp_and_account_metadata() {
+        let item = NookSecretListItem::from_core(nook_core::SecretListItem {
+            id: nook_core::SecretId::from_vault_record("secret_passkey"),
+            data: nook_core::SecretListItemData::Passkey {
+                rp_id: "login.example.com".to_owned(),
+                user_name: "alice@example.com".to_owned(),
+                user_display_name: "Alice".to_owned(),
+            },
+        });
+
+        assert_eq!(item.secret_type(), "passkey");
+        assert_eq!(item.rp_id(), "login.example.com");
+        assert_eq!(item.passkey_user_name(), "alice@example.com");
+        assert_eq!(item.passkey_user_display_name(), "Alice");
     }
 
     #[wasm_bindgen_test]

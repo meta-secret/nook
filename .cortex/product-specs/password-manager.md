@@ -58,6 +58,10 @@ keys.
    - The user enters a key (label) and value.
    - Rust validates non-empty label (trimmed) and non-empty value.
    - Clicking **Save Secret** inserts into the in-memory session, encrypts **only the changed record**, updates the armored cache, serializes to YAML, and writes to storage.
+   - Passkeys are not created through this generic form. The versioned `passkey`
+     payload is reserved for the authenticated extension WebAuthn provider flow;
+     Rust rejects attempts to construct one from ordinary form fields. See
+     [passkey-manager.md](../design-docs/passkey-manager.md).
 6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI. To fix a mistake or update content, the user **adds a new item and deletes the old one**. A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db` so storage never holds duplicates if the second step fails mid-flight.
 7. **Deleting Secrets:**
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
@@ -120,6 +124,14 @@ secrets:
 - **`vault_version`:** Local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
+- **Supported user-secret tags:** `login`, `api-key`, `seed-phrase`,
+  `secure-note`, and `passkey`. A `passkey` plaintext payload is versioned and
+  contains the RP/account metadata, credential id, user handle, ES256
+  PKCS#8/COSE key material, signature counter, discoverability, and backup
+  flags. It is encrypted as one ordinary per-record payload; private key
+  material never appears in projection YAML or event operations as plaintext.
+  Creation and assertion run through the approved, unlocked extension device,
+  not the generic add/edit form.
 Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
@@ -183,6 +195,7 @@ do not grant vault access.
 | `vault_crypto.rs` | Session-scoped age encrypt/decrypt |
 | `validation.rs` | Connect/secret validation, search filter |
 | `password.rs` | CSPRNG password generation |
+| `passkey_authenticator.rs` | RP/origin validation, ES256 registration/assertion, counters |
 
 All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-core/tests/vault_workflow.rs`.
 
@@ -197,6 +210,7 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 - Secret label/value validation
 - Connect/PAT validation
 - Secret search/filter
+- WebAuthn request validation, key generation, signing, and counter mutation
 
 **Belongs in UI only:**
 - Tab navigation, loading spinners, toast messages

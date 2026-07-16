@@ -81,6 +81,11 @@ fn canonical_identity(value: &SecretValue) -> Vec<u8> {
             append_field(&mut bytes, "secure-note");
             append_field(&mut bytes, normalized_text(&note.title).as_str());
         }
+        SecretValue::Passkey(passkey) => {
+            append_field(&mut bytes, "passkey");
+            append_field(&mut bytes, passkey.rp_id.as_str());
+            append_field(&mut bytes, passkey.credential_id.as_str());
+        }
         SecretValue::Authenticator(authenticator) => {
             append_field(&mut bytes, "authenticator");
             append_field(&mut bytes, normalized_text(&authenticator.issuer).as_str());
@@ -109,6 +114,17 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
                 &mut bytes,
                 provider_neutral_notes(&note.note, &IMPORT_METADATA_MARKERS).as_str(),
             );
+        }
+        SecretValue::Passkey(passkey) => {
+            append_field(&mut bytes, passkey.user_handle.as_str());
+            let crate::PasskeyCredentialKey::Es256 {
+                public_key_cose, ..
+            } = &passkey.key;
+            append_field(&mut bytes, public_key_cose.encoded());
+            append_field(&mut bytes, passkey.signature_count.to_string().as_str());
+            append_field(&mut bytes, if passkey.discoverable { "1" } else { "0" });
+            append_field(&mut bytes, if passkey.backup_eligible { "1" } else { "0" });
+            append_field(&mut bytes, if passkey.backup_state { "1" } else { "0" });
         }
         SecretValue::Authenticator(authenticator) => {
             append_field(&mut bytes, authenticator.secret.as_str());
@@ -212,9 +228,11 @@ pub fn enrich_secret(existing: &SecretValue, incoming: &SecretValue) -> SecretVa
 mod tests {
     use super::*;
     use crate::{
-        AuthenticatorSecret, LoginSecret, SecureNoteSecret, TotpAlgorithm, TotpDigits, TotpPeriod,
-        TotpSecret,
+        AuthenticatorSecret, LoginSecret, PasskeyRegistrationRequest, PasskeyRelyingParty,
+        PasskeyUser, SecureNoteSecret, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret,
+        create_website_passkey,
     };
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
     fn key(byte: char) -> SymmetricKey {
         SymmetricKey::parse(&byte.to_string().repeat(64)).unwrap()
@@ -373,6 +391,46 @@ mod tests {
                 &authenticator("JBSWY3DPEHPK3PXP", &["beta", "alpha"]),
                 &key('a')
             )
+        );
+    }
+
+    #[test]
+    fn passkey_identity_is_stable_while_counter_updates_create_new_versions() {
+        let registration = create_website_passkey(
+            &PasskeyRegistrationRequest {
+                origin: "https://login.example.com".to_owned(),
+                challenge: URL_SAFE_NO_PAD.encode([7_u8; 32]),
+                relying_party: PasskeyRelyingParty {
+                    id: "example.com".to_owned(),
+                    name: "Example".to_owned(),
+                },
+                user: PasskeyUser {
+                    id: URL_SAFE_NO_PAD.encode([8_u8; 16]),
+                    name: "alice@example.com".to_owned(),
+                    display_name: "Alice".to_owned(),
+                },
+                algorithms: vec![-7],
+                exclude_credentials: Vec::new(),
+                resident_key_required: true,
+                user_verification_required: true,
+            },
+            &[],
+        )
+        .unwrap();
+        let first = SecretValue::Passkey(registration.credential);
+        let mut updated = first.clone();
+        let SecretValue::Passkey(updated_passkey) = &mut updated else {
+            unreachable!();
+        };
+        updated_passkey.signature_count = 1;
+
+        assert_eq!(
+            secret_identity_fingerprint(&first, &key('a')),
+            secret_identity_fingerprint(&updated, &key('a'))
+        );
+        assert_ne!(
+            secret_fingerprint(&first, &key('a')),
+            secret_fingerprint(&updated, &key('a'))
         );
     }
 

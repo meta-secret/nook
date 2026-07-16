@@ -1347,6 +1347,7 @@
       "device_request": "Device request",
       "scope_vault_access": "vault access",
       "scope_password_filling": "password filling",
+      "scope_passkey_management": "passkey registration and sign-in",
       "scope_sync_provider_credentials": "sync-provider credentials",
       "connect_simple_vault": "Connect to Simple Vault",
       "open_simple_vault": "Open Simple Vault",
@@ -1383,6 +1384,11 @@
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook"
     },
+    "passkey": {
+      "save_title": "Save a passkey with Nook?",
+      "use_title": "Use a Nook passkey?",
+      "use_browser": "Use browser or security key"
+    },
     "consent": {
       "title": "Approve Nook extension",
       "description": "This adds a separate passkey-protected extension device to the unlocked Simple vault. The extension remains a permissioned filling companion; Sentinel Vault never participates.",
@@ -1392,6 +1398,7 @@
       "requested_access": "Requested access",
       "scope_vault_access": "Vault access",
       "scope_password_filling": "Password filling",
+      "scope_passkey_management": "Passkey registration and sign-in",
       "scope_sync_provider_credentials": "Sync-provider credentials",
       "unlock_first": "Unlock Simple Vault first, then approve this extension device.",
       "messaging_unavailable": "Browser extension messaging is unavailable.",

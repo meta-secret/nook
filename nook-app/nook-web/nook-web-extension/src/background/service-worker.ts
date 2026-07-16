@@ -24,11 +24,18 @@ import {
   pairingGrantStorageKey,
   setupStorageKey,
 } from './pairing-grants'
+import type { StoredExtensionPairingGrant } from './pairing-grants'
 import { importExtensionEventLog } from './vault-runtime'
 import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
+import {
+  isWebsitePasskeyOptionsMessage,
+  isWebsitePasskeyPerformMessage,
+  parsedWebsitePasskeyRequest,
+  type WebsitePasskeyCeremony,
+} from '../lib/webauthn-messages'
 
 const extensionSessionDocument = 'offscreen/session.html'
 let extensionSessionDocumentCreation: Promise<void> | undefined
@@ -47,6 +54,7 @@ type PendingIdentityHandoff =
       deviceSigningPublicKey: string
     }
 const pendingIdentityHandoffConsumptions = new Set<string>()
+const pendingWebsitePasskeyRequests = new Set<string>()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
   extensionSessionDocumentCreation ??= chrome.offscreen
@@ -189,7 +197,10 @@ async function openExtensionPairing(
   url.searchParams.set('extension_id', chrome.runtime.id)
   url.searchParams.set('device_label', device.deviceLabel)
   url.searchParams.set('nonce', nonce)
-  url.searchParams.set('scopes', 'vault-access,password-filling')
+  url.searchParams.set(
+    'scopes',
+    'vault-access,password-filling,passkey-management,sync-provider-credentials',
+  )
   chrome.tabs.create({ url: url.toString() })
 }
 
@@ -427,7 +438,7 @@ function setLocalStorage(items: Record<string, unknown>): Promise<void> {
   })
 }
 
-function getLocalStorage(key: string): Promise<Record<string, unknown>> {
+function getLocalStorage(key: string | null): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(key, (items) => {
       const message = chrome.runtime.lastError?.message
@@ -435,6 +446,178 @@ function getLocalStorage(key: string): Promise<Record<string, unknown>> {
       else resolve(items)
     })
   })
+}
+
+function requestOriginAndRpId(
+  ceremony: WebsitePasskeyCeremony,
+  requestJson: string,
+):
+  | { origin: string; rpId: string; request: Record<string, unknown> }
+  | undefined {
+  const request = parsedWebsitePasskeyRequest(requestJson)
+  if (!request || typeof request.origin !== 'string') return undefined
+  if (ceremony === 'get') {
+    return typeof request.rpId === 'string'
+      ? { origin: request.origin, rpId: request.rpId, request }
+      : undefined
+  }
+  const relyingParty = request.relyingParty
+  return relyingParty &&
+    typeof relyingParty === 'object' &&
+    'id' in relyingParty &&
+    typeof relyingParty.id === 'string'
+    ? { origin: request.origin, rpId: relyingParty.id, request }
+    : undefined
+}
+
+function isAuthorizedWebsiteSender(
+  sender: chrome.runtime.MessageSender,
+  origin: string,
+): boolean {
+  if (
+    sender.id !== chrome.runtime.id ||
+    sender.tab?.id === undefined ||
+    !sender.url
+  ) {
+    return false
+  }
+  try {
+    return new URL(sender.url).origin === origin
+  } catch {
+    return false
+  }
+}
+
+async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
+  const stored = await getLocalStorage(null)
+  return Object.values(stored).filter(
+    (value): value is StoredExtensionPairingGrant =>
+      isStoredExtensionPairingGrant(value) &&
+      value.scopes.includes('passkey-management'),
+  )
+}
+
+function passkeyRequestKey(
+  sender: chrome.runtime.MessageSender,
+  requestId: string,
+): string {
+  return `${sender.tab?.id ?? -1}:${sender.frameId ?? 0}:${requestId}`
+}
+
+async function websitePasskeyOptions(
+  message: Parameters<typeof isWebsitePasskeyOptionsMessage>[0] & {
+    payload: {
+      requestId: string
+      ceremony: WebsitePasskeyCeremony
+      requestJson: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  const context = requestOriginAndRpId(
+    message.payload.ceremony,
+    message.payload.requestJson,
+  )
+  if (!context || !isAuthorizedWebsiteSender(sender, context.origin)) {
+    return { ok: false, reason: 'passkey-forbidden-origin' }
+  }
+  const grants = await passkeyPairingGrants()
+  if (grants.length === 0)
+    return { ok: true, status: 'unavailable', options: [] }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    return { ok: true, status: 'locked', options: [] }
+  }
+  if (message.payload.ceremony === 'create') {
+    return {
+      ok: true,
+      status: 'ready',
+      options: grants.map((grant) => ({
+        vaultStoreId: grant.vaultStoreId,
+        vaultName: grant.vaultName,
+      })),
+    }
+  }
+  const options: unknown[] = []
+  for (const grant of grants) {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-list-passkeys',
+      payload: { ...grant, rpId: context.rpId, origin: context.origin },
+    })
+    if (
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true &&
+      'accounts' in response &&
+      Array.isArray(response.accounts)
+    ) {
+      for (const account of response.accounts) {
+        options.push({
+          vaultStoreId: grant.vaultStoreId,
+          vaultName: grant.vaultName,
+          account,
+        })
+      }
+    }
+  }
+  return { ok: true, status: 'ready', options }
+}
+
+async function performWebsitePasskey(
+  message: Parameters<typeof isWebsitePasskeyPerformMessage>[0] & {
+    payload: {
+      requestId: string
+      ceremony: WebsitePasskeyCeremony
+      requestJson: string
+      vaultStoreId: string
+      credentialId?: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  const context = requestOriginAndRpId(
+    message.payload.ceremony,
+    message.payload.requestJson,
+  )
+  if (!context || !isAuthorizedWebsiteSender(sender, context.origin)) {
+    return { ok: false, reason: 'passkey-forbidden-origin' }
+  }
+  const key = passkeyRequestKey(sender, message.payload.requestId)
+  if (pendingWebsitePasskeyRequests.has(key)) {
+    return { ok: false, reason: 'passkey-request-already-pending' }
+  }
+  pendingWebsitePasskeyRequests.add(key)
+  try {
+    const grant = (await passkeyPairingGrants()).find(
+      (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+    )
+    if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
+    if (message.payload.ceremony === 'get' && message.payload.credentialId) {
+      context.request.allowCredentials = [{ id: message.payload.credentialId }]
+    }
+    await ensureExtensionSessionDocument()
+    return sendSessionMessage({
+      type:
+        message.payload.ceremony === 'create'
+          ? 'nook:extension-session-register-passkey'
+          : 'nook:extension-session-assert-passkey',
+      payload: {
+        ...grant,
+        requestJson: JSON.stringify(context.request),
+      },
+    })
+  } finally {
+    pendingWebsitePasskeyRequests.delete(key)
+  }
 }
 
 function removeLocalStorage(keys: string[]): Promise<void> {
@@ -461,6 +644,30 @@ async function importApprovedPairing(
     await setLocalStorage(
       extensionPairingGrantStorageItems(message.payload, imported),
     )
+    await ensureExtensionSessionDocument()
+    const sessionImport = await sendSessionMessage({
+      type: 'nook:extension-session-import-vault',
+      payload: {
+        vaultStoreId: message.payload.vaultStoreId,
+        deviceId: message.payload.deviceId,
+        devicePublicKey: message.payload.devicePublicKey,
+        deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
+        eventLogRecords: message.eventLogRecords,
+        providers: message.payload.providers,
+      },
+    })
+    if (
+      !sessionImport ||
+      typeof sessionImport !== 'object' ||
+      !('ok' in sessionImport) ||
+      sessionImport.ok !== true
+    ) {
+      await removeLocalStorage([
+        pairingGrantStorageKey(message.payload.vaultStoreId),
+        setupStorageKey,
+      ])
+      return { ok: false, reason: 'extension-vault-import-failed' }
+    }
     return { ok: true, eventCount: imported.eventCount }
   } catch {
     return { ok: false, reason: 'event-log-import-failed' }
@@ -486,6 +693,17 @@ async function importLocalEventLogUpdate(
     await setLocalStorage(
       extensionStoredPairingGrantStorageItems(grant, imported),
     )
+    await ensureExtensionSessionDocument()
+    await sendSessionMessage({
+      type: 'nook:extension-session-update-vault',
+      payload: {
+        vaultStoreId: grant.vaultStoreId,
+        deviceId: grant.deviceId,
+        devicePublicKey: grant.devicePublicKey,
+        deviceSigningPublicKey: grant.deviceSigningPublicKey,
+        eventLogRecords,
+      },
+    })
     return { ok: true, eventCount: imported.eventCount }
   } catch {
     return { ok: false, reason: 'event-log-import-failed' }
@@ -503,6 +721,24 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isWebsitePasskeyOptionsMessage(message)) {
+    void websitePasskeyOptions(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'passkey-options-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsitePasskeyPerformMessage(message)) {
+    void performWebsitePasskey(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'passkey-ceremony-failed' }),
+      )
+    return true
+  }
+
   if (isExtensionSessionEnsureMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
