@@ -23,11 +23,21 @@ import {
 
 async function openBitwardenImport(page: Page) {
   await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('bitwarden-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
   await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
 }
 
 async function openOnePasswordImport(page: Page) {
   await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('onepassword-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
   await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
 }
 
@@ -221,6 +231,32 @@ test.describe('local vault', () => {
     await expect(row.getByText('1234')).toBeVisible()
 
     await deleteSecret(page, title)
+  })
+
+  test('keeps password-manager import forms folded until selected', async ({
+    page,
+  }) => {
+    await expandSettingsSection(page, 'import')
+
+    const bitwardenSection = page.getByTestId('bitwarden-import-section')
+    const onePasswordSection = page.getByTestId('onepassword-import-section')
+    const bitwardenToggle = bitwardenSection.getByRole('button').first()
+    const onePasswordToggle = onePasswordSection.getByRole('button').first()
+
+    await expect(bitwardenSection).toBeVisible()
+    await expect(onePasswordSection).toBeVisible()
+    await expect(bitwardenToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(onePasswordToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await bitwardenToggle.click()
+    await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await onePasswordToggle.click()
+    await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
   })
 
   test('imports Bitwarden logins and secure notes from JSON', async ({

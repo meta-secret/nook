@@ -9,10 +9,12 @@
     vault,
     isSaving,
     onImport,
+    embedded = false,
   }: {
     vault: VaultState
     isSaving: boolean
     onImport: (archive: Uint8Array) => Promise<NookImportResult>
+    embedded?: boolean
   } = $props()
 
   let selectedFile = $state<File | undefined>(undefined)
@@ -42,14 +44,16 @@
 </script>
 
 <div class="space-y-4" data-testid="onepassword-import-panel">
-  <div>
-    <h2 class="text-lg font-semibold text-foreground">
-      {vault.t('onepassword_import.title')}
-    </h2>
-    <p class="mt-1 text-sm text-muted-foreground">
-      {vault.t('onepassword_import.description')}
-    </p>
-  </div>
+  {#if !embedded}
+    <div>
+      <h2 class="text-lg font-semibold text-foreground">
+        {vault.t('onepassword_import.title')}
+      </h2>
+      <p class="mt-1 text-sm text-muted-foreground">
+        {vault.t('onepassword_import.description')}
+      </p>
+    </div>
+  {/if}
 
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">

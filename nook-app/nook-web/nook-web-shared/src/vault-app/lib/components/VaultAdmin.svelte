@@ -121,6 +121,7 @@
   let editingStoreId = $state<string | undefined>(undefined)
   let renamingStoreId = $state<string | undefined>(undefined)
   let switchingTo = $state<string | undefined>(undefined)
+  let activeImportProvider = $state<string | undefined>(undefined)
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
@@ -516,16 +517,36 @@
         {vault.t('settings.import_sources')}
       </span>
     {/snippet}
-    <BitwardenImportPanel
-      {vault}
-      {isSaving}
-      onImport={onImportBitwarden}
-    />
-    <div class="border-t border-border/60"></div>
-    <OnePasswordImportPanel
-      {vault}
-      {isSaving}
-      onImport={onImportOnePassword}
-    />
+    <div class="space-y-2">
+      <SettingsAccordionSection
+        title={vault.t('bitwarden_import.title')}
+        subtitle={vault.t('bitwarden_import.description')}
+        section="bitwarden"
+        bind:activeSection={activeImportProvider}
+        testId="bitwarden-import-section"
+      >
+        <BitwardenImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportBitwarden}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
+        title={vault.t('onepassword_import.title')}
+        subtitle={vault.t('onepassword_import.description')}
+        section="onepassword"
+        bind:activeSection={activeImportProvider}
+        testId="onepassword-import-section"
+      >
+        <OnePasswordImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportOnePassword}
+        />
+      </SettingsAccordionSection>
+    </div>
   </SettingsAccordionSection>
 </div>

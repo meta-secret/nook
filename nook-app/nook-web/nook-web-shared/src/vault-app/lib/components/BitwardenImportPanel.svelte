@@ -10,6 +10,7 @@
     isSaving,
     onImport,
     onClose = undefined,
+    embedded = false,
   }: {
     vault: VaultState
     isSaving: boolean
@@ -18,6 +19,7 @@
       password: string,
     ) => Promise<NookImportResult>
     onClose?: (() => void) | undefined
+    embedded?: boolean
   } = $props()
 
   let selectedFile = $state<File | undefined>(undefined)
@@ -57,14 +59,16 @@
     </button>
   {/if}
 
-  <div>
-    <h2 class="text-lg font-semibold text-foreground">
-      {vault.t('bitwarden_import.title')}
-    </h2>
-    <p class="mt-1 text-sm text-muted-foreground">
-      {vault.t('bitwarden_import.description')}
-    </p>
-  </div>
+  {#if !embedded}
+    <div>
+      <h2 class="text-lg font-semibold text-foreground">
+        {vault.t('bitwarden_import.title')}
+      </h2>
+      <p class="mt-1 text-sm text-muted-foreground">
+        {vault.t('bitwarden_import.description')}
+      </p>
+    </div>
+  {/if}
 
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">
