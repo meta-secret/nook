@@ -6,6 +6,7 @@ import {
   type NookSecretListItem,
   type NookSecretRecord,
   type NookVaultSyncResult,
+  type AuthenticatorCodeView,
   type VaultItemType,
   type VaultMember,
 } from "$lib/nook";
@@ -2493,6 +2494,24 @@ export class VaultState {
     return this.enqueueStorage(() => this.manager!.decryptSecret(id));
   }
 
+  async currentAuthenticatorCode(id: string): Promise<AuthenticatorCodeView> {
+    if (!this.manager) {
+      throw new Error("Vault manager is not initialized.");
+    }
+    const result = await this.enqueueStorage(() =>
+      this.manager!.currentAuthenticatorCode(id, Math.floor(Date.now() / 1000)),
+    );
+    try {
+      return {
+        code: result.code,
+        secondsRemaining: result.secondsRemaining,
+        period: result.period,
+      };
+    } finally {
+      result.free();
+    }
+  }
+
   async refreshDeviceState() {
     return multiDeviceActions.refreshDeviceState(this);
   }
@@ -2718,6 +2737,14 @@ export class VaultState {
     archive: Uint8Array,
   ): Promise<NookImportResult> {
     return secretsActions.handleOnePasswordImport(this, archive);
+  }
+
+  async handleApplePasswordsImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleApplePasswordsImport(this, csv);
+  }
+
+  async handleChromePasswordsImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleChromePasswordsImport(this, csv);
   }
 
   scheduleRemoteEventOutboxFlush(): void {

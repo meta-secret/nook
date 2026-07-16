@@ -9,6 +9,7 @@
     Braces,
     Sprout,
     StickyNote,
+    ShieldCheck,
     TriangleAlert,
   } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -16,7 +17,11 @@
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import type { NookSecretListItem, VaultItemType } from '$lib/nook'
+  import type {
+    AuthenticatorCodeView,
+    NookSecretListItem,
+    VaultItemType,
+  } from '$lib/nook'
   import {
     freeDecryptedSecrets,
     toggleSecretExposure,
@@ -69,6 +74,7 @@
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
+  let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
   const filteredItems = $derived(secrets)
 
@@ -84,6 +90,7 @@
     if (items.some((item) => item.type === 'login')) return Globe
     if (items.some((item) => item.type === 'api-key')) return Braces
     if (items.some((item) => item.type === 'seed-phrase')) return Sprout
+    if (items.some((item) => item.type === 'authenticator')) return ShieldCheck
     return StickyNote
   }
 
@@ -174,15 +181,47 @@
     )
   }
 
-  function toggleExpand(id: string) {
-    expandedSecrets = { ...expandedSecrets, [id]: !expandedSecrets[id] }
+  async function refreshAuthenticatorCode(id: string) {
+    const code = await vault.currentAuthenticatorCode(id)
+    authenticatorCodes = { ...authenticatorCodes, [id]: code }
   }
+
+  function toggleExpand(id: string) {
+    const expanding = !expandedSecrets[id]
+    expandedSecrets = { ...expandedSecrets, [id]: expanding }
+    if (
+      expanding &&
+      filteredItems.find((item) => item.id === id)?.type === 'authenticator'
+    ) {
+      void refreshAuthenticatorCode(id)
+    }
+  }
+
+  $effect(() => {
+    const timer = setInterval(() => {
+      for (const [id, current] of Object.entries(authenticatorCodes)) {
+        if (current.secondsRemaining <= 1) {
+          void refreshAuthenticatorCode(id)
+        } else {
+          authenticatorCodes = {
+            ...authenticatorCodes,
+            [id]: {
+              ...current,
+              secondsRemaining: current.secondsRemaining - 1,
+            },
+          }
+        }
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  })
 
   $effect(() => {
     void vault.secretQuery
     void vault.secretPageOffset
     freeDecryptedSecrets(untrack(() => decryptedSecrets))
     decryptedSecrets = {}
+    authenticatorCodes = {}
   })
 
   onDestroy(() => {
@@ -350,6 +389,7 @@
                     titleAsHeader={titleAsCardHeader}
                     expanded={Boolean(expandedSecrets[item.id])}
                     decrypted={decryptedSecrets[item.id]}
+                    authenticatorCode={authenticatorCodes[item.id]}
                     {copiedKey}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}

@@ -4,6 +4,7 @@
 //! metadata shares the same YAML row boundary. `nook-core` owns the plaintext
 //! password-manager payloads and session records.
 
+use crate::AuthenticatorSecret;
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
@@ -50,6 +51,7 @@ pub enum SecretValue {
     ApiKey(ApiKeySecret),
     SeedPhrase(SeedPhraseSecret),
     SecureNote(SecureNoteSecret),
+    Authenticator(AuthenticatorSecret),
 }
 
 impl SecretValue {
@@ -77,6 +79,12 @@ impl SecretValue {
             SecretType::SecureNote => serde_yaml::from_str(yaml)
                 .map(Self::SecureNote)
                 .map_err(SecretPayloadError::InvalidSecureNote),
+            SecretType::Authenticator => {
+                let mut secret: AuthenticatorSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidAuthenticator)?;
+                secret.normalize()?;
+                Ok(Self::Authenticator(secret))
+            }
         }
     }
 
@@ -86,6 +94,7 @@ impl SecretValue {
             Self::ApiKey(value) => serde_yaml::to_string(value),
             Self::SeedPhrase(value) => serde_yaml::to_string(value),
             Self::SecureNote(value) => serde_yaml::to_string(value),
+            Self::Authenticator(value) => serde_yaml::to_string(value),
         }
         .map_err(SecretPayloadError::Serialize)?;
         Ok(SecretPayloadYaml::from_trusted(yaml))
@@ -98,6 +107,7 @@ impl SecretValue {
             Self::ApiKey(_) => SecretType::ApiKey,
             Self::SeedPhrase(_) => SecretType::SeedPhrase,
             Self::SecureNote(_) => SecretType::SecureNote,
+            Self::Authenticator(_) => SecretType::Authenticator,
         }
     }
 
@@ -122,6 +132,7 @@ impl SecretValue {
                 value.title.zeroize();
                 value.note.zeroize();
             }
+            Self::Authenticator(value) => value.zeroize(),
         }
     }
 }

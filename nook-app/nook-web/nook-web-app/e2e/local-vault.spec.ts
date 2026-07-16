@@ -41,6 +41,26 @@ async function openOnePasswordImport(page: Page) {
   await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
 }
 
+async function openApplePasswordsImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('apple-passwords-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(page.getByTestId('apple-passwords-import-panel')).toBeVisible()
+}
+
+async function openChromePasswordsImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('chrome-passwords-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(page.getByTestId('chrome-passwords-import-panel')).toBeVisible()
+}
+
 function crc32(bytes: Buffer): number {
   let crc = 0xffffffff
   for (const byte of bytes) {
@@ -233,6 +253,41 @@ test.describe('local vault', () => {
     await deleteSecret(page, title)
   })
 
+  test('adds an authenticator with a live TOTP code and backup codes', async ({
+    page,
+  }) => {
+    const issuer = uniqueSecretKey('e2e-authenticator')
+    const account = `${issuer}@example.com`
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-authenticator').click()
+    await page.getByTestId('authenticator-issuer').fill(issuer)
+    await page.getByTestId('authenticator-account').fill(account)
+    await page.getByTestId('authenticator-secret').fill('JBSWY3DPEHPK3PXP')
+    await page
+      .getByTestId('authenticator-backup-codes')
+      .fill('backup-one\nbackup-two')
+    await page.getByTestId('save-secret-btn').click()
+
+    const row = page.getByTestId('secret-row').filter({ hasText: account })
+    await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await row.getByTestId('secret-row-toggle').click()
+    await expect(row.getByTestId('authenticator-current-code')).toHaveText(
+      /^\d{6}$/,
+      { timeout: UI_TIMEOUT_MS },
+    )
+    await expect(row.getByTestId('authenticator-backup-codes')).toContainText(
+      '••••••••',
+    )
+
+    await revealSecretInRow(row)
+    await expect(row.getByText('backup-one')).toBeVisible()
+    await expect(row.getByText('backup-two')).toBeVisible()
+    await expect(row.getByText('JBSWY3DPEHPK3PXP')).toBeVisible()
+
+    await deleteSecret(page, issuer)
+  })
+
   test('keeps password-manager import forms folded until selected', async ({
     page,
   }) => {
@@ -240,23 +295,169 @@ test.describe('local vault', () => {
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
     const onePasswordSection = page.getByTestId('onepassword-import-section')
+    const applePasswordsSection = page.getByTestId(
+      'apple-passwords-import-section',
+    )
+    const chromePasswordsSection = page.getByTestId(
+      'chrome-passwords-import-section',
+    )
     const bitwardenToggle = bitwardenSection.getByRole('button').first()
     const onePasswordToggle = onePasswordSection.getByRole('button').first()
+    const applePasswordsToggle = applePasswordsSection
+      .getByRole('button')
+      .first()
+    const chromePasswordsToggle = chromePasswordsSection
+      .getByRole('button')
+      .first()
 
+    await expect(applePasswordsSection).toBeVisible()
+    await expect(chromePasswordsSection).toBeVisible()
     await expect(bitwardenSection).toBeVisible()
     await expect(onePasswordSection).toBeVisible()
+    await expect(applePasswordsToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(chromePasswordsToggle).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
     await expect(bitwardenToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(onePasswordToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(
+      page.getByTestId('apple-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(
+      page.getByTestId('chrome-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await applePasswordsToggle.click()
+    await expect(page.getByTestId('apple-passwords-import-panel')).toBeVisible()
+    await expect(
+      page.getByTestId('chrome-passwords-import-panel'),
+    ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await bitwardenToggle.click()
+    await expect(
+      page.getByTestId('apple-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(
+      page.getByTestId('chrome-passwords-import-panel'),
+    ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await onePasswordToggle.click()
+    await expect(
+      page.getByTestId('apple-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(
+      page.getByTestId('chrome-passwords-import-panel'),
+    ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
+
+    await chromePasswordsToggle.click()
+    await expect(
+      page.getByTestId('apple-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+    await expect(
+      page.getByTestId('chrome-passwords-import-panel'),
+    ).toBeVisible()
+  })
+
+  test('imports Chrome-family browser logins from CSV', async ({ page }) => {
+    const exportCsv = [
+      'name,url,username,password,note',
+      [
+        '"Imported browser account"',
+        'https://chrome-import.example/login',
+        'chrome-alice',
+        'chrome-imported-password',
+        '"Imported from Chrome"',
+      ].join(','),
+    ].join('\n')
+
+    await openChromePasswordsImport(page)
+    await page.getByTestId('chrome-passwords-csv-file').setInputFiles({
+      name: 'Chrome Passwords.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('chrome-passwords-import-submit').click()
+    await expect(
+      page.getByTestId('chrome-passwords-import-result'),
+    ).toContainText('Imported 1 logins')
+
+    await page.getByTestId('vault-secrets-tab').click()
+    const loginGroup = page.getByTestId('vault-group-login')
+    await expect(loginGroup).toContainText('chrome-alice')
+
+    await openChromePasswordsImport(page)
+    await page.getByTestId('chrome-passwords-csv-file').setInputFiles({
+      name: 'Chrome Passwords.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('chrome-passwords-import-submit').click()
+    await expect(
+      page.getByTestId('chrome-passwords-import-result'),
+    ).toContainText('Imported 0 logins')
+    await expect(
+      page.getByTestId('chrome-passwords-import-result'),
+    ).toContainText('1 duplicates')
+  })
+
+  test('imports Apple Passwords logins and verification codes from CSV', async ({
+    page,
+  }) => {
+    const exportCsv = [
+      'Title,URL,Username,Password,Notes,OTPAuth',
+      [
+        '"Imported Apple account"',
+        'https://apple-import.example/login',
+        'apple-alice',
+        'apple-imported-password',
+        '"Imported from Apple Passwords"',
+        '"otpauth://totp/Apple%20Import%3Aapple-alice?secret=JBSWY3DPEHPK3PXP&issuer=Apple%20Import"',
+      ].join(','),
+    ].join('\n')
+
+    await openApplePasswordsImport(page)
+    await page.getByTestId('apple-passwords-csv-file').setInputFiles({
+      name: 'Passwords.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('apple-passwords-import-submit').click()
+    await expect(
+      page.getByTestId('apple-passwords-import-result'),
+    ).toContainText('Imported 2 items')
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'apple-alice',
+    )
+    await expect(page.getByTestId('vault-group-authenticator')).toContainText(
+      'apple-alice',
+    )
+
+    await openApplePasswordsImport(page)
+    await page.getByTestId('apple-passwords-csv-file').setInputFiles({
+      name: 'Passwords.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('apple-passwords-import-submit').click()
+    await expect(
+      page.getByTestId('apple-passwords-import-result'),
+    ).toContainText('Imported 0 items')
+    await expect(
+      page.getByTestId('apple-passwords-import-result'),
+    ).toContainText('2 duplicates')
   })
 
   test('imports Bitwarden logins and secure notes from JSON', async ({

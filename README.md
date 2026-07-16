@@ -15,12 +15,16 @@ choose, and opened only by identities you authorize.
 There is no Nook account. There is no master password. Approved devices unlock
 the vault.
 
-Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
+Store website logins, API keys, BIP39 seed phrases, Markdown secure notes, and
+Google Authenticator-compatible TOTP items with encrypted backup codes.
 Existing Bitwarden logins and secure notes can be imported from a plaintext or
 password-protected encrypted Bitwarden JSON export; account-restricted exports
 are not portable. 1Password logins, password items, and secure notes can be
-imported from an unencrypted 1PUX archive. Unsupported item types and
-attachments are skipped.
+imported from an unencrypted 1PUX archive. Apple Passwords website logins and
+TOTP verification codes can be imported from its unencrypted CSV export.
+Website logins from Chrome, Chromium, Brave, and Edge can be imported from
+their unencrypted password CSV exports.
+Unsupported item types and attachments are skipped.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 
@@ -86,9 +90,12 @@ path you configured), you lose the vault. Approve at least two devices.
 | API key | Website URL, key, optional expiration date |
 | BIP39 seed phrase | Account name, seed phrase |
 | Secure note | Title, note (Markdown) |
+| Authenticator | Service, account, TOTP setup key or `otpauth://` URI, optional backup codes |
 
 Items are searchable. Secret values stay masked until revealed. Secure notes use
-an Edit / Preview Markdown editor. Nook also includes a secure password generator.
+an Edit / Preview Markdown editor. Authenticator items derive the current
+one-time code locally in Rust/WASM and never persist generated codes. Nook also
+includes a secure password generator.
 
 Vault items are append-only in the UI: add, reveal, copy, delete. To change an
 item, add a corrected copy and delete the old one.

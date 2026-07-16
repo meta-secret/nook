@@ -33,7 +33,8 @@ pub use types::{
     NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
     NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
     NookSecretPage, NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
-    NookStorageProviderTypeUtil, NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
+    NookStorageProviderTypeUtil, NookTotpCode, NookVaultAccessReport, NookVaultMember,
+    NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -1377,6 +1378,32 @@ impl NookSecretListItem {
             _ => String::new(),
         }
     }
+
+    #[wasm_bindgen(getter)]
+    pub fn issuer(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Authenticator { issuer, .. } => issuer.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn account(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Authenticator { account, .. } => account.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = backupCodeCount)]
+    pub fn backup_code_count(&self) -> u32 {
+        match self.item.data {
+            nook_core::SecretListItemData::Authenticator {
+                backup_code_count, ..
+            } => u32::try_from(backup_code_count).unwrap_or(u32::MAX),
+            _ => 0,
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -1510,6 +1537,64 @@ impl NookSecretRecord {
         match &self.record.data {
             nook_core::SecretValue::SecureNote(value) => value.note.clone(),
             _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn issuer(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => value.issuer.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn account(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => value.account.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = totpSecret)]
+    pub fn totp_secret(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => value.secret.as_str().to_owned(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn algorithm(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => value.algorithm.as_str().to_owned(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn digits(&self) -> u32 {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => value.digits.get(),
+            _ => 0,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn period(&self) -> u32 {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => {
+                u32::try_from(value.period.get()).unwrap_or(u32::MAX)
+            }
+            _ => 0,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = backupCodes)]
+    pub fn backup_codes(&self) -> Vec<String> {
+        match &self.record.data {
+            nook_core::SecretValue::Authenticator(value) => value.backup_codes.clone(),
+            _ => Vec::new(),
         }
     }
 }
