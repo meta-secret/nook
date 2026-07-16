@@ -84,7 +84,7 @@ validate_metadata() {
     --arg channel "$CHANNEL_KEY" \
     --arg site "$EXTENSION_SITE_URL" \
     --arg simple "$EXPECTED_SIMPLE_VAULT_URL" \
-    '.schema_version == 1
+    '.schema_version == 2
       and .channel == $channel
       and .simple_vault_url == $simple
       and (.commit | test("^[0-9a-f]{40}$"))
@@ -92,7 +92,14 @@ validate_metadata() {
       and (.sha256 | test("^[0-9a-f]{64}$"))
       and (.archive | test("^[0-9A-Za-z][0-9A-Za-z.+_-]*\\.zip$"))
       and .download_url == ($site + "downloads/" + .archive)
-      and .checksum_url == ($site + "downloads/" + .archive + ".sha256")' \
+      and .checksum_url == ($site + "downloads/" + .archive + ".sha256")
+      and (if $channel == "production" then
+        .install_method == "chrome_web_store"
+        and .install_url == ("https://chromewebstore.google.com/detail/" + .extension_id)
+      else
+        .install_method == "manual_zip"
+        and .install_url == .download_url
+      end)' \
     "$metadata" >/dev/null || {
       fail "metadata from $METADATA_URL does not match the selected deployment"
       return 1
@@ -261,14 +268,36 @@ install_hosted_extension() {
   printf '%s\n' "$CURRENT_LINK"
 }
 
+launch_binary_detached() {
+  local binary="$1"
+  shift
+  if [ "$(uname -s)" = Darwin ]; then
+    case "$binary" in
+      *.app/Contents/MacOS/*)
+        local app_bundle="${binary%%.app/*}.app"
+        if [ -d "$app_bundle" ]; then
+          open -na "$app_bundle" --args "$@"
+          return 0
+        fi
+        ;;
+    esac
+  fi
+  nohup "$binary" "$@" >/dev/null 2>&1 </dev/null &
+}
+
 launch_browser() {
   local browser="$1"
   local extension_dir="$2"
+  local requested_profile_dir="${3:-}"
   local profile_dir
   local binary=''
   local app_name=''
   local env_name=''
-  profile_dir="$(profile_dir_for "$browser")"
+  if [ -n "$requested_profile_dir" ]; then
+    profile_dir="$requested_profile_dir"
+  else
+    profile_dir="$(profile_dir_for "$browser")"
+  fi
   mkdir -p "$profile_dir"
   chmod 700 "$profile_dir"
 
@@ -288,17 +317,41 @@ launch_browser() {
 
   if [ -n "$binary" ]; then
     [ -x "$binary" ] || { fail "$env_name is not executable: $binary"; return 1; }
-    nohup "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank >/dev/null 2>&1 </dev/null &
+    if [ "$browser" = chrome ]; then
+      local version
+      version="$("$binary" --version 2>/dev/null || true)"
+      case "$version" in
+        'Google Chrome for Testing '*) app_name='Google Chrome for Testing' ;;
+        'Chromium '*) app_name='Chromium' ;;
+        'Google Chrome '*)
+          launch_binary_detached "$binary" --user-data-dir="$profile_dir" chrome://extensions
+          printf 'Opened Google Chrome extension manager using isolated profile %s\n' "$profile_dir"
+          printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
+          return 0
+          ;;
+      esac
+    fi
+    launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
   else
     [ "$(uname -s)" = 'Darwin' ] || {
       fail "automatic $app_name discovery is supported only on macOS; set $env_name to its executable"
       return 1
     }
-    [ -d "/Applications/$app_name.app" ] || {
-      fail "$app_name is not installed in /Applications; set $env_name to its executable"
-      return 1
-    }
-    open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+    if [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome for Testing.app' ]; then
+      app_name='Google Chrome for Testing'
+      open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+    elif [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome.app' ]; then
+      open -na 'Google Chrome' --args --user-data-dir="$profile_dir" chrome://extensions
+      printf 'Opened Google Chrome extension manager using isolated profile %s\n' "$profile_dir"
+      printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
+      return 0
+    else
+      [ -d "/Applications/$app_name.app" ] || {
+        fail "$app_name is not installed in /Applications; set $env_name to its executable"
+        return 1
+      }
+      open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+    fi
   fi
   printf 'Launched %s with %s using isolated profile %s\n' "$app_name" "$extension_dir" "$profile_dir"
 }
@@ -315,6 +368,11 @@ main() {
       CHANNEL_KEY="$selected_channel"
       launch_browser "$2" "$extension_dir"
       ;;
+    launch-local)
+      [ "$#" -eq 4 ] || { fail 'usage: hosted-extension.sh launch-local chrome|brave <extension-dir> <profile-dir>'; return 1; }
+      CHANNEL_KEY='local'
+      launch_browser "$2" "$3" "$4"
+      ;;
     resolve)
       resolve_selection
       configure_install_paths
@@ -322,7 +380,7 @@ main() {
         "$CHANNEL_KEY" "$EXTENSION_SITE_URL" "$METADATA_URL" "$EXPECTED_SIMPLE_VAULT_URL" \
         "$EXPECTED_SENTINEL_VAULT_URL" "$CURRENT_LINK"
       ;;
-    *) fail 'usage: hosted-extension.sh install|run chrome|run brave|resolve'; return 1 ;;
+    *) fail 'usage: hosted-extension.sh install|run chrome|run brave|launch-local chrome|brave <extension-dir> <profile-dir>|resolve'; return 1 ;;
   esac
 }
 

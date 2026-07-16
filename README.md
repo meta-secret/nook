@@ -34,9 +34,12 @@ The Main channel mirrors that split at [dev.nokey.sh](https://dev.nokey.sh),
 Cloudflare's native `pr-<number>.<project>.pages.dev` branch aliases.
 Each PR site publishes its matching browser-extension ZIP under `/downloads/`;
 main does the same at `dev.nokey.sh`, and immutable production releases publish
-the versioned ZIP at `nokey.sh` plus the GitHub Release. These unsigned website
-artifacts must be unzipped and loaded with browser Developer mode; marketplace
-installation is intentionally separate.
+the versioned ZIP at `nokey.sh` plus the GitHub Release. The public site's
+browser-extension section reads the channel metadata: production sends users to
+the Chrome Web Store listing for the stable extension identity, while
+development and PR previews offer their unsigned ZIP with Developer-mode
+installation instructions. Production keeps the ZIP as a verifiable release
+artifact rather than the public installation path.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -92,8 +95,11 @@ item, add a corrected copy and delete the old one.
 1. Open **Simple Vault** for everyday secrets or **Sentinel Vault** for a
    quorum safe. Sentinel member devices enter only through an owner-issued
    invitation.
-2. Creating a **Simple** vault protects this browser with a passkey (WebAuthn
-   PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup: the owner
+2. Creating a **Simple** vault directly on the website protects this browser
+   with a passkey (WebAuthn PRF) or PIN fallback. When creation starts from the
+   unlocked Nook extension, the extension's protected device identity creates
+   the vault instead, so the website does not create another passkey.
+   **Sentinel** starts quorum / SLIP-0039 setup: the owner
    shares an invitation URL, each participant opens it and connects a protected
    device, then returns the signed response URL. After atomic creation, the
    owner sends each member their device-addressed encrypted share and completes
@@ -107,7 +113,9 @@ item, add a corrected copy and delete the old one.
 ### When you come back
 
 - Unlock with this browser's passkey/PIN-protected device keys, or use a backup
-  password to open the encrypted local vault directly.
+  password to open the encrypted local vault directly. A vault created with the
+  extension identity is unlocked by opening Nook from the unlocked extension;
+  the site receives a fresh encrypted, memory-only key handoff.
 - A backup-password session leaves the protected device identity and saved sync
   provider credentials locked. Authorize with the passkey or PIN when you want
   remote synchronization to resume.
@@ -277,13 +285,12 @@ task extension:build       # browser extension package
 task extension:check:fast  # host-cached extension format/unit/manifest/security gate
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
 task extension:install:hosted PR=410 # verify and install an isolated hosted PR build
-task extension:run:chrome CHANNEL=dev # launch a hosted build in an isolated Chrome profile
+task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded Chrome opens one-time setup
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile
 task ci:pr                 # health-checked BuildKit mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
-task pr:monitor PR=410     # arm hosted event continuation and exit; never polls or waits for Codex
-task pr:ready PR=410       # machine-readable final merge-readiness assertion
+task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
 ```

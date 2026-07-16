@@ -61,6 +61,7 @@
     appKind,
     isVerifying,
     isInitializing,
+    usesExtensionDeviceIdentity = false,
     onCreateDeviceVault,
     onConnectStorage,
     onStartSentinelGenesis,
@@ -84,6 +85,7 @@
     appKind: AppKind
     isVerifying: boolean
     isInitializing: boolean
+    usesExtensionDeviceIdentity?: boolean
     onCreateDeviceVault: (label: string) => void | Promise<void>
     onConnectStorage: () => void
     onStartSentinelGenesis?: (
@@ -951,9 +953,12 @@
                             <p
                               class="text-sm text-pretty text-muted-foreground"
                             >
-                              {vault.t('login.landing_create_simple_locally', {
-                                name: trimmedVaultName,
-                              })}
+                              {vault.t(
+                                usesExtensionDeviceIdentity
+                                  ? 'login.landing_create_simple_with_extension'
+                                  : 'login.landing_create_simple_locally',
+                                { name: trimmedVaultName },
+                              )}
                             </p>
                           {/if}
                           <Button

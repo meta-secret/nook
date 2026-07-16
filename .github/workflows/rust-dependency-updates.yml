@@ -1,6 +1,6 @@
 # Weekly direct Rust dependency audit. When Cargo manifests are behind crates.io,
 # the existing CI agent updates them in a PR and validates the full deterministic
-# test suite before its normal repository-owned PR gate and squash merge.
+# test suite before opening a PR for explicit review and merge authorization.
 name: Rust dependency updates
 
 on:

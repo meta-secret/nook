@@ -1,13 +1,10 @@
 import type { Octokit } from "@octokit/rest";
 
 import {
-  AGENT_MANAGED_PR_MARKER,
   createOctokit,
   inspectPrFeedback,
-  markAgentManagedPr,
   parseRepository,
   requiredPrWorkflows,
-  squashMergePr,
   type RepoRef,
   type RequiredPrWorkflow,
 } from "./github.js";
@@ -61,89 +58,6 @@ export async function runPrAudit(requireReady: boolean): Promise<void> {
   if (requireReady && !audit.ready) {
     throw new Error(`PR #${prNumber} is not ready: ${audit.reasons.join("; ")}`);
   }
-}
-
-export async function runPrMonitor(): Promise<void> {
-  const repository = process.env.GITHUB_REPOSITORY?.trim();
-  if (!repository) {
-    throw new Error("GITHUB_REPOSITORY is required");
-  }
-  const prNumber = readPrNumber();
-  const octokit = createOctokit();
-  const repoRef = parseRepository(repository);
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner: repoRef.owner,
-    repo: repoRef.repo,
-    pull_number: prNumber,
-  });
-  const { data: authenticated } = await octokit.rest.users.getAuthenticated();
-  const trustedAgentPr = isTrustedAgentPr(
-    pr.head.repo?.full_name,
-    pr.head.ref,
-    repository,
-    pr.user?.login,
-    authenticated.login,
-  );
-  if (trustedAgentPr) {
-    await markAgentManagedPr(octokit, repoRef, prNumber, `manual-${Date.now()}`);
-    console.log(
-      `Armed event-driven monitoring for PR #${prNumber}; this command exits without waiting or polling`,
-    );
-  } else {
-    console.log(
-      `PR #${prNumber} is not authored by the authenticated agent identity on a trusted branch; printing a read-only audit`,
-    );
-  }
-  const audit = await buildPrAudit(octokit, repoRef, prNumber);
-  console.log(JSON.stringify(audit, null, 2));
-}
-
-export async function runPrEvent(): Promise<void> {
-  const repository = process.env.GITHUB_REPOSITORY?.trim();
-  if (!repository) {
-    throw new Error("GITHUB_REPOSITORY is required");
-  }
-  const prNumber = readPrNumber();
-  const octokit = createOctokit();
-  const repoRef = parseRepository(repository);
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner: repoRef.owner,
-    repo: repoRef.repo,
-    pull_number: prNumber,
-  });
-  const { data: authenticated } = await octokit.rest.users.getAuthenticated();
-  const trustedAgentPr = isTrustedAgentPr(
-    pr.head.repo?.full_name,
-    pr.head.ref,
-    repository,
-    pr.user?.login,
-    authenticated.login,
-  );
-  if (!(pr.body ?? "").includes(AGENT_MANAGED_PR_MARKER) || !trustedAgentPr) {
-    console.log(`PR #${prNumber} is not agent-managed; ignoring event`);
-    return;
-  }
-  if (pr.merged || pr.state === "closed") {
-    console.log(`Agent-managed PR #${prNumber} is already ${pr.merged ? "merged" : "closed"}`);
-    return;
-  }
-
-  const audit = await buildPrAudit(octokit, repoRef, prNumber);
-  console.log(JSON.stringify(audit, null, 2));
-  if (audit.ready) {
-    await squashMergePr(octokit, repoRef, prNumber, audit.head.branch, audit.head.sha);
-    console.log(`Squash-merged agent-managed PR #${prNumber}`);
-    return;
-  }
-  if (isAwaitingRepositoryEvent(audit)) {
-    console.log(
-      `PR #${prNumber} is awaiting another repository-owned workflow event: ${audit.reasons.join("; ")}`,
-    );
-    return;
-  }
-  throw new Error(
-    `Agent-managed PR #${prNumber} requires a fix or feedback handling: ${audit.reasons.join("; ")}`,
-  );
 }
 
 export async function buildPrAudit(
@@ -353,56 +267,5 @@ function isHttpStatus(error: unknown, status: number): boolean {
     error !== null &&
     "status" in error &&
     (error as { status: number }).status === status
-  );
-}
-
-function isTransientEventReason(reason: string): boolean {
-  return (
-    reason.includes("run is not indexed for the current head") ||
-    reason.includes("run is queued") ||
-    reason.includes("run is in_progress")
-  );
-}
-
-export function isAwaitingRepositoryEvent(
-  audit: Pick<PrAudit, "reasons" | "requiredWorkflows">,
-): boolean {
-  const mainWorkflowPending = audit.requiredWorkflows.some(
-    (workflow) =>
-      workflow.workflowFile === "pr.yml" &&
-      (workflow.runId === undefined || workflow.status !== "completed"),
-  );
-  const repositoryWorkflowPending = audit.requiredWorkflows.some(
-    (workflow) => workflow.runId === undefined || workflow.status !== "completed",
-  );
-  return audit.reasons.every(
-    (reason) =>
-      isTransientEventReason(reason) ||
-      (repositoryWorkflowPending && reason === "pull request mergeability is unknown") ||
-      (mainWorkflowPending && reason === "exact-head github-pages deployment is not successful"),
-  );
-}
-
-export function isTrustedAgentHead(
-  headRepository: string | undefined,
-  headBranch: string,
-  repository: string,
-): boolean {
-  return (
-    headRepository === repository &&
-    ["agent/", "fix/", "codex/"].some((prefix) => headBranch.startsWith(prefix))
-  );
-}
-
-export function isTrustedAgentPr(
-  headRepository: string | undefined,
-  headBranch: string,
-  repository: string,
-  prAuthor: string | undefined,
-  authenticatedLogin: string,
-): boolean {
-  return (
-    isTrustedAgentHead(headRepository, headBranch, repository) &&
-    prAuthor === authenticatedLogin
   );
 }

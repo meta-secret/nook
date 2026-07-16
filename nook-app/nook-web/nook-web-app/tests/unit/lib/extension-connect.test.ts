@@ -5,6 +5,7 @@ import {
 } from '$lib/extension-connect'
 import {
   isBeginExtensionPairingMessage,
+  isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
@@ -234,6 +235,26 @@ describe('extension-owned pairing start', () => {
           deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Nook Extension',
         },
+      }),
+    ).toBe(false)
+  })
+
+  test('requires complete nonce-bound identity handoff requests', () => {
+    const message = {
+      type: 'nook:extension-identity-handoff-request',
+      payload: {
+        recipientPublicKey: 'age1recipient',
+        nonce: 'nonce-1',
+        expectedDeviceId: 'device-1',
+        expectedDevicePublicKey: 'age1device',
+        expectedDeviceSigningPublicKey: 'signing-key',
+      },
+    }
+    expect(isExtensionIdentityHandoffRequestMessage(message)).toBe(true)
+    expect(
+      isExtensionIdentityHandoffRequestMessage({
+        ...message,
+        payload: { ...message.payload, nonce: '' },
       }),
     ).toBe(false)
   })

@@ -1,5 +1,4 @@
 import initNookWasm, {
-  buildPasskeyRecoveryRequestOptions,
   configureVaultApplication,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -17,7 +16,11 @@ type DeviceResult = {
 type PasskeySetup = {
   userHandle: number[]
   prfInput: number[]
-  creationOptions: unknown
+}
+
+type PasskeyUnlockMaterial = {
+  credentialId: number[]
+  prfInput: number[]
 }
 
 let initPromise: Promise<unknown> | undefined
@@ -112,25 +115,14 @@ async function handleMessage(message: unknown): Promise<unknown> {
     case 'nook:extension-session-begin-passkey-setup': {
       const activeManager = await getManager()
       const setup = await activeManager.beginDeviceProtection()
-      const passkeyLabel = messagePayload(message).passkeyLabel
-      if (typeof passkeyLabel !== 'string') {
-        setup.free()
-        throw new Error('Extension session received an invalid passkey label.')
-      }
       const userHandle = setup.userHandle
       const prfInput = setup.prfInput
-      const creationOptions = setup.creationOptionsWithLabel(
-        '',
-        'Nook Extension',
-        passkeyLabel,
-      )
       setup.free()
       return {
         ok: true,
         setup: {
           userHandle: toNumbers(userHandle),
           prfInput: toNumbers(prfInput),
-          creationOptions,
         } satisfies PasskeySetup,
       }
     }
@@ -161,8 +153,6 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-recovery-options':
-      return { ok: true, options: buildPasskeyRecoveryRequestOptions('') }
     case 'nook:extension-session-recover-passkey': {
       const payload = messagePayload(message)
       const activeManager = await getManager()
@@ -185,7 +175,13 @@ async function handleMessage(message: unknown): Promise<unknown> {
     case 'nook:extension-session-unlock-options': {
       const options = await (await getManager()).passkeyUnlockOptions()
       try {
-        return { ok: true, options: options.requestOptions('') }
+        return {
+          ok: true,
+          material: {
+            credentialId: toNumbers(options.credentialId),
+            prfInput: toNumbers(options.prfInput),
+          } satisfies PasskeyUnlockMaterial,
+        }
       } finally {
         options.free()
       }
@@ -213,14 +209,52 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await (await getManager()).unlockPinDeviceIdentity(pin)
       return { ok: true, device: await activateSession() }
     }
+    case 'nook:extension-session-seal-identity-handoff': {
+      const payload = messagePayload(message)
+      const recipientPublicKey = payload.recipientPublicKey
+      const nonce = payload.nonce
+      if (typeof recipientPublicKey !== 'string' || typeof nonce !== 'string') {
+        throw new Error(
+          'Extension session received an invalid identity handoff.',
+        )
+      }
+      const activeManager = await getManager()
+      const status = await activeManager.deviceProtectionStatus()
+      if (status !== 'unlocked') {
+        throw new Error('Extension device identity is locked.')
+      }
+      const device = await deviceResult(activeManager)
+      if (
+        payload.expectedDeviceId !== device.deviceId ||
+        payload.expectedDevicePublicKey !== device.devicePublicKey ||
+        payload.expectedDeviceSigningPublicKey !== device.deviceSigningPublicKey
+      ) {
+        throw new Error(
+          'Extension identity request does not match this device.',
+        )
+      }
+      const envelope = await activeManager.sealExtensionIdentityHandoff(
+        recipientPublicKey,
+        nonce,
+      )
+      armSessionExpiry()
+      return { ok: true, envelope }
+    }
     default:
       return undefined
   }
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const serviceWorkerOnly =
+    messageType(message) === 'nook:extension-session-seal-identity-handoff'
+  const serviceWorkerSender =
+    sender.tab === undefined &&
+    (sender.url === undefined ||
+      sender.url === chrome.runtime.getURL('background/service-worker.js'))
   if (
     sender.id !== chrome.runtime.id ||
+    (serviceWorkerOnly && !serviceWorkerSender) ||
     !messageType(message)?.startsWith('nook:extension-session-')
   ) {
     return false

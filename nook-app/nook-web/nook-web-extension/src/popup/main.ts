@@ -35,11 +35,9 @@ async function main() {
   ])
   let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
   let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
-  if (!isConnected) {
-    protectionStatus = await extensionDeviceProtectionStatus()
-    if (protectionStatus === 'unlocked') {
-      activeSessionDevice = await extensionSessionDevice()
-    }
+  protectionStatus = await extensionDeviceProtectionStatus()
+  if (protectionStatus === 'unlocked') {
+    activeSessionDevice = await extensionSessionDevice()
   }
 
   mount(PopupApp, {

@@ -89,7 +89,7 @@ starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.
 * [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → commit/push first → local and applicable PR checks in parallel → fix loop → address comments already present → squash merge when green). Prefer cached local Docker over cold GH Actions; never wait for external services.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → commit/push first → local and applicable PR checks in parallel → fix loop → address comments already present → explicitly authorized squash merge or ready handoff). Green checks never authorize a merge. Prefer cached local Docker over cold GH Actions.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.

@@ -15,23 +15,21 @@ handoff:
    the feature branch with focused local checks while iterating.
 3. **Push and create/update the PR** — push a coherent commit and open the PR;
    later fixes update that same PR.
-4. **Preflight and arm Nook's event continuation** — run `task
-   pr:preflight PR=<number>` followed by `task pr:monitor PR=<number>` for
-   normally `PR / Verify and preview`, plus `Web research / Build and deploy
-   research catalog` when web-research paths change. Never monitor or wait for
-   an external review or check.
+4. **Preflight and validate** — run `task pr:preflight PR=<number>` and inspect
+   the path-applicable `PR / Verify and preview` and `Web research / Build and
+   deploy research catalog` workflows while local validation runs.
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for
    web/e2e failures, fix locally, and push the completed fix; the synchronize
    event re-evaluates the repository-owned check.
 6. **Address comments already present** — reply to actionable human, Codex, and
    automated comments with the fix, validation, or no-change rationale, then
-   push any needed changes and let Nook's event continuation re-evaluate. Do not wait for
+   push any needed changes and let Nook's PR workflows re-evaluate. Do not wait for
    new comments or another review cycle.
-7. **Merge when ready and green** — after the branch is current with
+7. **Merge only when explicitly authorized** — after the branch is current with
    `origin/main`, Nook's applicable repository-owned PR test checks are green, and actionable
-   comments currently present are handled, squash-merge the PR when the user
-   asked for merge-on-green. External reviews, checks, deployments, and services
-   never delay merge or handoff.
+   comments currently present are handled, squash-merge only when the user has
+   explicitly authorized merging that PR. Green checks alone are never merge
+   authorization.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -66,7 +64,9 @@ flowchart TD
   PUSH --> B
   PUSH --> F
   G -->|yes| C[8 Address comments]
-  C --> M[Squash merge PR]
+  C --> AUTH{Explicit merge authorization?}
+  AUTH -->|no| HANDOFF[Handoff ready PR]
+  AUTH -->|yes| M[Squash merge PR]
   M --> J[Report task duration]
   J --> K[Done]
 ```
@@ -214,15 +214,10 @@ applies to the changed paths, there is no remote check to wait for.
 
 ```bash
 task pr:preflight PR=<number>
-task pr:monitor PR=<number>
 ```
 
-`pr:monitor` marks a same-repository `agent/`, `fix/`, or `codex/` PR only when
-its author matches the authenticated agent identity. Other branch names receive
-a read-only exact-head audit. The command then exits. GitHub's `pull_request_target` and
-`workflow_run` events own all later continuation and squash-merge readiness.
-No agent process or CLI watcher polls status. Codex and every other external
-review/check are absent from the monitor contract.
+Use `task pr:ready PR=<number>` for a read-only exact-head readiness assertion.
+The command never merges and its success is not authorization to merge.
 
 Do not request, poll, or wait for Codex, Claude, Cursor, CodeRabbit, or any other
 external review/check/deployment. Do not add a grace period after the Nook PR
@@ -250,7 +245,6 @@ merge or enable auto-merge until this freshness check passes:
 ```bash
 git merge origin/main --no-edit
 git push origin HEAD
-task pr:monitor PR=<number>
 task pr:ready PR=<number>
 ```
 
@@ -312,13 +306,13 @@ the local gate on the latest pushed head before merge or handoff.
 
 When **Nook's applicable repository-owned PR test checks pass**, the branch is current
 with `origin/main`, actionable comments currently present are handled, and the
-user asked you to merge (or the task implies merge-on-green):
+user explicitly authorized merging this PR:
 
 ```bash
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a fix PR, waits for checks, and squash-merges the repair.
+After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a repair PR for explicit review and merge authorization.
 
 ### 9. Task completion report
 
@@ -355,7 +349,7 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 4. Monitor only `PR / Verify and preview`, plus `Web research / Build and deploy research catalog` for web-research paths; never request or wait for an external review/check.
 5. Inspect and address every actionable comment currently present, then proceed without waiting for another review cycle.
 6. On failure: fix → push completed fix → run the required local gate while CI refreshes.
-7. **Squash merge** into `main` when Nook's applicable PR test checks are green.
+7. **Squash merge** into `main` only when explicitly authorized; green checks alone are insufficient.
 8. Delete the branch (optional).
 9. **Report task duration** in the final message (see [§ Task completion report](#9-task-completion-report)).
 

@@ -41,12 +41,19 @@ jq -e \
   --arg channel "$EXPECTED_EXTENSION_CHANNEL" \
   --arg commit "$EXPECTED_EXTENSION_COMMIT" \
   --arg simple "$simple_vault_url" \
-  '.schema_version == 1
+  '.schema_version == 2
     and .channel == $channel
     and .commit == $commit
     and .simple_vault_url == $simple
     and (.extension_id | test("^[a-p]{32}$"))
-    and (.sha256 | test("^[0-9a-f]{64}$"))' \
+    and (.sha256 | test("^[0-9a-f]{64}$"))
+    and (if $channel == "production" then
+      .install_method == "chrome_web_store"
+      and .install_url == ("https://chromewebstore.google.com/detail/" + .extension_id)
+    else
+      .install_method == "manual_zip"
+      and .install_url == .download_url
+    end)' \
   "$metadata" >/dev/null
 
 download_url="$(jq -er '.download_url' "$metadata")"

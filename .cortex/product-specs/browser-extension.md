@@ -25,13 +25,13 @@ application capability checks enforce the vault-type boundary.
 
 ## Product Boundary
 
-| Surface | Responsibility |
-|---|---|
-| `simple.nokey.sh` | Complete vault UI, unlock, consent, device management, recovery, and settings |
-| Extension toolbar action | Create or unlock the extension device before approval; show “Open Simple Vault” afterward |
-| Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization |
-| In-page widget | Contextual open/unlock/select/fill/save actions only |
-| Content script | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials |
+| Surface                           | Responsibility                                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                            |
+| Extension toolbar action          | Create or unlock the extension device before approval; show “Open Simple Vault” afterward                |
+| Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization                          |
+| In-page widget                    | Contextual open/unlock/select/fill/save actions only                                                     |
+| Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials |
 
 "No vault UI in the extension" means no second vault-management UI. The toolbar
 popup may contain the standard one-time device-protection widget because
@@ -49,6 +49,10 @@ vault picker, unlock, secrets, settings, or device administration.
    route with the extension runtime id and its public device request. There is
    no website-first enable screen and no second extension window.
 4. The user creates, imports, or unlocks the full Simple vault on the website.
+   When creating a vault from this route, the unlocked extension sends its age
+   identity and matching event-signing seed in a one-time, nonce-bound age
+   envelope. Rust/WASM adopts that identity only for the website session, so
+   the website does not create or request a second passkey-protected device.
 5. Simple Vault shows explicit consent and approves the extension as a vault
    device through the Rust/WASM authorization boundary.
 6. Simple Vault sends the approved grant together with the canonical encrypted,
@@ -93,12 +97,15 @@ browser's extension developer mode.
 The supported developer launcher resolves hosted builds from that metadata,
 binds the archive and checksum URLs to the selected deployment origin, verifies
 SHA-256 before extraction, and activates a release atomically through a stable
-channel-specific path. It always launches with `--load-extension` and an
-isolated Nook browser profile. Development, production, and every PR number
-have separate install and profile directories; the launcher never modifies or
-silently installs into the user's normal browser profile. Failed downloads,
-metadata checks, checksum checks, or archive validation leave the prior active
-release unchanged.
+channel-specific path. It uses an isolated Nook browser profile. Brave,
+Chromium, and Chrome for Testing receive the verified directory through
+`--load-extension`. Branded Google Chrome removed that switch in Chrome 137, so
+the launcher opens its extension manager and requires a one-time **Load
+unpacked** selection of the verified `current` directory. Development,
+production, and every PR number have separate install and profile directories;
+the launcher never modifies or silently installs into the user's normal browser
+profile. Failed downloads, metadata checks, checksum checks, or archive
+validation leave the prior active release unchanged.
 
 Interactive local development uses HTTPS so passkeys, CloudKit, OAuth, and
 extension-to-site messaging run under production-like secure-context rules.
@@ -163,6 +170,21 @@ extension-origin IndexedDB by WebAuthn PRF. Event replication may occur while
 that identity is locked, but decrypting, matching, or filling requires an
 extension-origin unlock ceremony. The passkey is bound to the stable extension
 runtime id, not to the Simple Vault website origin.
+
+The `/extension-connect` creation path may temporarily use the unlocked
+extension identity. The website first creates a one-time age recipient whose
+private key remains inside its WASM manager. The extension encrypts its age
+private key and event-signing seed to that recipient; the website's Rust/WASM
+boundary decrypts the envelope, validates the route nonce and advertised
+device id/public keys, and keeps the adopted material only in memory. Raw
+private material never appears in URL parameters, TypeScript values,
+`chrome.storage.local`, website IndexedDB, or logs. Reloading the website
+requires a new handoff from an unlocked extension. The extension records each
+issued nonce and public device tuple in extension-only `chrome.storage.session`,
+consumes it before sealing, and returns a freshly issued nonce for a later
+same-page lock/unlock. Only the service worker may invoke the offscreen
+secret-sealing command. A failed website adoption resets both device identity
+and event-log signing state before another authorization attempt.
 
 For the same reason, the launcher does not yet show an active-vault selector.
 Once #244 supplies multiple usable encrypted extension projections, the

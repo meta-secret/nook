@@ -55,7 +55,10 @@ Main publishes the development ZIP at
 `https://simple.dev.nokey.sh/`. Production releases publish a versioned ZIP at
 `https://nokey.sh/downloads/` and attach the same bytes to the GitHub Release.
 Every channel also exposes `/downloads/extension.json` and the archive's
-`.sha256` file.
+`.sha256` file. Metadata schema version 2 distinguishes the public installation
+path from the downloadable verification artifact: production's `install_url`
+opens the Chrome Web Store listing derived from the stable extension ID, while
+development and PR channels use their same-origin ZIP with manual installation.
 
 The build writes a Manifest V3 extension bundle to `nook-app/nook-web/nook-web-extension/dist` inside
 the sealed Docker image. Use `task docker:extract:extension` to copy that bundle
@@ -86,8 +89,12 @@ task extension:test:e2e
 
 Chrome and Brave do not support silently installing an unsigned extension into
 a normal browser profile. The launch tasks therefore use stable, isolated Nook
-profiles and pass the verified directory through `--load-extension`. With no
-selector they build for trusted HTTPS localhost as before:
+profiles. Brave and Chrome for Testing receive the verified directory through
+`--load-extension`. Branded Google Chrome removed that switch in Chrome 137, so
+the task opens `chrome://extensions`; click **Load unpacked** once and select the
+printed `current` directory. Chrome remembers that unpacked extension in the
+isolated profile for later launches. With no selector the tasks build for
+trusted HTTPS localhost as before:
 
 ```bash
 task extension:run:chrome

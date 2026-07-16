@@ -35,6 +35,7 @@
   } from '$lib/legal-content'
   import { isAppLogsPath } from '$lib/app-logs-api'
   import {
+    adoptExtensionIdentity,
     extensionConnectRequestFromLocation,
     isExtensionConnectPath,
     type ExtensionConnectRequest,
@@ -81,16 +82,27 @@
       ? isAppLogsPath(window.location.pathname)
       : false,
   )
+  const initialExtensionConnectRequest =
+    typeof window !== 'undefined' && SUPPORTS_EXTENSION
+      ? extensionConnectRequestFromLocation(window.location)
+      : undefined
   let extensionConnectRoute = $state<boolean>(
     typeof window !== 'undefined'
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
   )
   let extensionConnectRequest = $state<ExtensionConnectRequest | undefined>(
-    typeof window !== 'undefined' && SUPPORTS_EXTENSION
-      ? extensionConnectRequestFromLocation(window.location)
-      : undefined,
+    initialExtensionConnectRequest,
   )
+  // Keep the public extension handoff request in memory after leaving the
+  // consent route. An extension-backed vault has no website passkey record,
+  // so an explicit vault lock must re-adopt the unlocked extension identity.
+  // Reloading the page intentionally clears this capability; the user can
+  // reopen Nook from the extension to establish a new handoff session.
+  let extensionIdentityRequest = $state<ExtensionConnectRequest | undefined>(
+    initialExtensionConnectRequest,
+  )
+  let extensionBackedVaultSession = $state(false)
   let sentinelInvitationRequest = $state(
     typeof window !== 'undefined' && APP_KIND !== 'simple'
       ? consumeSentinelGenesisRequestFromLocation()
@@ -116,6 +128,9 @@
     extensionConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
       : undefined
+    if (extensionConnectRequest) {
+      extensionIdentityRequest = extensionConnectRequest
+    }
     if (APP_KIND !== 'simple') {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
       if (invitationRequest) sentinelInvitationRequest = invitationRequest
@@ -151,6 +166,19 @@
   }
 
   function navigateHome() {
+    vault.closeHelp()
+    history.pushState(undefined, '', appPath('/'))
+    legalPage = undefined
+    logsPage = false
+    appLogsPage = false
+    extensionConnectRoute = false
+    extensionConnectRequest = undefined
+  }
+
+  function finishExtensionConnect(approved = false) {
+    if (!approved) {
+      extensionIdentityRequest = undefined
+    }
     vault.closeHelp()
     history.pushState(undefined, '', appPath('/'))
     legalPage = undefined
@@ -251,6 +279,20 @@
       return
     }
     if (existingVaultNeedsDeviceUnlock) {
+      const connectRequest = extensionIdentityRequest
+      const extensionIdentityCanUnlock =
+        connectRequest &&
+        (extensionBackedVaultSession ||
+          vault.deviceProtectionStatus === 'missing')
+      if (extensionIdentityCanUnlock) {
+        const adopted = await vault.authorizeWithExternalDeviceIdentity(
+          (manager) => adoptExtensionIdentity(manager, connectRequest),
+        )
+        if (!adopted) return
+        extensionBackedVaultSession = true
+        await vault.loadDb()
+        return
+      }
       pendingExistingVaultUnlock = true
       return
     }
@@ -322,12 +364,22 @@
   )
 
   async function handleCreateDeviceVault(label: string) {
+    const connectRequest = extensionIdentityRequest
+    if (connectRequest && vault.deviceId !== connectRequest.deviceId) {
+      const adopted = await vault.authorizeWithExternalDeviceIdentity(
+        (manager) => adoptExtensionIdentity(manager, connectRequest),
+      )
+      if (!adopted) return
+    }
     if (!vault.deviceProtectionReady) {
       pendingVaultCreation = { kind: 'simple', label }
       return
     }
     pendingVaultCreation = undefined
     await vault.createLocalVaultWithDeviceKeys(label)
+    if (connectRequest && vault.isAuthenticated) {
+      extensionBackedVaultSession = true
+    }
   }
 
   async function handleStartSentinelGenesis(
@@ -610,6 +662,11 @@
                 isVerifying={vault.isVerifying}
                 isInitializing={vault.isInitializing}
                 deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
+                usesExtensionDeviceIdentity={extensionIdentityRequest !==
+                  undefined &&
+                  (!requiresPasskeyFirst ||
+                    extensionBackedVaultSession ||
+                    vault.deviceProtectionStatus === 'missing')}
                 onUnlock={handleUnlock}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -668,7 +725,7 @@
           <ExtensionConnectConsent
             {vault}
             request={extensionConnectRequest}
-            onClose={navigateHome}
+            onClose={finishExtensionConnect}
           />
           <VaultStatusBar
             {vault}

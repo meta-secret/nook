@@ -15,7 +15,7 @@ on that same PR branch.
 Do not treat implementation as complete after local edits, a push, or a PR link.
 The agent owns the loop through local validation, Nook's applicable
 repository-owned PR test checks, fixes, re-pushes, comments already present, and squash merge when
-the user asked for merge-on-green. External services never extend that loop.
+the user explicitly authorized merging that PR. Green checks alone never authorize a merge.
 
 Default PR-first loop:
 
@@ -25,21 +25,19 @@ Default PR-first loop:
    focused local checks while iterating.
 3. **Push and create/update the PR** — once the branch has a coherent commit,
    push it and open the PR; subsequent fixes update the same PR.
-4. **Preflight and arm Nook's event continuation** — run `task
-   pr:preflight PR=<number>`, then once run `task pr:monitor PR=<number>` for normally `PR
-   / Verify and preview`, plus `Web research / Build and deploy research catalog`
-   when web-research paths change. The command exits after one snapshot; GitHub
-   events own long-lived state transitions and no agent or CLI polls status.
+4. **Preflight and validate** — run `task pr:preflight PR=<number>`, then inspect
+   the path-applicable `PR / Verify and preview` and `Web research / Build and
+   deploy research catalog` workflows while local validation runs.
 5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
    logs for web/e2e failures, fix locally, and push the completed fix; the
    synchronize event re-evaluates the refreshed repository-owned check.
 6. **Address comments already present** — reply to actionable human, Codex, and
    automated review comments with the fix, validation, or no-change rationale
    before resolving/considering them complete. Never wait for new feedback.
-7. **Merge when ready** — require `task pr:ready PR=<number>`, then when the branch is current, Nook's applicable
+7. **Merge only when authorized** — require `task pr:ready PR=<number>`, then when the branch is current, Nook's applicable
    repository-owned PR test checks are green, and actionable comments currently present are
-   handled, squash-merge the PR if the user asked for merge-on-green. Never
-   delay for an external review, check, deployment, or service.
+   handled, squash-merge only if the user explicitly authorized merging that
+   PR. Readiness is evidence, not authorization.
 
 ## Testing strategy — parallel final validation
 
@@ -91,12 +89,10 @@ Default agent flow:
 2. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
 3. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
 4. **Validate locally in parallel** — immediately run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e:pr` or `task ci:pr:e2e` when web/vault/sync flows change.
-5. **Arm only Nook's applicable PR event continuation** — run `task
-   pr:monitor PR=<number>` for normally `PR / Verify and
+5. **Inspect Nook's applicable PR workflows** — inspect `PR / Verify and
    preview`, plus `Web research / Build and deploy research catalog` for
-   web-research paths. Never request, poll,
-   monitor, or wait for Codex or another external service. See
-   [code-review.md](code-review.md).
+   web-research paths, while the local gate runs. Never treat green status as
+   merge authorization. See [code-review.md](code-review.md).
 6. **On any local or Nook PR-test failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
    debugging) → commit and push the completed fix → run local validation in
@@ -104,9 +100,10 @@ Default agent flow:
 7. **Address actionable PR comments currently present** — reply with the fix,
    validation, or no-change rationale, and push any needed changes; GitHub
    events re-evaluate Nook's applicable PR test checks. Do not wait for another review cycle.
-8. **Merge** — before merging, verify the PR branch is not stale against
+8. **Merge only with explicit authorization** — before merging, verify the PR branch is not stale against
    `origin/main`; update it and let the synchronize event re-evaluate Nook's applicable PR test checks if
-   needed. Squash merge when those repository-owned checks are green on the updated branch.
+   needed. After a push, re-run readiness and confirm the user's authorization
+   still applies to the current PR before squash merging.
 
 Never merge until the latest pushed branch has green applicable repository-owned
 PR test checks and has passed the required local gate for the change. External checks do
@@ -162,7 +159,7 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    Nook's applicable PR test checks. Never wait for new feedback or another review response.
 9. **Repeat** — Return to step 7 until Nook's applicable PR test checks are green and the
     actionable comments currently present are handled.
-10. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
+10. **Authorized squash merge or handoff** — if explicitly authorized, run `gh pr merge <n> --squash`; otherwise hand off the ready PR. Report task duration.
 
 ```mermaid
 flowchart TD
@@ -263,7 +260,7 @@ gh run view <run-id> --log-failed   # CI job output
 # For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
 task ci:pr                          # full PR mirror (no browser e2e)
-task pr:monitor PR=<number>         # exact-head repository workflows only
+task pr:ready PR=<number>           # read-only exact-head readiness assertion
 ```
 
 `task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. The automatic full browser gate is main-only (`task ci:main`).
@@ -298,7 +295,6 @@ Include scoped e2e or `task ci:pr:e2e` when the touch surface warrants it (see s
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
 task pr:preflight PR=<number>
-task pr:monitor PR=<number>
 ```
 
 Before every merge attempt, verify the PR branch is current with the latest base
@@ -315,14 +311,13 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 # If the branch is behind origin/main:
 git merge origin/main --no-edit
 git push origin HEAD
-task pr:monitor PR=<number>
 task pr:ready PR=<number>
 ```
 
 ### 11 — Merge
 
-When Nook's applicable repository-owned PR test checks pass and the user asked to merge
-(or the task implies merge-on-green):
+When Nook's applicable repository-owned PR test checks pass and the user has
+explicitly authorized merging this PR:
 
 ```bash
 gh pr merge <number> --squash
@@ -330,9 +325,9 @@ gh pr merge <number> --squash
 
 Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
 
-## CI auto-fix (nightly failures only)
+## CI fix PRs (nightly failures only)
 
-When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent, opens a fix PR, waits only for Nook's applicable repository-owned PR test checks, performs one final existing-feedback audit, and squash-merges only when no manual feedback handling remains. Main-branch failures never start an AI agent automatically and remain visible for manual handling. The nightly path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you — `pr.yml` triggers and you are not stuck approving a `github-actions[bot]` PR. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
+When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent and opens a fix PR for normal review. It never merges the PR automatically. Main-branch failures remain visible for manual handling. The nightly path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you and `pr.yml` triggers. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
 
 ## Non-negotiables
 
@@ -343,6 +338,7 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call
   `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never merge after a Nook PR-test failure without green local validation on the latest head** (`task ci:pr` for broad failures; a matching subset is enough for trivial fmt/lint).
+- **Never merge because checks are green.** Require explicit user authorization for the PR; automated agents and workflows only open PRs and report readiness.
 - **Never wait for external reviews or checks.** Codex reviews are not required.
   Monitor only Nook's applicable repository-owned PR test checks; address actionable comments
   that already exist, then proceed without waiting for another service response.
