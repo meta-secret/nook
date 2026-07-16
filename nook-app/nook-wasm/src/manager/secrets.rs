@@ -21,13 +21,11 @@ type ImportVersions = HashMap<
 type ImportFingerprintState = (ImportVersions, Vec<nook_core::SecretFingerprintAssignment>);
 
 fn has_current_import_fingerprints(
-    identity_fingerprint: &Option<nook_core::SecretFingerprint>,
-    fingerprint: &Option<nook_core::SecretFingerprint>,
+    identity_fingerprint: Option<&nook_core::SecretFingerprint>,
+    fingerprint: Option<&nook_core::SecretFingerprint>,
 ) -> bool {
     identity_fingerprint.is_some()
-        && fingerprint
-            .as_ref()
-            .is_some_and(nook_core::SecretFingerprint::is_current_secret_version)
+        && fingerprint.is_some_and(nook_core::SecretFingerprint::is_current_secret_version)
 }
 
 fn import_fingerprints(
@@ -44,7 +42,7 @@ fn import_fingerprints(
     let mut backfill = Vec::new();
     for (record, identity_fingerprint, fingerprint) in dedup_state {
         let (identity_fingerprint, fingerprint) =
-            if has_current_import_fingerprints(&identity_fingerprint, &fingerprint)
+            if has_current_import_fingerprints(identity_fingerprint.as_ref(), fingerprint.as_ref())
                 && record.secret_type != Some(nook_core::SecretType::Authenticator)
             {
                 (
@@ -352,14 +350,20 @@ mod import_tests {
             "hmac-sha256:v1:{}",
             "cd".repeat(32)
         )));
-        assert!(!has_current_import_fingerprints(&identity, &legacy));
+        assert!(!has_current_import_fingerprints(
+            identity.as_ref(),
+            legacy.as_ref()
+        ));
 
         let value = nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
             title: "Recovery".to_owned(),
             note: "same note".to_owned(),
         });
         let current = Some(nook_core::secret_fingerprint(&value, &key()));
-        assert!(has_current_import_fingerprints(&identity, &current));
+        assert!(has_current_import_fingerprints(
+            identity.as_ref(),
+            current.as_ref()
+        ));
     }
 }
 
