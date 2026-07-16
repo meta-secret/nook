@@ -2,12 +2,14 @@ export {}
 
 import {
   isBeginExtensionPairingMessage,
+  isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isExtensionPairingApprovedMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type {
   BeginExtensionPairingMessage,
+  ExtensionIdentityHandoffRequestMessage,
   ExtensionPairingApprovedMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -25,6 +27,12 @@ import {
 
 const extensionSessionDocument = 'offscreen/session.html'
 let extensionSessionDocumentCreation: Promise<void> | undefined
+type PendingIdentityHandoff = {
+  deviceId: string
+  devicePublicKey: string
+  deviceSigningPublicKey: string
+}
+const pendingIdentityHandoffConsumptions = new Set<string>()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
   extensionSessionDocumentCreation ??= chrome.offscreen
@@ -84,9 +92,73 @@ function randomNonce(): string {
   )
 }
 
-function openExtensionPairing(
+function pendingIdentityHandoffStorageKey(nonce: string): string {
+  return `nook.extension.identity-handoff.${nonce}`
+}
+
+function isPendingIdentityHandoff(
+  value: unknown,
+): value is PendingIdentityHandoff {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'deviceId' in value &&
+    typeof value.deviceId === 'string' &&
+    'devicePublicKey' in value &&
+    typeof value.devicePublicKey === 'string' &&
+    'deviceSigningPublicKey' in value &&
+    typeof value.deviceSigningPublicKey === 'string'
+  )
+}
+
+function setSessionStorage(items: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.session.set(items, () => {
+      const message = chrome.runtime.lastError?.message
+      if (message) reject(new Error(message))
+      else resolve()
+    })
+  })
+}
+
+function getSessionStorage(key: string): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.session.get(key, (items) => {
+      const message = chrome.runtime.lastError?.message
+      if (message) reject(new Error(message))
+      else resolve(items)
+    })
+  })
+}
+
+function removeSessionStorage(key: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.session.remove(key, () => {
+      const message = chrome.runtime.lastError?.message
+      if (message) reject(new Error(message))
+      else resolve()
+    })
+  })
+}
+
+async function issueIdentityHandoff(
+  nonce: string,
+  pending: PendingIdentityHandoff,
+): Promise<void> {
+  await setSessionStorage({
+    [pendingIdentityHandoffStorageKey(nonce)]: pending,
+  })
+}
+
+async function openExtensionPairing(
   device: BeginExtensionPairingMessage['payload'],
-): void {
+): Promise<void> {
+  const nonce = randomNonce()
+  await issueIdentityHandoff(nonce, {
+    deviceId: device.deviceId,
+    devicePublicKey: device.devicePublicKey,
+    deviceSigningPublicKey: device.deviceSigningPublicKey,
+  })
   const url = new URL(runtimeSimpleVaultUrl('extension-connect'))
   url.searchParams.set('device_id', device.deviceId)
   url.searchParams.set('device_public_key', device.devicePublicKey)
@@ -96,7 +168,7 @@ function openExtensionPairing(
   )
   url.searchParams.set('extension_id', chrome.runtime.id)
   url.searchParams.set('device_label', device.deviceLabel)
-  url.searchParams.set('nonce', randomNonce())
+  url.searchParams.set('nonce', nonce)
   url.searchParams.set('scopes', 'vault-access,password-filling')
   chrome.tabs.create({ url: url.toString() })
 }
@@ -107,6 +179,68 @@ function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
     return isRuntimeSimpleVaultUrl(sender.url)
   } catch {
     return false
+  }
+}
+
+function sendSessionMessage(message: unknown): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      const error = chrome.runtime.lastError?.message
+      if (error) reject(new Error(error))
+      else resolve(response)
+    })
+  })
+}
+
+async function createIdentityHandoff(
+  message: ExtensionIdentityHandoffRequestMessage,
+): Promise<{
+  ok: boolean
+  envelope?: string
+  nextNonce?: string
+  reason?: string
+}> {
+  const nonce = message.payload.nonce
+  if (pendingIdentityHandoffConsumptions.has(nonce)) {
+    return { ok: false, reason: 'extension-identity-handoff-not-issued' }
+  }
+  pendingIdentityHandoffConsumptions.add(nonce)
+  try {
+    const key = pendingIdentityHandoffStorageKey(nonce)
+    const stored = await getSessionStorage(key)
+    const pending = stored[key]
+    if (
+      !isPendingIdentityHandoff(pending) ||
+      pending.deviceId !== message.payload.expectedDeviceId ||
+      pending.devicePublicKey !== message.payload.expectedDevicePublicKey ||
+      pending.deviceSigningPublicKey !==
+        message.payload.expectedDeviceSigningPublicKey
+    ) {
+      return { ok: false, reason: 'extension-identity-handoff-not-issued' }
+    }
+    await removeSessionStorage(key)
+    await ensureExtensionSessionDocument()
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-seal-identity-handoff',
+      payload: message.payload,
+    })
+    if (
+      !!response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true &&
+      'envelope' in response &&
+      typeof response.envelope === 'string'
+    ) {
+      const nextNonce = randomNonce()
+      await issueIdentityHandoff(nextNonce, pending)
+      return { ok: true, envelope: response.envelope, nextNonce }
+    }
+    return { ok: false, reason: 'extension-identity-unavailable' }
+  } catch {
+    return { ok: false, reason: 'extension-identity-handoff-failed' }
+  } finally {
+    pendingIdentityHandoffConsumptions.delete(nonce)
   }
 }
 
@@ -278,9 +412,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
     }
-    openExtensionPairing(message.payload)
-    sendResponse({ ok: true })
-    return false
+    void openExtensionPairing(message.payload)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false, reason: 'pairing-launch-failed' }))
+    return true
   }
 
   return false
@@ -288,6 +423,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
+    if (isExtensionIdentityHandoffRequestMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void createIdentityHandoff(message).then(sendResponse)
+      return true
+    }
+
     if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
       sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
       return false

@@ -138,6 +138,7 @@ impl VaultSessionState {
 struct DeviceSessionState {
     id: String,
     identity_private_key: String,
+    extension_handoff_private_key: String,
 }
 
 struct StatusChannel {
@@ -225,6 +226,7 @@ impl Drop for NookVaultManager {
         self.storage.access_token.zeroize();
         self.vault.reset();
         self.device.identity_private_key.zeroize();
+        self.device.extension_handoff_private_key.zeroize();
         self.event_log.reset();
         self.sentinel_genesis = None;
         self.pending_sentinel_genesis_request = None;

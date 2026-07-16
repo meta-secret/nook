@@ -148,7 +148,7 @@
   }
 </script>
 
-{#if isConnected}
+{#if isConnected && status === 'unlocked'}
   <main class="connected-shell">
     <NookIcon src="../icons/nook.png" alt="" class="popup-logo" />
     <button

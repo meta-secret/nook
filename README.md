@@ -95,8 +95,11 @@ item, add a corrected copy and delete the old one.
 1. Open **Simple Vault** for everyday secrets or **Sentinel Vault** for a
    quorum safe. Sentinel member devices enter only through an owner-issued
    invitation.
-2. Creating a **Simple** vault protects this browser with a passkey (WebAuthn
-   PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup: the owner
+2. Creating a **Simple** vault directly on the website protects this browser
+   with a passkey (WebAuthn PRF) or PIN fallback. When creation starts from the
+   unlocked Nook extension, the extension's protected device identity creates
+   the vault instead, so the website does not create another passkey.
+   **Sentinel** starts quorum / SLIP-0039 setup: the owner
    shares an invitation URL, each participant opens it and connects a protected
    device, then returns the signed response URL. After atomic creation, the
    owner sends each member their device-addressed encrypted share and completes
@@ -110,7 +113,9 @@ item, add a corrected copy and delete the old one.
 ### When you come back
 
 - Unlock with this browser's passkey/PIN-protected device keys, or use a backup
-  password to open the encrypted local vault directly.
+  password to open the encrypted local vault directly. A vault created with the
+  extension identity is unlocked by opening Nook from the unlocked extension;
+  the site receives a fresh encrypted, memory-only key handoff.
 - A backup-password session leaves the protected device identity and saved sync
   provider credentials locked. Authorize with the passkey or PIN when you want
   remote synchronization to resume.

@@ -101,7 +101,7 @@ declare namespace chrome {
   }
 
   namespace storage {
-    const local: {
+    type StorageArea = {
       get(
         keys?: string | string[] | Record<string, unknown> | null,
         callback?: (items: Record<string, unknown>) => void,
@@ -109,5 +109,7 @@ declare namespace chrome {
       set(items: Record<string, unknown>, callback?: () => void): void
       remove(keys: string | string[], callback?: () => void): void
     }
+    const local: StorageArea
+    const session: StorageArea
   }
 }

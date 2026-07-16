@@ -4,6 +4,7 @@ impl From<nook_core::VaultError> for NookError {
     fn from(err: nook_core::VaultError) -> Self {
         use nook_core::VaultError;
         match err {
+            VaultError::ExtensionIdentityHandoff(e) => NookError::Encryption(e.to_string()),
             VaultError::Validation(e) => NookError::Database(e.to_string()),
             VaultError::VaultFormat(e) => NookError::Decryption(e.to_string()),
             VaultError::VaultCrypto(e) => NookError::Encryption(e.to_string()),

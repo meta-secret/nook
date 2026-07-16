@@ -88,7 +88,6 @@ import {
 } from "$lib/vault-architecture";
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
-
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers";
@@ -948,6 +947,41 @@ export class VaultState {
     }));
     this.deviceId = identity.deviceId;
     this.devicePublicKey = identity.devicePublicKey;
+  }
+
+  async authorizeWithExternalDeviceIdentity(
+    adopt: (manager: NookVaultManager) => Promise<void>,
+  ): Promise<boolean> {
+    if (!this.manager) return false;
+    const priorDeviceProtectionStatus = this.deviceProtectionStatus;
+    this.errorMsg = "";
+    this.isVerifying = true;
+    this.deviceAuthorizationInProgress = true;
+    try {
+      await this.enqueueStorage(() => adopt(this.manager!));
+      await this.continueInitializationAfterDeviceUnlock();
+      this.deviceProtectionStatus = "unlocked";
+      vaultLog.info("extension identity adopted", {
+        deviceId: this.deviceId,
+      });
+      return true;
+    } catch (error) {
+      await this.enqueueStorage(() =>
+        this.manager!.rollbackExtensionIdentityHandoff(),
+      );
+      this.deviceProtectionStatus =
+        priorDeviceProtectionStatus === "unlocked"
+          ? this.deviceProtectionLockedMode
+          : priorDeviceProtectionStatus;
+      this.errorMsg = this.t("extension.connect.identity_handoff_failed");
+      vaultLog.warn("extension identity handoff failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    } finally {
+      this.deviceAuthorizationInProgress = false;
+      this.isVerifying = false;
+    }
   }
 
   get draftVaultArchitecture(): VaultArchitecture {

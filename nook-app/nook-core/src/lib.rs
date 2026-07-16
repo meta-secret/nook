@@ -12,7 +12,9 @@ mod secrets;
 mod sync;
 mod vault;
 
-pub(crate) use auth::{device_key_protection, enrollment, multi_device, password_envelope};
+pub(crate) use auth::{
+    device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
+};
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{bip39, password, secret_types, secret_view, session};
 pub(crate) use sync::{
@@ -55,9 +57,14 @@ pub use enrollment::{
     peek_enrollment_issued_at,
 };
 pub use errors::{
-    DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, MultiDeviceError,
-    PasswordError, SecretPayloadError, SessionError, ValidationError, VaultCryptoError,
-    VaultEpochError, VaultError, VaultFormatError, VaultResult, VaultSyncError,
+    DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError,
+    ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, SecretPayloadError,
+    SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
+    VaultResult, VaultSyncError,
+};
+pub use extension_identity_handoff::{
+    ExtensionIdentityHandoffMaterial, open_extension_identity_handoff,
+    seal_extension_identity_handoff,
 };
 pub use i18n::{
     get_translation_catalog, lookup_translation, merge_translation_catalogs, parse_app_locale,

@@ -1,4 +1,6 @@
 import { stripBasePath } from "$lib/routes";
+import type { NookVaultManager } from "$app-wasm";
+import type { ExtensionIdentityHandoffRequestMessage } from "$web-shared/extension/runtime-messages";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -82,4 +84,98 @@ export function scopeLabel(scope: ExtensionConnectScope): string {
   if (scope === "vault-access") return "Vault access";
   if (scope === "password-filling") return "Password filling";
   return "Sync provider credentials";
+}
+
+type ExtensionIdentityHandoffResponse = {
+  ok?: boolean;
+  envelope?: unknown;
+  nextNonce?: unknown;
+  reason?: unknown;
+};
+
+function requestIdentityEnvelope(
+  request: ExtensionConnectRequest,
+  message: ExtensionIdentityHandoffRequestMessage,
+): Promise<{ envelope: string; nextNonce: string }> {
+  const runtime = (
+    globalThis as typeof globalThis & {
+      chrome?: {
+        runtime?: {
+          sendMessage?: (
+            extensionId: string,
+            message: unknown,
+            callback: (response?: ExtensionIdentityHandoffResponse) => void,
+          ) => void;
+          lastError?: { message?: string };
+        };
+      };
+    }
+  ).chrome?.runtime;
+  if (!runtime?.sendMessage) {
+    return Promise.reject(
+      new Error("extension-identity-messaging-unavailable"),
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    runtime.sendMessage?.(request.extensionRuntimeId, message, (response) => {
+      const runtimeError = runtime.lastError?.message;
+      if (runtimeError) {
+        reject(new Error(runtimeError));
+        return;
+      }
+      if (
+        response?.ok === true &&
+        typeof response.envelope === "string" &&
+        typeof response.nextNonce === "string" &&
+        response.nextNonce.length > 0
+      ) {
+        resolve({
+          envelope: response.envelope,
+          nextNonce: response.nextNonce,
+        });
+        return;
+      }
+      reject(
+        new Error(
+          typeof response?.reason === "string"
+            ? response.reason
+            : "extension-identity-handoff-rejected",
+        ),
+      );
+    });
+  });
+}
+
+/** Adopt the unlocked extension identity without exposing private key material
+ * to JavaScript. Only an age-encrypted, nonce-bound envelope crosses the
+ * extension boundary; Rust/WASM validates and installs its contents. */
+export async function adoptExtensionIdentity(
+  manager: NookVaultManager,
+  request: ExtensionConnectRequest,
+): Promise<void> {
+  const nonce = request.nonce;
+  const recipientPublicKey = manager.beginExtensionIdentityHandoff();
+  const message: ExtensionIdentityHandoffRequestMessage = {
+    type: "nook:extension-identity-handoff-request",
+    payload: {
+      recipientPublicKey,
+      nonce,
+      expectedDeviceId: request.deviceId,
+      expectedDevicePublicKey: request.devicePublicKey,
+      expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
+    },
+  };
+  const { envelope, nextNonce } = await requestIdentityEnvelope(
+    request,
+    message,
+  );
+  manager.finishExtensionIdentityHandoff(
+    envelope,
+    nonce,
+    request.deviceId,
+    request.devicePublicKey,
+    request.deviceSigningPublicKey,
+  );
+  request.nonce = nextNonce;
 }

@@ -14,6 +14,86 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = lockDeviceIdentity)]
     pub fn lock_device_identity(&mut self) {
         self.device.identity_private_key.zeroize();
+        self.device.extension_handoff_private_key.zeroize();
+    }
+
+    /// Create a one-time age recipient for an extension identity handoff.
+    /// The matching private key remains inside this manager's Rust state.
+    #[wasm_bindgen(js_name = beginExtensionIdentityHandoff)]
+    pub fn begin_extension_identity_handoff(&mut self) -> Result<String, JsError> {
+        self.device.extension_handoff_private_key.zeroize();
+        let recipient = nook_core::DeviceIdentity::generate()?;
+        self.device.extension_handoff_private_key = recipient.secret_string().into_inner();
+        Ok(recipient.public_key().into_inner())
+    }
+
+    /// Seal the currently unlocked extension identity to a one-time website
+    /// recipient. Plaintext private material never crosses the WASM boundary.
+    #[wasm_bindgen(js_name = sealExtensionIdentityHandoff)]
+    pub async fn seal_extension_identity_handoff(
+        &mut self,
+        recipient_public_key: &str,
+        nonce: &str,
+    ) -> Result<String, JsError> {
+        let identity = self.ensure_device_identity()?;
+        self.ensure_signing_identity().await?;
+        let recipient_public_key = nook_core::DevicePublicKey::parse(recipient_public_key)?;
+        Ok(nook_core::seal_extension_identity_handoff(
+            &identity,
+            &self.event_log.signing_seed,
+            &recipient_public_key,
+            nonce,
+        )?
+        .into_inner())
+    }
+
+    /// Open and validate an extension identity handoff, then adopt both the age
+    /// identity and its matching event-signing seed for this in-memory session.
+    #[wasm_bindgen(js_name = finishExtensionIdentityHandoff)]
+    pub fn finish_extension_identity_handoff(
+        &mut self,
+        envelope: &str,
+        nonce: &str,
+        expected_device_id: &str,
+        expected_device_public_key: &str,
+        expected_device_signing_public_key: &str,
+    ) -> Result<(), JsError> {
+        let private_key = Zeroizing::new(std::mem::take(
+            &mut self.device.extension_handoff_private_key,
+        ));
+        if private_key.is_empty() {
+            return Err(NookError::Decryption(
+                "Extension identity handoff was not initialized.".to_owned(),
+            )
+            .into());
+        }
+        let recipient = nook_core::DeviceIdentity::from_secret_str(
+            &nook_core::DeviceIdentitySecret::parse(&private_key)?,
+        )?;
+        let material = nook_core::open_extension_identity_handoff(
+            &recipient,
+            &nook_core::AgeArmoredCiphertext::parse(envelope)?,
+            nonce,
+            &nook_core::DeviceId::parse(expected_device_id)?,
+            &nook_core::DevicePublicKey::parse(expected_device_public_key)?,
+            &nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?,
+        )?;
+        let (identity, signing_seed) = material.into_parts();
+
+        self.device.identity_private_key.zeroize();
+        self.event_log.signing_seed.zeroize();
+        self.device.id = identity.device_id().as_str().to_owned();
+        self.device.identity_private_key = identity.secret_string().into_inner();
+        self.event_log.signing_seed = signing_seed;
+        Ok(())
+    }
+
+    /// Clear every secret installed by a failed external identity
+    /// authorization, including the event-log signing seed.
+    #[wasm_bindgen(js_name = rollbackExtensionIdentityHandoff)]
+    pub fn rollback_extension_identity_handoff(&mut self) {
+        self.lock_device_identity();
+        self.reset_vault_session();
     }
 
     #[wasm_bindgen(js_name = deviceProtectionStatus)]
@@ -293,6 +373,7 @@ impl NookVaultManager {
     pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
         self.reset_vault_session();
         self.device.identity_private_key.zeroize();
+        self.device.extension_handoff_private_key.zeroize();
         self.device.id.clear();
         self.storage.access_token.zeroize();
         self.storage.remote_ref.clear();
