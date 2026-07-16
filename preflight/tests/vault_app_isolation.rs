@@ -314,9 +314,7 @@ fn pr_uses_a_fresh_buildkit_daemon_and_removes_it_after_the_build() {
         "--bootstrap",
         "trap cleanup EXIT",
         "docker buildx rm --force \"$builder\"",
-        "SCCACHE_REDIS_HOST_IP=\"$gateway\" \"$@\"",
-        "docker network inspect bridge",
-        "ping -4 -c 1 host.docker.internal",
+        "BUILDX_BUILDER=\"$builder\" \"$@\"",
     ] {
         assert!(
             wrapper.contains(required),

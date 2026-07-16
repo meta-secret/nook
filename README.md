@@ -312,10 +312,9 @@ Rust compilation has a second cache boundary below Docker layers: pinned
 `sccache` clients use one persistent, Docker-host-only Redis service per Docker
 host. On macOS the service binds to host loopback; on Linux it binds only to
 Docker's bridge-gateway interface. Build and runtime containers resolve the
-same `host.docker.internal` endpoint. Normal Docker-driver builds use the
-`host-gateway` mapping; isolated PR BuildKit resolves and passes the concrete
-Docker-host IPv4 address because the `docker-container` driver rejects the
-literal `host-gateway` value.
+same `host.docker.internal` endpoint. A shared resolver supplies a concrete
+Docker-host IPv4 address to Bake and every Rust-capable runtime container; the
+magic Docker gateway token is not used.
 The service stores up to 8 GiB by default with LRU eviction and AOF
 persistence. It is an optimization only—Cargo, tests, and final linking remain
 the correctness boundary—and it never transfers cache data between machines.

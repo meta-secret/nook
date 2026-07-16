@@ -43,7 +43,7 @@ variable "SCCACHE_REDIS_PORT" {
 }
 
 variable "SCCACHE_REDIS_HOST_IP" {
-  default = "host-gateway"
+  default = ""
 }
 
 target "_sccache-network" {

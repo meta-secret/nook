@@ -333,9 +333,9 @@ image between build and deploy.
 service is running. It reuses compatible crate outputs when an exact BuildKit
 layer misses; it does not replace cargo-chef, transfer data between runners, or
 change the build result when empty. Linux publishes Redis only on the Docker
-bridge gateway; Docker Desktop publishes only on host loopback. Normal builds
-map `host.docker.internal` to `host-gateway`, while the isolated PR wrapper
-passes the concrete Docker-host IPv4 address required by the container driver.
+bridge gateway; Docker Desktop publishes only on host loopback. A shared
+resolver passes the concrete Docker-host IPv4 address to both Bake and runtime
+containers, independent of the selected BuildKit driver.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
 Main deploys `dist/site`, Simple, and Sentinel independently to
