@@ -8,6 +8,9 @@ use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
 
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
 const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
+const IDENTITY_FINGERPRINT_SCHEME: &str = "hmac-sha256:v1:";
+const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
+
 struct ImportMetadataMarker {
     heading: &'static str,
     key_prefixes: &'static [&'static str],
@@ -79,6 +82,13 @@ impl SecretFingerprint {
     #[must_use]
     pub fn from_trusted(value: String) -> Self {
         Self(value)
+    }
+
+    /// Whether this fingerprint uses the current secret-version semantics.
+    /// Older values are recomputed and backfilled during the next import.
+    #[must_use]
+    pub fn is_current_secret_version(&self) -> bool {
+        self.0.starts_with(SECRET_VERSION_FINGERPRINT_SCHEME)
     }
 }
 
@@ -206,13 +216,18 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
     bytes
 }
 
-fn fingerprint(domain: &[u8], canonical: &[u8], secrets_key: &SymmetricKey) -> SecretFingerprint {
+fn fingerprint(
+    domain: &[u8],
+    canonical: &[u8],
+    scheme: &str,
+    secrets_key: &SymmetricKey,
+) -> SecretFingerprint {
     let mut mac = Hmac::<Sha256>::new_from_slice(secrets_key.as_str().as_bytes())
         .expect("HMAC accepts keys of any length");
     mac.update(domain);
     mac.update(canonical);
     SecretFingerprint::from_trusted(format!(
-        "hmac-sha256:v1:{}",
+        "{scheme}{}",
         hex::encode(mac.finalize().into_bytes())
     ))
 }
@@ -223,7 +238,12 @@ pub fn secret_identity_fingerprint(
     value: &SecretValue,
     secrets_key: &SymmetricKey,
 ) -> SecretFingerprint {
-    fingerprint(IDENTITY_DOMAIN, &canonical_identity(value), secrets_key)
+    fingerprint(
+        IDENTITY_DOMAIN,
+        &canonical_identity(value),
+        IDENTITY_FINGERPRINT_SCHEME,
+        secrets_key,
+    )
 }
 
 /// Compute one secret-value version, bound to its logical item identity.
@@ -232,6 +252,7 @@ pub fn secret_fingerprint(value: &SecretValue, secrets_key: &SymmetricKey) -> Se
     fingerprint(
         VERSION_DOMAIN,
         &canonical_secret_version(value),
+        SECRET_VERSION_FINGERPRINT_SCHEME,
         secrets_key,
     )
 }
@@ -326,6 +347,16 @@ mod tests {
         assert_ne!(
             secret_fingerprint(&value, &key('a')),
             secret_fingerprint(&value, &key('b'))
+        );
+        assert!(
+            secret_identity_fingerprint(&value, &key('a'))
+                .as_str()
+                .starts_with(IDENTITY_FINGERPRINT_SCHEME)
+        );
+        assert!(secret_fingerprint(&value, &key('a')).is_current_secret_version());
+        assert!(
+            !SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)))
+                .is_current_secret_version()
         );
     }
 
