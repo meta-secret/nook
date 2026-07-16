@@ -200,7 +200,7 @@ export class VaultState {
     "devices",
   );
   adminAccordionSection = $state<
-    "vaults" | "storage" | "passwords" | undefined
+    "vaults" | "storage" | "passwords" | "import-export" | undefined
   >("vaults");
   helpOpen = $state(false);
 
@@ -2349,7 +2349,9 @@ export class VaultState {
     void this.refreshDeviceState();
   }
 
-  openAdmin(accordion: "vaults" | "storage" | "passwords" = "vaults") {
+  openAdmin(
+    accordion: "vaults" | "storage" | "passwords" | "import-export" = "vaults",
+  ) {
     this.helpOpen = false;
     this.cancelProviderSetup();
     this.cancelAddProvider();

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   addSecret,
@@ -7,6 +8,7 @@ import {
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
+  expandSettingsSection,
   expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,
@@ -16,6 +18,11 @@ import {
   unlockVaultOnLogin,
   waitForVaultUnlocked,
 } from './helpers'
+
+async function openBitwardenImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
+}
 
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
@@ -191,7 +198,7 @@ test.describe('local vault', () => {
       ],
     })
 
-    await page.getByTestId('import-bitwarden-btn').click()
+    await openBitwardenImport(page)
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_export.json',
       mimeType: 'application/json',
@@ -205,7 +212,7 @@ test.describe('local vault', () => {
       '1 unsupported',
     )
 
-    await page.getByTestId('bitwarden-import-back').click()
+    await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'bitwarden-alice',
     )
@@ -213,7 +220,7 @@ test.describe('local vault', () => {
       'Imported private note',
     )
 
-    await page.getByTestId('import-bitwarden-btn').click()
+    await openBitwardenImport(page)
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_export.json',
       mimeType: 'application/json',
@@ -238,7 +245,7 @@ test.describe('local vault', () => {
       ),
     )
 
-    await page.getByTestId('import-bitwarden-btn').click()
+    await openBitwardenImport(page)
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_encrypted_export.json',
       mimeType: 'application/json',
@@ -274,7 +281,7 @@ test.describe('local vault', () => {
       items,
     })
 
-    await page.getByTestId('import-bitwarden-btn').click()
+    await openBitwardenImport(page)
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_large_export.json',
       mimeType: 'application/json',

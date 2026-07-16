@@ -417,6 +417,8 @@
     "storage_desc": "Replicate your vault to sync providers",
     "passwords": "Passwords & Unlocks",
     "passwords_desc": "Passwords available for unlock and device onboarding",
+    "import_export": "Import & Export",
+    "import_export_desc": "Move supported data into or out of this vault",
     "devices": "Devices & Roster",
     "devices_desc": "Enrolled browsers and pending access requests",
     "add_provider": "Add Storage Provider",

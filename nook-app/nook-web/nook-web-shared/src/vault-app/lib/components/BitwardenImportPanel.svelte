@@ -9,7 +9,7 @@
     vault,
     isSaving,
     onImport,
-    onClose,
+    onClose = undefined,
   }: {
     vault: VaultState
     isSaving: boolean
@@ -17,7 +17,7 @@
       json: string,
       password: string,
     ) => Promise<NookBitwardenImportResult>
-    onClose: () => void
+    onClose?: (() => void) | undefined
   } = $props()
 
   let selectedFile = $state<File | undefined>(undefined)
@@ -45,15 +45,17 @@
 </script>
 
 <div class="space-y-4" data-testid="bitwarden-import-panel">
-  <button
-    type="button"
-    class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-    data-testid="bitwarden-import-back"
-    onclick={onClose}
-  >
-    <ArrowLeft class="size-4" />
-    {vault.t('common.back')}
-  </button>
+  {#if onClose}
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      data-testid="bitwarden-import-back"
+      onclick={onClose}
+    >
+      <ArrowLeft class="size-4" />
+      {vault.t('common.back')}
+    </button>
+  {/if}
 
   <div>
     <h2 class="text-lg font-semibold text-foreground">
