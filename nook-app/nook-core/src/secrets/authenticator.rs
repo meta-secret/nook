@@ -162,7 +162,9 @@ impl AuthenticatorSecret {
         self.secret = TotpSecret::parse(self.secret.as_str())?;
         self.digits = TotpDigits::parse(self.digits.get())?;
         self.period = TotpPeriod::parse(self.period.get())?;
-        self.backup_codes = normalize_backup_codes(&self.backup_codes);
+        let normalized_backup_codes = normalize_backup_codes(&self.backup_codes);
+        self.backup_codes.zeroize();
+        self.backup_codes = normalized_backup_codes;
         self.validate()
     }
 
@@ -251,7 +253,7 @@ impl AuthenticatorSecret {
         let (label_raw, query_raw) = rest
             .split_once('?')
             .ok_or(ValidationError::AuthenticatorUriInvalid)?;
-        let label = decode_uri_component(label_raw)?;
+        let label = decode_uri_path_component(label_raw)?;
         let params = parse_query(query_raw)?;
         let secret = params
             .get("secret")
@@ -297,6 +299,12 @@ impl Zeroize for AuthenticatorSecret {
     }
 }
 
+impl Drop for AuthenticatorSecret {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TotpCode {
     pub code: String,
@@ -305,11 +313,13 @@ pub struct TotpCode {
 }
 
 fn normalize_base32(value: &str) -> String {
-    value
+    let mut normalized = value
         .chars()
         .filter(|character| !character.is_ascii_whitespace() && *character != '-')
         .map(|character| character.to_ascii_uppercase())
-        .collect()
+        .collect::<String>();
+    normalized.truncate(normalized.trim_end_matches('=').len());
+    normalized
 }
 
 fn decode_base32(value: &str) -> Result<Vec<u8>, ValidationError> {
@@ -350,7 +360,14 @@ fn normalize_backup_codes(codes: &[String]) -> Vec<String> {
     normalized
 }
 
-fn decode_uri_component(value: &str) -> Result<String, ValidationError> {
+fn decode_uri_path_component(value: &str) -> Result<String, ValidationError> {
+    percent_decode_str(value)
+        .decode_utf8()
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|_| ValidationError::AuthenticatorUriInvalid)
+}
+
+fn decode_uri_query_component(value: &str) -> Result<String, ValidationError> {
     percent_decode_str(&value.replace('+', " "))
         .decode_utf8()
         .map(std::borrow::Cow::into_owned)
@@ -365,7 +382,10 @@ fn parse_query(query: &str) -> Result<HashMap<String, String>, ValidationError> 
             let (key, value) = part
                 .split_once('=')
                 .ok_or(ValidationError::AuthenticatorUriInvalid)?;
-            Ok((decode_uri_component(key)?, decode_uri_component(value)?))
+            Ok((
+                decode_uri_query_component(key)?,
+                decode_uri_query_component(value)?,
+            ))
         })
         .collect()
 }
@@ -484,6 +504,25 @@ mod tests {
         assert_eq!(item.backup_codes, ["first-code", "second-code"]);
         item.zeroize();
         assert!(item.secret.as_str().is_empty());
+    }
+
+    #[test]
+    fn canonicalizes_base32_padding() {
+        let padded = TotpSecret::parse("JBSWY3DPEHPK3PXP====").unwrap();
+        let unpadded = TotpSecret::parse("JBSWY3DPEHPK3PXP").unwrap();
+
+        assert_eq!(padded, unpadded);
+        assert_eq!(padded.as_str(), "JBSWY3DPEHPK3PXP");
+    }
+
+    #[test]
+    fn preserves_plus_signs_in_otpauth_labels() {
+        let item = AuthenticatorSecret::from_otpauth_uri(
+            "otpauth://totp/Example%3Aalice%2Balerts%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
+        )
+        .unwrap();
+
+        assert_eq!(item.account, "alice+alerts@example.com");
     }
 
     #[test]

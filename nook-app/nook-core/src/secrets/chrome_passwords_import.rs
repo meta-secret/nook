@@ -106,6 +106,10 @@ fn convert_record(record: &StringRecord, columns: ChromePasswordColumns) -> Opti
     let password = password_field(record, columns.password);
     let mut notes = optional_field(record, columns.note);
 
+    if password.is_empty() {
+        return None;
+    }
+
     if name.is_empty()
         && url.is_empty()
         && username.is_empty()
@@ -233,6 +237,24 @@ mod tests {
         };
 
         assert_eq!(login.password, " secret ");
+    }
+
+    #[test]
+    fn skips_rows_without_a_password_but_preserves_whitespace_only_passwords() {
+        let csv = concat!(
+            "url,username,password\n",
+            "https://example.com,alice,\n",
+            "https://spaces.example,alice,\"   \"\n"
+        );
+
+        let plan = plan_chrome_passwords_import(csv).unwrap();
+
+        assert_eq!(plan.source_count, 2);
+        assert_eq!(plan.skipped_unsupported, 1);
+        let SecretValue::Login(login) = &plan.items[0] else {
+            panic!("expected login");
+        };
+        assert_eq!(login.password, "   ");
     }
 
     #[test]

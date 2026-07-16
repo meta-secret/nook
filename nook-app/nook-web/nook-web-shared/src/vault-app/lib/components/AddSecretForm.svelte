@@ -260,8 +260,9 @@
     if (selectedType === 'api-key') return apiKey.trim().length > 0
     if (selectedType === 'authenticator') {
       return (
-        authenticatorIssuer.trim().length > 0 &&
-        authenticatorSecret.trim().length > 0
+        authenticatorSecret.trim().length > 0 &&
+        (authenticatorIssuer.trim().length > 0 ||
+          authenticatorSecret.trim().startsWith('otpauth://'))
       )
     }
     if (selectedType === 'login') {
@@ -675,7 +676,6 @@
             data-testid="authenticator-issuer"
             bind:value={authenticatorIssuer}
             placeholder={vault.t('add_secret.placeholder_issuer')}
-            required
             class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
           />
         </div>

@@ -319,6 +319,25 @@ test.describe('local vault', () => {
     await deleteSecret(page, issuer)
   })
 
+  test('adds an authenticator from an otpauth URI without separate issuer input', async ({
+    page,
+  }) => {
+    const issuer = uniqueSecretKey('e2e-authenticator-uri')
+    const account = `${issuer}+alerts@example.com`
+    const uri = `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=JBSWY3DPEHPK3PXP&issuer=${encodeURIComponent(issuer)}`
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-authenticator').click()
+    await page.getByTestId('authenticator-secret').fill(uri)
+    await expect(page.getByTestId('save-secret-btn')).toBeEnabled()
+    await page.getByTestId('save-secret-btn').click()
+
+    const row = page.getByTestId('secret-row').filter({ hasText: account })
+    await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+
+    await deleteSecret(page, issuer)
+  })
+
   test('keeps password-manager import forms folded until selected', async ({
     page,
   }) => {
