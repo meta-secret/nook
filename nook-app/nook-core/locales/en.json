@@ -428,6 +428,19 @@
     "result_imported": "Imported {count} items.",
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
+  "lastpass_import": {
+    "title": "Import from LastPass",
+    "description": "Move logins and secure notes from a LastPass generic CSV export into this vault.",
+    "export_hint_title": "Export a CSV file from LastPass",
+    "export_hint": "In the LastPass desktop browser extension, open Account, choose Fix a problem yourself, then Export vault items and Export data for use anywhere. The CSV is unencrypted, so delete it after the import finishes.",
+    "file_label": "LastPass CSV export",
+    "supported_types": "Nook imports website logins and secure notes. LastPass grouping, favorite, and optional TOTP metadata are preserved in encrypted item notes.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "LastPass import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "onepassword_import": {
     "title": "Import from 1Password",
     "description": "Move supported items from a 1Password Unencrypted Export (.1pux) archive into this vault.",
@@ -467,6 +480,19 @@
     "result_imported": "Imported {count} logins.",
     "result_skipped": "Skipped {unsupported} unsupported or empty rows and {duplicates} duplicates."
   },
+  "proton_pass_import": {
+    "title": "Import from Proton Pass",
+    "description": "Move logins and secure notes from a Proton Pass export into this vault.",
+    "export_hint_title": "Export an unencrypted ZIP from Proton Pass",
+    "export_hint": "In Proton Pass, open Settings, choose Export, then select the unencrypted ZIP option. A decrypted data.json file is also accepted. Encrypted PGP exports must be decrypted first. Delete the plaintext export after the import finishes.",
+    "file_label": "Proton Pass ZIP or JSON export",
+    "supported_types": "Nook imports logins and secure notes. Vault, TOTP, alternate URL/email, pin, and supported custom-field metadata are preserved in item notes. Cards, identities, aliases, passkeys, attachments, and other types are skipped.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "Proton Pass import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "settings": {
     "title": "Settings",
     "storage": "Sync providers",
@@ -475,7 +501,7 @@
     "passwords_desc": "Passwords available for unlock and device onboarding",
     "import_export": "Import & Export",
     "import_export_desc": "Move supported data into or out of this vault",
-    "import_sources": "Apple Passwords · Chrome · Bitwarden · 1Password",
+    "import_sources": "Apple Passwords · Chrome · Bitwarden · LastPass · 1Password · Proton Pass",
     "devices": "Devices & Roster",
     "devices_desc": "Enrolled browsers and pending access requests",
     "add_provider": "Add Storage Provider",
@@ -1049,7 +1075,9 @@
     "apple_passwords_imported": "Imported {count} Apple Passwords items.",
     "chrome_passwords_imported": "Imported {count} browser logins.",
     "bitwarden_imported": "Imported {count} Bitwarden items.",
+    "lastpass_imported": "Imported {count} LastPass items.",
     "onepassword_imported": "Imported {count} 1Password items.",
+    "proton_pass_imported": "Imported {count} Proton Pass items.",
     "error_timeout": "Connection timed out. Check your PAT, network, and try again.",
     "error_no_engine": "Vault engine is not available.",
     "error_unlock_required": "Unlock the vault before adding a password.",

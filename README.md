@@ -19,15 +19,18 @@ Store website logins, API keys, BIP39 seed phrases, Markdown secure notes, and
 Google Authenticator-compatible TOTP items with encrypted backup codes.
 Existing Bitwarden logins and secure notes can be imported from a plaintext or
 password-protected encrypted Bitwarden JSON export; account-restricted exports
-are not portable. 1Password logins, password items, and secure notes can be
-imported from an unencrypted 1PUX archive. Apple Passwords website logins and
-TOTP verification codes can be imported from its unencrypted CSV export.
-Website logins from Chrome, Chromium, Brave, and Edge can be imported from
-their unencrypted password CSV exports. Unsupported item types and attachments
-are skipped. Overlapping records are reconciled with vault-keyed item-identity
-and secret-version HMAC fingerprints. Matching secret versions enrich the
-existing item with additional provider fields; differing passwords remain as
-separate items instead of being overwritten.
+are not portable. LastPass logins and secure notes can be imported from an
+unencrypted generic CSV export. 1Password logins, password items, and secure
+notes can be imported from an unencrypted 1PUX archive. Apple Passwords website
+logins and TOTP verification codes can be imported from its unencrypted CSV
+export. Website logins from Chrome, Chromium, Brave, and Edge can be imported
+from their unencrypted password CSV exports. Proton Pass logins and secure notes
+can be imported from an unencrypted ZIP export or a decrypted `data.json`;
+PGP-encrypted exports must be decrypted first. Unsupported item types and
+attachments are skipped. Overlapping records are reconciled with vault-keyed
+item-identity and secret-version HMAC fingerprints. Matching secret versions
+enrich the existing item with additional provider fields; differing passwords
+remain as separate items instead of being overwritten.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 

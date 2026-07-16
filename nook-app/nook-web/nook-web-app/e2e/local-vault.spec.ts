@@ -31,6 +31,16 @@ async function openBitwardenImport(page: Page) {
   await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
 }
 
+async function openLastPassImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('lastpass-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
+}
+
 async function openOnePasswordImport(page: Page) {
   await expandSettingsSection(page, 'import')
   const section = page.getByTestId('onepassword-import-section')
@@ -59,6 +69,16 @@ async function openChromePasswordsImport(page: Page) {
     await toggle.click()
   }
   await expect(page.getByTestId('chrome-passwords-import-panel')).toBeVisible()
+}
+
+async function openProtonPassImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('proton-pass-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(page.getByTestId('proton-pass-import-panel')).toBeVisible()
 }
 
 function crc32(bytes: Buffer): number {
@@ -305,6 +325,7 @@ test.describe('local vault', () => {
     await expandSettingsSection(page, 'import')
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
+    const lastPassSection = page.getByTestId('lastpass-import-section')
     const onePasswordSection = page.getByTestId('onepassword-import-section')
     const applePasswordsSection = page.getByTestId(
       'apple-passwords-import-section',
@@ -313,6 +334,7 @@ test.describe('local vault', () => {
       'chrome-passwords-import-section',
     )
     const bitwardenToggle = bitwardenSection.getByRole('button').first()
+    const lastPassToggle = lastPassSection.getByRole('button').first()
     const onePasswordToggle = onePasswordSection.getByRole('button').first()
     const applePasswordsToggle = applePasswordsSection
       .getByRole('button')
@@ -324,6 +346,7 @@ test.describe('local vault', () => {
     await expect(applePasswordsSection).toBeVisible()
     await expect(chromePasswordsSection).toBeVisible()
     await expect(bitwardenSection).toBeVisible()
+    await expect(lastPassSection).toBeVisible()
     await expect(onePasswordSection).toBeVisible()
     await expect(applePasswordsToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(chromePasswordsToggle).toHaveAttribute(
@@ -331,6 +354,7 @@ test.describe('local vault', () => {
       'false',
     )
     await expect(bitwardenToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(lastPassToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(onePasswordToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(
       page.getByTestId('apple-passwords-import-panel'),
@@ -347,6 +371,7 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await bitwardenToggle.click()
@@ -357,6 +382,12 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
+    await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await lastPassToggle.click()
+    await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await onePasswordToggle.click()
@@ -367,6 +398,7 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
 
     await chromePasswordsToggle.click()
@@ -752,6 +784,151 @@ test.describe('local vault', () => {
     await page.getByTestId('vault-secrets-tab').click()
     rows = page.getByTestId('secret-row').filter({ hasText: 'shared-alice' })
     await expect(rows).toHaveCount(2)
+  })
+
+  test('imports LastPass logins and secure notes from CSV idempotently', async ({
+    page,
+  }) => {
+    const exportCsv = [
+      'url,username,password,extra,name,grouping,fav',
+      'https://lastpass.example/login,lastpass-alice,lastpass-secret,"Recovery codes, elsewhere",Imported LastPass login,Work,1',
+      'http://sn,,,"# LastPass note\n\nKeep offline",Imported LastPass note,Personal,0',
+    ].join('\n')
+
+    await openLastPassImport(page)
+    await page.getByTestId('lastpass-csv-file').setInputFiles({
+      name: 'lastpass_export.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('lastpass-import-submit').click()
+    await expect(page.getByTestId('lastpass-import-result')).toContainText(
+      'Imported 2 items',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'lastpass-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported LastPass note',
+    )
+
+    await openLastPassImport(page)
+    await page.getByTestId('lastpass-csv-file').setInputFiles({
+      name: 'lastpass_export.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('lastpass-import-submit').click()
+    await expect(page.getByTestId('lastpass-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('lastpass-import-result')).toContainText(
+      '2 duplicates',
+    )
+  })
+
+  test('imports Proton Pass logins and secure notes idempotently', async ({
+    page,
+  }) => {
+    const archive = storedZip({
+      'Proton Pass/data.json': JSON.stringify({
+        userId: 'user',
+        version: '1.32.0',
+        vaults: {
+          work: {
+            name: 'Work',
+            items: [
+              {
+                data: {
+                  metadata: {
+                    name: 'Imported Proton login',
+                    note: 'Recovery codes elsewhere',
+                  },
+                  extraFields: [
+                    {
+                      fieldName: 'PIN',
+                      type: 'hidden',
+                      data: { content: '1234' },
+                    },
+                  ],
+                  type: 'login',
+                  content: {
+                    itemEmail: 'proton-alice@example.com',
+                    itemUsername: 'proton-alice',
+                    password: 'proton-secret',
+                    urls: ['https://proton-pass.example/login'],
+                    totpUri: 'otpauth://totp/example',
+                    passkeys: [],
+                  },
+                },
+                state: 1,
+                pinned: true,
+                files: [],
+              },
+              {
+                data: {
+                  metadata: {
+                    name: 'Imported Proton note',
+                    note: 'Private note body',
+                  },
+                  extraFields: [],
+                  type: 'note',
+                  content: {},
+                },
+                state: 1,
+              },
+              {
+                data: {
+                  metadata: { name: 'Skipped card', note: '' },
+                  extraFields: [],
+                  type: 'creditCard',
+                  content: {},
+                },
+                state: 1,
+              },
+            ],
+          },
+        },
+      }),
+    })
+
+    await openProtonPassImport(page)
+    await page.getByTestId('proton-pass-export-file').setInputFiles({
+      name: 'Proton Pass_export.zip',
+      mimeType: 'application/zip',
+      buffer: archive,
+    })
+    await page.getByTestId('proton-pass-import-submit').click()
+    await expect(page.getByTestId('proton-pass-import-result')).toContainText(
+      'Imported 2 items',
+    )
+    await expect(page.getByTestId('proton-pass-import-result')).toContainText(
+      '1 unsupported',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'proton-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported Proton note',
+    )
+
+    await openProtonPassImport(page)
+    await page.getByTestId('proton-pass-export-file').setInputFiles({
+      name: 'Proton Pass_export.zip',
+      mimeType: 'application/zip',
+      buffer: archive,
+    })
+    await page.getByTestId('proton-pass-import-submit').click()
+    await expect(page.getByTestId('proton-pass-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('proton-pass-import-result')).toContainText(
+      '2 duplicates',
+    )
   })
 
   test('imports a password-protected encrypted Bitwarden JSON export', async ({

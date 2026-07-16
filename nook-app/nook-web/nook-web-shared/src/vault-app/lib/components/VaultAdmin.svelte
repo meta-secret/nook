@@ -15,9 +15,11 @@
   import AuthStorage from "$lib/components/AuthStorage.svelte";
   import VaultPasswordCard from "$lib/components/VaultPasswordCard.svelte";
   import BitwardenImportPanel from "$lib/components/BitwardenImportPanel.svelte";
+  import LastPassImportPanel from "$lib/components/LastPassImportPanel.svelte";
   import OnePasswordImportPanel from "$lib/components/OnePasswordImportPanel.svelte";
   import ApplePasswordsImportPanel from "$lib/components/ApplePasswordsImportPanel.svelte";
   import ChromePasswordsImportPanel from "$lib/components/ChromePasswordsImportPanel.svelte";
+  import ProtonPassImportPanel from "$lib/components/ProtonPassImportPanel.svelte";
   import { Button } from "$lib/components/ui/button";
   import type {
     NookLocalVaultEntry,
@@ -60,9 +62,11 @@
     onIssueCode,
     onClearCode,
     onImportBitwarden,
+    onImportLastPass,
     onImportOnePassword,
     onImportApplePasswords,
     onImportChromePasswords,
+    onImportProtonPass,
     activeSection = $bindable(
       undefined as
         | "vaults"
@@ -109,9 +113,11 @@
       json: string,
       password: string,
     ) => Promise<NookImportResult>;
+    onImportLastPass: (csv: string) => Promise<NookImportResult>;
     onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>;
     onImportApplePasswords: (csv: string) => Promise<NookImportResult>;
     onImportChromePasswords: (csv: string) => Promise<NookImportResult>;
+    onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>;
     activeSection?:
       | "vaults"
       | "storage"
@@ -570,6 +576,21 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
+        title={vault.t("lastpass_import.title")}
+        subtitle={vault.t("lastpass_import.description")}
+        section="lastpass"
+        bind:activeSection={activeImportProvider}
+        testId="lastpass-import-section"
+      >
+        <LastPassImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportLastPass}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
         title={vault.t("onepassword_import.title")}
         subtitle={vault.t("onepassword_import.description")}
         section="onepassword"
@@ -581,6 +602,21 @@
           {isSaving}
           embedded
           onImport={onImportOnePassword}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
+        title={vault.t("proton_pass_import.title")}
+        subtitle={vault.t("proton_pass_import.description")}
+        section="proton-pass"
+        bind:activeSection={activeImportProvider}
+        testId="proton-pass-import-section"
+      >
+        <ProtonPassImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportProtonPass}
         />
       </SettingsAccordionSection>
     </div>
