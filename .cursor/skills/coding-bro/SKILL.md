@@ -29,7 +29,7 @@ Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the 
 | 4 | Commit + push/open or update PR **before required final checks** |
 | 5 | Immediately run local validation in parallel with PR workflows — `task check`; `task ci:pr` when web flows change |
 | 6 | Watch only applicable repository-owned checks: `PR / Verify and preview`, plus `Web research / Build and deploy research catalog` for web-research paths; never request or wait for an external review/check |
-| 7–9 | On failure: logs → fix (single-spec e2e) → `task ci:pr` loop until green → push → address actionable comments currently present → re-watch only Nook's PR check |
+| 7–9 | On failure: logs → fix (single-spec e2e) → `task ci:pr` loop until green → push → address actionable comments currently present → let Nook's event continuation re-evaluate |
 | 10 | `gh pr merge --squash` when Nook's applicable PR test checks are green + duration report |
 
 Full commands, e2e helpers, and non-negotiables: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
