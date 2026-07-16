@@ -2438,6 +2438,9 @@ export async function revealSecretInRow(
   if ((await revealButton.getAttribute('aria-pressed')) !== 'true') {
     await revealButton.click()
   }
+  await expect(revealButton).toHaveAttribute('aria-pressed', 'true', {
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function selectLoginUnlockMethod(

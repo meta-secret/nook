@@ -282,7 +282,8 @@ fn development_cloudflare_deploy_preserves_isolated_origins() {
         "zones/$zone_id/purge_cache",
         "Cloudflare zone administration was unavailable; verifying live domains",
         "cache_bust=\"nook_commit=${{ github.sha }}&attempt=$attempt\"",
-        "extension.json?nook_commit=${{ github.sha }}",
+        "EXTENSION_CACHE_BUST=\"${{ github.sha }}-$attempt\"",
+        "Waiting for exact-head development extension artifacts",
         "https://$DEV_DOMAIN/site/",
         "https://$DEV_DOMAIN/simple/",
         "https://$DEV_DOMAIN/sentinel/",
@@ -304,6 +305,38 @@ fn development_cloudflare_deploy_preserves_isolated_origins() {
         "development artifacts must embed their stable isolated channel origins"
     );
 
+    let pull_request = read(&root, ".github/workflows/pr.yml");
+    assert!(
+        pull_request.contains(
+            "EXTENSION_CACHE_BUST=\"${{ github.event.pull_request.head.sha }}-$attempt\""
+        ),
+        "PR extension verification must bypass mutable artifact caches on every convergence attempt"
+    );
+
+    let release = read(&root, ".github/workflows/release.yml");
+    assert!(
+        release.contains("EXTENSION_CACHE_BUST=\"$RELEASE_SHA-$attempt\"")
+            && release.contains("Waiting for exact-release extension artifacts"),
+        "release extension verification must retry cache-busted exact-release artifacts"
+    );
+
+    let verifier = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh",
+    );
+    for required in [
+        "cache_busted_url()",
+        "fetch_from_selected_origin \"$(cache_busted_url \"$EXTENSION_METADATA_URL\")\"",
+        "fetch_from_selected_origin \"$(cache_busted_url \"$download_url\")\"",
+        "fetch_from_selected_origin \"$(cache_busted_url \"$checksum_url\")\"",
+        "Extension deployment verification failed at line $LINENO",
+    ] {
+        assert!(
+            verifier.contains(required),
+            "extension deployment verifier is missing cache/diagnostic invariant: {required}"
+        );
+    }
+
     let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("-e CF_PAGES_DIST_DIR"),
@@ -314,6 +347,25 @@ fn development_cloudflare_deploy_preserves_isolated_origins() {
     assert!(
         ci_tasks.contains("*) deploy_dir=\"{{.REPO_ROOT}}/$deploy_dir\" ;;"),
         "repo-relative Cloudflare artifact directories must resolve from the repository root"
+    );
+}
+
+#[test]
+fn focused_playwright_task_runs_only_matching_projects() {
+    let root = repository_root();
+    let web_tasks = read(&root, "nook-app/nook-web/.task/web.yml");
+    let focused = section(
+        &web_tasks,
+        "  _web:test:e2e:file:",
+        "  _web:test:e2e:pr:parallel:",
+    );
+    assert!(
+        focused.contains("bun x playwright test ${E2E_SPEC}"),
+        "focused e2e must invoke Playwright directly for the requested specs"
+    );
+    assert!(
+        !focused.contains("bun run test:e2e --") && !focused.contains("--project=e2e"),
+        "focused e2e must not expand into the full stable/unstable scripts or select a nonexistent project"
     );
 }
 

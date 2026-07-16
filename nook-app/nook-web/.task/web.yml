@@ -348,7 +348,7 @@ tasks:
       - test -n "${E2E_SPEC:-}" || (echo "E2E_SPEC is required (e.g. e2e/connect.spec.ts)" >&2; exit 1)
       - echo "==> Playwright e2e scoped run (${E2E_SPEC})"
       - task: _web:e2e:build-if-needed
-      - cd "{{.WEB_ROOT}}" && bun run test:e2e -- --project=e2e ${E2E_SPEC}
+      - cd "{{.WEB_ROOT}}" && bun x playwright test ${E2E_SPEC}
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:pr:parallel:

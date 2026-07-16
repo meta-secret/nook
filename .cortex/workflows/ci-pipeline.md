@@ -364,6 +364,10 @@ security headers, and the Simple/Sentinel extension boundary. It records one
 payload contains all
 three origins. Before live probes, the workflow purges the affected URLs so a
 cached fallback cannot survive a deployment switch.
+Extension metadata, ZIP, and checksum verification adds an attempt-specific
+exact-commit query to every mutable artifact URL and retries convergence on PR,
+main, and release. This prevents a fresh metadata response from being paired
+with an older edge-cached archive that reused the same channel filename.
 
 **Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
 
