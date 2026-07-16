@@ -534,6 +534,7 @@ mod tests {
                     id: SecretId::from_vault_record(secret_id),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
+                    fingerprint: None,
                 },
             }],
         };

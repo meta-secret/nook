@@ -1,5 +1,6 @@
 //! Construct signed vault events from session state.
 
+use crate::SecretFingerprint;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::{
@@ -55,11 +56,13 @@ pub fn encrypted_secret_from_armored(
     id: &SecretId,
     secret_type: crate::SecretType,
     ciphertext: &str,
+    fingerprint: Option<SecretFingerprint>,
 ) -> EncryptedSecretPayload {
     EncryptedSecretPayload {
         id: id.clone(),
         secret_type,
         ciphertext: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
+        fingerprint,
     }
 }
 

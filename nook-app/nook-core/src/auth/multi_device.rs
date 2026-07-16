@@ -122,6 +122,7 @@ pub fn apply_vault_meta_operation(
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
+        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. }
         | VaultOperation::PasswordRemoved { .. }

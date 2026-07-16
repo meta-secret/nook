@@ -85,6 +85,7 @@ impl EventLogDevice {
                 &SecretId::from_vault_record(secret_id),
                 SecretType::ApiKey,
                 ciphertext.as_str(),
+                None,
             ),
         }])
     }

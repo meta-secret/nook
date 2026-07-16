@@ -12,7 +12,7 @@ use crate::vault_wire::{
     AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
     OpaqueCiphertext, PasswordEntryId, Sha256Hex,
 };
-use crate::{PasswordEnvelope, PasswordUnlockEntry};
+use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -39,6 +39,8 @@ pub struct EncryptedSecretPayload {
     #[serde(rename = "type")]
     pub secret_type: SecretType,
     pub ciphertext: OpaqueCiphertext,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<SecretFingerprint>,
 }
 
 impl EncryptedSecretPayload {
@@ -48,6 +50,7 @@ impl EncryptedSecretPayload {
             id: record.key.clone(),
             secret_type: record.secret_type.unwrap_or(SecretType::ApiKey),
             ciphertext: OpaqueCiphertext::from_trusted(record.value.as_str().to_owned()),
+            fingerprint: None,
         }
     }
 
@@ -59,6 +62,13 @@ impl EncryptedSecretPayload {
             value: StoredRecordPayload::from_trusted(self.ciphertext.as_str().to_owned()),
         }
     }
+}
+
+/// One legacy secret fingerprint added without changing its ciphertext.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SecretFingerprintAssignment {
+    pub secret_id: SecretId,
+    pub fingerprint: SecretFingerprint,
 }
 
 /// One sentinel share encrypted to a participant device, recorded in the event log.
@@ -96,6 +106,9 @@ pub enum VaultOperation {
         old_id: SecretId,
         chosen_secret_id: SecretId,
         rejected_secret_ids: Vec<SecretId>,
+    },
+    SecretFingerprintsBackfilled {
+        fingerprints: Vec<SecretFingerprintAssignment>,
     },
     JoinRequested {
         device_id: DeviceId,
@@ -433,6 +446,7 @@ mod tests {
                     id: SecretId::from_vault_record("secret_abc12345678"),
                     secret_type: SecretType::Login,
                     ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                    fingerprint: None,
                 },
             }],
         };
@@ -479,6 +493,10 @@ mod tests {
                     id: SecretId::from_vault_record("secret_abc12345678"),
                     secret_type: SecretType::Login,
                     ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                    fingerprint: Some(SecretFingerprint::from_trusted(format!(
+                        "hmac-sha256:v1:{}",
+                        "ab".repeat(32)
+                    ))),
                 }],
                 password_entries: vec![],
             },
@@ -491,6 +509,7 @@ mod tests {
         assert!(yaml.starts_with("schema_version: 2\n"));
         assert!(yaml.contains("operations:\n- type: vault-imported\n"));
         assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
+        assert!(yaml.contains("fingerprint: hmac-sha256:v1:"));
         assert!(yaml.contains("\nsignature: ed25519:"));
         assert!(yaml.ends_with('\n'));
         assert!(!yaml.trim_start().starts_with('{'));

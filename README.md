@@ -20,7 +20,9 @@ Existing Bitwarden logins and secure notes can be imported from a plaintext or
 password-protected encrypted Bitwarden JSON export; account-restricted exports
 are not portable. 1Password logins, password items, and secure notes can be
 imported from an unencrypted 1PUX archive. Unsupported item types and
-attachments are skipped.
+attachments are skipped. Overlapping records are detected with vault-keyed
+HMAC fingerprints, so matching imports are skipped without exposing a reusable
+plaintext digest or repeatedly decrypting fingerprinted records.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 

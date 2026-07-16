@@ -1,6 +1,7 @@
 //! Deterministic encrypted vault projection from the causal event log.
 
 use crate::PasswordUnlockEntry;
+use crate::SecretFingerprint;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::secret_types::StoredSecretRecord;
@@ -17,6 +18,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedSecret {
     pub record: StoredSecretRecord,
+    pub fingerprint: Option<SecretFingerprint>,
     pub created_by: EventId,
     pub deleted_by: Option<EventId>,
     pub replaced_from: Option<SecretId>,
@@ -206,6 +208,13 @@ fn apply_operation(
                 let _ = chosen;
             }
         }
+        VaultOperation::SecretFingerprintsBackfilled { fingerprints } => {
+            for assignment in fingerprints {
+                if let Some(secret) = projection.secrets.get_mut(&assignment.secret_id) {
+                    secret.fingerprint = Some(assignment.fingerprint.clone());
+                }
+            }
+        }
         VaultOperation::VaultCleared => {
             projection.cleared = true;
             projection.secrets.clear();
@@ -261,6 +270,7 @@ fn insert_secret(
         secret.id.clone(),
         ProjectedSecret {
             record: secret.to_stored(),
+            fingerprint: secret.fingerprint.clone(),
             created_by: event_id.clone(),
             deleted_by: None,
             replaced_from,
@@ -352,7 +362,6 @@ mod tests {
     use super::*;
     use crate::PasswordEnvelope;
     use crate::PasswordUnlockEntry;
-    use crate::VaultResult;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
         GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
@@ -363,6 +372,7 @@ mod tests {
     use crate::vault_wire::{
         DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex,
     };
+    use crate::{SecretFingerprint, SecretFingerprintAssignment, VaultResult};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -450,6 +460,7 @@ mod tests {
                     id: sid(secret_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
+                    fingerprint: None,
                 },
             }],
         };
@@ -470,6 +481,44 @@ mod tests {
         let projection = project_vault(&graph, STORE).unwrap();
         assert_eq!(projection.live_secrets(&graph).len(), 2);
         assert!(!projection.has_blocking_conflicts());
+    }
+
+    #[test]
+    fn fingerprint_backfill_updates_projection_without_changing_ciphertext() -> VaultResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+        let created = secret_created(vec![genesis_id], "secret_fingerprint1", &signing_key);
+        let created_id = created.id()?;
+        graph.insert(created, STORE)?;
+
+        let fingerprint =
+            SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)));
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(&signing_key),
+            actor_signing_public_key: Some(public_key(&signing_key)),
+            parents: vec![created_id],
+            created_at: ts("2026-06-28T00:00:01Z"),
+            key_epoch: epoch(),
+            operations: vec![VaultOperation::SecretFingerprintsBackfilled {
+                fingerprints: vec![SecretFingerprintAssignment {
+                    secret_id: sid("secret_fingerprint1"),
+                    fingerprint: fingerprint.clone(),
+                }],
+            }],
+        };
+        graph.insert(VaultEvent::sign(body, &signing_key)?, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        let projected = projection.secrets.get(&sid("secret_fingerprint1")).unwrap();
+        assert_eq!(projected.fingerprint.as_ref(), Some(&fingerprint));
+        assert_eq!(
+            projected.record.value.as_str(),
+            "cipher-secret_fingerprint1"
+        );
+        Ok(())
     }
 
     #[test]
@@ -524,6 +573,7 @@ mod tests {
                         id: sid(new_id),
                         secret_type: SecretType::ApiKey,
                         ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
+                        fingerprint: None,
                     },
                 }],
             };
@@ -685,6 +735,7 @@ mod tests {
                         id: sid(new_id),
                         secret_type: SecretType::ApiKey,
                         ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
+                        fingerprint: None,
                     },
                 }],
             };

@@ -61,6 +61,7 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotatio
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
+        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
         | VaultOperation::SentinelParticipantEnrolled { .. }
@@ -151,6 +152,7 @@ mod tests {
                     id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
+                    fingerprint: None,
                 },
             }),
             None
