@@ -82,10 +82,8 @@ jq -e \
     and .externally_connectable.matches == [$match]
     and any(.content_scripts[]; .matches == [$match])
     and all(.content_scripts[];
-      if (.matches | index("<all_urls>") != null)
-      then .exclude_matches | index($match) != null
-      else true
-      end)
+      (.matches == [$match]) or
+      (.matches == ["<all_urls>"] and (.exclude_matches | index($match) != null)))
     and all(.content_scripts[]; .exclude_matches | index($sentinel) != null)
     and all(.content_scripts[]; .exclude_matches | index($production_sentinel) != null)
     and all(.content_scripts[]; .matches | index($sentinel) == null)

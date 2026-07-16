@@ -6,6 +6,7 @@ const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
 export const AGENT_MANAGED_PR_MARKER = "<!-- nook-agent-managed -->";
+const AGENT_MONITOR_WAKE_PREFIX = "<!-- nook-agent-monitor-wake:";
 
 export function parseRepository(fullName: string): RepoRef {
   const [owner, repo] = fullName.split("/");
@@ -102,10 +103,38 @@ export async function createFixPr(
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
     if (existing) {
+      await markAgentManagedPr(octokit, repoRef, existing, runId);
       return existing;
     }
     throw err;
   }
+}
+
+export async function markAgentManagedPr(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  prNumber: number,
+  wakeId: string,
+): Promise<void> {
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+  const bodyWithoutPriorWake = (pr.body ?? "")
+    .split("\n")
+    .filter((line) => !line.startsWith(AGENT_MONITOR_WAKE_PREFIX))
+    .join("\n")
+    .trim();
+  const markedBody = bodyWithoutPriorWake.includes(AGENT_MANAGED_PR_MARKER)
+    ? bodyWithoutPriorWake
+    : `${bodyWithoutPriorWake}\n\n${AGENT_MANAGED_PR_MARKER}`.trim();
+  await octokit.rest.pulls.update({
+    owner,
+    repo,
+    pull_number: prNumber,
+    body: `${markedBody}\n${AGENT_MONITOR_WAKE_PREFIX}${wakeId} -->`,
+  });
 }
 
 export async function commentOnIssue(
@@ -278,6 +307,7 @@ export async function squashMergePr(
   repoRef: RepoRef,
   prNumber: number,
   headBranch: string,
+  headSha: string,
 ): Promise<void> {
   const { owner, repo } = repoRef;
   log.info(`Squash merging PR #${prNumber}`);
@@ -286,6 +316,7 @@ export async function squashMergePr(
     repo,
     pull_number: prNumber,
     merge_method: "squash",
+    sha: headSha,
   });
 
   try {

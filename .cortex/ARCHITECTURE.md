@@ -299,8 +299,9 @@ All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` 
 PR delivery helpers live in `agentic-ai/ci-agent` and are exposed as `task
 pr:preflight`, `task pr:monitor`, and `task pr:ready`. Preflight and readiness
 emit machine-readable exact-head state. The monitor selects only Nook's
-path-applicable `PR` and `Web research` workflows, marks a trusted same-repo
-agent PR, prints one current snapshot, and exits. Long-lived continuation is
+path-applicable `PR` and `Web research` workflows, marks a same-repo agent PR
+only when its author matches the authenticated agent identity, prints one
+current snapshot, and exits. Ordinary branches receive a read-only audit. Long-lived continuation is
 owned entirely by GitHub `pull_request_target` / `workflow_run` events; no agent
 process or CLI polls check state, and Codex or another external review/check is
 never selected. Extension

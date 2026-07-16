@@ -7,6 +7,7 @@ import {
   createFixPr,
   createOctokit,
   findOpenPr,
+  markAgentManagedPr,
   parseRepository,
   pullRequestUrl,
 } from "./github.js";
@@ -33,8 +34,8 @@ export async function runCiImplement(): Promise<void> {
     process.env.FIX_BRANCH?.trim() ||
     `agent/prompt-${runId}`;
   const issueNumberRaw = process.env.AGENT_ISSUE_NUMBER?.trim();
-  const issueNumber = issueNumberRaw ? Number(issueNumberRaw) : null;
-  if (issueNumberRaw && (!Number.isInteger(issueNumber) || (issueNumber ?? 0) <= 0)) {
+  const issueNumber = issueNumberRaw ? Number(issueNumberRaw) : undefined;
+  if (issueNumberRaw && (issueNumber === undefined || !Number.isInteger(issueNumber) || issueNumber <= 0)) {
     throw new Error(`Invalid AGENT_ISSUE_NUMBER: ${issueNumberRaw}`);
   }
 
@@ -92,6 +93,8 @@ export async function runCiImplement(): Promise<void> {
       );
     }
   }
+
+  await markAgentManagedPr(octokit, repoRef, prNumber, runId);
 
   log.info(
     `PR #${prNumber} handed to the workflow_run monitor; the agent job will not poll or wait`,

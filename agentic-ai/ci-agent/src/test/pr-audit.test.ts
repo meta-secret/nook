@@ -7,6 +7,7 @@ import {
   buildPrAudit,
   isAwaitingRepositoryEvent,
   isTrustedAgentHead,
+  isTrustedAgentPr,
 } from "../main/pr-audit.js";
 
 test("event monitor accepts only same-repository agent branches", () => {
@@ -14,6 +15,26 @@ test("event monitor accepts only same-repository agent branches", () => {
   assert.equal(isTrustedAgentHead("meta-secret/nook", "agent/issue-410", "meta-secret/nook"), true);
   assert.equal(isTrustedAgentHead("fork/nook", "codex/fast-monitor", "meta-secret/nook"), false);
   assert.equal(isTrustedAgentHead("meta-secret/nook", "feature/manual", "meta-secret/nook"), false);
+  assert.equal(
+    isTrustedAgentPr(
+      "meta-secret/nook",
+      "codex/fast-monitor",
+      "meta-secret/nook",
+      "agent-user",
+      "agent-user",
+    ),
+    true,
+  );
+  assert.equal(
+    isTrustedAgentPr(
+      "meta-secret/nook",
+      "codex/fast-monitor",
+      "meta-secret/nook",
+      "other-user",
+      "agent-user",
+    ),
+    false,
+  );
 });
 
 test("event monitor defers missing deployment only while the PR workflow is pending", () => {
@@ -21,10 +42,10 @@ test("event monitor defers missing deployment only while the PR workflow is pend
     checkName: "Verify and preview",
     workflowFile: "pr.yml",
     workflowName: "PR",
-    conclusion: null,
+    conclusion: undefined,
     runId: 41,
     status: "in_progress",
-    url: null,
+    url: undefined,
   };
   assert.equal(
     isAwaitingRepositoryEvent({
@@ -127,7 +148,7 @@ function mockOctokit(options: MockOptions = {}): Octokit {
           data: {
             workflow_runs: [
               {
-                conclusion: options.runStatus === "in_progress" ? null : "success",
+                conclusion: options.runStatus === "in_progress" ? undefined : "success",
                 head_sha: "head-sha",
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
                 id: 42,

@@ -6,6 +6,7 @@ import {
   createFixPr,
   createOctokit,
   findOpenPr,
+  markAgentManagedPr,
   parseRepository,
 } from "./github.js";
 import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
@@ -74,6 +75,8 @@ export async function runCiFix(): Promise<void> {
     }
     log.info(`Opened fix PR #${prNumber}`);
   }
+
+  await markAgentManagedPr(octokit, repoRef, prNumber, runId);
 
   const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
   log.info(

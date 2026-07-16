@@ -216,8 +216,9 @@ task pr:preflight PR=<number>
 task pr:monitor PR=<number>
 ```
 
-`pr:monitor` marks a trusted same-repository `agent/`, `fix/`, or `codex/` PR,
-prints one exact-head audit, and exits. GitHub's `pull_request_target` and
+`pr:monitor` marks a same-repository `agent/`, `fix/`, or `codex/` PR only when
+its author matches the authenticated agent identity. Other branch names receive
+a read-only exact-head audit. The command then exits. GitHub's `pull_request_target` and
 `workflow_run` events own all later continuation and squash-merge readiness.
 No agent process or CLI watcher polls status. Codex and every other external
 review/check are absent from the monitor contract.

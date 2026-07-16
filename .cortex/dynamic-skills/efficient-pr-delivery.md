@@ -17,9 +17,9 @@ exact-head deployment requirements are then discovered only at merge time.
 
 Run `task pr:preflight PR=<number>` as soon as a PR exists. Use focused checks
 while editing, then commit and push the coherent iteration before starting the
-long local gate. Run `task pr:monitor PR=<number>` once to arm a trusted
-same-repository agent PR and print its current audit; the command exits
-immediately. Long-lived state transitions belong exclusively to the hosted
+long local gate. Run `task pr:monitor PR=<number>` once to arm a same-repository
+agent PR whose author matches the authenticated agent identity, or to print a
+read-only audit for an ordinary branch; the command exits immediately. Long-lived state transitions belong exclusively to the hosted
 `pull_request_target` / `workflow_run` continuation, so neither an agent process
 nor a CLI watcher polls the API.
 

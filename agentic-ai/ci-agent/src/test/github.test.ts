@@ -5,8 +5,10 @@ import type { Octokit } from "@octokit/rest";
 
 import {
   assertNoPendingPrFeedback,
+  markAgentManagedPr,
   requiredPrCheckNames,
   requiredPrWorkflows,
+  squashMergePr,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
@@ -62,6 +64,43 @@ test("assertNoPendingPrFeedback blocks unresolved review threads", async () => {
     assertNoPendingPrFeedback(octokit, repoRef, 347),
     /feedback requiring manual handling.*threads=1/,
   );
+});
+
+test("markAgentManagedPr marks and wakes a reused PR", async () => {
+  let updatedBody = "";
+  const octokit = {
+    rest: {
+      pulls: {
+        get: async () => ({ data: { body: "Existing body" } }),
+        update: async ({ body }: { body: string }) => {
+          updatedBody = body;
+          return { data: {} };
+        },
+      },
+    },
+  } as unknown as Octokit;
+
+  await markAgentManagedPr(octokit, repoRef, 347, "run-42");
+  assert.match(updatedBody, /<!-- nook-agent-managed -->/);
+  assert.match(updatedBody, /<!-- nook-agent-monitor-wake:run-42 -->/);
+});
+
+test("squashMergePr requires the audited head SHA", async () => {
+  let mergeSha = "";
+  const octokit = {
+    rest: {
+      pulls: {
+        merge: async ({ sha }: { sha: string }) => {
+          mergeSha = sha;
+          return { data: {} };
+        },
+      },
+      git: { deleteRef: async () => ({ data: {} }) },
+    },
+  } as unknown as Octokit;
+
+  await squashMergePr(octokit, repoRef, 347, "agent/fix", "audited-sha");
+  assert.equal(mergeSha, "audited-sha");
 });
 
 type MockOptions = {

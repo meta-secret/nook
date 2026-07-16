@@ -4,6 +4,7 @@ import {
   AGENT_MANAGED_PR_MARKER,
   createOctokit,
   inspectPrFeedback,
+  markAgentManagedPr,
   parseRepository,
   requiredPrWorkflows,
   squashMergePr,
@@ -12,10 +13,10 @@ import {
 } from "./github.js";
 
 type WorkflowAudit = RequiredPrWorkflow & {
-  conclusion: string | null;
-  runId: number | null;
-  status: string | null;
-  url: string | null;
+  conclusion?: string;
+  runId?: number;
+  status?: string;
+  url?: string;
 };
 
 type BranchProtectionAudit = {
@@ -29,11 +30,16 @@ export type PrAudit = {
   base: { branch: string; sha: string };
   branchProtection: BranchProtectionAudit;
   changedFiles: string[];
-  exactHeadDeployment: { environment: string; state: string; url: string | null } | null;
+  exactHeadDeployment?: { environment: string; state: string; url?: string };
   externalReviewPolicy: "inspect-present-feedback-only-never-wait";
   feedback: Awaited<ReturnType<typeof inspectPrFeedback>>;
   head: { branch: string; sha: string };
-  mergeState: { behindBy: number; draft: boolean; mergeable: boolean | null; state: string };
+  mergeState: {
+    behindBy: number;
+    draft: boolean;
+    mergeability: "conflicting" | "mergeable" | "unknown";
+    state: string;
+  };
   number: number;
   ready: boolean;
   reasons: string[];
@@ -70,22 +76,24 @@ export async function runPrMonitor(): Promise<void> {
     repo: repoRef.repo,
     pull_number: prNumber,
   });
-  if (!isTrustedAgentHead(pr.head.repo?.full_name, pr.head.ref, repository)) {
-    throw new Error(
-      `PR #${prNumber} must use a same-repository agent/, fix/, or codex/ branch`,
+  const { data: authenticated } = await octokit.rest.users.getAuthenticated();
+  const trustedAgentPr = isTrustedAgentPr(
+    pr.head.repo?.full_name,
+    pr.head.ref,
+    repository,
+    pr.user?.login,
+    authenticated.login,
+  );
+  if (trustedAgentPr) {
+    await markAgentManagedPr(octokit, repoRef, prNumber, `manual-${Date.now()}`);
+    console.log(
+      `Armed event-driven monitoring for PR #${prNumber}; this command exits without waiting or polling`,
+    );
+  } else {
+    console.log(
+      `PR #${prNumber} is not authored by the authenticated agent identity on a trusted branch; printing a read-only audit`,
     );
   }
-  if (!(pr.body ?? "").includes(AGENT_MANAGED_PR_MARKER)) {
-    await octokit.rest.pulls.update({
-      owner: repoRef.owner,
-      repo: repoRef.repo,
-      pull_number: prNumber,
-      body: `${pr.body ?? ""}\n\n${AGENT_MANAGED_PR_MARKER}`.trim(),
-    });
-  }
-  console.log(
-    `Armed event-driven monitoring for PR #${prNumber}; this command exits without waiting or polling`,
-  );
   const audit = await buildPrAudit(octokit, repoRef, prNumber);
   console.log(JSON.stringify(audit, null, 2));
 }
@@ -103,8 +111,15 @@ export async function runPrEvent(): Promise<void> {
     repo: repoRef.repo,
     pull_number: prNumber,
   });
-  const trustedHead = isTrustedAgentHead(pr.head.repo?.full_name, pr.head.ref, repository);
-  if (!(pr.body ?? "").includes(AGENT_MANAGED_PR_MARKER) || !trustedHead) {
+  const { data: authenticated } = await octokit.rest.users.getAuthenticated();
+  const trustedAgentPr = isTrustedAgentPr(
+    pr.head.repo?.full_name,
+    pr.head.ref,
+    repository,
+    pr.user?.login,
+    authenticated.login,
+  );
+  if (!(pr.body ?? "").includes(AGENT_MANAGED_PR_MARKER) || !trustedAgentPr) {
     console.log(`PR #${prNumber} is not agent-managed; ignoring event`);
     return;
   }
@@ -116,7 +131,7 @@ export async function runPrEvent(): Promise<void> {
   const audit = await buildPrAudit(octokit, repoRef, prNumber);
   console.log(JSON.stringify(audit, null, 2));
   if (audit.ready) {
-    await squashMergePr(octokit, repoRef, prNumber, pr.head.ref);
+    await squashMergePr(octokit, repoRef, prNumber, audit.head.branch, audit.head.sha);
     console.log(`Squash-merged agent-managed PR #${prNumber}`);
     return;
   }
@@ -165,16 +180,29 @@ export async function buildPrAudit(
       inspectBranchProtection(octokit, repoRef, pr.base.ref),
       inspectExactHeadDeployment(octokit, repoRef, pr.head.sha),
     ]);
+  const mergeable =
+    typeof pr.mergeable === "boolean"
+      ? pr.mergeable
+      : (
+          await octokit.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: prNumber,
+          })
+        ).data.mergeable;
 
   const reasons: string[] = [];
   if (pr.state !== "open") reasons.push(`state is ${pr.state}`);
   if (pr.draft) reasons.push("pull request is draft");
-  if (pr.mergeable === false) reasons.push("pull request has a merge conflict");
+  const mergeability =
+    mergeable === true ? "mergeable" : mergeable === false ? "conflicting" : "unknown";
+  if (mergeability === "conflicting") reasons.push("pull request has a merge conflict");
+  if (mergeability === "unknown") reasons.push("pull request mergeability is unknown");
   if (comparison.data.behind_by > 0) {
     reasons.push(`head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`);
   }
   for (const workflow of requiredWorkflows) {
-    if (workflow.runId === null) {
+    if (workflow.runId === undefined) {
       reasons.push(`${workflow.workflowName} run is not indexed for the current head`);
     } else if (workflow.status !== "completed") {
       reasons.push(`${workflow.workflowName} run is ${workflow.status}`);
@@ -209,7 +237,7 @@ export async function buildPrAudit(
     mergeState: {
       behindBy: comparison.data.behind_by,
       draft: pr.draft ?? false,
-      mergeable: pr.mergeable,
+      mergeability,
       state: pr.state,
     },
     number: pr.number,
@@ -247,10 +275,10 @@ async function auditWorkflows(
       );
       return {
         ...workflow,
-        conclusion: run?.conclusion ?? null,
-        runId: run?.id ?? null,
-        status: run?.status ?? null,
-        url: run?.html_url ?? null,
+        conclusion: run?.conclusion ?? undefined,
+        runId: run?.id,
+        status: run?.status ?? undefined,
+        url: run?.html_url ?? undefined,
       };
     }),
   );
@@ -303,11 +331,11 @@ async function inspectExactHeadDeployment(
       return {
         environment: deployment.environment,
         state: latest.state,
-        url: latest.environment_url ?? null,
+        url: latest.environment_url ?? undefined,
       };
     }
   }
-  return null;
+  return undefined;
 }
 
 function readPrNumber(): number {
@@ -342,11 +370,15 @@ export function isAwaitingRepositoryEvent(
   const mainWorkflowPending = audit.requiredWorkflows.some(
     (workflow) =>
       workflow.workflowFile === "pr.yml" &&
-      (workflow.runId === null || workflow.status !== "completed"),
+      (workflow.runId === undefined || workflow.status !== "completed"),
+  );
+  const repositoryWorkflowPending = audit.requiredWorkflows.some(
+    (workflow) => workflow.runId === undefined || workflow.status !== "completed",
   );
   return audit.reasons.every(
     (reason) =>
       isTransientEventReason(reason) ||
+      (repositoryWorkflowPending && reason === "pull request mergeability is unknown") ||
       (mainWorkflowPending && reason === "exact-head github-pages deployment is not successful"),
   );
 }
@@ -359,5 +391,18 @@ export function isTrustedAgentHead(
   return (
     headRepository === repository &&
     ["agent/", "fix/", "codex/"].some((prefix) => headBranch.startsWith(prefix))
+  );
+}
+
+export function isTrustedAgentPr(
+  headRepository: string | undefined,
+  headBranch: string,
+  repository: string,
+  prAuthor: string | undefined,
+  authenticatedLogin: string,
+): boolean {
+  return (
+    isTrustedAgentHead(headRepository, headBranch, repository) &&
+    prAuthor === authenticatedLogin
   );
 }
