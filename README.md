@@ -18,7 +18,9 @@ the vault.
 Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
 Existing Bitwarden logins and secure notes can be imported from a plaintext or
 password-protected encrypted Bitwarden JSON export; account-restricted exports
-are not portable and unsupported Bitwarden item types are skipped.
+are not portable. 1Password logins, password items, and secure notes can be
+imported from an unencrypted 1PUX archive. Unsupported item types and
+attachments are skipped.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 

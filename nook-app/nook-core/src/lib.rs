@@ -16,7 +16,9 @@ pub(crate) use auth::{
     device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
-pub(crate) use secrets::{bip39, bitwarden_import, password, secret_types, secret_view, session};
+pub(crate) use secrets::{
+    bip39, bitwarden_import, onepassword_import, password, secret_types, secret_view, session,
+};
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
     vault_sync_store,
@@ -85,6 +87,9 @@ pub use nook_auth2::{
     SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
     SentinelUnlockStatus, add_sentinel_unlock_response, finalize_sentinel_unlock,
     sentinel_unlock_request, sentinel_unlock_status,
+};
+pub use onepassword_import::{
+    OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
 };
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,

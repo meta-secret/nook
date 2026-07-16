@@ -26,6 +26,63 @@ async function openBitwardenImport(page: Page) {
   await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
 }
 
+async function openOnePasswordImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
+}
+
+function crc32(bytes: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1))
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function storedZip(entries: Record<string, string>): Buffer {
+  const localRecords: Buffer[] = []
+  const centralRecords: Buffer[] = []
+  let offset = 0
+
+  for (const [name, text] of Object.entries(entries)) {
+    const fileName = Buffer.from(name)
+    const data = Buffer.from(text)
+    const checksum = crc32(data)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt32LE(checksum, 14)
+    local.writeUInt32LE(data.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(fileName.length, 26)
+    localRecords.push(local, fileName, data)
+
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt32LE(checksum, 16)
+    central.writeUInt32LE(data.length, 20)
+    central.writeUInt32LE(data.length, 24)
+    central.writeUInt16LE(fileName.length, 28)
+    central.writeUInt32LE(offset, 42)
+    centralRecords.push(central, fileName)
+    offset += local.length + fileName.length + data.length
+  }
+
+  const centralDirectory = Buffer.concat(centralRecords)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(Object.keys(entries).length, 8)
+  end.writeUInt16LE(Object.keys(entries).length, 10)
+  end.writeUInt32LE(centralDirectory.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...localRecords, centralDirectory, end])
+}
+
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/app/')
@@ -233,6 +290,106 @@ test.describe('local vault', () => {
       'Imported 0 items',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      '2 duplicates',
+    )
+  })
+
+  test('imports a 1Password 1PUX archive idempotently', async ({ page }) => {
+    const archive = storedZip({
+      'export.attributes': JSON.stringify({
+        version: 3,
+        description: '1Password Unencrypted Export',
+        createdAt: 1585333569,
+      }),
+      'export.data': JSON.stringify({
+        accounts: [
+          {
+            vaults: [
+              {
+                attrs: { name: 'Personal' },
+                items: [
+                  {
+                    categoryUuid: '001',
+                    state: 'active',
+                    overview: {
+                      title: 'Imported 1Password login',
+                      url: 'https://1password.example/login',
+                      urls: [],
+                      tags: ['migration'],
+                    },
+                    details: {
+                      loginFields: [
+                        {
+                          value: 'onepassword-alice',
+                          name: 'username',
+                          fieldType: 'T',
+                          designation: 'username',
+                        },
+                        {
+                          value: 'onepassword-secret',
+                          name: 'password',
+                          fieldType: 'P',
+                          designation: 'password',
+                        },
+                      ],
+                      notesPlain: 'Imported from 1Password',
+                      sections: [],
+                    },
+                  },
+                  {
+                    categoryUuid: '003',
+                    state: 'active',
+                    overview: { title: 'Imported 1Password note' },
+                    details: {
+                      notesPlain: 'Private note body',
+                      sections: [],
+                    },
+                  },
+                  {
+                    categoryUuid: '002',
+                    overview: { title: 'Skipped card' },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    })
+
+    await openOnePasswordImport(page)
+    await page.getByTestId('onepassword-pux-file').setInputFiles({
+      name: 'account.1pux',
+      mimeType: 'application/zip',
+      buffer: archive,
+    })
+    await page.getByTestId('onepassword-import-submit').click()
+    await expect(page.getByTestId('onepassword-import-result')).toContainText(
+      'Imported 2 items',
+    )
+    await expect(page.getByTestId('onepassword-import-result')).toContainText(
+      '1 unsupported',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'onepassword-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported 1Password note',
+    )
+
+    await openOnePasswordImport(page)
+    await page.getByTestId('onepassword-pux-file').setInputFiles({
+      name: 'account.1pux',
+      mimeType: 'application/zip',
+      buffer: archive,
+    })
+    await page.getByTestId('onepassword-import-submit').click()
+    await expect(page.getByTestId('onepassword-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('onepassword-import-result')).toContainText(
       '2 duplicates',
     )
   })

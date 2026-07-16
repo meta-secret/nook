@@ -1170,14 +1170,14 @@ impl NookSecretPage {
 
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct NookBitwardenImportResult {
+pub struct NookImportResult {
     imported: u32,
     skipped_unsupported: u32,
     skipped_duplicates: u32,
 }
 
 #[wasm_bindgen]
-impl NookBitwardenImportResult {
+impl NookImportResult {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn imported(&self) -> u32 {

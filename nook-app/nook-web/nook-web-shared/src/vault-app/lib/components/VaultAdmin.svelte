@@ -15,13 +15,14 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
+  import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { NookBitwardenImportResult } from '$lib/nook'
+  import type { NookImportResult } from '$lib/nook'
   import type {
     OAuthFilePreset,
     StorageProvider,
@@ -57,6 +58,7 @@
     onIssueCode,
     onClearCode,
     onImportBitwarden,
+    onImportOnePassword,
     activeSection = $bindable(
       undefined as
         | 'vaults'
@@ -102,7 +104,8 @@
     onImportBitwarden: (
       json: string,
       password: string,
-    ) => Promise<NookBitwardenImportResult>
+    ) => Promise<NookImportResult>
+    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
     activeSection?:
       | 'vaults'
       | 'storage'
@@ -510,13 +513,19 @@
         class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
       >
         <FileUp class="size-3" />
-        Bitwarden
+        {vault.t('settings.import_sources')}
       </span>
     {/snippet}
     <BitwardenImportPanel
       {vault}
       {isSaving}
       onImport={onImportBitwarden}
+    />
+    <div class="border-t border-border/60"></div>
+    <OnePasswordImportPanel
+      {vault}
+      {isSaving}
+      onImport={onImportOnePassword}
     />
   </SettingsAccordionSection>
 </div>
