@@ -621,6 +621,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let bake = read(&root, "nook-app/docker-bake.hcl");
     for required in [
         "GHA_CACHE_ENABLED",
+        "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
         "type=gha,scope=nook-web-deps-v1",
@@ -633,6 +634,11 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             "hosted BuildKit cache contract is missing: {required}"
         );
     }
+    assert!(
+        read(&root, "nook-app/docker/base.docker-bake.hcl")
+            .contains("cache-to   = rust_base_cache_to"),
+        "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
+    );
     assert!(
         !bake.contains("type=registry"),
         "delivery caches must use the GitHub Actions cache service, not registry manifests"

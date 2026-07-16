@@ -10,6 +10,8 @@ target "rust-base" {
   args = {
     SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
   }
+  cache-from = rust_base_cache_from
+  cache-to   = rust_base_cache_to
 }
 
 target "web-base" {
