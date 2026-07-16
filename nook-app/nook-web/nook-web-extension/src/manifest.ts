@@ -32,6 +32,7 @@ export type ExtensionManifest = {
     exclude_matches: string[]
     js: string[]
     run_at: 'document_idle' | 'document_start'
+    world?: 'ISOLATED' | 'MAIN'
   }>
   externally_connectable: {
     matches: string[]
@@ -92,6 +93,26 @@ export function createManifest(
         ],
         js: ['content/autofill.js'],
         run_at: 'document_idle',
+      },
+      {
+        matches: ['<all_urls>'],
+        exclude_matches: [
+          simpleVaultMatch,
+          ...sentinelVaultMatchPatterns(simpleVaultBaseUrl),
+        ],
+        js: ['content/webauthn-content.js'],
+        run_at: 'document_start',
+        world: 'ISOLATED',
+      },
+      {
+        matches: ['<all_urls>'],
+        exclude_matches: [
+          simpleVaultMatch,
+          ...sentinelVaultMatchPatterns(simpleVaultBaseUrl),
+        ],
+        js: ['content/webauthn-page.js'],
+        run_at: 'document_start',
+        world: 'MAIN',
       },
       {
         matches: [simpleVaultMatch],

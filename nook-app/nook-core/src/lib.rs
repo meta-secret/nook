@@ -17,7 +17,8 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
-    bip39, bitwarden_import, onepassword_import, password, secret_types, secret_view, session,
+    bip39, bitwarden_import, onepassword_import, passkey_authenticator, password, secret_types,
+    secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
@@ -90,6 +91,12 @@ pub use nook_auth2::{
 };
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
+};
+pub use passkey_authenticator::{
+    PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
+    PasskeyAuthenticatorError, PasskeyCredentialDescriptor, PasskeyRegistrationRequest,
+    PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser, assert_website_passkey,
+    create_website_passkey, validate_website_passkey_origin,
 };
 pub use secret_types::{
     ApiKeySecret, LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey,

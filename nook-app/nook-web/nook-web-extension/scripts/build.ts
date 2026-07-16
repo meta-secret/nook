@@ -134,6 +134,11 @@ type NookLocaleCatalog = {
       open_vault: string
       dismiss: string
     }
+    passkey: {
+      save_title: string
+      use_title: string
+      use_browser: string
+    }
   }
 }
 
@@ -146,6 +151,9 @@ async function buildChromeLocales() {
       const messages = {
         widgetOpenVault: { message: catalog.extension.widget.open_vault },
         widgetDismiss: { message: catalog.extension.widget.dismiss },
+        passkeySaveTitle: { message: catalog.extension.passkey.save_title },
+        passkeyUseTitle: { message: catalog.extension.passkey.use_title },
+        passkeyUseBrowser: { message: catalog.extension.passkey.use_browser },
       }
       const localeDir = join(distDir, '_locales', locale)
       await mkdir(localeDir, { recursive: true })
@@ -164,6 +172,8 @@ await mkdir(distDir, { recursive: true })
 await Promise.all([
   buildEntrypoint('src/background/service-worker.ts', 'background'),
   buildEntrypoint('src/content/autofill.ts', 'content'),
+  buildEntrypoint('src/content/webauthn-content.ts', 'content'),
+  buildEntrypoint('src/content/webauthn-page.ts', 'content'),
   buildEntrypoint('src/content/simple-vault-bridge.ts', 'content'),
   buildEntrypoint('src/offscreen/session.ts', 'offscreen'),
 ])

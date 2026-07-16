@@ -92,9 +92,73 @@ async function startLoginServer(): Promise<TestServer> {
   }
 
   return {
-    origin: `http://127.0.0.1:${address.port}`,
+    origin: `http://localhost:${address.port}`,
     close: () => closeServer(server),
   }
+}
+
+async function registerWebsitePasskey(page: Page): Promise<string> {
+  const ceremony = page.evaluate(async () => {
+    const credential = (await navigator.credentials.create({
+      publicKey: {
+        challenge: new Uint8Array(32).fill(7),
+        rp: { id: 'localhost', name: 'Nook extension e2e' },
+        user: {
+          id: new TextEncoder().encode('nook-e2e-user'),
+          name: 'alice@example.com',
+          displayName: 'Alice',
+        },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+        authenticatorSelection: {
+          residentKey: 'required',
+          userVerification: 'required',
+        },
+        timeout: 15_000,
+      },
+    })) as PublicKeyCredential
+    return credential.id
+  })
+  await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
+  await page.keyboard.press('Enter')
+  return ceremony
+}
+
+async function assertWebsitePasskey(
+  page: Page,
+  credentialId: string,
+): Promise<void> {
+  const ceremony = page.evaluate(async (id) => {
+    const rawId = Uint8Array.from(
+      atob(
+        id.replaceAll('-', '+').replaceAll('_', '/') +
+          '='.repeat((4 - (id.length % 4)) % 4),
+      ),
+      (character) => character.charCodeAt(0),
+    )
+    const credential = (await navigator.credentials.get({
+      publicKey: {
+        challenge: new Uint8Array(32).fill(9),
+        rpId: 'localhost',
+        allowCredentials: [{ type: 'public-key', id: rawId }],
+        userVerification: 'required',
+        timeout: 15_000,
+      },
+    })) as PublicKeyCredential
+    const response = credential.response as AuthenticatorAssertionResponse
+    return {
+      id: credential.id,
+      authenticatorDataLength: response.authenticatorData.byteLength,
+      signatureLength: response.signature.byteLength,
+    }
+  }, credentialId)
+  await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
+  await page.keyboard.press('Enter')
+  const result = await ceremony
+  expect(result).toMatchObject({
+    id: credentialId,
+    authenticatorDataLength: 37,
+  })
+  expect(result.signatureLength).toBeGreaterThan(64)
 }
 
 function closeServer(server: Server) {
@@ -279,7 +343,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         url.searchParams.get('device_signing_public_key') ===
           'popup-signing-key' &&
         url.searchParams.get('nonce') !== null &&
-        url.searchParams.get('scopes') === 'vault-access,password-filling'
+        url.searchParams.get('scopes') ===
+          'vault-access,password-filling,passkey-management,sync-provider-credentials'
       )
     })
 
@@ -436,6 +501,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ],
   })
   await context.addInitScript(installMockPasskeyRuntime)
+  const loginServer = await startLoginServer()
 
   try {
     const worker = await getServiceWorker(context)
@@ -553,6 +619,21 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         selectedVaultName: 'Extension approval vault',
         eventCount: expect.any(Number),
       })
+    const pairedStorage = await readExtensionStorage(context)
+    const pairedGrant = Object.entries(pairedStorage).find(([key]) =>
+      key.startsWith('nook:extension-pairing-grant:'),
+    )?.[1]
+    expect(pairedGrant).toEqual(
+      expect.objectContaining({
+        scopes: expect.arrayContaining(['passkey-management']),
+      }),
+    )
+
+    const website = await context.newPage()
+    await website.goto(`${loginServer.origin}/login`)
+    const websiteCredentialId = await registerWebsitePasskey(website)
+    expect(websiteCredentialId).toBeTruthy()
+    await assertWebsitePasskey(website, websiteCredentialId)
 
     const connectedPopupPage = await context.newPage()
     const reopenedConnectPagePromise = context.waitForEvent('page')
@@ -617,8 +698,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
+    await assertWebsitePasskey(website, websiteCredentialId)
     await attachNookLogsForTest(simplePage, testInfo)
   } finally {
     await context.close()
+    await loginServer.close()
   }
 })

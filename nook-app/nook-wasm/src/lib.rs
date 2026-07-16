@@ -30,9 +30,10 @@ pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
     NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
     NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookImportResult,
-    NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
-    NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
-    NookSecretPage, NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
+    NookJoinRequest, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration,
+    NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecretPage,
+    NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
     NookStorageProviderTypeUtil, NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;

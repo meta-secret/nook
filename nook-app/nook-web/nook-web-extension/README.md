@@ -8,6 +8,13 @@ the complete vault interface. The extension contains browser-only behavior:
 device protection, the in-page Nook widget, autofill DOM integration, and
 background coordination.
 
+For ordinary websites, the extension also provides explicit passkey save and
+use prompts. It intercepts non-conditional WebAuthn create/get calls, asks the
+user to choose a granted Simple Vault/account, and delegates validation,
+ES256 key generation, signing, and counter persistence to Rust/WASM. The user
+can always choose the browser or a security key instead. Locked, unavailable,
+or account-less Nook sessions automatically use that native fallback.
+
 After a passkey or PIN authorization, the extension keeps its decrypted device
 identity only in an offscreen extension document for 15 minutes. Reopening the
 toolbar popup during that window resumes pairing without another prompt. The
@@ -124,6 +131,7 @@ Development, production, and every PR number use different install and profile
 directories, so they cannot reuse extension state. Override the two roots with
 `NOOK_EXTENSION_RELEASE_DIR` and `NOOK_EXTENSION_PROFILE_ROOT` when needed.
 
-Extension WebAuthn ceremonies omit the RP ID and let Chromium bind the
-credential to the stable extension origin; the website continues to use its
-HTTPS hostname as the RP ID.
+Device-protection WebAuthn ceremonies omit the RP ID and let Chromium bind the
+credential to the stable extension origin. Website-passkey ceremonies instead
+preserve the website's validated HTTPS RP ID and origin; private credential key
+material never crosses the Rust/WASM boundary.

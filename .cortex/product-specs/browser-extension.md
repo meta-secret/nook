@@ -1,6 +1,6 @@
 # Browser Extension Product Spec
 
-Status: Active direction for #234, #235, #237, and #244.
+Status: Implemented direction for #234, #235, #237, #244, and #441.
 
 `nook-web-extension` is the browser integration for Simple Vault. It does not
 duplicate the vault application UI. On first run, clicking the extension opens
@@ -18,6 +18,8 @@ The extension owns browser-only responsibilities:
 - offering to save or update a credential by opening Simple Vault;
 - maintaining separately revocable extension device state and an encrypted,
   extension-owned event-log projection for independent fill.
+- offering to create and use website passkeys through an explicit consent
+  prompt while preserving browser/security-key fallback.
 
 The extension is a Simple Vault capability. It must never pair with, receive a
 grant from, inject a content script into, or open Sentinel Vault. Rust/WASM
@@ -242,11 +244,23 @@ When both devices exist, unlock selection is deterministic:
 4. if no independent website device or recovery method exists, explain that the
    extension is required rather than showing an unrelated new-passkey setup.
 
-For the same reason, the launcher does not yet show an active-vault selector.
-Once #244 supplies multiple usable encrypted extension projections, the
-launcher may list approved vaults and let the user select which projection the
-background runtime uses. A list of grant names alone would falsely imply that
-the extension can already unlock, query, and fill from those vaults.
+The launcher does not become a vault browser. Website passkey prompts may list
+the approved vaults and matching RP accounts returned by Rust/WASM because that
+selection is scoped to one active browser ceremony.
+
+## Website Passkeys
+
+The page-world adapter wraps non-conditional WebAuthn `create` and `get` calls.
+An isolated content script asks the service worker for eligible vaults/accounts
+and renders an explicit Nook choice. Conditional mediation and unavailable or
+locked Nook sessions use the original browser WebAuthn implementation.
+
+The service worker binds each request to its exact tab, frame, sender origin,
+and RP. The offscreen manager opens only a currently approved Simple Vault
+grant. Rust/WASM owns the complete authenticator operation and commits the
+encrypted event before a public response returns. See
+[passkey-manager.md](../design-docs/passkey-manager.md) for ceremony rules,
+counter convergence, and the threat model.
 
 ## Consent
 
@@ -257,6 +271,7 @@ permissions describe actions instead of implementation details:
 - fill a selected login;
 - offer to save new or changed credentials;
 - optionally synchronize the encrypted local extension state in the background.
+- save and use website passkeys for the requesting RP.
 
 Background sync-provider access is separate and opt-in. Provider secrets are
 re-sealed for the extension device before leaving the approving vault session.

@@ -74,7 +74,16 @@ impl PasskeyPrivateKeyPkcs8 {
     }
 
     fn validate(&self) -> SecretPayloadResult<()> {
-        validate_base64url_field("ES256 private key", &self.0, 1, PASSKEY_PRIVATE_KEY_MAX_LEN)
+        validate_base64url_field("ES256 private key", &self.0, 1, PASSKEY_PRIVATE_KEY_MAX_LEN)?;
+        crate::passkey_authenticator::validate_es256_credential_key(self, None).map_err(|error| {
+            SecretPayloadError::InvalidPasskey {
+                reason: error.to_string(),
+            }
+        })
+    }
+
+    pub(crate) fn encoded(&self) -> &str {
+        &self.0
     }
 
     fn zeroize(&mut self) {
@@ -107,6 +116,10 @@ impl PasskeyPublicKeyCose {
 
     fn validate(&self) -> SecretPayloadResult<()> {
         validate_base64url_field("ES256 public key", &self.0, 1, PASSKEY_PUBLIC_KEY_MAX_LEN)
+    }
+
+    pub(crate) fn encoded(&self) -> &str {
+        &self.0
     }
 
     fn zeroize(&mut self) {
@@ -143,7 +156,14 @@ impl PasskeyCredentialKey {
                 public_key_cose,
             } => {
                 private_key_pkcs8.validate()?;
-                public_key_cose.validate()
+                public_key_cose.validate()?;
+                crate::passkey_authenticator::validate_es256_credential_key(
+                    private_key_pkcs8,
+                    Some(public_key_cose),
+                )
+                .map_err(|error| SecretPayloadError::InvalidPasskey {
+                    reason: error.to_string(),
+                })
             }
         }
     }
@@ -229,7 +249,7 @@ impl PasskeySecret {
         Ok(())
     }
 
-    fn zeroize_plaintext(&mut self) {
+    pub fn zeroize_plaintext(&mut self) {
         self.rp_id.zeroize();
         self.rp_name.zeroize();
         self.credential_id.zeroize();
@@ -241,6 +261,12 @@ impl PasskeySecret {
         self.discoverable.zeroize();
         self.backup_eligible.zeroize();
         self.backup_state.zeroize();
+    }
+}
+
+impl Zeroize for PasskeySecret {
+    fn zeroize(&mut self) {
+        self.zeroize_plaintext();
     }
 }
 
@@ -433,23 +459,28 @@ mod tests {
     }
 
     fn passkey() -> PasskeySecret {
-        PasskeySecret {
-            version: PASSKEY_SECRET_VERSION,
-            rp_id: "accounts.example.com".to_owned(),
-            rp_name: "Example".to_owned(),
-            credential_id: encoded(1, 32),
-            user_handle: encoded(2, 32),
-            user_name: "alice@example.com".to_owned(),
-            user_display_name: "Alice".to_owned(),
-            key: PasskeyCredentialKey::Es256 {
-                private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(encoded(3, 96)).unwrap(),
-                public_key_cose: PasskeyPublicKeyCose::parse(encoded(4, 77)).unwrap(),
+        let request = crate::PasskeyRegistrationRequest {
+            origin: "https://accounts.example.com".to_owned(),
+            challenge: encoded(1, 32),
+            relying_party: crate::PasskeyRelyingParty {
+                id: "accounts.example.com".to_owned(),
+                name: "Example".to_owned(),
             },
-            signature_count: 4,
-            discoverable: true,
-            backup_eligible: true,
-            backup_state: true,
-        }
+            user: crate::PasskeyUser {
+                id: encoded(2, 32),
+                name: "alice@example.com".to_owned(),
+                display_name: "Alice".to_owned(),
+            },
+            algorithms: vec![-7],
+            exclude_credentials: Vec::new(),
+            resident_key_required: true,
+            user_verification_required: true,
+        };
+        let mut passkey = crate::create_website_passkey(&request, &[])
+            .unwrap()
+            .credential;
+        passkey.signature_count = 4;
+        passkey
     }
 
     #[test]

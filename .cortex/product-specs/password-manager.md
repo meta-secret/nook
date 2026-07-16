@@ -59,8 +59,9 @@ keys.
    - Rust validates non-empty label (trimmed) and non-empty value.
    - Clicking **Save Secret** inserts into the in-memory session, encrypts **only the changed record**, updates the armored cache, serializes to YAML, and writes to storage.
    - Passkeys are not created through this generic form. The versioned `passkey`
-     payload is reserved for the authenticated WebAuthn provider flow tracked by
-     #441; Rust rejects attempts to construct one from ordinary form fields.
+     payload is reserved for the authenticated extension WebAuthn provider flow;
+     Rust rejects attempts to construct one from ordinary form fields. See
+     [passkey-manager.md](../design-docs/passkey-manager.md).
 6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI. To fix a mistake or update content, the user **adds a new item and deletes the old one**. A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db` so storage never holds duplicates if the second step fails mid-flight.
 7. **Deleting Secrets:**
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
@@ -115,8 +116,8 @@ secrets:
   PKCS#8/COSE key material, signature counter, discoverability, and backup
   flags. It is encrypted as one ordinary per-record payload; private key
   material never appears in projection YAML or event operations as plaintext.
-  Creation and assertion support land through the dependent #441 feature
-  slices, not the generic add/edit form.
+  Creation and assertion run through the approved, unlocked extension device,
+  not the generic add/edit form.
 Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
@@ -180,6 +181,7 @@ do not grant vault access.
 | `vault_crypto.rs` | Session-scoped age encrypt/decrypt |
 | `validation.rs` | Connect/secret validation, search filter |
 | `password.rs` | CSPRNG password generation |
+| `passkey_authenticator.rs` | RP/origin validation, ES256 registration/assertion, counters |
 
 All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-core/tests/vault_workflow.rs`.
 
@@ -194,6 +196,7 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 - Secret label/value validation
 - Connect/PAT validation
 - Secret search/filter
+- WebAuthn request validation, key generation, signing, and counter mutation
 
 **Belongs in UI only:**
 - Tab navigation, loading spinners, toast messages

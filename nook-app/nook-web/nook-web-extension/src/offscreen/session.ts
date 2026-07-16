@@ -1,6 +1,9 @@
 import initNookWasm, {
   configureVaultApplication,
+  loadAuthProviders,
   NookVaultManager,
+  providerWasmArgs,
+  saveAuthProviders,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
@@ -21,6 +24,26 @@ type PasskeySetup = {
 type PasskeyUnlockMaterial = {
   credentialId: number[]
   prfInput: number[]
+}
+
+type ExtensionVaultGrant = {
+  vaultStoreId: string
+  deviceId: string
+  devicePublicKey: string
+  deviceSigningPublicKey: string
+}
+
+type StoredProvider = {
+  id: string
+  type: string
+  storeId?: string
+}
+
+type LoadedProviders = {
+  snapshot: {
+    providers: StoredProvider[]
+    activeVaultStoreId?: string
+  }
 }
 
 let initPromise: Promise<unknown> | undefined
@@ -97,6 +120,67 @@ function messagePayload(message: unknown): Record<string, unknown> {
   return payload && typeof payload === 'object'
     ? (payload as Record<string, unknown>)
     : {}
+}
+
+function extensionVaultGrant(
+  payload: Record<string, unknown>,
+): ExtensionVaultGrant {
+  const fields = [
+    'vaultStoreId',
+    'deviceId',
+    'devicePublicKey',
+    'deviceSigningPublicKey',
+  ] as const
+  for (const field of fields) {
+    if (typeof payload[field] !== 'string' || payload[field].length === 0) {
+      throw new Error('Extension session received an invalid vault grant.')
+    }
+  }
+  return {
+    vaultStoreId: payload.vaultStoreId as string,
+    deviceId: payload.deviceId as string,
+    devicePublicKey: payload.devicePublicKey as string,
+    deviceSigningPublicKey: payload.deviceSigningPublicKey as string,
+  }
+}
+
+async function openPasskeyVault(
+  activeManager: NookVaultManager,
+  grant: ExtensionVaultGrant,
+): Promise<void> {
+  await activeManager.openExtensionPasskeyVault(
+    grant.vaultStoreId,
+    grant.deviceId,
+    grant.devicePublicKey,
+    grant.deviceSigningPublicKey,
+  )
+}
+
+async function flushPasskeyEventToProviders(
+  activeManager: NookVaultManager,
+  vaultStoreId: string,
+): Promise<void> {
+  const loaded = (await loadAuthProviders(activeManager)) as LoadedProviders
+  const providers = loaded.snapshot.providers.filter(
+    (provider) =>
+      provider.storeId === vaultStoreId &&
+      provider.type !== 'local' &&
+      provider.type !== 'local-folder',
+  )
+  await Promise.allSettled(
+    providers.map(async (provider) => {
+      const args = providerWasmArgs(provider)
+      try {
+        await activeManager.flushEventOutboxForProvider(
+          args.mode,
+          args.pat,
+          args.repo,
+        )
+      } finally {
+        args.free()
+      }
+    }),
+  )
 }
 
 async function handleMessage(message: unknown): Promise<unknown> {
@@ -239,6 +323,134 @@ async function handleMessage(message: unknown): Promise<unknown> {
       )
       armSessionExpiry()
       return { ok: true, envelope }
+    }
+    case 'nook:extension-session-import-vault': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      const records = payload.eventLogRecords
+      const providers = payload.providers
+      if (!Array.isArray(records) || !Array.isArray(providers)) {
+        throw new Error('Extension session received an invalid vault import.')
+      }
+      const activeManager = await getManager()
+      const status = await activeManager.importExtensionEventLogRecords(
+        grant.vaultStoreId,
+        grant.deviceId,
+        grant.devicePublicKey,
+        grant.deviceSigningPublicKey,
+        records,
+      )
+      const existing = (await loadAuthProviders(
+        activeManager,
+      )) as LoadedProviders
+      const merged = new Map(
+        existing.snapshot.providers.map((provider) => [provider.id, provider]),
+      )
+      for (const provider of providers as StoredProvider[]) {
+        if (provider && typeof provider.id === 'string')
+          merged.set(provider.id, provider)
+      }
+      await saveAuthProviders(activeManager, {
+        providers: Array.from(merged.values()),
+        activeVaultStoreId: grant.vaultStoreId,
+      })
+      return { ok: true, status }
+    }
+    case 'nook:extension-session-update-vault': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (!Array.isArray(payload.eventLogRecords)) {
+        throw new Error(
+          'Extension session received an invalid event-log update.',
+        )
+      }
+      const status = await (
+        await getManager()
+      ).importExtensionEventLogRecords(
+        grant.vaultStoreId,
+        grant.deviceId,
+        grant.devicePublicKey,
+        grant.deviceSigningPublicKey,
+        payload.eventLogRecords,
+      )
+      return { ok: true, status }
+    }
+    case 'nook:extension-session-list-passkeys': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (
+        typeof payload.rpId !== 'string' ||
+        typeof payload.origin !== 'string'
+      ) {
+        throw new Error('Extension session received an invalid passkey lookup.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const accounts = await activeManager.listWebsitePasskeyAccounts(
+        payload.rpId,
+        payload.origin,
+      )
+      try {
+        return {
+          ok: true,
+          accounts: accounts.map((account) => ({
+            credentialId: account.credentialId,
+            userName: account.userName,
+            userDisplayName: account.userDisplayName,
+          })),
+        }
+      } finally {
+        accounts.forEach((account) => account.free())
+      }
+    }
+    case 'nook:extension-session-register-passkey': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (typeof payload.requestJson !== 'string') {
+        throw new Error('Extension session received an invalid registration.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const registration = await activeManager.registerWebsitePasskey(
+        payload.requestJson,
+      )
+      try {
+        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+        return {
+          ok: true,
+          credentialId: registration.credentialId,
+          clientDataJSON: registration.clientDataJSON,
+          attestationObject: registration.attestationObject,
+          transports: registration.transports,
+        }
+      } finally {
+        registration.free()
+      }
+    }
+    case 'nook:extension-session-assert-passkey': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (typeof payload.requestJson !== 'string') {
+        throw new Error('Extension session received an invalid assertion.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const assertion = await activeManager.assertWebsitePasskey(
+        payload.requestJson,
+      )
+      try {
+        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+        return {
+          ok: true,
+          credentialId: assertion.credentialId,
+          clientDataJSON: assertion.clientDataJSON,
+          authenticatorData: assertion.authenticatorData,
+          signature: assertion.signature,
+          userHandle: assertion.userHandle,
+        }
+      } finally {
+        assertion.free()
+      }
     }
     default:
       return undefined

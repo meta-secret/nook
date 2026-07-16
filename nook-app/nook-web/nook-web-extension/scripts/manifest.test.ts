@@ -63,4 +63,24 @@ describe('extension origin isolation', () => {
   test('declares the offscreen permission for its memory-only device session', () => {
     expect(createManifest('1.0.0').permissions).toContain('offscreen')
   })
+
+  test('installs isolated transport and page-world WebAuthn bridges at document start', () => {
+    const scripts = createManifest('1.0.0').content_scripts
+    expect(
+      scripts.some(
+        (script) =>
+          script.world === 'ISOLATED' &&
+          script.run_at === 'document_start' &&
+          script.js.includes('content/webauthn-content.js'),
+      ),
+    ).toBe(true)
+    expect(
+      scripts.some(
+        (script) =>
+          script.world === 'MAIN' &&
+          script.run_at === 'document_start' &&
+          script.js.includes('content/webauthn-page.js'),
+      ),
+    ).toBe(true)
+  })
 })

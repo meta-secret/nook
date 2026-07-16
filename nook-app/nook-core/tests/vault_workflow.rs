@@ -2,11 +2,11 @@
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
-    ApiKeySecret, Database, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
-    PasskeyPublicKeyCose, PasskeySecret, PasswordOptions, ReplaceSecretInput, SecretId, SecretType,
-    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
-    deserialize_stored, filter_secrets, generate_password, replace_secret, serialize_stored,
-    validate_connect, validate_secret_data, validate_secret_id,
+    ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
+    PasswordOptions, ReplaceSecretInput, SecretId, SecretType, SecretValue, StoredRecordPayload,
+    SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState, deserialize_stored, filter_secrets,
+    generate_password, replace_secret, serialize_stored, validate_connect, validate_secret_data,
+    validate_secret_id,
 };
 use std::collections::HashMap;
 
@@ -48,25 +48,28 @@ fn sample_db() -> Database {
 }
 
 fn passkey() -> SecretValue {
-    SecretValue::Passkey(PasskeySecret {
-        version: PASSKEY_SECRET_VERSION,
-        rp_id: "login.example.com".to_owned(),
-        rp_name: "Example".to_owned(),
-        credential_id: URL_SAFE_NO_PAD.encode([1_u8; 32]),
-        user_handle: URL_SAFE_NO_PAD.encode([2_u8; 32]),
-        user_name: "alice@example.com".to_owned(),
-        user_display_name: "Alice".to_owned(),
-        key: PasskeyCredentialKey::Es256 {
-            private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(URL_SAFE_NO_PAD.encode([3_u8; 96]))
-                .unwrap(),
-            public_key_cose: PasskeyPublicKeyCose::parse(URL_SAFE_NO_PAD.encode([4_u8; 77]))
-                .unwrap(),
+    let request = PasskeyRegistrationRequest {
+        origin: "https://login.example.com".to_owned(),
+        challenge: URL_SAFE_NO_PAD.encode([1_u8; 32]),
+        relying_party: PasskeyRelyingParty {
+            id: "login.example.com".to_owned(),
+            name: "Example".to_owned(),
         },
-        signature_count: 7,
-        discoverable: true,
-        backup_eligible: true,
-        backup_state: true,
-    })
+        user: PasskeyUser {
+            id: URL_SAFE_NO_PAD.encode([2_u8; 32]),
+            name: "alice@example.com".to_owned(),
+            display_name: "Alice".to_owned(),
+        },
+        algorithms: vec![-7],
+        exclude_credentials: Vec::new(),
+        resident_key_required: true,
+        user_verification_required: true,
+    };
+    let mut passkey = nook_core::create_website_passkey(&request, &[])
+        .unwrap()
+        .credential;
+    passkey.signature_count = 7;
+    SecretValue::Passkey(passkey)
 }
 
 fn armored_cache_from_db(db: &Database, crypto: &VaultCrypto) -> HashMap<SecretId, String> {
@@ -103,7 +106,8 @@ fn load_vault(yaml: &str, crypto: &VaultCrypto) -> (Database, HashMap<SecretId, 
 fn passkey_round_trips_through_encrypted_vault_storage() {
     let crypto = VaultCrypto::new(&test_key()).unwrap();
     let mut database = Database::new();
-    database.insert(sid("passkey-example"), passkey());
+    let expected = passkey();
+    database.insert(sid("passkey-example"), expected.clone());
 
     let stored = database.to_stored_records_with_crypto(&crypto).unwrap();
     assert_eq!(stored[0].secret_type, Some(SecretType::Passkey));
@@ -121,7 +125,7 @@ fn passkey_round_trips_through_encrypted_vault_storage() {
             .find(|record| record.id.as_str() == "passkey-example")
             .unwrap()
             .data,
-        passkey()
+        expected
     );
 }
 
