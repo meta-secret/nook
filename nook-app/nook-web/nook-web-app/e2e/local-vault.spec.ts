@@ -430,7 +430,9 @@ test.describe('local vault', () => {
     )
   })
 
-  test('skips overlapping Bitwarden and 1Password records', async ({ page }) => {
+  test('skips overlapping Bitwarden and 1Password records', async ({
+    page,
+  }) => {
     const bitwardenExport = JSON.stringify({
       encrypted: false,
       folders: [],
