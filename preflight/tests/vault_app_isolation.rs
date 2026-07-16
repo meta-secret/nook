@@ -297,6 +297,8 @@ fn pr_retries_only_the_known_transient_buildkit_lease_loss() {
         "status=\"${PIPESTATUS[0]}\"",
         "unable to lease content: lease does not exist",
         "Retrying once after transient BuildKit lease loss",
+        "docker buildx prune --builder \"$builder\" --force",
+        "docker buildx inspect \"$builder\" --bootstrap",
     ] {
         assert!(
             pr.contains(required),

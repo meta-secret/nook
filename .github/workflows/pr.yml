@@ -53,6 +53,7 @@ jobs:
       - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
+          builder="${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
           for attempt in 1 2; do
             log="$RUNNER_TEMP/ci-pr-attempt-$attempt.log"
             set +e
@@ -71,7 +72,10 @@ jobs:
             if [ "$attempt" -eq 1 ] && grep -Fq \
               'unable to lease content: lease does not exist' "$log"; then
               echo "::warning::Retrying once after transient BuildKit lease loss"
-              docker buildx inspect --bootstrap >/dev/null || true
+              # Bootstrapping alone preserves the daemon's corrupt lease metadata. Prune only the
+              # selected builder's unused cache after this exact failure, then bootstrap it once.
+              docker buildx prune --builder "$builder" --force
+              docker buildx inspect "$builder" --bootstrap >/dev/null
               continue
             fi
             exit "$status"
