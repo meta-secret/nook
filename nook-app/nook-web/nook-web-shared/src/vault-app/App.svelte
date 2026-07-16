@@ -881,6 +881,8 @@
                   onClearCode={() => vault.clearEnrollmentCode()}
                   onImportBitwarden={(json, password) =>
                     vault.handleBitwardenImport(json, password)}
+                  onImportOnePassword={(archive) =>
+                    vault.handleOnePasswordImport(archive)}
                 />
               {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
                 <OnboardDevice

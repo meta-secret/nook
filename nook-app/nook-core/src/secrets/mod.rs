@@ -2,6 +2,7 @@
 
 pub(crate) mod bip39;
 pub(crate) mod bitwarden_import;
+pub(crate) mod onepassword_import;
 pub(crate) mod password;
 pub(crate) mod secret_types;
 pub(crate) mod secret_view;

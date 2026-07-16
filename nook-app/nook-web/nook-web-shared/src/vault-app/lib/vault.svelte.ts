@@ -2,7 +2,7 @@ import {
   getVaultManager,
   isoTimestamp,
   type JoinRequest,
-  type NookBitwardenImportResult,
+  type NookImportResult,
   type NookSecretListItem,
   type NookSecretRecord,
   type NookVaultSyncResult,
@@ -2710,8 +2710,14 @@ export class VaultState {
   async handleBitwardenImport(
     json: string,
     password: string,
-  ): Promise<NookBitwardenImportResult> {
+  ): Promise<NookImportResult> {
     return secretsActions.handleBitwardenImport(this, json, password);
+  }
+
+  async handleOnePasswordImport(
+    archive: Uint8Array,
+  ): Promise<NookImportResult> {
+    return secretsActions.handleOnePasswordImport(this, archive);
   }
 
   scheduleRemoteEventOutboxFlush(): void {

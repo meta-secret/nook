@@ -15,13 +15,14 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
+  import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { NookBitwardenImportResult } from '$lib/nook'
+  import type { NookImportResult } from '$lib/nook'
   import type {
     OAuthFilePreset,
     StorageProvider,
@@ -57,6 +58,7 @@
     onIssueCode,
     onClearCode,
     onImportBitwarden,
+    onImportOnePassword,
     activeSection = $bindable(
       undefined as
         | 'vaults'
@@ -102,7 +104,8 @@
     onImportBitwarden: (
       json: string,
       password: string,
-    ) => Promise<NookBitwardenImportResult>
+    ) => Promise<NookImportResult>
+    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
     activeSection?:
       | 'vaults'
       | 'storage'
@@ -118,6 +121,7 @@
   let editingStoreId = $state<string | undefined>(undefined)
   let renamingStoreId = $state<string | undefined>(undefined)
   let switchingTo = $state<string | undefined>(undefined)
+  let activeImportProvider = $state<string | undefined>(undefined)
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
@@ -510,13 +514,39 @@
         class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
       >
         <FileUp class="size-3" />
-        Bitwarden
+        {vault.t('settings.import_sources')}
       </span>
     {/snippet}
-    <BitwardenImportPanel
-      {vault}
-      {isSaving}
-      onImport={onImportBitwarden}
-    />
+    <div class="space-y-2">
+      <SettingsAccordionSection
+        title={vault.t('bitwarden_import.title')}
+        subtitle={vault.t('bitwarden_import.description')}
+        section="bitwarden"
+        bind:activeSection={activeImportProvider}
+        testId="bitwarden-import-section"
+      >
+        <BitwardenImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportBitwarden}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
+        title={vault.t('onepassword_import.title')}
+        subtitle={vault.t('onepassword_import.description')}
+        section="onepassword"
+        bind:activeSection={activeImportProvider}
+        testId="onepassword-import-section"
+      >
+        <OnePasswordImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportOnePassword}
+        />
+      </SettingsAccordionSection>
+    </div>
   </SettingsAccordionSection>
 </div>

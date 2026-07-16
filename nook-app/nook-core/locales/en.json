@@ -416,6 +416,19 @@
     "result_imported": "Imported {count} items.",
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
+  "onepassword_import": {
+    "title": "Import from 1Password",
+    "description": "Move supported items from a 1Password Unencrypted Export (.1pux) archive into this vault.",
+    "export_hint_title": "Export a 1PUX file from 1Password",
+    "export_hint": "In 1Password, choose Export, select your account, and use the 1PUX format. The export is unencrypted, so keep it safe and delete it after the import finishes.",
+    "file_label": "1Password 1PUX export",
+    "supported_types": "Nook imports logins, password items, and secure notes. Attachments, passkeys, cards, identities, SSH keys, and other item types are skipped.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "1Password import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "settings": {
     "title": "Settings",
     "storage": "Sync providers",
@@ -424,6 +437,7 @@
     "passwords_desc": "Passwords available for unlock and device onboarding",
     "import_export": "Import & Export",
     "import_export_desc": "Move supported data into or out of this vault",
+    "import_sources": "Bitwarden · 1Password",
     "devices": "Devices & Roster",
     "devices_desc": "Enrolled browsers and pending access requests",
     "add_provider": "Add Storage Provider",
@@ -981,6 +995,7 @@
     "secret_deleted": "Secret deleted successfully.",
     "item_updated": "Item updated successfully.",
     "bitwarden_imported": "Imported {count} Bitwarden items.",
+    "onepassword_imported": "Imported {count} 1Password items.",
     "error_timeout": "Connection timed out. Check your PAT, network, and try again.",
     "error_no_engine": "Vault engine is not available.",
     "error_unlock_required": "Unlock the vault before adding a password.",

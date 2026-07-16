@@ -1,6 +1,6 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type {
-  NookBitwardenImportResult,
+  NookImportResult,
   NookSecretRecord,
   VaultItemType,
 } from "$lib/nook";
@@ -262,7 +262,7 @@ export async function handleBitwardenImport(
   state: VaultState,
   json: string,
   password: string,
-): Promise<NookBitwardenImportResult> {
+): Promise<NookImportResult> {
   if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
   if (state.editsBlocked) throw new Error(editBlockedMessage(state));
   state.errorMsg = "";
@@ -290,6 +290,45 @@ export async function handleBitwardenImport(
     return result;
   } catch (error: unknown) {
     state.errorMsg = state.t("bitwarden_import.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    state.isSaving = false;
+  }
+}
+
+export async function handleOnePasswordImport(
+  state: VaultState,
+  archive: Uint8Array,
+): Promise<NookImportResult> {
+  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  try {
+    const result = await state.enqueueStorage(() =>
+      state.manager!.importOnePasswordPux(archive),
+    );
+    await state.runFanOutSyncAfterLocalSave();
+    await state.refreshSecretsFromSession();
+    log.info("1Password import completed", {
+      imported: result.imported,
+      skippedUnsupported: result.skippedUnsupported,
+      skippedDuplicates: result.skippedDuplicates,
+    });
+    state.showSuccess(
+      state.t("toasts.onepassword_imported", {
+        count: String(result.imported),
+      }),
+    );
+    return result;
+  } catch (error: unknown) {
+    state.errorMsg = state.t("onepassword_import.failed", {
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
