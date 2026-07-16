@@ -55,6 +55,8 @@ struct BitwardenItem {
     name: String,
     #[serde(default, deserialize_with = "deserialize_string_or_default")]
     notes: String,
+    #[serde(default)]
+    fields: Vec<BitwardenField>,
     login: Option<BitwardenLogin>,
 }
 
@@ -64,8 +66,18 @@ struct BitwardenLogin {
     username: String,
     #[serde(default, deserialize_with = "deserialize_string_or_default")]
     password: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    totp: String,
     #[serde(default)]
     uris: Vec<BitwardenUri>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BitwardenField {
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    name: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    value: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -261,6 +273,45 @@ fn parse_items(value: &serde_json::Value) -> Result<Vec<BitwardenItem>, Bitwarde
     serde_json::from_value(items.clone()).map_err(Into::into)
 }
 
+fn append_bitwarden_metadata(
+    notes: &mut String,
+    metadata: impl IntoIterator<Item = (String, String)>,
+) {
+    let metadata = metadata
+        .into_iter()
+        .filter(|(_, value)| !value.trim().is_empty())
+        .collect::<Vec<_>>();
+    if metadata.is_empty() {
+        return;
+    }
+    if !notes.is_empty() {
+        notes.push_str("\n\n");
+    }
+    notes.push_str("## Bitwarden");
+    for (key, value) in metadata {
+        notes.push_str("\n- ");
+        notes.push_str(&key);
+        notes.push_str(": ");
+        notes.push_str(&value);
+    }
+}
+
+fn custom_field_metadata(fields: Vec<BitwardenField>) -> Vec<(String, String)> {
+    fields
+        .into_iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let name = field.name.trim();
+            let key = if name.is_empty() {
+                format!("field[{}]", index + 1)
+            } else {
+                format!("field.{name}")
+            };
+            (key, field.value)
+        })
+        .collect()
+}
+
 fn convert_login(item: BitwardenItem) -> Option<SecretValue> {
     let login = item.login?;
     let uris = login
@@ -273,22 +324,37 @@ fn convert_login(item: BitwardenItem) -> Option<SecretValue> {
         .first()
         .cloned()
         .unwrap_or_else(|| item.name.trim().to_owned());
+    let mut metadata = Vec::new();
+    metadata.push(("totp".to_owned(), login.totp));
+    metadata.extend(
+        uris.into_iter()
+            .skip(1)
+            .enumerate()
+            .map(|(index, uri)| (format!("uri[{}]", index + 2), uri)),
+    );
+    metadata.extend(custom_field_metadata(item.fields));
+    let mut notes = item.notes;
+    append_bitwarden_metadata(&mut notes, metadata);
 
     Some(SecretValue::Login(LoginSecret {
         website_url: website_url.trim().to_owned(),
         username: login.username,
         password: login.password,
-        notes: item.notes,
+        notes,
     }))
 }
 
 fn convert_item(item: BitwardenItem) -> Option<SecretValue> {
     match item.item_type {
         1 => convert_login(item),
-        2 => Some(SecretValue::SecureNote(SecureNoteSecret {
-            title: item.name.trim().to_owned(),
-            note: item.notes,
-        })),
+        2 => {
+            let mut notes = item.notes;
+            append_bitwarden_metadata(&mut notes, custom_field_metadata(item.fields));
+            Some(SecretValue::SecureNote(SecureNoteSecret {
+                title: item.name.trim().to_owned(),
+                note: notes,
+            }))
+        }
         _ => None,
     }
 }
@@ -375,7 +441,10 @@ mod tests {
         assert_eq!(login.website_url, "https://github.com/login");
         assert_eq!(login.username, "alice");
         assert_eq!(login.password, "secret");
-        assert_eq!(login.notes, "recovery codes elsewhere");
+        assert_eq!(
+            login.notes,
+            "recovery codes elsewhere\n\n## Bitwarden\n- totp: otpauth://secret\n- uri[2]: https://gist.github.com\n- field.PIN: 1234"
+        );
     }
 
     #[test]
@@ -393,6 +462,32 @@ mod tests {
             vec![SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
                 note: "hello".to_owned(),
+            })]
+        );
+    }
+
+    #[test]
+    fn preserves_secure_note_custom_fields() {
+        let plan = plan_bitwarden_import(
+            r#"{"items":[{
+                "type":2,
+                "name":"Recovery",
+                "notes":"Keep offline",
+                "fields":[
+                    {"name":"answer","value":"blue"},
+                    {"name":null,"value":"unnamed secret"},
+                    {"name":"empty","value":null}
+                ]
+            }]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            plan.items,
+            vec![SecretValue::SecureNote(SecureNoteSecret {
+                title: "Recovery".to_owned(),
+                note:
+                    "Keep offline\n\n## Bitwarden\n- field.answer: blue\n- field[2]: unnamed secret"
+                        .to_owned(),
             })]
         );
     }
