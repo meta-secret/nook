@@ -931,6 +931,7 @@ fn to_js_value<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bin
 pub async fn load_auth_providers(
     manager: &NookVaultManager,
 ) -> Result<JsValue, wasm_bindgen::JsError> {
+    manager.ensure_auth_provider_persistence_allowed()?;
     let identity = manager.device_identity()?;
     let normalized = crate::storage::auth_providers::load_auth_providers(&identity).await?;
     Ok(to_js_value(&normalized)?)
@@ -943,6 +944,7 @@ pub async fn save_auth_providers(
     manager: &NookVaultManager,
     snapshot: JsValue,
 ) -> Result<(), wasm_bindgen::JsError> {
+    manager.ensure_auth_provider_persistence_allowed()?;
     let identity = manager.device_identity()?;
     let snapshot: nook_core::AuthProvidersSnapshotData = serde_wasm_bindgen::from_value(snapshot)?;
     crate::storage::auth_providers::save_auth_providers(&identity, &snapshot).await?;

@@ -1202,7 +1202,8 @@
     "unlock": {
       "action": "Разблокировать Simple Vault на этой вкладке",
       "open_simple_vault_first": "Откройте вкладку Simple Vault и повторите попытку.",
-      "handoff_failed": "Расширение не смогло разблокировать эту вкладку Simple Vault."
+      "handoff_failed": "Расширение не смогло разблокировать эту вкладку Simple Vault.",
+      "provider_changes_blocked": "Заблокируйте сеанс, открытый расширением, и разблокируйте сайт с помощью passkey или PIN-кода, чтобы изменить провайдеров синхронизации."
     },
     "manifest": {
       "name": "Пароли Nook",

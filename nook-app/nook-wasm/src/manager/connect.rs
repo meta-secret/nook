@@ -25,6 +25,18 @@ fn is_sentinel_ceremony_required(err: &NookError) -> bool {
     }
 }
 
+fn ensure_extension_handoff_uses_existing_vault(
+    extension_handoff_active: bool,
+    use_genesis: bool,
+) -> Result<(), NookError> {
+    if extension_handoff_active && use_genesis {
+        return Err(NookError::Database(
+            "Extension identity handoff requires an existing local vault.".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Returns `ready`, `new_vault`, `needs_enrollment`, `join_pending`,
@@ -184,6 +196,11 @@ impl NookVaultManager {
         } else {
             content_requires_genesis(&content, force_genesis)?
         };
+
+        ensure_extension_handoff_uses_existing_vault(
+            self.extension_identity_handoff_active,
+            use_genesis,
+        )?;
 
         if use_genesis {
             self.bootstrap_genesis_connect(&identity).await?;
@@ -394,5 +411,17 @@ impl NookVaultManager {
         self.persist_projection_cache().await?;
         let _ = self.status.tx.send("READY".to_owned());
         Ok(self.get_records()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_extension_handoff_uses_existing_vault;
+
+    #[test]
+    fn extension_handoff_never_bootstraps_genesis() {
+        assert!(ensure_extension_handoff_uses_existing_vault(true, true).is_err());
+        assert!(ensure_extension_handoff_uses_existing_vault(true, false).is_ok());
+        assert!(ensure_extension_handoff_uses_existing_vault(false, true).is_ok());
     }
 }

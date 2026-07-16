@@ -23,6 +23,16 @@ import { createLogger } from "$lib/log";
 
 const log = createLogger("vault-providers");
 
+function providerCredentialsReadOnly(state: VaultState): boolean {
+  return state.manager?.authProviderPersistenceAllowed === false;
+}
+
+function blockExtensionBackedProviderChange(state: VaultState): boolean {
+  if (!providerCredentialsReadOnly(state)) return false;
+  state.errorMsg = state.t("extension.unlock.provider_changes_blocked");
+  return true;
+}
+
 /** Store id for persisting a sync provider row before or after wasm connect. */
 function vaultStoreIdForProviderSave(state: VaultState): string | undefined {
   const fromManager = state.manager?.vaultStoreId.trim();
@@ -46,6 +56,13 @@ export async function loadProviders(
   state: VaultState,
   options?: { ensureLocalRow?: boolean },
 ) {
+  if (providerCredentialsReadOnly(state)) {
+    state.providers = state.providers.filter(
+      (provider) => provider.type === "local",
+    );
+    state.providersLoaded = true;
+    return;
+  }
   const snapshot = await state.enqueueStorage(() =>
     options?.ensureLocalRow
       ? loadAuthProvidersWithLocalRow(state.manager!)
@@ -125,6 +142,9 @@ export async function persistProviders(
   state: VaultState,
   opts?: { replace?: boolean },
 ) {
+  if (blockExtensionBackedProviderChange(state)) {
+    throw new Error(state.t("extension.unlock.provider_changes_blocked"));
+  }
   if (!opts?.replace && state.localVaultPresent) {
     const snapshot = await state.enqueueStorage(() =>
       loadAuthProviders(state.manager!),
@@ -150,6 +170,7 @@ export function beginProviderSetup(
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ) {
+  if (blockExtensionBackedProviderChange(state)) return;
   if (!state.isAuthenticated) {
     state.resetVaultSessionState();
   }
@@ -182,6 +203,7 @@ export function beginProviderSetup(
 }
 
 export function beginAddProvider(state: VaultState) {
+  if (blockExtensionBackedProviderChange(state)) return;
   if (!state.isAuthenticated) {
     state.resetVaultSessionState();
   }
@@ -222,6 +244,7 @@ export async function removeProvider(
   state: VaultState,
   id: string,
 ): Promise<void> {
+  if (blockExtensionBackedProviderChange(state)) return;
   const target = state.providers.find((p) => p.id === id);
   if (!target || target.type === "local") return;
 
@@ -240,6 +263,7 @@ export async function removeProvider(
 }
 
 export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
+  if (blockExtensionBackedProviderChange(state)) return false;
   const pat = state.githubPat.trim();
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO;
   const sharedGoogleDrive =

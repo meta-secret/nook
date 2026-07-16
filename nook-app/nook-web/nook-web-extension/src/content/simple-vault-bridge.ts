@@ -48,7 +48,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     message.payload.identitySecret = ''
     message.payload.signingSeed = ''
     sendResponse({ ok: false })
-  }, 15_000)
+  }, 35_000)
   window.postMessage(message, window.location.origin)
   return true
 })

@@ -182,7 +182,9 @@ export async function loadDb(state: VaultState, options?: LoadDbOptions) {
     if (options?.loadSiteProviders !== false) {
       await state.loadProviders();
     }
-    await state.promoteSessionVaultToLocalIfNeeded();
+    if (options?.loadSiteProviders !== false) {
+      await state.promoteSessionVaultToLocalIfNeeded();
+    }
     await state.refreshPasswordEntriesList();
     await state.hydrateMultiDeviceState();
     state.markVaultUnlocked();

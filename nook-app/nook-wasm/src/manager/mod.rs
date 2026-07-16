@@ -200,6 +200,10 @@ impl SyncOutboxState {
 #[wasm_bindgen]
 pub struct NookVaultManager {
     pub(in crate::manager) application: nook_core::VaultApplication,
+    /// True only while Simple Vault is using an identity borrowed from the
+    /// extension. Origin-owned provider credentials must remain inaccessible
+    /// for the lifetime of this session.
+    pub(in crate::manager) extension_identity_handoff_active: bool,
     pub(in crate::manager) storage: StorageSession,
     pub(in crate::manager) vault: VaultSessionState,
     pub(in crate::manager) device: DeviceSessionState,
@@ -239,6 +243,7 @@ impl NookVaultManager {
     pub fn new() -> Self {
         Self {
             application: crate::application::configured_vault_application(),
+            extension_identity_handoff_active: false,
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),
@@ -259,6 +264,11 @@ impl NookVaultManager {
     #[wasm_bindgen(getter, js_name = vaultApplication)]
     pub fn vault_application(&self) -> String {
         self.application.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = authProviderPersistenceAllowed)]
+    pub fn auth_provider_persistence_allowed(&self) -> bool {
+        !self.extension_identity_handoff_active
     }
 
     #[wasm_bindgen(getter, js_name = vaultStoreId)]
@@ -372,6 +382,15 @@ impl NookVaultManager {
 // submodules can call them without leaking into the rest of the crate.
 
 impl NookVaultManager {
+    pub(crate) fn ensure_auth_provider_persistence_allowed(&self) -> Result<(), NookError> {
+        if self.extension_identity_handoff_active {
+            return Err(NookError::Database(
+                "ExtensionHandoffProviderCredentialsReadOnly".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
         records_to_vec(self.vault.database.list())

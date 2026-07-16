@@ -41,6 +41,7 @@ impl NookVaultManager {
     pub fn lock_device_identity(&mut self) {
         self.device.identity_private_key.zeroize();
         self.event_log.signing_seed.zeroize();
+        self.extension_identity_handoff_active = false;
     }
 
     /// Export the unlocked extension identity for a single in-memory handoff to
@@ -93,6 +94,7 @@ impl NookVaultManager {
         self.device.id = device_id;
         self.device.identity_private_key = private_key;
         self.event_log.signing_seed = signing_seed;
+        self.extension_identity_handoff_active = true;
         Ok(())
     }
 
@@ -411,10 +413,12 @@ mod tests {
             identity.public_key()
         );
         assert_eq!(simple.event_log.signing_seed, signing_seed.as_str());
+        assert!(!simple.auth_provider_persistence_allowed());
 
         simple.lock_device_identity();
         assert!(simple.device.identity_private_key.is_empty());
         assert!(simple.event_log.signing_seed.is_empty());
+        assert!(simple.auth_provider_persistence_allowed());
 
         let mut sentinel = NookVaultManager::new();
         sentinel.application = nook_core::VaultApplication::Sentinel;

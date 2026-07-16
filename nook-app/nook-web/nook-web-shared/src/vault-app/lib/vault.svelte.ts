@@ -1258,11 +1258,15 @@ export class VaultState {
       this.deviceProtectionStatus = "unlocked";
       return true;
     } catch {
-      if (
-        this.deviceProtectionStatus === "unlocked" ||
-        deviceIdentityUnlocked
-      ) {
-        void this.lockDeviceProtection();
+      if (deviceIdentityUnlocked) {
+        // `connect()` may have decrypted the vault before active-grant
+        // validation rejected the handoff. Clear that entire session before
+        // dropping the borrowed device identity.
+        try {
+          await this.enqueueStorage(() => this.manager!.resetVaultSession());
+        } finally {
+          await this.lockDeviceProtection();
+        }
       }
       // Rust validation errors intentionally stay behind the typed boundary;
       // user-facing copy always comes from the shared locale catalog.

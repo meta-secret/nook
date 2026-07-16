@@ -92,7 +92,7 @@
         (response: { ok?: boolean } | undefined) => {
           const runtimeError = chrome.runtime.lastError?.message
           if (runtimeError) {
-            reject(new Error(runtimeError))
+            reject(new Error(i18n.t('extension.unlock.handoff_failed')))
             return
           }
           if (response?.ok === true) {
