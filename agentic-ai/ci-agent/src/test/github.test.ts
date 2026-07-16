@@ -5,8 +5,10 @@ import type { Octokit } from "@octokit/rest";
 
 import {
   assertNoPendingPrFeedback,
+  markAgentManagedPr,
   requiredPrCheckNames,
-  waitForPrChecks,
+  requiredPrWorkflows,
+  squashMergePr,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
@@ -28,30 +30,13 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ]),
     ["Build and deploy research catalog", "Verify and preview"],
   );
-});
-
-test("waitForPrChecks ignores pending external checks", async () => {
-  const octokit = mockOctokit({
-    files: ["nook-app/nook-core/src/lib.rs"],
-    checkRuns: [
-      checkRun("Codex", "in_progress"),
-      checkRun("Verify and preview", "completed", "success"),
-    ],
-  });
-
-  await waitForPrChecks(octokit, repoRef, 347, 0, 1_000);
-});
-
-test("waitForPrChecks fails a repository-owned check", async () => {
-  const octokit = mockOctokit({
-    files: ["nook-app/nook-core/src/lib.rs"],
-    checkRuns: [checkRun("Verify and preview", "completed", "failure")],
-  });
-
-  await assert.rejects(
-    waitForPrChecks(octokit, repoRef, 347, 0, 1_000),
-    /repository-owned checks failed/,
-  );
+  assert.deepEqual(requiredPrWorkflows(["nook-app/nook-core/src/lib.rs"]), [
+    {
+      checkName: "Verify and preview",
+      workflowFile: "pr.yml",
+      workflowName: "PR",
+    },
+  ]);
 });
 
 test("assertNoPendingPrFeedback ignores repository status comments", async () => {
@@ -81,9 +66,45 @@ test("assertNoPendingPrFeedback blocks unresolved review threads", async () => {
   );
 });
 
+test("markAgentManagedPr marks and wakes a reused PR", async () => {
+  let updatedBody = "";
+  const octokit = {
+    rest: {
+      pulls: {
+        get: async () => ({ data: { body: "Existing body" } }),
+        update: async ({ body }: { body: string }) => {
+          updatedBody = body;
+          return { data: {} };
+        },
+      },
+    },
+  } as unknown as Octokit;
+
+  await markAgentManagedPr(octokit, repoRef, 347, "run-42");
+  assert.match(updatedBody, /<!-- nook-agent-managed -->/);
+  assert.match(updatedBody, /<!-- nook-agent-monitor-wake:run-42 -->/);
+});
+
+test("squashMergePr requires the audited head SHA", async () => {
+  let mergeSha = "";
+  const octokit = {
+    rest: {
+      pulls: {
+        merge: async ({ sha }: { sha: string }) => {
+          mergeSha = sha;
+          return { data: {} };
+        },
+      },
+      git: { deleteRef: async () => ({ data: {} }) },
+    },
+  } as unknown as Octokit;
+
+  await squashMergePr(octokit, repoRef, 347, "agent/fix", "audited-sha");
+  assert.equal(mergeSha, "audited-sha");
+});
+
 type MockOptions = {
   files?: string[];
-  checkRuns?: Array<ReturnType<typeof checkRun>>;
   issueComments?: Array<{ body: string }>;
   reviews?: Array<{ commit_id: string; state: string; body: string }>;
   unresolvedThreads?: number;
@@ -104,9 +125,6 @@ function mockOctokit(options: MockOptions): Octokit {
     rest: {
       pulls,
       issues,
-      checks: {
-        listForRef: async () => ({ data: { check_runs: options.checkRuns ?? [] } }),
-      },
     },
     paginate: async (
       route: (args: unknown) => Promise<{ data: unknown[] }>,
@@ -126,17 +144,4 @@ function mockOctokit(options: MockOptions): Octokit {
     }),
   };
   return octokit as unknown as Octokit;
-}
-
-function checkRun(
-  name: string,
-  status: "queued" | "in_progress" | "completed",
-  conclusion?: string,
-) {
-  return {
-    name,
-    status,
-    conclusion,
-    app: { slug: name === "Codex" ? "codex" : "github-actions" },
-  };
 }

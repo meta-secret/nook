@@ -5,6 +5,8 @@ import { createLogger } from "./logger.js";
 const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
+export const AGENT_MANAGED_PR_MARKER = "<!-- nook-agent-managed -->";
+const AGENT_MONITOR_WAKE_PREFIX = "<!-- nook-agent-monitor-wake:";
 
 export function parseRepository(fullName: string): RepoRef {
   const [owner, repo] = fullName.split("/");
@@ -75,7 +77,7 @@ export async function createFixPr(
   const { owner, repo } = repoRef;
   const title =
     process.env.AGENT_PR_TITLE?.trim() || `Fix ${fixLabel} (run ${runId})`;
-  const body =
+  const requestedBody =
     process.env.AGENT_PR_BODY?.trim() ||
     [
       "## Summary",
@@ -84,6 +86,9 @@ export async function createFixPr(
       "## Test plan",
       "- [ ] CI green on this PR",
     ].join("\n");
+  const body = requestedBody.includes(AGENT_MANAGED_PR_MARKER)
+    ? requestedBody
+    : `${requestedBody}\n\n${AGENT_MANAGED_PR_MARKER}`;
 
   try {
     const { data } = await octokit.rest.pulls.create({
@@ -98,10 +103,38 @@ export async function createFixPr(
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
     if (existing) {
+      await markAgentManagedPr(octokit, repoRef, existing, runId);
       return existing;
     }
     throw err;
   }
+}
+
+export async function markAgentManagedPr(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  prNumber: number,
+  wakeId: string,
+): Promise<void> {
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+  const bodyWithoutPriorWake = (pr.body ?? "")
+    .split("\n")
+    .filter((line) => !line.startsWith(AGENT_MONITOR_WAKE_PREFIX))
+    .join("\n")
+    .trim();
+  const markedBody = bodyWithoutPriorWake.includes(AGENT_MANAGED_PR_MARKER)
+    ? bodyWithoutPriorWake
+    : `${bodyWithoutPriorWake}\n\n${AGENT_MANAGED_PR_MARKER}`.trim();
+  await octokit.rest.pulls.update({
+    owner,
+    repo,
+    pull_number: prNumber,
+    body: `${markedBody}\n${AGENT_MONITOR_WAKE_PREFIX}${wakeId} -->`,
+  });
 }
 
 export async function commentOnIssue(
@@ -119,94 +152,42 @@ export async function commentOnIssue(
   });
 }
 
-const DEFAULT_CHECKS_TIMEOUT_MS = 45 * 60 * 1000;
 const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
 
-export function requiredPrCheckNames(paths: string[]): string[] {
-  const required = new Set<string>();
+export type RequiredPrWorkflow = {
+  checkName: string;
+  workflowFile: string;
+  workflowName: string;
+};
+
+const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: MAIN_PR_CHECK,
+  workflowFile: "pr.yml",
+  workflowName: "PR",
+};
+
+const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: WEB_RESEARCH_PR_CHECK,
+  workflowFile: "web-research.yml",
+  workflowName: "Web research",
+};
+
+export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
+  const required: RequiredPrWorkflow[] = [];
 
   if (paths.some(isWebResearchPath)) {
-    required.add(WEB_RESEARCH_PR_CHECK);
+    required.push(WEB_RESEARCH_PR_WORKFLOW);
   }
   if (paths.some((path) => !isMainPrIgnoredPath(path))) {
-    required.add(MAIN_PR_CHECK);
+    required.push(MAIN_PR_WORKFLOW);
   }
 
-  return [...required];
+  return required;
 }
 
-export async function waitForPrChecks(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-  pollMs: number,
-  timeoutMs = Number(process.env.CI_FIX_CHECKS_TIMEOUT_MS ?? DEFAULT_CHECKS_TIMEOUT_MS),
-): Promise<void> {
-  log.info(`Waiting for PR #${prNumber} repository-owned checks`);
-  const { owner, repo } = repoRef;
-  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-    owner,
-    repo,
-    pull_number: prNumber,
-    per_page: 100,
-  });
-  const requiredNames = requiredPrCheckNames(files.map((file) => file.filename));
-  if (requiredNames.length === 0) {
-    log.info(`PR #${prNumber} has no applicable repository-owned remote check`);
-    return;
-  }
-
-  log.info(`PR #${prNumber} requires: ${requiredNames.join(", ")}`);
-  const started = Date.now();
-  const effectiveTimeout =
-    Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_CHECKS_TIMEOUT_MS;
-
-  while (true) {
-    if (Date.now() - started > effectiveTimeout) {
-      throw new Error(
-        `PR #${prNumber} checks timed out after ${Math.round(effectiveTimeout / 60000)}m (CI_FIX_CHECKS_TIMEOUT_MS)`,
-      );
-    }
-
-    const { data: pr } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-    });
-    const sha = pr.head.sha;
-
-    const { data: checkRuns } = await octokit.rest.checks.listForRef({
-      owner,
-      repo,
-      ref: sha,
-      per_page: 100,
-    });
-    const repositoryRuns = checkRuns.check_runs.filter(
-      (run) =>
-        requiredNames.includes(run.name) && run.app?.slug === "github-actions",
-    );
-    const failedRuns = repositoryRuns.filter(
-      (run) => run.status === "completed" && run.conclusion !== "success",
-    );
-    if (failedRuns.length > 0) {
-      throw new Error(
-        `PR #${prNumber} repository-owned checks failed: ${failedRuns.map((run) => run.name).join(", ")}`,
-      );
-    }
-
-    const successfulNames = new Set(
-      repositoryRuns
-        .filter((run) => run.status === "completed" && run.conclusion === "success")
-        .map((run) => run.name),
-    );
-    if (requiredNames.every((name) => successfulNames.has(name))) {
-      log.info(`PR #${prNumber} repository-owned checks passed`);
-      return;
-    }
-
-    await sleep(pollMs);
-  }
+export function requiredPrCheckNames(paths: string[]): string[] {
+  return requiredPrWorkflows(paths).map((workflow) => workflow.checkName);
 }
 
 type ReviewThreadPage = {
@@ -238,6 +219,32 @@ export async function assertNoPendingPrFeedback(
   repoRef: RepoRef,
   prNumber: number,
 ): Promise<void> {
+  const feedback = await inspectPrFeedback(octokit, repoRef, prNumber);
+  if (
+    feedback.unresolvedThreads > 0 ||
+    feedback.substantiveComments > 0 ||
+    feedback.substantiveReviews > 0
+  ) {
+    throw new Error(
+      `PR #${prNumber} has feedback requiring manual handling before merge ` +
+        `(threads=${feedback.unresolvedThreads}, comments=${feedback.substantiveComments}, reviews=${feedback.substantiveReviews})`,
+    );
+  }
+
+  log.info(`PR #${prNumber} has no pending feedback at final inspection`);
+}
+
+export type PrFeedbackSummary = {
+  substantiveComments: number;
+  substantiveReviews: number;
+  unresolvedThreads: number;
+};
+
+export async function inspectPrFeedback(
+  octokit: Octokit,
+  repoRef: RepoRef,
+  prNumber: number,
+): Promise<PrFeedbackSummary> {
   const { owner, repo } = repoRef;
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
@@ -288,18 +295,11 @@ export async function assertNoPendingPrFeedback(
     return body.length > 0 && !body.startsWith("### 💡 Codex Review");
   });
 
-  if (
-    unresolvedThreads > 0 ||
-    substantiveComments.length > 0 ||
-    substantiveReviews.length > 0
-  ) {
-    throw new Error(
-      `PR #${prNumber} has feedback requiring manual handling before merge ` +
-        `(threads=${unresolvedThreads}, comments=${substantiveComments.length}, reviews=${substantiveReviews.length})`,
-    );
-  }
-
-  log.info(`PR #${prNumber} has no pending feedback at final inspection`);
+  return {
+    substantiveComments: substantiveComments.length,
+    substantiveReviews: substantiveReviews.length,
+    unresolvedThreads,
+  };
 }
 
 export async function squashMergePr(
@@ -307,6 +307,7 @@ export async function squashMergePr(
   repoRef: RepoRef,
   prNumber: number,
   headBranch: string,
+  headSha: string,
 ): Promise<void> {
   const { owner, repo } = repoRef;
   log.info(`Squash merging PR #${prNumber}`);
@@ -315,6 +316,7 @@ export async function squashMergePr(
     repo,
     pull_number: prNumber,
     merge_method: "squash",
+    sha: headSha,
   });
 
   try {
@@ -337,10 +339,6 @@ function isNotFound(err: unknown): boolean {
     "status" in err &&
     (err as { status: number }).status === 404
   );
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isWebResearchPath(path: string): boolean {

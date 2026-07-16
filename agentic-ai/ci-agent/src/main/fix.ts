@@ -2,14 +2,12 @@ import { chdir } from "node:process";
 
 import { loadConfig } from "./config.js";
 import {
-  assertNoPendingPrFeedback,
   branchExistsOnOrigin,
   createFixPr,
   createOctokit,
   findOpenPr,
+  markAgentManagedPr,
   parseRepository,
-  squashMergePr,
-  waitForPrChecks,
 } from "./github.js";
 import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
 import { createLogger } from "./logger.js";
@@ -17,8 +15,6 @@ import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
 
 const log = createLogger("fix");
-
-const DEFAULT_POLL_MS = 15_000;
 
 export async function runCiFix(): Promise<void> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
@@ -29,8 +25,6 @@ export async function runCiFix(): Promise<void> {
 
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
   const fixBranch = process.env.FIX_BRANCH?.trim() || `fix/ci-${runId}`;
-  const pollMs = Number(process.env.CI_FIX_POLL_MS ?? DEFAULT_POLL_MS);
-
   chdir(repoRoot);
 
   const octokit = createOctokit();
@@ -82,9 +76,11 @@ export async function runCiFix(): Promise<void> {
     log.info(`Opened fix PR #${prNumber}`);
   }
 
+  await markAgentManagedPr(octokit, repoRef, prNumber, runId);
+
   const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
-  await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
-  await assertNoPendingPrFeedback(octokit, repoRef, prNumber);
-  await squashMergePr(octokit, repoRef, prNumber, fixBranch);
-  log.info(`Done — merged PR #${prNumber} (fix for ${fixLabel} run ${runId})`);
+  log.info(
+    `PR #${prNumber} handed to the workflow_run monitor; the agent job will not poll or wait`,
+  );
+  log.info(`Done — event monitor armed for ${fixLabel} run ${runId}`);
 }

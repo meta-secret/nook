@@ -2,16 +2,14 @@ import { chdir } from "node:process";
 
 import { loadConfig } from "./config.js";
 import {
-  assertNoPendingPrFeedback,
   branchExistsOnOrigin,
   commentOnIssue,
   createFixPr,
   createOctokit,
   findOpenPr,
+  markAgentManagedPr,
   parseRepository,
   pullRequestUrl,
-  squashMergePr,
-  waitForPrChecks,
 } from "./github.js";
 import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
 import { createLogger } from "./logger.js";
@@ -19,8 +17,6 @@ import { loadPrompt, resolveAgentTask } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
 
 const log = createLogger("implement");
-
-const DEFAULT_POLL_MS = 15_000;
 
 export async function runCiImplement(): Promise<void> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
@@ -37,10 +33,9 @@ export async function runCiImplement(): Promise<void> {
     process.env.AGENT_BRANCH?.trim() ||
     process.env.FIX_BRANCH?.trim() ||
     `agent/prompt-${runId}`;
-  const pollMs = Number(process.env.CI_FIX_POLL_MS ?? DEFAULT_POLL_MS);
   const issueNumberRaw = process.env.AGENT_ISSUE_NUMBER?.trim();
-  const issueNumber = issueNumberRaw ? Number(issueNumberRaw) : null;
-  if (issueNumberRaw && (!Number.isInteger(issueNumber) || (issueNumber ?? 0) <= 0)) {
+  const issueNumber = issueNumberRaw ? Number(issueNumberRaw) : undefined;
+  if (issueNumberRaw && (issueNumber === undefined || !Number.isInteger(issueNumber) || issueNumber <= 0)) {
     throw new Error(`Invalid AGENT_ISSUE_NUMBER: ${issueNumberRaw}`);
   }
 
@@ -94,15 +89,17 @@ export async function runCiImplement(): Promise<void> {
         octokit,
         repoRef,
         issueNumber,
-        `Opened PR ${url} for this issue. Waiting only for Nook's repository-owned PR checks, then inspecting existing feedback before squash-merging.`,
+        `Opened PR ${url} for this issue. The implementation job will exit; Nook's workflow_run monitor will evaluate repository-owned checks and currently present feedback without waiting for Codex or another external review.`,
       );
     }
   }
 
-  await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
-  await assertNoPendingPrFeedback(octokit, repoRef, prNumber);
-  await squashMergePr(octokit, repoRef, prNumber, agentBranch);
-  log.info(`Done — merged PR #${prNumber} (implement run ${runId})`);
+  await markAgentManagedPr(octokit, repoRef, prNumber, runId);
+
+  log.info(
+    `PR #${prNumber} handed to the workflow_run monitor; the agent job will not poll or wait`,
+  );
+  log.info(`Done — event monitor armed for implement run ${runId}`);
 
   if (issueNumber) {
     const url = pullRequestUrl(repoRef, prNumber);
@@ -110,7 +107,7 @@ export async function runCiImplement(): Promise<void> {
       octokit,
       repoRef,
       issueNumber,
-      `Squash-merged ${url}.`,
+      `Event-driven repository-check monitoring is armed for ${url}. The agent job has exited and will not wait for Codex or another external review.`,
     );
   }
 }

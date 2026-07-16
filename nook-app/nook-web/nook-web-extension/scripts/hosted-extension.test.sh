@@ -58,6 +58,13 @@ cat > "$fixture/archive/manifest.json" <<'EOF'
   "content_scripts": [{
     "matches": ["https://pr-410.nokey-simple.pages.dev/*"],
     "exclude_matches": [
+      "https://sentinel.nokey.sh/*",
+      "https://pr-410.nokey-sentinel.pages.dev/*"
+    ],
+    "js": ["service-worker.js"]
+  }, {
+    "matches": ["<all_urls>"],
+    "exclude_matches": [
       "https://pr-410.nokey-simple.pages.dev/*",
       "https://sentinel.nokey.sh/*",
       "https://pr-410.nokey-sentinel.pages.dev/*"
@@ -99,6 +106,16 @@ missing_simple="$fixture/missing-simple.json"
 jq '(.content_scripts[].exclude_matches) -= ["https://pr-410.nokey-simple.pages.dev/*"]' \
   "$fixture/archive/manifest.json" > "$missing_simple"
 expect_failure validate_extracted_manifest "$missing_simple" "$extension_id"
+extra_target="$fixture/extra-target.json"
+jq '.content_scripts += [{
+  "matches": ["https://example.com/*"],
+  "exclude_matches": [
+    "https://sentinel.nokey.sh/*",
+    "https://pr-410.nokey-sentinel.pages.dev/*"
+  ],
+  "js": ["service-worker.js"]
+}]' "$fixture/archive/manifest.json" > "$extra_target"
+expect_failure validate_extracted_manifest "$extra_target" "$extension_id"
 expect_failure validate_extracted_manifest \
   "$fixture/archive/manifest.json" 'abcdefghijklmnopabcdefghijklmnop'
 

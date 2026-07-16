@@ -51,14 +51,35 @@ jobs:
       # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
       # path and makes a cold Rust cache slower than the former combined build.
       - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
-        run: >-
-          task ci:pr
-          VITE_BASE=/
-          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
-          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-          WASM_BUILD_MODE=dev
+        run: |
+          set -euo pipefail
+          builder="${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
+          for attempt in 1 2; do
+            log="$RUNNER_TEMP/ci-pr-attempt-$attempt.log"
+            set +e
+            task ci:pr \
+              VITE_BASE=/ \
+              VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
+              VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
+              VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
+              VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
+              WASM_BUILD_MODE=dev 2>&1 | tee "$log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 1 ] && grep -Fq \
+              'unable to lease content: lease does not exist' "$log"; then
+              echo "::warning::Retrying once after transient BuildKit lease loss"
+              # Bootstrapping alone preserves the daemon's corrupt lease metadata. Prune only the
+              # selected builder's unused cache after this exact failure, then bootstrap it once.
+              docker buildx prune --builder "$builder" --force
+              docker buildx inspect "$builder" --bootstrap >/dev/null
+              continue
+            fi
+            exit "$status"
+          done
         env:
           CI: true
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
@@ -178,13 +199,34 @@ jobs:
             echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
             exit 1
           fi
-          EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
-          EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
-          EXPECTED_EXTENSION_COMMIT="${{ github.event.pull_request.head.sha }}" \
-          EXPECTED_EXTENSION_SITE_URL="$site_url/" \
-          EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
-          EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
-            bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
+          extension_verified=false
+          last_extension_output=''
+          for attempt in $(seq 1 12); do
+            set +e
+            last_extension_output="$(
+              EXTENSION_METADATA_URL="$site_url/downloads/extension.json?nook_commit=${{ github.event.pull_request.head.sha }}" \
+              EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
+              EXPECTED_EXTENSION_COMMIT="${{ github.event.pull_request.head.sha }}" \
+              EXPECTED_EXTENSION_SITE_URL="$site_url/" \
+              EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
+              EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
+                bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh 2>&1
+            )"
+            extension_status=$?
+            set -e
+            if [ "$extension_status" -eq 0 ]; then
+              printf '%s\n' "$last_extension_output"
+              extension_verified=true
+              break
+            fi
+            echo "Waiting for exact-head extension metadata (attempt $attempt/12)"
+            sleep 5
+          done
+          if [ "$extension_verified" != true ]; then
+            printf '%s\n' "$last_extension_output" >&2
+            echo "::error::Extension metadata did not converge to the exact PR head"
+            exit 1
+          fi
           echo "site_url=$site_url" >> "$GITHUB_OUTPUT"
           echo "simple_url=$simple_url" >> "$GITHUB_OUTPUT"
           echo "sentinel_url=$sentinel_url" >> "$GITHUB_OUTPUT"
