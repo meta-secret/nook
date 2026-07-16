@@ -54,12 +54,46 @@ variable "GHA_CACHE_ENABLED" {
   default = ""
 }
 
-rust_cache_from = GHA_CACHE_ENABLED != "" ? [
+rust_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : []
 
-rust_cache_to = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+rust_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-deps-v2,mode=min,version=2,ignore-error=true,timeout=10m",
+] : []
+
+rust_debug_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-debug-v2,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : []
+
+rust_debug_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-debug-v2,mode=min,version=2,ignore-error=true,timeout=10m",
+] : []
+
+rust_wasm_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-wasm-v2,version=2",
+  "type=gha,scope=nook-rust-debug-v2,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : []
+
+rust_wasm_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-wasm-v2,mode=min,version=2,ignore-error=true,timeout=10m",
+] : []
+
+rust_artifacts_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-artifacts-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-v2,version=2",
+  "type=gha,scope=nook-rust-debug-v2,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : []
+
+rust_artifacts_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-artifacts-v2,mode=min,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 web_deps_cache_from = GHA_CACHE_ENABLED != "" ? [

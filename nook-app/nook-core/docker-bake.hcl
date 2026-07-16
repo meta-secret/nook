@@ -12,7 +12,8 @@ target "builder-deps" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  cache-from = rust_cache_from
+  cache-from = rust_deps_cache_from
+  cache-to   = rust_deps_cache_to
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
@@ -26,7 +27,8 @@ target "builder-debug" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = rust_cache_from
+  cache-from = rust_debug_cache_from
+  cache-to   = rust_debug_cache_to
 }
 
 // Small local-output target for the rare case where a commit-keyed main coverage artifact is
@@ -41,5 +43,5 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = rust_cache_from
+  cache-from = rust_debug_cache_from
 }
