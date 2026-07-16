@@ -739,6 +739,7 @@ export class VaultState {
     const stripped = message
       .replace(/^GitHub error:\s*/i, "")
       .replace(/^Drive error:\s*/i, "")
+      .replace(/^Database error:\s*/i, "")
       .trim();
     if (stripped.startsWith("errors.")) {
       return this.t(stripped);

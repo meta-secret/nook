@@ -99,7 +99,7 @@ pub struct TotpSecret(String);
 impl TotpSecret {
     pub fn parse(value: &str) -> Result<Self, ValidationError> {
         let mut normalized = Zeroizing::new(normalize_base32(value));
-        let decoded = decode_base32(&normalized)?;
+        let decoded = Zeroizing::new(decode_base32(&normalized)?);
         if decoded.len() < MIN_SECRET_BYTES {
             return Err(ValidationError::AuthenticatorSecretInvalid);
         }

@@ -269,6 +269,9 @@ test.describe('local vault', () => {
       .fill('backup-one\nbackup-two')
     await page.getByTestId('save-secret-btn').click()
     await expect(page.getByTestId('secret-form-error')).toBeVisible()
+    await expect(page.getByTestId('secret-form-error')).toContainText(
+      'Enter a valid Base32 authenticator secret.',
+    )
 
     await page.getByTestId('authenticator-secret').fill('JBSWY3DPEHPK3PXP')
     await page.getByTestId('save-secret-btn').click()

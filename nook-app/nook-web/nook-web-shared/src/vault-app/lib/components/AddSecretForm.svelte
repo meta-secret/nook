@@ -225,7 +225,9 @@
     try {
       dataYaml = buildSecretYaml(selectedType, secretFields())
     } catch (error) {
-      submitError = error instanceof Error ? error.message : String(error)
+      submitError = vault.resolveErrorMessage(
+        error instanceof Error ? error.message : String(error),
+      )
       return
     }
 
