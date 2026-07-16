@@ -30,7 +30,11 @@
   let handoffError = $state('')
 
   const canApprove = $derived(
-    vault.isAuthenticated && !isApproving && !vault.isSaving && !approved,
+    vault.isAuthenticated &&
+      !vault.isVerifying &&
+      !isApproving &&
+      !vault.isSaving &&
+      !approved,
   )
 
   function truncate(value: string, head = 14, tail = 10) {

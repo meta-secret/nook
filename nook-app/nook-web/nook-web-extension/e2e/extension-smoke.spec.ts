@@ -526,9 +526,22 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBe(extensionDeviceId)
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
-    await expect(
-      simplePage.getByTestId('extension-connect-approved'),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect
+      .poll(
+        async () => {
+          if (
+            await simplePage
+              .getByTestId('extension-connect-approved')
+              .isVisible()
+          ) {
+            return 'approved'
+          }
+          const alerts = await simplePage.getByRole('alert').allTextContents()
+          return alerts.at(-1) ?? 'pending'
+        },
+        { timeout: 15_000 },
+      )
+      .toBe('approved')
 
     await expect
       .poll(async () => {
