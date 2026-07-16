@@ -17,6 +17,42 @@ fn read(root: &Path, path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+#[test]
+fn agent_prs_cannot_be_merged_automatically() {
+    let root = repository_root();
+    assert!(
+        !root.join(".github/workflows/agent-pr-monitor.yml").exists(),
+        "the retired agent PR monitor workflow must not be restored"
+    );
+
+    for (path, forbidden) in [
+        (
+            "agentic-ai/ci-agent/src/main/main.ts",
+            &["pr-monitor", "pr-event"][..],
+        ),
+        (
+            "agentic-ai/ci-agent/src/main/github.ts",
+            &[
+                "nook-agent-managed",
+                "nook-agent-monitor-wake",
+                "octokit.rest.pulls.merge",
+            ][..],
+        ),
+        (
+            ".task/agentic-ai.yml",
+            &["pr:monitor", "CI_AGENT_CMD=pr-monitor"][..],
+        ),
+    ] {
+        let source = read(&root, path);
+        for token in forbidden {
+            assert!(
+                !source.contains(token),
+                "{path} must not restore automatic PR merge control `{token}`"
+            );
+        }
+    }
+}
+
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
     content
         .split_once(start)

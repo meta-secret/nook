@@ -4,9 +4,9 @@
 # runs the same live smoke spec once per day per provider; swap providers by
 # setting NOOK_E2E_SYNC_PROVIDER on each matrix job.
 #
-# On failure: task ci-agent:fix fixes and opens a marked PR, then exits.
-# agent-pr-monitor.yml wakes on repository workflow completion and squash-merges
-# when the exact-head readiness audit passes. Requires CURSOR_API_KEY and NOOK_GITHUB_PAT.
+# On failure: task ci-agent:fix fixes and opens a PR for explicit review, then
+# exits. No workflow merges the PR automatically. Requires CURSOR_API_KEY and
+# NOOK_GITHUB_PAT.
 
 name: E2E (nightly)
 

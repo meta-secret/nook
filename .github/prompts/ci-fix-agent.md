@@ -47,7 +47,7 @@ commands talk to the host daemon and run the sealed nook-web image.
 ## Rules
 
 - Do **not** run any `git` commands — the harness commits and pushes `${FIX_BRANCH}` after you finish.
-- Do **not** create or merge a PR — GitHub Actions opens the PR and squash-merges after checks pass.
+- Do **not** create or merge a PR — GitHub Actions opens the PR for explicit review and merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the CI failure root cause.
 - Follow `.cortex/rules.md` (squash merge only; never kill Docker daemon).

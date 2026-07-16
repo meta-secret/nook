@@ -83,4 +83,4 @@ When applying a skill to code:
    invariant.
 6. Run the smallest meaningful local validation first. For implementation
    tasks, push the coherent iteration before `task check`, then run the required
-   local gate after `task pr:monitor PR=<number>` arms GitHub's event continuation.
+   local gate alongside the repository-owned PR workflows.

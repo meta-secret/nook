@@ -5,8 +5,6 @@ import { createLogger } from "./logger.js";
 const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
-export const AGENT_MANAGED_PR_MARKER = "<!-- nook-agent-managed -->";
-const AGENT_MONITOR_WAKE_PREFIX = "<!-- nook-agent-monitor-wake:";
 
 export function parseRepository(fullName: string): RepoRef {
   const [owner, repo] = fullName.split("/");
@@ -86,9 +84,6 @@ export async function createFixPr(
       "## Test plan",
       "- [ ] CI green on this PR",
     ].join("\n");
-  const body = requestedBody.includes(AGENT_MANAGED_PR_MARKER)
-    ? requestedBody
-    : `${requestedBody}\n\n${AGENT_MANAGED_PR_MARKER}`;
 
   try {
     const { data } = await octokit.rest.pulls.create({
@@ -97,44 +92,16 @@ export async function createFixPr(
       title,
       head: headBranch,
       base: "main",
-      body,
+      body: requestedBody,
     });
     return data.number;
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
     if (existing) {
-      await markAgentManagedPr(octokit, repoRef, existing, runId);
       return existing;
     }
     throw err;
   }
-}
-
-export async function markAgentManagedPr(
-  octokit: Octokit,
-  { owner, repo }: RepoRef,
-  prNumber: number,
-  wakeId: string,
-): Promise<void> {
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: prNumber,
-  });
-  const bodyWithoutPriorWake = (pr.body ?? "")
-    .split("\n")
-    .filter((line) => !line.startsWith(AGENT_MONITOR_WAKE_PREFIX))
-    .join("\n")
-    .trim();
-  const markedBody = bodyWithoutPriorWake.includes(AGENT_MANAGED_PR_MARKER)
-    ? bodyWithoutPriorWake
-    : `${bodyWithoutPriorWake}\n\n${AGENT_MANAGED_PR_MARKER}`.trim();
-  await octokit.rest.pulls.update({
-    owner,
-    repo,
-    pull_number: prNumber,
-    body: `${markedBody}\n${AGENT_MONITOR_WAKE_PREFIX}${wakeId} -->`,
-  });
 }
 
 export async function commentOnIssue(
@@ -214,26 +181,6 @@ const REVIEW_THREADS_QUERY = `
   }
 `;
 
-export async function assertNoPendingPrFeedback(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-): Promise<void> {
-  const feedback = await inspectPrFeedback(octokit, repoRef, prNumber);
-  if (
-    feedback.unresolvedThreads > 0 ||
-    feedback.substantiveComments > 0 ||
-    feedback.substantiveReviews > 0
-  ) {
-    throw new Error(
-      `PR #${prNumber} has feedback requiring manual handling before merge ` +
-        `(threads=${feedback.unresolvedThreads}, comments=${feedback.substantiveComments}, reviews=${feedback.substantiveReviews})`,
-    );
-  }
-
-  log.info(`PR #${prNumber} has no pending feedback at final inspection`);
-}
-
 export type PrFeedbackSummary = {
   substantiveComments: number;
   substantiveReviews: number;
@@ -300,36 +247,6 @@ export async function inspectPrFeedback(
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
   };
-}
-
-export async function squashMergePr(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-  headBranch: string,
-  headSha: string,
-): Promise<void> {
-  const { owner, repo } = repoRef;
-  log.info(`Squash merging PR #${prNumber}`);
-  await octokit.rest.pulls.merge({
-    owner,
-    repo,
-    pull_number: prNumber,
-    merge_method: "squash",
-    sha: headSha,
-  });
-
-  try {
-    await octokit.rest.git.deleteRef({
-      owner,
-      repo,
-      ref: `heads/${headBranch}`,
-    });
-  } catch (err: unknown) {
-    if (!isNotFound(err)) {
-      throw err;
-    }
-  }
 }
 
 function isNotFound(err: unknown): boolean {

@@ -130,7 +130,7 @@ tasks:
           CI_AGENT_CMD: agent
 
   ci-agent:fix:
-    desc: Run CI fix agent, open PR, then hand off to the event-driven PR monitor.
+    desc: Run CI fix agent and open a PR for explicit review and merge authorization.
     deps:
       - setup
     cmds:
@@ -139,7 +139,7 @@ tasks:
           CI_AGENT_CMD: fix
 
   ci-agent:implement:
-    desc: Implement issue/prompt, open PR, then hand off to the event-driven PR monitor.
+    desc: Implement issue/prompt and open a PR for explicit review and merge authorization.
     deps:
       - setup
     cmds:
@@ -159,20 +159,8 @@ tasks:
         export PR_NUMBER="{{.PR}}";
         task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
 
-  pr:monitor:
-    desc: Arm hosted event continuation, print one audit, and exit without polling or waiting for external reviews (PR=<number>).
-    requires:
-      vars: [PR]
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:docker:run CI_AGENT_CMD=pr-monitor'
-
   pr:ready:
-    desc: Fail unless the exact PR head is current, deployed, repository-green, and existing feedback is handled (PR=<number>).
+    desc: Read-only assertion that the exact PR head is current, deployed, repository-green, and has no pending feedback (PR=<number>); never merges.
     requires:
       vars: [PR]
     cmds:

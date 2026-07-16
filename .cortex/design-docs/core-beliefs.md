@@ -31,7 +31,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done). See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
-* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → local checks → push → PR → monitor CI → fix until green → squash merge.
+* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → local checks → push → PR → inspect CI → fix until green → explicit merge authorization or ready handoff. Green checks never authorize a merge.
 * **Do not stop at push.** The agent owns the PR through merge (when requested) or explicit handoff.
 * **Question-only turns** (no code changes) skip the pipeline.
 
