@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures'
 import {
   addSecret,
@@ -225,6 +226,67 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       '2 duplicates',
     )
+  })
+
+  test('imports a password-protected encrypted Bitwarden JSON export', async ({
+    page,
+  }) => {
+    const encryptedExport = readFileSync(
+      new URL(
+        '../../../nook-core/src/secrets/fixtures/bitwarden_encrypted_pbkdf2.json',
+        import.meta.url,
+      ),
+    )
+
+    await page.getByTestId('import-bitwarden-btn').click()
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_encrypted_export.json',
+      mimeType: 'application/json',
+      buffer: encryptedExport,
+    })
+    await page
+      .getByTestId('bitwarden-export-password')
+      .fill('correct horse battery staple')
+    await page.getByTestId('bitwarden-import-submit').click()
+
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 2 items',
+    )
+    await expect(page.getByTestId('bitwarden-export-password')).toHaveValue('')
+  })
+
+  test('imports 1,300 Bitwarden logins without hanging', async ({ page }) => {
+    test.setTimeout(60_000)
+    const items = Array.from({ length: 1_300 }, (_, index) => ({
+      type: 1,
+      name: `Bulk login ${index}`,
+      notes: '',
+      login: {
+        username: `bulk-user-${index}`,
+        password: `bulk-password-${index}`,
+        uris: [{ uri: `https://bulk-${index}.example` }],
+        fido2Credentials: [],
+      },
+    }))
+    const exportJson = JSON.stringify({
+      encrypted: false,
+      folders: [],
+      items,
+    })
+
+    await page.getByTestId('import-bitwarden-btn').click()
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_large_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(exportJson),
+    })
+    const started = Date.now()
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 1300 items',
+      { timeout: 30_000 },
+    )
+    expect(Date.now() - started).toBeLessThan(30_000)
   })
 
   test('persists secrets after reload', async ({ page }) => {

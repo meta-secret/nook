@@ -256,6 +256,7 @@ export async function handleAddSecret(
 export async function handleBitwardenImport(
   state: VaultState,
   json: string,
+  password: string,
 ): Promise<NookBitwardenImportResult> {
   if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
   if (state.editsBlocked) throw new Error(editBlockedMessage(state));
@@ -267,7 +268,7 @@ export async function handleBitwardenImport(
   });
   try {
     const result = await state.enqueueStorage(() =>
-      state.manager!.importBitwardenJson(json),
+      state.manager!.importBitwardenJson(json, password),
     );
     state.secrets = result.secrets;
     await state.runFanOutSyncAfterLocalSave();

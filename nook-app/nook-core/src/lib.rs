@@ -31,7 +31,10 @@ pub use bip39::{
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
     validate_bip39_mnemonic,
 };
-pub use bitwarden_import::{BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import};
+pub use bitwarden_import::{
+    BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import,
+    plan_bitwarden_import_with_password,
+};
 pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,

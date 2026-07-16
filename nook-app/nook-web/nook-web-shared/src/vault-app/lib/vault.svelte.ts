@@ -2614,8 +2614,9 @@ export class VaultState {
 
   async handleBitwardenImport(
     json: string,
+    password: string,
   ): Promise<NookBitwardenImportResult> {
-    return secretsActions.handleBitwardenImport(this, json);
+    return secretsActions.handleBitwardenImport(this, json, password);
   }
 
   scheduleRemoteEventOutboxFlush(): void {

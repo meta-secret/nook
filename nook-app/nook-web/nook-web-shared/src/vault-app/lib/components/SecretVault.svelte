@@ -58,7 +58,10 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onImportBitwarden: (json: string) => Promise<NookBitwardenImportResult>
+    onImportBitwarden: (
+      json: string,
+      password: string,
+    ) => Promise<NookBitwardenImportResult>
     onAddModeChange?: (open: boolean, type?: VaultItemType | undefined) => void
   } = $props()
 

@@ -13,13 +13,17 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (json: string) => Promise<NookBitwardenImportResult>
+    onImport: (
+      json: string,
+      password: string,
+    ) => Promise<NookBitwardenImportResult>
     onClose: () => void
   } = $props()
 
   let selectedFile = $state<File | undefined>(undefined)
   let result = $state<NookBitwardenImportResult | undefined>(undefined)
   let error = $state('')
+  let password = $state('')
 
   function selectFile(event: Event) {
     selectedFile = (event.currentTarget as HTMLInputElement).files?.[0]
@@ -32,7 +36,8 @@
     error = ''
     result = undefined
     try {
-      result = await onImport(await selectedFile.text())
+      result = await onImport(await selectedFile.text(), password)
+      password = ''
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause)
     }
@@ -82,6 +87,21 @@
           onchange={selectFile}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
         />
+      </label>
+
+      <label class="block space-y-2 text-sm font-medium text-foreground">
+        <span>{vault.t('bitwarden_import.password_label')}</span>
+        <input
+          type="password"
+          autocomplete="off"
+          data-testid="bitwarden-export-password"
+          bind:value={password}
+          placeholder={vault.t('bitwarden_import.password_placeholder')}
+          class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+        />
+        <span class="block text-xs font-normal text-muted-foreground">
+          {vault.t('bitwarden_import.password_hint')}
+        </span>
       </label>
 
       <p class="text-xs text-muted-foreground">
