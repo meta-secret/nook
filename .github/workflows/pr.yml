@@ -312,27 +312,40 @@ jobs:
             const sentinel = process.env.SENTINEL_PREVIEW_URL.replace(/\/$/, '')
             const extension = process.env.EXTENSION_PREVIEW_URL
             const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/\n- Browser extension: ${extension}`
-            const { data: comments } = await withBackoff('Listing preview comments', () => github.rest.issues.listComments({
+            const commentQuery = await withBackoff('Listing preview comments', () => github.graphql(`
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    id
+                    comments(last: 100) {
+                      nodes { id body }
+                    }
+                  }
+                }
+              }
+            `, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              per_page: 100,
+              number: context.payload.pull_request.number,
             }))
-            const existing = comments.find((comment) => comment.body?.startsWith(marker))
+            const pullRequest = commentQuery.repository.pullRequest
+            const existing = pullRequest.comments.nodes.find((comment) => comment.body?.startsWith(marker))
             if (existing) {
-              await withBackoff('Updating the preview comment', () => github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              }))
+              await withBackoff('Updating the preview comment', () => github.graphql(`
+                mutation($id: ID!, $body: String!) {
+                  updateIssueComment(input: { id: $id, body: $body }) {
+                    issueComment { id }
+                  }
+                }
+              `, { id: existing.id, body }))
             } else {
-              await withBackoff('Creating the preview comment', () => github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body,
-              }))
+              await withBackoff('Creating the preview comment', () => github.graphql(`
+                mutation($subjectId: ID!, $body: String!) {
+                  addComment(input: { subjectId: $subjectId, body: $body }) {
+                    commentEdge { node { id } }
+                  }
+                }
+              `, { subjectId: pullRequest.id, body }))
             }
 
       - name: Record github-pages deployment
