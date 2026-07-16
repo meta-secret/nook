@@ -92,25 +92,51 @@
       eventLogRecords,
     }
 
-    return new Promise((resolve, reject) => {
-      runtime.sendMessage?.(request.extensionRuntimeId, message, (response) => {
-        const runtimeError = runtime.lastError?.message
-        if (runtimeError) {
-          reject(new Error(runtimeError))
-          return
-        }
-        if (
-          typeof response === 'object' &&
-          response !== null &&
-          'ok' in response &&
-          (response as { ok?: unknown }).ok === true
-        ) {
-          resolve()
-          return
-        }
-        reject(new Error(vault.t('extension.consent.grant_rejected')))
+    const sendOnce = () =>
+      new Promise<void>((resolve, reject) => {
+        runtime.sendMessage?.(
+          request.extensionRuntimeId,
+          message,
+          (response) => {
+            const runtimeError = runtime.lastError?.message
+            if (runtimeError) {
+              reject(new Error(runtimeError))
+              return
+            }
+            if (
+              typeof response === 'object' &&
+              response !== null &&
+              'ok' in response &&
+              (response as { ok?: unknown }).ok === true
+            ) {
+              resolve()
+              return
+            }
+            reject(new Error(vault.t('extension.consent.grant_rejected')))
+          },
+        )
       })
-    })
+
+    return (async () => {
+      let lastError: Error | undefined
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await sendOnce()
+          return
+        } catch (caught) {
+          lastError =
+            caught instanceof Error
+              ? caught
+              : new Error(vault.t('extension.consent.grant_rejected'))
+          if (attempt < 2) {
+            await new Promise<void>((resolve) =>
+              window.setTimeout(resolve, 150),
+            )
+          }
+        }
+      }
+      throw lastError ?? new Error(vault.t('extension.consent.grant_rejected'))
+    })()
   }
 
   async function approveExtension() {
