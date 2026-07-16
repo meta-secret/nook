@@ -770,6 +770,7 @@
                   syncProviders={vault.syncProviders}
                   syncingProviderId={vault.syncingProviderId}
                   isAuthenticated={vault.isAuthenticated}
+                  isSaving={vault.isSaving}
                   isVerifying={vault.isVerifying}
                   isInitializing={vault.isInitializing}
                   addProviderOpen={vault.addProviderOpen}
@@ -795,6 +796,8 @@
                   onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
                   onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
                   onClearCode={() => vault.clearEnrollmentCode()}
+                  onImportBitwarden={(json, password) =>
+                    vault.handleBitwardenImport(json, password)}
                 />
               {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
                 <OnboardDevice

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   addSecret,
@@ -6,6 +8,7 @@ import {
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
+  expandSettingsSection,
   expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,
@@ -15,6 +18,11 @@ import {
   unlockVaultOnLogin,
   waitForVaultUnlocked,
 } from './helpers'
+
+async function openBitwardenImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
+}
 
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
@@ -154,6 +162,138 @@ test.describe('local vault', () => {
     await expect(row.getByText('1234')).toBeVisible()
 
     await deleteSecret(page, title)
+  })
+
+  test('imports Bitwarden logins and secure notes from JSON', async ({
+    page,
+  }) => {
+    const exportJson = JSON.stringify({
+      encrypted: false,
+      folders: [],
+      items: [
+        {
+          id: 'bitwarden-login-1',
+          type: 1,
+          name: 'Imported GitHub',
+          notes: 'Work account',
+          login: {
+            username: 'bitwarden-alice',
+            password: 'imported-password',
+            uris: [{ uri: 'https://github.com/login' }],
+          },
+        },
+        {
+          id: 'bitwarden-note-1',
+          type: 2,
+          name: 'Imported private note',
+          notes: 'Imported note body',
+          secureNote: { type: 0 },
+        },
+        {
+          id: 'bitwarden-card-1',
+          type: 3,
+          name: 'Skipped card',
+          card: { number: '4111111111111111' },
+        },
+      ],
+    })
+
+    await openBitwardenImport(page)
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(exportJson),
+    })
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 2 items',
+    )
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      '1 unsupported',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'bitwarden-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported private note',
+    )
+
+    await openBitwardenImport(page)
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(exportJson),
+    })
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      '2 duplicates',
+    )
+  })
+
+  test('imports a password-protected encrypted Bitwarden JSON export', async ({
+    page,
+  }) => {
+    const encryptedExport = readFileSync(
+      new URL(
+        '../../../nook-core/src/secrets/fixtures/bitwarden_encrypted_pbkdf2.json',
+        import.meta.url,
+      ),
+    )
+
+    await openBitwardenImport(page)
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_encrypted_export.json',
+      mimeType: 'application/json',
+      buffer: encryptedExport,
+    })
+    await page
+      .getByTestId('bitwarden-export-password')
+      .fill('correct horse battery staple')
+    await page.getByTestId('bitwarden-import-submit').click()
+
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 2 items',
+    )
+    await expect(page.getByTestId('bitwarden-export-password')).toHaveValue('')
+  })
+
+  test('imports 1,300 Bitwarden logins without hanging', async ({ page }) => {
+    test.setTimeout(60_000)
+    const items = Array.from({ length: 1_300 }, (_, index) => ({
+      type: 1,
+      name: `Bulk login ${index}`,
+      notes: '',
+      login: {
+        username: `bulk-user-${index}`,
+        password: `bulk-password-${index}`,
+        uris: [{ uri: `https://bulk-${index}.example` }],
+        fido2Credentials: [],
+      },
+    }))
+    const exportJson = JSON.stringify({
+      encrypted: false,
+      folders: [],
+      items,
+    })
+
+    await openBitwardenImport(page)
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_large_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(exportJson),
+    })
+    const started = Date.now()
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 1300 items',
+      { timeout: 30_000 },
+    )
+    expect(Date.now() - started).toBeLessThan(30_000)
   })
 
   test('persists secrets after reload', async ({ page }) => {

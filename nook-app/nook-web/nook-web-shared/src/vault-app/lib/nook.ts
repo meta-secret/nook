@@ -1,4 +1,5 @@
 import type {
+  NookBitwardenImportResult,
   NookJoinRequest,
   NookSecretRecord,
   NookVaultManager,
@@ -22,6 +23,7 @@ await ensureAppWasm();
 initWasmLogging();
 
 export type {
+  NookBitwardenImportResult,
   NookJoinRequest,
   NookSecretRecord,
   NookVaultManager,

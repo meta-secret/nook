@@ -16,6 +16,9 @@ There is no Nook account. There is no master password. Approved devices unlock
 the vault.
 
 Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
+Existing Bitwarden logins and secure notes can be imported from a plaintext or
+password-protected encrypted Bitwarden JSON export; account-restricted exports
+are not portable and unsupported Bitwarden item types are skipped.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 

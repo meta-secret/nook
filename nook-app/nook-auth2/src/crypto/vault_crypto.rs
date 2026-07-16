@@ -13,8 +13,11 @@ pub struct VaultCrypto {
     recipient: age::scrypt::Recipient,
 }
 
-/// scrypt N = 2^15 — fast enough for WASM while the key remains 128-bit random hex.
-const PROGRAMMATIC_SCRYPT_LOG_N: u8 = 15;
+/// scrypt N = 2^10. The input is a uniformly random 256-bit vault key, not a
+/// human password, so password-hardening does not add meaningful resistance to
+/// guessing attacks. Existing records retain and advertise their embedded work
+/// factor; this only makes new per-record encryption practical in browser WASM.
+const PROGRAMMATIC_SCRYPT_LOG_N: u8 = 10;
 
 impl VaultCrypto {
     pub fn new(passphrase: &SymmetricKey) -> VaultCryptoResult<Self> {
@@ -116,5 +119,26 @@ mod tests {
         assert_ne!(a, b);
         assert_eq!(crypto.decrypt_value(&a).unwrap().as_str(), "same");
         assert_eq!(crypto.decrypt_value(&b).unwrap().as_str(), "same");
+    }
+
+    #[test]
+    fn bulk_roundtrip_is_practical_for_password_manager_imports() {
+        let started = std::time::Instant::now();
+        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let encrypted = (0..1_300)
+            .map(|index| crypto.encrypt_value(format!("secret-{index}")))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        for (index, ciphertext) in encrypted.iter().enumerate() {
+            assert_eq!(
+                crypto.decrypt_value(ciphertext).unwrap().as_str(),
+                format!("secret-{index}")
+            );
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(30),
+            "1,300-record roundtrip took {:?}",
+            started.elapsed()
+        );
     }
 }

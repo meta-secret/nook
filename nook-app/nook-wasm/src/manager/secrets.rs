@@ -2,10 +2,12 @@
 //! status-channel poll).
 
 use super::NookVaultManager;
+use crate::NookBitwardenImportResult;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::records_to_vec;
 use serde::Serialize;
+use std::collections::HashSet;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
 
@@ -111,6 +113,89 @@ impl NookVaultManager {
             "secret added"
         );
         Ok(records)
+    }
+
+    /// Import supported entries from a plaintext or password-protected encrypted
+    /// Bitwarden JSON export in one signed event. Exact values already present in
+    /// the active vault are not imported again.
+    #[wasm_bindgen(js_name = importBitwardenJson)]
+    pub async fn import_bitwarden_json(
+        &mut self,
+        json: String,
+        password: String,
+    ) -> Result<NookBitwardenImportResult, JsError> {
+        let _ = self.status.tx.send("IMPORT_BITWARDEN_START".to_owned());
+        self.ensure_vault_crypto_from_cache().await?;
+        if !self
+            .vault
+            .architecture
+            .can_create_secret_with_records(&self.stored_records_snapshot())
+        {
+            return Err(NookError::Database(
+                "Sentinel vault is not ready for secret import.".to_owned(),
+            )
+            .into());
+        }
+
+        let password = zeroize::Zeroizing::new(password);
+        let plan = nook_core::plan_bitwarden_import_with_password(
+            &json,
+            (!password.is_empty()).then_some(password.as_str()),
+        )
+        .map_err(|error| NookError::Database(error.to_string()))?;
+        let mut seen = self
+            .vault
+            .database
+            .list()
+            .into_iter()
+            .map(|record| record.data.to_yaml().map(|yaml| yaml.as_str().to_owned()))
+            .collect::<Result<HashSet<_>, _>>()?;
+        let mut skipped_duplicates = 0;
+        let mut operations = Vec::new();
+
+        for value in plan.items {
+            let yaml = value.to_yaml()?;
+            if !seen.insert(yaml.as_str().to_owned()) {
+                skipped_duplicates += 1;
+                continue;
+            }
+            let secret_type = value.secret_type();
+            let ciphertext = self
+                .vault
+                .crypto
+                .as_ref()
+                .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
+                .encrypt_value(yaml.as_str())?;
+            let id = nook_core::generate_secret_id()?;
+            operations.push(nook_core::VaultOperation::SecretCreated {
+                secret: nook_core::encrypted_secret_from_armored(
+                    &id,
+                    secret_type,
+                    ciphertext.as_str(),
+                ),
+            });
+        }
+
+        let imported = operations.len();
+        if !operations.is_empty() {
+            self.append_vault_operations(operations).await?;
+        }
+        let _ = self.status.tx.send("READY".to_owned());
+        let secrets = self.get_records()?;
+        tracing::info!(
+            scope = "wasm-secrets",
+            action = "import-bitwarden",
+            imported,
+            skipped_unsupported = plan.skipped_unsupported,
+            skipped_duplicates,
+            "Bitwarden import completed"
+        );
+        Ok(NookBitwardenImportResult::new(
+            imported,
+            plan.skipped_unsupported,
+            skipped_duplicates,
+            secrets,
+        ))
     }
 
     // Replace a secret (new id + payload, single save)

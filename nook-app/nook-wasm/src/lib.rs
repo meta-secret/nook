@@ -28,12 +28,12 @@ pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 pub use manager::NookVaultManager;
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
-    NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
-    NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookJoinRequest,
-    NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
-    NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecurityConflict,
-    NookStorageConnectArgs, NookStorageProviderKind, NookStorageProviderTypeUtil,
-    NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
+    NookBitwardenImportResult, NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil,
+    NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
+    NookGoogleDriveFolder, NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions,
+    NookPasswordEntrySummary, NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig,
+    NookSecretFormFields, NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
+    NookStorageProviderTypeUtil, NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
