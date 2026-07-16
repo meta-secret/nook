@@ -6,6 +6,7 @@ import {
   type NookSecretListItem,
   type NookSecretRecord,
   type NookVaultSyncResult,
+  type AuthenticatorCodeView,
   type VaultItemType,
   type VaultMember,
 } from "$lib/nook";
@@ -738,6 +739,7 @@ export class VaultState {
     const stripped = message
       .replace(/^GitHub error:\s*/i, "")
       .replace(/^Drive error:\s*/i, "")
+      .replace(/^Database error:\s*/i, "")
       .trim();
     if (stripped.startsWith("errors.")) {
       return this.t(stripped);
@@ -2493,6 +2495,26 @@ export class VaultState {
     return this.enqueueStorage(() => this.manager!.decryptSecret(id));
   }
 
+  async currentAuthenticatorCode(id: string): Promise<AuthenticatorCodeView> {
+    if (!this.manager) {
+      throw new Error("Vault manager is not initialized.");
+    }
+    const unixSeconds = Math.floor(Date.now() / 1000);
+    const result = await this.enqueueStorage(() =>
+      this.manager!.currentAuthenticatorCode(id, unixSeconds),
+    );
+    try {
+      return {
+        code: result.code,
+        secondsRemaining: result.secondsRemaining,
+        period: result.period,
+        expiresAtUnixSeconds: unixSeconds + result.secondsRemaining,
+      };
+    } finally {
+      result.free();
+    }
+  }
+
   async refreshDeviceState() {
     return multiDeviceActions.refreshDeviceState(this);
   }
@@ -2714,10 +2736,28 @@ export class VaultState {
     return secretsActions.handleBitwardenImport(this, json, password);
   }
 
+  async handleLastPassImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleLastPassImport(this, csv);
+  }
+
   async handleOnePasswordImport(
     archive: Uint8Array,
   ): Promise<NookImportResult> {
     return secretsActions.handleOnePasswordImport(this, archive);
+  }
+
+  async handleApplePasswordsImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleApplePasswordsImport(this, csv);
+  }
+
+  async handleChromePasswordsImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleChromePasswordsImport(this, csv);
+  }
+
+  async handleProtonPassImport(
+    exportBytes: Uint8Array,
+  ): Promise<NookImportResult> {
+    return secretsActions.handleProtonPassImport(this, exportBytes);
   }
 
   scheduleRemoteEventOutboxFlush(): void {

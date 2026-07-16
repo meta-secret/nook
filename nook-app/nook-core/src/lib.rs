@@ -17,8 +17,9 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
-    bip39, bitwarden_import, onepassword_import, passkey_authenticator, password, secret_types,
-    secret_view, session,
+    apple_passwords_import, authenticator, bip39, bitwarden_import, chrome_passwords_import,
+    lastpass_import, onepassword_import, passkey_authenticator, password, proton_pass_import,
+    secret_fingerprint, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
@@ -31,6 +32,12 @@ pub(crate) use vault::{
     vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
+pub use apple_passwords_import::{
+    ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_import,
+};
+pub use authenticator::{
+    AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,
+};
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
@@ -39,6 +46,9 @@ pub use bip39::{
 pub use bitwarden_import::{
     BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import,
     plan_bitwarden_import_with_password,
+};
+pub use chrome_passwords_import::{
+    ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
 };
 pub use database::Database;
 pub use device_key_protection::{
@@ -78,6 +88,7 @@ pub use i18n::{
     resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_translation_catalog,
     translate, translate_from_catalog,
 };
+pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,
@@ -97,6 +108,12 @@ pub use passkey_authenticator::{
     PasskeyAuthenticatorError, PasskeyCredentialDescriptor, PasskeyRegistrationRequest,
     PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser, assert_website_passkey,
     create_website_passkey, validate_website_passkey_origin,
+};
+pub use proton_pass_import::{
+    ProtonPassImportError, ProtonPassImportPlan, plan_proton_pass_import,
+};
+pub use secret_fingerprint::{
+    SecretFingerprint, enrich_secret, secret_fingerprint, secret_identity_fingerprint,
 };
 pub use secret_types::{
     ApiKeySecret, LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey,
@@ -218,9 +235,10 @@ pub use vault_epoch_crypto::{
     rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
 };
 pub use vault_event::{
-    EncryptedSecretPayload, GenesisImportPayload, SentinelShareIssuedPayload, VaultEvent,
-    VaultEventBody, VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
-    parse_event_storage_bytes, parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    EncryptedSecretPayload, GenesisImportPayload, SecretFingerprintAssignment,
+    SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+    VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
+    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
 pub use vault_event_builder::{
     AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,

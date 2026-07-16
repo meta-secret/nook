@@ -123,6 +123,21 @@ pub enum ValidationError {
     #[error("errors.validation.bip39_invalid")]
     Bip39Invalid,
 
+    #[error("errors.validation.authenticator_issuer_required")]
+    AuthenticatorIssuerRequired,
+
+    #[error("errors.validation.authenticator_secret_invalid")]
+    AuthenticatorSecretInvalid,
+
+    #[error("errors.validation.authenticator_digits_invalid")]
+    AuthenticatorDigitsInvalid,
+
+    #[error("errors.validation.authenticator_period_invalid")]
+    AuthenticatorPeriodInvalid,
+
+    #[error("errors.validation.authenticator_uri_invalid")]
+    AuthenticatorUriInvalid,
+
     #[error("errors.validation.symmetric_key_invalid")]
     SymmetricKeyInvalid,
 

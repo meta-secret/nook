@@ -1351,6 +1351,13 @@ pub struct NookSecretFormFields {
     seed: String,
     title: String,
     note: String,
+    issuer: String,
+    account: String,
+    totp_secret: String,
+    algorithm: String,
+    digits: String,
+    period: String,
+    backup_codes: String,
 }
 
 #[wasm_bindgen]
@@ -1368,6 +1375,13 @@ impl NookSecretFormFields {
         seed: Option<String>,
         title: Option<String>,
         note: Option<String>,
+        issuer: Option<String>,
+        account: Option<String>,
+        totp_secret: Option<String>,
+        algorithm: Option<String>,
+        digits: Option<String>,
+        period: Option<String>,
+        backup_codes: Option<String>,
     ) -> Self {
         Self {
             website_url: website_url.unwrap_or_default(),
@@ -1380,6 +1394,13 @@ impl NookSecretFormFields {
             seed: seed.unwrap_or_default(),
             title: title.unwrap_or_default(),
             note: note.unwrap_or_default(),
+            issuer: issuer.unwrap_or_default(),
+            account: account.unwrap_or_default(),
+            totp_secret: totp_secret.unwrap_or_default(),
+            algorithm: algorithm.unwrap_or_default(),
+            digits: digits.unwrap_or_default(),
+            period: period.unwrap_or_default(),
+            backup_codes: backup_codes.unwrap_or_default(),
         }
     }
 
@@ -1395,7 +1416,50 @@ impl NookSecretFormFields {
             "seed": self.seed,
             "title": self.title,
             "note": self.note,
+            "issuer": self.issuer,
+            "account": self.account,
+            "totpSecret": self.totp_secret,
+            "algorithm": self.algorithm,
+            "digits": self.digits,
+            "period": self.period,
+            "backupCodes": self.backup_codes,
         })
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookTotpCode {
+    code: String,
+    seconds_remaining: u32,
+    period: u32,
+}
+
+#[wasm_bindgen]
+impl NookTotpCode {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn code(&self) -> String {
+        self.code.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = secondsRemaining)]
+    #[must_use]
+    pub fn seconds_remaining(&self) -> u32 {
+        self.seconds_remaining
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn period(&self) -> u32 {
+        self.period
+    }
+
+    pub(crate) fn from_core(value: nook_core::TotpCode) -> Self {
+        Self {
+            code: value.code,
+            seconds_remaining: u32::try_from(value.seconds_remaining).unwrap_or(u32::MAX),
+            period: u32::try_from(value.period).unwrap_or(u32::MAX),
+        }
     }
 }
 

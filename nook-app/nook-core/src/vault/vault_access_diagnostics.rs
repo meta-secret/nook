@@ -339,6 +339,7 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
         VaultOperation::SentinelSharesIssued { shares } => shares.len(),
         VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretConflictResolved { .. }
+        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::SentinelParticipantEnrolled { .. }
         | VaultOperation::JoinDenied { .. }
@@ -671,6 +672,8 @@ mod tests {
                     id: SecretId::from_vault_record("secret_eventdiag"),
                     secret_type: SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                    identity_fingerprint: None,
+                    fingerprint: None,
                 }],
                 password_entries: Vec::new(),
             },
@@ -700,6 +703,8 @@ mod tests {
             id: SecretId::from_vault_record("secret_payload01"),
             secret_type: SecretType::ApiKey,
             ciphertext: crate::OpaqueCiphertext::from_trusted("cipher".to_owned()),
+            identity_fingerprint: None,
+            fingerprint: None,
         };
 
         assert_eq!(

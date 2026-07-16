@@ -4,9 +4,9 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookImportResult;
-use crate::{NookSecretPage, NookSecretRecord};
+use crate::{NookSecretPage, NookSecretRecord, NookTotpCode};
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
 
@@ -14,31 +14,175 @@ fn serialize_js_objects<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_b
     value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
 }
 
+type ImportVersions = HashMap<
+    nook_core::SecretFingerprint,
+    Vec<(nook_core::StoredSecretRecord, nook_core::SecretFingerprint)>,
+>;
+type ImportFingerprintState = (ImportVersions, Vec<nook_core::SecretFingerprintAssignment>);
+
+fn import_fingerprints(
+    dedup_state: Vec<(
+        nook_core::StoredSecretRecord,
+        Option<nook_core::SecretFingerprint>,
+        Option<nook_core::SecretFingerprint>,
+    )>,
+    crypto: &nook_core::VaultCrypto,
+    secrets_key: &nook_core::SymmetricKey,
+    incoming_count: usize,
+) -> Result<ImportFingerprintState, NookError> {
+    let mut by_identity = HashMap::with_capacity(dedup_state.len() + incoming_count);
+    let mut backfill = Vec::new();
+    for (record, identity_fingerprint, fingerprint) in dedup_state {
+        let (identity_fingerprint, fingerprint) =
+            if let (Some(identity_fingerprint), Some(fingerprint)) =
+                (identity_fingerprint, fingerprint)
+            {
+                (identity_fingerprint, fingerprint)
+            } else {
+                let secret_type = record.secret_type.ok_or_else(|| {
+                    NookError::Database(format!("Secret {} is missing its type.", record.key))
+                })?;
+                let ciphertext = nook_core::AgeArmoredCiphertext::parse(record.value.as_str())?;
+                let mut plaintext = crypto.decrypt_value(&ciphertext)?;
+                let mut value =
+                    nook_core::SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+                plaintext.zeroize_plaintext();
+                let identity_fingerprint =
+                    nook_core::secret_identity_fingerprint(&value, secrets_key);
+                let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
+                backfill.push(nook_core::SecretFingerprintAssignment {
+                    secret_id: record.key.clone(),
+                    identity_fingerprint: identity_fingerprint.clone(),
+                    fingerprint: fingerprint.clone(),
+                });
+                value.zeroize_plaintext();
+                (identity_fingerprint, fingerprint)
+            };
+        by_identity
+            .entry(identity_fingerprint)
+            .or_insert_with(Vec::new)
+            .push((record, fingerprint));
+    }
+    Ok((by_identity, backfill))
+}
+
+enum ImportItemOutcome {
+    Duplicate,
+    Operation(nook_core::VaultOperation),
+}
+
+fn reconcile_import_item(
+    mut value: nook_core::SecretValue,
+    existing_by_identity: &ImportVersions,
+    seen_versions: &mut HashSet<nook_core::SecretFingerprint>,
+    crypto: &nook_core::VaultCrypto,
+    secrets_key: &nook_core::SymmetricKey,
+) -> Result<ImportItemOutcome, NookError> {
+    let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key);
+    let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
+    if let Some((record, _)) = existing_by_identity
+        .get(&identity_fingerprint)
+        .and_then(|records| {
+            records
+                .iter()
+                .find(|(_, existing)| existing == &fingerprint)
+        })
+    {
+        let secret_type = record.secret_type.ok_or_else(|| {
+            NookError::Database(format!("Secret {} is missing its type.", record.key))
+        })?;
+        let ciphertext = nook_core::AgeArmoredCiphertext::parse(record.value.as_str())?;
+        let mut plaintext = crypto.decrypt_value(&ciphertext)?;
+        let mut existing = nook_core::SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+        plaintext.zeroize_plaintext();
+        let mut enriched = nook_core::enrich_secret(&existing, &value);
+        let outcome = if enriched == existing {
+            ImportItemOutcome::Duplicate
+        } else {
+            let mut yaml = enriched.to_yaml()?;
+            let ciphertext = crypto.encrypt_value(yaml.as_str())?;
+            yaml.zeroize_plaintext();
+            let new_id = nook_core::generate_secret_id()?;
+            ImportItemOutcome::Operation(nook_core::VaultOperation::SecretReplaced {
+                old_id: record.key.clone(),
+                new_secret: nook_core::encrypted_secret_from_armored(
+                    &new_id,
+                    secret_type,
+                    ciphertext.as_str(),
+                    Some(identity_fingerprint),
+                    Some(fingerprint),
+                ),
+            })
+        };
+        existing.zeroize_plaintext();
+        enriched.zeroize_plaintext();
+        value.zeroize_plaintext();
+        return Ok(outcome);
+    }
+    if !seen_versions.insert(fingerprint.clone()) {
+        value.zeroize_plaintext();
+        return Ok(ImportItemOutcome::Duplicate);
+    }
+    let mut yaml = value.to_yaml()?;
+    let secret_type = value.secret_type();
+    let ciphertext = crypto.encrypt_value(yaml.as_str())?;
+    yaml.zeroize_plaintext();
+    value.zeroize_plaintext();
+    let id = nook_core::generate_secret_id()?;
+    Ok(ImportItemOutcome::Operation(
+        nook_core::VaultOperation::SecretCreated {
+            secret: nook_core::encrypted_secret_from_armored(
+                &id,
+                secret_type,
+                ciphertext.as_str(),
+                Some(identity_fingerprint),
+                Some(fingerprint),
+            ),
+        },
+    ))
+}
+
 #[derive(Clone, Copy)]
 enum SecretImportSource {
+    ApplePasswords,
     Bitwarden,
+    ChromePasswords,
+    LastPass,
     OnePassword,
+    ProtonPass,
 }
 
 impl SecretImportSource {
     const fn status(self) -> &'static str {
         match self {
+            Self::ApplePasswords => "IMPORT_APPLE_PASSWORDS_START",
             Self::Bitwarden => "IMPORT_BITWARDEN_START",
+            Self::ChromePasswords => "IMPORT_CHROME_PASSWORDS_START",
+            Self::LastPass => "IMPORT_LASTPASS_START",
             Self::OnePassword => "IMPORT_ONEPASSWORD_START",
+            Self::ProtonPass => "IMPORT_PROTON_PASS_START",
         }
     }
 
     const fn action(self) -> &'static str {
         match self {
+            Self::ApplePasswords => "import-apple-passwords",
             Self::Bitwarden => "import-bitwarden",
+            Self::ChromePasswords => "import-chrome-passwords",
+            Self::LastPass => "import-lastpass",
             Self::OnePassword => "import-onepassword",
+            Self::ProtonPass => "import-proton-pass",
         }
     }
 
     const fn label(self) -> &'static str {
         match self {
+            Self::ApplePasswords => "Apple Passwords",
             Self::Bitwarden => "Bitwarden",
+            Self::ChromePasswords => "Chrome passwords",
+            Self::LastPass => "LastPass",
             Self::OnePassword => "1Password",
+            Self::ProtonPass => "Proton Pass",
         }
     }
 }
@@ -63,54 +207,51 @@ impl NookVaultManager {
             .into());
         }
 
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let dedup_state = self.live_secret_dedup_state().await?;
         let crypto = self
             .vault
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        let mut seen = HashSet::with_capacity(self.vault.meta.secrets.len());
-        for (secret_type, payload) in self.vault.meta.secrets.values() {
-            let ciphertext = nook_core::AgeArmoredCiphertext::parse(payload.as_str())?;
-            let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-            let mut value =
-                nook_core::SecretValue::from_yaml_str(*secret_type, plaintext.as_str())?;
-            plaintext.zeroize_plaintext();
-            let mut canonical = value.to_yaml()?;
-            seen.insert(nook_core::sha256_hex(canonical.as_str().as_bytes()));
-            canonical.zeroize_plaintext();
-            value.zeroize_plaintext();
-        }
+        let (existing_by_identity, backfill) =
+            import_fingerprints(dedup_state, crypto, &secrets_key, items.len())?;
+        let mut seen_versions = existing_by_identity
+            .values()
+            .flatten()
+            .map(|(_, fingerprint)| fingerprint.clone())
+            .collect::<HashSet<_>>();
         let mut skipped_duplicates = 0;
-        let mut operations = Vec::new();
-
-        for mut value in items {
-            let mut yaml = value.to_yaml()?;
-            if !seen.insert(nook_core::sha256_hex(yaml.as_str().as_bytes())) {
-                skipped_duplicates += 1;
-                yaml.zeroize_plaintext();
-                value.zeroize_plaintext();
-                continue;
-            }
-            let secret_type = value.secret_type();
-            let ciphertext = self
-                .vault
-                .crypto
-                .as_ref()
-                .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-                .encrypt_value(yaml.as_str())?;
-            yaml.zeroize_plaintext();
-            value.zeroize_plaintext();
-            let id = nook_core::generate_secret_id()?;
-            operations.push(nook_core::VaultOperation::SecretCreated {
-                secret: nook_core::encrypted_secret_from_armored(
-                    &id,
-                    secret_type,
-                    ciphertext.as_str(),
-                ),
+        let mut operations = Vec::with_capacity(items.len() + usize::from(!backfill.is_empty()));
+        if !backfill.is_empty() {
+            operations.push(nook_core::VaultOperation::SecretFingerprintsBackfilled {
+                fingerprints: backfill,
             });
         }
 
-        let imported = operations.len();
+        for value in items {
+            match reconcile_import_item(
+                value,
+                &existing_by_identity,
+                &mut seen_versions,
+                crypto,
+                &secrets_key,
+            )? {
+                ImportItemOutcome::Duplicate => skipped_duplicates += 1,
+                ImportItemOutcome::Operation(operation) => operations.push(operation),
+            }
+        }
+
+        let imported = operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    nook_core::VaultOperation::SecretCreated { .. }
+                        | nook_core::VaultOperation::SecretReplaced { .. }
+                )
+            })
+            .count();
         if !operations.is_empty() {
             self.append_vault_operations(operations).await?;
         }
@@ -171,6 +312,33 @@ impl NookVaultManager {
         Ok(NookSecretRecord::from_record(record))
     }
 
+    #[wasm_bindgen(js_name = currentAuthenticatorCode)]
+    pub fn current_authenticator_code(
+        &self,
+        id: &str,
+        unix_seconds: u32,
+    ) -> Result<NookTotpCode, JsError> {
+        let crypto = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let id = nook_core::SecretId::from_vault_record(id);
+        let mut record =
+            nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+        let code = if let nook_core::SecretValue::Authenticator(value) = &record.data {
+            value.current_code(u64::from(unix_seconds))?
+        } else {
+            record.zeroize_plaintext();
+            return Err(NookError::Database(
+                "Requested secret is not an authenticator item.".to_owned(),
+            )
+            .into());
+        };
+        record.zeroize_plaintext();
+        Ok(NookTotpCode::from_core(code))
+    }
+
     /// Prefixed secret item id (`secret_{token}`).
     pub fn generate_secret_id(&self) -> Result<String, JsError> {
         Ok(nook_core::generate_secret_id()?.to_string())
@@ -229,7 +397,11 @@ impl NookVaultManager {
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
+        let identity_fingerprint =
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
         typed_value.zeroize_plaintext();
 
         let armored = self
@@ -248,7 +420,13 @@ impl NookVaultManager {
         );
 
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
-            secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
+            secret: nook_core::encrypted_secret_from_armored(
+                &id,
+                secret_type,
+                &ciphertext,
+                Some(identity_fingerprint),
+                Some(fingerprint),
+            ),
         }])
         .await?;
         let _ = self.status.tx.send("READY".to_owned());
@@ -290,6 +468,23 @@ impl NookVaultManager {
         .await
     }
 
+    /// Import logins and secure notes from a plaintext `LastPass` generic CSV
+    /// export in one signed event. The CSV is parsed in memory and never
+    /// persisted.
+    #[wasm_bindgen(js_name = importLastPassCsv)]
+    pub async fn import_lastpass_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_lastpass_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::LastPass,
+        )
+        .await
+    }
+
     /// Import supported entries from an unencrypted 1Password 1PUX archive in
     /// one signed event. The archive is parsed in memory and never persisted.
     #[wasm_bindgen(js_name = importOnePasswordPux)]
@@ -305,6 +500,64 @@ impl NookVaultManager {
             plan.items,
             plan.skipped_unsupported,
             SecretImportSource::OnePassword,
+        )
+        .await
+    }
+
+    /// Import passwords and verification codes from an Apple Passwords CSV
+    /// export in one signed event. The plaintext CSV is parsed only in memory.
+    #[wasm_bindgen(js_name = importApplePasswordsCsv)]
+    pub async fn import_apple_passwords_csv(
+        &mut self,
+        csv: String,
+    ) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_apple_passwords_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::ApplePasswords,
+        )
+        .await
+    }
+
+    /// Import logins from a Chrome-family CSV export in one signed event. The
+    /// plaintext CSV is parsed only in memory.
+    #[wasm_bindgen(js_name = importChromePasswordsCsv)]
+    pub async fn import_chrome_passwords_csv(
+        &mut self,
+        csv: String,
+    ) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_chrome_passwords_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::ChromePasswords,
+        )
+        .await
+    }
+
+    /// Import logins and secure notes from an unencrypted Proton Pass ZIP
+    /// export or decrypted data.json in one signed event. The export is parsed
+    /// in memory and never persisted.
+    #[wasm_bindgen(js_name = importProtonPass)]
+    pub async fn import_proton_pass(
+        &mut self,
+        export: Vec<u8>,
+    ) -> Result<NookImportResult, JsError> {
+        let export = zeroize::Zeroizing::new(export);
+        let plan = nook_core::plan_proton_pass_import(export.as_slice())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(export);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::ProtonPass,
         )
         .await
     }
@@ -330,6 +583,12 @@ impl NookVaultManager {
             .into());
         }
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
+        let identity_fingerprint =
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
+        typed_value.zeroize_plaintext();
         let crypto = self
             .vault
             .crypto
@@ -360,6 +619,8 @@ impl NookVaultManager {
                 &validated_new,
                 secret_type,
                 &ciphertext,
+                Some(identity_fingerprint),
+                Some(fingerprint),
             ),
         }])
         .await?;

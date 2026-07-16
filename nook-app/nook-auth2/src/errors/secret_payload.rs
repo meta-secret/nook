@@ -31,6 +31,9 @@ pub enum SecretPayloadError {
     #[error("Passkeys must be created through the authenticated WebAuthn flow.")]
     PasskeyCreationRequiresAuthenticator,
 
+    #[error("Invalid authenticator payload")]
+    InvalidAuthenticator(#[source] serde_yaml::Error),
+
     #[error("Failed to serialize secret payload")]
     Serialize(#[source] serde_yaml::Error),
 
