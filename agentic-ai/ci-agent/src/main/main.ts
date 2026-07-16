@@ -6,6 +6,7 @@ import { runCiImplement } from "./implement.js";
 import { loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
+import { runPrAudit, runPrEvent, runPrMonitor } from "./pr-audit.js";
 
 async function runAgentCommand(): Promise<void> {
   const config = loadConfig();
@@ -32,9 +33,21 @@ async function main(): Promise<void> {
     case "implement":
       await runCiImplement();
       break;
+    case "pr-monitor":
+      await runPrMonitor();
+      break;
+    case "pr-preflight":
+      await runPrAudit(false);
+      break;
+    case "pr-ready":
+      await runPrAudit(true);
+      break;
+    case "pr-event":
+      await runPrEvent();
+      break;
     default:
       throw new Error(
-        `Unknown command: ${command} (expected agent, fix, or implement)`,
+        `Unknown command: ${command} (expected agent, fix, implement, pr-preflight, pr-monitor, pr-ready, or pr-event)`,
       );
   }
 }

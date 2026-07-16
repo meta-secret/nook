@@ -305,6 +305,19 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload over trusted `https://localhost:<port>` using ignored TLS material in `.nook/https/`) and `task wasm:build:fast` (mounted no-opt WASM regeneration). `task web:https:setup` builds and runs the pinned repository `mkcert` container; only the final CA trust operation runs on the host because the browser consumes the host trust store. Playwright and CI keep their isolated loopback-HTTP transport when real passkey/OAuth/provider ceremonies are not under test.
 
+PR delivery helpers live in `agentic-ai/ci-agent` and are exposed as `task
+pr:preflight`, `task pr:monitor`, and `task pr:ready`. Preflight and readiness
+emit machine-readable exact-head state. The monitor selects only Nook's
+path-applicable `PR` and `Web research` workflows, marks a same-repo agent PR
+only when its author matches the authenticated agent identity, prints one
+current snapshot, and exits. Ordinary branches receive a read-only audit. Long-lived continuation is
+owned entirely by GitHub `pull_request_target` / `workflow_run` events; no agent
+process or CLI polls check state, and Codex or another external review/check is
+never selected. Extension
+iteration has a host-cached `task extension:check:fast` gate, while required
+full local validation still begins after the coherent iteration is pushed and
+runs in parallel with repository CI.
+
 ### Split Rust/WASM and web images
 
 - **Rust/WASM lineage**: `rust-base` + chef-cooked dependencies + native coverage/tests + WASM clippy/build/Node tests. Its multi-GB `target/`, Cargo registry, and compiler live only in the persistent runner's local BuildKit store. Explicit `task rust:*` / `task wasm:*` commands load the source-sealed `nook-rust:local` image on demand; browser-only WASM tests and mounted Vite development use `nook-rust-browser:local`.

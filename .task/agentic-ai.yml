@@ -94,7 +94,6 @@ tasks:
         -e AGENT_BRANCH
         -e CI_AGENT_PROMPT_FILE
         -e CI_FIX_LABEL
-        -e CI_FIX_POLL_MS
         -e CI_AGENT_TIMEOUT_MS
         -e CI_AGENT_HEARTBEAT_MS
         -e CI_AGENT_LOG_LEVEL
@@ -106,6 +105,7 @@ tasks:
         -e AGENT_PR_TITLE
         -e AGENT_PR_BODY
         -e AGENT_COMMIT_MESSAGE
+        -e PR_NUMBER
         -e VITE_BASE
         -e VITE_VAULT_SYNC_INTERVAL_MS
         -e WASM_BUILD_MODE
@@ -130,7 +130,7 @@ tasks:
           CI_AGENT_CMD: agent
 
   ci-agent:fix:
-    desc: Full CI fix loop in Docker — agent, GitHub REST API (PR, checks, squash merge).
+    desc: Run CI fix agent, open PR, then hand off to the event-driven PR monitor.
     deps:
       - setup
     cmds:
@@ -139,10 +139,46 @@ tasks:
           CI_AGENT_CMD: fix
 
   ci-agent:implement:
-    desc: Implement issue/prompt via Cursor agent in Docker, open PR, squash-merge.
+    desc: Implement issue/prompt, open PR, then hand off to the event-driven PR monitor.
     deps:
       - setup
     cmds:
       - task: ci-agent:docker:run
         vars:
           CI_AGENT_CMD: implement
+
+  pr:preflight:
+    desc: Print a machine-readable PR audit before implementation or final validation (PR=<number>).
+    requires:
+      vars: [PR]
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
+        export PR_NUMBER="{{.PR}}";
+        task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
+
+  pr:monitor:
+    desc: Arm hosted event continuation, print one audit, and exit without polling or waiting for external reviews (PR=<number>).
+    requires:
+      vars: [PR]
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
+        export PR_NUMBER="{{.PR}}";
+        task ci-agent:docker:run CI_AGENT_CMD=pr-monitor'
+
+  pr:ready:
+    desc: Fail unless the exact PR head is current, deployed, repository-green, and existing feedback is handled (PR=<number>).
+    requires:
+      vars: [PR]
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
+        export PR_NUMBER="{{.PR}}";
+        task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
