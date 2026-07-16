@@ -274,11 +274,17 @@
       : 'Nook Simple Vault'
   })
 
-  async function handleUnlock() {
+  async function handleUnlock(skipExtensionDiscovery = false) {
+    if (vault.addProviderOpen && vault.loginSetupType) {
+      await vault.connectStagedProvider()
+      return
+    }
+    const activeStoreId = vault.activeVaultStoreId?.trim() ?? ''
     const connectRequest = extensionIdentityRequest
     if (
       connectRequest?.source === 'paired-vault' &&
-      vault.localVaultPresent
+      vault.localVaultPresent &&
+      connectRequest.vaultStoreId === activeStoreId
     ) {
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         (manager) => adoptExtensionIdentity(manager, connectRequest),
@@ -288,9 +294,21 @@
       await vault.loadDb()
       return
     }
+    if (
+      !skipExtensionDiscovery &&
+      SUPPORTS_EXTENSION &&
+      vault.localVaultPresent &&
+      activeStoreId
+    ) {
+      extensionDiscoveryStoreId = ''
+      await resumePairedExtensionVault(activeStoreId)
+      if (vault.isAuthenticated) return
+    }
     if (existingVaultNeedsDeviceUnlock) {
       const extensionIdentityCanUnlock =
         connectRequest &&
+        (connectRequest.source !== 'paired-vault' ||
+          connectRequest.vaultStoreId === activeStoreId) &&
         (connectRequest.source === 'paired-vault' ||
           extensionBackedVaultSession ||
           vault.deviceProtectionStatus === 'missing')
@@ -387,9 +405,21 @@
     ) {
       return
     }
+    if (discovery.status === 'locked') {
+      window.setTimeout(() => {
+        if (
+          !vault.isAuthenticated &&
+          vault.activeVaultStoreId === storeId &&
+          extensionDiscoveryStoreId === storeId
+        ) {
+          extensionDiscoveryStoreId = ''
+        }
+      }, 1_000)
+      return
+    }
     if (discovery.status !== 'unlocked') return
     extensionIdentityRequest = discovery.request
-    await handleUnlock()
+    await handleUnlock(true)
   }
 
   async function handleCreateDeviceVault(label: string) {
@@ -479,12 +509,17 @@
   $effect(() => {
     const storeId = vault.activeVaultStoreId?.trim() ?? ''
     if (
+      extensionIdentityRequest?.source === 'paired-vault' &&
+      extensionIdentityRequest.vaultStoreId !== storeId
+    ) {
+      extensionIdentityRequest = undefined
+    }
+    if (
       !SUPPORTS_EXTENSION ||
       extensionConnectRoute ||
       vault.isAuthenticated ||
       vault.isInitializing ||
       vault.isVerifying ||
-      !vault.providersLoaded ||
       !vault.localVaultPresent ||
       !storeId ||
       extensionDiscoveryStoreId === storeId

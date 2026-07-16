@@ -212,6 +212,20 @@ function sendSessionMessage(message: unknown): Promise<unknown> {
   })
 }
 
+async function pairedVaultGrantIsCurrent(
+  pending: Extract<PendingIdentityHandoff, { kind: 'paired-vault' }>,
+): Promise<boolean> {
+  const key = pairingGrantStorageKey(pending.vaultStoreId)
+  const stored = await getLocalStorage(key)
+  const grant = stored[key]
+  return (
+    isStoredExtensionPairingGrant(grant) &&
+    grant.deviceId === pending.deviceId &&
+    grant.devicePublicKey === pending.devicePublicKey &&
+    grant.deviceSigningPublicKey === pending.deviceSigningPublicKey
+  )
+}
+
 async function createIdentityHandoff(
   message:
     | ExtensionIdentityHandoffRequestMessage
@@ -246,6 +260,12 @@ async function createIdentityHandoff(
     ) {
       return { ok: false, reason: 'extension-identity-handoff-not-issued' }
     }
+    if (
+      pending.kind === 'paired-vault' &&
+      !(await pairedVaultGrantIsCurrent(pending))
+    ) {
+      return { ok: false, reason: 'extension-pairing-revoked' }
+    }
     await removeSessionStorage(key)
     await ensureExtensionSessionDocument()
     const response = await sendSessionMessage({
@@ -260,6 +280,12 @@ async function createIdentityHandoff(
       'envelope' in response &&
       typeof response.envelope === 'string'
     ) {
+      if (
+        pending.kind === 'paired-vault' &&
+        !(await pairedVaultGrantIsCurrent(pending))
+      ) {
+        return { ok: false, reason: 'extension-pairing-revoked' }
+      }
       const nextNonce = randomNonce()
       await issueIdentityHandoff(nextNonce, pending)
       return { ok: true, envelope: response.envelope, nextNonce }
