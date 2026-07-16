@@ -2,7 +2,32 @@
 
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
-use crate::{SecretRecord, SecretType, SecretValue};
+use crate::{SecretId, SecretRecord, SecretType, SecretValue};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecretListItemData {
+    Login {
+        website_url: String,
+        username: String,
+    },
+    ApiKey {
+        website_url: String,
+        expires_at: String,
+    },
+    SeedPhrase {
+        name: String,
+        word_count: usize,
+    },
+    SecureNote {
+        title: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecretListItem {
+    pub id: SecretId,
+    pub data: SecretListItemData,
+}
 
 fn hostname_from_url(raw: &str) -> String {
     let mut host = raw.trim();
@@ -18,6 +43,36 @@ fn hostname_from_url(raw: &str) -> String {
 }
 
 impl SecretRecord {
+    /// Build the secret-free list representation that may cross into UI state.
+    ///
+    /// Credentials, login notes, seed words, and secure-note bodies are
+    /// intentionally absent. Callers must request the full record separately
+    /// for an explicit reveal, secret copy, or edit action.
+    #[must_use]
+    pub fn list_item(&self) -> SecretListItem {
+        let data = match &self.data {
+            SecretValue::Login(value) => SecretListItemData::Login {
+                website_url: value.website_url.clone(),
+                username: value.username.clone(),
+            },
+            SecretValue::ApiKey(value) => SecretListItemData::ApiKey {
+                website_url: value.website_url.clone(),
+                expires_at: value.expires_at.clone(),
+            },
+            SecretValue::SeedPhrase(value) => SecretListItemData::SeedPhrase {
+                name: value.name.clone(),
+                word_count: value.seed.split_whitespace().count(),
+            },
+            SecretValue::SecureNote(value) => SecretListItemData::SecureNote {
+                title: value.title.clone(),
+            },
+        };
+        SecretListItem {
+            id: self.id.clone(),
+            data,
+        }
+    }
+
     /// Primary label for list rows (website URL, account name, note title, …).
     #[must_use]
     pub fn display_title(&self) -> String {
@@ -137,6 +192,86 @@ impl SecretRecord {
     }
 }
 
+impl SecretListItem {
+    #[must_use]
+    pub fn secret_type(&self) -> SecretType {
+        match &self.data {
+            SecretListItemData::Login { .. } => SecretType::Login,
+            SecretListItemData::ApiKey { .. } => SecretType::ApiKey,
+            SecretListItemData::SeedPhrase { .. } => SecretType::SeedPhrase,
+            SecretListItemData::SecureNote { .. } => SecretType::SecureNote,
+        }
+    }
+
+    #[must_use]
+    pub fn display_title(&self) -> String {
+        match &self.data {
+            SecretListItemData::Login { website_url, .. }
+            | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
+            SecretListItemData::SeedPhrase { name, .. } => name.clone(),
+            SecretListItemData::SecureNote { title } => title.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn group_key(&self) -> String {
+        match &self.data {
+            SecretListItemData::Login { website_url, .. }
+            | SecretListItemData::ApiKey { website_url, .. } => {
+                let host = hostname_from_url(website_url);
+                if host.is_empty() {
+                    "No Website".to_owned()
+                } else {
+                    host
+                }
+            }
+            SecretListItemData::SeedPhrase { name, .. } => {
+                let name = name.trim();
+                if name.is_empty() {
+                    "Unnamed Seed Phrase".to_owned()
+                } else {
+                    name.to_owned()
+                }
+            }
+            SecretListItemData::SecureNote { title } => {
+                let title = title.trim();
+                if title.is_empty() {
+                    "Unnamed Note".to_owned()
+                } else {
+                    title.to_owned()
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn summary(&self) -> String {
+        match &self.data {
+            SecretListItemData::Login {
+                website_url,
+                username,
+            } => {
+                if !username.trim().is_empty() {
+                    username.trim().to_owned()
+                } else if !website_url.trim().is_empty() {
+                    website_url.trim().to_owned()
+                } else {
+                    "login".to_owned()
+                }
+            }
+            SecretListItemData::ApiKey { website_url, .. } => {
+                if website_url.trim().is_empty() {
+                    "api-key".to_owned()
+                } else {
+                    website_url.trim().to_owned()
+                }
+            }
+            SecretListItemData::SeedPhrase { name, .. } => name.trim().to_owned(),
+            SecretListItemData::SecureNote { title } => title.trim().to_owned(),
+        }
+    }
+}
+
 /// Build a validated YAML payload for `add_secret` / `replace_secret` from form fields.
 pub fn build_secret_yaml(
     secret_type: SecretType,
@@ -195,6 +330,46 @@ mod tests {
         let record = login_record();
         assert!(record.matches_search("alice"));
         assert!(!record.matches_search("correct"));
+    }
+
+    #[test]
+    fn list_item_keeps_login_metadata_and_drops_sensitive_fields() {
+        let item = login_record().list_item();
+
+        assert_eq!(item.secret_type(), SecretType::Login);
+        assert_eq!(item.group_key(), "github.com");
+        assert_eq!(item.summary(), "alice");
+        assert_eq!(
+            item.data,
+            SecretListItemData::Login {
+                website_url: "https://www.github.com/login".to_owned(),
+                username: "alice".to_owned(),
+            }
+        );
+        assert!(!format!("{item:?}").contains("correct horse battery staple"));
+    }
+
+    #[test]
+    fn list_item_exposes_only_derived_seed_word_count() {
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_seed"),
+            secret_type: SecretType::SeedPhrase,
+            data: SecretValue::SeedPhrase(crate::SeedPhraseSecret {
+                name: "wallet".to_owned(),
+                seed: "abandon ability able about above absent absorb abstract absurd abuse access accident".to_owned(),
+            }),
+        };
+
+        let item = record.list_item();
+
+        assert_eq!(
+            item.data,
+            SecretListItemData::SeedPhrase {
+                name: "wallet".to_owned(),
+                word_count: 12,
+            }
+        );
+        assert!(!format!("{item:?}").contains("abandon"));
     }
 
     #[test]

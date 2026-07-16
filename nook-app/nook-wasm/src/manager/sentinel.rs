@@ -433,13 +433,8 @@ impl NookVaultManager {
             .clone();
         let keys = nook_core::finalize_sentinel_unlock(session, &identity)?;
         let records = self.stored_records_snapshot();
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
-        let database = nook_core::Database::from_stored_records_with_crypto(
-            &nook_core::user_stored_records(&records),
-            &crypto,
-        )?;
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.vault.database = database;
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
         if self.event_log_has_events().await? {
             self.apply_event_projection_to_session().await?;
         }
@@ -649,13 +644,8 @@ impl NookVaultManager {
             let stored_records = nook_core::deserialize_stored(content, format)?;
             let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-            let crypto = nook_core::VaultCrypto::new(&secrets_key)?;
             let meta = nook_core::VaultMetaState::from_stored_records(&stored_records);
-            let user_records = nook_core::user_stored_records(&stored_records);
-            let database =
-                nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)?;
             return Ok(LoadedVault {
-                database,
                 meta,
                 secrets_key,
                 members_key,
@@ -681,7 +671,6 @@ impl NookVaultManager {
         self.vault.secrets_key.clear();
         self.vault.members_key.clear();
         self.vault.crypto = None;
-        self.vault.database.clear();
         self.vault.last_synced_content = content.to_owned();
         Ok(())
     }

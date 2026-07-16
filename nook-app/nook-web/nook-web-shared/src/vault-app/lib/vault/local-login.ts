@@ -111,7 +111,8 @@ export async function createLocalVaultWithDeviceKeys(
       }
       return state.manager!.connect("local", "", "");
     })) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
     state.markVaultUnlocked();
     const storeId = requireManagerVaultStoreId(state.manager);
     state.activeVaultStoreId = storeId;
@@ -208,7 +209,8 @@ export async function createLocalVault(
       }
       return state.manager!.connect("local", "", "");
     })) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
     state.markVaultUnlocked();
     await state.addVaultPassword(
       state.t("login.master_password_label"),

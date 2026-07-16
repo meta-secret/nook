@@ -101,7 +101,7 @@ impl SecretValue {
         }
     }
 
-    pub(crate) fn zeroize_plaintext(&mut self) {
+    pub fn zeroize_plaintext(&mut self) {
         match self {
             Self::Login(value) => {
                 value.website_url.zeroize();
@@ -136,7 +136,7 @@ pub struct SecretRecord {
 }
 
 impl SecretRecord {
-    pub(crate) fn zeroize_plaintext(&mut self) {
+    pub fn zeroize_plaintext(&mut self) {
         self.data.zeroize_plaintext();
     }
 }

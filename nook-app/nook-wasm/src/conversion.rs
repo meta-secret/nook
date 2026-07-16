@@ -4,8 +4,6 @@ use crate::types::{NookVaultSyncResult, joins_to_vec, members_to_vec};
 use crate::{NookError, NookVaultManager};
 use wasm_bindgen::JsError;
 
-pub(crate) use crate::types::records_to_vec;
-
 pub(crate) fn content_requires_genesis(
     content: &str,
     force_genesis: bool,
@@ -51,7 +49,6 @@ pub(crate) fn wasm_iso_timestamp() -> String {
 }
 
 pub(crate) struct LoadedVault {
-    pub(crate) database: nook_core::Database,
     pub(crate) meta: nook_core::VaultMetaState,
     pub(crate) secrets_key: nook_core::SymmetricKey,
     pub(crate) members_key: nook_core::SymmetricKey,
@@ -61,9 +58,8 @@ pub(crate) fn load_stored_vault(
     content: &str,
     identity: &nook_core::DeviceIdentity,
 ) -> Result<LoadedVault, NookError> {
-    let loaded = nook_core::load_stored_vault(content, identity)?;
+    let loaded = nook_core::unlock_stored_vault(content, identity)?;
     Ok(LoadedVault {
-        database: loaded.database,
         meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,

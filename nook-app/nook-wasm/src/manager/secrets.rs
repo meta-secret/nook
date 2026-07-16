@@ -4,8 +4,7 @@
 use super::NookVaultManager;
 use crate::NookBitwardenImportResult;
 use crate::NookError;
-use crate::NookSecretRecord;
-use crate::conversion::records_to_vec;
+use crate::{NookSecretPage, NookSecretRecord};
 use serde::Serialize;
 use std::collections::HashSet;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -18,8 +17,40 @@ fn serialize_js_objects<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_b
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
-        let filtered = nook_core::filter_secrets(&self.vault.database.list(), query);
-        records_to_vec(filtered).map_err(Into::into)
+        let mut records = self.get_records()?;
+        records.retain(|record| record.matches_search(query));
+        Ok(records)
+    }
+
+    #[wasm_bindgen(js_name = querySecretPage)]
+    pub fn query_secret_page_js(
+        &self,
+        query: &str,
+        offset: u32,
+        limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
+        Ok(NookSecretPage::from_core(
+            self.query_secret_page(query, offset, limit)?,
+        )?)
+    }
+
+    /// Decrypt one full record only after an explicit reveal or secret-value copy.
+    #[wasm_bindgen(js_name = decryptSecret)]
+    pub fn decrypt_secret_js(&self, id: &str) -> Result<NookSecretRecord, JsError> {
+        let crypto = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let id = nook_core::SecretId::from_vault_record(id);
+        let record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+        tracing::info!(
+            scope = "wasm-secrets",
+            action = "decrypt-secret",
+            secret_id = %id,
+            "secret plaintext exposed on demand"
+        );
+        Ok(NookSecretRecord::from_record(record))
     }
 
     /// Prefixed secret item id (`secret_{token}`).
@@ -80,8 +111,8 @@ impl NookVaultManager {
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
-        let typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
-        self.vault.database.insert(id.clone(), typed_value);
+        let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
+        typed_value.zeroize_plaintext();
 
         let armored = self
             .vault
@@ -143,19 +174,29 @@ impl NookVaultManager {
             (!password.is_empty()).then_some(password.as_str()),
         )
         .map_err(|error| NookError::Database(error.to_string()))?;
-        let mut seen = self
+        let crypto = self
             .vault
-            .database
-            .list()
-            .into_iter()
-            .map(|record| record.data.to_yaml().map(|yaml| yaml.as_str().to_owned()))
-            .collect::<Result<HashSet<_>, _>>()?;
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let mut seen = HashSet::with_capacity(self.vault.meta.secrets.len());
+        for (secret_type, payload) in self.vault.meta.secrets.values() {
+            let ciphertext = nook_core::AgeArmoredCiphertext::parse(payload.as_str())?;
+            let mut plaintext = crypto.decrypt_value(&ciphertext)?;
+            let mut value =
+                nook_core::SecretValue::from_yaml_str(*secret_type, plaintext.as_str())?;
+            plaintext.zeroize_plaintext();
+            let mut canonical = value.to_yaml()?;
+            seen.insert(nook_core::sha256_hex(canonical.as_str().as_bytes()));
+            canonical.zeroize_plaintext();
+            value.zeroize_plaintext();
+        }
         let mut skipped_duplicates = 0;
         let mut operations = Vec::new();
 
         for value in plan.items {
             let yaml = value.to_yaml()?;
-            if !seen.insert(yaml.as_str().to_owned()) {
+            if !seen.insert(nook_core::sha256_hex(yaml.as_str().as_bytes())) {
                 skipped_duplicates += 1;
                 continue;
             }
@@ -181,7 +222,6 @@ impl NookVaultManager {
             self.append_vault_operations(operations).await?;
         }
         let _ = self.status.tx.send("READY".to_owned());
-        let secrets = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
             action = "import-bitwarden",
@@ -194,7 +234,6 @@ impl NookVaultManager {
             imported,
             plan.skipped_unsupported,
             skipped_duplicates,
-            secrets,
         ))
     }
 
@@ -224,8 +263,7 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        nook_core::replace_secret(
-            &mut self.vault.database,
+        nook_core::replace_encrypted_secret(
             &mut self.vault.meta,
             crypto,
             &nook_core::ReplaceSecretInput {
@@ -235,7 +273,6 @@ impl NookVaultManager {
                 data_yaml: &data,
             },
         )?;
-
         let validated_new = nook_core::validate_secret_id(&new_id)?;
         let validated_old = nook_core::validate_secret_id(&old_id)?;
         let ciphertext = self
@@ -406,7 +443,6 @@ impl NookVaultManager {
         let _ = self.status.tx.send("DELETE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
-        self.vault.database.remove_and_zeroize(&id);
         self.vault.meta.secrets.remove(&id);
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
             secret_id: id.clone(),

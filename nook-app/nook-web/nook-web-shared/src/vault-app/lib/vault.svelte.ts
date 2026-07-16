@@ -3,6 +3,7 @@ import {
   isoTimestamp,
   type JoinRequest,
   type NookBitwardenImportResult,
+  type NookSecretListItem,
   type NookSecretRecord,
   type NookVaultSyncResult,
   type VaultItemType,
@@ -257,7 +258,12 @@ export class VaultState {
   isAuthenticated = $state(false);
   /** True when the login gate should explain that the last lock was due to idle timeout. */
   sessionExpiredByIdle = $state(false);
-  secrets = $state<NookSecretRecord[]>([]);
+  secrets = $state<NookSecretListItem[]>([]);
+  secretTotal = $state(0);
+  secretPageOffset = $state(0);
+  secretPageSize = 50;
+  secretQuery = $state("");
+  private secretPageGeneration = 0;
 
   errorMsg = $state("");
   successMsg = $state("");
@@ -1879,10 +1885,15 @@ export class VaultState {
   }
 
   clearUnlockedSession() {
+    this.secretPageGeneration += 1;
     this.stopIdleSessionTracking();
     this.stopVaultSync();
     this.isAuthenticated = false;
+    for (const secret of this.secrets) secret.free();
     this.secrets = [];
+    this.secretTotal = 0;
+    this.secretPageOffset = 0;
+    this.secretQuery = "";
     this.pendingJoins = [];
     this.vaultMembers = [];
     this.joinEnrollmentPrompt = "none";
@@ -1920,9 +1931,6 @@ export class VaultState {
 
   applyVaultSyncResult(result: NookVaultSyncResult) {
     if (this.isAuthenticated) {
-      if (result.secrets.length > 0) {
-        this.secrets = result.secrets;
-      }
       this.pendingJoins = result.pendingJoins;
       this.vaultMembers = result.vaultMembers;
       return;
@@ -2230,7 +2238,8 @@ export class VaultState {
       const raw = await this.enqueueStorage(() =>
         this.manager!.resolveProjectionConflict(oldSecretId, chosenSecretId),
       );
-      this.secrets = raw as NookSecretRecord[];
+      for (const record of raw as NookSecretRecord[]) record.free();
+      await this.refreshSecretsFromSession();
       await this.refreshReplacementConflicts();
       this.scheduleFanOutSyncAfterLocalSave();
       this.showSuccess(this.t("toasts.secret_conflict_resolved"));
@@ -2423,15 +2432,65 @@ export class VaultState {
 
   async refreshSecretsFromSession() {
     if (!this.manager) {
+      for (const secret of this.secrets) secret.free();
       this.secrets = [];
+      this.secretTotal = 0;
+      this.secretPageOffset = 0;
       return;
     }
-    // `filter_secrets` borrows the wasm manager; route it through the storage
+    // Page queries borrow the wasm manager; route them through the storage
     // chain so a background sync's refresh can't alias an in-flight foreground
     // `&mut self` op (delete/add) and trigger a recursive-borrow hang.
-    this.secrets = await this.enqueueStorage(() =>
-      this.manager!.filter_secrets(""),
+    await this.loadSecretPage(this.secretQuery, this.secretPageOffset);
+  }
+
+  async loadSecretPage(query: string, requestedOffset = 0) {
+    if (!this.manager) return;
+    const generation = this.secretPageGeneration;
+    const page = await this.enqueueStorage(() =>
+      this.manager!.querySecretPage(
+        query,
+        requestedOffset,
+        this.secretPageSize,
+      ),
     );
+    let records = page.takeItems();
+    let total = page.total;
+    let offset = page.offset;
+    page.free();
+    if (generation !== this.secretPageGeneration) {
+      for (const record of records) record.free();
+      return;
+    }
+
+    if (records.length === 0 && total > 0 && offset >= total) {
+      const lastOffset =
+        Math.floor((total - 1) / this.secretPageSize) * this.secretPageSize;
+      const lastPage = await this.enqueueStorage(() =>
+        this.manager!.querySecretPage(query, lastOffset, this.secretPageSize),
+      );
+      records = lastPage.takeItems();
+      total = lastPage.total;
+      offset = lastPage.offset;
+      lastPage.free();
+      if (generation !== this.secretPageGeneration) {
+        for (const record of records) record.free();
+        return;
+      }
+    }
+
+    for (const secret of this.secrets) secret.free();
+    this.secrets = records;
+    this.secretTotal = total;
+    this.secretPageOffset = offset;
+    this.secretQuery = query;
+  }
+
+  async decryptSecret(id: string): Promise<NookSecretRecord> {
+    if (!this.manager) {
+      throw new Error("Vault manager is not initialized.");
+    }
+    return this.enqueueStorage(() => this.manager!.decryptSecret(id));
   }
 
   async refreshDeviceState() {

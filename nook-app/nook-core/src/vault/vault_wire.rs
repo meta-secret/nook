@@ -21,8 +21,8 @@ macro_rules! transparent_str_newtype {
             }
 
             #[must_use]
-            pub fn into_inner(self) -> String {
-                self.0
+            pub fn into_inner(mut self) -> String {
+                std::mem::take(&mut self.0)
             }
 
             pub fn from_trusted(value: String) -> Self {
@@ -52,6 +52,20 @@ macro_rules! transparent_str_newtype {
 
 transparent_str_newtype!(StoredVaultYaml);
 transparent_str_newtype!(SecretPayloadYaml);
+
+impl SecretPayloadYaml {
+    pub fn zeroize_plaintext(&mut self) {
+        use zeroize::Zeroize;
+        self.0.zeroize();
+    }
+}
+
+impl Drop for SecretPayloadYaml {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.0.zeroize();
+    }
+}
 
 /// On-disk vault blob. Projection caches are YAML only.
 #[derive(Debug, Clone, PartialEq, Eq)]

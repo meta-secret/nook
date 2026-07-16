@@ -14,9 +14,16 @@
 - The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`). `wasm-pack build` installs the matching `wasm-bindgen-cli` itself — not `cargo install`. **Binaryen (`wasm-opt`) is baked into the base image** (pinned `BINARYEN_VERSION`, installed to `/usr/local/bin`) so wasm-pack runs post-link optimization with a correct, local `wasm-opt` and never downloads it at build time (a modern version is required — old Debian binaryen corrupts `externref` tables).
 
 ## 3. Session state (`NookVaultManager`)
-- `database` — typed in-memory plaintext session (`nook_core::Database`)
-- `stored_armored` — per-key armored ciphertext cache (incremental saves)
+- `meta.secrets` — per-key armored ciphertext for the unlocked vault; the
+  manager does not retain a hydrated plaintext `Database`
 - `crypto` — `nook_core::VaultCrypto` (derived once per connect)
+- `querySecretPage` — briefly decrypts only the requested page (maximum 100
+  records; the web app uses 50), zeroizes each full record, and returns a typed
+  metadata-only `NookSecretPage`
+- `decryptSecret` — decrypts exactly one full `NookSecretRecord` for an explicit
+  reveal or secret-value copy
+- encrypted search — decrypts candidates one at a time because searchable
+  metadata is inside each encrypted payload; non-matches are zeroized
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`
 
 ## 3a. Browser API boundaries
@@ -40,7 +47,9 @@
 
 | Export | Use |
 |--------|-----|
-| `NookSecretRecord` | Decrypted vault items (getters + view helpers) |
+| `NookSecretListItem` | Metadata-only list item with no credential/body getters |
+| `NookSecretRecord` | One explicitly decrypted vault item; freed on hide/action completion |
+| `NookSecretPage` | Page-scoped metadata items plus total/offset/limit |
 | `NookJoinRequest` | Pending device join rows (`deviceId`, `publicKey`, `requestedAt`) |
 | `NookVaultMember` | Enrolled devices (`authId`, `deviceId`, …) |
 | `NookPasswordEntrySummary` | Backup-password list entries |
@@ -60,7 +69,11 @@
 
 WASM boundary getters may still return `String`; parse with `Foo::parse` / `Deserialize` before calling core. Use `.as_str()` / `.into_inner()` only at the JS edge.
 
-**Do not duplicate in TypeScript.** The web UI consumes `NookSecretRecord` wasm objects with typed getters (`websiteUrl`, `username`, `password`, …) and view helpers (`groupKey`, `summary`, `matchesSearch`, `primaryCredential`).
+**Do not duplicate in TypeScript.** List/search UI consumes
+`NookSecretListItem`; it cannot access password, API key, seed words, login
+notes, or secure-note bodies. Explicit reveal/copy calls return one
+`NookSecretRecord`, which must be freed as soon as the action or revealed state
+ends.
 
 | Layer | Responsibility |
 |-------|----------------|
@@ -68,7 +81,10 @@ WASM boundary getters may still return `String`; parse with `Foo::parse` / `Dese
 | `nook-wasm` | Typed boundary structs, `buildSecretYaml`, session CRUD |
 | `nook-web` | Svelte forms + rendering; `VaultItemType` string union for the type picker only |
 
-**Reads:** `records_to_vec` builds `Vec<NookSecretRecord>` from `nook_core::SecretRecord` — no YAML round-trip to JS.
+**Reads:** page queries convert decrypted records into
+`Vec<NookSecretListItem>` and zeroize the full records before returning.
+`decryptSecret(id)` is the only list-flow path that creates a full
+`NookSecretRecord` in JavaScript.
 
 **Writes:** Forms construct `NookSecretFormFields`, call `buildSecretYaml(type, fields)` (Rust validation), then `add_secret` / `replace_secret`. New item ids use `NookVaultManager.generate_secret_id()`.
 

@@ -11,7 +11,9 @@ import {
   expandSettingsSection,
   expandSecretRow,
   fillSeedPhraseGrid,
+  flushNookLogPersistQueue,
   mockBip39Wordlist,
+  readPersistedAppLogs,
   revealSecretInRow,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
@@ -294,6 +296,105 @@ test.describe('local vault', () => {
       { timeout: 30_000 },
     )
     expect(Date.now() - started).toBeLessThan(30_000)
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('secret-row')).toHaveCount(50)
+    await expect(page.getByTestId('secret-pagination')).toBeVisible()
+    await expect(page.getByText('Page 1 of 26')).toBeVisible()
+
+    await page.getByTestId('secret-page-next').click()
+    await expect(page.getByText('Page 2 of 26')).toBeVisible()
+    await expect(page.getByTestId('secret-row')).toHaveCount(50)
+
+    await page.getByTestId('search-secrets').fill('bulk-user-1299')
+    await expect(
+      page.getByTestId('secret-row').filter({ hasText: 'bulk-user-1299' }),
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('secret-pagination')).toHaveCount(0)
+  })
+
+  test('decrypts paginated credentials only for reveal or secret copy', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const items = Array.from({ length: 55 }, (_, index) => ({
+      type: 1,
+      name: `Demand login ${index}`,
+      notes: `private-note-${index}`,
+      login: {
+        username: `demand-user-${index}`,
+        password: `demand-password-${index}`,
+        uris: [{ uri: `https://demand-${index}.example` }],
+        fido2Credentials: [],
+      },
+    }))
+
+    await openBitwardenImport(page)
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_demand_decrypt.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({ encrypted: false, folders: [], items }),
+      ),
+    })
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 55 items',
+    )
+    await page.getByTestId('vault-secrets-tab').click()
+
+    const decryptLogCount = async () => {
+      await flushNookLogPersistQueue(page)
+      return (
+        (await readPersistedAppLogs(page, 1000))?.filter((entry) =>
+          entry.message.includes('secret plaintext exposed on demand'),
+        ).length ?? 0
+      )
+    }
+
+    const beforeNavigation = await decryptLogCount()
+    await page.getByTestId('secret-page-next').click()
+    await expect(page.getByText('Page 2 of 2')).toBeVisible()
+    await expect(page.getByTestId('secret-row')).toHaveCount(5)
+    await expect(page.getByTestId('secret-page-next')).toBeDisabled()
+    await expect(page.getByTestId('secret-page-previous')).toBeEnabled()
+    await page.getByTestId('search-secrets').fill('demand-user-54')
+    const row = page
+      .getByTestId('secret-row')
+      .filter({ hasText: 'demand-user-54' })
+    await expect(row).toBeVisible()
+    await expect.poll(decryptLogCount).toBe(beforeNavigation)
+
+    await row.getByTestId('secret-row-toggle').click()
+    await expect(row.getByTestId('revealed-secret')).toContainText('••••')
+    await expect(row).not.toContainText('demand-password-54')
+    await expect(row).not.toContainText('private-note-54')
+
+    await row.getByTestId('reveal-secret-btn').click()
+    await expect(row.getByTestId('revealed-secret')).toContainText(
+      'demand-password-54',
+    )
+    await expect(row).toContainText('private-note-54')
+    await expect.poll(decryptLogCount).toBe(beforeNavigation + 1)
+
+    await row.getByTestId('reveal-secret-btn').click()
+    await expect(row).not.toContainText('demand-password-54')
+    await expect(row).not.toContainText('private-note-54')
+    await expect.poll(decryptLogCount).toBe(beforeNavigation + 1)
+
+    await row.getByRole('button', { name: 'Copy secret' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('demand-password-54')
+    await expect(row).not.toContainText('demand-password-54')
+    await expect.poll(decryptLogCount).toBe(beforeNavigation + 2)
+
+    await row.getByRole('button', { name: 'Copy username' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('demand-user-54')
+    await expect.poll(decryptLogCount).toBe(beforeNavigation + 2)
   })
 
   test('persists secrets after reload', async ({ page }) => {

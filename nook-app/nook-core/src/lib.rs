@@ -90,7 +90,7 @@ pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
-pub use secret_view::build_secret_yaml;
+pub use secret_view::{SecretListItem, SecretListItemData, build_secret_yaml};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
     create_sentinel_onboarding_package, decode_sentinel_onboarding_package,
@@ -147,7 +147,7 @@ pub use password_envelope::{
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
     verify_password_entry,
 };
-pub use session::{ReplaceSecretInput, replace_secret};
+pub use session::{ReplaceSecretInput, replace_encrypted_secret, replace_secret};
 pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials, seal_provider_credentials,
     seal_provider_credentials_for_public_key,
@@ -190,9 +190,10 @@ pub use vault_architecture::{
     validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_connect::{
-    LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,
-    apply_member_records, capture_vault_unlock_from_content, content_requires_genesis,
-    load_sentinel_vault, load_sentinel_vault_from_opened, load_stored_vault,
+    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContentMetadata,
+    access_status_for_vault_content, apply_member_records, capture_vault_unlock_from_content,
+    content_requires_genesis, load_sentinel_vault, load_sentinel_vault_from_opened,
+    load_stored_vault, unlock_stored_vault,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch::{
@@ -244,7 +245,11 @@ pub use vault_sentinel_genesis::{
     start_sentinel_genesis,
 };
 pub use vault_sentinel_unlock::{respond_to_sentinel_unlock_request, start_sentinel_unlock};
-pub use vault_session::apply_user_records_to_armored_session;
+pub use vault_session::{
+    DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage,
+    apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,
+    decrypt_encrypted_secret, query_encrypted_secrets,
+};
 pub use vault_session_cache::hydrate_keys_from_projection_yaml;
 pub use vault_signing::SigningIdentity;
 pub use vault_sync::{

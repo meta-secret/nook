@@ -57,7 +57,8 @@ export async function createFreshVault(state: VaultState) {
         timeoutPromise,
       ])) as NookSecretRecord[];
     });
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
     state.markVaultUnlocked();
     state.activeVaultStoreId = localLoginActions.requireManagerVaultStoreId(
       state.manager,

@@ -139,13 +139,11 @@ impl NookVaultManager {
         let updated = nook_core::serialize_stored(&records, format)?;
         let loaded = load_stored_vault(updated.as_str(), &identity)?;
         let LoadedVault {
-            database,
             meta,
             secrets_key: resolved_secrets_key,
             members_key: resolved_members_key,
         } = loaded;
         self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
-        self.vault.database = database;
         self.vault.meta = meta;
         Ok(self.get_records()?)
     }
@@ -432,7 +430,6 @@ impl NookVaultManager {
             self.vault.secrets_key.clear();
             self.vault.members_key.clear();
             self.vault.crypto = None;
-            self.vault.database.clear();
             return Ok(Vec::new());
         }
 
