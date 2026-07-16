@@ -56,13 +56,9 @@
     onAddModeChange?: (open: boolean, type?: VaultItemType | undefined) => void
   } = $props()
 
-  let searchPattern = $state('')
+  let searchPattern = $derived(vault.secretQuery)
   let revealSecrets = $state<Record<string, boolean>>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-
-  $effect(() => {
-    searchPattern = vault.secretQuery
-  })
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
