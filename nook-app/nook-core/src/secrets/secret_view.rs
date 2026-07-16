@@ -21,6 +21,11 @@ pub enum SecretListItemData {
     SecureNote {
         title: String,
     },
+    Passkey {
+        rp_id: String,
+        user_name: String,
+        user_display_name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +71,11 @@ impl SecretRecord {
             SecretValue::SecureNote(value) => SecretListItemData::SecureNote {
                 title: value.title.clone(),
             },
+            SecretValue::Passkey(value) => SecretListItemData::Passkey {
+                rp_id: value.rp_id.clone(),
+                user_name: value.user_name.clone(),
+                user_display_name: value.user_display_name.clone(),
+            },
         };
         SecretListItem {
             id: self.id.clone(),
@@ -81,6 +91,7 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.website_url.clone(),
             SecretValue::SeedPhrase(value) => value.name.clone(),
             SecretValue::SecureNote(value) => value.title.clone(),
+            SecretValue::Passkey(value) => value.rp_id.clone(),
         }
     }
 
@@ -92,6 +103,7 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.key.as_str(),
             SecretValue::SeedPhrase(value) => value.seed.as_str(),
             SecretValue::SecureNote(value) => value.note.as_str(),
+            SecretValue::Passkey(_) => "",
         }
     }
 
@@ -131,6 +143,7 @@ impl SecretRecord {
                     title.to_owned()
                 }
             }
+            SecretValue::Passkey(value) => value.rp_id.clone(),
         }
     }
 
@@ -155,6 +168,13 @@ impl SecretRecord {
             }
             SecretValue::SeedPhrase(value) => value.name.trim().to_owned(),
             SecretValue::SecureNote(value) => value.title.trim().to_owned(),
+            SecretValue::Passkey(value) => {
+                if value.user_display_name.trim().is_empty() {
+                    value.user_name.trim().to_owned()
+                } else {
+                    value.user_display_name.trim().to_owned()
+                }
+            }
         }
     }
 
@@ -184,6 +204,12 @@ impl SecretRecord {
             SecretValue::SecureNote(value) => {
                 fields.push(value.title.clone());
             }
+            SecretValue::Passkey(value) => {
+                fields.push(value.rp_id.clone());
+                fields.push(value.rp_name.clone());
+                fields.push(value.user_name.clone());
+                fields.push(value.user_display_name.clone());
+            }
         }
 
         fields
@@ -200,6 +226,7 @@ impl SecretListItem {
             SecretListItemData::ApiKey { .. } => SecretType::ApiKey,
             SecretListItemData::SeedPhrase { .. } => SecretType::SeedPhrase,
             SecretListItemData::SecureNote { .. } => SecretType::SecureNote,
+            SecretListItemData::Passkey { .. } => SecretType::Passkey,
         }
     }
 
@@ -210,6 +237,7 @@ impl SecretListItem {
             | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
             SecretListItemData::SeedPhrase { name, .. } => name.clone(),
             SecretListItemData::SecureNote { title } => title.clone(),
+            SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
         }
     }
 
@@ -241,6 +269,7 @@ impl SecretListItem {
                     title.to_owned()
                 }
             }
+            SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
         }
     }
 
@@ -268,6 +297,17 @@ impl SecretListItem {
             }
             SecretListItemData::SeedPhrase { name, .. } => name.trim().to_owned(),
             SecretListItemData::SecureNote { title } => title.trim().to_owned(),
+            SecretListItemData::Passkey {
+                user_name,
+                user_display_name,
+                ..
+            } => {
+                if user_display_name.trim().is_empty() {
+                    user_name.trim().to_owned()
+                } else {
+                    user_display_name.trim().to_owned()
+                }
+            }
         }
     }
 }
@@ -297,6 +337,9 @@ pub fn build_secret_yaml(
             "title": fields.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
             "note": fields.get("note").and_then(|v| v.as_str()).unwrap_or_default(),
         }),
+        SecretType::Passkey => {
+            return Err(SecretPayloadError::PasskeyCreationRequiresAuthenticator);
+        }
     };
     let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
     SecretPayloadYaml::parse(secret_type, &yaml)
@@ -305,7 +348,11 @@ pub fn build_secret_yaml(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LoginSecret, SecretId};
+    use crate::{
+        LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
+        PasskeyPublicKeyCose, PasskeySecret, SecretId,
+    };
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
     fn login_record() -> SecretRecord {
         SecretRecord {
@@ -373,6 +420,45 @@ mod tests {
     }
 
     #[test]
+    fn passkey_list_item_exposes_account_metadata_without_key_material() {
+        let private_key = URL_SAFE_NO_PAD.encode([7_u8; 96]);
+        let credential_id = URL_SAFE_NO_PAD.encode([8_u8; 32]);
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_passkey"),
+            secret_type: SecretType::Passkey,
+            data: SecretValue::Passkey(PasskeySecret {
+                version: PASSKEY_SECRET_VERSION,
+                rp_id: "login.example.com".to_owned(),
+                rp_name: "Example".to_owned(),
+                credential_id: credential_id.clone(),
+                user_handle: URL_SAFE_NO_PAD.encode([9_u8; 32]),
+                user_name: "alice@example.com".to_owned(),
+                user_display_name: "Alice".to_owned(),
+                key: PasskeyCredentialKey::Es256 {
+                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone()).unwrap(),
+                    public_key_cose: PasskeyPublicKeyCose::parse(
+                        URL_SAFE_NO_PAD.encode([10_u8; 77]),
+                    )
+                    .unwrap(),
+                },
+                signature_count: 0,
+                discoverable: true,
+                backup_eligible: true,
+                backup_state: false,
+            }),
+        };
+
+        let item = record.list_item();
+
+        assert_eq!(item.secret_type(), SecretType::Passkey);
+        assert_eq!(item.group_key(), "login.example.com");
+        assert_eq!(item.summary(), "Alice");
+        assert!(item.display_title().contains("example.com"));
+        assert!(!format!("{item:?}").contains(&private_key));
+        assert!(!format!("{item:?}").contains(&credential_id));
+    }
+
+    #[test]
     fn build_secret_yaml_round_trips_login_fields() {
         let fields = serde_json::json!({
             "websiteUrl": "https://example.com",
@@ -424,5 +510,14 @@ mod tests {
             "seed": "invalid phrase"
         });
         assert!(build_secret_yaml(SecretType::SeedPhrase, &fields).is_err());
+    }
+
+    #[test]
+    fn build_secret_yaml_rejects_manual_passkey_creation() {
+        let error = build_secret_yaml(SecretType::Passkey, &serde_json::json!({})).unwrap_err();
+        assert!(matches!(
+            error,
+            SecretPayloadError::PasskeyCreationRequiresAuthenticator
+        ));
     }
 }

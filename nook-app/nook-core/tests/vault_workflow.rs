@@ -1,8 +1,10 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
-    ApiKeySecret, Database, PasswordOptions, ReplaceSecretInput, SecretId, SecretType, SecretValue,
-    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
+    ApiKeySecret, Database, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
+    PasskeyPublicKeyCose, PasskeySecret, PasswordOptions, ReplaceSecretInput, SecretId, SecretType,
+    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
     deserialize_stored, filter_secrets, generate_password, replace_secret, serialize_stored,
     validate_connect, validate_secret_data, validate_secret_id,
 };
@@ -45,6 +47,28 @@ fn sample_db() -> Database {
     db
 }
 
+fn passkey() -> SecretValue {
+    SecretValue::Passkey(PasskeySecret {
+        version: PASSKEY_SECRET_VERSION,
+        rp_id: "login.example.com".to_owned(),
+        rp_name: "Example".to_owned(),
+        credential_id: URL_SAFE_NO_PAD.encode([1_u8; 32]),
+        user_handle: URL_SAFE_NO_PAD.encode([2_u8; 32]),
+        user_name: "alice@example.com".to_owned(),
+        user_display_name: "Alice".to_owned(),
+        key: PasskeyCredentialKey::Es256 {
+            private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(URL_SAFE_NO_PAD.encode([3_u8; 96]))
+                .unwrap(),
+            public_key_cose: PasskeyPublicKeyCose::parse(URL_SAFE_NO_PAD.encode([4_u8; 77]))
+                .unwrap(),
+        },
+        signature_count: 7,
+        discoverable: true,
+        backup_eligible: true,
+        backup_state: true,
+    })
+}
+
 fn armored_cache_from_db(db: &Database, crypto: &VaultCrypto) -> HashMap<SecretId, String> {
     db.to_stored_records_with_crypto(crypto)
         .unwrap()
@@ -73,6 +97,32 @@ fn load_vault(yaml: &str, crypto: &VaultCrypto) -> (Database, HashMap<SecretId, 
     }
     let db = Database::from_stored_records_with_crypto(&records, crypto).unwrap();
     (db, armored)
+}
+
+#[test]
+fn passkey_round_trips_through_encrypted_vault_storage() {
+    let crypto = VaultCrypto::new(&test_key()).unwrap();
+    let mut database = Database::new();
+    database.insert(sid("passkey-example"), passkey());
+
+    let stored = database.to_stored_records_with_crypto(&crypto).unwrap();
+    assert_eq!(stored[0].secret_type, Some(SecretType::Passkey));
+    assert!(!stored[0].value.as_str().contains("alice@example.com"));
+    assert!(!stored[0].value.as_str().contains("login.example.com"));
+
+    let yaml = serialize_stored(&stored, VaultFormat::Yaml).unwrap();
+    let parsed = deserialize_stored(yaml.as_str(), VaultFormat::Yaml).unwrap();
+    let restored = Database::from_stored_records_with_crypto(&parsed, &crypto).unwrap();
+
+    assert_eq!(
+        restored
+            .list()
+            .iter()
+            .find(|record| record.id.as_str() == "passkey-example")
+            .unwrap()
+            .data,
+        passkey()
+    );
 }
 
 #[test]

@@ -92,8 +92,9 @@ pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
 };
 pub use secret_types::{
-    ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
-    SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
+    ApiKeySecret, LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey,
+    PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose, PasskeySecret, SecretRecord, SecretType,
+    SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{SecretListItem, SecretListItemData, build_secret_yaml};
 pub use vault_sentinel_onboarding::{

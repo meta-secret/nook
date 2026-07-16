@@ -17,6 +17,7 @@ pub enum SecretType {
     ApiKey,
     SeedPhrase,
     SecureNote,
+    Passkey,
 }
 
 impl SecretType {
@@ -26,6 +27,7 @@ impl SecretType {
             "api-key" => Ok(Self::ApiKey),
             "seed-phrase" => Ok(Self::SeedPhrase),
             "secure-note" => Ok(Self::SecureNote),
+            "passkey" => Ok(Self::Passkey),
             _ => Err(SecretPayloadError::UnknownSecretType {
                 value: value.to_owned(),
             }),
@@ -39,6 +41,7 @@ impl SecretType {
             Self::ApiKey => "api-key",
             Self::SeedPhrase => "seed-phrase",
             Self::SecureNote => "secure-note",
+            Self::Passkey => "passkey",
         }
     }
 }
@@ -105,6 +108,7 @@ mod tests {
             ("api-key", SecretType::ApiKey),
             ("seed-phrase", SecretType::SeedPhrase),
             ("secure-note", SecretType::SecureNote),
+            ("passkey", SecretType::Passkey),
         ];
         for (tag, expected) in cases {
             assert_eq!(SecretType::parse(tag).unwrap(), expected);

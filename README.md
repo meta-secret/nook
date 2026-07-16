@@ -16,6 +16,11 @@ There is no Nook account. There is no master password. Approved devices unlock
 the vault.
 
 Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
+The encrypted vault schema also includes a versioned passkey record for the
+Chromium passkey-provider work tracked by
+[issue #441](https://github.com/meta-secret/nook/issues/441). Passkeys cannot be
+created from the generic item form; creation and use require the authenticated
+extension/WebAuthn flow.
 Existing Bitwarden logins and secure notes can be imported from a plaintext or
 password-protected encrypted Bitwarden JSON export; account-restricted exports
 are not portable. 1Password logins, password items, and secure notes can be
