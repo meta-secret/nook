@@ -19,7 +19,8 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
         "bind_ip=127.0.0.1",
         "network inspect bridge",
         "--publish \"$bind_ip:$port:6379\"",
-        "--add-host host.docker.internal:host-gateway",
+        "--add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}",
+        "resolve-docker-host-ip.sh",
         "--set '*.args.SCCACHE_REDIS_PORT={{.SCCACHE_REDIS_PORT}}'",
     ] {
         assert!(
@@ -37,7 +38,9 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
     );
 
     let bake = read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("\"host.docker.internal\" = \"host-gateway\""));
+    assert!(bake.contains("variable \"SCCACHE_REDIS_HOST_IP\""));
+    assert!(bake.contains("variable \"SCCACHE_REDIS_HOST_IP\" {\n  default = \"\""));
+    assert!(bake.contains("\"host.docker.internal\" = SCCACHE_REDIS_HOST_IP"));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(
@@ -49,15 +52,46 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
     let docker_tasks = read("nook-app/docker/Taskfile.yml");
     assert!(
         docker_tasks
-            .matches("--add-host host.docker.internal:host-gateway")
+            .matches("--add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}")
             .count()
             >= 5,
         "every Rust-capable runtime path must resolve the shared Redis endpoint"
     );
+    assert!(
+        docker_tasks
+            .matches("-e SCCACHE_REDIS_HOST_IP=\"{{.SCCACHE_REDIS_HOST_IP}}\"")
+            .count()
+            >= 7,
+        "runtime containers must inherit the resolved address without needing Docker"
+    );
+
+    for path in [
+        "nook-app/Taskfile.yml",
+        "nook-app/docker/Taskfile.yml",
+        "nook-app/docker-bake.hcl",
+    ] {
+        let forbidden_gateway_token = ["host", "gateway"].join("-");
+        assert!(
+            !read(path).contains(&forbidden_gateway_token),
+            "{path} must use the resolved numeric Docker host address"
+        );
+    }
+
+    let resolver = read("nook-app/docker/resolve-docker-host-ip.sh");
+    for required in [
+        "ping -4 -c 1 host.docker.internal",
+        "network inspect bridge",
+        "*[!0-9.]*",
+    ] {
+        assert!(
+            resolver.contains(required),
+            "Docker host resolver is missing: {required}"
+        );
+    }
 }
 
 #[test]
-fn rust_build_targets_inherit_the_sccache_host_gateway() {
+fn rust_build_targets_inherit_the_sccache_host_mapping() {
     for (path, targets) in [
         (
             "nook-app/nook-core/docker-bake.hcl",
@@ -86,7 +120,7 @@ fn rust_build_targets_inherit_the_sccache_host_gateway() {
                 .0;
             assert!(
                 body.contains("inherits") && body.contains("_sccache-network"),
-                "{target} must inherit the sccache host-gateway mapping"
+                "{target} must inherit the sccache host mapping"
             );
         }
     }

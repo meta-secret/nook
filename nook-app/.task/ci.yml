@@ -2,12 +2,51 @@ version: "3"
 
 tasks:
   ci:pr:
-    desc: PR CI — Rust/WASM image validation, then one slim web container for format/verify/build (browser e2e runs on main).
+    desc: PR CI in a fresh BuildKit daemon — Rust/WASM validation, then one slim web container for format/verify/build.
+    cmds:
+      - task: _buildx:isolated
+        vars: { BUILD_TASK: _ci:pr:host }
+
+  _ci:pr:host:
     cmds:
       - task: preflight
       - task: setup
       - task: docker:task
         vars: { TASK: _ci:pr }
+
+  _buildx:isolated:
+    internal: true
+    requires:
+      vars: [BUILD_TASK]
+    env:
+      CI: '{{.CI}}'
+      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+      DOCKER_E2E_IMAGE: '{{.DOCKER_E2E_IMAGE}}'
+      DOCKER_NOFILE_LIMIT: '{{.DOCKER_NOFILE_LIMIT}}'
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      NOOK_ENV: '{{.NOOK_ENV}}'
+      NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
+      NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'
+      NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
+      NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
+      PREPARE_GROUP: '{{.PREPARE_GROUP}}'
+      SCCACHE_REDIS_CONTAINER: '{{.SCCACHE_REDIS_CONTAINER}}'
+      SCCACHE_REDIS_IMAGE: '{{.SCCACHE_REDIS_IMAGE}}'
+      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
+      SCCACHE_REDIS_MAXMEMORY: '{{.SCCACHE_REDIS_MAXMEMORY}}'
+      SCCACHE_REDIS_PORT: '{{.SCCACHE_REDIS_PORT}}'
+      SCCACHE_REDIS_VOLUME: '{{.SCCACHE_REDIS_VOLUME}}'
+      SETUP_TARGET: '{{.SETUP_TARGET}}'
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
+      VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
+      VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
+      VITE_SITE_URL: '{{.VITE_SITE_URL}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/with-isolated-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
 
   ci:pr:e2e:
     desc: Explicit local/manual full stub web Playwright e2e plus extension e2e.

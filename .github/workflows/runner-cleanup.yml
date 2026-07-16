@@ -28,8 +28,9 @@ jobs:
       - name: Prune stale Docker data
         run: |
           set -euo pipefail
-          # Keep one week of recent BuildKit/image state so PR -> main -> release can reuse the
-          # expensive Rust and Chromium layers. The age filter still bounds long-term disk use.
+          # Keep one week of recent BuildKit/image state so main and release can reuse the
+          # expensive Rust and Chromium layers. PR builders remove their own state. The age
+          # filter still bounds long-term disk use.
           # Docker does not support combining the age filter with --volumes.
           # Keep the age-bound cache/image cleanup, then remove unused volumes
           # separately (Docker volume prune has no supported age filter).

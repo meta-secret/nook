@@ -10,6 +10,7 @@ tasks:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
+      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
@@ -26,6 +27,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -67,7 +69,8 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:host-gateway
+        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -83,7 +86,8 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:host-gateway
+        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -99,7 +103,8 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:host-gateway
+        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
@@ -114,6 +119,7 @@ tasks:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
+      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
       VITE_BASE: '{{.VITE_BASE}}'
       NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
       NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
@@ -130,6 +136,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -212,7 +219,7 @@ tasks:
         esac;
         rm -rf "$out_dir";
         mkdir -p "$out_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
 
   docker:web:dev:
     internal: true
@@ -222,7 +229,8 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:host-gateway
+        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
@@ -245,7 +253,8 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:host-gateway
+        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"

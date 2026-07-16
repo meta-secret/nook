@@ -30,13 +30,15 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
-  # One persistent Redis cache per Docker host. BuildKit compilation steps reach it through the
-  # Docker host gateway; their short-lived local sccache daemons remain isolated by Unix sockets.
+  # One persistent Redis cache per Docker host. BuildKit compilation steps reach it through a
+  # resolved numeric host address; their short-lived local sccache daemons remain isolated by Unix sockets.
   SCCACHE_REDIS_IMAGE: '{{default "redis:8.2.2-alpine" .SCCACHE_REDIS_IMAGE}}'
   SCCACHE_REDIS_CONTAINER: '{{default "nook-sccache-redis" .SCCACHE_REDIS_CONTAINER}}'
   SCCACHE_REDIS_VOLUME: '{{default "nook-sccache-redis" .SCCACHE_REDIS_VOLUME}}'
   SCCACHE_REDIS_PORT: '{{default "6380" .SCCACHE_REDIS_PORT}}'
   SCCACHE_REDIS_MAXMEMORY: '{{default "8gb" .SCCACHE_REDIS_MAXMEMORY}}'
+  SCCACHE_REDIS_HOST_IP:
+    sh: 'DOCKER="{{.DOCKER}}" SCCACHE_REDIS_IMAGE="{{.SCCACHE_REDIS_IMAGE}}" "{{.APP_ROOT}}/docker/resolve-docker-host-ip.sh"'
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -150,7 +152,7 @@ tasks:
           echo "task sccache:ensure: Redis did not become healthy" >&2;
           exit 1;
         fi;
-        if [ "$({{.DOCKER}} run --rm --add-host host.docker.internal:host-gateway "$image" redis-cli -h host.docker.internal -p "$port" ping 2>/dev/null || true)" != PONG ]; then
+        if [ "$({{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" redis-cli -h host.docker.internal -p "$port" ping 2>/dev/null || true)" != PONG ]; then
           echo "task sccache:ensure: build-container routing cannot reach Redis through host.docker.internal:$port" >&2;
           exit 1;
         fi;
@@ -215,11 +217,11 @@ tasks:
         trap cleanup EXIT;
         rm -rf "$artifacts_dir";
         mkdir -p "$artifacts_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" {{.PREPARE_GROUP}};
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" {{.PREPARE_GROUP}};
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
-        env WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
 
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
@@ -233,7 +235,7 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust; then
+          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
@@ -253,7 +255,7 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
+          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
