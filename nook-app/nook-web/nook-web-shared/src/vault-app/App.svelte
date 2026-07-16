@@ -1,145 +1,146 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
-  import { VaultState, type StartSentinelGenesisArgs } from '$lib/vault.svelte'
-  import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
-  import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
-  import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
-  import HelpPage from '$lib/components/HelpPage.svelte'
-  import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
-  import LogsPage from '$lib/components/LogsPage.svelte'
-  import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
-  import SiteFooter from '$lib/components/SiteFooter.svelte'
-  import LoginGate from '$lib/components/LoginGate.svelte'
-  import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
-  import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
-  import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
-  import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
-  import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
-  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
-  import LocalOnlyVaultWarningBanner from '$lib/components/LocalOnlyVaultWarningBanner.svelte'
-  import SecretVault from '$lib/components/SecretVault.svelte'
-  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
-  import VaultAdmin from '$lib/components/VaultAdmin.svelte'
-  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import NookLogo from '$lib/components/NookLogo.svelte'
-  import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
-  import VaultSwitcher from '$lib/components/VaultSwitcher.svelte'
-  import { Button } from '$lib/components/ui/button'
+  import { onMount } from "svelte";
+  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from "@lucide/svelte";
+  import { VaultState, type StartSentinelGenesisArgs } from "$lib/vault.svelte";
+  import { loadAuthProviders, saveAuthProviders } from "$lib/auth-providers";
+  import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
+  import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
+  import HelpPage from "$lib/components/HelpPage.svelte";
+  import LegalDocumentPage from "$lib/components/LegalDocumentPage.svelte";
+  import LogsPage from "$lib/components/LogsPage.svelte";
+  import AppLogsApiPage from "$lib/components/AppLogsApiPage.svelte";
+  import SiteFooter from "$lib/components/SiteFooter.svelte";
+  import LoginGate from "$lib/components/LoginGate.svelte";
+  import PasskeyAuthOverlay from "$lib/components/PasskeyAuthOverlay.svelte";
+  import ExtensionConnectConsent from "$lib/components/ExtensionConnectConsent.svelte";
+  import JoinEnrollmentDialog from "$lib/components/JoinEnrollmentDialog.svelte";
+  import LocalFolderMultipleVaultsDialog from "$lib/components/LocalFolderMultipleVaultsDialog.svelte";
+  import VaultSyncConflictDialog from "$lib/components/VaultSyncConflictDialog.svelte";
+  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
+  import LocalOnlyVaultWarningBanner from "$lib/components/LocalOnlyVaultWarningBanner.svelte";
+  import SecretVault from "$lib/components/SecretVault.svelte";
+  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
+  import VaultAdmin from "$lib/components/VaultAdmin.svelte";
+  import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
+  import NookLogo from "$lib/components/NookLogo.svelte";
+  import HeaderLanguageSelect from "$lib/components/HeaderLanguageSelect.svelte";
+  import VaultSwitcher from "$lib/components/VaultSwitcher.svelte";
+  import { Button } from "$lib/components/ui/button";
   import {
     appPath,
     getLegalPageFromPath,
     isLogsPath,
     legalPageForId,
     type LegalPageId,
-  } from '$lib/legal-content'
-  import { isAppLogsPath } from '$lib/app-logs-api'
+  } from "$lib/legal-content";
+  import { isAppLogsPath } from "$lib/app-logs-api";
   import {
     adoptExtensionIdentity,
     discoverPairedExtensionIdentity,
     extensionConnectRequestFromLocation,
     isExtensionConnectPath,
     type ExtensionConnectRequest,
-  } from '$lib/extension-connect'
-  import type { VaultItemType } from '$lib/nook'
-  import { configuredVaultApplication } from '$app-wasm'
-  import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
+  } from "$lib/extension-connect";
+  import type { VaultItemType } from "$lib/nook";
+  import { configuredVaultApplication } from "$app-wasm";
+  import { consumeSentinelOnboardingFromLocation } from "$lib/sentinel-onboarding-link";
   import {
     APP_KIND,
     IS_SENTINEL_APP,
     SUPPORTS_EXTENSION,
     siblingAppUrl,
-  } from '$lib/app-kind'
+  } from "$lib/app-kind";
   import {
     consumeSentinelGenesisParticipantResponseFromLocation,
     consumeSentinelGenesisRequestFromLocation,
-  } from '$lib/sentinel-genesis-link'
+  } from "$lib/sentinel-genesis-link";
 
-  const vault = new VaultState()
-  type ColorMode = 'light' | 'dark'
-  const THEME_STORAGE_KEY = 'nook_color_mode'
+  const vault = new VaultState();
+  type ColorMode = "light" | "dark";
+  const THEME_STORAGE_KEY = "nook_color_mode";
 
   function systemColorMode(): ColorMode {
-    return typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light'
+    return typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
   }
 
-  let colorMode = $state<ColorMode>(systemColorMode())
-  let followsSystemColorMode = $state(true)
+  let colorMode = $state<ColorMode>(systemColorMode());
+  let followsSystemColorMode = $state(true);
   let legalPage = $state<LegalPageId | undefined>(
-    typeof window !== 'undefined'
+    typeof window !== "undefined"
       ? getLegalPageFromPath(window.location.pathname)
       : undefined,
-  )
+  );
   let logsPage = $state<boolean>(
-    typeof window !== 'undefined'
+    typeof window !== "undefined"
       ? isLogsPath(window.location.pathname)
       : false,
-  )
+  );
   let appLogsPage = $state<boolean>(
-    typeof window !== 'undefined'
+    typeof window !== "undefined"
       ? isAppLogsPath(window.location.pathname)
       : false,
-  )
+  );
   const initialExtensionConnectRequest =
-    typeof window !== 'undefined' && SUPPORTS_EXTENSION
+    typeof window !== "undefined" && SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
-      : undefined
+      : undefined;
   let extensionConnectRoute = $state<boolean>(
-    typeof window !== 'undefined'
+    typeof window !== "undefined"
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
-  )
+  );
   let extensionConnectRequest = $state<ExtensionConnectRequest | undefined>(
     initialExtensionConnectRequest,
-  )
+  );
   // Keep the public extension handoff request in memory after leaving the
   // consent route. On reload, the site asks the installed extension for a new
   // vault-bound handoff only when that extension already holds an approved
   // grant for the active local vault.
   let extensionIdentityRequest = $state<ExtensionConnectRequest | undefined>(
     initialExtensionConnectRequest,
-  )
-  let extensionBackedVaultSession = $state(false)
-  let extensionDiscoveryStoreId = $state('')
+  );
+  let extensionBackedVaultSession = $state(false);
+  let extensionDiscoveryStoreId = $state("");
   let sentinelInvitationRequest = $state(
-    typeof window !== 'undefined' && APP_KIND !== 'simple'
+    typeof window !== "undefined" && APP_KIND !== "simple"
       ? consumeSentinelGenesisRequestFromLocation()
-      : '',
-  )
+      : "",
+  );
   let sentinelParticipantResponse = $state(
-    typeof window !== 'undefined' && APP_KIND !== 'simple'
+    typeof window !== "undefined" && APP_KIND !== "simple"
       ? consumeSentinelGenesisParticipantResponseFromLocation()
-      : '',
-  )
+      : "",
+  );
   let sentinelOnboardingPackage = $state(
-    typeof window !== 'undefined' && APP_KIND !== 'simple'
+    typeof window !== "undefined" && APP_KIND !== "simple"
       ? consumeSentinelOnboardingFromLocation()
-      : '',
-  )
+      : "",
+  );
 
   function syncRoute() {
-    legalPage = getLegalPageFromPath(window.location.pathname)
-    logsPage = isLogsPath(window.location.pathname)
-    appLogsPage = isAppLogsPath(window.location.pathname)
+    legalPage = getLegalPageFromPath(window.location.pathname);
+    logsPage = isLogsPath(window.location.pathname);
+    appLogsPage = isAppLogsPath(window.location.pathname);
     extensionConnectRoute =
-      SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
+      SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname);
     extensionConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
-      : undefined
+      : undefined;
     if (extensionConnectRequest) {
-      extensionIdentityRequest = extensionConnectRequest
+      extensionIdentityRequest = extensionConnectRequest;
     }
-    if (APP_KIND !== 'simple') {
-      const invitationRequest = consumeSentinelGenesisRequestFromLocation()
-      if (invitationRequest) sentinelInvitationRequest = invitationRequest
+    if (APP_KIND !== "simple") {
+      const invitationRequest = consumeSentinelGenesisRequestFromLocation();
+      if (invitationRequest) sentinelInvitationRequest = invitationRequest;
       const participantResponse =
-        consumeSentinelGenesisParticipantResponseFromLocation()
-      if (participantResponse) sentinelParticipantResponse = participantResponse
-      const onboardingPackage = consumeSentinelOnboardingFromLocation()
-      if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
+        consumeSentinelGenesisParticipantResponseFromLocation();
+      if (participantResponse)
+        sentinelParticipantResponse = participantResponse;
+      const onboardingPackage = consumeSentinelOnboardingFromLocation();
+      if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage;
     }
   }
 
@@ -147,86 +148,86 @@
     candidatesJson: string,
   ): Array<{ eventId: string; secretId: string }> {
     try {
-      const parsed = JSON.parse(candidatesJson) as Array<[string, string]>
-      return parsed.map(([eventId, secretId]) => ({ eventId, secretId }))
+      const parsed = JSON.parse(candidatesJson) as Array<[string, string]>;
+      return parsed.map(([eventId, secretId]) => ({ eventId, secretId }));
     } catch {
-      return []
+      return [];
     }
   }
 
   function shortId(id: string): string {
-    return id.length > 18 ? `${id.slice(0, 18)}...` : id
+    return id.length > 18 ? `${id.slice(0, 18)}...` : id;
   }
 
   function conflictReasons(reasonsJson: string): string {
     try {
-      return (JSON.parse(reasonsJson) as string[]).join(', ')
+      return (JSON.parse(reasonsJson) as string[]).join(", ");
     } catch {
-      return 'key epoch rotation'
+      return "key epoch rotation";
     }
   }
 
   function navigateHome() {
-    vault.closeHelp()
-    history.pushState(undefined, '', appPath('/'))
-    legalPage = undefined
-    logsPage = false
-    appLogsPage = false
-    extensionConnectRoute = false
-    extensionConnectRequest = undefined
+    vault.closeHelp();
+    history.pushState(undefined, "", appPath("/"));
+    legalPage = undefined;
+    logsPage = false;
+    appLogsPage = false;
+    extensionConnectRoute = false;
+    extensionConnectRequest = undefined;
   }
 
   function finishExtensionConnect(approved = false) {
     if (!approved) {
-      extensionIdentityRequest = undefined
+      extensionIdentityRequest = undefined;
     }
-    vault.closeHelp()
-    history.pushState(undefined, '', appPath('/'))
-    legalPage = undefined
-    logsPage = false
-    appLogsPage = false
-    extensionConnectRoute = false
-    extensionConnectRequest = undefined
+    vault.closeHelp();
+    history.pushState(undefined, "", appPath("/"));
+    legalPage = undefined;
+    logsPage = false;
+    appLogsPage = false;
+    extensionConnectRoute = false;
+    extensionConnectRequest = undefined;
   }
 
   function navigateToSiblingApp(event: MouseEvent) {
-    event.preventDefault()
-    const destination = siblingAppUrl()
-    if (!destination) return
-    vault.lockVault()
-    window.location.assign(destination)
+    event.preventDefault();
+    const destination = siblingAppUrl();
+    if (!destination) return;
+    vault.lockVault();
+    window.location.assign(destination);
   }
 
   onMount(() => {
-    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
-    const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
-    if (savedMode === 'light' || savedMode === 'dark') {
-      colorMode = savedMode
-      followsSystemColorMode = false
+    const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const savedMode = localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedMode === "light" || savedMode === "dark") {
+      colorMode = savedMode;
+      followsSystemColorMode = false;
     } else {
-      colorMode = colorScheme.matches ? 'dark' : 'light'
+      colorMode = colorScheme.matches ? "dark" : "light";
     }
     const handleColorSchemeChange = (event: MediaQueryListEvent) => {
       if (followsSystemColorMode) {
-        colorMode = event.matches ? 'dark' : 'light'
+        colorMode = event.matches ? "dark" : "light";
       }
-    }
-    colorScheme.addEventListener('change', handleColorSchemeChange)
-    void vault.init()
+    };
+    colorScheme.addEventListener("change", handleColorSchemeChange);
+    void vault.init();
 
     if (vault.runtimeConfig.exposeDebugHooks()) {
-      ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
-      ;(
+      (window as Window & { __nookVault?: VaultState }).__nookVault = vault;
+      (
         window as Window & { __nookConfiguredVaultApplication?: string }
-      ).__nookConfiguredVaultApplication = configuredVaultApplication()
-      ;(
+      ).__nookConfiguredVaultApplication = configuredVaultApplication();
+      (
         window as Window & {
           __nookAuthProviders?: {
-            loadAuthProviders: () => ReturnType<typeof loadAuthProviders>
+            loadAuthProviders: () => ReturnType<typeof loadAuthProviders>;
             saveAuthProviders: (
               snapshot: Parameters<typeof saveAuthProviders>[1],
-            ) => ReturnType<typeof saveAuthProviders>
-          }
+            ) => ReturnType<typeof saveAuthProviders>;
+          };
         }
       ).__nookAuthProviders = {
         loadAuthProviders: () =>
@@ -235,64 +236,64 @@
           vault.enqueueStorage(() =>
             saveAuthProviders(vault.manager!, snapshot),
           ),
-      }
+      };
     }
 
-    syncRoute()
-    window.addEventListener('popstate', syncRoute)
-    window.addEventListener('hashchange', syncRoute)
+    syncRoute();
+    window.addEventListener("popstate", syncRoute);
+    window.addEventListener("hashchange", syncRoute);
 
     return () => {
-      vault.stopVaultSync()
-      vault.stopIdleSessionTracking()
-      void vault.lockDeviceProtection()
-      window.removeEventListener('popstate', syncRoute)
-      window.removeEventListener('hashchange', syncRoute)
-      colorScheme.removeEventListener('change', handleColorSchemeChange)
-    }
-  })
+      vault.stopVaultSync();
+      vault.stopIdleSessionTracking();
+      void vault.lockDeviceProtection();
+      window.removeEventListener("popstate", syncRoute);
+      window.removeEventListener("hashchange", syncRoute);
+      colorScheme.removeEventListener("change", handleColorSchemeChange);
+    };
+  });
 
   $effect(() => {
-    document.documentElement.classList.toggle('dark', colorMode === 'dark')
-  })
+    document.documentElement.classList.toggle("dark", colorMode === "dark");
+  });
 
   $effect(() => {
     if (legalPage) {
-      document.title = `${legalPageForId(legalPage).title} · Nook`
-      return
+      document.title = `${legalPageForId(legalPage).title} · Nook`;
+      return;
     }
     if (logsPage) {
-      document.title = 'Application logs · Nook'
-      return
+      document.title = "Application logs · Nook";
+      return;
     }
     if (extensionConnectRoute) {
-      document.title = 'Approve extension · Nook'
-      return
+      document.title = "Approve extension · Nook";
+      return;
     }
     document.title = IS_SENTINEL_APP
-      ? 'Nook Sentinel Vault'
-      : 'Nook Simple Vault'
-  })
+      ? "Nook Sentinel Vault"
+      : "Nook Simple Vault";
+  });
 
   async function handleUnlock(skipExtensionDiscovery = false) {
     if (vault.addProviderOpen && vault.loginSetupType) {
-      await vault.connectStagedProvider()
-      return
+      await vault.connectStagedProvider();
+      return;
     }
-    const activeStoreId = vault.activeVaultStoreId?.trim() ?? ''
-    const connectRequest = extensionIdentityRequest
+    const activeStoreId = vault.activeVaultStoreId?.trim() ?? "";
+    const connectRequest = extensionIdentityRequest;
     if (
-      connectRequest?.source === 'paired-vault' &&
+      connectRequest?.source === "paired-vault" &&
       vault.localVaultPresent &&
       connectRequest.vaultStoreId === activeStoreId
     ) {
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         (manager) => adoptExtensionIdentity(manager, connectRequest),
-      )
-      if (!adopted) return
-      extensionBackedVaultSession = true
-      await vault.loadDb()
-      return
+      );
+      if (!adopted) return;
+      extensionBackedVaultSession = true;
+      await vault.loadDb();
+      return;
     }
     if (
       !skipExtensionDiscovery &&
@@ -300,144 +301,146 @@
       vault.localVaultPresent &&
       activeStoreId
     ) {
-      extensionDiscoveryStoreId = ''
-      await resumePairedExtensionVault(activeStoreId)
-      if (vault.isAuthenticated) return
+      extensionDiscoveryStoreId = "";
+      await resumePairedExtensionVault(activeStoreId);
+      if (vault.isAuthenticated) return;
     }
     if (existingVaultNeedsDeviceUnlock) {
       const extensionIdentityCanUnlock =
         connectRequest &&
-        (connectRequest.source !== 'paired-vault' ||
+        (connectRequest.source !== "paired-vault" ||
           connectRequest.vaultStoreId === activeStoreId) &&
-        (connectRequest.source === 'paired-vault' ||
+        (connectRequest.source === "paired-vault" ||
           extensionBackedVaultSession ||
-          vault.deviceProtectionStatus === 'missing')
+          vault.deviceProtectionStatus === "missing");
       if (extensionIdentityCanUnlock) {
         const adopted = await vault.authorizeWithExternalDeviceIdentity(
           (manager) => adoptExtensionIdentity(manager, connectRequest),
-        )
-        if (!adopted) return
-        extensionBackedVaultSession = true
-        await vault.loadDb()
-        return
+        );
+        if (!adopted) return;
+        extensionBackedVaultSession = true;
+        await vault.loadDb();
+        return;
       }
-      pendingExistingVaultUnlock = true
-      return
+      pendingExistingVaultUnlock = true;
+      return;
     }
     if (vault.loginSetupType) {
-      await vault.connectStagedProvider()
-      return
+      await vault.connectStagedProvider();
+      return;
     }
-    await vault.loadDb()
+    await vault.loadDb();
   }
 
   async function handlePasswordUnlock(entryId: string, password: string) {
-    await vault.unlockWithPassword(entryId, password)
+    await vault.unlockWithPassword(entryId, password);
   }
 
   async function handleSettingsReconnect() {
     if (vault.loginSetupType) {
-      await vault.connectAndSyncStagedProvider()
-      return
+      await vault.connectAndSyncStagedProvider();
+      return;
     }
-    await vault.manualSync()
+    await vault.manualSync();
   }
 
   function toggleColorMode() {
-    followsSystemColorMode = false
-    colorMode = colorMode === 'dark' ? 'light' : 'dark'
-    localStorage.setItem(THEME_STORAGE_KEY, colorMode)
+    followsSystemColorMode = false;
+    colorMode = colorMode === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_STORAGE_KEY, colorMode);
   }
 
-  const compactShellWidth = 'max-w-5xl'
-  const authenticatedShellWidth = 'max-w-5xl'
+  const compactShellWidth = "max-w-5xl";
+  const authenticatedShellWidth = "max-w-5xl";
   const shellWidth = $derived(
     vault.isAuthenticated ? authenticatedShellWidth : compactShellWidth,
-  )
-  const appVersion = '0.1.0'
-  let secretsAddOpen = $state(false)
-  let secretsAddFormType = $state<VaultItemType | undefined>(undefined)
+  );
+  const appVersion = "0.1.0";
+  let secretsAddOpen = $state(false);
+  let secretsAddFormType = $state<VaultItemType | undefined>(undefined);
   const secretsNoteEditorOpen = $derived(
-    secretsAddOpen && secretsAddFormType === 'secure-note',
-  )
+    secretsAddOpen && secretsAddFormType === "secure-note",
+  );
   const authenticatedShellSpacing = $derived(
-    secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
-  )
+    secretsAddOpen ? "py-4 sm:py-8" : "pb-28 pt-4 sm:py-8",
+  );
   const shellSpacing = $derived(
     legalPage || logsPage || extensionConnectRoute
-      ? 'py-5 sm:py-6'
+      ? "py-5 sm:py-6"
       : vault.isAuthenticated
         ? authenticatedShellSpacing
-        : 'py-5 sm:py-6',
-  )
+        : "py-5 sm:py-6",
+  );
   /** Existing vault unlock keeps passkey-first; empty create defers passkey. */
   const requiresPasskeyFirst = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
-  )
+  );
   const existingVaultNeedsDeviceUnlock = $derived(
     requiresPasskeyFirst && !vault.deviceProtectionReady,
-  )
+  );
   const showLoginWithoutPasskey = $derived(
     !requiresPasskeyFirst && vault.providersLoaded,
-  )
+  );
   type PendingVaultCreation =
-    | { kind: 'simple'; label: string }
-    | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
-    | { kind: 'sentinel-participant-key' }
-    | { kind: 'sentinel-participant-response'; requestPayload: string }
-    | { kind: 'sentinel-onboarding'; packageJson: string }
-  let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
-  let pendingExistingVaultUnlock = $state(false)
+    | { kind: "simple"; label: string }
+    | { kind: "sentinel"; args: StartSentinelGenesisArgs }
+    | { kind: "sentinel-participant-key" }
+    | { kind: "sentinel-participant-response"; requestPayload: string }
+    | { kind: "sentinel-onboarding"; packageJson: string };
+  let pendingVaultCreation = $state<PendingVaultCreation | undefined>(
+    undefined,
+  );
+  let pendingExistingVaultUnlock = $state(false);
   const showPasskeyOverlay = $derived(
     pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
-  )
+  );
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
-  )
+  );
 
   async function resumePairedExtensionVault(storeId: string) {
-    extensionDiscoveryStoreId = storeId
-    const discovery = await discoverPairedExtensionIdentity(storeId)
+    extensionDiscoveryStoreId = storeId;
+    const discovery = await discoverPairedExtensionIdentity(storeId);
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
       vault.activeVaultStoreId !== storeId
     ) {
-      return
+      return;
     }
-    if (discovery.status === 'locked') {
+    if (discovery.status === "locked") {
       window.setTimeout(() => {
         if (
           !vault.isAuthenticated &&
           vault.activeVaultStoreId === storeId &&
           extensionDiscoveryStoreId === storeId
         ) {
-          extensionDiscoveryStoreId = ''
+          extensionDiscoveryStoreId = "";
         }
-      }, 1_000)
-      return
+      }, 1_000);
+      return;
     }
-    if (discovery.status !== 'unlocked') return
-    extensionIdentityRequest = discovery.request
-    await handleUnlock(true)
+    if (discovery.status !== "unlocked") return;
+    extensionIdentityRequest = discovery.request;
+    await handleUnlock(true);
   }
 
   async function handleCreateDeviceVault(label: string) {
-    const connectRequest = extensionIdentityRequest
+    const connectRequest = extensionIdentityRequest;
     if (connectRequest && vault.deviceId !== connectRequest.deviceId) {
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         (manager) => adoptExtensionIdentity(manager, connectRequest),
-      )
-      if (!adopted) return
+      );
+      if (!adopted) return;
     }
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: 'simple', label }
-      return
+      pendingVaultCreation = { kind: "simple", label };
+      return;
     }
-    pendingVaultCreation = undefined
-    await vault.createLocalVaultWithDeviceKeys(label)
+    pendingVaultCreation = undefined;
+    await vault.createLocalVaultWithDeviceKeys(label);
     if (connectRequest && vault.isAuthenticated) {
-      extensionBackedVaultSession = true
+      extensionBackedVaultSession = true;
     }
   }
 
@@ -445,21 +448,21 @@
     args: StartSentinelGenesisArgs,
   ): Promise<boolean> {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: 'sentinel', args }
-      return false
+      pendingVaultCreation = { kind: "sentinel", args };
+      return false;
     }
-    pendingVaultCreation = undefined
-    await vault.startSentinelGenesis(args)
-    return true
+    pendingVaultCreation = undefined;
+    await vault.startSentinelGenesis(args);
+    return true;
   }
 
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: 'sentinel-participant-key' }
-      return ''
+      pendingVaultCreation = { kind: "sentinel-participant-key" };
+      return "";
     }
-    pendingVaultCreation = undefined
-    return vault.createSentinelGenesisPublicKeyAnnouncement()
+    pendingVaultCreation = undefined;
+    return vault.createSentinelGenesisPublicKeyAnnouncement();
   }
 
   async function handleCreateSentinelParticipantResponse(
@@ -467,52 +470,52 @@
   ): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreation = {
-        kind: 'sentinel-participant-response',
+        kind: "sentinel-participant-response",
         requestPayload,
-      }
-      return ''
+      };
+      return "";
     }
-    pendingVaultCreation = undefined
-    return vault.createSentinelGenesisParticipantResponse(requestPayload)
+    pendingVaultCreation = undefined;
+    return vault.createSentinelGenesisParticipantResponse(requestPayload);
   }
 
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: 'sentinel-onboarding', packageJson }
-      return
+      pendingVaultCreation = { kind: "sentinel-onboarding", packageJson };
+      return;
     }
-    pendingVaultCreation = undefined
-    await vault.acceptSentinelOnboardingPackage(packageJson)
-    sentinelOnboardingPackage = ''
+    pendingVaultCreation = undefined;
+    await vault.acceptSentinelOnboardingPackage(packageJson);
+    sentinelOnboardingPackage = "";
   }
 
   $effect(() => {
-    const pending = pendingVaultCreation
-    if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return
-    pendingVaultCreation = undefined
-    if (pending.kind === 'simple') {
-      void vault.createLocalVaultWithDeviceKeys(pending.label)
-      return
+    const pending = pendingVaultCreation;
+    if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return;
+    pendingVaultCreation = undefined;
+    if (pending.kind === "simple") {
+      void vault.createLocalVaultWithDeviceKeys(pending.label);
+      return;
     }
     if (
-      pending.kind === 'sentinel-participant-key' ||
-      pending.kind === 'sentinel-participant-response'
+      pending.kind === "sentinel-participant-key" ||
+      pending.kind === "sentinel-participant-response"
     )
-      return
-    if (pending.kind === 'sentinel-onboarding') {
-      void handleAcceptSentinelOnboarding(pending.packageJson)
-      return
+      return;
+    if (pending.kind === "sentinel-onboarding") {
+      void handleAcceptSentinelOnboarding(pending.packageJson);
+      return;
     }
-    void vault.startSentinelGenesis(pending.args)
-  })
+    void vault.startSentinelGenesis(pending.args);
+  });
 
   $effect(() => {
-    const storeId = vault.activeVaultStoreId?.trim() ?? ''
+    const storeId = vault.activeVaultStoreId?.trim() ?? "";
     if (
-      extensionIdentityRequest?.source === 'paired-vault' &&
+      extensionIdentityRequest?.source === "paired-vault" &&
       extensionIdentityRequest.vaultStoreId !== storeId
     ) {
-      extensionIdentityRequest = undefined
+      extensionIdentityRequest = undefined;
     }
     if (
       !SUPPORTS_EXTENSION ||
@@ -524,10 +527,10 @@
       !storeId ||
       extensionDiscoveryStoreId === storeId
     ) {
-      return
+      return;
     }
-    void resumePairedExtensionVault(storeId)
-  })
+    void resumePairedExtensionVault(storeId);
+  });
 
   $effect(() => {
     if (
@@ -535,11 +538,11 @@
       !vault.deviceProtectionReady ||
       vault.isVerifying
     ) {
-      return
+      return;
     }
-    pendingExistingVaultUnlock = false
-    void vault.loadDb()
-  })
+    pendingExistingVaultUnlock = false;
+    void vault.loadDb();
+  });
 </script>
 
 {#if appLogsPage}
@@ -547,7 +550,7 @@
 {:else}
   <main
     class="min-h-svh bg-background text-foreground"
-    class:dark={colorMode === 'dark'}
+    class:dark={colorMode === "dark"}
   >
     <header
       class="app-header border-b border-border/50 bg-card/80 backdrop-blur-md"
@@ -570,13 +573,13 @@
               size="sm"
               class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
               data-testid="header-lock-vault-btn"
-              title={vault.t('session.lock_desc')}
+              title={vault.t("session.lock_desc")}
               disabled={vault.isVerifying || vault.isInitializing}
               onclick={() => vault.lockVault()}
             >
               <Lock class="size-4" />
               <span class="hidden sm:inline"
-                >{vault.t('common.lock_vault')}</span
+                >{vault.t("common.lock_vault")}</span
               >
             </Button>
             <div
@@ -594,23 +597,23 @@
               data-testid="sibling-vault-app-link"
               onclick={navigateToSiblingApp}
             >
-              {vault.t('app.open_simple_app')}
+              {vault.t("app.open_simple_app")}
             </a>
           {/if}
 
           <button
             type="button"
             class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
-            aria-label={colorMode === 'dark'
-              ? vault.t('app.switch_light')
-              : vault.t('app.switch_dark')}
-            title={colorMode === 'dark'
-              ? vault.t('app.switch_light')
-              : vault.t('app.switch_dark')}
+            aria-label={colorMode === "dark"
+              ? vault.t("app.switch_light")
+              : vault.t("app.switch_dark")}
+            title={colorMode === "dark"
+              ? vault.t("app.switch_light")
+              : vault.t("app.switch_dark")}
             data-testid="theme-toggle-btn"
             onclick={toggleColorMode}
           >
-            {#if colorMode === 'dark'}
+            {#if colorMode === "dark"}
               <Sun class="size-4" />
             {:else}
               <Moon class="size-4" />
@@ -624,8 +627,8 @@
             class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
               ? 'w-10'
               : 'px-3.5'}"
-            aria-label={vault.t('app.github_aria')}
-            title={vault.t('app.github_title')}
+            aria-label={vault.t("app.github_aria")}
+            title={vault.t("app.github_title")}
             data-testid="github-source-link"
           >
             <svg
@@ -638,7 +641,7 @@
                 d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.86 8.36 6.84 9.72.5.09.68-.22.68-.49 0-.24-.01-.89-.01-1.75-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.93.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.32 9.32 0 0 1 12 6.98c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.13 10.13 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
               />
             </svg>
-            <span class={vault.isAuthenticated ? 'sr-only' : 'hidden sm:inline'}
+            <span class={vault.isAuthenticated ? "sr-only" : "hidden sm:inline"}
               >GitHub</span
             >
           </a>
@@ -653,7 +656,7 @@
               onclick={navigateHome}
             >
               <ArrowLeft class="size-4" />
-              <span class="hidden sm:inline">{vault.t('app.back')}</span>
+              <span class="hidden sm:inline">{vault.t("app.back")}</span>
             </Button>
           {:else if vault.helpOpen}
             <Button
@@ -665,7 +668,7 @@
               onclick={() => vault.closeHelp()}
             >
               <ArrowLeft class="size-4" />
-              <span class="hidden sm:inline">{vault.t('app.back')}</span>
+              <span class="hidden sm:inline">{vault.t("app.back")}</span>
             </Button>
           {:else}
             <Button
@@ -677,7 +680,7 @@
               onclick={() => vault.openHelp()}
             >
               <BookOpen class="size-4" />
-              <span class="hidden sm:inline">{vault.t('app.help')}</span>
+              <span class="hidden sm:inline">{vault.t("app.help")}</span>
             </Button>
           {/if}
         </div>
@@ -701,10 +704,10 @@
             successMsg={vault.successMsg}
             errorMsg={vault.errorMsg}
             {appVersion}
-            label={vault.isAuthenticated ? undefined : 'Nook'}
+            label={vault.isAuthenticated ? undefined : "Nook"}
             showSyncStatus={vault.isAuthenticated}
             showStorageIcon={vault.isAuthenticated}
-            variant={vault.isAuthenticated ? 'panel' : 'quiet'}
+            variant={vault.isAuthenticated ? "panel" : "quiet"}
             onDismissSuccess={() => vault.dismissSuccess()}
             onDismissError={() => vault.dismissError()}
           />
@@ -715,10 +718,10 @@
           data-testid="extension-connect-invalid"
         >
           <h1 class="text-lg font-semibold text-foreground">
-            {vault.t('extension.connect.invalid_title')}
+            {vault.t("extension.connect.invalid_title")}
           </h1>
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-            {vault.t('extension.connect.invalid_description')}
+            {vault.t("extension.connect.invalid_description")}
           </p>
           <Button
             type="button"
@@ -726,7 +729,7 @@
             class="mt-4"
             onclick={navigateHome}
           >
-            {vault.t('extension.connect.return_to_nook')}
+            {vault.t("extension.connect.return_to_nook")}
           </Button>
         </section>
       {:else if !vault.isAuthenticated}
@@ -746,10 +749,10 @@
                 deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
                 usesExtensionDeviceIdentity={extensionIdentityRequest !==
                   undefined &&
-                  (extensionIdentityRequest.source === 'paired-vault' ||
+                  (extensionIdentityRequest.source === "paired-vault" ||
                     !requiresPasskeyFirst ||
                     extensionBackedVaultSession ||
-                    vault.deviceProtectionStatus === 'missing')}
+                    vault.deviceProtectionStatus === "missing")}
                 onUnlock={handleUnlock}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -794,10 +797,10 @@
                 {vault}
                 onDismiss={() => {
                   if (showExistingVaultPasskeyOverlay) {
-                    pendingExistingVaultUnlock = false
-                    return
+                    pendingExistingVaultUnlock = false;
+                    return;
                   }
-                  pendingVaultCreation = undefined
+                  pendingVaultCreation = undefined;
                 }}
               />
             {/if}
@@ -843,10 +846,10 @@
               {#if vault.syncProviders.length === 0}
                 <LocalOnlyVaultWarningBanner
                   {vault}
-                  onAddSyncProvider={() => vault.openAdmin('storage')}
+                  onAddSyncProvider={() => vault.openAdmin("storage")}
                 />
               {/if}
-              {#if vault.settingsOpen && vault.settingsSection === 'admin'}
+              {#if vault.settingsOpen && vault.settingsSection === "admin"}
                 <VaultAdmin
                   {vault}
                   bind:activeSection={vault.adminAccordionSection}
@@ -883,8 +886,12 @@
                     vault.handleBitwardenImport(json, password)}
                   onImportOnePassword={(archive) =>
                     vault.handleOnePasswordImport(archive)}
+                  onImportApplePasswords={(csv) =>
+                    vault.handleApplePasswordsImport(csv)}
+                  onImportChromePasswords={(csv) =>
+                    vault.handleChromePasswordsImport(csv)}
                 />
-              {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
+              {:else if vault.settingsOpen && vault.settingsSection === "onboard"}
                 <OnboardDevice
                   {vault}
                   syncProviders={vault.syncProviders}
@@ -935,7 +942,7 @@
                     onApproveJoin={(id) => vault.approveJoin(id)}
                     onRefresh={() => vault.manualSync()}
                     onOpenDevicesSettings={() =>
-                      vault.openSettings('storage', 'devices')}
+                      vault.openSettings("storage", "devices")}
                   />
                 {/if}
                 <div class="flex min-h-0 flex-1 flex-col">
@@ -946,8 +953,8 @@
                     editBlockReason={vault.editBlockReason}
                     secrets={vault.secrets}
                     onAddModeChange={(open, type = undefined) => {
-                      secretsAddOpen = open
-                      secretsAddFormType = type
+                      secretsAddOpen = open;
+                      secretsAddFormType = type;
                     }}
                     onAddSecret={(id, type, data) =>
                       vault.handleAddSecret(id, type, data)}
@@ -994,7 +1001,7 @@
                 settingsOpen={vault.settingsOpen}
                 settingsSection={vault.settingsSection}
                 onSelectSecrets={() => vault.closeSettings()}
-                onSelectOnboard={() => vault.openSettings('onboard')}
+                onSelectOnboard={() => vault.openSettings("onboard")}
                 onSelectAdmin={() => vault.openAdmin()}
                 onSelectSettings={() => vault.openSettings()}
               />
@@ -1010,10 +1017,10 @@
 
     <JoinEnrollmentDialog
       {vault}
-      open={vault.joinEnrollmentPrompt !== 'none'}
-      variant={vault.joinEnrollmentPrompt === 'pending'
-        ? 'pending'
-        : 'needs_request'}
+      open={vault.joinEnrollmentPrompt !== "none"}
+      variant={vault.joinEnrollmentPrompt === "pending"
+        ? "pending"
+        : "needs_request"}
       deviceId={vault.deviceId}
       isBusy={vault.isVerifying}
       bind:enrollSecretsKey={vault.enrollSecretsKey}
@@ -1049,15 +1056,15 @@
     {#if vault.replacementConflicts.length > 0}
       <div
         class={`fixed left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-amber-500/40 bg-amber-950/95 p-4 text-sm text-amber-50 shadow-lg ${
-          vault.securityConflicts.length > 0 ? 'bottom-32' : 'bottom-4'
+          vault.securityConflicts.length > 0 ? "bottom-32" : "bottom-4"
         }`}
       >
-        <p class="font-medium">{vault.t('app.secret_sync_conflicts')}</p>
+        <p class="font-medium">{vault.t("app.secret_sync_conflicts")}</p>
         <div class="mt-3 space-y-3">
           {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
             <div class="rounded border border-amber-400/30 p-3">
               <p class="text-amber-100">
-                {vault.t('app.conflict_original', {
+                {vault.t("app.conflict_original", {
                   id: shortId(conflict.oldSecretId),
                 })}
               </p>
@@ -1073,7 +1080,7 @@
                         candidate.secretId,
                       )}
                   >
-                    {vault.t('app.conflict_keep', {
+                    {vault.t("app.conflict_keep", {
                       id: shortId(candidate.secretId),
                     })}
                   </Button>
@@ -1089,7 +1096,7 @@
       <div
         class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-red-500/50 bg-red-950/95 p-4 text-sm text-red-50 shadow-lg"
       >
-        <p class="font-medium">{vault.t('app.security_conflict')}</p>
+        <p class="font-medium">{vault.t("app.security_conflict")}</p>
         <div class="mt-2 space-y-2 text-red-100">
           {#each vault.securityConflicts as conflict (conflict.eventsJson)}
             <p>{conflictReasons(conflict.reasonsJson)}</p>

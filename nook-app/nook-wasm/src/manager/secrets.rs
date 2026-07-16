@@ -4,7 +4,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookImportResult;
-use crate::{NookSecretPage, NookSecretRecord};
+use crate::{NookSecretPage, NookSecretRecord, NookTotpCode};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -144,28 +144,36 @@ fn reconcile_import_item(
 
 #[derive(Clone, Copy)]
 enum SecretImportSource {
+    ApplePasswords,
     Bitwarden,
+    ChromePasswords,
     OnePassword,
 }
 
 impl SecretImportSource {
     const fn status(self) -> &'static str {
         match self {
+            Self::ApplePasswords => "IMPORT_APPLE_PASSWORDS_START",
             Self::Bitwarden => "IMPORT_BITWARDEN_START",
+            Self::ChromePasswords => "IMPORT_CHROME_PASSWORDS_START",
             Self::OnePassword => "IMPORT_ONEPASSWORD_START",
         }
     }
 
     const fn action(self) -> &'static str {
         match self {
+            Self::ApplePasswords => "import-apple-passwords",
             Self::Bitwarden => "import-bitwarden",
+            Self::ChromePasswords => "import-chrome-passwords",
             Self::OnePassword => "import-onepassword",
         }
     }
 
     const fn label(self) -> &'static str {
         match self {
+            Self::ApplePasswords => "Apple Passwords",
             Self::Bitwarden => "Bitwarden",
+            Self::ChromePasswords => "Chrome passwords",
             Self::OnePassword => "1Password",
         }
     }
@@ -294,6 +302,33 @@ impl NookVaultManager {
             "secret plaintext exposed on demand"
         );
         Ok(NookSecretRecord::from_record(record))
+    }
+
+    #[wasm_bindgen(js_name = currentAuthenticatorCode)]
+    pub fn current_authenticator_code(
+        &self,
+        id: &str,
+        unix_seconds: u32,
+    ) -> Result<NookTotpCode, JsError> {
+        let crypto = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let id = nook_core::SecretId::from_vault_record(id);
+        let mut record =
+            nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+        let code = if let nook_core::SecretValue::Authenticator(value) = &record.data {
+            value.current_code(u64::from(unix_seconds))?
+        } else {
+            record.zeroize_plaintext();
+            return Err(NookError::Database(
+                "Requested secret is not an authenticator item.".to_owned(),
+            )
+            .into());
+        };
+        record.zeroize_plaintext();
+        Ok(NookTotpCode::from_core(code))
     }
 
     /// Prefixed secret item id (`secret_{token}`).
@@ -440,6 +475,44 @@ impl NookVaultManager {
             plan.items,
             plan.skipped_unsupported,
             SecretImportSource::OnePassword,
+        )
+        .await
+    }
+
+    /// Import passwords and verification codes from an Apple Passwords CSV
+    /// export in one signed event. The plaintext CSV is parsed only in memory.
+    #[wasm_bindgen(js_name = importApplePasswordsCsv)]
+    pub async fn import_apple_passwords_csv(
+        &mut self,
+        csv: String,
+    ) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_apple_passwords_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::ApplePasswords,
+        )
+        .await
+    }
+
+    /// Import logins from a Chrome-family CSV export in one signed event. The
+    /// plaintext CSV is parsed only in memory.
+    #[wasm_bindgen(js_name = importChromePasswordsCsv)]
+    pub async fn import_chrome_passwords_csv(
+        &mut self,
+        csv: String,
+    ) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_chrome_passwords_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::ChromePasswords,
         )
         .await
     }

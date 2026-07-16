@@ -75,6 +75,11 @@ fn canonical_identity(value: &SecretValue) -> Vec<u8> {
             append_field(&mut bytes, "secure-note");
             append_field(&mut bytes, normalized_text(&note.title).as_str());
         }
+        SecretValue::Authenticator(authenticator) => {
+            append_field(&mut bytes, "authenticator");
+            append_field(&mut bytes, normalized_text(&authenticator.issuer).as_str());
+            append_field(&mut bytes, normalized_text(&authenticator.account).as_str());
+        }
     }
     bytes
 }
@@ -95,6 +100,21 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
         ),
         SecretValue::SecureNote(note) => {
             append_field(&mut bytes, provider_neutral_notes(&note.note).as_str());
+        }
+        SecretValue::Authenticator(authenticator) => {
+            append_field(&mut bytes, authenticator.secret.as_str());
+            append_field(&mut bytes, authenticator.algorithm.as_str());
+            append_field(&mut bytes, authenticator.digits.get().to_string().as_str());
+            append_field(&mut bytes, authenticator.period.get().to_string().as_str());
+            let mut backup_codes = authenticator
+                .backup_codes
+                .iter()
+                .map(|code| normalized_text(code))
+                .collect::<Vec<_>>();
+            backup_codes.sort();
+            for code in backup_codes {
+                append_field(&mut bytes, code.as_str());
+            }
         }
     }
     bytes
@@ -178,10 +198,25 @@ pub fn enrich_secret(existing: &SecretValue, incoming: &SecretValue) -> SecretVa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LoginSecret, SecureNoteSecret};
+    use crate::{
+        AuthenticatorSecret, LoginSecret, SecureNoteSecret, TotpAlgorithm, TotpDigits, TotpPeriod,
+        TotpSecret,
+    };
 
     fn key(byte: char) -> SymmetricKey {
         SymmetricKey::parse(&byte.to_string().repeat(64)).unwrap()
+    }
+
+    fn authenticator(secret: &str, backup_codes: &[&str]) -> SecretValue {
+        SecretValue::Authenticator(AuthenticatorSecret {
+            issuer: "Example".to_owned(),
+            account: "alice@example.com".to_owned(),
+            secret: TotpSecret::parse(secret).unwrap(),
+            algorithm: TotpAlgorithm::Sha1,
+            digits: TotpDigits::parse(6).unwrap(),
+            period: TotpPeriod::parse(30).unwrap(),
+            backup_codes: backup_codes.iter().map(ToString::to_string).collect(),
+        })
     }
 
     #[test]
@@ -259,6 +294,34 @@ mod tests {
         assert_ne!(
             secret_fingerprint(&first, &key('a')),
             secret_fingerprint(&second, &key('a'))
+        );
+    }
+
+    #[test]
+    fn authenticator_identity_excludes_secret_material() {
+        let first = authenticator("JBSWY3DPEHPK3PXP", &["alpha"]);
+        let second = authenticator("KRSXG5DSNFXGOIDB", &["beta"]);
+        assert_eq!(
+            secret_identity_fingerprint(&first, &key('a')),
+            secret_identity_fingerprint(&second, &key('a'))
+        );
+        assert_ne!(
+            secret_fingerprint(&first, &key('a')),
+            secret_fingerprint(&second, &key('a'))
+        );
+    }
+
+    #[test]
+    fn authenticator_backup_code_order_does_not_create_a_new_version() {
+        assert_eq!(
+            secret_fingerprint(
+                &authenticator("JBSWY3DPEHPK3PXP", &["alpha", "beta"]),
+                &key('a')
+            ),
+            secret_fingerprint(
+                &authenticator("JBSWY3DPEHPK3PXP", &["beta", "alpha"]),
+                &key('a')
+            )
         );
     }
 

@@ -337,6 +337,84 @@ export async function handleOnePasswordImport(
   }
 }
 
+export async function handleApplePasswordsImport(
+  state: VaultState,
+  csv: string,
+): Promise<NookImportResult> {
+  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  try {
+    const result = await state.enqueueStorage(() =>
+      state.manager!.importApplePasswordsCsv(csv),
+    );
+    await state.runFanOutSyncAfterLocalSave();
+    await state.refreshSecretsFromSession();
+    log.info("Apple Passwords import completed", {
+      imported: result.imported,
+      skippedUnsupported: result.skippedUnsupported,
+      skippedDuplicates: result.skippedDuplicates,
+    });
+    state.showSuccess(
+      state.t("toasts.apple_passwords_imported", {
+        count: String(result.imported),
+      }),
+    );
+    return result;
+  } catch (error: unknown) {
+    state.errorMsg = state.t("apple_passwords_import.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    state.isSaving = false;
+  }
+}
+
+export async function handleChromePasswordsImport(
+  state: VaultState,
+  csv: string,
+): Promise<NookImportResult> {
+  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  try {
+    const result = await state.enqueueStorage(() =>
+      state.manager!.importChromePasswordsCsv(csv),
+    );
+    await state.runFanOutSyncAfterLocalSave();
+    await state.refreshSecretsFromSession();
+    log.info("Chrome passwords import completed", {
+      imported: result.imported,
+      skippedUnsupported: result.skippedUnsupported,
+      skippedDuplicates: result.skippedDuplicates,
+    });
+    state.showSuccess(
+      state.t("toasts.chrome_passwords_imported", {
+        count: String(result.imported),
+      }),
+    );
+    return result;
+  } catch (error: unknown) {
+    state.errorMsg = state.t("chrome_passwords_import.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    state.isSaving = false;
+  }
+}
+
 export async function handleDeleteSecret(state: VaultState, id: string) {
   if (!state.manager) return;
   if (state.editsBlocked) {

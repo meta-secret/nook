@@ -2,7 +2,7 @@
 
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
-use crate::{SecretId, SecretRecord, SecretType, SecretValue};
+use crate::{AuthenticatorSecret, SecretId, SecretRecord, SecretType, SecretValue};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretListItemData {
@@ -20,6 +20,11 @@ pub enum SecretListItemData {
     },
     SecureNote {
         title: String,
+    },
+    Authenticator {
+        issuer: String,
+        account: String,
+        backup_code_count: usize,
     },
 }
 
@@ -66,6 +71,11 @@ impl SecretRecord {
             SecretValue::SecureNote(value) => SecretListItemData::SecureNote {
                 title: value.title.clone(),
             },
+            SecretValue::Authenticator(value) => SecretListItemData::Authenticator {
+                issuer: value.issuer.clone(),
+                account: value.account.clone(),
+                backup_code_count: value.backup_codes.len(),
+            },
         };
         SecretListItem {
             id: self.id.clone(),
@@ -81,6 +91,7 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.website_url.clone(),
             SecretValue::SeedPhrase(value) => value.name.clone(),
             SecretValue::SecureNote(value) => value.title.clone(),
+            SecretValue::Authenticator(value) => value.issuer.clone(),
         }
     }
 
@@ -92,6 +103,7 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.key.as_str(),
             SecretValue::SeedPhrase(value) => value.seed.as_str(),
             SecretValue::SecureNote(value) => value.note.as_str(),
+            SecretValue::Authenticator(value) => value.secret.as_str(),
         }
     }
 
@@ -131,6 +143,7 @@ impl SecretRecord {
                     title.to_owned()
                 }
             }
+            SecretValue::Authenticator(value) => value.issuer.trim().to_owned(),
         }
     }
 
@@ -155,6 +168,13 @@ impl SecretRecord {
             }
             SecretValue::SeedPhrase(value) => value.name.trim().to_owned(),
             SecretValue::SecureNote(value) => value.title.trim().to_owned(),
+            SecretValue::Authenticator(value) => {
+                if value.account.trim().is_empty() {
+                    value.issuer.trim().to_owned()
+                } else {
+                    value.account.trim().to_owned()
+                }
+            }
         }
     }
 
@@ -184,6 +204,10 @@ impl SecretRecord {
             SecretValue::SecureNote(value) => {
                 fields.push(value.title.clone());
             }
+            SecretValue::Authenticator(value) => {
+                fields.push(value.issuer.clone());
+                fields.push(value.account.clone());
+            }
         }
 
         fields
@@ -200,6 +224,7 @@ impl SecretListItem {
             SecretListItemData::ApiKey { .. } => SecretType::ApiKey,
             SecretListItemData::SeedPhrase { .. } => SecretType::SeedPhrase,
             SecretListItemData::SecureNote { .. } => SecretType::SecureNote,
+            SecretListItemData::Authenticator { .. } => SecretType::Authenticator,
         }
     }
 
@@ -210,6 +235,7 @@ impl SecretListItem {
             | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
             SecretListItemData::SeedPhrase { name, .. } => name.clone(),
             SecretListItemData::SecureNote { title } => title.clone(),
+            SecretListItemData::Authenticator { issuer, .. } => issuer.clone(),
         }
     }
 
@@ -241,6 +267,7 @@ impl SecretListItem {
                     title.to_owned()
                 }
             }
+            SecretListItemData::Authenticator { issuer, .. } => issuer.trim().to_owned(),
         }
     }
 
@@ -268,6 +295,15 @@ impl SecretListItem {
             }
             SecretListItemData::SeedPhrase { name, .. } => name.trim().to_owned(),
             SecretListItemData::SecureNote { title } => title.trim().to_owned(),
+            SecretListItemData::Authenticator {
+                issuer, account, ..
+            } => {
+                if account.trim().is_empty() {
+                    issuer.trim().to_owned()
+                } else {
+                    account.trim().to_owned()
+                }
+            }
         }
     }
 }
@@ -297,6 +333,39 @@ pub fn build_secret_yaml(
             "title": fields.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
             "note": fields.get("note").and_then(|v| v.as_str()).unwrap_or_default(),
         }),
+        SecretType::Authenticator => {
+            let value = AuthenticatorSecret::from_form_fields(
+                fields
+                    .get("issuer")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+                fields
+                    .get("account")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+                fields
+                    .get("totpSecret")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+                fields
+                    .get("algorithm")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+                fields
+                    .get("digits")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+                fields
+                    .get("period")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+                fields
+                    .get("backupCodes")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default(),
+            )?;
+            return SecretValue::Authenticator(value).to_yaml();
+        }
     };
     let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
     SecretPayloadYaml::parse(secret_type, &yaml)
@@ -424,5 +493,63 @@ mod tests {
             "seed": "invalid phrase"
         });
         assert!(build_secret_yaml(SecretType::SeedPhrase, &fields).is_err());
+    }
+
+    #[test]
+    fn authenticator_list_item_hides_shared_secret_and_backup_codes() {
+        let value = AuthenticatorSecret::from_form_fields(
+            "Example",
+            "alice@example.com",
+            "JBSWY3DPEHPK3PXP",
+            "SHA1",
+            "6",
+            "30",
+            "backup-one\nbackup-two",
+        )
+        .unwrap();
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_authenticator"),
+            secret_type: SecretType::Authenticator,
+            data: SecretValue::Authenticator(value),
+        };
+
+        let item = record.list_item();
+        assert_eq!(item.secret_type(), SecretType::Authenticator);
+        assert_eq!(item.group_key(), "Example");
+        assert_eq!(item.summary(), "alice@example.com");
+        assert_eq!(
+            item.data,
+            SecretListItemData::Authenticator {
+                issuer: "Example".to_owned(),
+                account: "alice@example.com".to_owned(),
+                backup_code_count: 2,
+            }
+        );
+        let debug = format!("{item:?}");
+        assert!(!debug.contains("JBSWY"));
+        assert!(!debug.contains("backup-one"));
+    }
+
+    #[test]
+    fn build_secret_yaml_accepts_authenticator_uri() {
+        let fields = serde_json::json!({
+            "issuer": "",
+            "account": "",
+            "totpSecret": "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example",
+            "algorithm": "",
+            "digits": "",
+            "period": "",
+            "backupCodes": "one\ntwo"
+        });
+        let yaml = build_secret_yaml(SecretType::Authenticator, &fields).unwrap();
+        let parsed = SecretValue::from_yaml(SecretType::Authenticator, &yaml).unwrap();
+        match parsed {
+            SecretValue::Authenticator(value) => {
+                assert_eq!(value.issuer, "Example");
+                assert_eq!(value.account, "alice");
+                assert_eq!(value.backup_codes, ["one", "two"]);
+            }
+            _ => panic!("expected authenticator"),
+        }
     }
 }

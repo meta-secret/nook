@@ -22,6 +22,9 @@ pub enum SecretPayloadError {
     #[error("Invalid secure note payload")]
     InvalidSecureNote(#[source] serde_yaml::Error),
 
+    #[error("Invalid authenticator payload")]
+    InvalidAuthenticator(#[source] serde_yaml::Error),
+
     #[error("Failed to serialize secret payload")]
     Serialize(#[source] serde_yaml::Error),
 

@@ -4,6 +4,7 @@
     Braces,
     Sprout,
     StickyNote,
+    ShieldCheck,
     ArrowLeft,
     KeyRound,
     RefreshCw,
@@ -73,6 +74,14 @@
   let seedPhraseValid = $state(false)
   let noteTitle = $state('')
   let noteBody = $state('')
+  let authenticatorIssuer = $state('')
+  let authenticatorAccount = $state('')
+  let authenticatorSecret = $state('')
+  let authenticatorAlgorithm = $state('SHA1')
+  let authenticatorDigits = $state('6')
+  let authenticatorPeriod = $state('30')
+  let authenticatorBackupCodes = $state('')
+  let submitError = $state('')
 
   let genLength = $state(defaultPasswordGenerationOptions.length)
   let genUppercase = $state(defaultPasswordGenerationOptions.uppercase)
@@ -90,6 +99,8 @@
             ? vault.t('add_secret.title_edit_seed_phrase')
             : selectedType === 'secure-note'
               ? vault.t('add_secret.title_edit_secure_note')
+              : selectedType === 'authenticator'
+                ? vault.t('add_secret.title_edit_authenticator')
               : vault.t('add_secret.title_edit_item')
       : selectedType === 'login'
         ? vault.t('add_secret.title_new_login')
@@ -99,6 +110,8 @@
             ? vault.t('add_secret.title_new_seed_phrase')
             : selectedType === 'secure-note'
               ? vault.t('add_secret.title_new_secure_note')
+              : selectedType === 'authenticator'
+                ? vault.t('add_secret.title_new_authenticator')
               : vault.t('add_secret.title_add_item'),
   )
 
@@ -118,9 +131,17 @@
     } else if (item.type === 'seed-phrase') {
       accountName = item.name
       seedPhrase = item.seed
-    } else {
+    } else if (item.type === 'secure-note') {
       noteTitle = item.title
       noteBody = item.note
+    } else {
+      authenticatorIssuer = item.issuer
+      authenticatorAccount = item.account
+      authenticatorSecret = item.totpSecret
+      authenticatorAlgorithm = item.algorithm
+      authenticatorDigits = String(item.digits)
+      authenticatorPeriod = String(item.period)
+      authenticatorBackupCodes = item.backupCodes.join('\n')
     }
   })
 
@@ -146,6 +167,17 @@
         seed: seedPhrase.trim(),
       }
     }
+    if (selectedType === 'authenticator') {
+      return {
+        issuer: authenticatorIssuer.trim(),
+        account: authenticatorAccount.trim(),
+        totpSecret: authenticatorSecret.trim(),
+        algorithm: authenticatorAlgorithm,
+        digits: authenticatorDigits,
+        period: authenticatorPeriod,
+        backupCodes: authenticatorBackupCodes,
+      }
+    }
     return {
       title: noteTitle.trim(),
       note: noteBody,
@@ -164,6 +196,14 @@
     seedPhrase = ''
     noteTitle = ''
     noteBody = ''
+    authenticatorIssuer = ''
+    authenticatorAccount = ''
+    authenticatorSecret = ''
+    authenticatorAlgorithm = 'SHA1'
+    authenticatorDigits = '6'
+    authenticatorPeriod = '30'
+    authenticatorBackupCodes = ''
+    submitError = ''
     showPasswordOptions = false
     showPasswordValue = false
   }
@@ -176,11 +216,20 @@
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
     if (!selectedType) return
+    submitError = ''
 
     if (selectedType === 'secure-note' && !noteBody.trim()) return
     if (selectedType === 'seed-phrase' && !seedPhraseValid) return
 
-    const dataYaml = buildSecretYaml(selectedType, secretFields())
+    let dataYaml: string
+    try {
+      dataYaml = buildSecretYaml(selectedType, secretFields())
+    } catch (error) {
+      submitError = vault.resolveErrorMessage(
+        error instanceof Error ? error.message : String(error),
+      )
+      return
+    }
 
     if (isEditMode && initialItem && onReplaceSecret) {
       await onReplaceSecret(initialItem.id, selectedType, dataYaml)
@@ -209,6 +258,12 @@
     if (selectedType === 'seed-phrase') return seedPhraseValid
     if (selectedType === 'secure-note') return noteBody.trim().length > 0
     if (selectedType === 'api-key') return apiKey.trim().length > 0
+    if (selectedType === 'authenticator') {
+      return (
+        authenticatorIssuer.trim().length > 0 &&
+        authenticatorSecret.trim().length > 0
+      )
+    }
     if (selectedType === 'login') {
       return (
         websiteUrl.trim().length > 0 &&
@@ -255,6 +310,24 @@
         >
         <span class="mt-1 block text-xs text-muted-foreground"
           >{vault.t('add_secret.website_account_desc')}</span
+        >
+      </button>
+      <button
+        type="button"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid="item-type-authenticator"
+        onclick={() => (selectedType = 'authenticator')}
+      >
+        <div
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
+        >
+          <ShieldCheck class="size-6" />
+        </div>
+        <span class="block text-sm font-semibold text-foreground"
+          >{vault.t('vault.types.authenticator')}</span
+        >
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >{vault.t('add_secret.authenticator_desc')}</span
         >
       </button>
       <button
@@ -367,6 +440,16 @@
         </Button>
       </div>
     </div>
+
+    {#if submitError}
+      <p
+        class="text-sm text-destructive"
+        role="alert"
+        data-testid="secret-form-error"
+      >
+        {submitError}
+      </p>
+    {/if}
 
     {#if selectedType === 'login'}
       <div class="space-y-1.5">
@@ -580,6 +663,115 @@
           bind:value={seedPhrase}
           bind:valid={seedPhraseValid}
         />
+      </div>
+    {:else if selectedType === 'authenticator'}
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium" for="authenticator-issuer"
+            >{vault.t('vault.fields.issuer')}</label
+          >
+          <input
+            id="authenticator-issuer"
+            data-testid="authenticator-issuer"
+            bind:value={authenticatorIssuer}
+            placeholder={vault.t('add_secret.placeholder_issuer')}
+            required
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          />
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium" for="authenticator-account"
+            >{vault.t('vault.fields.account')}</label
+          >
+          <input
+            id="authenticator-account"
+            data-testid="authenticator-account"
+            bind:value={authenticatorAccount}
+            placeholder={vault.t('add_secret.placeholder_authenticator_account')}
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          />
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="authenticator-secret"
+          >{vault.t('vault.fields.authenticator_secret')}</label
+        >
+        <textarea
+          id="authenticator-secret"
+          data-testid="authenticator-secret"
+          bind:value={authenticatorSecret}
+          rows="3"
+          required
+          spellcheck="false"
+          placeholder={vault.t('add_secret.placeholder_authenticator_secret')}
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        ></textarea>
+        <p class="text-xs text-muted-foreground text-pretty">
+          {vault.t('add_secret.authenticator_secret_hint')}
+        </p>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium" for="authenticator-algorithm"
+            >{vault.t('vault.fields.algorithm')}</label
+          >
+          <select
+            id="authenticator-algorithm"
+            data-testid="authenticator-algorithm"
+            bind:value={authenticatorAlgorithm}
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          >
+            <option value="SHA1">SHA-1</option>
+            <option value="SHA256">SHA-256</option>
+            <option value="SHA512">SHA-512</option>
+          </select>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium" for="authenticator-digits"
+            >{vault.t('vault.fields.digits')}</label
+          >
+          <select
+            id="authenticator-digits"
+            data-testid="authenticator-digits"
+            bind:value={authenticatorDigits}
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          >
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium" for="authenticator-period"
+            >{vault.t('vault.fields.period_seconds')}</label
+          >
+          <input
+            id="authenticator-period"
+            data-testid="authenticator-period"
+            type="number"
+            min="15"
+            max="300"
+            bind:value={authenticatorPeriod}
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          />
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="authenticator-backup-codes"
+          >{vault.t('vault.fields.backup_codes')}</label
+        >
+        <textarea
+          id="authenticator-backup-codes"
+          data-testid="authenticator-backup-codes"
+          bind:value={authenticatorBackupCodes}
+          rows="4"
+          spellcheck="false"
+          placeholder={vault.t('add_secret.placeholder_backup_codes')}
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        ></textarea>
+        <p class="text-xs text-muted-foreground">
+          {vault.t('add_secret.backup_codes_hint')}
+        </p>
       </div>
     {:else}
       <div class="shrink-0 space-y-1.5">

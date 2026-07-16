@@ -17,8 +17,8 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
-    bip39, bitwarden_import, onepassword_import, password, secret_fingerprint, secret_types,
-    secret_view, session,
+    apple_passwords_import, authenticator, bip39, bitwarden_import, chrome_passwords_import,
+    onepassword_import, password, secret_fingerprint, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
@@ -31,6 +31,12 @@ pub(crate) use vault::{
     vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
+pub use apple_passwords_import::{
+    ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_import,
+};
+pub use authenticator::{
+    AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,
+};
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
@@ -39,6 +45,9 @@ pub use bip39::{
 pub use bitwarden_import::{
     BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import,
     plan_bitwarden_import_with_password,
+};
+pub use chrome_passwords_import::{
+    ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
 };
 pub use database::Database;
 pub use device_key_protection::{

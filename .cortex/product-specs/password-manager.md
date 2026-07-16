@@ -65,10 +65,20 @@ keys.
    - The user selects a plaintext Bitwarden JSON export in the browser.
    - Rust parses the export and maps Bitwarden login items to Nook logins and Bitwarden secure-note items to Nook secure notes. Cards, identities, SSH keys, and other unsupported types are counted and skipped.
    - The user can alternatively select an unencrypted 1Password 1PUX archive. Rust validates the bounded ZIP archive and format metadata, reads `export.data` in memory without extracting attachments, maps Login and Password items to Nook logins, and maps Secure Note items to Nook secure notes. Attachments, passkeys, cards, identities, SSH keys, and other unsupported categories are skipped.
+   - The user can alternatively select an unencrypted Apple Passwords CSV export. Rust validates the canonical `Title`, `URL`, `Username`, and `Password` columns, maps each row to a Nook login, preserves `Notes` and title metadata, and converts valid `OTPAuth` values into standalone authenticator items. Passkeys, Wi-Fi passwords, and Sign in with Apple accounts are not included in Apple's CSV export.
+   - The user can alternatively select an unencrypted Chrome-family password CSV export. Rust requires the portable `url`, `username`, and `password` columns, accepts optional `name`/`title` and `note`/`notes` metadata, and maps each non-empty row to a Nook login. Header order, case, BOMs, spaces, underscores, and hyphens are normalized so Chrome, Chromium, Brave, and Edge exports share one import path. Browser passkeys and non-password autofill data are not included.
    - Provider-neutral reconciliation is computed in Rust with two HMAC-SHA-256 tags keyed by the active vault `secrets_key`: an item-identity tag that excludes the password and provider metadata, plus a secret-version tag that includes the password or other secret value and is bound to that identity.
    - When both tags match, Nook enriches the existing item with missing notes and provider fields instead of creating a duplicate. When only identity matches, the differing password/secret version is imported as another item rather than silently overwriting either value.
    - The event log stores the opaque tags beside ciphertext, which reveals equality only inside that vault and avoids repeatedly decrypting unrelated fingerprinted records. Legacy records are decrypted and backfilled once; key-epoch rotation recomputes every tag with the new key.
-   - WASM encrypts every accepted item and appends all `SecretCreated` operations in one signed event. The plaintext export is never persisted or logged by Nook.
+   - WASM encrypts every accepted item and appends the import, enrichment, and fingerprint-backfill operations in one signed event. The plaintext export is never persisted or logged by Nook.
+9. **Authenticator items:**
+   - Users can store Google Authenticator-compatible TOTP secrets as standalone
+     secure items with issuer, optional account label, algorithm, digits,
+     period, and encrypted backup codes.
+   - Rust parses Base32 setup keys and `otpauth://totp/...` URIs, validates the
+     parameters, and derives the current code. Generated codes are ephemeral
+     and are never added to the event log.
+   - See [authenticator-items.md](authenticator-items.md).
 
 ### C. Cryptographically Secure Password Generator
 1. **Options Panel:** Located alongside the addition form.

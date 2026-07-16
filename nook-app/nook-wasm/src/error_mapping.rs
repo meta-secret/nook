@@ -81,6 +81,11 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::DeviceIdInvalid
             | ValidationError::Bip39Empty
             | ValidationError::Bip39Invalid
+            | ValidationError::AuthenticatorIssuerRequired
+            | ValidationError::AuthenticatorSecretInvalid
+            | ValidationError::AuthenticatorDigitsInvalid
+            | ValidationError::AuthenticatorPeriodInvalid
+            | ValidationError::AuthenticatorUriInvalid
             | ValidationError::SymmetricKeyInvalid
             | ValidationError::AgeArmoredInvalid
             | ValidationError::DevicePublicKeyInvalid
