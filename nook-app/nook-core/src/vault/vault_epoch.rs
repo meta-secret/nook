@@ -152,6 +152,7 @@ mod tests {
                     id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
+                    identity_fingerprint: None,
                     fingerprint: None,
                 },
             }),

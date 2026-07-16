@@ -67,6 +67,7 @@ impl NookVaultManager {
         Vec<(
             nook_core::StoredSecretRecord,
             Option<nook_core::SecretFingerprint>,
+            Option<nook_core::SecretFingerprint>,
         )>,
         NookError,
     > {
@@ -77,7 +78,13 @@ impl NookVaultManager {
             .secrets
             .values()
             .filter(|secret| secret.is_live(&graph))
-            .map(|secret| (secret.record.clone(), secret.fingerprint.clone()))
+            .map(|secret| {
+                (
+                    secret.record.clone(),
+                    secret.identity_fingerprint.clone(),
+                    secret.fingerprint.clone(),
+                )
+            })
             .collect())
     }
 

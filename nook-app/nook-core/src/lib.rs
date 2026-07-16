@@ -92,7 +92,9 @@ pub use nook_auth2::{
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
 };
-pub use secret_fingerprint::{SecretFingerprint, secret_fingerprint};
+pub use secret_fingerprint::{
+    SecretFingerprint, enrich_secret, secret_fingerprint, secret_identity_fingerprint,
+};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,

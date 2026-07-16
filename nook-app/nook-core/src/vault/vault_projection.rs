@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedSecret {
     pub record: StoredSecretRecord,
+    pub identity_fingerprint: Option<SecretFingerprint>,
     pub fingerprint: Option<SecretFingerprint>,
     pub created_by: EventId,
     pub deleted_by: Option<EventId>,
@@ -209,11 +210,7 @@ fn apply_operation(
             }
         }
         VaultOperation::SecretFingerprintsBackfilled { fingerprints } => {
-            for assignment in fingerprints {
-                if let Some(secret) = projection.secrets.get_mut(&assignment.secret_id) {
-                    secret.fingerprint = Some(assignment.fingerprint.clone());
-                }
-            }
+            apply_fingerprint_backfill(projection, fingerprints);
         }
         VaultOperation::VaultCleared => {
             projection.cleared = true;
@@ -260,6 +257,18 @@ fn apply_operation(
     }
 }
 
+fn apply_fingerprint_backfill(
+    projection: &mut VaultProjection,
+    fingerprints: &[crate::SecretFingerprintAssignment],
+) {
+    for assignment in fingerprints {
+        if let Some(secret) = projection.secrets.get_mut(&assignment.secret_id) {
+            secret.identity_fingerprint = Some(assignment.identity_fingerprint.clone());
+            secret.fingerprint = Some(assignment.fingerprint.clone());
+        }
+    }
+}
+
 fn insert_secret(
     projection: &mut VaultProjection,
     event_id: &EventId,
@@ -270,6 +279,7 @@ fn insert_secret(
         secret.id.clone(),
         ProjectedSecret {
             record: secret.to_stored(),
+            identity_fingerprint: secret.identity_fingerprint.clone(),
             fingerprint: secret.fingerprint.clone(),
             created_by: event_id.clone(),
             deleted_by: None,
@@ -460,6 +470,7 @@ mod tests {
                     id: sid(secret_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
+                    identity_fingerprint: None,
                     fingerprint: None,
                 },
             }],
@@ -505,6 +516,7 @@ mod tests {
             operations: vec![VaultOperation::SecretFingerprintsBackfilled {
                 fingerprints: vec![SecretFingerprintAssignment {
                     secret_id: sid("secret_fingerprint1"),
+                    identity_fingerprint: fingerprint.clone(),
                     fingerprint: fingerprint.clone(),
                 }],
             }],
@@ -573,6 +585,7 @@ mod tests {
                         id: sid(new_id),
                         secret_type: SecretType::ApiKey,
                         ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
+                        identity_fingerprint: None,
                         fingerprint: None,
                     },
                 }],
@@ -735,6 +748,7 @@ mod tests {
                         id: sid(new_id),
                         secret_type: SecretType::ApiKey,
                         ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
+                        identity_fingerprint: None,
                         fingerprint: None,
                     },
                 }],

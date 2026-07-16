@@ -114,6 +114,7 @@ fn append_secure_note(
             SecretType::SecureNote,
             ciphertext.as_str(),
             None,
+            None,
         ),
     }])
 }
@@ -356,6 +357,7 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_newaaaaaaa"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newaaaaaaa".to_owned()),
+            identity_fingerprint: None,
             fingerprint: None,
         },
     }])?;
@@ -366,6 +368,7 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_newbbbbbbb"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newbbbbbbb".to_owned()),
+            identity_fingerprint: None,
             fingerprint: None,
         },
     }])?;
@@ -424,6 +427,7 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_outoforder1"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-child".to_owned()),
+            identity_fingerprint: None,
             fingerprint: None,
         },
     }];
@@ -481,6 +485,7 @@ fn pending_child_from_one_provider_applies_after_parent_arrives_from_another() -
                 id: SecretId::from_vault_record("secret_splitparent"),
                 secret_type: SecretType::ApiKey,
                 ciphertext: OpaqueCiphertext::from_trusted("cipher-split".to_owned()),
+                identity_fingerprint: None,
                 fingerprint: None,
             },
         }],
@@ -536,6 +541,7 @@ fn join_merge_single_head() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_joinmerge1"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-join".to_owned()),
+            identity_fingerprint: None,
             fingerprint: None,
         },
     }])?;

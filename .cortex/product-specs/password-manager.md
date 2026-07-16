@@ -65,8 +65,9 @@ keys.
    - The user selects a plaintext Bitwarden JSON export in the browser.
    - Rust parses the export and maps Bitwarden login items to Nook logins and Bitwarden secure-note items to Nook secure notes. Cards, identities, SSH keys, and other unsupported types are counted and skipped.
    - The user can alternatively select an unencrypted 1Password 1PUX archive. Rust validates the bounded ZIP archive and format metadata, reads `export.data` in memory without extracting attachments, maps Login and Password items to Nook logins, and maps Secure Note items to Nook secure notes. Attachments, passkeys, cards, identities, SSH keys, and other unsupported categories are skipped.
-   - Provider-neutral duplicate identity is computed in Rust. Login and secure-note metadata added by Bitwarden or 1Password does not make the same underlying item distinct.
-   - Duplicate identity uses an HMAC-SHA-256 fingerprint keyed by the active vault `secrets_key`. The event log stores the opaque tag beside ciphertext, which reveals equality only inside that vault and avoids repeatedly decrypting fingerprinted records. Legacy records are decrypted and backfilled once; key-epoch rotation recomputes every tag with the new key.
+   - Provider-neutral reconciliation is computed in Rust with two HMAC-SHA-256 tags keyed by the active vault `secrets_key`: an item-identity tag that excludes the password and provider metadata, plus a secret-version tag that includes the password or other secret value and is bound to that identity.
+   - When both tags match, Nook enriches the existing item with missing notes and provider fields instead of creating a duplicate. When only identity matches, the differing password/secret version is imported as another item rather than silently overwriting either value.
+   - The event log stores the opaque tags beside ciphertext, which reveals equality only inside that vault and avoids repeatedly decrypting unrelated fingerprinted records. Legacy records are decrypted and backfilled once; key-epoch rotation recomputes every tag with the new key.
    - WASM encrypts every accepted item and appends all `SecretCreated` operations in one signed event. The plaintext export is never persisted or logged by Nook.
 
 ### C. Cryptographically Secure Password Generator

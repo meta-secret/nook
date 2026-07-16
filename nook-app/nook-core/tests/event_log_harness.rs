@@ -86,6 +86,7 @@ impl EventLogDevice {
                 SecretType::ApiKey,
                 ciphertext.as_str(),
                 None,
+                None,
             ),
         }])
     }

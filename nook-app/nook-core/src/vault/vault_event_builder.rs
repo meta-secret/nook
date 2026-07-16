@@ -56,12 +56,14 @@ pub fn encrypted_secret_from_armored(
     id: &SecretId,
     secret_type: crate::SecretType,
     ciphertext: &str,
+    identity_fingerprint: Option<SecretFingerprint>,
     fingerprint: Option<SecretFingerprint>,
 ) -> EncryptedSecretPayload {
     EncryptedSecretPayload {
         id: id.clone(),
         secret_type,
         ciphertext: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
+        identity_fingerprint,
         fingerprint,
     }
 }

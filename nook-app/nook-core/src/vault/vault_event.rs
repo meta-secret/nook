@@ -40,6 +40,8 @@ pub struct EncryptedSecretPayload {
     pub secret_type: SecretType,
     pub ciphertext: OpaqueCiphertext,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_fingerprint: Option<SecretFingerprint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fingerprint: Option<SecretFingerprint>,
 }
 
@@ -50,6 +52,7 @@ impl EncryptedSecretPayload {
             id: record.key.clone(),
             secret_type: record.secret_type.unwrap_or(SecretType::ApiKey),
             ciphertext: OpaqueCiphertext::from_trusted(record.value.as_str().to_owned()),
+            identity_fingerprint: None,
             fingerprint: None,
         }
     }
@@ -68,6 +71,7 @@ impl EncryptedSecretPayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretFingerprintAssignment {
     pub secret_id: SecretId,
+    pub identity_fingerprint: SecretFingerprint,
     pub fingerprint: SecretFingerprint,
 }
 
@@ -446,6 +450,7 @@ mod tests {
                     id: SecretId::from_vault_record("secret_abc12345678"),
                     secret_type: SecretType::Login,
                     ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                    identity_fingerprint: None,
                     fingerprint: None,
                 },
             }],
@@ -493,6 +498,10 @@ mod tests {
                     id: SecretId::from_vault_record("secret_abc12345678"),
                     secret_type: SecretType::Login,
                     ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                    identity_fingerprint: Some(SecretFingerprint::from_trusted(format!(
+                        "hmac-sha256:v1:{}",
+                        "cd".repeat(32)
+                    ))),
                     fingerprint: Some(SecretFingerprint::from_trusted(format!(
                         "hmac-sha256:v1:{}",
                         "ab".repeat(32)

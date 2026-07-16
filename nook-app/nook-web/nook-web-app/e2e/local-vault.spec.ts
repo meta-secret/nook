@@ -430,7 +430,7 @@ test.describe('local vault', () => {
     )
   })
 
-  test('skips overlapping Bitwarden and 1Password records', async ({
+  test('enriches matching imports and keeps different passwords', async ({
     page,
   }) => {
     const bitwardenExport = JSON.stringify({
@@ -451,49 +451,50 @@ test.describe('local vault', () => {
         },
       ],
     })
-    const onePasswordArchive = storedZip({
-      'export.attributes': JSON.stringify({
-        version: 3,
-        description: '1Password Unencrypted Export',
-      }),
-      'export.data': JSON.stringify({
-        accounts: [
-          {
-            vaults: [
-              {
-                attrs: { name: 'Personal' },
-                items: [
-                  {
-                    categoryUuid: '001',
-                    state: 'active',
-                    overview: {
-                      title: 'Shared login',
-                      url: 'https://shared.example/login',
-                      tags: ['1password'],
+    const onePasswordArchive = (password: string) =>
+      storedZip({
+        'export.attributes': JSON.stringify({
+          version: 3,
+          description: '1Password Unencrypted Export',
+        }),
+        'export.data': JSON.stringify({
+          accounts: [
+            {
+              vaults: [
+                {
+                  attrs: { name: 'Personal' },
+                  items: [
+                    {
+                      categoryUuid: '001',
+                      state: 'active',
+                      overview: {
+                        title: 'Shared login',
+                        url: 'https://shared.example/login',
+                        tags: ['1password'],
+                      },
+                      details: {
+                        loginFields: [
+                          {
+                            value: 'shared-alice',
+                            designation: 'username',
+                          },
+                          {
+                            value: password,
+                            designation: 'password',
+                            fieldType: 'P',
+                          },
+                        ],
+                        notesPlain: 'Meaningful note',
+                        sections: [],
+                      },
                     },
-                    details: {
-                      loginFields: [
-                        {
-                          value: 'shared-alice',
-                          designation: 'username',
-                        },
-                        {
-                          value: 'shared-secret',
-                          designation: 'password',
-                          fieldType: 'P',
-                        },
-                      ],
-                      notesPlain: 'Meaningful note',
-                      sections: [],
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      }),
-    })
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      })
 
     await openBitwardenImport(page)
     await page.getByTestId('bitwarden-json-file').setInputFiles({
@@ -510,15 +511,35 @@ test.describe('local vault', () => {
     await page.getByTestId('onepassword-pux-file').setInputFiles({
       name: 'account.1pux',
       mimeType: 'application/zip',
-      buffer: onePasswordArchive,
+      buffer: onePasswordArchive('shared-secret'),
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 1 item',
     )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    let rows = page
+      .getByTestId('secret-row')
+      .filter({ hasText: 'shared-alice' })
+    await expect(rows).toHaveCount(1)
+    await revealSecretInRow(rows.first())
+    await expect(rows.first()).toContainText('field.source: Bitwarden')
+    await expect(rows.first()).toContainText('tags: 1password')
+
+    await openOnePasswordImport(page)
+    await page.getByTestId('onepassword-pux-file').setInputFiles({
+      name: 'account.1pux',
+      mimeType: 'application/zip',
+      buffer: onePasswordArchive('rotated-secret'),
+    })
+    await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      '1 duplicate',
+      'Imported 1 item',
     )
+    await page.getByTestId('vault-secrets-tab').click()
+    rows = page.getByTestId('secret-row').filter({ hasText: 'shared-alice' })
+    await expect(rows).toHaveCount(2)
   })
 
   test('imports a password-protected encrypted Bitwarden JSON export', async ({
