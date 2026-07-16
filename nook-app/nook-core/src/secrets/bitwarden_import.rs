@@ -445,6 +445,25 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_current_bitwarden_million_iteration_encrypted_export_envelope() {
+        // Mirrors a current real-world password-protected export without
+        // retaining the user's encrypted vault payload in the repository.
+        let error = plan_bitwarden_import(
+            r#"{
+                "encrypted": true,
+                "passwordProtected": true,
+                "salt": "H9dHvU7fbVqilXoI625l+g==",
+                "kdfType": 0,
+                "kdfIterations": 1000000,
+                "encKeyValidation_DO_NOT_EDIT": "2.AAECAwQFBgcICQoLDA0ODw==|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                "data": "2.EBESExQVFhcYGRobHB0eHw==|AAAAAAAAAAAAAAAAAAAAAA==|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }"#,
+        )
+        .unwrap_err();
+        assert!(matches!(error, BitwardenImportError::PasswordRequired));
+    }
+
+    #[test]
     fn rejects_account_restricted_exports() {
         let error = plan_bitwarden_import_with_password(
             r#"{"encrypted":true,"passwordProtected":false,"salt":"","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"","data":""}"#,
