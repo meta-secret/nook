@@ -78,10 +78,84 @@ test.describe('legal pages', () => {
       'href',
       `${SENTINEL_APP_URL}/`,
     )
+    await expect(page.getByTestId('hero-extension-link')).toHaveAttribute(
+      'href',
+      '#browser-extension',
+    )
+    await expect(
+      page.locator('footer a[href="#browser-extension"]'),
+    ).toHaveText('Browser extension')
     await expect(page.getByTestId('hero-cta-secondary')).toHaveCount(0)
     await expect(page.locator('#architecture')).toHaveCount(1)
     await expect(page.locator('#app')).toHaveCount(0)
     await expect(page.getByTestId('landing-theme-toggle')).toBeVisible()
+  })
+
+  test('uses the Chrome Web Store for production extension installs', async ({
+    page,
+  }) => {
+    const extensionId = 'abcdefghijklmnopabcdefghijklmnop'
+    await page.route('**/downloads/extension.json', async (route) => {
+      await route.fulfill({
+        json: {
+          schema_version: 2,
+          channel: 'production',
+          version: '1.2.3',
+          extension_id: extensionId,
+          install_method: 'chrome_web_store',
+          install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
+        },
+      })
+    })
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
+
+    const action = page.getByTestId('extension-install-action')
+    await expect(action).toHaveText('Add to Chrome')
+    await expect(action).toHaveAttribute(
+      'href',
+      `https://chromewebstore.google.com/detail/${extensionId}`,
+    )
+    await expect(page.getByTestId('extension-store-note')).toBeVisible()
+    await expect(page.getByTestId('extension-manual-instructions')).toBeHidden()
+    await expect(page.getByTestId('extension-install-status')).toContainText(
+      'Channel: production · Version: 1.2.3',
+    )
+  })
+
+  test('uses the channel ZIP and manual instructions for preview installs', async ({
+    page,
+  }) => {
+    let downloadUrl = ''
+    await page.route('**/downloads/extension.json', async (route) => {
+      downloadUrl = route
+        .request()
+        .url()
+        .replace('extension.json', 'nook-passwords-pr-431.zip')
+      await route.fulfill({
+        json: {
+          schema_version: 2,
+          channel: 'pr-431',
+          version: '1.2.3',
+          extension_id: 'abcdefghijklmnopabcdefghijklmnop',
+          download_url: downloadUrl,
+          install_method: 'manual_zip',
+          install_url: downloadUrl,
+        },
+      })
+    })
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
+
+    const action = page.getByTestId('extension-install-action')
+    await expect(action).toHaveText('Download extension ZIP')
+    await expect(action).toHaveAttribute('href', downloadUrl)
+    await expect(action).toHaveAttribute('download', '')
+    await expect(
+      page.getByTestId('extension-manual-instructions'),
+    ).toBeVisible()
+    await expect(page.getByTestId('extension-store-note')).toBeHidden()
+
+    await page.getByTestId('hero-extension-link').click()
+    await expect(page.locator('#browser-extension')).toBeInViewport()
   })
 
   test('uses the system theme until the visitor chooses one', async ({
@@ -124,6 +198,9 @@ test.describe('legal pages', () => {
     await expect(page).toHaveTitle('Nook — Ключи, не аккаунты')
     await expect(page.locator('.lead')).toContainText(
       'Nook — passwordless, local-first',
+    )
+    await expect(page.getByTestId('hero-extension-link')).toHaveText(
+      'Установить расширение для браузера',
     )
     await expect(
       page.getByRole('button', { name: 'Shamir Secret Sharing', exact: true }),

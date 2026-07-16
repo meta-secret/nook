@@ -84,7 +84,7 @@ validate_metadata() {
     --arg channel "$CHANNEL_KEY" \
     --arg site "$EXTENSION_SITE_URL" \
     --arg simple "$EXPECTED_SIMPLE_VAULT_URL" \
-    '.schema_version == 1
+    '.schema_version == 2
       and .channel == $channel
       and .simple_vault_url == $simple
       and (.commit | test("^[0-9a-f]{40}$"))
@@ -92,7 +92,14 @@ validate_metadata() {
       and (.sha256 | test("^[0-9a-f]{64}$"))
       and (.archive | test("^[0-9A-Za-z][0-9A-Za-z.+_-]*\\.zip$"))
       and .download_url == ($site + "downloads/" + .archive)
-      and .checksum_url == ($site + "downloads/" + .archive + ".sha256")' \
+      and .checksum_url == ($site + "downloads/" + .archive + ".sha256")
+      and (if $channel == "production" then
+        .install_method == "chrome_web_store"
+        and .install_url == ("https://chromewebstore.google.com/detail/" + .extension_id)
+      else
+        .install_method == "manual_zip"
+        and .install_url == .download_url
+      end)' \
     "$metadata" >/dev/null || {
       fail "metadata from $METADATA_URL does not match the selected deployment"
       return 1
