@@ -953,7 +953,7 @@ export class VaultState {
     adopt: (manager: NookVaultManager) => Promise<void>,
   ): Promise<boolean> {
     if (!this.manager) return false;
-    const priorDeviceProtectionReady = this.deviceProtectionReady;
+    const priorDeviceProtectionStatus = this.deviceProtectionStatus;
     this.errorMsg = "";
     this.isVerifying = true;
     this.deviceAuthorizationInProgress = true;
@@ -966,7 +966,13 @@ export class VaultState {
       });
       return true;
     } catch (error) {
-      if (!priorDeviceProtectionReady) this.manager.lockDeviceIdentity();
+      await this.enqueueStorage(() =>
+        this.manager!.rollbackExtensionIdentityHandoff(),
+      );
+      this.deviceProtectionStatus =
+        priorDeviceProtectionStatus === "unlocked"
+          ? this.deviceProtectionLockedMode
+          : priorDeviceProtectionStatus;
       this.errorMsg = this.t("extension.connect.identity_handoff_failed");
       vaultLog.warn("extension identity handoff failed", {
         error: error instanceof Error ? error.message : String(error),

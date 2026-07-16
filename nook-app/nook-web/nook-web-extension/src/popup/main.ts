@@ -36,7 +36,7 @@ async function main() {
   let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
   let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
   protectionStatus = await extensionDeviceProtectionStatus()
-  if (!isConnected && protectionStatus === 'unlocked') {
+  if (protectionStatus === 'unlocked') {
     activeSessionDevice = await extensionSessionDevice()
   }
 

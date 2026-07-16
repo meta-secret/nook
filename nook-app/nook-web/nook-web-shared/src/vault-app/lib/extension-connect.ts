@@ -89,13 +89,14 @@ export function scopeLabel(scope: ExtensionConnectScope): string {
 type ExtensionIdentityHandoffResponse = {
   ok?: boolean;
   envelope?: unknown;
+  nextNonce?: unknown;
   reason?: unknown;
 };
 
 function requestIdentityEnvelope(
   request: ExtensionConnectRequest,
   message: ExtensionIdentityHandoffRequestMessage,
-): Promise<string> {
+): Promise<{ envelope: string; nextNonce: string }> {
   const runtime = (
     globalThis as typeof globalThis & {
       chrome?: {
@@ -123,8 +124,16 @@ function requestIdentityEnvelope(
         reject(new Error(runtimeError));
         return;
       }
-      if (response?.ok === true && typeof response.envelope === "string") {
-        resolve(response.envelope);
+      if (
+        response?.ok === true &&
+        typeof response.envelope === "string" &&
+        typeof response.nextNonce === "string" &&
+        response.nextNonce.length > 0
+      ) {
+        resolve({
+          envelope: response.envelope,
+          nextNonce: response.nextNonce,
+        });
         return;
       }
       reject(
@@ -145,23 +154,28 @@ export async function adoptExtensionIdentity(
   manager: NookVaultManager,
   request: ExtensionConnectRequest,
 ): Promise<void> {
+  const nonce = request.nonce;
   const recipientPublicKey = manager.beginExtensionIdentityHandoff();
   const message: ExtensionIdentityHandoffRequestMessage = {
     type: "nook:extension-identity-handoff-request",
     payload: {
       recipientPublicKey,
-      nonce: request.nonce,
+      nonce,
       expectedDeviceId: request.deviceId,
       expectedDevicePublicKey: request.devicePublicKey,
       expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
     },
   };
-  const envelope = await requestIdentityEnvelope(request, message);
+  const { envelope, nextNonce } = await requestIdentityEnvelope(
+    request,
+    message,
+  );
   manager.finishExtensionIdentityHandoff(
     envelope,
-    request.nonce,
+    nonce,
     request.deviceId,
     request.devicePublicKey,
     request.deviceSigningPublicKey,
   );
+  request.nonce = nextNonce;
 }

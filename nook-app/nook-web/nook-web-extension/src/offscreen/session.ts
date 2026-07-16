@@ -246,8 +246,15 @@ async function handleMessage(message: unknown): Promise<unknown> {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const serviceWorkerOnly =
+    messageType(message) === 'nook:extension-session-seal-identity-handoff'
+  const serviceWorkerSender =
+    sender.tab === undefined &&
+    (sender.url === undefined ||
+      sender.url === chrome.runtime.getURL('background/service-worker.js'))
   if (
     sender.id !== chrome.runtime.id ||
+    (serviceWorkerOnly && !serviceWorkerSender) ||
     !messageType(message)?.startsWith('nook:extension-session-')
   ) {
     return false

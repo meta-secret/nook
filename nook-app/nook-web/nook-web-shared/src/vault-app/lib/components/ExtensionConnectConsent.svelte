@@ -21,7 +21,7 @@
   }: {
     vault: VaultState
     request: ExtensionConnectRequest
-    onClose: () => void
+    onClose: (approved: boolean) => void
   } = $props()
 
   let isApproving = $state(false)
@@ -303,7 +303,11 @@
   {/if}
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
-    <Button type="button" variant="outline" onclick={onClose}>
+    <Button
+      type="button"
+      variant="outline"
+      onclick={() => onClose(approved)}
+    >
       {approved
         ? vault.t('common.done')
         : vault.t('common.cancel')}

@@ -451,7 +451,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     )
     const connectUrl = new URL(simplePage.url())
     const extensionDeviceId = connectUrl.searchParams.get('device_id')
+    const extensionDevicePublicKey =
+      connectUrl.searchParams.get('device_public_key')
+    const extensionDeviceSigningPublicKey = connectUrl.searchParams.get(
+      'device_signing_public_key',
+    )
+    const initialHandoffNonce = connectUrl.searchParams.get('nonce')
     expect(extensionDeviceId).toBeTruthy()
+    expect(extensionDevicePublicKey).toBeTruthy()
+    expect(extensionDeviceSigningPublicKey).toBeTruthy()
+    expect(initialHandoffNonce).toBeTruthy()
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await simplePage
@@ -468,6 +477,43 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
+    expect(
+      await simplePage.evaluate(
+        ({
+          extensionId,
+          nonce,
+          deviceId,
+          devicePublicKey,
+          deviceSigningPublicKey,
+        }) =>
+          new Promise((resolve) => {
+            chrome.runtime.sendMessage(
+              extensionId,
+              {
+                type: 'nook:extension-identity-handoff-request',
+                payload: {
+                  recipientPublicKey: 'age1replayattempt',
+                  nonce,
+                  expectedDeviceId: deviceId,
+                  expectedDevicePublicKey: devicePublicKey,
+                  expectedDeviceSigningPublicKey: deviceSigningPublicKey,
+                },
+              },
+              resolve,
+            )
+          }),
+        {
+          extensionId,
+          nonce: initialHandoffNonce,
+          deviceId: extensionDeviceId,
+          devicePublicKey: extensionDevicePublicKey,
+          deviceSigningPublicKey: extensionDeviceSigningPublicKey,
+        },
+      ),
+    ).toEqual({
+      ok: false,
+      reason: 'extension-identity-handoff-not-issued',
+    })
     expect(
       await simplePage.evaluate(
         () =>
@@ -496,12 +542,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       })
 
     const connectedPopupPage = await context.newPage()
+    const reopenedConnectPagePromise = context.waitForEvent('page')
     await connectedPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
-    await expect(
-      connectedPopupPage.getByTestId('open-simple-vault-btn'),
-    ).toBeVisible()
+    const reopenedConnectPage = await reopenedConnectPagePromise
+    await expect(reopenedConnectPage).toHaveURL((url) =>
+      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    )
+    expect(new URL(reopenedConnectPage.url()).pathname).toContain(
+      'extension-connect',
+    )
+    await reopenedConnectPage.close()
 
     await simplePage.getByRole('button', { name: 'Done' }).click()
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()

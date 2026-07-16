@@ -88,6 +88,14 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Clear every secret installed by a failed external identity
+    /// authorization, including the event-log signing seed.
+    #[wasm_bindgen(js_name = rollbackExtensionIdentityHandoff)]
+    pub fn rollback_extension_identity_handoff(&mut self) {
+        self.lock_device_identity();
+        self.reset_vault_session();
+    }
+
     #[wasm_bindgen(js_name = deviceProtectionStatus)]
     pub async fn device_protection_status(&self) -> Result<String, JsError> {
         if !self.device.identity_private_key.is_empty() {

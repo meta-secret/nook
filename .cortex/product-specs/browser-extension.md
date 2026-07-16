@@ -179,7 +179,12 @@ boundary decrypts the envelope, validates the route nonce and advertised
 device id/public keys, and keeps the adopted material only in memory. Raw
 private material never appears in URL parameters, TypeScript values,
 `chrome.storage.local`, website IndexedDB, or logs. Reloading the website
-requires a new handoff from an unlocked extension.
+requires a new handoff from an unlocked extension. The extension records each
+issued nonce and public device tuple in extension-only `chrome.storage.session`,
+consumes it before sealing, and returns a freshly issued nonce for a later
+same-page lock/unlock. Only the service worker may invoke the offscreen
+secret-sealing command. A failed website adoption resets both device identity
+and event-log signing state before another authorization attempt.
 
 For the same reason, the launcher does not yet show an active-vault selector.
 Once #244 supplies multiple usable encrypted extension projections, the
