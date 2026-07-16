@@ -248,7 +248,8 @@ jobs:
           for attempt in $(seq 1 12); do
             set +e
             last_extension_output="$(
-              EXTENSION_METADATA_URL="$site_url/downloads/extension.json?nook_commit=${{ github.event.pull_request.head.sha }}" \
+              EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
+              EXTENSION_CACHE_BUST="${{ github.event.pull_request.head.sha }}-$attempt" \
               EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
               EXPECTED_EXTENSION_COMMIT="${{ github.event.pull_request.head.sha }}" \
               EXPECTED_EXTENSION_SITE_URL="$site_url/" \

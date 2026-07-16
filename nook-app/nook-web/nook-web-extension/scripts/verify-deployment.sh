@@ -10,9 +10,24 @@ set -euo pipefail
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+trap 'echo "Extension deployment verification failed at line $LINENO" >&2' ERR
 metadata="$tmp_dir/extension.json"
 archive="$tmp_dir/extension.zip"
 site_url="${EXPECTED_EXTENSION_SITE_URL%/}/"
+cache_bust="${EXTENSION_CACHE_BUST:-$EXPECTED_EXTENSION_COMMIT}"
+
+if [[ ! "$cache_bust" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "EXTENSION_CACHE_BUST contains unsupported URL characters" >&2
+  exit 1
+fi
+
+cache_busted_url() {
+  local url="$1"
+  case "$url" in
+    *\?*) printf '%s&nook_verify=%s' "$url" "$cache_bust" ;;
+    *) printf '%s?nook_verify=%s' "$url" "$cache_bust" ;;
+  esac
+}
 
 fetch_from_selected_origin() {
   local url="$1"
@@ -32,7 +47,7 @@ fetch_from_selected_origin() {
   esac
 }
 
-fetch_from_selected_origin "$EXTENSION_METADATA_URL" "$metadata"
+fetch_from_selected_origin "$(cache_busted_url "$EXTENSION_METADATA_URL")" "$metadata"
 
 simple_vault_url="${EXPECTED_SIMPLE_VAULT_URL%/}/"
 sentinel_vault_match="${EXPECTED_SENTINEL_VAULT_URL%/}/*"
@@ -64,7 +79,7 @@ if [ "$download_url" != "$expected_download_url" ]; then
   exit 1
 fi
 
-fetch_from_selected_origin "$download_url" "$archive"
+fetch_from_selected_origin "$(cache_busted_url "$download_url")" "$archive"
 expected_sha256="$(jq -er '.sha256' "$metadata")"
 printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum -c - >/dev/null
 
@@ -112,7 +127,7 @@ metadata_extension_id="$(jq -er '.extension_id' "$metadata")"
 test "$manifest_extension_id" = "$metadata_extension_id"
 
 checksum_url="$(jq -er '.checksum_url' "$metadata")"
-fetch_from_selected_origin "$checksum_url" "$tmp_dir/checksum"
+fetch_from_selected_origin "$(cache_busted_url "$checksum_url")" "$tmp_dir/checksum"
 grep -Fxq "$expected_sha256  $archive_name" "$tmp_dir/checksum"
 
 printf 'Verified %s (%s) for %s\n' \
