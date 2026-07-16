@@ -5,8 +5,13 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::records_to_vec;
+use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
+
+fn serialize_js_objects<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
+    value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
+}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -221,7 +226,7 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = exportEventLogRecords)]
     pub async fn export_event_log_records_js(&self) -> Result<JsValue, JsError> {
         let records = self.export_event_log_records().await?;
-        serde_wasm_bindgen::to_value(&records).map_err(|e| JsError::new(&e.to_string()))
+        serialize_js_objects(&records).map_err(|e| JsError::new(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = parseEventLogStorageRecord)]
@@ -372,5 +377,53 @@ impl NookVaultManager {
         }])
         .await?;
         Ok(self.get_records()?)
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod wasm_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    #[derive(Serialize)]
+    struct SignedEventBody {
+        schema_version: u32,
+    }
+
+    #[derive(Serialize)]
+    struct SignedEvent {
+        #[serde(flatten)]
+        body: SignedEventBody,
+        signature: String,
+    }
+
+    #[derive(Serialize)]
+    struct ExportedRecord {
+        event_id: String,
+        event: SignedEvent,
+    }
+
+    fn get(target: &JsValue, field: &str) -> JsValue {
+        js_sys::Reflect::get(target, &JsValue::from_str(field)).expect("js field")
+    }
+
+    #[wasm_bindgen_test]
+    fn event_log_export_serializes_flattened_signed_events_as_plain_objects() {
+        let value = serialize_js_objects(&vec![ExportedRecord {
+            event_id: "event-1".to_owned(),
+            event: SignedEvent {
+                body: SignedEventBody { schema_version: 1 },
+                signature: "ed25519:test-signature".to_owned(),
+            },
+        }])
+        .expect("serialize event-log records");
+        let record = js_sys::Array::from(&value).get(0);
+        let event = get(&record, "event");
+
+        assert_eq!(get(&event, "schema_version").as_f64(), Some(1.0));
+        assert_eq!(
+            get(&event, "signature").as_string().as_deref(),
+            Some("ed25519:test-signature"),
+        );
     }
 }
