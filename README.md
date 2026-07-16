@@ -279,7 +279,7 @@ task extension:build:localhost # local-only identity targeting trusted HTTPS loc
 task extension:install:hosted PR=410 # verify and install an isolated hosted PR build
 task extension:run:chrome CHANNEL=dev # launch a hosted build in an isolated Chrome profile
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile
-task ci:pr                 # isolated-BuildKit mirror of the PR CI gate (no browser e2e)
+task ci:pr                 # health-checked BuildKit mirror of the PR CI gate (no browser e2e)
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
 task pr:monitor PR=410     # arm hosted event continuation and exit; never polls or waits for Codex
@@ -301,9 +301,11 @@ change, update this README in the same change (see [`.cortex/AGENTS.md`](.cortex
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) and
 independent **linux/amd64** Rust, web dependency, and browser lineages. Each
-`task ci:pr` invocation creates a fresh `docker-container` BuildKit daemon for
-the entire preflight + app solve and removes it on exit, preventing one PR build
-from inheriting another build's daemon or lease state. Workspace source is copied into
+The self-hosted delivery tasks (`task ci:pr` and `task ci:main`, including the
+release gate) reuse a dedicated `docker-container` BuildKit daemon. Before any
+repository build, a hard 60-second functional probe either confirms both daemon
+bootstrap and a minimal solve or force-kills the stuck process group, removes
+the builder container/state, and bootstraps a replacement. Workspace source is copied into
 the slim `nook-web:local` image (sealed image; no runtime bind mount except
 `task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a separate
 source-sealed Rust image on demand.
@@ -319,12 +321,11 @@ The service stores up to 8 GiB by default with LRU eviction and AOF
 persistence. It is an optimization only—Cargo, tests, and final linking remain
 the correctness boundary—and it never transfers cache data between machines.
 
-No BuildKit cache is imported from or exported to a registry. PR builds start
-with empty BuildKit state; the persistent Docker-context builder remains the
-fast path for non-PR build commands. The shared Redis-backed `sccache` still
-reuses compatible Rust compiler outputs below the disposable PR builder. This
-prevents stale BuildKit daemon state and cache blobs from becoming correctness
-or network dependencies. Details:
+No BuildKit cache is imported from or exported to a registry. Healthy delivery
+builds retain local BuildKit layers across PR, main, and release; stale or stuck
+daemon state is bounded by the pre-build probe and replaceable without killing
+the host Docker daemon. The shared Redis-backed `sccache` also reuses compatible
+Rust compiler outputs below BuildKit. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

@@ -63,7 +63,12 @@ tasks:
       - task: ci:pr:e2e
 
   ci:main:
-    desc: Main CI — Rust/WASM image validation, then one slim web container for verify/build/e2e.
+    desc: Main/release CI on the health-checked persistent BuildKit daemon — Rust/WASM validation, then verify/build/e2e.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:host }
+
+  _ci:main:host:
     cmds:
       - task: preflight
       - task: setup

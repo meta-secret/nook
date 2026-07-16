@@ -34,15 +34,20 @@ run_with_timeout() {
   local timeout_seconds="$1"
   shift
 
+  # Job control gives the timed command its own process group even in this
+  # non-interactive shell. Docker Buildx launches child processes, so timing
+  # out only the immediate shell would leave the actual client wedged.
+  set -m
   "$@" &
   local command_pid=$!
+  set +m
   local deadline=$((SECONDS + timeout_seconds))
 
   while kill -0 "$command_pid" 2>/dev/null; do
     if [ "$SECONDS" -ge "$deadline" ]; then
-      kill -TERM "$command_pid" 2>/dev/null || true
+      kill -TERM -- "-$command_pid" 2>/dev/null || true
       sleep 2
-      kill -KILL "$command_pid" 2>/dev/null || true
+      kill -KILL -- "-$command_pid" 2>/dev/null || true
       wait "$command_pid" 2>/dev/null || true
       return 124
     fi

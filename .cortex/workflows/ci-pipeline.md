@@ -134,8 +134,8 @@ provider, those handlers read and write real event files under a temp directory.
 
 Runner placement separates delivery validation from long-running background
 work. The `pr.yml` verify/preview gate, main delivery, and production release use
-the self-hosted `nook` pool. PR builds isolate and discard BuildKit state; main
-and release may reuse the active Docker-context builder. AI
+the self-hosted `nook` pool. All three reuse the dedicated delivery BuildKit
+builder only after the same bounded functional health check. AI
 implement/fix/smoke jobs use GitHub-hosted `ubuntu-latest`, where their six-hour
 background work cannot exhaust or block the Nook machine. Other scheduled,
 manual e2e, and research jobs also remain GitHub-hosted.
@@ -154,9 +154,9 @@ a whole-build retry loop.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
-| `pr.yml` | `nook` | Isolated-BuildKit verification and preview for developer-critical PRs |
+| `pr.yml` | `nook` | Health-checked persistent BuildKit verification and preview for developer-critical PRs |
 | `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Isolate long-running background AI work from the Nook machine |
-| `main.yml` `ci`, `release.yml` | `nook` | Reuse the host's normal Docker/BuildKit state for post-merge delivery and release instead of downloading multi-GB Rust/browser lineages into fresh VMs |
+| `main.yml` `ci`, `release.yml` | `nook` | Reuse the same health-checked delivery BuildKit state for post-merge delivery and release instead of downloading multi-GB Rust/browser lineages into fresh VMs |
 | `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Isolate scheduled, manual, and research work from the delivery runner |
 | `runner-cleanup.yml` | `nook` | Maintain the self-hosted Docker cache and disk |
 
@@ -300,10 +300,11 @@ as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
-**Remote PR CI uses a health-checked persistent BuildKit daemon.** The PR
-workflow runs on the self-hosted `nook` pool. Before every `task ci:pr`, a
-60-second bounded probe reuses the dedicated PR builder when healthy or
-force-kills and replaces it when missing, failed, or stuck. `task ci:pr` runs
+**Self-hosted delivery CI uses a health-checked persistent BuildKit daemon.** The
+PR, main, and release workflows run on the self-hosted `nook` pool. Before every
+`task ci:pr` or `task ci:main`, a 60-second bounded probe reuses the dedicated
+delivery builder when healthy or terminates the stuck probe process group and
+replaces the builder when missing, failed, or stuck. `task ci:pr` runs
 the standalone Rust **repository preflight** before app setup, then one parallel
 Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
 no browser e2e, Cloudflare preview,
@@ -324,9 +325,9 @@ service) are never requested, polled, or awaited. Existing actionable comments
 must still be addressed, but no external status may delay merge or handoff.
 
 **Delivery jobs keep host services local.** PR verification, main, and release use the
-persistent self-hosted `nook` runner. PR verification reuses a dedicated local
-BuildKit builder behind the bounded health check; non-PR build commands may
-reuse the active Docker-context builder.
+persistent self-hosted `nook` runner. They reuse one dedicated local BuildKit
+builder behind the bounded health check; unrelated local and GitHub-hosted build
+commands may reuse their active Docker-context builder.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
