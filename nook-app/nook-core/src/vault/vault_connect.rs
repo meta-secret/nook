@@ -246,7 +246,7 @@ mod tests {
     };
 
     #[test]
-    fn encrypted_unlock_rejects_user_rows_without_a_secret_type() -> VaultResult<()> {
+    fn encrypted_unlock_rejects_user_rows_without_a_secret_type() {
         let record = StoredSecretRecord {
             key: crate::SecretId::from_vault_record("secret_missing_type"),
             secret_type: None,
@@ -261,7 +261,6 @@ mod tests {
             error,
             crate::VaultError::Database(crate::DatabaseError::MissingSecretType { .. })
         ));
-        Ok(())
     }
 
     #[test]
