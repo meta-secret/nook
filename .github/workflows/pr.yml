@@ -34,12 +34,34 @@ env:
   DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  rust:
+    name: Native Rust verification
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+      - name: Rust format, clippy, tests, and coverage
+        run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+        env:
+          CI: true
+      - name: Upload Rust coverage handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-rust-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/rust
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    # PR validation is developer-critical and runs on a health-checked persistent
-    # BuildKit daemon on the Nook pool. Long-running AI jobs stay on ubuntu-latest.
-    runs-on: nook
+    # WASM and web stay on one hosted runner so the generated package crosses only a local
+    # scratch boundary. Native Rust remains independent and publishes coverage in parallel.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -47,13 +69,18 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
-      # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
-      # path and makes a cold Rust cache slower than the former combined build.
-      - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
+      - name: WASM clippy, build, and Node tests
+        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+        env:
+          CI: true
+          WASM_BUILD_MODE: dev
+
+      # The generated WASM package remains on this runner. Coverage reporting consumes the native
+      # job's small artifact later and never blocks the web build on Rust completion.
+      - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
-          task ci:pr \
+          task ci:pr:web CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined \
             VITE_BASE=/ \
             VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
             VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
@@ -67,10 +94,47 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
-      # The verified image already contains the Rust coverage artifacts produced by the graph
-      # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.
-      - name: Export Rust coverage from verified image
-        run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
+      - name: Download Rust coverage handoff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: pr-rust-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 360); do
+            native_job="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+                --jq '[.jobs[] | select(.name == "Native Rust verification")] | first // {}'
+            )"
+            native_status="$(jq -r '.status // "queued"' <<< "$native_job")"
+            native_conclusion="$(jq -r '.conclusion // ""' <<< "$native_job")"
+            if [ "$native_status" = "completed" ] && [ "$native_conclusion" != "success" ]; then
+              echo "::error::Native Rust verification completed with $native_conclusion"
+              exit 1
+            fi
+
+            # A rerun keeps run_id and increments run_attempt. Do not accept the stable artifact
+            # name until the latest native job has completed successfully, otherwise a rerun-all
+            # could consume the previous attempt's coverage before its replacement is uploaded.
+            if [ "$native_status" = "completed" ] && [ "$native_conclusion" = "success" ]; then
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+                --paginate \
+                --jq '.artifacts[].name' \
+                | grep -Fxq "$ARTIFACT_NAME"; then
+                rm -rf coverage/current
+                mkdir -p coverage/current
+                gh run download "$GITHUB_RUN_ID" \
+                  --name "$ARTIFACT_NAME" \
+                  --dir coverage/current
+                test -s coverage/current/summary.json
+                exit 0
+              fi
+            fi
+
+            echo "Waiting for native coverage artifact (attempt $attempt/360; native=$native_status${native_conclusion:+/$native_conclusion})"
+            sleep 5
+          done
+          echo "::error::Native Rust coverage artifact was not published within 30 minutes"
+          exit 1
 
       - name: Deploy unified internal test harness
         id: deploy

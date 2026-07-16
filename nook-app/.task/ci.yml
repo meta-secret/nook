@@ -7,6 +7,39 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:pr:host }
 
+  ci:pr:rust:
+    desc: Native Rust format, clippy, tests, and coverage for the split hosted PR pipeline.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:rust:host }
+
+  _ci:pr:rust:host:
+    cmds:
+      - task: preflight
+      - task: docker:ci:rust:export
+
+  ci:pr:wasm:
+    desc: WASM clippy, build, and Node tests for the split hosted PR pipeline.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:wasm:host }
+
+  _ci:pr:wasm:host:
+    cmds:
+      - task: docker:ci:wasm:export
+
+  ci:pr:web:
+    desc: Build and verify web/extension code from downloaded split-CI artifacts.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:web:host }
+
+  _ci:pr:web:host:
+    cmds:
+      - task: docker:ci:web:build
+      - task: docker:task
+        vars: { TASK: _ci:pr }
+
   _ci:pr:host:
     cmds:
       - task: preflight
@@ -20,6 +53,7 @@ tasks:
       vars: [BUILD_TASK]
     env:
       CI: '{{.CI}}'
+      CI_ARTIFACT_DIR: '{{.CI_ARTIFACT_DIR}}'
       DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
       DOCKER_E2E_IMAGE: '{{.DOCKER_E2E_IMAGE}}'
       DOCKER_NOFILE_LIMIT: '{{.DOCKER_NOFILE_LIMIT}}'

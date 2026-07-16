@@ -43,9 +43,8 @@ env:
 jobs:
   ci:
     name: Check, build, e2e, and deploy dev
-    # Keep the multi-GB Rust target and browser layers on the persistent delivery runner instead of
-    # downloading them into a fresh GitHub-hosted VM after every merge.
-    runs-on: nook
+    # Main refreshes the default-branch GHA cache that new PRs are allowed to restore.
+    runs-on: ubuntu-latest
     environment:
       name: development
       url: https://dev.nokey.sh/

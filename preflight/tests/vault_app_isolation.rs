@@ -509,7 +509,7 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     let warmup = section(
         &dockerfile,
         "# Also warm the COVERAGE-instrumented deps:",
-        "# Warm the wasm32 DEBUG/TEST-profile dependencies",
+        "# --- Native verify warm-up",
     );
 
     assert_eq!(
@@ -631,7 +631,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
 }
 
 #[test]
-fn delivery_ci_uses_runner_local_buildkit_cache_only() {
+fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let root = repository_root();
     for workflow in [
         ".github/workflows/pr.yml",
@@ -640,8 +640,8 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     ] {
         let content = read(&root, workflow);
         assert!(
-            content.contains("runs-on: nook"),
-            "{workflow} must reuse the persistent delivery runner's Docker layers"
+            content.contains("runs-on: ubuntu-latest"),
+            "{workflow} must use elastic GitHub-hosted capacity"
         );
         for run_scoped_image in [
             "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -655,37 +655,141 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     }
 
     let bake = read(&root, "nook-app/docker-bake.hcl");
-    for retired in [
-        "type=registry",
-        "TOOLCHAIN_REGISTRY",
-        "TOOLCHAIN_PUSH",
-        "toolchain-push",
-        "buildcache",
-        "${GIT_COMMIT_ID}",
+    for required in [
+        "GHA_CACHE_ENABLED",
+        "GHA_CACHE_WRITE_ENABLED",
+        "type=gha,scope=nook-rust-base-v1",
+        "type=gha,scope=nook-rust-deps-v2",
+        "type=gha,scope=nook-rust-wasm-deps-v1",
+        "type=gha,scope=nook-web-deps-v1",
+        "type=gha,scope=nook-web-v1",
+        "type=gha,scope=nook-web-e2e-v1",
+        "mode=max,version=2",
     ] {
         assert!(
-            !bake.contains(retired),
-            "remote BuildKit cache transfer remains in bake configuration: {retired}"
+            bake.contains(required),
+            "hosted BuildKit cache contract is missing: {required}"
         );
     }
+    assert!(
+        read(&root, "nook-app/docker/base.docker-bake.hcl")
+            .contains("cache-to   = rust_base_cache_to"),
+        "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
+    );
+    assert!(
+        !bake.contains("type=registry"),
+        "delivery caches must use the GitHub Actions cache service, not registry manifests"
+    );
+    assert_eq!(
+        bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
+        6,
+        "every hosted cache exporter must honor the read-only workflow mode"
+    );
+
+    let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
+    assert!(
+        rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
+            && !rust_bake.contains("cache-to   = rust_artifacts_cache_to"),
+        "WASM must branch from cached dependencies without exporting source-heavy snapshots"
+    );
+    let core_bake = read(&root, "nook-app/nook-core/docker-bake.hcl");
+    assert!(
+        core_bake.contains("cache-to   = rust_deps_cache_to")
+            && !core_bake.contains("cache-to   = rust_debug_cache_to"),
+        "only stable Rust dependency layers should be exported"
+    );
+    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    assert!(
+        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm")
+            && wasm_dockerfile.contains("RUN touch nook-core/src/i18n.rs")
+            && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
+        "native verification and WASM must run as sibling branches, preserve locale rebuilds, and join only small outputs"
+    );
+    let web_bake = read(&root, "nook-app/docker/toolchain.docker-bake.hcl");
+    assert!(
+        web_bake.contains("cache-to   = web_deps_cache_to"),
+        "web dependencies need an independent cache scope"
+    );
+    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    assert!(
+        docker_tasks.contains("for attempt in 1 2; do")
+            && docker_tasks
+                .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
+        "hosted web delivery must retry the immediate BuildKit frontend flake once"
+    );
 
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
-    for retired in ["docker/login-action", "ghcr.io", "TOOLCHAIN_REGISTRY"] {
+    for required in [
+        "docker/setup-buildx-action@v3",
+        "crazy-max/ghaction-github-runtime@v3",
+        "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
+        "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
+        "GHA_CACHE_ENABLED=1",
+        "GHA_CACHE_WRITE_ENABLED=1",
+    ] {
         assert!(
-            !setup.contains(retired),
-            "Docker setup must not authenticate or configure remote BuildKit caches: {retired}"
+            setup.contains(required),
+            "GitHub-hosted Docker setup is missing: {required}"
         );
     }
+    assert!(
+        !setup.contains("systemctl restart docker") && !setup.contains("/etc/docker/daemon.json"),
+        "delivery setup must not reconfigure or restart Docker"
+    );
+
+    let pr = read(&root, ".github/workflows/pr.yml");
+    for required in [
+        "name: Native Rust verification",
+        "name: Verify and preview",
+        "task ci:pr:rust",
+        "task ci:pr:wasm",
+        "task ci:pr:web",
+        "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
+        "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
+        "Native Rust verification completed with $native_conclusion",
+        "attempt $attempt/360",
+    ] {
+        assert!(
+            pr.contains(required),
+            "PR CI must keep native Rust parallel with the combined WASM/web runner: {required}"
+        );
+    }
+    let native_job_lookup = pr
+        .find("native_job=\"$(")
+        .expect("PR verification must inspect the latest native job");
+    let artifact_lookup = pr
+        .find("actions/runs/$GITHUB_RUN_ID/artifacts")
+        .expect("PR verification must inspect the Rust handoff artifact");
+    assert!(
+        native_job_lookup < artifact_lookup,
+        "PR verification must prove the latest native attempt succeeded before accepting a run-stable artifact"
+    );
+    let e2e_pr = read(&root, ".github/workflows/e2e-pr.yml");
+    assert!(
+        e2e_pr.contains("cache-write: \"false\""),
+        "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
+    );
+    let release = read(&root, ".github/workflows/release.yml");
+    let release_setup = release
+        .find("uses: ./.github/actions/nook-docker-setup")
+        .expect("release must use the safe workflow-ref Docker setup");
+    let release_source = release
+        .find("- name: Checkout release source")
+        .expect("release must checkout its requested source");
+    assert!(
+        release_setup < release_source,
+        "release must initialize Docker from the workflow ref before checking out an older source"
+    );
+    assert!(
+        !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !pr
+                .contains("ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !pr.contains("needs: [rust, wasm]"),
+        "PR CI must not round-trip WASM through a third runner or key Rust handoffs to a rerun attempt"
+    );
 
     let main = read(&root, ".github/workflows/main.yml");
     assert!(main.contains("          task ci:main\n"));
-    for retired in ["ci:main:publish", "PUSH_TOOLCHAIN", "TOOLCHAIN_REGISTRY"] {
-        assert!(
-            !main.contains(retired),
-            "main must not publish or import remote BuildKit caches: {retired}"
-        );
-    }
-
     let cleanup = read(&root, ".github/workflows/runner-cleanup.yml");
     assert!(
         cleanup.contains("--filter until=168h"),

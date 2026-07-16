@@ -1,5 +1,11 @@
 name: Nook Docker setup
-description: Task and containerd image store setup for runner-local BuildKit caching.
+description: Task, Buildx, and GitHub-hosted BuildKit cache setup.
+
+inputs:
+  cache-write:
+    description: Allow this workflow source to update the shared hosted BuildKit cache scopes.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -28,39 +34,31 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # Enable the containerd image store so the `docker` driver builder (the daemon's built-in
-    # BuildKit, which `task setup` selects via `docker context show` -> "default") writes build
-    # results STRAIGHT into the image store — no full-image tarball export + load. The common web
-    # image is now slim, while the heavy Rust lineage stays in the runner's local BuildKit cache. We do NOT use
-    # docker/setup-buildx-action because builder lifecycle is repository-owned: normal builds use the Docker
-    # driver, while `task ci:pr` selects its dedicated health-checked `docker-container` builder.
-    # Recent ubuntu-latest (Docker 29+) enables this by default, but we set it explicitly so the
-    # fast path is guaranteed regardless of runner image drift.
-    - name: Enable containerd image store
+    # The GHA cache exporter requires the docker-container driver. setup-buildx owns this ephemeral
+    # builder on GitHub-hosted VMs; all Task/Bake callers use it, so delivery does not depend on or
+    # mutate the Docker daemon's default image store.
+    - name: Setup Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v3
+
+    # Inline `task`/Bake calls do not receive GitHub's cache-service token automatically. This
+    # helper exposes ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL as documented by Docker for `type=gha`.
+    - name: Expose GitHub Actions cache runtime
+      uses: crazy-max/ghaction-github-runtime@v3
+
+    - name: Select hosted BuildKit cache
       shell: bash
       run: |
-        # Self-hosted runners (nook) pre-configure the containerd store at the host level and the
-        # runner user cannot sudo non-interactively. Only touch the daemon config when the store is
-        # not already active, so those runners short-circuit before any sudo call.
-        if docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'; then
-          echo "containerd image store already enabled; skipping daemon reconfiguration"
-          exit 0
-        fi
-        daemon_json="/etc/docker/daemon.json"
-        sudo mkdir -p /etc/docker
-        if [ -f "$daemon_json" ]; then
-          sudo jq '. + {"features": (.features // {} | . + {"containerd-snapshotter": true})}' "$daemon_json" \
-            | sudo tee "${daemon_json}.tmp" >/dev/null
-          sudo mv "${daemon_json}.tmp" "$daemon_json"
+        echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
+        echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
+        if [ "${{ inputs.cache-write }}" = "true" ]; then
+          echo "GHA_CACHE_WRITE_ENABLED=1" >> "$GITHUB_ENV"
         else
-          echo '{"features": {"containerd-snapshotter": true}}' | sudo tee "$daemon_json" >/dev/null
+          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
         fi
-        sudo systemctl restart docker
-        # Fail fast if the store did not switch — otherwise the docker driver falls back to the
-        # slow classic export and we would silently lose the speedup.
-        docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'
 
     - name: Set CI environment
       shell: bash
       run: |
-        echo "NOOK_ENV=ci" >> $GITHUB_ENV
+        echo "NOOK_ENV=ci" >> "$GITHUB_ENV"

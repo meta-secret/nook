@@ -1,7 +1,7 @@
 // Slim nook-web image: web base + dependencies + host-exported WASM/coverage + workspace source.
 // This is the image `task` runs against at runtime (no bind mount). Declares its own contexts next to nook-app/nook-web/nook-web-app/Dockerfile,
 // like every other package bake file. nook-app/docker-bake.hcl adds the loadable `nook-web` variant.
-// The selected builder's local content store caches this linux/amd64 lineage.
+// The selected builder caches this linux/amd64 lineage locally and in the matching hosted GHA scope.
 
 variable "VITE_BASE" {
   default = "/"
