@@ -434,7 +434,7 @@
     "export_hint_title": "Export a CSV file from LastPass",
     "export_hint": "In the LastPass desktop browser extension, open Account, choose Fix a problem yourself, then Export vault items and Export data for use anywhere. The CSV is unencrypted, so delete it after the import finishes.",
     "file_label": "LastPass CSV export",
-    "supported_types": "Nook imports website logins and secure notes. LastPass grouping and favorite metadata are preserved in item notes.",
+    "supported_types": "Nook imports website logins and secure notes. LastPass grouping, favorite, and optional TOTP metadata are preserved in encrypted item notes.",
     "import": "Import items",
     "importing": "Importing…",
     "failed": "LastPass import failed: {error}",

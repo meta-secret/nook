@@ -11,6 +11,7 @@ const MAX_EXPORT_BYTES: usize = 64 * 1024 * 1024;
 const REQUIRED_COLUMNS: [&str; 7] = [
     "url", "username", "password", "extra", "name", "grouping", "fav",
 ];
+const OPTIONAL_COLUMNS: [&str; 1] = ["totp"];
 
 #[derive(Debug, Error)]
 pub enum LastPassImportError {
@@ -32,19 +33,20 @@ pub struct LastPassImportPlan {
 fn header_indexes(
     headers: &StringRecord,
 ) -> Result<HashMap<&'static str, usize>, LastPassImportError> {
-    let mut indexes = HashMap::with_capacity(REQUIRED_COLUMNS.len());
+    let mut indexes = HashMap::with_capacity(REQUIRED_COLUMNS.len() + OPTIONAL_COLUMNS.len());
     for (index, header) in headers.iter().enumerate() {
         let normalized = header
             .trim_start_matches('\u{feff}')
             .trim()
             .to_ascii_lowercase();
-        if let Some(required) = REQUIRED_COLUMNS
+        if let Some(column) = REQUIRED_COLUMNS
             .iter()
-            .find(|required| normalized == **required)
-            && indexes.insert(*required, index).is_some()
+            .chain(OPTIONAL_COLUMNS.iter())
+            .find(|column| normalized == **column)
+            && indexes.insert(*column, index).is_some()
         {
             return Err(LastPassImportError::InvalidHeader(format!(
-                "column `{required}` appears more than once"
+                "column `{column}` appears more than once"
             )));
         }
     }
@@ -73,7 +75,7 @@ fn field<'a>(
         .unwrap_or_default()
 }
 
-fn append_lastpass_metadata(notes: &mut String, grouping: &str, favorite: &str) {
+fn append_lastpass_metadata(notes: &mut String, grouping: &str, favorite: &str, totp: &str) {
     let mut metadata = Vec::new();
     if !grouping.trim().is_empty() {
         metadata.push(("group", grouping.trim()));
@@ -83,6 +85,9 @@ fn append_lastpass_metadata(notes: &mut String, grouping: &str, favorite: &str) 
         "1" | "true" | "yes"
     ) {
         metadata.push(("favorite", "true"));
+    }
+    if !totp.trim().is_empty() {
+        metadata.push(("totp", totp.trim()));
     }
     if metadata.is_empty() {
         return;
@@ -119,6 +124,7 @@ fn convert_record(
         &mut notes,
         field(record, indexes, "grouping"),
         field(record, indexes, "fav"),
+        field(record, indexes, "totp"),
     );
 
     if is_secure_note_url(url) {
@@ -197,9 +203,9 @@ mod tests {
     #[test]
     fn accepts_reordered_headers_bom_extra_columns_and_blank_rows() {
         let export = concat!(
-            "\u{feff}name,password,url,extra,username,fav,grouping,ignored\n",
-            "Router,router-secret,,note,admin,false,Home,value\n",
-            ",,,,,,,\n",
+            "\u{feff}name,password,url,extra,username,fav,grouping,totp,ignored\n",
+            "Router,router-secret,,note,admin,false,Home,otpauth://totp/router?secret=ABC,value\n",
+            ",,,,,,,,\n",
         );
         let plan = plan_lastpass_import(export).unwrap();
         assert_eq!(plan.source_count, 1);
@@ -209,7 +215,11 @@ mod tests {
                 website_url: "Router".to_owned(),
                 username: "admin".to_owned(),
                 password: "router-secret".to_owned(),
-                notes: "note\n\n## LastPass\n- group: Home".to_owned(),
+                notes: concat!(
+                    "note\n\n## LastPass\n- group: Home\n",
+                    "- totp: otpauth://totp/router?secret=ABC",
+                )
+                .to_owned(),
             })]
         );
     }
