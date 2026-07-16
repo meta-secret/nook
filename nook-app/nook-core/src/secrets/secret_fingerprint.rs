@@ -8,7 +8,8 @@ use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
 
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
 const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
-const IMPORT_METADATA_MARKERS: [&str; 4] = [
+const IMPORT_METADATA_MARKERS: [&str; 2] = ["## Bitwarden", "## 1Password"];
+const LOGIN_IMPORT_METADATA_MARKERS: [&str; 4] = [
     "## Bitwarden",
     "## 1Password",
     "## Browser password manager",
@@ -37,9 +38,9 @@ fn normalized_text(value: &str) -> String {
     value.replace("\r\n", "\n").trim().to_owned()
 }
 
-fn provider_neutral_notes(value: &str) -> String {
+fn provider_neutral_notes(value: &str, markers: &[&str]) -> String {
     let normalized = normalized_text(value);
-    let marker_index = IMPORT_METADATA_MARKERS
+    let marker_index = markers
         .iter()
         .filter_map(|marker| {
             normalized
@@ -104,7 +105,10 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
                 .as_str(),
         ),
         SecretValue::SecureNote(note) => {
-            append_field(&mut bytes, provider_neutral_notes(&note.note).as_str());
+            append_field(
+                &mut bytes,
+                provider_neutral_notes(&note.note, &IMPORT_METADATA_MARKERS).as_str(),
+            );
         }
         SecretValue::Authenticator(authenticator) => {
             append_field(&mut bytes, authenticator.secret.as_str());
@@ -155,7 +159,7 @@ pub fn secret_fingerprint(value: &SecretValue, secrets_key: &SymmetricKey) -> Se
     )
 }
 
-fn merge_notes(existing: &str, incoming: &str) -> String {
+fn merge_notes(existing: &str, incoming: &str, markers: &[&str]) -> String {
     let existing = normalized_text(existing);
     let incoming = normalized_text(incoming);
     if incoming.is_empty() || existing == incoming || existing.contains(&incoming) {
@@ -163,8 +167,8 @@ fn merge_notes(existing: &str, incoming: &str) -> String {
     } else if existing.is_empty() || incoming.contains(&existing) {
         incoming
     } else {
-        let existing_base = provider_neutral_notes(&existing);
-        let incoming_base = provider_neutral_notes(&incoming);
+        let existing_base = provider_neutral_notes(&existing, markers);
+        let incoming_base = provider_neutral_notes(&incoming, markers);
         if existing_base == incoming_base {
             let incoming_metadata = incoming[incoming_base.len()..].trim();
             if incoming_metadata.is_empty() || existing.contains(incoming_metadata) {
@@ -187,13 +191,17 @@ pub fn enrich_secret(existing: &SecretValue, incoming: &SecretValue) -> SecretVa
                 website_url: existing.website_url.clone(),
                 username: existing.username.clone(),
                 password: existing.password.clone(),
-                notes: merge_notes(&existing.notes, &incoming.notes),
+                notes: merge_notes(
+                    &existing.notes,
+                    &incoming.notes,
+                    &LOGIN_IMPORT_METADATA_MARKERS,
+                ),
             })
         }
         (SecretValue::SecureNote(existing), SecretValue::SecureNote(incoming)) => {
             SecretValue::SecureNote(SecureNoteSecret {
                 title: existing.title.clone(),
-                note: merge_notes(&existing.note, &incoming.note),
+                note: merge_notes(&existing.note, &incoming.note, &IMPORT_METADATA_MARKERS),
             })
         }
         _ => existing.clone(),
@@ -317,6 +325,23 @@ mod tests {
             title: "Recovery".to_owned(),
             note: "second".to_owned(),
         });
+        assert_ne!(
+            secret_fingerprint(&first, &key('a')),
+            secret_fingerprint(&second, &key('a'))
+        );
+    }
+
+    #[test]
+    fn login_only_import_markers_remain_meaningful_in_secure_notes() {
+        let first = SecretValue::SecureNote(SecureNoteSecret {
+            title: "Migration guide".to_owned(),
+            note: "Steps\n\n## Apple Passwords\nUse the first export".to_owned(),
+        });
+        let second = SecretValue::SecureNote(SecureNoteSecret {
+            title: "Migration guide".to_owned(),
+            note: "Steps\n\n## Apple Passwords\nUse the second export".to_owned(),
+        });
+
         assert_ne!(
             secret_fingerprint(&first, &key('a')),
             secret_fingerprint(&second, &key('a'))
