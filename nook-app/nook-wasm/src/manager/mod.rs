@@ -363,6 +363,40 @@ impl NookVaultManager {
         self.sentinel_unlock = None;
         self.sync_outbox.reset();
     }
+
+    /// Zeroize the active session and clear every Nook-owned browser database.
+    /// Remote sync replicas and platform authenticator credentials are not touched.
+    #[wasm_bindgen(js_name = "deleteLocalBrowserData")]
+    pub async fn delete_local_browser_data(&mut self) -> Result<(), JsError> {
+        self.reset_vault_session();
+        self.storage.access_token.zeroize();
+        self.storage = StorageSession::default();
+        self.device.id.clear();
+        self.device.identity_private_key.zeroize();
+        self.device.extension_handoff_private_key.zeroize();
+
+        let mut errors = Vec::new();
+        if let Err(error) = crate::logger::clear_logs_db().await {
+            errors.push(error.to_string());
+        }
+        if let Err(error) = crate::storage::local_folder::clear_local_folder_db().await {
+            errors.push(error.to_string());
+        }
+        if let Err(error) = crate::storage::auth_providers::clear_auth_providers_db().await {
+            errors.push(error.to_string());
+        }
+        if let Err(error) = crate::storage::indexed_db::clear_vault_db().await {
+            errors.push(error.to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(JsError::new(&format!(
+                "Could not clear all local browser databases: {}",
+                errors.join("; ")
+            )))
+        }
+    }
 }
 
 // ---- Cross-cutting private helpers ----------------------------------------

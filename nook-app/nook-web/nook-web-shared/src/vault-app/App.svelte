@@ -54,6 +54,7 @@
     consumeSentinelGenesisParticipantResponseFromLocation,
     consumeSentinelGenesisRequestFromLocation,
   } from "$lib/sentinel-genesis-link";
+  import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
 
   const vault = new VaultState();
   type ColorMode = "light" | "dark";
@@ -213,6 +214,9 @@
       }
     };
     colorScheme.addEventListener("change", handleColorSchemeChange);
+    const unsubscribeLocalDataDeletion = subscribeToLocalBrowserDataDeletion(
+      () => vault.handleRemoteLocalBrowserDataDeletion(),
+    );
     void vault.init();
 
     if (vault.runtimeConfig.exposeDebugHooks()) {
@@ -250,6 +254,7 @@
       window.removeEventListener("popstate", syncRoute);
       window.removeEventListener("hashchange", syncRoute);
       colorScheme.removeEventListener("change", handleColorSchemeChange);
+      unsubscribeLocalDataDeletion();
     };
   });
 

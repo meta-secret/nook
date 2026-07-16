@@ -133,6 +133,27 @@ async fn open_handle_db() -> Result<rexie::Rexie, NookError> {
         .map_err(|e| NookError::IndexedDb(format!("Local folder IndexedDB build error: {e:?}")))
 }
 
+pub(crate) async fn clear_local_folder_db() -> Result<(), NookError> {
+    MEMORY_HANDLES.with(|handles| handles.borrow_mut().clear());
+    let rexie = open_handle_db().await?;
+    let transaction = rexie
+        .transaction(&[STORE_NAME], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| {
+            NookError::IndexedDb(format!("Local folder clear transaction error: {e:?}"))
+        })?;
+    transaction
+        .store(STORE_NAME)
+        .map_err(|e| NookError::IndexedDb(format!("Local folder clear store error: {e:?}")))?
+        .clear()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Local folder clear error: {e:?}")))?;
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Local folder clear completion error: {e:?}")))?;
+    Ok(())
+}
+
 async fn store_directory_handle(handle_id: &str, handle: JsValue) -> Result<(), NookError> {
     MEMORY_HANDLES.with(|handles| {
         handles
