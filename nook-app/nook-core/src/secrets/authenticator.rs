@@ -518,7 +518,7 @@ mod tests {
     #[test]
     fn preserves_plus_signs_in_otpauth_labels() {
         let item = AuthenticatorSecret::from_otpauth_uri(
-            "otpauth://totp/Example:alice+alerts%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
+            "otpauth://totp/Example%3Aalice%2Balerts%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
         )
         .unwrap();
 
