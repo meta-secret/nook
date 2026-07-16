@@ -720,7 +720,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     }
     assert!(
         !setup.contains("systemctl restart docker") && !setup.contains("/etc/docker/daemon.json"),
-        "delivery setup must fail fast on runner drift instead of reconfiguring or restarting Docker"
+        "delivery setup must not reconfigure or restart Docker"
     );
 
     let pr = read(&root, ".github/workflows/pr.yml");

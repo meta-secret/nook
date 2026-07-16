@@ -28,19 +28,9 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # Delivery never rewrites daemon configuration or restarts Docker. Current ubuntu-latest
-    # images provide the containerd store; fail fast if runner-image drift removes that contract.
-    - name: Require containerd image store
-      shell: bash
-      run: |
-        if ! docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'; then
-          echo "::error::The runner must provide Docker's containerd image store; delivery CI never restarts the Docker daemon"
-          exit 1
-        fi
-        echo "containerd image store is enabled"
-
     # The GHA cache exporter requires the docker-container driver. setup-buildx owns this ephemeral
-    # builder on GitHub-hosted VMs; the repository health wrapper probes the selected name before use.
+    # builder on GitHub-hosted VMs; all Task/Bake callers use it, so delivery does not depend on or
+    # mutate the Docker daemon's default image store.
     - name: Setup Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
