@@ -101,19 +101,6 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 360); do
-            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-              --paginate \
-              --jq '.artifacts[].name' \
-              | grep -Fxq "$ARTIFACT_NAME"; then
-              rm -rf coverage/current
-              mkdir -p coverage/current
-              gh run download "$GITHUB_RUN_ID" \
-                --name "$ARTIFACT_NAME" \
-                --dir coverage/current
-              test -s coverage/current/summary.json
-              exit 0
-            fi
-
             native_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all" \
                 --jq '[.jobs[] | select(.name == "Native Rust verification")] | sort_by(.started_at) | last // {}'
@@ -123,6 +110,24 @@ jobs:
             if [ "$native_status" = "completed" ] && [ "$native_conclusion" != "success" ]; then
               echo "::error::Native Rust verification completed with $native_conclusion"
               exit 1
+            fi
+
+            # A rerun keeps run_id and increments run_attempt. Do not accept the stable artifact
+            # name until the latest native job has completed successfully, otherwise a rerun-all
+            # could consume the previous attempt's coverage before its replacement is uploaded.
+            if [ "$native_status" = "completed" ] && [ "$native_conclusion" = "success" ]; then
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+                --paginate \
+                --jq '.artifacts[].name' \
+                | grep -Fxq "$ARTIFACT_NAME"; then
+                rm -rf coverage/current
+                mkdir -p coverage/current
+                gh run download "$GITHUB_RUN_ID" \
+                  --name "$ARTIFACT_NAME" \
+                  --dir coverage/current
+                test -s coverage/current/summary.json
+                exit 0
+              fi
             fi
 
             echo "Waiting for native coverage artifact (attempt $attempt/360; native=$native_status${native_conclusion:+/$native_conclusion})"

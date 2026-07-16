@@ -739,6 +739,16 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             "PR CI must keep native Rust parallel with the combined WASM/web runner: {required}"
         );
     }
+    let native_job_lookup = pr
+        .find("native_job=\"$(")
+        .expect("PR verification must inspect the latest native job");
+    let artifact_lookup = pr
+        .find("actions/runs/$GITHUB_RUN_ID/artifacts")
+        .expect("PR verification must inspect the Rust handoff artifact");
+    assert!(
+        native_job_lookup < artifact_lookup,
+        "PR verification must prove the latest native attempt succeeded before accepting a run-stable artifact"
+    );
     assert!(
         !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
             && !pr
