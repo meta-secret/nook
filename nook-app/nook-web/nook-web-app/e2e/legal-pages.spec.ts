@@ -54,6 +54,16 @@ test.describe('legal pages', () => {
   })
 
   test('serves the public landing page at the site root', async ({ page }) => {
+    await page.route(
+      'https://api.github.com/repos/meta-secret/nook',
+      async (route) => {
+        await route.fulfill({
+          json: {
+            stargazers_count: 12_345,
+          },
+        })
+      },
+    )
     await page.goto(`${PUBLIC_SITE_PATH}/`)
     await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
     await expect(page).toHaveTitle('Nook — Keys, not accounts')
@@ -89,6 +99,21 @@ test.describe('legal pages', () => {
     await expect(page.locator('#architecture')).toHaveCount(1)
     await expect(page.locator('#app')).toHaveCount(0)
     await expect(page.getByTestId('landing-theme-toggle')).toBeVisible()
+    await expect(page.getByTestId('landing-github-stars')).toHaveAttribute(
+      'href',
+      'https://github.com/meta-secret/nook',
+    )
+    await expect(page.getByTestId('landing-github-stars')).toHaveAttribute(
+      'target',
+      '_blank',
+    )
+    await expect(page.getByTestId('landing-github-star-count')).toHaveText(
+      '12.3K',
+    )
+    await expect(page.getByTestId('landing-github-stars')).toHaveAttribute(
+      'aria-label',
+      'View Nook on GitHub · GitHub stars: 12,345',
+    )
   })
 
   test('uses the Chrome Web Store for production extension installs', async ({
@@ -190,6 +215,16 @@ test.describe('legal pages', () => {
   test('localizes the landing page without translating protocol names', async ({
     page,
   }) => {
+    await page.route(
+      'https://api.github.com/repos/meta-secret/nook',
+      async (route) => {
+        await route.fulfill({
+          json: {
+            stargazers_count: 12_345,
+          },
+        })
+      },
+    )
     await page.addInitScript(() => localStorage.setItem('nook_locale', 'ru'))
     await page.goto(`${PUBLIC_SITE_PATH}/`)
 
@@ -201,6 +236,10 @@ test.describe('legal pages', () => {
     )
     await expect(page.getByTestId('hero-extension-link')).toHaveText(
       'Установить расширение для браузера',
+    )
+    await expect(page.getByTestId('landing-github-stars')).toHaveAttribute(
+      'aria-label',
+      'Открыть Nook на GitHub · Звёзды на GitHub: 12 345',
     )
     await expect(
       page.getByRole('button', { name: 'Shamir Secret Sharing', exact: true }),
