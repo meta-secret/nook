@@ -27,8 +27,7 @@ target "builder-debug" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = rust_debug_cache_from
-  cache-to   = rust_debug_cache_to
+  cache-from = rust_source_cache_from
 }
 
 // Small local-output target for the rare case where a commit-keyed main coverage artifact is
@@ -43,5 +42,5 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = rust_debug_cache_from
+  cache-from = rust_source_cache_from
 }

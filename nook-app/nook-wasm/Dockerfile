@@ -1,16 +1,18 @@
 # syntax=docker/dockerfile:1.4
 
-# nook-wasm build stage: wasm32 clippy + release build + wasm-pack bundle.
-# LINEAR CHAIN: FROM builder-debug (native warm-up), so this stage inherits the native target/
-# in place and adds the wasm32 target/ + generated JS/wasm bundle to the SAME image lineage.
-# No COPY --from of target/ anywhere — the Rust lineage is continuous, which keeps
-# the BuildKit cache chain intact (a warm rebuild is a pure cache hit, no recompile) and avoids
-# re-materializing multi-GB target/ layers. `builder-debug` is injected by bake via
-# `contexts = { builder-debug = "target:builder-debug" }`.
+# nook-wasm build stage: wasm32 clippy + release build + wasm-pack bundle. It is a sibling of
+# builder-debug from the shared manifest-keyed dependency image, so hosted BuildKit can run WASM
+# and native coverage concurrently instead of serializing both source-sensitive branches.
 
-FROM builder-debug AS builder-wasm
+FROM builder-deps AS builder-wasm
 
 ARG WASM_BUILD_MODE=dev
+
+COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
+COPY nook-app/.config .config
+COPY nook-app/nook-auth2 nook-auth2
+COPY nook-app/nook-core nook-core
+COPY nook-app/nook-wasm nook-wasm
 
 # Rust clippy, native coverage/tests, and wasm-bindgen Node tests finish in the Rust branch. The
 # slim web image can therefore run web-only Task gates without Cargo installed.
@@ -49,7 +51,7 @@ RUN cargo fmt --all -- --check
 FROM scratch AS web-artifacts
 
 COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
-COPY --from=builder-wasm /opt/nook/coverage /coverage
+COPY --from=builder-debug /opt/nook/coverage /coverage
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting
 # commands. Normal setup/CI does not load this multi-GB image into Docker's runtime image store.

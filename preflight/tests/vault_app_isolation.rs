@@ -622,9 +622,6 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     for required in [
         "GHA_CACHE_ENABLED",
         "type=gha,scope=nook-rust-deps-v2",
-        "type=gha,scope=nook-rust-debug-v2",
-        "type=gha,scope=nook-rust-wasm-v2",
-        "type=gha,scope=nook-rust-artifacts-v2",
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
@@ -643,15 +640,21 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
 
     let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
-        rust_bake.contains("cache-to   = rust_wasm_cache_to")
-            && rust_bake.contains("cache-to   = rust_artifacts_cache_to"),
-        "the Rust/WASM named targets must export distinct cache scopes"
+        rust_bake.contains("builder-deps = \"target:builder-deps\"")
+            && !rust_bake.contains("cache-to   = rust_artifacts_cache_to"),
+        "WASM must branch from cached dependencies without exporting source-heavy snapshots"
     );
     let core_bake = read(&root, "nook-app/nook-core/docker-bake.hcl");
     assert!(
         core_bake.contains("cache-to   = rust_deps_cache_to")
-            && core_bake.contains("cache-to   = rust_debug_cache_to"),
-        "the Rust dependency and native verification targets must export their own scopes"
+            && !core_bake.contains("cache-to   = rust_debug_cache_to"),
+        "only stable Rust dependency layers should be exported"
+    );
+    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    assert!(
+        wasm_dockerfile.contains("FROM builder-deps AS builder-wasm")
+            && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
+        "native verification and WASM must run as sibling branches and join only small outputs"
     );
     let web_bake = read(&root, "nook-app/docker/toolchain.docker-bake.hcl");
     assert!(

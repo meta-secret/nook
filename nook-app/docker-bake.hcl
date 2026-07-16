@@ -8,8 +8,8 @@
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl -> _nook-web-common (slim web image)
 // Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
-// PREPARE PHASE: rust-base -> builder-deps -> builder-debug -> builder-wasm -> web-artifacts, in
-// parallel with web-base -> web-deps. web-artifacts is exported to a commit-scoped,
+// PREPARE PHASE: rust-base -> builder-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
+// parallel with web-base -> web-deps. web-artifacts joins only small outputs and is exported to a commit-scoped,
 // invocation-isolated host directory.
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
 // Rust snapshot never becomes a context or parent of the final image. Local builds reuse the
@@ -63,37 +63,9 @@ rust_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2,mode=min,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-rust_debug_cache_from = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-debug-v2,version=2",
+rust_source_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
-] : []
-
-rust_debug_cache_to = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-debug-v2,mode=min,version=2,ignore-error=true,timeout=10m",
-] : []
-
-rust_wasm_cache_from = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-v2,version=2",
-  "type=gha,scope=nook-rust-debug-v2,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : []
-
-rust_wasm_cache_to = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-v2,mode=min,version=2,ignore-error=true,timeout=10m",
-] : []
-
-rust_artifacts_cache_from = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-artifacts-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-v2,version=2",
-  "type=gha,scope=nook-rust-debug-v2,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : []
-
-rust_artifacts_cache_to = GHA_CACHE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-artifacts-v2,mode=min,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 web_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
