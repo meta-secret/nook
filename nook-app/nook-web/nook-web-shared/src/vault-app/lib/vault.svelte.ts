@@ -2,6 +2,7 @@ import {
   getVaultManager,
   isoTimestamp,
   type JoinRequest,
+  type NookBitwardenImportResult,
   type NookSecretRecord,
   type NookVaultSyncResult,
   type VaultItemType,
@@ -198,7 +199,7 @@ export class VaultState {
     "devices",
   );
   adminAccordionSection = $state<
-    "vaults" | "storage" | "passwords" | undefined
+    "vaults" | "storage" | "passwords" | "import-export" | undefined
   >("vaults");
   helpOpen = $state(false);
 
@@ -2382,7 +2383,9 @@ export class VaultState {
     void this.refreshDeviceState();
   }
 
-  openAdmin(accordion: "vaults" | "storage" | "passwords" = "vaults") {
+  openAdmin(
+    accordion: "vaults" | "storage" | "passwords" | "import-export" = "vaults",
+  ) {
     this.helpOpen = false;
     this.cancelProviderSetup();
     this.cancelAddProvider();
@@ -2643,6 +2646,13 @@ export class VaultState {
 
   async handleAddSecret(id: string, type: VaultItemType, data: string) {
     return secretsActions.handleAddSecret(this, id, type, data);
+  }
+
+  async handleBitwardenImport(
+    json: string,
+    password: string,
+  ): Promise<NookBitwardenImportResult> {
+    return secretsActions.handleBitwardenImport(this, json, password);
   }
 
   scheduleRemoteEventOutboxFlush(): void {

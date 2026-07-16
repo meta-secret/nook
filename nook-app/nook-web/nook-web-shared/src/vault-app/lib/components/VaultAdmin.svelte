@@ -3,6 +3,7 @@
     Check,
     CheckCircle2,
     FolderKey,
+    FileUp,
     Lock,
     PencilLine,
     Plus,
@@ -13,12 +14,14 @@
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
+  import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { NookBitwardenImportResult } from '$lib/nook'
   import type {
     OAuthFilePreset,
     StorageProvider,
@@ -32,6 +35,7 @@
     syncProviders,
     syncingProviderId = undefined,
     isAuthenticated,
+    isSaving,
     addProviderOpen = false,
     setupType = $bindable(undefined as StorageProviderType | undefined),
     githubPat = $bindable(''),
@@ -52,8 +56,14 @@
     onRemovePassword,
     onIssueCode,
     onClearCode,
+    onImportBitwarden,
     activeSection = $bindable(
-      undefined as 'vaults' | 'storage' | 'passwords' | undefined,
+      undefined as
+        | 'vaults'
+        | 'storage'
+        | 'passwords'
+        | 'import-export'
+        | undefined,
     ),
   }: {
     vault: VaultState
@@ -62,6 +72,7 @@
     syncProviders: StorageProvider[]
     syncingProviderId?: string | undefined
     isAuthenticated: boolean
+    isSaving: boolean
     addProviderOpen?: boolean
     setupType?: StorageProviderType | undefined
     githubPat: string
@@ -88,7 +99,16 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
-    activeSection?: 'vaults' | 'storage' | 'passwords' | undefined
+    onImportBitwarden: (
+      json: string,
+      password: string,
+    ) => Promise<NookBitwardenImportResult>
+    activeSection?:
+      | 'vaults'
+      | 'storage'
+      | 'passwords'
+      | 'import-export'
+      | undefined
   } = $props()
 
   let newVaultName = $state('')
@@ -475,6 +495,28 @@
       {onIssueCode}
       {onClearCode}
       allowIssueCode={false}
+    />
+  </SettingsAccordionSection>
+
+  <SettingsAccordionSection
+    title={vault.t('settings.import_export')}
+    subtitle={vault.t('settings.import_export_desc')}
+    section="import-export"
+    bind:activeSection
+    testId="vault-import-export-section"
+  >
+    {#snippet badge()}
+      <span
+        class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
+      >
+        <FileUp class="size-3" />
+        Bitwarden
+      </span>
+    {/snippet}
+    <BitwardenImportPanel
+      {vault}
+      {isSaving}
+      onImport={onImportBitwarden}
     />
   </SettingsAccordionSection>
 </div>

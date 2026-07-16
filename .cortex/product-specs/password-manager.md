@@ -61,6 +61,11 @@ keys.
 6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI. To fix a mistake or update content, the user **adds a new item and deletes the old one**. A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db` so storage never holds duplicates if the second step fails mid-flight.
 7. **Deleting Secrets:**
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
+8. **Importing from Bitwarden:**
+   - The user selects a plaintext Bitwarden JSON export in the browser.
+   - Rust parses the export and maps Bitwarden login items to Nook logins and Bitwarden secure-note items to Nook secure notes. Cards, identities, SSH keys, and other unsupported types are counted and skipped.
+   - Exact values already in the active vault are counted and skipped so repeating the same import is idempotent.
+   - WASM encrypts every accepted item and appends all `SecretCreated` operations in one signed event. The plaintext export is never persisted or logged by Nook.
 
 ### C. Cryptographically Secure Password Generator
 1. **Options Panel:** Located alongside the addition form.

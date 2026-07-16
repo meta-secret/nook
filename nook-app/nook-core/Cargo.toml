@@ -23,6 +23,10 @@ base64 = "0.22"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 thiserror = "2.0.18"
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
+aes = "0.9.1"
+cbc = { version = "0.2.0", features = ["alloc"] }
+hmac = "0.12.1"
+argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 hkdf = "0.12.4"
 pbkdf2 = { version = "0.13.0", features = ["sha2"] }
 tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }

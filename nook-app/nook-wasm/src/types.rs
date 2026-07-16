@@ -1121,6 +1121,55 @@ impl NookVaultSyncResult {
     }
 }
 
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookBitwardenImportResult {
+    imported: u32,
+    skipped_unsupported: u32,
+    skipped_duplicates: u32,
+    secrets: Vec<NookSecretRecord>,
+}
+
+#[wasm_bindgen]
+impl NookBitwardenImportResult {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn imported(&self) -> u32 {
+        self.imported
+    }
+
+    #[wasm_bindgen(getter, js_name = skippedUnsupported)]
+    #[must_use]
+    pub fn skipped_unsupported(&self) -> u32 {
+        self.skipped_unsupported
+    }
+
+    #[wasm_bindgen(getter, js_name = skippedDuplicates)]
+    #[must_use]
+    pub fn skipped_duplicates(&self) -> u32 {
+        self.skipped_duplicates
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn secrets(&self) -> Vec<NookSecretRecord> {
+        self.secrets.clone()
+    }
+
+    pub(crate) fn new(
+        imported: usize,
+        skipped_unsupported: usize,
+        skipped_duplicates: usize,
+        secrets: Vec<NookSecretRecord>,
+    ) -> Self {
+        Self {
+            imported: u32::try_from(imported).unwrap_or(u32::MAX),
+            skipped_unsupported: u32::try_from(skipped_unsupported).unwrap_or(u32::MAX),
+            skipped_duplicates: u32::try_from(skipped_duplicates).unwrap_or(u32::MAX),
+            secrets,
+        }
+    }
+}
+
 /// Flat form payload for `buildSecretYaml` — unused fields stay empty.
 #[wasm_bindgen]
 pub struct NookSecretFormFields {

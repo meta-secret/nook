@@ -2050,6 +2050,7 @@ export async function connectGithubSyncProviderFromSettings(
 const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
   unlock: 'vault-unlock-section',
+  import: 'vault-import-export-section',
   devices: 'vault-devices-section',
 } as const
 
