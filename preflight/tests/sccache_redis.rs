@@ -57,6 +57,13 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
             >= 5,
         "every Rust-capable runtime path must resolve the shared Redis endpoint"
     );
+    assert!(
+        docker_tasks
+            .matches("-e SCCACHE_REDIS_HOST_IP=\"{{.SCCACHE_REDIS_HOST_IP}}\"")
+            .count()
+            >= 5,
+        "runtime containers must inherit the resolved address without needing Docker"
+    );
 
     for path in [
         "nook-app/Taskfile.yml",
