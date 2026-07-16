@@ -2,9 +2,9 @@ version: "3"
 
 tasks:
   ci:pr:
-    desc: PR CI in a fresh BuildKit daemon — Rust/WASM validation, then one slim web container for format/verify/build.
+    desc: PR CI on a health-checked persistent BuildKit daemon — Rust/WASM validation, then one slim web container for format/verify/build.
     cmds:
-      - task: _buildx:isolated
+      - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:pr:host }
 
   _ci:pr:host:
@@ -14,7 +14,7 @@ tasks:
       - task: docker:task
         vars: { TASK: _ci:pr }
 
-  _buildx:isolated:
+  _buildx:healthy:
     internal: true
     requires:
       vars: [BUILD_TASK]
@@ -46,7 +46,7 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/with-isolated-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
+      - bash "{{.REPO_ROOT}}/.github/scripts/with-healthy-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
 
   ci:pr:e2e:
     desc: Explicit local/manual full stub web Playwright e2e plus extension e2e.

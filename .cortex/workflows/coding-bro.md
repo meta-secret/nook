@@ -62,10 +62,11 @@ validation may not. If a local check fails after the push, fix it, commit and
 push the complete fix immediately, then rerun local validation in parallel with
 the refreshed PR workflow.
 
-**PR GitHub Actions is isolated and developer-critical.** `pr.yml` runs on the
-self-hosted `nook` pool, but `task ci:pr` creates and removes a fresh BuildKit
-daemon for each invocation. Only compatible Rust compiler objects persist via
-the Docker-host-only Redis `sccache` service.
+**PR GitHub Actions is health-bounded and developer-critical.** `pr.yml` runs
+on the self-hosted `nook` pool, where `task ci:pr` reuses a dedicated BuildKit
+daemon after a hard 60-second health probe. A stuck daemon is force-killed and
+replaced; healthy Docker layers and compatible Redis-backed `sccache` objects
+persist locally.
 Long-running AI agents and other background workflows stay on fresh
 GitHub-hosted runners, where cold setup is acceptable. A failing fmt, clippy,
 unit test, or e2e spec still burns a remote validation cycle, so do not use PR
