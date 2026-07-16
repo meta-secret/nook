@@ -204,7 +204,7 @@ Skip e2e for small, isolated Rust-only or docs-only changes.
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
-`pr.yml` fans native Rust and WASM across independent hosted runners, then the web runner consumes their small artifacts, verifies/builds without browser e2e, and deploys the internal harness plus isolated native Pages aliases for site, Simple, and Sentinel. `PR / Verify and preview` depends on both producer jobs, and the isolated site alias is recorded as the successful `github-pages` deployment for ruleset enforcement. The automatic full browser e2e gate runs on main only (`ci:main`).
+`pr.yml` runs native Rust on one hosted runner while `PR / Verify and preview` keeps WASM, web verification/build, and deployment on a second runner. Generated WASM stays on that runner instead of being uploaded to a third VM. After the web build, the job downloads the native runner's small coverage artifact for comparison/reporting, then deploys the internal harness plus isolated native Pages aliases for site, Simple, and Sentinel. The isolated site alias is recorded as the successful `github-pages` deployment for ruleset enforcement. The automatic full browser e2e gate runs on main only (`ci:main`).
 
 **Do not stop after opening the PR.** Wait only for applicable repository-owned
 workflows: `PR`, plus `Web research` when `.github/workflows/web-research.yml` or

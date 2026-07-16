@@ -302,10 +302,11 @@ as the base comparison because the measured source is unchanged.
 main, and release run on fresh `ubuntu-latest` VMs. The shared Docker setup
 creates a `docker-container` builder, exposes GitHub's cache-service runtime,
 and enables separate v2 scopes for stable Rust dependencies, web dependencies,
-browser-free web, and e2e web. PR CI assigns native Rust, WASM, and web to
-separate hosted runners. Rust and WASM upload only small coverage/package
-handoffs; the dependent web job verifies and builds the sealed image (no browser
-e2e), deploys the Cloudflare previews,
+browser-free web, and e2e web. PR CI assigns native Rust to one runner and keeps
+WASM plus web verification/build on a second runner. Generated WASM stays local
+to that second runner; native Rust uploads only the small coverage handoff,
+which is downloaded after the web build for reporting. The combined job runs
+without browser e2e, deploys the Cloudflare previews,
 and a successful `github-pages` deployment status for the PR head SHA). The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
 `nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source

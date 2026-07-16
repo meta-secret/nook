@@ -248,7 +248,7 @@ tasks:
         env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
 
   docker:ci:web:build:
-    desc: Build the sealed web image from downloaded CI WASM and coverage artifacts.
+    desc: Build the sealed web image from the same-runner CI WASM artifact.
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
@@ -257,7 +257,8 @@ tasks:
         artifacts="{{.CI_ARTIFACT_DIR}}";
         case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
         test -s "$artifacts/nook-wasm/nook_wasm.js";
-        test -s "$artifacts/coverage/nook-core/summary.json";
+        mkdir -p "$artifacts/coverage/nook-core";
+        : > "$artifacts/coverage/nook-core/.web-only";
         env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web'
 
   docker:web:dev:

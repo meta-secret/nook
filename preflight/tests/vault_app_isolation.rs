@@ -684,17 +684,22 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let pr = read(&root, ".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
-        "name: WASM verification",
-        "needs: [rust, wasm]",
+        "name: Verify and preview",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
+        "ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}",
     ] {
         assert!(
             pr.contains(required),
-            "PR CI must fan out across hosted runners: {required}"
+            "PR CI must keep native Rust parallel with the combined WASM/web runner: {required}"
         );
     }
+    assert!(
+        !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !pr.contains("needs: [rust, wasm]"),
+        "PR CI must not round-trip WASM through a third hosted runner"
+    );
 
     let main = read(&root, ".github/workflows/main.yml");
     assert!(main.contains("          task ci:main\n"));

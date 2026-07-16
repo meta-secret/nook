@@ -55,34 +55,11 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  wasm:
-    name: WASM verification
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-      - name: WASM clippy, build, and Node tests
-        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/wasm
-        env:
-          CI: true
-          WASM_BUILD_MODE: dev
-      - name: Upload WASM handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/wasm
-          retention-days: 1
-          if-no-files-found: error
-
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    needs: [rust, wasm]
-    # GitHub-hosted capacity scales across concurrent PRs. BuildKit layers are restored from the
-    # main-seeded GHA cache and updated in the PR branch cache for fast follow-up pushes.
+    # WASM and web stay on one hosted runner so the generated package crosses only a local
+    # scratch boundary. Native Rust remains independent and publishes coverage in parallel.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -91,20 +68,14 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      - name: Download Rust coverage handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/coverage/nook-core
+      - name: WASM clippy, build, and Node tests
+        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+        env:
+          CI: true
+          WASM_BUILD_MODE: dev
 
-      - name: Download WASM handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined
-
-      # Native Rust and WASM already ran on independent hosted runners. This runner consumes their
-      # small handoffs and owns only web/extension verification, the production image, and previews.
+      # The generated WASM package remains on this runner. Coverage reporting consumes the native
+      # job's small artifact later and never blocks the web build on Rust completion.
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
@@ -122,10 +93,30 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
-      # The verified image already contains the Rust coverage artifacts produced by the graph
-      # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.
-      - name: Export Rust coverage from verified image
-        run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
+      - name: Download Rust coverage handoff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              --paginate \
+              --jq '.artifacts[].name' \
+              | grep -Fxq "$ARTIFACT_NAME"; then
+              rm -rf coverage/current
+              mkdir -p coverage/current
+              gh run download "$GITHUB_RUN_ID" \
+                --name "$ARTIFACT_NAME" \
+                --dir coverage/current
+              test -s coverage/current/summary.json
+              exit 0
+            fi
+            echo "Waiting for native coverage artifact (attempt $attempt/36)"
+            sleep 5
+          done
+          echo "::error::Native Rust coverage artifact was not published"
+          exit 1
 
       - name: Deploy unified internal test harness
         id: deploy
