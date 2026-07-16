@@ -260,8 +260,9 @@
     if (selectedType === 'api-key') return apiKey.trim().length > 0
     if (selectedType === 'authenticator') {
       return (
-        authenticatorIssuer.trim().length > 0 &&
-        authenticatorSecret.trim().length > 0
+        authenticatorSecret.trim().length > 0 &&
+        (authenticatorIssuer.trim().length > 0 ||
+          authenticatorSecret.trim().startsWith('otpauth://'))
       )
     }
     if (selectedType === 'login') {

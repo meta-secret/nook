@@ -8,7 +8,12 @@ use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
 
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
 const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
-const IMPORT_METADATA_MARKERS: [&str; 2] = ["## Bitwarden", "## 1Password"];
+const IMPORT_METADATA_MARKERS: [&str; 4] = [
+    "## Bitwarden",
+    "## 1Password",
+    "## Browser password manager",
+    "## Apple Passwords",
+];
 
 /// Opaque HMAC-SHA-256 tag. It can reveal equality inside one vault, but it
 /// cannot be tested against guessed plaintext without that vault's secret key.
@@ -278,6 +283,27 @@ mod tests {
                 }),
                 &key('a')
             )
+        );
+    }
+
+    #[test]
+    fn login_versions_ignore_all_supported_importer_metadata() {
+        let chrome = SecretValue::Login(LoginSecret {
+            website_url: "https://example.com".to_owned(),
+            username: "alice".to_owned(),
+            password: "secret".to_owned(),
+            notes: "shared note\n\n## Browser password manager\n- name: Example".to_owned(),
+        });
+        let apple = SecretValue::Login(LoginSecret {
+            website_url: "https://example.com".to_owned(),
+            username: "alice".to_owned(),
+            password: "secret".to_owned(),
+            notes: "shared note\n\n## Apple Passwords\n- title: Example".to_owned(),
+        });
+
+        assert_eq!(
+            secret_fingerprint(&chrome, &key('a')),
+            secret_fingerprint(&apple, &key('a'))
         );
     }
 
