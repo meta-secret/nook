@@ -1220,7 +1220,19 @@ export class VaultState {
     identitySecret: string,
     signingSeed: string,
   ) {
-    if (!this.manager || this.isVerifying || this.isInitializing) return false;
+    // An already-open vault owns a live manager session. Reject before
+    // replacing that identity so a stale or different extension grant cannot
+    // knock the user out of the vault they are currently using.
+    if (
+      !this.manager ||
+      this.isVerifying ||
+      this.isInitializing ||
+      this.isAuthenticated
+    ) {
+      identitySecret = "";
+      signingSeed = "";
+      return false;
+    }
     this.isVerifying = true;
     this.errorMsg = "";
     let deviceIdentityUnlocked = false;
@@ -1245,17 +1257,16 @@ export class VaultState {
       }
       this.deviceProtectionStatus = "unlocked";
       return true;
-    } catch (error) {
+    } catch {
       if (
         this.deviceProtectionStatus === "unlocked" ||
         deviceIdentityUnlocked
       ) {
         void this.lockDeviceProtection();
       }
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : this.t("extension.unlock.handoff_failed");
+      // Rust validation errors intentionally stay behind the typed boundary;
+      // user-facing copy always comes from the shared locale catalog.
+      this.errorMsg = this.t("extension.unlock.handoff_failed");
       return false;
     } finally {
       // Strings cannot be zeroized in JavaScript; dropping this reference as

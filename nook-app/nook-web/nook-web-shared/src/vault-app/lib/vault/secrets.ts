@@ -45,7 +45,11 @@ export async function loadDb(state: VaultState, options?: LoadDbOptions) {
       await state.ensureOAuthTokensFresh();
     }
 
-    if (!state.isAuthenticated && state.loginSetupType === "local-folder") {
+    if (
+      options?.loadSiteProviders !== false &&
+      !state.isAuthenticated &&
+      state.loginSetupType === "local-folder"
+    ) {
       const saved = await state.ensureProviderSaved();
       if (!saved) return;
       const provider =
@@ -104,7 +108,9 @@ export async function loadDb(state: VaultState, options?: LoadDbOptions) {
     }
 
     if (accessStatus === "needs_enrollment") {
-      await state.ensureProviderSaved();
+      if (options?.loadSiteProviders !== false) {
+        await state.ensureProviderSaved();
+      }
       const hasPasswordFallback = await state.refreshPasswordEntriesList();
       if (hasPasswordFallback && state.passwordEntries.length > 0) {
         state.loginPasswordPrompt = true;
@@ -116,7 +122,9 @@ export async function loadDb(state: VaultState, options?: LoadDbOptions) {
       return;
     }
     if (accessStatus === "join_pending") {
-      await state.ensureProviderSaved();
+      if (options?.loadSiteProviders !== false) {
+        await state.ensureProviderSaved();
+      }
       const hasPasswordFallback = await state.refreshPasswordEntriesList();
       if (hasPasswordFallback && state.passwordEntries.length > 0) {
         state.loginPasswordPrompt = true;
@@ -168,7 +176,9 @@ export async function loadDb(state: VaultState, options?: LoadDbOptions) {
     // edit (especially delete, which used to fire-and-forget fan-out) can run
     // while `syncProviders` is still empty and never push the event remotely.
     state.syncOAuthRemoteRefFromManager();
-    await state.ensureProviderSaved();
+    if (options?.loadSiteProviders !== false) {
+      await state.ensureProviderSaved();
+    }
     if (options?.loadSiteProviders !== false) {
       await state.loadProviders();
     }
