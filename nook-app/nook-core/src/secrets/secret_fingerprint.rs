@@ -8,12 +8,60 @@ use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
 
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
 const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
-const IMPORT_METADATA_MARKERS: [&str; 2] = ["## Bitwarden", "## 1Password"];
-const LOGIN_IMPORT_METADATA_MARKERS: [&str; 4] = [
-    "## Bitwarden",
-    "## 1Password",
-    "## Browser password manager",
-    "## Apple Passwords",
+struct ImportMetadataMarker {
+    heading: &'static str,
+    key_prefixes: &'static [&'static str],
+}
+
+const BITWARDEN_METADATA: ImportMetadataMarker = ImportMetadataMarker {
+    heading: "## Bitwarden",
+    key_prefixes: &["totp:", "uri[", "field.", "field["],
+};
+const ONEPASSWORD_METADATA: ImportMetadataMarker = ImportMetadataMarker {
+    heading: "## 1Password",
+    key_prefixes: &["vault:", "state:", "tags:", "url.", "url[", "field["],
+};
+const LASTPASS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
+    heading: "## LastPass",
+    key_prefixes: &["group:", "favorite:", "totp:"],
+};
+const PROTON_PASS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
+    heading: "## Proton Pass",
+    key_prefixes: &[
+        "vault:",
+        "state:",
+        "pinned:",
+        "email:",
+        "totp:",
+        "url[",
+        "field.",
+        "field[",
+        "passkeys_skipped:",
+        "attachments_skipped:",
+    ],
+};
+const BROWSER_METADATA: ImportMetadataMarker = ImportMetadataMarker {
+    heading: "## Browser password manager",
+    key_prefixes: &["name:"],
+};
+const APPLE_PASSWORDS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
+    heading: "## Apple Passwords",
+    key_prefixes: &["title:"],
+};
+
+const IMPORT_METADATA_MARKERS: [&ImportMetadataMarker; 4] = [
+    &BITWARDEN_METADATA,
+    &ONEPASSWORD_METADATA,
+    &LASTPASS_METADATA,
+    &PROTON_PASS_METADATA,
+];
+const LOGIN_IMPORT_METADATA_MARKERS: [&ImportMetadataMarker; 6] = [
+    &BITWARDEN_METADATA,
+    &ONEPASSWORD_METADATA,
+    &LASTPASS_METADATA,
+    &PROTON_PASS_METADATA,
+    &BROWSER_METADATA,
+    &APPLE_PASSWORDS_METADATA,
 ];
 
 /// Opaque HMAC-SHA-256 tag. It can reveal equality inside one vault, but it
@@ -38,15 +86,28 @@ fn normalized_text(value: &str) -> String {
     value.replace("\r\n", "\n").trim().to_owned()
 }
 
-fn provider_neutral_notes(value: &str, markers: &[&str]) -> String {
+fn provider_neutral_notes(value: &str, markers: &[&ImportMetadataMarker]) -> String {
     let normalized = normalized_text(value);
     let marker_index = markers
         .iter()
         .filter_map(|marker| {
-            normalized
-                .find(&format!("\n\n{marker}"))
+            let heading = marker.heading;
+            let index = normalized
+                .find(&format!("\n\n{heading}"))
                 .map(|index| index + 2)
-                .or_else(|| normalized.starts_with(marker).then_some(0))
+                .or_else(|| normalized.starts_with(heading).then_some(0))?;
+            let metadata = normalized[index + heading.len()..].strip_prefix('\n')?;
+            let first_bullet = metadata.strip_prefix("- ")?.lines().next()?;
+            let is_dotted_onepassword_field = marker.heading == "## 1Password"
+                && first_bullet
+                    .split_once(':')
+                    .is_some_and(|(key, _)| key.contains('.'));
+            (is_dotted_onepassword_field
+                || marker
+                    .key_prefixes
+                    .iter()
+                    .any(|prefix| first_bullet.starts_with(prefix)))
+            .then_some(index)
         })
         .min();
     marker_index.map_or(normalized.clone(), |index| {
@@ -175,7 +236,7 @@ pub fn secret_fingerprint(value: &SecretValue, secrets_key: &SymmetricKey) -> Se
     )
 }
 
-fn merge_notes(existing: &str, incoming: &str, markers: &[&str]) -> String {
+fn merge_notes(existing: &str, incoming: &str, markers: &[&ImportMetadataMarker]) -> String {
     let existing = normalized_text(existing);
     let incoming = normalized_text(incoming);
     if incoming.is_empty() || existing == incoming || existing.contains(&incoming) {
@@ -364,6 +425,50 @@ mod tests {
             secret_fingerprint(&first, &key('a')),
             secret_fingerprint(&second, &key('a'))
         );
+    }
+
+    #[test]
+    fn secure_note_versions_ignore_all_provider_metadata() {
+        let providers = [
+            "## Bitwarden\n- field.folder: Personal",
+            "## 1Password\n- vault: Personal",
+            "## LastPass\n- group: Personal",
+            "## Proton Pass\n- vault: Personal",
+        ];
+        let expected = secret_fingerprint(
+            &SecretValue::SecureNote(SecureNoteSecret {
+                title: "Recovery".to_owned(),
+                note: format!("same note\n\n{}", providers[0]),
+            }),
+            &key('a'),
+        );
+
+        for metadata in providers {
+            let note = SecretValue::SecureNote(SecureNoteSecret {
+                title: "Recovery".to_owned(),
+                note: format!("same note\n\n{metadata}"),
+            });
+            assert_eq!(secret_fingerprint(&note, &key('a')), expected);
+        }
+    }
+
+    #[test]
+    fn user_authored_provider_sections_remain_meaningful() {
+        for heading in ["## LastPass", "## Proton Pass"] {
+            let first = SecretValue::SecureNote(SecureNoteSecret {
+                title: "Migration diary".to_owned(),
+                note: format!("Notes\n\n{heading}\n- diary: first export"),
+            });
+            let second = SecretValue::SecureNote(SecureNoteSecret {
+                title: "Migration diary".to_owned(),
+                note: format!("Notes\n\n{heading}\n- diary: second export"),
+            });
+
+            assert_ne!(
+                secret_fingerprint(&first, &key('a')),
+                secret_fingerprint(&second, &key('a'))
+            );
+        }
     }
 
     #[test]

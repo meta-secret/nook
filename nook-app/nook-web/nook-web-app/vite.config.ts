@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { loadEnv, type PreviewServer, type ViteDevServer } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { svelteTesting } from '@testing-library/svelte/vite'
 import {
   buildRobotsTxt,
   buildSitemapXml,
@@ -218,6 +219,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       tailwindcss(),
       svelte(),
+      svelteTesting(),
       deploymentChannelLinks(),
       spaFallback(appKind, outputDirectory),
       seoStaticFiles(outputDirectory),
