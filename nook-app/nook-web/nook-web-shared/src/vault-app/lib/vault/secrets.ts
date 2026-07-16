@@ -1,5 +1,9 @@
 import type { VaultState } from "$lib/vault.svelte";
-import type { NookSecretRecord, VaultItemType } from "$lib/nook";
+import type {
+  NookBitwardenImportResult,
+  NookSecretRecord,
+  VaultItemType,
+} from "$lib/nook";
 import {
   generatePassword as coreGeneratePassword,
   generateSecretId,
@@ -244,6 +248,46 @@ export async function handleAddSecret(
   } catch (e: unknown) {
     state.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`;
     throw e;
+  } finally {
+    state.isSaving = false;
+  }
+}
+
+export async function handleBitwardenImport(
+  state: VaultState,
+  json: string,
+): Promise<NookBitwardenImportResult> {
+  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  try {
+    const result = await state.enqueueStorage(() =>
+      state.manager!.importBitwardenJson(json),
+    );
+    state.secrets = result.secrets;
+    await state.runFanOutSyncAfterLocalSave();
+    await state.refreshSecretsFromSession();
+    log.info("Bitwarden import completed", {
+      imported: result.imported,
+      skippedUnsupported: result.skippedUnsupported,
+      skippedDuplicates: result.skippedDuplicates,
+    });
+    state.showSuccess(
+      state.t("toasts.bitwarden_imported", {
+        count: String(result.imported),
+      }),
+    );
+    return result;
+  } catch (error: unknown) {
+    state.errorMsg = state.t("bitwarden_import.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   } finally {
     state.isSaving = false;
   }

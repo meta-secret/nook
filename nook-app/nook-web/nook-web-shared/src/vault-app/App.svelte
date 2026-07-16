@@ -809,6 +809,8 @@
                     onReplaceSecret={(oldId, type, data) =>
                       vault.handleReplaceSecret(oldId, type, data)}
                     onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
+                    onImportBitwarden={(json) =>
+                      vault.handleBitwardenImport(json)}
                     onGeneratePassword={(
                       length,
                       lowercase,

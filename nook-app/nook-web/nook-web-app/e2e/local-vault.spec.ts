@@ -156,6 +156,77 @@ test.describe('local vault', () => {
     await deleteSecret(page, title)
   })
 
+  test('imports Bitwarden logins and secure notes from JSON', async ({
+    page,
+  }) => {
+    const exportJson = JSON.stringify({
+      encrypted: false,
+      folders: [],
+      items: [
+        {
+          id: 'bitwarden-login-1',
+          type: 1,
+          name: 'Imported GitHub',
+          notes: 'Work account',
+          login: {
+            username: 'bitwarden-alice',
+            password: 'imported-password',
+            uris: [{ uri: 'https://github.com/login' }],
+          },
+        },
+        {
+          id: 'bitwarden-note-1',
+          type: 2,
+          name: 'Imported private note',
+          notes: 'Imported note body',
+          secureNote: { type: 0 },
+        },
+        {
+          id: 'bitwarden-card-1',
+          type: 3,
+          name: 'Skipped card',
+          card: { number: '4111111111111111' },
+        },
+      ],
+    })
+
+    await page.getByTestId('import-bitwarden-btn').click()
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(exportJson),
+    })
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 2 items',
+    )
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      '1 unsupported',
+    )
+
+    await page.getByTestId('bitwarden-import-back').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'bitwarden-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported private note',
+    )
+
+    await page.getByTestId('import-bitwarden-btn').click()
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(exportJson),
+    })
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      '2 duplicates',
+    )
+  })
+
   test('persists secrets after reload', async ({ page }) => {
     const key = uniqueSecretKey('e2e-local-persist')
     const value = 'persist-me'

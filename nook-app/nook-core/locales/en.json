@@ -394,6 +394,20 @@
       "never_synced": "Never synced"
     }
   },
+  "bitwarden_import": {
+    "button": "Import Bitwarden",
+    "title": "Import from Bitwarden",
+    "description": "Move supported items from a plaintext Bitwarden JSON export into this vault.",
+    "export_hint_title": "Export a JSON file from Bitwarden",
+    "export_hint": "In Bitwarden, open Tools, choose Export vault, and select the plaintext .json format. Delete the export after the import finishes.",
+    "file_label": "Bitwarden JSON export",
+    "supported_types": "Nook imports logins and secure notes. Cards, identities, SSH keys, and other item types are skipped.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "Bitwarden import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "settings": {
     "title": "Settings",
     "storage": "Sync providers",
@@ -956,6 +970,7 @@
     "secret_saved": "Secret saved successfully.",
     "secret_deleted": "Secret deleted successfully.",
     "item_updated": "Item updated successfully.",
+    "bitwarden_imported": "Imported {count} Bitwarden items.",
     "error_timeout": "Connection timed out. Check your PAT, network, and try again.",
     "error_no_engine": "Vault engine is not available.",
     "error_unlock_required": "Unlock the vault before adding a password.",

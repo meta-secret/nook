@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     ArrowLeft,
+    FileUp,
     Plus,
     Search,
     Globe,
@@ -13,8 +14,13 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
+  import BitwardenImportPanel from './BitwardenImportPanel.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import type { NookSecretRecord, VaultItemType } from '$lib/nook'
+  import type {
+    NookBitwardenImportResult,
+    NookSecretRecord,
+    VaultItemType,
+  } from '$lib/nook'
 
   let {
     vault,
@@ -26,6 +32,7 @@
     onReplaceSecret,
     onDeleteSecret,
     onGeneratePassword,
+    onImportBitwarden,
     onAddModeChange,
   }: {
     vault: VaultState
@@ -51,6 +58,7 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
+    onImportBitwarden: (json: string) => Promise<NookBitwardenImportResult>
     onAddModeChange?: (open: boolean, type?: VaultItemType | undefined) => void
   } = $props()
 
@@ -59,6 +67,7 @@
   let expandedSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
+  let bitwardenImportOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let editItem = $state<NookSecretRecord | undefined>(undefined)
@@ -106,6 +115,16 @@
     formSelectedType = undefined
     addSecretOpen = true
     notifyAddMode()
+  }
+
+  function openBitwardenImport() {
+    bitwardenImportOpen = true
+    onAddModeChange?.(true)
+  }
+
+  function closeBitwardenImport() {
+    bitwardenImportOpen = false
+    onAddModeChange?.(false)
   }
 
   function closeAddSecret() {
@@ -166,7 +185,14 @@
       : ''}"
   data-testid="vault-panel"
 >
-  {#if addSecretOpen}
+  {#if bitwardenImportOpen}
+    <BitwardenImportPanel
+      {vault}
+      {isSaving}
+      onImport={onImportBitwarden}
+      onClose={closeBitwardenImport}
+    />
+  {:else if addSecretOpen}
     <div
       class="animate-in fade-in slide-in-from-right-2 duration-200 {isSecureNoteEditor
         ? 'flex min-h-0 flex-1 flex-col'
@@ -215,6 +241,18 @@
           </p>
         </div>
         <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
+            data-testid="import-bitwarden-btn"
+            disabled={editsBlocked}
+            title={editsBlocked ? editBlockReason : undefined}
+            onclick={openBitwardenImport}
+          >
+            <FileUp class="size-3.5" />
+            {vault.t('bitwarden_import.button')}
+          </Button>
           <Button
             size="sm"
             variant="outline"

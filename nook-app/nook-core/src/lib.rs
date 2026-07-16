@@ -14,7 +14,7 @@ mod vault;
 
 pub(crate) use auth::{device_key_protection, enrollment, multi_device, password_envelope};
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
-pub(crate) use secrets::{bip39, password, secret_types, secret_view, session};
+pub(crate) use secrets::{bip39, bitwarden_import, password, secret_types, secret_view, session};
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
     vault_sync_store,
@@ -31,6 +31,7 @@ pub use bip39::{
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
     validate_bip39_mnemonic,
 };
+pub use bitwarden_import::{BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import};
 pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
