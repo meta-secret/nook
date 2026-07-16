@@ -28,6 +28,21 @@ target "rust-format-check" {
   cache-from = rust_source_cache_from
 }
 
+target "wasm-export" {
+  inherits   = ["_sccache-network"]
+  context    = "."
+  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  target     = "wasm-export"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    builder-deps = "target:builder-deps"
+  }
+  args = {
+    WASM_BUILD_MODE = WASM_BUILD_MODE
+  }
+  cache-from = rust_source_cache_from
+}
+
 // Small scratch output exported to the host between the parallel prepare phase and slim web build.
 target "web-artifacts" {
   inherits   = ["_sccache-network"]

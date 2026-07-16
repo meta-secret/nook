@@ -34,9 +34,53 @@ env:
   DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  rust:
+    name: Native Rust verification
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+      - name: Rust format, clippy, tests, and coverage
+        run: task ci:pr:rust CI_ARTIFACT_DIR=ci-artifacts/rust
+        env:
+          CI: true
+      - name: Upload Rust coverage handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/rust
+          retention-days: 1
+          if-no-files-found: error
+
+  wasm:
+    name: WASM verification
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+      - name: WASM clippy, build, and Node tests
+        run: task ci:pr:wasm CI_ARTIFACT_DIR=ci-artifacts/wasm
+        env:
+          CI: true
+          WASM_BUILD_MODE: dev
+      - name: Upload WASM handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/wasm
+          retention-days: 1
+          if-no-files-found: error
+
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
+    needs: [rust, wasm]
     # GitHub-hosted capacity scales across concurrent PRs. BuildKit layers are restored from the
     # main-seeded GHA cache and updated in the PR branch cache for fast follow-up pushes.
     runs-on: ubuntu-latest
@@ -47,13 +91,24 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
-      # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
-      # path and makes a cold Rust cache slower than the former combined build.
-      - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
+      - name: Download Rust coverage handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/joined/coverage/nook-core
+
+      - name: Download WASM handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/joined
+
+      # Native Rust and WASM already ran on independent hosted runners. This runner consumes their
+      # small handoffs and owns only web/extension verification, the production image, and previews.
+      - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
-          task ci:pr \
+          task ci:pr:web CI_ARTIFACT_DIR=ci-artifacts/joined \
             VITE_BASE=/ \
             VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
             VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \

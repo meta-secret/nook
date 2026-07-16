@@ -124,6 +124,10 @@ group "builders" {
   targets = ["builder-wasm", "web-deps"]
 }
 
+group "ci-rust" {
+  targets = ["coverage-export", "rust-format-check"]
+}
+
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
 // _nook-web-common lives in nook-app/nook-web/nook-web-app/docker-bake.hcl.
 target "nook-web" {

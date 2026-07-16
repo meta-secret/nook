@@ -675,6 +675,21 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         );
     }
 
+    let pr = read(&root, ".github/workflows/pr.yml");
+    for required in [
+        "name: Native Rust verification",
+        "name: WASM verification",
+        "needs: [rust, wasm]",
+        "task ci:pr:rust",
+        "task ci:pr:wasm",
+        "task ci:pr:web",
+    ] {
+        assert!(
+            pr.contains(required),
+            "PR CI must fan out across hosted runners: {required}"
+        );
+    }
+
     let main = read(&root, ".github/workflows/main.yml");
     assert!(main.contains("          task ci:main\n"));
     let cleanup = read(&root, ".github/workflows/runner-cleanup.yml");

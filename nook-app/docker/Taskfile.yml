@@ -221,6 +221,45 @@ tasks:
         mkdir -p "$out_dir";
         env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
 
+  docker:ci:rust:export:
+    desc: Run native Rust formatting/coverage on one CI runner and export only coverage artifacts.
+    deps: [sccache:ensure]
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.CI_ARTIFACT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        rm -rf "$out_dir"; mkdir -p "$out_dir";
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
+
+  docker:ci:wasm:export:
+    desc: Run WASM clippy/build/tests on a separate CI runner and export only the generated package.
+    deps: [sccache:ensure]
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/wasm" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.CI_ARTIFACT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        rm -rf "$out_dir"; mkdir -p "$out_dir";
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
+
+  docker:ci:web:build:
+    desc: Build the sealed web image from downloaded CI WASM and coverage artifacts.
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        artifacts="{{.CI_ARTIFACT_DIR}}";
+        case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
+        test -s "$artifacts/nook-wasm/nook_wasm.js";
+        test -s "$artifacts/coverage/nook-core/summary.json";
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web'
+
   docker:web:dev:
     internal: true
     # Mounted for Vite hot-reload. The on-demand browser/Rust image contains both toolchains;

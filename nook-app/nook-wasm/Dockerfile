@@ -39,6 +39,10 @@ RUN case "$WASM_BUILD_MODE" in \
 
 RUN wasm-pack test --node nook-wasm
 
+FROM scratch AS wasm-export
+
+COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+
 # Formatting is an independent validation leaf so `task format` can still load nook-rust and fix
 # unformatted source. Normal `task setup` includes this target in its parallel prepare group.
 FROM builder-debug AS rust-format-check
