@@ -79,7 +79,6 @@ struct VaultSessionState {
     members_key: String,
     crypto: Option<nook_core::VaultCrypto>,
     meta: nook_core::VaultMetaState,
-    database: nook_core::Database,
     last_synced_content: String,
     /// Active unlock mode for this vault.
     unlock: nook_core::VaultUnlock,
@@ -102,7 +101,6 @@ impl Default for VaultSessionState {
             members_key: String::new(),
             crypto: None,
             meta: nook_core::VaultMetaState::default(),
-            database: nook_core::Database::new(),
             last_synced_content: String::new(),
             unlock: nook_core::VaultUnlock::Keys,
             password_entries: Vec::new(),
@@ -123,7 +121,6 @@ impl VaultSessionState {
         self.members_key.zeroize();
         self.crypto = None;
         self.meta = nook_core::VaultMetaState::default();
-        self.database.clear();
         self.last_synced_content.clear();
         self.unlock = nook_core::VaultUnlock::Keys;
         self.password_entries.clear();
@@ -374,9 +371,34 @@ impl NookVaultManager {
 // submodules can call them without leaking into the rest of the crate.
 
 impl NookVaultManager {
+    pub(crate) fn query_secret_page(
+        &self,
+        query: &str,
+        offset: u32,
+        limit: u32,
+    ) -> Result<nook_core::SecretPage, NookError> {
+        let crypto = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        Ok(nook_core::query_encrypted_secrets(
+            &self.vault.meta.secrets,
+            crypto,
+            query,
+            usize::try_from(offset).unwrap_or(usize::MAX),
+            usize::try_from(limit).unwrap_or(nook_core::DEFAULT_SECRET_PAGE_SIZE),
+        )?)
+    }
+
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        records_to_vec(self.vault.database.list())
+        let page = self.query_secret_page(
+            "",
+            0,
+            u32::try_from(nook_core::DEFAULT_SECRET_PAGE_SIZE).unwrap_or(50),
+        )?;
+        records_to_vec(page.records)
     }
 
     pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {

@@ -18,6 +18,10 @@ import {
 
 const log = createLogger("connect");
 
+function freeSecretRecords(records: NookSecretRecord[]) {
+  for (const record of records) record.free();
+}
+
 export async function loadDb(state: VaultState) {
   if (state.isInitializing) {
     state.errorMsg = state.t("errors.engine_loading");
@@ -154,7 +158,8 @@ export async function loadDb(state: VaultState) {
         timeoutPromise,
       ])) as NookSecretRecord[];
     });
-    state.secrets = rawRecords;
+    freeSecretRecords(rawRecords);
+    await state.loadSecretPage("", 0);
     // Load sync providers before unlocking the UI. Otherwise a fast local
     // edit (especially delete, which used to fire-and-forget fan-out) can run
     // while `syncProviders` is still empty and never push the event remotely.
@@ -167,7 +172,7 @@ export async function loadDb(state: VaultState) {
     state.markVaultUnlocked();
     log.info("vault connected", {
       mode: state.storageMode,
-      secrets: rawRecords.length,
+      secrets: state.secretTotal,
       accessStatus,
     });
     if (state.storageMode === "local") {
@@ -238,7 +243,7 @@ export async function handleAddSecret(
         state.manager!.add_secret(id, type, data),
         "Add secret",
       )) as NookSecretRecord[];
-      state.secrets = rawRecords;
+      freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
     log.info("secret added", { id, type });
@@ -270,7 +275,6 @@ export async function handleBitwardenImport(
     const result = await state.enqueueStorage(() =>
       state.manager!.importBitwardenJson(json, password),
     );
-    state.secrets = result.secrets;
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
     log.info("Bitwarden import completed", {
@@ -307,6 +311,8 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
   // the authoritative wasm op, which can queue behind background sync work
   // (restored below if the delete fails).
   const previousSecrets = state.secrets;
+  const deletedRecord = state.secrets.find((record) => record.id === id);
+  let committed = false;
   state.secrets = state.secrets.filter((record) => record.id !== id);
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
@@ -316,8 +322,10 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
       const rawRecords = (await state.manager!.delete_secret(
         id,
       )) as NookSecretRecord[];
-      state.secrets = rawRecords;
+      freeSecretRecords(rawRecords);
     });
+    committed = true;
+    deletedRecord?.free();
     await state.refreshSecretsFromSession();
     log.info("secret deleted", { id });
     state.showSuccess(state.t("toasts.secret_deleted"));
@@ -327,7 +335,9 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
   } catch (e: unknown) {
-    state.secrets = previousSecrets;
+    if (!committed) {
+      state.secrets = previousSecrets;
+    }
     state.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`;
     throw e;
   } finally {
@@ -361,7 +371,7 @@ export async function handleReplaceSecret(
         type,
         data,
       )) as NookSecretRecord[];
-      state.secrets = rawRecords;
+      freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
     log.info("secret replaced", { oldId, newId, type });

@@ -32,8 +32,9 @@ pub use types::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
     NookGoogleDriveFolder, NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions,
     NookPasswordEntrySummary, NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig,
-    NookSecretFormFields, NookSecurityConflict, NookStorageConnectArgs, NookStorageProviderKind,
-    NookStorageProviderTypeUtil, NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
+    NookSecretFormFields, NookSecretPage, NookSecurityConflict, NookStorageConnectArgs,
+    NookStorageProviderKind, NookStorageProviderTypeUtil, NookVaultAccessReport, NookVaultMember,
+    NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -1294,6 +1295,12 @@ pub fn read_vault_version(yaml: &str) -> u64 {
 #[derive(Clone)]
 pub struct NookSecretRecord {
     record: nook_core::SecretRecord,
+}
+
+impl Drop for NookSecretRecord {
+    fn drop(&mut self) {
+        self.record.zeroize_plaintext();
+    }
 }
 
 #[wasm_bindgen]

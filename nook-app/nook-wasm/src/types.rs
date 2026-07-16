@@ -1114,10 +1114,56 @@ impl NookVaultSyncResult {
         Ok(Self {
             changed,
             access_status: String::new(),
-            secrets: manager.get_records().unwrap_or_default(),
+            secrets: Vec::new(),
             pending_joins: manager.pending_joins().unwrap_or_default(),
             vault_members: manager.vault_members().unwrap_or_default(),
         })
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSecretPage {
+    records: Vec<NookSecretRecord>,
+    total: u32,
+    offset: u32,
+    limit: u32,
+}
+
+impl NookSecretPage {
+    pub(crate) fn from_core(page: nook_core::SecretPage) -> Result<Self, NookError> {
+        Ok(Self {
+            records: records_to_vec(page.records)?,
+            total: u32::try_from(page.total).unwrap_or(u32::MAX),
+            offset: u32::try_from(page.offset).unwrap_or(u32::MAX),
+            limit: u32::try_from(page.limit).unwrap_or(u32::MAX),
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl NookSecretPage {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn limit(&self) -> u32 {
+        self.limit
+    }
+
+    /// Transfer page-owned plaintext records to JavaScript without cloning them.
+    #[wasm_bindgen(js_name = takeRecords)]
+    pub fn take_records(&mut self) -> Vec<NookSecretRecord> {
+        std::mem::take(&mut self.records)
     }
 }
 
@@ -1127,7 +1173,6 @@ pub struct NookBitwardenImportResult {
     imported: u32,
     skipped_unsupported: u32,
     skipped_duplicates: u32,
-    secrets: Vec<NookSecretRecord>,
 }
 
 #[wasm_bindgen]
@@ -1150,22 +1195,15 @@ impl NookBitwardenImportResult {
         self.skipped_duplicates
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn secrets(&self) -> Vec<NookSecretRecord> {
-        self.secrets.clone()
-    }
-
     pub(crate) fn new(
         imported: usize,
         skipped_unsupported: usize,
         skipped_duplicates: usize,
-        secrets: Vec<NookSecretRecord>,
     ) -> Self {
         Self {
             imported: u32::try_from(imported).unwrap_or(u32::MAX),
             skipped_unsupported: u32::try_from(skipped_unsupported).unwrap_or(u32::MAX),
             skipped_duplicates: u32::try_from(skipped_duplicates).unwrap_or(u32::MAX),
-            secrets,
         }
     }
 }

@@ -205,7 +205,8 @@ export async function unlockWithPassword(
         password,
       ),
     )) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
     if (state.deviceProtectionReady) {
       await state.ensureProviderSaved();
       await state.loadProviders();
@@ -489,7 +490,8 @@ export async function connectWithEnrollmentCode(
         unlockPassword,
       ),
     )) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
     await state.ensureProviderSaved();
     await state.loadProviders();
     await state.refreshPasswordEntriesList();

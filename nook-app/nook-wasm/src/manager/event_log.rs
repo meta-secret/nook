@@ -23,7 +23,7 @@ use crate::storage::local_folder::{
 };
 use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
-    VaultOperation, apply_user_records_to_armored_session, build_signed_event,
+    VaultOperation, apply_user_records_to_encrypted_session, build_signed_event,
     classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
     rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
 };
@@ -251,13 +251,7 @@ impl NookVaultManager {
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         self.vault.password_entries = projection.password_entries;
         self.vault.unlock = nook_core::VaultUnlock::Keys;
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        self.vault.database =
-            apply_user_records_to_armored_session(user_records, crypto, &mut self.vault.meta)?;
+        apply_user_records_to_encrypted_session(user_records, &mut self.vault.meta);
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {

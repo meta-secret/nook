@@ -294,6 +294,21 @@ test.describe('local vault', () => {
       { timeout: 30_000 },
     )
     expect(Date.now() - started).toBeLessThan(30_000)
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('secret-row')).toHaveCount(50)
+    await expect(page.getByTestId('secret-pagination')).toBeVisible()
+    await expect(page.getByText('Page 1 of 26')).toBeVisible()
+
+    await page.getByTestId('secret-page-next').click()
+    await expect(page.getByText('Page 2 of 26')).toBeVisible()
+    await expect(page.getByTestId('secret-row')).toHaveCount(50)
+
+    await page.getByTestId('search-secrets').fill('bulk-user-1299')
+    await expect(
+      page.getByTestId('secret-row').filter({ hasText: 'bulk-user-1299' }),
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('secret-pagination')).toHaveCount(0)
   })
 
   test('persists secrets after reload', async ({ page }) => {

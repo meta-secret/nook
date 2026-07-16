@@ -14,7 +14,7 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, an
 | **Local vault cache** | Authoritative copies in `nook_db` as `vault:{store_id}` blobs + registry | Yes |
 | **Sync provider** | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth` | Yes — credentials only |
 | **Device identity** | Passkey-PRF or PIN-wrapped X25519 key in `nook_db.device_identity_wrapped` | Ciphertext persists; plaintext does not |
-| **Unlocked session** | WASM typed `Database` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
+| **Unlocked session** | Vault keys + encrypted records in WASM; one decrypted page in Svelte | **No** — cleared on Lock |
 | **Sentinel genesis draft** | Pre-vault policy and verified participant public keys | Not a vault or unlocked session; persistence policy is a separate decision |
 | **Lock** | End session; return to login gate | N/A |
 
@@ -43,7 +43,8 @@ flowchart TB
 3. A Sentinel genesis draft is not registered as a vault and cannot be selected,
    imported, opened, or synchronized before atomic genesis completes.
 4. A user may **own many vaults** over time (work vs personal, migrated stores, etc.). Each vault is independent: different `store_id`, different unlock material, different provider set.
-5. **Lock** does not delete vaults or providers — it drops both the decrypted vault session and plaintext device identity from memory.
+5. **Lock** does not delete vaults or providers — it drops vault keys, the
+   current decrypted page, and plaintext device identity from memory.
 
 ---
 
@@ -55,8 +56,8 @@ flowchart TB
 
 | Cleared (memory) | Kept (disk) |
 |------------------|-------------|
-| `isAuthenticated`, `secrets[]` | `nook_db` vault blobs + registry |
-| WASM typed `Database` via `resetVaultSession()` | `nook_db.device_identity_wrapped` |
+| `isAuthenticated`, current `secrets[]` page | `nook_db` vault blobs + registry |
+| WASM vault keys + `VaultCrypto` via `resetVaultSession()` | `nook_db.device_identity_wrapped` |
 | WASM device identity via `lockDeviceIdentity()` | WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms |
 | Pending joins / roster UI cache | `nook_auth` sync provider list + tokens |
 | Settings / help panels | Password entries inside encrypted YAML |
@@ -168,6 +169,11 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 ## 6. Security notes
 
 - Lock must clear WASM session state — never rely on hiding UI alone.
+- The unlocked WASM session retains encrypted record payloads, not a plaintext
+  `Database`. List access decrypts at most 50 records into the active page.
+  Search decrypts candidates one at a time because searchable metadata is
+  encrypted; non-matches and Rust/WASM wrapper drops explicitly zeroize
+  plaintext buffers.
 - The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey or PIN authorization again depending on the stored wrapper.
 - Sync provider tokens in `nook_auth` remain after lock — they are storage credentials, not vault keys.
 - Vault authentication/authorization belongs to `nook-auth2`; sync provider replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.

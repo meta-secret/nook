@@ -54,6 +54,13 @@ pub struct LoadedVault {
     pub members_key: crate::SymmetricKey,
 }
 
+/// Unlocked vault material without a hydrated plaintext secret database.
+pub struct UnlockedVault {
+    pub meta: VaultMetaState,
+    pub secrets_key: crate::SymmetricKey,
+    pub members_key: crate::SymmetricKey,
+}
+
 /// Non-secret top-level YAML metadata captured without decrypting records.
 pub struct VaultContentMetadata {
     pub unlock: VaultUnlock,
@@ -99,6 +106,12 @@ pub fn access_status_for_vault_content(
 /// identity is never enough for the default 2-of-N policy; use
 /// [`load_sentinel_vault`] when enough participant identities are available.
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
+    let unlocked = unlock_stored_vault(content, identity)?;
+    hydrate_loaded_vault(unlocked)
+}
+
+/// Resolve vault keys and retain encrypted records without decrypting user items.
+pub fn unlock_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<UnlockedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
     if architecture.vault_type == VaultType::Sentinel {
@@ -107,7 +120,11 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
     let stored_records = deserialize_stored(content, format)?;
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
-    hydrate_loaded_vault(&stored_records, secrets_key, members_key)
+    Ok(UnlockedVault {
+        meta: VaultMetaState::from_stored_records(&stored_records),
+        secrets_key,
+        members_key,
+    })
 }
 
 /// Native/test helper: reconstruct a sentinel vault when enough participant
@@ -128,7 +145,11 @@ pub fn load_sentinel_vault(
     let stored_records = deserialize_stored(content, format)?;
     architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_sentinel_vault_keys(&stored_records, identities)?;
-    hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
+    hydrate_loaded_vault(UnlockedVault {
+        meta: VaultMetaState::from_stored_records(&stored_records),
+        secrets_key: keys.secrets_key,
+        members_key: keys.members_key,
+    })
 }
 
 /// Reconstruct a sentinel vault session from opened-share ceremony contributions.
@@ -144,23 +165,22 @@ pub fn load_sentinel_vault_from_opened(
     let stored_records = deserialize_stored(content, format)?;
     architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_sentinel_vault_keys_from_opened(&stored_records, opened)?;
-    hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
+    hydrate_loaded_vault(UnlockedVault {
+        meta: VaultMetaState::from_stored_records(&stored_records),
+        secrets_key: keys.secrets_key,
+        members_key: keys.members_key,
+    })
 }
 
-fn hydrate_loaded_vault(
-    stored_records: &[StoredSecretRecord],
-    secrets_key: crate::SymmetricKey,
-    members_key: crate::SymmetricKey,
-) -> VaultResult<LoadedVault> {
-    let crypto = VaultCrypto::new(&secrets_key)?;
-    let meta = VaultMetaState::from_stored_records(stored_records);
-    let user_records = user_stored_records(stored_records);
+fn hydrate_loaded_vault(unlocked: UnlockedVault) -> VaultResult<LoadedVault> {
+    let crypto = VaultCrypto::new(&unlocked.secrets_key)?;
+    let user_records = user_stored_records(&unlocked.meta.to_stored_records());
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
     Ok(LoadedVault {
         database: db,
-        meta,
-        secrets_key,
-        members_key,
+        meta: unlocked.meta,
+        secrets_key: unlocked.secrets_key,
+        members_key: unlocked.members_key,
     })
 }
 

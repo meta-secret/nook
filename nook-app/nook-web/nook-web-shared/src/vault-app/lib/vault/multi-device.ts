@@ -50,7 +50,8 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
     const rawRecords = (await state.enqueueStorage(() =>
       state.manager!.approve_join_request(joinDeviceId),
     )) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.refreshSecretsFromSession();
     await state.flushRemoteEventOutboxNow();
     await state.hydrateMultiDeviceState();
     state.pendingJoins = state.pendingJoins.filter(
@@ -79,7 +80,8 @@ export async function denyJoin(state: VaultState, joinDeviceId: string) {
     const rawRecords = (await state.enqueueStorage(() =>
       state.manager!.deny_join_request(joinDeviceId),
     )) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.refreshSecretsFromSession();
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(state.t("toasts.join_denied"));
@@ -137,7 +139,8 @@ export async function revokeDevice(state: VaultState, authId: string) {
       state.showSuccess(state.t("toasts.device_removed"));
       return;
     }
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.refreshSecretsFromSession();
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(state.t("toasts.device_revoked"));
@@ -193,7 +196,8 @@ export async function enrollAndConnect(state: VaultState) {
         membersKey,
       ),
     )) as NookSecretRecord[];
-    state.secrets = rawRecords;
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
     state.markVaultUnlocked();
     state.enrollSecretsKey = "";
     state.enrollMembersKey = "";

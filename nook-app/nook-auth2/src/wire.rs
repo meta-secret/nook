@@ -22,8 +22,8 @@ macro_rules! transparent_str_newtype {
             }
 
             #[must_use]
-            pub fn into_inner(self) -> String {
-                self.0
+            pub fn into_inner(mut self) -> String {
+                std::mem::take(&mut self.0)
             }
 
             #[must_use]
@@ -60,6 +60,18 @@ transparent_str_newtype!(PasswordEntryId);
 transparent_str_newtype!(OpaqueCiphertext);
 transparent_str_newtype!(DecryptedPlaintext);
 transparent_str_newtype!(SigningSeedHex);
+
+impl DecryptedPlaintext {
+    pub fn zeroize_plaintext(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl Drop for DecryptedPlaintext {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DeviceIdentitySecret(String);

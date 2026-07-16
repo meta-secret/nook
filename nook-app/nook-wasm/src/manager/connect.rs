@@ -312,13 +312,11 @@ impl NookVaultManager {
         match self.load_stored_vault_or_sentinel_ceremony(&projection, identity) {
             Ok(loaded) => {
                 let LoadedVault {
-                    database,
                     meta,
                     secrets_key,
                     members_key,
                 } = loaded;
                 self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-                self.vault.database = database;
                 self.vault.meta = meta;
                 self.event_log.enabled = true;
                 self.apply_event_projection_to_session().await?;
@@ -357,7 +355,6 @@ impl NookVaultManager {
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.vault.meta.apply_record(&member);
         }
-        self.vault.database.clear();
         self.vault.last_synced_content.clear();
         Ok(())
     }
@@ -365,7 +362,6 @@ impl NookVaultManager {
     // Initialize an empty database
     pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("INITIALIZE_START".to_owned());
-        self.vault.database.clear();
         self.vault.meta.secrets.clear();
         if self.needs_genesis_persist() {
             let identity = self.device_identity()?;

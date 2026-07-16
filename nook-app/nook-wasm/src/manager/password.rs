@@ -317,11 +317,6 @@ impl NookVaultManager {
                 .await?;
         }
 
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
-        let stored_records = self.stored_records_snapshot();
-        let user_records = nook_core::user_stored_records(&stored_records);
-        self.vault.database =
-            nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)?;
         if event_log_remote {
             let yaml = self.serialize_current_projection_yaml()?;
             save_to_indexed_db(&yaml).await?;

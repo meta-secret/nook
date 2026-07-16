@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
     ArrowLeft,
+    ChevronLeft,
+    ChevronRight,
     Plus,
     Search,
     Globe,
@@ -57,20 +59,24 @@
   let searchPattern = $state('')
   let revealSecrets = $state<Record<string, boolean>>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
+
+  $effect(() => {
+    searchPattern = vault.secretQuery
+  })
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let editItem = $state<NookSecretRecord | undefined>(undefined)
 
-  const filteredItems = $derived.by(() => {
-    const needle = searchPattern.trim()
-    if (!needle) return secrets
-    return secrets.filter((item) => item.matchesSearch(needle))
-  })
+  const filteredItems = $derived(secrets)
 
-  const visibleItemCount = $derived(
-    searchPattern.trim() ? filteredItems.length : secrets.length,
+  const visibleItemCount = $derived(secrets.length)
+  const currentPage = $derived(
+    Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
+  )
+  const pageCount = $derived(
+    Math.max(1, Math.ceil(vault.secretTotal / vault.secretPageSize)),
   )
 
   function getGroupIcon(items: NookSecretRecord[]) {
@@ -131,6 +137,15 @@
       void formSelectedType
       notifyAddMode()
     }
+  })
+
+  $effect(() => {
+    const query = searchPattern.trim()
+    if (query === vault.secretQuery) return
+    const timer = setTimeout(() => {
+      void vault.loadSecretPage(query, 0)
+    }, 200)
+    return () => clearTimeout(timer)
   })
 
   const isSecureNoteEditor = $derived(
@@ -204,10 +219,10 @@
       >
         <div>
           <p class="text-sm font-semibold text-foreground">
-            {searchPattern.trim() && visibleItemCount !== secrets.length
-              ? vault.t('vault.secret_count_filtered', {
+            {vault.secretTotal !== visibleItemCount
+              ? vault.t('vault.secret_count_page', {
                   count: String(visibleItemCount),
-                  total: String(secrets.length),
+                  total: String(vault.secretTotal),
                 })
               : vault.t('vault.secret_count', {
                   count: String(visibleItemCount),
@@ -330,6 +345,53 @@
               </CardContent>
             </Card>
           {/each}
+          {#if vault.secretTotal > vault.secretPageSize}
+            <div
+              class="flex items-center justify-between gap-3 pt-1"
+              data-testid="secret-pagination"
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="secret-page-previous"
+                disabled={vault.secretPageOffset === 0}
+                onclick={() =>
+                  vault.loadSecretPage(
+                    vault.secretQuery,
+                    Math.max(
+                      0,
+                      vault.secretPageOffset - vault.secretPageSize,
+                    ),
+                  )}
+              >
+                <ChevronLeft class="size-3.5" />
+                {vault.t('vault.previous_page')}
+              </Button>
+              <span class="text-xs text-muted-foreground">
+                {vault.t('vault.page_status', {
+                  page: String(currentPage),
+                  total: String(pageCount),
+                })}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="secret-page-next"
+                disabled={
+                  vault.secretPageOffset + vault.secretPageSize >=
+                  vault.secretTotal
+                }
+                onclick={() =>
+                  vault.loadSecretPage(
+                    vault.secretQuery,
+                    vault.secretPageOffset + vault.secretPageSize,
+                  )}
+              >
+                {vault.t('vault.next_page')}
+                <ChevronRight class="size-3.5" />
+              </Button>
+            </div>
+          {/if}
         </div>
       {/if}
     </div>

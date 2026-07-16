@@ -24,7 +24,7 @@ local command
   → validate hash, signature, schema, parents
   → causal DAG
   → deterministic encrypted projection
-  → plaintext WASM session (unlocked only)
+  → encrypted WASM session + page-scoped plaintext (unlocked only)
 ```
 
 ### Source of truth
@@ -33,8 +33,8 @@ The immutable event set is authoritative. These are **derived caches only**:
 
 - encrypted IndexedDB projection;
 - optional immutable checkpoints;
-- plaintext `Database` session;
-- UI arrays.
+- ciphertext-backed unlocked WASM session;
+- page-scoped plaintext UI arrays.
 
 Projection YAML is a browser-local import/export format, not a provider sync
 artifact for event-log vaults.
