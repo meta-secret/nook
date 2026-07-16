@@ -905,7 +905,15 @@ export class VaultState {
       !hasPendingEnrollment &&
       (options?.forceVaultUnlock === true || this.shouldAutoUnlock());
     if (autoUnlock) {
-      await this.loadDb();
+      await this.loadDb(
+        options?.forceVaultUnlock === true
+          ? {
+              allowActiveVerification: true,
+              loadSiteProviders: options.loadSiteProviders,
+              validateExtensionIdentity: true,
+            }
+          : undefined,
+      );
       if (!this.isAuthenticated && this.localProvider) {
         void this.probeLoginUnlockMode();
       }
@@ -2514,8 +2522,8 @@ export class VaultState {
     return providersActions.connectStagedProvider(this);
   }
 
-  async loadDb() {
-    return secretsActions.loadDb(this);
+  async loadDb(options?: secretsActions.LoadDbOptions) {
+    return secretsActions.loadDb(this, options);
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<void> {

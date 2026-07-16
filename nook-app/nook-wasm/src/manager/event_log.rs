@@ -1136,6 +1136,32 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Verify that the in-memory identity handed off by the extension is the
+    /// exact encryption and signing identity in the vault's active grant.
+    #[wasm_bindgen(js_name = validateExtensionDeviceIdentityForHandoff)]
+    pub async fn validate_extension_device_identity_for_handoff(&mut self) -> Result<(), JsError> {
+        super::device_protection::ensure_extension_identity_handoff_target(self.application)?;
+        let identity = self.device_identity()?;
+        let signing_public_key = self.ensure_signing_identity().await?.public_key();
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        let has_active_grant = nook_core::event_graph_has_active_device_access(
+            &graph,
+            identity.device_id(),
+            &identity.public_key(),
+            &signing_public_key,
+        )?;
+        let auth_id = nook_core::dec_auth_id_from_public_key(&identity.public_key())?;
+        if !has_active_grant || !self.vault.meta.auth.contains_key(&auth_id) {
+            return Err(NookError::Decryption(
+                "Extension identity is not an active vault member with matching encryption and signing keys."
+                    .to_owned(),
+            )
+            .into());
+        }
+        Ok(())
+    }
+
     /// Copy a single-vault provider event log into local storage as its own vault.
     ///
     /// This is the safe recovery path when the active local vault and the provider

@@ -14,7 +14,13 @@ import {
 
 const log = createLogger("connect");
 
-export async function loadDb(state: VaultState) {
+export interface LoadDbOptions {
+  allowActiveVerification?: boolean;
+  loadSiteProviders?: boolean;
+  validateExtensionIdentity?: boolean;
+}
+
+export async function loadDb(state: VaultState, options?: LoadDbOptions) {
   if (state.isInitializing) {
     state.errorMsg = state.t("errors.engine_loading");
     return;
@@ -25,7 +31,7 @@ export async function loadDb(state: VaultState) {
     return;
   }
 
-  if (state.isVerifying) {
+  if (state.isVerifying && options?.allowActiveVerification !== true) {
     state.errorMsg = state.t("errors.connection_in_progress");
     return;
   }
@@ -35,7 +41,9 @@ export async function loadDb(state: VaultState) {
   state.isVerifying = true;
   try {
     await state.initDeviceIdentity();
-    await state.ensureOAuthTokensFresh();
+    if (options?.loadSiteProviders !== false) {
+      await state.ensureOAuthTokensFresh();
+    }
 
     if (!state.isAuthenticated && state.loginSetupType === "local-folder") {
       const saved = await state.ensureProviderSaved();
@@ -150,13 +158,20 @@ export async function loadDb(state: VaultState) {
         timeoutPromise,
       ])) as NookSecretRecord[];
     });
+    if (options?.validateExtensionIdentity === true) {
+      await state.enqueueStorage(() =>
+        state.manager!.validateExtensionDeviceIdentityForHandoff(),
+      );
+    }
     state.secrets = rawRecords;
     // Load sync providers before unlocking the UI. Otherwise a fast local
     // edit (especially delete, which used to fire-and-forget fan-out) can run
     // while `syncProviders` is still empty and never push the event remotely.
     state.syncOAuthRemoteRefFromManager();
     await state.ensureProviderSaved();
-    await state.loadProviders();
+    if (options?.loadSiteProviders !== false) {
+      await state.loadProviders();
+    }
     await state.promoteSessionVaultToLocalIfNeeded();
     await state.refreshPasswordEntriesList();
     await state.hydrateMultiDeviceState();

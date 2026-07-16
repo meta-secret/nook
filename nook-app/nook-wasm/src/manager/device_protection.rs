@@ -20,7 +20,7 @@ fn ensure_extension_identity_handoff_source(
     ))
 }
 
-fn ensure_extension_identity_handoff_target(
+pub(in crate::manager) fn ensure_extension_identity_handoff_target(
     application: nook_core::VaultApplication,
 ) -> Result<(), NookError> {
     if application == nook_core::VaultApplication::Simple
