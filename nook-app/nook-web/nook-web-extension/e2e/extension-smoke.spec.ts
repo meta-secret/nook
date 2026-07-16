@@ -526,9 +526,22 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBe(extensionDeviceId)
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
-    await expect(
-      simplePage.getByTestId('extension-connect-approved'),
-    ).toBeVisible()
+    await expect
+      .poll(
+        async () => {
+          if (
+            await simplePage
+              .getByTestId('extension-connect-approved')
+              .isVisible()
+          ) {
+            return 'approved'
+          }
+          const alerts = await simplePage.getByRole('alert').allTextContents()
+          return alerts.at(-1) ?? 'pending'
+        },
+        { timeout: 15_000 },
+      )
+      .toBe('approved')
 
     await expect
       .poll(async () => {
@@ -557,6 +570,23 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
 
     await simplePage.getByRole('button', { name: 'Done' }).click()
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+
+    await simplePage.reload()
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(simplePage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    expect(
+      await simplePage.evaluate(
+        () =>
+          (
+            window as Window & {
+              __nookVault?: { deviceId?: string }
+            }
+          ).__nookVault?.deviceId,
+      ),
+    ).toBe(extensionDeviceId)
+
     await simplePage.getByTestId('header-lock-vault-btn').click()
     await expect(
       simplePage.getByTestId('login-local-unlock-step'),
@@ -586,7 +616,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
             entry.data?.includes(extensionDeviceId ?? '') === true,
         ).length
       })
-      .toBe(2)
+      .toBe(3)
     await attachNookLogsForTest(simplePage, testInfo)
   } finally {
     await context.close()

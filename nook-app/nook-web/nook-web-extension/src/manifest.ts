@@ -31,7 +31,7 @@ export type ExtensionManifest = {
     matches: string[]
     exclude_matches: string[]
     js: string[]
-    run_at: 'document_idle'
+    run_at: 'document_idle' | 'document_start'
   }>
   externally_connectable: {
     matches: string[]
@@ -97,7 +97,7 @@ export function createManifest(
         matches: [simpleVaultMatch],
         exclude_matches: sentinelVaultMatchPatterns(simpleVaultBaseUrl),
         js: ['content/simple-vault-bridge.js'],
-        run_at: 'document_idle',
+        run_at: 'document_start',
       },
     ],
     externally_connectable: {

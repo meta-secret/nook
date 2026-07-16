@@ -7,7 +7,7 @@ export type ExtensionConnectScope =
   | "password-filling"
   | "sync-provider-credentials";
 
-export type ExtensionConnectRequest = {
+type ExtensionIdentityRequestBase = {
   deviceId: string;
   devicePublicKey: string;
   deviceSigningPublicKey: string;
@@ -17,12 +17,32 @@ export type ExtensionConnectRequest = {
   scopes: ExtensionConnectScope[];
 };
 
+export type ExtensionConnectRequest =
+  | (ExtensionIdentityRequestBase & {
+      source: "extension-connect";
+    })
+  | (ExtensionIdentityRequestBase & {
+      source: "paired-vault";
+      vaultStoreId: string;
+    });
+
+export type PairedExtensionIdentityDiscovery =
+  | { status: "unavailable" | "locked" }
+  | { status: "unlocked"; request: ExtensionConnectRequest };
+
 export const isExtensionConnectPath: (pathname: string) => boolean = () =>
   false;
 
 export const extensionConnectRequestFromLocation: (
   location: Location,
 ) => undefined = () => undefined;
+
+export async function discoverPairedExtensionIdentity(
+  _vaultStoreId: string,
+): Promise<PairedExtensionIdentityDiscovery> {
+  void _vaultStoreId;
+  return { status: "unavailable" };
+}
 
 export function scopeLabel(): never {
   throw new Error("errors.validation.sentinel_extension_forbidden");
