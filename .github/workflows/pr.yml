@@ -289,6 +289,22 @@ jobs:
         with:
           retries: 3
           script: |
+            const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+            const withBackoff = async (label, request) => {
+              let lastError
+              for (let attempt = 1; attempt <= 5; attempt += 1) {
+                try {
+                  return await request()
+                } catch (error) {
+                  lastError = error
+                  if (attempt === 5) break
+                  const delaySeconds = attempt * 15
+                  core.warning(`${label} failed on attempt ${attempt}; retrying in ${delaySeconds}s`)
+                  await sleep(delaySeconds * 1000)
+                }
+              }
+              throw lastError
+            }
             const marker = '### Preview deployed'
             const root = process.env.PREVIEW_URL.replace(/\/$/, '')
             const site = process.env.SITE_PREVIEW_URL.replace(/\/$/, '')
@@ -296,27 +312,27 @@ jobs:
             const sentinel = process.env.SENTINEL_PREVIEW_URL.replace(/\/$/, '')
             const extension = process.env.EXTENSION_PREVIEW_URL
             const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/\n- Browser extension: ${extension}`
-            const { data: comments } = await github.rest.issues.listComments({
+            const { data: comments } = await withBackoff('Listing preview comments', () => github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               per_page: 100,
-            })
+            }))
             const existing = comments.find((comment) => comment.body?.startsWith(marker))
             if (existing) {
-              await github.rest.issues.updateComment({
+              await withBackoff('Updating the preview comment', () => github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: existing.id,
                 body,
-              })
+              }))
             } else {
-              await github.rest.issues.createComment({
+              await withBackoff('Creating the preview comment', () => github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
                 body,
-              })
+              }))
             }
 
       - name: Record github-pages deployment
