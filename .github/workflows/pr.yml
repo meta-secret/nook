@@ -44,14 +44,14 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
       - name: Rust format, clippy, tests, and coverage
-        run: task ci:pr:rust CI_ARTIFACT_DIR=ci-artifacts/rust
+        run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
         with:
           name: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci-artifacts/rust
+          path: ${{ runner.temp }}/nook-ci-artifacts/rust
           retention-days: 1
           if-no-files-found: error
 
@@ -65,7 +65,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
       - name: WASM clippy, build, and Node tests
-        run: task ci:pr:wasm CI_ARTIFACT_DIR=ci-artifacts/wasm
+        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/wasm
         env:
           CI: true
           WASM_BUILD_MODE: dev
@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci-artifacts/wasm
+          path: ${{ runner.temp }}/nook-ci-artifacts/wasm
           retention-days: 1
           if-no-files-found: error
 
@@ -95,20 +95,20 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci-artifacts/joined/coverage/nook-core
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/coverage/nook-core
 
       - name: Download WASM handoff
         uses: actions/download-artifact@v8
         with:
           name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci-artifacts/joined
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined
 
       # Native Rust and WASM already ran on independent hosted runners. This runner consumes their
       # small handoffs and owns only web/extension verification, the production image, and previews.
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
-          task ci:pr:web CI_ARTIFACT_DIR=ci-artifacts/joined \
+          task ci:pr:web CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined \
             VITE_BASE=/ \
             VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
             VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
