@@ -115,10 +115,10 @@ Codex Cloud review to begin or finish.
 
 ### 5. Local checks
 
-**Remote PR CI is isolated and remains a full validation gate.** `pr.yml` uses
-the self-hosted `nook` pool, but each `task ci:pr` invocation creates and removes
-its own BuildKit daemon. Compatible Rust compiler objects may still persist in
-the Docker-host-only Redis `sccache`. **Focused local Docker commands can use
+**Remote PR CI is health-bounded and remains a full validation gate.** `pr.yml`
+uses the self-hosted `nook` pool and reuses a dedicated PR BuildKit daemon after
+a hard 60-second probe; a stuck daemon is force-killed and replaced. Compatible
+Docker layers and Redis-backed compiler objects persist locally. **Focused local Docker commands can use
 cached images** and are strongly preferred for checking tests, fixing issues,
 and iterating. Once the iteration is ready for final validation, push first and run
 the local gate immediately while remote CI runs. Remote CI validates the PR in

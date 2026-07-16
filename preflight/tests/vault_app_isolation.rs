@@ -1,6 +1,9 @@
 use std::{
     fs,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    process::Command,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 fn repository_root() -> PathBuf {
@@ -289,38 +292,123 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
-fn pr_uses_a_fresh_buildkit_daemon_and_removes_it_after_the_build() {
+fn pr_reuses_a_health_checked_buildkit_daemon() {
     let root = repository_root();
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
         !pr.contains("docker buildx prune") && !pr.contains("BUILDX_BUILDER"),
-        "PR workflow must not repair or select a shared BuildKit builder"
+        "PR workflow must delegate builder health and selection to the wrapper"
     );
 
     let ci = read(&root, "nook-app/.task/ci.yml");
-    for required in [
-        "task: _buildx:isolated",
-        "vars: { BUILD_TASK: _ci:pr:host }",
-    ] {
+    for required in ["task: _buildx:healthy", "vars: { BUILD_TASK: _ci:pr:host }"] {
         assert!(
             ci.contains(required),
-            "task ci:pr must enter the isolated BuildKit wrapper: {required}"
+            "task ci:pr must enter the health-checked BuildKit wrapper: {required}"
         );
     }
 
-    let wrapper = read(&root, ".github/scripts/with-isolated-buildkit.sh");
+    let wrapper = read(&root, ".github/scripts/with-healthy-buildkit.sh");
     for required in [
+        "NOOK_PR_BUILDX_BUILDER:-nook-pr",
+        "NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60",
+        "buildx inspect \"$builder\" --bootstrap",
+        "buildx build",
+        "--output type=cacheonly",
+        "run_with_timeout \"$health_timeout\"",
+        "rm --force \"$container\"",
+        "volume rm --force \"$state_volume\"",
         "--driver docker-container",
         "--bootstrap",
-        "trap cleanup EXIT",
-        "docker buildx rm --force \"$builder\"",
         "BUILDX_BUILDER=\"$builder\" \"$@\"",
     ] {
         assert!(
             wrapper.contains(required),
-            "isolated BuildKit wrapper missing lifecycle contract: {required}"
+            "health-checked BuildKit wrapper missing lifecycle contract: {required}"
         );
     }
+    assert!(
+        !wrapper.contains("trap cleanup EXIT"),
+        "a healthy PR builder must survive successful invocations"
+    );
+}
+
+#[test]
+fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() {
+    let root = repository_root();
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must follow the Unix epoch")
+        .as_nanos();
+    let temp = std::env::temp_dir().join(format!(
+        "nook-buildkit-health-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&temp).expect("create BuildKit health test directory");
+
+    let fake_docker = temp.join("docker");
+    let docker_log = temp.join("docker.log");
+    let command_marker = temp.join("command-ran");
+    fs::write(
+        &fake_docker,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+if [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
+  exec sleep 30
+fi
+"#,
+    )
+    .expect("write fake Docker command");
+    let mut permissions = fs::metadata(&fake_docker)
+        .expect("stat fake Docker command")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&fake_docker, permissions).expect("make fake Docker executable");
+
+    let started = Instant::now();
+    let output = Command::new("bash")
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
+        .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
+        .env("FAKE_DOCKER_LOG", &docker_log)
+        .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
+        .env("NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS", "1")
+        .env("NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS", "2")
+        .output()
+        .expect("run BuildKit health wrapper");
+    let elapsed = started.elapsed();
+
+    assert!(
+        output.status.success(),
+        "wrapper failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        elapsed < Duration::from_secs(12),
+        "one-second probe timeout took {elapsed:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(&command_marker).expect("wrapped command marker"),
+        "ok"
+    );
+
+    let calls = fs::read_to_string(&docker_log).expect("fake Docker call log");
+    for required in [
+        "buildx inspect nook-pr-timeout-test --bootstrap",
+        "rm --force buildx_buildkit_nook-pr-timeout-test0",
+        "buildx rm --force nook-pr-timeout-test",
+        "volume rm --force buildx_buildkit_nook-pr-timeout-test0_state",
+        "buildx create --name nook-pr-timeout-test --driver docker-container --bootstrap",
+    ] {
+        assert!(
+            calls.contains(required),
+            "missing recovery call: {required}"
+        );
+    }
+
+    fs::remove_dir_all(temp).expect("remove BuildKit health test directory");
 }
 
 #[test]

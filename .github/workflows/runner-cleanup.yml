@@ -29,8 +29,8 @@ jobs:
         run: |
           set -euo pipefail
           # Keep one week of recent BuildKit/image state so main and release can reuse the
-          # expensive Rust and Chromium layers. PR builders remove their own state. The age
-          # filter still bounds long-term disk use.
+          # expensive Rust and Chromium layers. The persistent PR builder is subject to the
+          # same age filter, which bounds long-term disk use without discarding every run.
           # Docker does not support combining the age filter with --volumes.
           # Keep the age-bound cache/image cleanup, then remove unused volumes
           # separately (Docker volume prune has no supported age filter).

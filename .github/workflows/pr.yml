@@ -37,8 +37,8 @@ jobs:
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    # PR validation is developer-critical and runs in an invocation-scoped BuildKit
-    # daemon on the Nook pool. Long-running AI jobs stay on ubuntu-latest.
+    # PR validation is developer-critical and runs on a health-checked persistent
+    # BuildKit daemon on the Nook pool. Long-running AI jobs stay on ubuntu-latest.
     runs-on: nook
     steps:
       - name: Checkout

@@ -300,9 +300,10 @@ as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
-**Remote PR CI uses isolated BuildKit state.** The PR workflow runs on the
-self-hosted `nook` pool, but every `task ci:pr` creates a fresh BuildKit daemon
-and removes it after the complete preflight + app solve. `task ci:pr` runs
+**Remote PR CI uses a health-checked persistent BuildKit daemon.** The PR
+workflow runs on the self-hosted `nook` pool. Before every `task ci:pr`, a
+60-second bounded probe reuses the dedicated PR builder when healthy or
+force-kills and replaces it when missing, failed, or stuck. `task ci:pr` runs
 the standalone Rust **repository preflight** before app setup, then one parallel
 Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
 no browser e2e, Cloudflare preview,
@@ -323,8 +324,8 @@ service) are never requested, polled, or awaited. Existing actionable comments
 must still be addressed, but no external status may delay merge or handoff.
 
 **Delivery jobs keep host services local.** PR verification, main, and release use the
-persistent self-hosted `nook` runner. PR verification deliberately discards its
-BuildKit layers with its invocation-scoped builder; non-PR build commands may
+persistent self-hosted `nook` runner. PR verification reuses a dedicated local
+BuildKit builder behind the bounded health check; non-PR build commands may
 reuse the active Docker-context builder.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
