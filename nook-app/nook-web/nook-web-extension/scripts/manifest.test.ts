@@ -52,6 +52,11 @@ describe('extension origin isolation', () => {
             !exclude_matches.includes(simpleMatch),
         ),
       ).toBe(true)
+      expect(
+        manifest.content_scripts.find(({ matches }) =>
+          matches.includes(simpleMatch),
+        )?.run_at,
+      ).toBe('document_start')
     })
   }
 

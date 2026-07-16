@@ -56,10 +56,54 @@ export type ExtensionIdentityHandoffRequestMessage = {
   }
 }
 
+export type ExtensionPairedVaultIdentityDiscoveryMessage = {
+  type: 'nook:extension-paired-vault-identity-discovery'
+  payload: {
+    requestId: string
+    vaultStoreId: string
+  }
+}
+
+type ExtensionPairedVaultIdentityStatusBase = {
+  requestId: string
+  vaultStoreId: string
+}
+
+export type ExtensionPairedVaultIdentityStatusMessage =
+  | {
+      type: 'nook:extension-paired-vault-identity-status'
+      payload: ExtensionPairedVaultIdentityStatusBase & {
+        status: 'unavailable' | 'locked'
+      }
+    }
+  | {
+      type: 'nook:extension-paired-vault-identity-status'
+      payload: ExtensionPairedVaultIdentityStatusBase & {
+        status: 'unlocked'
+        extensionRuntimeId: string
+        deviceId: string
+        devicePublicKey: string
+        deviceSigningPublicKey: string
+        deviceLabel: string
+        nonce: string
+        scopes: string[]
+      }
+    }
+
+export type ExtensionPairedVaultIdentityHandoffRequestMessage = {
+  type: 'nook:extension-paired-vault-identity-handoff-request'
+  payload: ExtensionIdentityHandoffRequestMessage['payload'] & {
+    vaultStoreId: string
+  }
+}
+
 export type RuntimeMessage =
   | OpenSimpleVaultMessage
   | BeginExtensionPairingMessage
   | ExtensionIdentityHandoffRequestMessage
+  | ExtensionPairedVaultIdentityDiscoveryMessage
+  | ExtensionPairedVaultIdentityStatusMessage
+  | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
 
@@ -161,6 +205,96 @@ export function isExtensionIdentityHandoffRequestMessage(
   }
   const payload = (message as { payload: Record<string, unknown> }).payload
   return (
+    typeof payload.recipientPublicKey === 'string' &&
+    payload.recipientPublicKey.length > 0 &&
+    typeof payload.nonce === 'string' &&
+    payload.nonce.length > 0 &&
+    typeof payload.expectedDeviceId === 'string' &&
+    payload.expectedDeviceId.length > 0 &&
+    typeof payload.expectedDevicePublicKey === 'string' &&
+    payload.expectedDevicePublicKey.length > 0 &&
+    typeof payload.expectedDeviceSigningPublicKey === 'string' &&
+    payload.expectedDeviceSigningPublicKey.length > 0
+  )
+}
+
+export function isExtensionPairedVaultIdentityDiscoveryMessage(
+  message: unknown,
+): message is ExtensionPairedVaultIdentityDiscoveryMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-paired-vault-identity-discovery' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  return (
+    typeof payload.requestId === 'string' &&
+    payload.requestId.length > 0 &&
+    typeof payload.vaultStoreId === 'string' &&
+    payload.vaultStoreId.length > 0
+  )
+}
+
+export function isExtensionPairedVaultIdentityStatusMessage(
+  message: unknown,
+): message is ExtensionPairedVaultIdentityStatusMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-paired-vault-identity-status' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  if (
+    typeof payload.requestId !== 'string' ||
+    payload.requestId.length === 0 ||
+    typeof payload.vaultStoreId !== 'string' ||
+    payload.vaultStoreId.length === 0
+  ) {
+    return false
+  }
+  if (payload.status === 'unavailable' || payload.status === 'locked') {
+    return true
+  }
+  return (
+    payload.status === 'unlocked' &&
+    typeof payload.extensionRuntimeId === 'string' &&
+    payload.extensionRuntimeId.length > 0 &&
+    typeof payload.deviceId === 'string' &&
+    payload.deviceId.length > 0 &&
+    typeof payload.devicePublicKey === 'string' &&
+    payload.devicePublicKey.length > 0 &&
+    typeof payload.deviceSigningPublicKey === 'string' &&
+    payload.deviceSigningPublicKey.length > 0 &&
+    typeof payload.deviceLabel === 'string' &&
+    payload.deviceLabel.length > 0 &&
+    typeof payload.nonce === 'string' &&
+    payload.nonce.length > 0 &&
+    Array.isArray(payload.scopes) &&
+    payload.scopes.every((scope) => typeof scope === 'string')
+  )
+}
+
+export function isExtensionPairedVaultIdentityHandoffRequestMessage(
+  message: unknown,
+): message is ExtensionPairedVaultIdentityHandoffRequestMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-paired-vault-identity-handoff-request' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  return (
+    typeof payload.vaultStoreId === 'string' &&
+    payload.vaultStoreId.length > 0 &&
     typeof payload.recipientPublicKey === 'string' &&
     payload.recipientPublicKey.length > 0 &&
     typeof payload.nonce === 'string' &&

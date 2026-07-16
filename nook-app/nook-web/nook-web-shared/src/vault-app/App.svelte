@@ -36,6 +36,7 @@
   import { isAppLogsPath } from '$lib/app-logs-api'
   import {
     adoptExtensionIdentity,
+    discoverPairedExtensionIdentity,
     extensionConnectRequestFromLocation,
     isExtensionConnectPath,
     type ExtensionConnectRequest,
@@ -95,14 +96,14 @@
     initialExtensionConnectRequest,
   )
   // Keep the public extension handoff request in memory after leaving the
-  // consent route. An extension-backed vault has no website passkey record,
-  // so an explicit vault lock must re-adopt the unlocked extension identity.
-  // Reloading the page intentionally clears this capability; the user can
-  // reopen Nook from the extension to establish a new handoff session.
+  // consent route. On reload, the site asks the installed extension for a new
+  // vault-bound handoff only when that extension already holds an approved
+  // grant for the active local vault.
   let extensionIdentityRequest = $state<ExtensionConnectRequest | undefined>(
     initialExtensionConnectRequest,
   )
   let extensionBackedVaultSession = $state(false)
+  let extensionDiscoveryStoreId = $state('')
   let sentinelInvitationRequest = $state(
     typeof window !== 'undefined' && APP_KIND !== 'simple'
       ? consumeSentinelGenesisRequestFromLocation()
@@ -274,15 +275,24 @@
   })
 
   async function handleUnlock() {
-    if (vault.loginSetupType) {
-      await vault.connectStagedProvider()
+    const connectRequest = extensionIdentityRequest
+    if (
+      connectRequest?.source === 'paired-vault' &&
+      vault.localVaultPresent
+    ) {
+      const adopted = await vault.authorizeWithExternalDeviceIdentity(
+        (manager) => adoptExtensionIdentity(manager, connectRequest),
+      )
+      if (!adopted) return
+      extensionBackedVaultSession = true
+      await vault.loadDb()
       return
     }
     if (existingVaultNeedsDeviceUnlock) {
-      const connectRequest = extensionIdentityRequest
       const extensionIdentityCanUnlock =
         connectRequest &&
-        (extensionBackedVaultSession ||
+        (connectRequest.source === 'paired-vault' ||
+          extensionBackedVaultSession ||
           vault.deviceProtectionStatus === 'missing')
       if (extensionIdentityCanUnlock) {
         const adopted = await vault.authorizeWithExternalDeviceIdentity(
@@ -294,6 +304,10 @@
         return
       }
       pendingExistingVaultUnlock = true
+      return
+    }
+    if (vault.loginSetupType) {
+      await vault.connectStagedProvider()
       return
     }
     await vault.loadDb()
@@ -362,6 +376,21 @@
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
   )
+
+  async function resumePairedExtensionVault(storeId: string) {
+    extensionDiscoveryStoreId = storeId
+    const discovery = await discoverPairedExtensionIdentity(storeId)
+    if (
+      vault.isAuthenticated ||
+      extensionConnectRoute ||
+      vault.activeVaultStoreId !== storeId
+    ) {
+      return
+    }
+    if (discovery.status !== 'unlocked') return
+    extensionIdentityRequest = discovery.request
+    await handleUnlock()
+  }
 
   async function handleCreateDeviceVault(label: string) {
     const connectRequest = extensionIdentityRequest
@@ -445,6 +474,24 @@
       return
     }
     void vault.startSentinelGenesis(pending.args)
+  })
+
+  $effect(() => {
+    const storeId = vault.activeVaultStoreId?.trim() ?? ''
+    if (
+      !SUPPORTS_EXTENSION ||
+      extensionConnectRoute ||
+      vault.isAuthenticated ||
+      vault.isInitializing ||
+      vault.isVerifying ||
+      !vault.providersLoaded ||
+      !vault.localVaultPresent ||
+      !storeId ||
+      extensionDiscoveryStoreId === storeId
+    ) {
+      return
+    }
+    void resumePairedExtensionVault(storeId)
   })
 
   $effect(() => {
@@ -664,7 +711,8 @@
                 deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
                 usesExtensionDeviceIdentity={extensionIdentityRequest !==
                   undefined &&
-                  (!requiresPasskeyFirst ||
+                  (extensionIdentityRequest.source === 'paired-vault' ||
+                    !requiresPasskeyFirst ||
                     extensionBackedVaultSession ||
                     vault.deviceProtectionStatus === 'missing')}
                 onUnlock={handleUnlock}

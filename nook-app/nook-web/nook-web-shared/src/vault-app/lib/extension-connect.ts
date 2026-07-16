@@ -1,6 +1,11 @@
 import { stripBasePath } from "$lib/routes";
 import type { NookVaultManager } from "$app-wasm";
-import type { ExtensionIdentityHandoffRequestMessage } from "$web-shared/extension/runtime-messages";
+import {
+  isExtensionPairedVaultIdentityStatusMessage,
+  type ExtensionIdentityHandoffRequestMessage,
+  type ExtensionPairedVaultIdentityDiscoveryMessage,
+  type ExtensionPairedVaultIdentityHandoffRequestMessage,
+} from "$web-shared/extension/runtime-messages";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -9,7 +14,7 @@ export type ExtensionConnectScope =
   | "password-filling"
   | "sync-provider-credentials";
 
-export type ExtensionConnectRequest = {
+type ExtensionIdentityRequestBase = {
   deviceId: string;
   devicePublicKey: string;
   deviceSigningPublicKey: string;
@@ -19,11 +24,25 @@ export type ExtensionConnectRequest = {
   scopes: ExtensionConnectScope[];
 };
 
+export type ExtensionConnectRequest =
+  | (ExtensionIdentityRequestBase & {
+      source: "extension-connect";
+    })
+  | (ExtensionIdentityRequestBase & {
+      source: "paired-vault";
+      vaultStoreId: string;
+    });
+
+export type PairedExtensionIdentityDiscovery =
+  | { status: "unavailable" | "locked" }
+  | { status: "unlocked"; request: ExtensionConnectRequest };
+
 const validScopes = new Set<ExtensionConnectScope>([
   "vault-access",
   "password-filling",
   "sync-provider-credentials",
 ]);
+const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
 
 export function isExtensionConnectPath(pathname: string): boolean {
   const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
@@ -70,6 +89,7 @@ export function extensionConnectRequestFromLocation(
   }
 
   return {
+    source: "extension-connect",
     deviceId,
     devicePublicKey,
     deviceSigningPublicKey,
@@ -78,6 +98,105 @@ export function extensionConnectRequestFromLocation(
     nonce,
     scopes,
   };
+}
+
+function requestId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
+function discoverPairedExtensionIdentityOnce(
+  vaultStoreId: string,
+): Promise<PairedExtensionIdentityDiscovery | undefined> {
+  const extensionRuntimeId = document.documentElement
+    .getAttribute(extensionRuntimeIdAttribute)
+    ?.trim();
+  if (!extensionRuntimeId) return Promise.resolve(undefined);
+
+  const discoveryRequestId = requestId();
+  const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
+    type: "nook:extension-paired-vault-identity-discovery",
+    payload: {
+      requestId: discoveryRequestId,
+      vaultStoreId,
+    },
+  };
+
+  return new Promise((resolve) => {
+    const runtime = (
+      globalThis as typeof globalThis & {
+        chrome?: {
+          runtime?: {
+            sendMessage?: (
+              extensionId: string,
+              message: unknown,
+              callback: (response?: unknown) => void,
+            ) => void;
+            lastError?: { message?: string };
+          };
+        };
+      }
+    ).chrome?.runtime;
+    if (!runtime?.sendMessage) {
+      resolve(undefined);
+      return;
+    }
+
+    runtime.sendMessage(extensionRuntimeId, message, (statusMessage) => {
+      if (runtime.lastError?.message) {
+        resolve(undefined);
+        return;
+      }
+      if (
+        !isExtensionPairedVaultIdentityStatusMessage(statusMessage) ||
+        statusMessage.payload.requestId !== discoveryRequestId ||
+        statusMessage.payload.vaultStoreId !== vaultStoreId
+      ) {
+        resolve(undefined);
+        return;
+      }
+      if (statusMessage.payload.status !== "unlocked") {
+        resolve({ status: statusMessage.payload.status });
+        return;
+      }
+      const scopes = statusMessage.payload.scopes.filter(
+        (scope): scope is ExtensionConnectScope =>
+          validScopes.has(scope as ExtensionConnectScope),
+      );
+      if (scopes.length === 0) {
+        resolve({ status: "unavailable" });
+        return;
+      }
+      resolve({
+        status: "unlocked",
+        request: {
+          source: "paired-vault",
+          vaultStoreId,
+          deviceId: statusMessage.payload.deviceId,
+          devicePublicKey: statusMessage.payload.devicePublicKey,
+          deviceSigningPublicKey: statusMessage.payload.deviceSigningPublicKey,
+          extensionRuntimeId: statusMessage.payload.extensionRuntimeId,
+          deviceLabel: statusMessage.payload.deviceLabel,
+          nonce: statusMessage.payload.nonce,
+          scopes,
+        },
+      });
+    });
+  });
+}
+
+export async function discoverPairedExtensionIdentity(
+  vaultStoreId: string,
+): Promise<PairedExtensionIdentityDiscovery> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await discoverPairedExtensionIdentityOnce(vaultStoreId);
+    if (result) return result;
+  }
+  return { status: "unavailable" };
 }
 
 export function scopeLabel(scope: ExtensionConnectScope): string {
@@ -95,7 +214,9 @@ type ExtensionIdentityHandoffResponse = {
 
 function requestIdentityEnvelope(
   request: ExtensionConnectRequest,
-  message: ExtensionIdentityHandoffRequestMessage,
+  message:
+    | ExtensionIdentityHandoffRequestMessage
+    | ExtensionPairedVaultIdentityHandoffRequestMessage,
 ): Promise<{ envelope: string; nextNonce: string }> {
   const runtime = (
     globalThis as typeof globalThis & {
@@ -156,16 +277,28 @@ export async function adoptExtensionIdentity(
 ): Promise<void> {
   const nonce = request.nonce;
   const recipientPublicKey = manager.beginExtensionIdentityHandoff();
-  const message: ExtensionIdentityHandoffRequestMessage = {
-    type: "nook:extension-identity-handoff-request",
-    payload: {
-      recipientPublicKey,
-      nonce,
-      expectedDeviceId: request.deviceId,
-      expectedDevicePublicKey: request.devicePublicKey,
-      expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
-    },
+  const handoffPayload = {
+    recipientPublicKey,
+    nonce,
+    expectedDeviceId: request.deviceId,
+    expectedDevicePublicKey: request.devicePublicKey,
+    expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
   };
+  const message:
+    | ExtensionIdentityHandoffRequestMessage
+    | ExtensionPairedVaultIdentityHandoffRequestMessage =
+    request.source === "paired-vault"
+      ? {
+          type: "nook:extension-paired-vault-identity-handoff-request",
+          payload: {
+            ...handoffPayload,
+            vaultStoreId: request.vaultStoreId,
+          },
+        }
+      : {
+          type: "nook:extension-identity-handoff-request",
+          payload: handoffPayload,
+        };
   const { envelope, nextNonce } = await requestIdentityEnvelope(
     request,
     message,

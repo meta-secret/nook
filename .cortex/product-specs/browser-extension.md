@@ -64,6 +64,40 @@ vault picker, unlock, secrets, settings, or device administration.
 The website origin is a transport and UI boundary, not cryptographic authority
 by itself. An unlocked, authorized vault device creates the approval event.
 
+### Primary Identity And Authentication UX
+
+The extension identity is the default device identity whenever the approved,
+unlocked extension is available. Opening Simple Vault from the extension,
+refreshing the page, locking and reopening the vault, or navigating within the
+site must not prompt for a second website passkey. The site requests a fresh
+encrypted handoff from the extension and uses that identity only in WASM memory.
+
+This rule applies to both supported starting points:
+
+- **Extension-first vault:** the unlocked extension identity creates the vault.
+  The vault is encrypted for the extension device, and the site continues to
+  request a fresh extension handoff after a refresh or explicit lock.
+- **Existing website vault:** the unlocked website device approves the
+  extension as another authorized device. Rust adds a vault-key envelope for
+  the extension public key. After approval, the extension identity becomes the
+  preferred local unlock path while the website device remains a fallback.
+
+The extension and website are different WebAuthn relying-party origins. They
+cannot share one passkey credential or silently create an independently usable
+website passkey from an extension ceremony. Therefore:
+
+- normal extension-first setup performs only the extension passkey ceremony;
+- a separately usable website fallback exists only when the website already has
+  a protected device or the user explicitly enrolls one later;
+- enrolling that fallback requires one website-origin passkey or PIN ceremony;
+- generating website keys without independently protecting their private
+  material does not count as a backup and must not be presented as one.
+
+This avoids double authentication in the primary flow without making a false
+recovery promise. If the extension is deleted before a website fallback or
+another recovery method exists, the site cannot reconstruct the extension
+private identity.
+
 ## Toolbar Behavior
 
 - The toolbar always opens the extension-owned launcher.
@@ -171,6 +205,14 @@ that identity is locked, but decrypting, matching, or filling requires an
 extension-origin unlock ceremony. The passkey is bound to the stable extension
 runtime id, not to the Simple Vault website origin.
 
+The extension database does not need the website private key. Its canonical
+encrypted event log contains the vault-key envelope addressed to the extension
+public key. The extension passkey unlocks the extension age identity, and
+Rust/WASM uses that identity to open the envelope and decrypt the local
+projection. `chrome.storage.local` may retain only non-secret grant and status
+metadata; the wrapped private identity and encrypted vault projection remain in
+extension-origin IndexedDB.
+
 The `/extension-connect` creation path may temporarily use the unlocked
 extension identity. The website first creates a one-time age recipient whose
 private key remains inside its WASM manager. The extension encrypts its age
@@ -179,12 +221,26 @@ boundary decrypts the envelope, validates the route nonce and advertised
 device id/public keys, and keeps the adopted material only in memory. Raw
 private material never appears in URL parameters, TypeScript values,
 `chrome.storage.local`, website IndexedDB, or logs. Reloading the website
-requires a new handoff from an unlocked extension. The extension records each
-issued nonce and public device tuple in extension-only `chrome.storage.session`,
-consumes it before sealing, and returns a freshly issued nonce for a later
-same-page lock/unlock. Only the service worker may invoke the offscreen
-secret-sealing command. A failed website adoption resets both device identity
-and event-log signing state before another authorization attempt.
+requests a new handoff from the unlocked extension, including when the user
+arrived at the normal vault route rather than `/extension-connect`. The website
+discovers the pairing by the local vault store id; the extension returns a
+handoff only when it holds a current grant for that exact vault. The extension
+records each issued nonce, vault store id, and public device tuple in
+extension-only `chrome.storage.session`, consumes it before sealing, and returns
+a freshly issued nonce for a later lock/unlock. Only the service worker may
+invoke the offscreen secret-sealing command. A failed website adoption resets
+both device identity and event-log signing state before another authorization
+attempt.
+
+When both devices exist, unlock selection is deterministic:
+
+1. use the approved, unlocked extension identity by default;
+2. if the extension is locked, the user may unlock it from the toolbar and
+   retry; the website must not attempt an extension-origin WebAuthn ceremony;
+3. if the extension is locked, unavailable, revoked, or cannot unlock, offer
+   the website's protected device as the fallback when one exists;
+4. if no independent website device or recovery method exists, explain that the
+   extension is required rather than showing an unrelated new-passkey setup.
 
 For the same reason, the launcher does not yet show an active-vault selector.
 Once #244 supplies multiple usable encrypted extension projections, the

@@ -117,7 +117,8 @@ item, add a corrected copy and delete the old one.
 
 - Unlock with this browser's passkey/PIN-protected device keys, or use a backup
   password to open the encrypted local vault directly. A vault created with the
-  extension identity is unlocked by opening Nook from the unlocked extension;
+  extension identity automatically prefers that approved identity whenever the
+  extension is unlocked, including after a page refresh or explicit vault lock;
   the site receives a fresh encrypted, memory-only key handoff.
 - A backup-password session leaves the protected device identity and saved sync
   provider credentials locked. Authorize with the passkey or PIN when you want

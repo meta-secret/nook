@@ -7,6 +7,9 @@ import {
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
+  isExtensionPairedVaultIdentityDiscoveryMessage,
+  isExtensionPairedVaultIdentityHandoffRequestMessage,
+  isExtensionPairedVaultIdentityStatusMessage,
   isExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -35,6 +38,7 @@ describe('extension connect route parsing', () => {
     )
 
     expect(request).toEqual({
+      source: 'extension-connect',
       deviceId: 'device-1',
       devicePublicKey: 'enc-pk',
       deviceSigningPublicKey: 'sign-pk',
@@ -257,5 +261,47 @@ describe('extension-owned pairing start', () => {
         payload: { ...message.payload, nonce: '' },
       }),
     ).toBe(false)
+  })
+
+  test('validates paired-vault discovery and nonce-bound handoff messages', () => {
+    expect(
+      isExtensionPairedVaultIdentityDiscoveryMessage({
+        type: 'nook:extension-paired-vault-identity-discovery',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-1',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityStatusMessage({
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-1',
+          status: 'unlocked',
+          extensionRuntimeId: 'extension-1',
+          deviceId: 'device-1',
+          devicePublicKey: 'age1device',
+          deviceSigningPublicKey: 'signing-key',
+          deviceLabel: 'Nook Extension',
+          nonce: 'nonce-1',
+          scopes: ['vault-access'],
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityHandoffRequestMessage({
+        type: 'nook:extension-paired-vault-identity-handoff-request',
+        payload: {
+          vaultStoreId: 'store-1',
+          recipientPublicKey: 'age1recipient',
+          nonce: 'nonce-1',
+          expectedDeviceId: 'device-1',
+          expectedDevicePublicKey: 'age1device',
+          expectedDeviceSigningPublicKey: 'signing-key',
+        },
+      }),
+    ).toBe(true)
   })
 })

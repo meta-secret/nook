@@ -4,12 +4,17 @@ import {
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
+  isExtensionPairedVaultIdentityDiscoveryMessage,
+  isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairingApprovedMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type {
   BeginExtensionPairingMessage,
   ExtensionIdentityHandoffRequestMessage,
+  ExtensionPairedVaultIdentityDiscoveryMessage,
+  ExtensionPairedVaultIdentityHandoffRequestMessage,
+  ExtensionPairedVaultIdentityStatusMessage,
   ExtensionPairingApprovedMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -27,11 +32,20 @@ import {
 
 const extensionSessionDocument = 'offscreen/session.html'
 let extensionSessionDocumentCreation: Promise<void> | undefined
-type PendingIdentityHandoff = {
-  deviceId: string
-  devicePublicKey: string
-  deviceSigningPublicKey: string
-}
+type PendingIdentityHandoff =
+  | {
+      kind: 'pairing'
+      deviceId: string
+      devicePublicKey: string
+      deviceSigningPublicKey: string
+    }
+  | {
+      kind: 'paired-vault'
+      vaultStoreId: string
+      deviceId: string
+      devicePublicKey: string
+      deviceSigningPublicKey: string
+    }
 const pendingIdentityHandoffConsumptions = new Set<string>()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
@@ -107,7 +121,12 @@ function isPendingIdentityHandoff(
     'devicePublicKey' in value &&
     typeof value.devicePublicKey === 'string' &&
     'deviceSigningPublicKey' in value &&
-    typeof value.deviceSigningPublicKey === 'string'
+    typeof value.deviceSigningPublicKey === 'string' &&
+    'kind' in value &&
+    (value.kind === 'pairing' ||
+      (value.kind === 'paired-vault' &&
+        'vaultStoreId' in value &&
+        typeof value.vaultStoreId === 'string'))
   )
 }
 
@@ -155,6 +174,7 @@ async function openExtensionPairing(
 ): Promise<void> {
   const nonce = randomNonce()
   await issueIdentityHandoff(nonce, {
+    kind: 'pairing',
     deviceId: device.deviceId,
     devicePublicKey: device.devicePublicKey,
     deviceSigningPublicKey: device.deviceSigningPublicKey,
@@ -193,7 +213,9 @@ function sendSessionMessage(message: unknown): Promise<unknown> {
 }
 
 async function createIdentityHandoff(
-  message: ExtensionIdentityHandoffRequestMessage,
+  message:
+    | ExtensionIdentityHandoffRequestMessage
+    | ExtensionPairedVaultIdentityHandoffRequestMessage,
 ): Promise<{
   ok: boolean
   envelope?: string
@@ -211,6 +233,12 @@ async function createIdentityHandoff(
     const pending = stored[key]
     if (
       !isPendingIdentityHandoff(pending) ||
+      (pending.kind === 'pairing' &&
+        message.type !== 'nook:extension-identity-handoff-request') ||
+      (pending.kind === 'paired-vault' &&
+        (message.type !==
+          'nook:extension-paired-vault-identity-handoff-request' ||
+          pending.vaultStoreId !== message.payload.vaultStoreId)) ||
       pending.deviceId !== message.payload.expectedDeviceId ||
       pending.devicePublicKey !== message.payload.expectedDevicePublicKey ||
       pending.deviceSigningPublicKey !==
@@ -241,6 +269,114 @@ async function createIdentityHandoff(
     return { ok: false, reason: 'extension-identity-handoff-failed' }
   } finally {
     pendingIdentityHandoffConsumptions.delete(nonce)
+  }
+}
+
+type ExtensionSessionStatusResponse = {
+  ok?: unknown
+  status?: unknown
+  device?: unknown
+}
+
+type UnlockedSessionDevice = {
+  deviceId: string
+  devicePublicKey: string
+  deviceSigningPublicKey: string
+}
+
+function unlockedSessionDevice(
+  response: unknown,
+): UnlockedSessionDevice | undefined {
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('ok' in response) ||
+    response.ok !== true ||
+    !('status' in response) ||
+    response.status !== 'unlocked' ||
+    !('device' in response) ||
+    !response.device ||
+    typeof response.device !== 'object'
+  ) {
+    return undefined
+  }
+  const device = response.device
+  if (
+    !('deviceId' in device) ||
+    typeof device.deviceId !== 'string' ||
+    !('devicePublicKey' in device) ||
+    typeof device.devicePublicKey !== 'string' ||
+    !('deviceSigningPublicKey' in device) ||
+    typeof device.deviceSigningPublicKey !== 'string'
+  ) {
+    return undefined
+  }
+  return {
+    deviceId: device.deviceId,
+    devicePublicKey: device.devicePublicKey,
+    deviceSigningPublicKey: device.deviceSigningPublicKey,
+  }
+}
+
+async function discoverPairedVaultIdentity(
+  message: ExtensionPairedVaultIdentityDiscoveryMessage,
+): Promise<ExtensionPairedVaultIdentityStatusMessage> {
+  const { requestId, vaultStoreId } = message.payload
+  const unavailable = {
+    type: 'nook:extension-paired-vault-identity-status',
+    payload: { requestId, vaultStoreId, status: 'unavailable' },
+  } satisfies ExtensionPairedVaultIdentityStatusMessage
+  try {
+    const key = pairingGrantStorageKey(vaultStoreId)
+    const stored = await getLocalStorage(key)
+    const grant = stored[key]
+    if (!isStoredExtensionPairingGrant(grant)) return unavailable
+
+    await ensureExtensionSessionDocument()
+    const statusResponse = (await sendSessionMessage({
+      type: 'nook:extension-session-status',
+    })) as ExtensionSessionStatusResponse
+    if (statusResponse.status !== 'unlocked') {
+      return {
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: { requestId, vaultStoreId, status: 'locked' },
+      }
+    }
+    const sessionDevice = unlockedSessionDevice(statusResponse)
+    if (
+      !sessionDevice ||
+      sessionDevice.deviceId !== grant.deviceId ||
+      sessionDevice.devicePublicKey !== grant.devicePublicKey ||
+      sessionDevice.deviceSigningPublicKey !== grant.deviceSigningPublicKey
+    ) {
+      return unavailable
+    }
+
+    const nonce = randomNonce()
+    await issueIdentityHandoff(nonce, {
+      kind: 'paired-vault',
+      vaultStoreId,
+      deviceId: grant.deviceId,
+      devicePublicKey: grant.devicePublicKey,
+      deviceSigningPublicKey: grant.deviceSigningPublicKey,
+    })
+    return {
+      type: 'nook:extension-paired-vault-identity-status',
+      payload: {
+        requestId,
+        vaultStoreId,
+        status: 'unlocked',
+        extensionRuntimeId: chrome.runtime.id,
+        deviceId: grant.deviceId,
+        devicePublicKey: grant.devicePublicKey,
+        deviceSigningPublicKey: grant.deviceSigningPublicKey,
+        deviceLabel: grant.deviceLabel,
+        nonce,
+        scopes: grant.scopes,
+      },
+    }
+  } catch {
+    return unavailable
   }
 }
 
@@ -423,7 +559,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
+    if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void discoverPairedVaultIdentity(message).then(sendResponse)
+      return true
+    }
+
     if (isExtensionIdentityHandoffRequestMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void createIdentityHandoff(message).then(sendResponse)
+      return true
+    }
+
+    if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
