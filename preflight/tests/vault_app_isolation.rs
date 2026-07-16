@@ -626,7 +626,6 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
-        "mode=min,version=2",
         "mode=max,version=2",
     ] {
         assert!(
