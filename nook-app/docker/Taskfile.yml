@@ -10,6 +10,7 @@ tasks:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
+      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
@@ -26,6 +27,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -117,6 +119,7 @@ tasks:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
+      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
       VITE_BASE: '{{.VITE_BASE}}'
       NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
       NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
@@ -133,6 +136,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"

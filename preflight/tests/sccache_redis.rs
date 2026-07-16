@@ -61,7 +61,7 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
         docker_tasks
             .matches("-e SCCACHE_REDIS_HOST_IP=\"{{.SCCACHE_REDIS_HOST_IP}}\"")
             .count()
-            >= 5,
+            >= 7,
         "runtime containers must inherit the resolved address without needing Docker"
     );
 
