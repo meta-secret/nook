@@ -50,10 +50,11 @@ jobs:
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
         with:
-          name: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
+          name: pr-rust-${{ github.run_id }}
           path: ${{ runner.temp }}/nook-ci-artifacts/rust
           retention-days: 1
           if-no-files-found: error
+          overwrite: true
 
   verify:
     name: Verify and preview
@@ -96,10 +97,10 @@ jobs:
       - name: Download Rust coverage handoff
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}
+          ARTIFACT_NAME: pr-rust-${{ github.run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 360); do
             if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
               --paginate \
               --jq '.artifacts[].name' \
@@ -112,10 +113,22 @@ jobs:
               test -s coverage/current/summary.json
               exit 0
             fi
-            echo "Waiting for native coverage artifact (attempt $attempt/36)"
+
+            native_job="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all" \
+                --jq '[.jobs[] | select(.name == "Native Rust verification")] | sort_by(.started_at) | last // {}'
+            )"
+            native_status="$(jq -r '.status // "queued"' <<< "$native_job")"
+            native_conclusion="$(jq -r '.conclusion // ""' <<< "$native_job")"
+            if [ "$native_status" = "completed" ] && [ "$native_conclusion" != "success" ]; then
+              echo "::error::Native Rust verification completed with $native_conclusion"
+              exit 1
+            fi
+
+            echo "Waiting for native coverage artifact (attempt $attempt/360; native=$native_status${native_conclusion:+/$native_conclusion})"
             sleep 5
           done
-          echo "::error::Native Rust coverage artifact was not published"
+          echo "::error::Native Rust coverage artifact was not published within 30 minutes"
           exit 1
 
       - name: Deploy unified internal test harness

@@ -695,8 +695,9 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
     assert!(
         wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm")
+            && wasm_dockerfile.contains("RUN touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
-        "native verification and WASM must run as sibling branches and join only small outputs"
+        "native verification and WASM must run as sibling branches, preserve locale rebuilds, and join only small outputs"
     );
     let web_bake = read(&root, "nook-app/docker/toolchain.docker-bake.hcl");
     assert!(
@@ -709,6 +710,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "docker/setup-buildx-action@v3",
         "crazy-max/ghaction-github-runtime@v3",
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
+        "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
     ] {
         assert!(
@@ -716,6 +718,10 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             "GitHub-hosted Docker setup is missing: {required}"
         );
     }
+    assert!(
+        !setup.contains("systemctl restart docker") && !setup.contains("/etc/docker/daemon.json"),
+        "delivery setup must fail fast on runner drift instead of reconfiguring or restarting Docker"
+    );
 
     let pr = read(&root, ".github/workflows/pr.yml");
     for required in [
@@ -724,7 +730,9 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
-        "ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}",
+        "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
+        "Native Rust verification completed with $native_conclusion",
+        "attempt $attempt/360",
     ] {
         assert!(
             pr.contains(required),
@@ -733,8 +741,10 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     }
     assert!(
         !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !pr
+                .contains("ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}")
             && !pr.contains("needs: [rust, wasm]"),
-        "PR CI must not round-trip WASM through a third hosted runner"
+        "PR CI must not round-trip WASM through a third runner or key Rust handoffs to a rerun attempt"
     );
 
     let main = read(&root, ".github/workflows/main.yml");

@@ -28,36 +28,16 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # Enable the containerd image store so the `docker` driver builder (the daemon's built-in
-    # BuildKit, which `task setup` selects via `docker context show` -> "default") writes build
-    # results STRAIGHT into the image store — no full-image tarball export + load. The common web
-    # image is now slim, while the heavy Rust lineage stays in BuildKit/GHA cache. Hosted CI uses
-    # setup-buildx-action below to create the docker-container builder required by the GHA exporter.
-    # Recent ubuntu-latest (Docker 29+) enables this by default, but we set it explicitly so the
-    # fast path is guaranteed regardless of runner image drift.
-    - name: Enable containerd image store
+    # Delivery never rewrites daemon configuration or restarts Docker. Current ubuntu-latest
+    # images provide the containerd store; fail fast if runner-image drift removes that contract.
+    - name: Require containerd image store
       shell: bash
       run: |
-        # Self-hosted runners (nook) pre-configure the containerd store at the host level and the
-        # runner user cannot sudo non-interactively. Only touch the daemon config when the store is
-        # not already active, so those runners short-circuit before any sudo call.
-        if docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'; then
-          echo "containerd image store already enabled; skipping daemon reconfiguration"
-          exit 0
+        if ! docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'; then
+          echo "::error::The runner must provide Docker's containerd image store; delivery CI never restarts the Docker daemon"
+          exit 1
         fi
-        daemon_json="/etc/docker/daemon.json"
-        sudo mkdir -p /etc/docker
-        if [ -f "$daemon_json" ]; then
-          sudo jq '. + {"features": (.features // {} | . + {"containerd-snapshotter": true})}' "$daemon_json" \
-            | sudo tee "${daemon_json}.tmp" >/dev/null
-          sudo mv "${daemon_json}.tmp" "$daemon_json"
-        else
-          echo '{"features": {"containerd-snapshotter": true}}' | sudo tee "$daemon_json" >/dev/null
-        fi
-        sudo systemctl restart docker
-        # Fail fast if the store did not switch — otherwise the docker driver falls back to the
-        # slow classic export and we would silently lose the speedup.
-        docker info -f '{{ .DriverStatus }}' | grep -q 'io.containerd.snapshotter.v1'
+        echo "containerd image store is enabled"
 
     # The GHA cache exporter requires the docker-container driver. setup-buildx owns this ephemeral
     # builder on GitHub-hosted VMs; the repository health wrapper probes the selected name before use.
@@ -74,6 +54,7 @@ runs:
       shell: bash
       run: |
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
+        echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
 
     - name: Set CI environment

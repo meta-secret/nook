@@ -14,6 +14,10 @@ COPY nook-app/nook-auth2 nook-auth2
 COPY nook-app/nook-core nook-core
 COPY nook-app/nook-wasm nook-wasm
 
+# Docker COPY preserves source mtimes while the inherited dependency target can be newer. Touch
+# the module that embeds locale JSON so locale-only changes cannot reuse stale WASM outputs.
+RUN touch nook-core/src/i18n.rs
+
 # Rust clippy, native coverage/tests, and wasm-bindgen Node tests finish in the Rust branch. The
 # slim web image can therefore run web-only Task gates without Cargo installed.
 RUN cargo clippy --release --target wasm32-unknown-unknown \
