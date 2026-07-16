@@ -4,7 +4,7 @@
 # builder-debug from the shared manifest-keyed dependency image, so hosted BuildKit can run WASM
 # and native coverage concurrently instead of serializing both source-sensitive branches.
 
-FROM builder-deps AS builder-wasm
+FROM builder-wasm-deps AS builder-wasm
 
 ARG WASM_BUILD_MODE=dev
 

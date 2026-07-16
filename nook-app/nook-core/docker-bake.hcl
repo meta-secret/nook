@@ -16,6 +16,19 @@ target "builder-deps" {
   cache-to   = rust_deps_cache_to
 }
 
+target "builder-wasm-deps" {
+  inherits   = ["_sccache-network"]
+  context    = "."
+  dockerfile = "nook-app/nook-core/Dockerfile"
+  target     = "builder-wasm-deps"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    rust-base = "target:rust-base"
+  }
+  cache-from = rust_wasm_deps_cache_from
+  cache-to   = rust_wasm_deps_cache_to
+}
+
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
 target "builder-debug" {
   inherits   = ["_sccache-network"]

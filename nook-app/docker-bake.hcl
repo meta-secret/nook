@@ -63,6 +63,16 @@ rust_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2,mode=min,version=2,ignore-error=true,timeout=10m",
 ] : []
 
+rust_wasm_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : []
+
+rust_wasm_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-wasm-deps-v1,mode=min,version=2,ignore-error=true,timeout=10m",
+] : []
+
 rust_source_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",

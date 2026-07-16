@@ -18,8 +18,8 @@ RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src \
     && touch nook-auth2/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
-# --- Shared rust dependency cache (chef cook + fetch once) ---
-FROM rust-base AS builder-deps
+# --- Shared manifest-only dependency cache (chef cook + fetch once) ---
+FROM rust-base AS builder-deps-common
 
 WORKDIR /meta-secret/nook/nook-app
 
@@ -35,6 +35,19 @@ COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
 RUN cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json
 RUN cargo fetch --locked
+
+# WASM jobs stop at this lightweight boundary instead of compiling native nextest/coverage deps.
+FROM builder-deps-common AS builder-wasm-deps
+
+RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
+RUN echo '' > nook-auth2/src/lib.rs
+RUN echo '' > nook-core/src/lib.rs
+RUN echo '' > nook-wasm/src/lib.rs
+RUN cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm
+
+# Native verification extends the WASM dependency boundary with native and coverage profiles.
+FROM builder-wasm-deps AS builder-deps
+
 # Warm the native test- AND dev/check-profile DEPENDENCY artifacts against the REAL Cargo.lock.
 # cargo-chef rewrites workspace versions to 0.0.1, so its cooked native artifacts are NOT reused by
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
@@ -42,10 +55,6 @@ RUN cargo fetch --locked
 # compile the deps, and keep the stubs for downstream workspace packages. Real crate source is
 # copied over the stubs in builder-debug in dependency order (nook-auth2 -> nook-core -> nook-wasm).
 # Kept as separate cache layers.
-RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
-RUN echo '' > nook-auth2/src/lib.rs
-RUN echo '' > nook-core/src/lib.rs
-RUN echo '' > nook-wasm/src/lib.rs
 RUN cargo nextest run --no-run -p nook-auth2 --profile ci
 RUN cargo nextest run --no-run -p nook-core --profile ci
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings
@@ -57,13 +66,6 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
 RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass
-# Warm the wasm32 DEBUG/TEST-profile dependencies used by `wasm-pack test --node` in CI. The
-# release-profile chef layers above cannot satisfy this separate target/wasm32-unknown-unknown/debug
-# artifact set. Keeping the warm-up here, before real sources are copied, makes it manifest-keyed;
-# source-only changes then rebuild the workspace crates but not the full wasm test dependency graph.
-# This is last so adding/changing the WASM test warm-up does not invalidate the native warm-up layers.
-RUN cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm
-
 # --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---
 FROM builder-deps AS builder-debug
 

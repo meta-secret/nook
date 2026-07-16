@@ -9,7 +9,7 @@ target "builder-wasm" {
   target     = "builder-wasm"
   platforms  = ["linux/amd64"]
   contexts = {
-    builder-deps = "target:builder-deps"
+    builder-wasm-deps = "target:builder-wasm-deps"
   }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
@@ -35,7 +35,7 @@ target "wasm-export" {
   target     = "wasm-export"
   platforms  = ["linux/amd64"]
   contexts = {
-    builder-deps = "target:builder-deps"
+    builder-wasm-deps = "target:builder-wasm-deps"
   }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
@@ -52,7 +52,7 @@ target "web-artifacts" {
   platforms  = ["linux/amd64"]
   contexts = {
     builder-debug = "target:builder-debug"
-    builder-deps  = "target:builder-deps"
+    builder-wasm-deps = "target:builder-wasm-deps"
   }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
@@ -68,7 +68,7 @@ target "_nook-rust-common" {
   target     = "nook-rust"
   platforms  = ["linux/amd64"]
   contexts = {
-    builder-deps = "target:builder-deps"
+    builder-wasm-deps = "target:builder-wasm-deps"
   }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
@@ -84,7 +84,7 @@ target "_nook-rust-browser-common" {
   target     = "nook-rust-browser"
   platforms  = ["linux/amd64"]
   contexts = {
-    builder-deps = "target:builder-deps"
+    builder-wasm-deps = "target:builder-wasm-deps"
   }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE

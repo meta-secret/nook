@@ -473,7 +473,7 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     let warmup = section(
         &dockerfile,
         "# Also warm the COVERAGE-instrumented deps:",
-        "# Warm the wasm32 DEBUG/TEST-profile dependencies",
+        "# --- Native verify warm-up",
     );
 
     assert_eq!(
@@ -622,6 +622,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     for required in [
         "GHA_CACHE_ENABLED",
         "type=gha,scope=nook-rust-deps-v2",
+        "type=gha,scope=nook-rust-wasm-deps-v1",
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
@@ -640,7 +641,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
 
     let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
-        rust_bake.contains("builder-deps = \"target:builder-deps\"")
+        rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
             && !rust_bake.contains("cache-to   = rust_artifacts_cache_to"),
         "WASM must branch from cached dependencies without exporting source-heavy snapshots"
     );
@@ -652,7 +653,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     );
     let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
     assert!(
-        wasm_dockerfile.contains("FROM builder-deps AS builder-wasm")
+        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification and WASM must run as sibling branches and join only small outputs"
     );
