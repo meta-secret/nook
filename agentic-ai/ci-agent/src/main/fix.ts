@@ -6,7 +6,6 @@ import {
   createFixPr,
   createOctokit,
   findOpenPr,
-  markAgentManagedPr,
   parseRepository,
 } from "./github.js";
 import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
@@ -76,11 +75,7 @@ export async function runCiFix(): Promise<void> {
     log.info(`Opened fix PR #${prNumber}`);
   }
 
-  await markAgentManagedPr(octokit, repoRef, prNumber, runId);
-
   const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
-  log.info(
-    `PR #${prNumber} handed to the workflow_run monitor; the agent job will not poll or wait`,
-  );
-  log.info(`Done — event monitor armed for ${fixLabel} run ${runId}`);
+  log.info(`PR #${prNumber} opened for review; no automatic merge is configured`);
+  log.info(`Done — ${fixLabel} run ${runId} requires explicit merge authorization`);
 }

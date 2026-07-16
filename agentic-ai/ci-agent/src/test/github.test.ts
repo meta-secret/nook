@@ -4,11 +4,9 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import {
-  assertNoPendingPrFeedback,
-  markAgentManagedPr,
+  createFixPr,
   requiredPrCheckNames,
   requiredPrWorkflows,
-  squashMergePr,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
@@ -39,109 +37,31 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
   ]);
 });
 
-test("assertNoPendingPrFeedback ignores repository status comments", async () => {
-  const octokit = mockOctokit({
-    issueComments: [
-      { body: "### Preview deployed\n\nhttps://example.test" },
-      { body: "<!-- nook-core-coverage -->\n### nook-core + nook-auth2 coverage" },
-    ],
-    reviews: [
-      {
-        commit_id: "head-sha",
-        state: "COMMENTED",
-        body: "### 💡 Codex Review\n\nReview summary",
-      },
-    ],
-  });
-
-  await assertNoPendingPrFeedback(octokit, repoRef, 347);
-});
-
-test("assertNoPendingPrFeedback blocks unresolved review threads", async () => {
-  const octokit = mockOctokit({ unresolvedThreads: 1 });
-
-  await assert.rejects(
-    assertNoPendingPrFeedback(octokit, repoRef, 347),
-    /feedback requiring manual handling.*threads=1/,
-  );
-});
-
-test("markAgentManagedPr marks and wakes a reused PR", async () => {
-  let updatedBody = "";
+test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
+  let createdBody = "";
   const octokit = {
     rest: {
       pulls: {
-        get: async () => ({ data: { body: "Existing body" } }),
-        update: async ({ body }: { body: string }) => {
-          updatedBody = body;
-          return { data: {} };
+        create: async ({ body }: { body: string }) => {
+          createdBody = body;
+          return { data: { number: 347 } };
         },
       },
     },
   } as unknown as Octokit;
 
-  await markAgentManagedPr(octokit, repoRef, 347, "run-42");
-  assert.match(updatedBody, /<!-- nook-agent-managed -->/);
-  assert.match(updatedBody, /<!-- nook-agent-monitor-wake:run-42 -->/);
+  const priorBody = process.env.AGENT_PR_BODY;
+  process.env.AGENT_PR_BODY = "## Summary\n\nOpen this PR for review.";
+  try {
+    const prNumber = await createFixPr(octokit, repoRef, "agent/fix", "run-42");
+    assert.equal(prNumber, 347);
+    assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");
+    assert.doesNotMatch(createdBody, /nook-agent-managed|nook-agent-monitor-wake/);
+  } finally {
+    if (priorBody === undefined) {
+      delete process.env.AGENT_PR_BODY;
+    } else {
+      process.env.AGENT_PR_BODY = priorBody;
+    }
+  }
 });
-
-test("squashMergePr requires the audited head SHA", async () => {
-  let mergeSha = "";
-  const octokit = {
-    rest: {
-      pulls: {
-        merge: async ({ sha }: { sha: string }) => {
-          mergeSha = sha;
-          return { data: {} };
-        },
-      },
-      git: { deleteRef: async () => ({ data: {} }) },
-    },
-  } as unknown as Octokit;
-
-  await squashMergePr(octokit, repoRef, 347, "agent/fix", "audited-sha");
-  assert.equal(mergeSha, "audited-sha");
-});
-
-type MockOptions = {
-  files?: string[];
-  issueComments?: Array<{ body: string }>;
-  reviews?: Array<{ commit_id: string; state: string; body: string }>;
-  unresolvedThreads?: number;
-};
-
-function mockOctokit(options: MockOptions): Octokit {
-  const pulls = {
-    listFiles: async () => ({
-      data: (options.files ?? []).map((filename) => ({ filename })),
-    }),
-    get: async () => ({ data: { head: { sha: "head-sha" } } }),
-    listReviews: async () => ({ data: options.reviews ?? [] }),
-  };
-  const issues = {
-    listComments: async () => ({ data: options.issueComments ?? [] }),
-  };
-  const octokit = {
-    rest: {
-      pulls,
-      issues,
-    },
-    paginate: async (
-      route: (args: unknown) => Promise<{ data: unknown[] }>,
-      args: unknown,
-    ) => (await route(args)).data,
-    graphql: async () => ({
-      repository: {
-        pullRequest: {
-          reviewThreads: {
-            nodes: Array.from({ length: options.unresolvedThreads ?? 0 }, () => ({
-              isResolved: false,
-            })),
-            pageInfo: { hasNextPage: false },
-          },
-        },
-      },
-    }),
-  };
-  return octokit as unknown as Octokit;
-}

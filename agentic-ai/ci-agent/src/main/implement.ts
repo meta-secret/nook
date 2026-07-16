@@ -7,7 +7,6 @@ import {
   createFixPr,
   createOctokit,
   findOpenPr,
-  markAgentManagedPr,
   parseRepository,
   pullRequestUrl,
 } from "./github.js";
@@ -89,25 +88,11 @@ export async function runCiImplement(): Promise<void> {
         octokit,
         repoRef,
         issueNumber,
-        `Opened PR ${url} for this issue. The implementation job will exit; Nook's workflow_run monitor will evaluate repository-owned checks and currently present feedback without waiting for Codex or another external review.`,
+        `Opened PR ${url} for this issue. The implementation job has exited; the PR requires normal review and explicit merge authorization.`,
       );
     }
   }
 
-  await markAgentManagedPr(octokit, repoRef, prNumber, runId);
-
-  log.info(
-    `PR #${prNumber} handed to the workflow_run monitor; the agent job will not poll or wait`,
-  );
-  log.info(`Done — event monitor armed for implement run ${runId}`);
-
-  if (issueNumber) {
-    const url = pullRequestUrl(repoRef, prNumber);
-    await commentOnIssue(
-      octokit,
-      repoRef,
-      issueNumber,
-      `Event-driven repository-check monitoring is armed for ${url}. The agent job has exited and will not wait for Codex or another external review.`,
-    );
-  }
+  log.info(`PR #${prNumber} opened for review; no automatic merge is configured`);
+  log.info(`Done — implement run ${runId} requires explicit merge authorization`);
 }
