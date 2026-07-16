@@ -500,8 +500,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       `--load-extension=${extensionDir}`,
     ],
   })
-  await context.addInitScript(installMockPasskeyRuntime)
   const loginServer = await startLoginServer()
+  const website = await context.newPage()
+  await website.goto(`${loginServer.origin}/login`)
+  await context.addInitScript(installMockPasskeyRuntime)
 
   try {
     const worker = await getServiceWorker(context)
@@ -629,8 +631,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }),
     )
 
-    const website = await context.newPage()
-    await website.goto(`${loginServer.origin}/login`)
     const websiteCredentialId = await registerWebsitePasskey(website)
     expect(websiteCredentialId).toBeTruthy()
     await assertWebsitePasskey(website, websiteCredentialId)
