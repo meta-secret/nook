@@ -5,7 +5,7 @@ if [ ! -e node_modules ]; then
   ln -s ../nook-web-app/node_modules node_modules
 fi
 
-export NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL:-http://127.0.0.1:5174/}"
+export NOOK_SIMPLE_VAULT_URL="${NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL:-http://127.0.0.1:5174/}"
 
 bun run build
 
