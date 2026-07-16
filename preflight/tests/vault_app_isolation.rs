@@ -292,7 +292,7 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
-fn pr_reuses_a_health_checked_buildkit_daemon() {
+fn delivery_reuses_a_health_checked_buildkit_daemon() {
     let root = repository_root();
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
@@ -301,10 +301,14 @@ fn pr_reuses_a_health_checked_buildkit_daemon() {
     );
 
     let ci = read(&root, "nook-app/.task/ci.yml");
-    for required in ["task: _buildx:healthy", "vars: { BUILD_TASK: _ci:pr:host }"] {
+    for required in [
+        "task: _buildx:healthy",
+        "vars: { BUILD_TASK: _ci:pr:host }",
+        "vars: { BUILD_TASK: _ci:main:host }",
+    ] {
         assert!(
             ci.contains(required),
-            "task ci:pr must enter the health-checked BuildKit wrapper: {required}"
+            "delivery CI must enter the health-checked BuildKit wrapper: {required}"
         );
     }
 
@@ -316,6 +320,9 @@ fn pr_reuses_a_health_checked_buildkit_daemon() {
         "buildx build",
         "--output type=cacheonly",
         "run_with_timeout \"$health_timeout\"",
+        "set -m",
+        "kill -TERM -- \"-$command_pid\"",
+        "kill -KILL -- \"-$command_pid\"",
         "rm --force \"$container\"",
         "volume rm --force \"$state_volume\"",
         "--driver docker-container",
@@ -348,6 +355,7 @@ fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() {
 
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
+    let child_pid_file = temp.join("docker-child.pid");
     let command_marker = temp.join("command-ran");
     fs::write(
         &fake_docker,
@@ -355,7 +363,10 @@ fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() {
 set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
 if [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
-  exec sleep 30
+  sleep 30 &
+  child_pid=$!
+  printf '%s\n' "$child_pid" > "$FAKE_DOCKER_CHILD_PID"
+  wait "$child_pid"
 fi
 "#,
     )
@@ -373,6 +384,7 @@ fi
         .arg(&command_marker)
         .env("DOCKER", &fake_docker)
         .env("FAKE_DOCKER_LOG", &docker_log)
+        .env("FAKE_DOCKER_CHILD_PID", &child_pid_file)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
         .env("NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS", "1")
         .env("NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS", "2")
@@ -392,6 +404,16 @@ fi
     assert_eq!(
         fs::read_to_string(&command_marker).expect("wrapped command marker"),
         "ok"
+    );
+    let child_pid = fs::read_to_string(&child_pid_file).expect("timed Docker child pid");
+    assert!(
+        !Command::new("kill")
+            .args(["-0", child_pid.trim()])
+            .output()
+            .expect("check timed Docker child")
+            .status
+            .success(),
+        "timed Docker child {child_pid:?} survived process-group cleanup"
     );
 
     let calls = fs::read_to_string(&docker_log).expect("fake Docker call log");
