@@ -289,20 +289,38 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
-fn pr_retries_only_the_known_transient_buildkit_lease_loss() {
+fn pr_uses_a_fresh_buildkit_daemon_and_removes_it_after_the_build() {
     let root = repository_root();
     let pr = read(&root, ".github/workflows/pr.yml");
+    assert!(
+        !pr.contains("docker buildx prune") && !pr.contains("BUILDX_BUILDER"),
+        "PR workflow must not repair or select a shared BuildKit builder"
+    );
+
+    let ci = read(&root, "nook-app/.task/ci.yml");
     for required in [
-        "for attempt in 1 2; do",
-        "status=\"${PIPESTATUS[0]}\"",
-        "unable to lease content: lease does not exist",
-        "Retrying once after transient BuildKit lease loss",
-        "docker buildx prune --builder \"$builder\" --force",
-        "docker buildx inspect \"$builder\" --bootstrap",
+        "task: _buildx:isolated",
+        "vars: { BUILD_TASK: _ci:pr:host }",
     ] {
         assert!(
-            pr.contains(required),
-            "PR workflow missing bounded BuildKit retry contract: {required}"
+            ci.contains(required),
+            "task ci:pr must enter the isolated BuildKit wrapper: {required}"
+        );
+    }
+
+    let wrapper = read(&root, ".github/scripts/with-isolated-buildkit.sh");
+    for required in [
+        "--driver docker-container",
+        "--bootstrap",
+        "trap cleanup EXIT",
+        "docker buildx rm --force \"$builder\"",
+        "SCCACHE_REDIS_HOST_IP=\"$gateway\" \"$@\"",
+        "docker network inspect bridge",
+        "ping -4 -c 1 host.docker.internal",
+    ] {
+        assert!(
+            wrapper.contains(required),
+            "isolated BuildKit wrapper missing lifecycle contract: {required}"
         );
     }
 }

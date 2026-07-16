@@ -37,8 +37,8 @@ jobs:
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    # PR validation is latency-sensitive and benefits from the Nook runners'
-    # warm Docker/BuildKit cache. Long-running AI jobs stay on ubuntu-latest.
+    # PR validation is developer-critical and runs in an invocation-scoped BuildKit
+    # daemon on the Nook pool. Long-running AI jobs stay on ubuntu-latest.
     runs-on: nook
     steps:
       - name: Checkout
@@ -53,33 +53,13 @@ jobs:
       - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
-          builder="${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
-          for attempt in 1 2; do
-            log="$RUNNER_TEMP/ci-pr-attempt-$attempt.log"
-            set +e
-            task ci:pr \
-              VITE_BASE=/ \
-              VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
-              VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
-              VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
-              VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
-              WASM_BUILD_MODE=dev 2>&1 | tee "$log"
-            status="${PIPESTATUS[0]}"
-            set -e
-            if [ "$status" -eq 0 ]; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 1 ] && grep -Fq \
-              'unable to lease content: lease does not exist' "$log"; then
-              echo "::warning::Retrying once after transient BuildKit lease loss"
-              # Bootstrapping alone preserves the daemon's corrupt lease metadata. Prune only the
-              # selected builder's unused cache after this exact failure, then bootstrap it once.
-              docker buildx prune --builder "$builder" --force
-              docker buildx inspect "$builder" --bootstrap >/dev/null
-              continue
-            fi
-            exit "$status"
-          done
+          task ci:pr \
+            VITE_BASE=/ \
+            VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
+            VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
+            VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
+            VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
+            WASM_BUILD_MODE=dev
         env:
           CI: true
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/

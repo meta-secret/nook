@@ -37,7 +37,8 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
     );
 
     let bake = read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("\"host.docker.internal\" = \"host-gateway\""));
+    assert!(bake.contains("variable \"SCCACHE_REDIS_HOST_IP\""));
+    assert!(bake.contains("\"host.docker.internal\" = SCCACHE_REDIS_HOST_IP"));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(

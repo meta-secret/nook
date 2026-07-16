@@ -134,7 +134,8 @@ provider, those handlers read and write real event files under a temp directory.
 
 Runner placement separates delivery validation from long-running background
 work. The `pr.yml` verify/preview gate, main delivery, and production release use
-the self-hosted `nook` pool so they can reuse warm Docker/BuildKit state. AI
+the self-hosted `nook` pool. PR builds isolate and discard BuildKit state; main
+and release may reuse the active Docker-context builder. AI
 implement/fix/smoke jobs use GitHub-hosted `ubuntu-latest`, where their six-hour
 background work cannot exhaust or block the Nook machine. Other scheduled,
 manual e2e, and research jobs also remain GitHub-hosted.
@@ -153,9 +154,9 @@ a whole-build retry loop.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
-| `pr.yml` | `nook` | Fast, cache-warm verification and preview for developer-critical PRs |
+| `pr.yml` | `nook` | Isolated-BuildKit verification and preview for developer-critical PRs |
 | `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Isolate long-running background AI work from the Nook machine |
-| `main.yml` `ci`, `release.yml` | `nook` | Reuse the warm Docker/BuildKit state across PR, post-merge delivery, and release instead of downloading the multi-GB Rust/browser lineages into fresh VMs |
+| `main.yml` `ci`, `release.yml` | `nook` | Reuse the host's normal Docker/BuildKit state for post-merge delivery and release instead of downloading multi-GB Rust/browser lineages into fresh VMs |
 | `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Isolate scheduled, manual, and research work from the delivery runner |
 | `runner-cleanup.yml` | `nook` | Maintain the self-hosted Docker cache and disk |
 
@@ -299,8 +300,9 @@ as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
-**Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
-self-hosted `nook` pool and reuses its Docker/BuildKit cache. `task ci:pr` runs
+**Remote PR CI uses isolated BuildKit state.** The PR workflow runs on the
+self-hosted `nook` pool, but every `task ci:pr` creates a fresh BuildKit daemon
+and removes it after the complete preflight + app solve. `task ci:pr` runs
 the standalone Rust **repository preflight** before app setup, then one parallel
 Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
 no browser e2e, Cloudflare preview,
@@ -320,18 +322,20 @@ External reviews and checks (Codex, Claude, Cursor, CodeRabbit, or any other
 service) are never requested, polled, or awaited. Existing actionable comments
 must still be addressed, but no external status may delay merge or handoff.
 
-**Delivery jobs are cache-warm.** PR verification, main, and release use the
-persistent self-hosted `nook` runner, so the Rust target and other local BuildKit
-layers survive the PR -> main -> release chain instead of being downloaded again.
+**Delivery jobs keep host services local.** PR verification, main, and release use the
+persistent self-hosted `nook` runner. PR verification deliberately discards its
+BuildKit layers with its invocation-scoped builder; non-PR build commands may
+reuse the active Docker-context builder.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
-Docker image tags; concurrent PR, main, and release jobs may share BuildKit cache
-layers, but must never replace one another's runtime image between build and deploy.
+Docker image tags; concurrent jobs must never replace one another's runtime
+image between build and deploy.
 `task setup` also ensures the host's Docker-host-only Redis-backed `sccache`
 service is running. It reuses compatible crate outputs when an exact BuildKit
 layer misses; it does not replace cargo-chef, transfer data between runners, or
 change the build result when empty. Linux publishes Redis only on the Docker
-bridge gateway and maps `host.docker.internal` to `host-gateway`; Docker Desktop
-publishes only on host loopback using the same in-container hostname.
+bridge gateway; Docker Desktop publishes only on host loopback. Normal builds
+map `host.docker.internal` to `host-gateway`, while the isolated PR wrapper
+passes the concrete Docker-host IPv4 address required by the container driver.
 Scheduled/manual e2e, research, and every AI-agent job remain on isolated
 GitHub-hosted runners. They build cold and never import registry cache snapshots.
 Main deploys `dist/site`, Simple, and Sentinel independently to

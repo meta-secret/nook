@@ -42,12 +42,16 @@ variable "SCCACHE_REDIS_PORT" {
   default = "6380"
 }
 
+variable "SCCACHE_REDIS_HOST_IP" {
+  default = "host-gateway"
+}
+
 target "_sccache-network" {
   args = {
     SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
   }
   extra-hosts = {
-    "host.docker.internal" = "host-gateway"
+    "host.docker.internal" = SCCACHE_REDIS_HOST_IP
   }
 }
 
