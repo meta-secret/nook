@@ -657,6 +657,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let bake = read(&root, "nook-app/docker-bake.hcl");
     for required in [
         "GHA_CACHE_ENABLED",
+        "GHA_CACHE_WRITE_ENABLED",
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
@@ -678,6 +679,11 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     assert!(
         !bake.contains("type=registry"),
         "delivery caches must use the GitHub Actions cache service, not registry manifests"
+    );
+    assert_eq!(
+        bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
+        6,
+        "every hosted cache exporter must honor the read-only workflow mode"
     );
 
     let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
@@ -719,6 +725,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
+        "GHA_CACHE_WRITE_ENABLED=1",
     ] {
         assert!(
             setup.contains(required),
@@ -738,6 +745,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "task ci:pr:wasm",
         "task ci:pr:web",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
+        "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
         "attempt $attempt/360",
     ] {
@@ -755,6 +763,22 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     assert!(
         native_job_lookup < artifact_lookup,
         "PR verification must prove the latest native attempt succeeded before accepting a run-stable artifact"
+    );
+    let e2e_pr = read(&root, ".github/workflows/e2e-pr.yml");
+    assert!(
+        e2e_pr.contains("cache-write: \"false\""),
+        "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
+    );
+    let release = read(&root, ".github/workflows/release.yml");
+    let release_setup = release
+        .find("uses: ./.github/actions/nook-docker-setup")
+        .expect("release must use the safe workflow-ref Docker setup");
+    let release_source = release
+        .find("- name: Checkout release source")
+        .expect("release must checkout its requested source");
+    assert!(
+        release_setup < release_source,
+        "release must initialize Docker from the workflow ref before checking out an older source"
     );
     assert!(
         !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")

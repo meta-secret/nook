@@ -1,5 +1,11 @@
 name: Nook Docker setup
-description: Task, Buildx, containerd image store, and GitHub-hosted BuildKit cache setup.
+description: Task, Buildx, and GitHub-hosted BuildKit cache setup.
+
+inputs:
+  cache-write:
+    description: Allow this workflow source to update the shared hosted BuildKit cache scopes.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -46,6 +52,11 @@ runs:
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
+        if [ "${{ inputs.cache-write }}" = "true" ]; then
+          echo "GHA_CACHE_WRITE_ENABLED=1" >> "$GITHUB_ENV"
+        else
+          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
+        fi
 
     - name: Set CI environment
       shell: bash

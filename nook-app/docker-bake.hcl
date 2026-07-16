@@ -54,11 +54,17 @@ variable "GHA_CACHE_ENABLED" {
   default = ""
 }
 
+// Some manual workflows build an arbitrary PR head while the Actions run itself belongs to the
+// default branch. They may restore shared layers, but must not overwrite main's cache scopes.
+variable "GHA_CACHE_WRITE_ENABLED" {
+  default = ""
+}
+
 rust_base_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-base-v1,version=2",
 ] : []
 
-rust_base_cache_to = GHA_CACHE_ENABLED != "" ? [
+rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-base-v1,mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
@@ -67,7 +73,7 @@ rust_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-v1,version=2",
 ] : []
 
-rust_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
+rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2,mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
@@ -77,7 +83,7 @@ rust_wasm_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-v1,version=2",
 ] : []
 
-rust_wasm_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
+rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-wasm-deps-v1,mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
@@ -90,7 +96,7 @@ web_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-web-deps-v1,version=2",
 ] : []
 
-web_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
+web_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-web-deps-v1,mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
@@ -99,7 +105,7 @@ web_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-web-deps-v1,version=2",
 ] : []
 
-web_cache_to = GHA_CACHE_ENABLED != "" ? [
+web_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-web-v1,mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
@@ -108,7 +114,7 @@ web_e2e_cache_from = GHA_CACHE_ENABLED != "" ? [
   "type=gha,scope=nook-web-deps-v1,version=2",
 ] : []
 
-web_e2e_cache_to = GHA_CACHE_ENABLED != "" ? [
+web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-web-e2e-v1,mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 

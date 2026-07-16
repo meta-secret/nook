@@ -102,8 +102,8 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 360); do
             native_job="$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all" \
-                --jq '[.jobs[] | select(.name == "Native Rust verification")] | sort_by(.started_at) | last // {}'
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+                --jq '[.jobs[] | select(.name == "Native Rust verification")] | first // {}'
             )"
             native_status="$(jq -r '.status // "queued"' <<< "$native_job")"
             native_conclusion="$(jq -r '.conclusion // ""' <<< "$native_job")"
