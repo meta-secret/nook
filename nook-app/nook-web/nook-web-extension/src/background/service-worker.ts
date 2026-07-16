@@ -414,9 +414,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     void openExtensionPairing(message.payload)
       .then(() => sendResponse({ ok: true }))
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'pairing-launch-failed' }),
-      )
+      .catch(() => sendResponse({ ok: false, reason: 'pairing-launch-failed' }))
     return true
   }
 
