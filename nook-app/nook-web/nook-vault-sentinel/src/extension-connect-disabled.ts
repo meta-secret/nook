@@ -32,5 +32,7 @@ export async function adoptExtensionIdentity(
   _manager: NookVaultManager,
   _request: ExtensionConnectRequest,
 ): Promise<void> {
+  void _manager;
+  void _request;
   throw new Error("errors.validation.sentinel_extension_forbidden");
 }
