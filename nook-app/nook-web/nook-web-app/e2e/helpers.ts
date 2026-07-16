@@ -19,12 +19,14 @@ import {
 } from './vault-yaml'
 import { registerE2eGithubRepo } from './github-repos'
 import {
+  fetchGithubEventLogContents,
   fetchGithubVaultYaml,
   githubApiFetch,
   githubApiHeaders,
   githubFetch,
   githubRepoContext,
   GITHUB_VAULT_PATH,
+  listGithubEventFilePaths,
 } from './github-api'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -492,12 +494,40 @@ async function deleteGithubFileIfExists(
   throw new Error(`GitHub vault ${vaultPath} still present after reset`)
 }
 
+async function fetchGithubRemoteSnapshot(
+  pat: string,
+  repoName: string,
+): Promise<VaultYamlSnapshot | undefined> {
+  const eventYamls = await fetchGithubEventLogContents(pat, repoName)
+  if (eventYamls.length > 0) {
+    return parseVaultEventLogSnapshot(eventYamls)
+  }
+  const yaml = await fetchGithubVaultYaml(pat, repoName)
+  if (yaml) {
+    return parseVaultYamlSnapshot(yaml)
+  }
+  return undefined
+}
+
+async function deleteGithubEventLog(
+  pat: string,
+  headers: ReturnType<typeof githubApiHeaders>,
+  repo: string,
+  repoName: string,
+) {
+  const paths = await listGithubEventFilePaths(pat, repoName)
+  for (const filePath of paths) {
+    await deleteGithubFileIfExists(pat, headers, repo, filePath)
+  }
+}
+
 /** Wipe remote vault file so a fresh local encryption key can connect. */
 export async function resetGithubVault(
   pat: string,
   repoName = DEFAULT_GITHUB_REPO,
 ) {
   const { headers, repo } = await githubRepoContext(pat, repoName)
+  await deleteGithubEventLog(pat, headers, repo, repoName)
   await deleteGithubFileIfExists(pat, headers, repo, GITHUB_VAULT_PATH)
 }
 
@@ -510,24 +540,23 @@ export async function waitForVaultYaml(
   const timeoutMs = options?.timeoutMs ?? GITHUB_SYNC_TIMEOUT_MS
   const intervalMs = options?.intervalMs ?? GITHUB_SYNC_INTERVAL_MS
   const deadline = Date.now() + timeoutMs
-  let lastError = 'vault file missing'
+  let lastError = 'remote event log empty'
 
   while (Date.now() < deadline) {
     if (options?.page) {
       await assertNoVaultErrors(options.page, { allowTransient: true })
     }
-    const yaml = await fetchGithubVaultYaml(pat, repoName)
-    if (yaml) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
+    const snapshot = await fetchGithubRemoteSnapshot(pat, repoName)
+    if (snapshot) {
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for vault YAML: ${lastError}`)
+  throw new Error(`Timed out waiting for remote vault state: ${lastError}`)
 }
 
 async function assertNoVaultErrors(
@@ -3727,8 +3756,8 @@ async function syncSecretCount(target: GithubE2eTarget): Promise<number> {
       ? parseVaultEventLogSnapshot(events).secretIds.length
       : 0
   }
-  const yaml = await fetchGithubVaultYaml(target.pat, target.repoName)
-  return parseVaultYamlSnapshot(yaml ?? 'secrets: []').secretIds.length
+  const snapshot = await fetchGithubRemoteSnapshot(target.pat, target.repoName)
+  return snapshot?.secretIds.length ?? 0
 }
 
 export async function addSecret(

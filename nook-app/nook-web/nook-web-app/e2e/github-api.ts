@@ -1,4 +1,6 @@
 const GITHUB_VAULT_PATH = 'nook-events'
+const EVENT_LOG_ROOT = 'nook-log/v1/events'
+const SHA256_BASE64URL_LEN = 43
 const GITHUB_FETCH_TIMEOUT_MS = 30_000
 const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
 
@@ -108,6 +110,102 @@ export async function githubRepoContext(
   return context
 }
 
+function isGithubEventLogPath(path: string): boolean {
+  if (!path.startsWith(`${EVENT_LOG_ROOT}/`)) {
+    return false
+  }
+  const name = path.slice(EVENT_LOG_ROOT.length + 1)
+  if (name.includes('/')) {
+    return false
+  }
+  if (!name.endsWith('.yaml')) {
+    return false
+  }
+  const stem = name.slice(0, -'.yaml'.length)
+  return (
+    stem.length === SHA256_BASE64URL_LEN &&
+    /^[A-Za-z0-9_-]+$/.test(stem)
+  )
+}
+
+async function fetchGithubRepoDefaultBranch(
+  pat: string,
+  repo: string,
+): Promise<string | undefined> {
+  const res = await githubApiFetch(pat, `https://api.github.com/repos/${repo}`)
+  if (res.status === 404) {
+    return undefined
+  }
+  const data = (await res.json()) as { default_branch: string }
+  return data.default_branch
+}
+
+/** Flat immutable event YAML paths under nook-log/v1/events (live GitHub sync). */
+export async function listGithubEventFilePaths(
+  pat: string,
+  repoName: string,
+): Promise<string[]> {
+  const { repo } = await githubRepoContext(pat, repoName)
+  const branch = await fetchGithubRepoDefaultBranch(pat, repo)
+  if (!branch) {
+    return []
+  }
+  const url = `https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`
+  const res = await githubApiFetch(pat, url)
+  if (res.status === 404) {
+    return []
+  }
+  const tree = (await res.json()) as {
+    tree: Array<{ path: string; type: string }>
+    truncated: boolean
+  }
+  if (tree.truncated) {
+    throw new Error(
+      `GitHub event tree listing was truncated for ${repo}; sync would be incomplete`,
+    )
+  }
+  return tree.tree
+    .filter(
+      (entry) => entry.type === 'blob' && isGithubEventLogPath(entry.path),
+    )
+    .map((entry) => entry.path)
+}
+
+async function fetchGithubTextFile(
+  pat: string,
+  repo: string,
+  headers: Record<string, string>,
+  filePath: string,
+): Promise<string | undefined> {
+  const url = `https://api.github.com/repos/${repo}/contents/${filePath}`
+  const res = await githubApiFetch(pat, url, { headers })
+  if (res.status === 404) {
+    return undefined
+  }
+  const data = (await res.json()) as { content: string }
+  return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString(
+    'utf-8',
+  )
+}
+
+/** Fetch decoded event YAML bodies from a live GitHub repo. */
+export async function fetchGithubEventLogContents(
+  pat: string,
+  repoName: string,
+): Promise<string[]> {
+  const { headers, repo } = await githubRepoContext(pat, repoName)
+  const paths = await listGithubEventFilePaths(pat, repoName)
+  if (paths.length === 0) {
+    return []
+  }
+  const contents = await Promise.all(
+    paths.map((filePath) =>
+      fetchGithubTextFile(pat, repo, headers, filePath),
+    ),
+  )
+  return contents.filter((content): content is string => content !== undefined)
+}
+
 export async function fetchGithubVaultYaml(
   pat: string,
   repoName: string,
@@ -142,4 +240,4 @@ export async function fetchGithubVaultYaml(
   return yaml
 }
 
-export { GITHUB_VAULT_PATH }
+export { EVENT_LOG_ROOT, GITHUB_VAULT_PATH }
