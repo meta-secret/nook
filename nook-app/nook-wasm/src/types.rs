@@ -1,6 +1,7 @@
 //! Typed values exported across the wasm-bindgen boundary (no raw `JsValue` bags).
 
 use crate::NookError;
+use crate::NookSecretListItem;
 use crate::NookSecretRecord;
 use crate::NookVaultManager;
 use gloo_utils::window;
@@ -1123,7 +1124,7 @@ impl NookVaultSyncResult {
 
 #[wasm_bindgen]
 pub struct NookSecretPage {
-    records: Vec<NookSecretRecord>,
+    items: Vec<NookSecretListItem>,
     total: u32,
     offset: u32,
     limit: u32,
@@ -1132,7 +1133,7 @@ pub struct NookSecretPage {
 impl NookSecretPage {
     pub(crate) fn from_core(page: nook_core::SecretPage) -> Result<Self, NookError> {
         Ok(Self {
-            records: records_to_vec(page.records)?,
+            items: list_items_to_vec(page.records),
             total: u32::try_from(page.total).unwrap_or(u32::MAX),
             offset: u32::try_from(page.offset).unwrap_or(u32::MAX),
             limit: u32::try_from(page.limit).unwrap_or(u32::MAX),
@@ -1160,10 +1161,10 @@ impl NookSecretPage {
         self.limit
     }
 
-    /// Transfer page-owned plaintext records to JavaScript without cloning them.
-    #[wasm_bindgen(js_name = takeRecords)]
-    pub fn take_records(&mut self) -> Vec<NookSecretRecord> {
-        std::mem::take(&mut self.records)
+    /// Transfer page-owned metadata items to JavaScript without cloning them.
+    #[wasm_bindgen(js_name = takeItems)]
+    pub fn take_items(&mut self) -> Vec<NookSecretListItem> {
+        std::mem::take(&mut self.items)
     }
 }
 
@@ -1276,6 +1277,13 @@ pub(crate) fn records_to_vec(
         .into_iter()
         .map(NookSecretRecord::from_record)
         .collect())
+}
+
+pub(crate) fn list_items_to_vec(items: Vec<nook_core::SecretListItem>) -> Vec<NookSecretListItem> {
+    items
+        .into_iter()
+        .map(NookSecretListItem::from_core)
+        .collect()
 }
 
 pub(crate) fn joins_to_vec(joins: Vec<nook_core::JoinRequest>) -> Vec<NookJoinRequest> {

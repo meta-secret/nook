@@ -393,12 +393,22 @@ impl NookVaultManager {
 
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        let page = self.query_secret_page(
-            "",
-            0,
-            u32::try_from(nook_core::DEFAULT_SECRET_PAGE_SIZE).unwrap_or(50),
-        )?;
-        records_to_vec(page.records)
+        let crypto = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        records_to_vec(
+            self.vault
+                .meta
+                .secrets
+                .keys()
+                .map(|id| {
+                    nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)
+                        .map_err(NookError::from)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
     }
 
     pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {

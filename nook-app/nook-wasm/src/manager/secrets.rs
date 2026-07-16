@@ -4,7 +4,6 @@
 use super::NookVaultManager;
 use crate::NookBitwardenImportResult;
 use crate::NookError;
-use crate::conversion::records_to_vec;
 use crate::{NookSecretPage, NookSecretRecord};
 use serde::Serialize;
 use std::collections::HashSet;
@@ -18,12 +17,9 @@ fn serialize_js_objects<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_b
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
-        let page = self.query_secret_page(
-            query,
-            0,
-            u32::try_from(nook_core::DEFAULT_SECRET_PAGE_SIZE).unwrap_or(50),
-        )?;
-        records_to_vec(page.records).map_err(Into::into)
+        let mut records = self.get_records()?;
+        records.retain(|record| record.matches_search(query));
+        Ok(records)
     }
 
     #[wasm_bindgen(js_name = querySecretPage)]
@@ -36,6 +32,25 @@ impl NookVaultManager {
         Ok(NookSecretPage::from_core(
             self.query_secret_page(query, offset, limit)?,
         )?)
+    }
+
+    /// Decrypt one full record only after an explicit reveal or secret-value copy.
+    #[wasm_bindgen(js_name = decryptSecret)]
+    pub fn decrypt_secret_js(&self, id: &str) -> Result<NookSecretRecord, JsError> {
+        let crypto = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let id = nook_core::SecretId::from_vault_record(id);
+        let record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+        tracing::info!(
+            scope = "wasm-secrets",
+            action = "decrypt-secret",
+            secret_id = %id,
+            "secret plaintext exposed on demand"
+        );
+        Ok(NookSecretRecord::from_record(record))
     }
 
     /// Prefixed secret item id (`secret_{token}`).

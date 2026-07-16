@@ -90,7 +90,7 @@ pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
-pub use secret_view::build_secret_yaml;
+pub use secret_view::{SecretListItem, SecretListItemData, build_secret_yaml};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
     create_sentinel_onboarding_package, decode_sentinel_onboarding_package,
@@ -248,7 +248,7 @@ pub use vault_sentinel_unlock::{respond_to_sentinel_unlock_request, start_sentin
 pub use vault_session::{
     DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage,
     apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,
-    query_encrypted_secrets,
+    decrypt_encrypted_secret, query_encrypted_secrets,
 };
 pub use vault_session_cache::hydrate_keys_from_projection_yaml;
 pub use vault_signing::SigningIdentity;

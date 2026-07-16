@@ -16,14 +16,21 @@
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import type { NookSecretRecord, VaultItemType } from '$lib/nook'
+  import type { NookSecretListItem, VaultItemType } from '$lib/nook'
+  import {
+    freeDecryptedSecrets,
+    toggleSecretExposure,
+    withDecryptedSecret,
+    type DecryptedSecrets,
+  } from '$lib/vault/secret-exposure'
+  import { onDestroy, untrack } from 'svelte'
 
   let {
     vault,
     isSaving,
     editsBlocked = false,
     editBlockReason = undefined,
-    secrets = [] as NookSecretRecord[],
+    secrets = [] as NookSecretListItem[],
     onAddSecret,
     onReplaceSecret,
     onDeleteSecret,
@@ -34,7 +41,7 @@
     isSaving: boolean
     editsBlocked?: boolean
     editBlockReason?: string | undefined
-    secrets?: NookSecretRecord[]
+    secrets?: NookSecretListItem[]
     onAddSecret: (
       id: string,
       type: VaultItemType,
@@ -57,13 +64,11 @@
   } = $props()
 
   let searchPattern = $derived(vault.secretQuery)
-  let revealSecrets = $state<Record<string, boolean>>({})
+  let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let editItem = $state<NookSecretRecord | undefined>(undefined)
 
   const filteredItems = $derived(secrets)
 
@@ -75,7 +80,7 @@
     Math.max(1, Math.ceil(vault.secretTotal / vault.secretPageSize)),
   )
 
-  function getGroupIcon(items: NookSecretRecord[]) {
+  function getGroupIcon(items: NookSecretListItem[]) {
     if (items.some((item) => item.type === 'login')) return Globe
     if (items.some((item) => item.type === 'api-key')) return Braces
     if (items.some((item) => item.type === 'seed-phrase')) return Sprout
@@ -83,7 +88,7 @@
   }
 
   const groups = $derived.by(() => {
-    const dict: Record<string, NookSecretRecord[]> = {}
+    const dict: Record<string, NookSecretListItem[]> = {}
     for (const item of filteredItems) {
       const key = item.groupKey
       if (!dict[key]) {
@@ -104,7 +109,6 @@
   }
 
   function openAddSecret() {
-    editItem = undefined
     formSelectedType = undefined
     addSecretOpen = true
     notifyAddMode()
@@ -116,15 +120,8 @@
     notifyAddMode()
   }
 
-  function openEditItem(item: NookSecretRecord) {
+  async function openEditItem() {
     addSecretOpen = false
-    editItem = item
-    notifyAddMode()
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function closeEditItem() {
-    editItem = undefined
     notifyAddMode()
   }
 
@@ -156,17 +153,41 @@
     }, 2000)
   }
 
-  function toggleReveal(id: string) {
-    const next = !revealSecrets[id]
-    revealSecrets = { ...revealSecrets, [id]: next }
-    if (next) {
+  async function toggleReveal(id: string) {
+    const revealing = decryptedSecrets[id] === undefined
+    decryptedSecrets = await toggleSecretExposure(
+      decryptedSecrets,
+      id,
+      (secretId) => vault.decryptSecret(secretId),
+    )
+    if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true }
     }
+  }
+
+  async function copySecret(id: string) {
+    await withDecryptedSecret(
+      decryptedSecrets,
+      id,
+      (secretId) => vault.decryptSecret(secretId),
+      (record) => copyToClipboard(record.primaryCredential, id, 'secret'),
+    )
   }
 
   function toggleExpand(id: string) {
     expandedSecrets = { ...expandedSecrets, [id]: !expandedSecrets[id] }
   }
+
+  $effect(() => {
+    void vault.secretQuery
+    void vault.secretPageOffset
+    freeDecryptedSecrets(untrack(() => decryptedSecrets))
+    decryptedSecrets = {}
+  })
+
+  onDestroy(() => {
+    freeDecryptedSecrets(decryptedSecrets)
+  })
 </script>
 
 <div
@@ -328,13 +349,14 @@
                     {index}
                     titleAsHeader={titleAsCardHeader}
                     expanded={Boolean(expandedSecrets[item.id])}
-                    {revealSecrets}
+                    decrypted={decryptedSecrets[item.id]}
                     {copiedKey}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
+                    onCopySecret={copySecret}
                     {vault}
                   />
                 {/each}
@@ -354,10 +376,7 @@
                 onclick={() =>
                   vault.loadSecretPage(
                     vault.secretQuery,
-                    Math.max(
-                      0,
-                      vault.secretPageOffset - vault.secretPageSize,
-                    ),
+                    Math.max(0, vault.secretPageOffset - vault.secretPageSize),
                   )}
               >
                 <ChevronLeft class="size-3.5" />
@@ -373,10 +392,8 @@
                 size="sm"
                 variant="outline"
                 data-testid="secret-page-next"
-                disabled={
-                  vault.secretPageOffset + vault.secretPageSize >=
-                  vault.secretTotal
-                }
+                disabled={vault.secretPageOffset + vault.secretPageSize >=
+                  vault.secretTotal}
                 onclick={() =>
                   vault.loadSecretPage(
                     vault.secretQuery,

@@ -12,7 +12,7 @@
     Check,
     ChevronDown,
   } from '@lucide/svelte'
-  import type { NookSecretRecord } from '$lib/nook'
+  import type { NookSecretListItem, NookSecretRecord } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import MarkdownContent from './MarkdownContent.svelte'
   import SeedPhraseGrid from './SeedPhraseGrid.svelte'
@@ -21,30 +21,32 @@
     item,
     index,
     expanded,
-    revealSecrets,
+    decrypted,
     copiedKey,
     onToggleExpand,
     onToggleReveal,
     onEditItem,
     onDeleteSecret,
     onCopyToClipboard,
+    onCopySecret,
     vault,
     titleAsHeader = false,
   }: {
-    item: NookSecretRecord
+    item: NookSecretListItem
     index: number
     expanded: boolean
-    revealSecrets: Record<string, boolean>
+    decrypted: NookSecretRecord | undefined
     copiedKey: string | undefined
     onToggleExpand: (id: string) => void
-    onToggleReveal: (id: string) => void
-    onEditItem: (item: NookSecretRecord) => void
+    onToggleReveal: (id: string) => Promise<void>
+    onEditItem: (item: NookSecretListItem) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
     onCopyToClipboard: (
       text: string,
       id: string,
       field: string,
     ) => Promise<void>
+    onCopySecret: (id: string) => Promise<void>
     vault: VaultState
     /** Use the title row as the card header (no duplicate group header). */
     titleAsHeader?: boolean
@@ -63,7 +65,7 @@
     }
     if (item.type === 'seed-phrase') {
       const name = item.name.trim()
-      const words = item.seed.trim().split(/\s+/).filter(Boolean).length
+      const words = item.seedWordCount
       const label = name || vault.t('vault.fields.unnamed_seed_phrase')
       if (words === 12 || words === 24) {
         return `${label} · ${vault.t('vault.fields.words_count', { count: String(words) })}`
@@ -148,21 +150,21 @@
       >
         <button
           type="button"
-          onclick={() => onToggleReveal(item.id)}
-          aria-label={revealSecrets[item.id]
+          onclick={() => void onToggleReveal(item.id)}
+          aria-label={decrypted
             ? vault.t('vault.hide_value')
             : vault.t('vault.show_value')}
-          aria-pressed={Boolean(revealSecrets[item.id])}
+          aria-pressed={Boolean(decrypted)}
           data-testid="reveal-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
-          {#if revealSecrets[item.id]}<EyeOff class="size-3.5" />{:else}<Eye
+          {#if decrypted}<EyeOff class="size-3.5" />{:else}<Eye
               class="size-3.5"
             />{/if}
         </button>
         <button
           type="button"
-          onclick={() => onEditItem(item)}
+          onclick={() => void onEditItem(item)}
           aria-label={vault.t('common.edit')}
           data-testid="edit-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
@@ -248,12 +250,11 @@
                 class="truncate font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {revealSecrets[item.id] ? item.password : '••••••••••••••••'}
+                {decrypted ? decrypted.password : '••••••••••••••••'}
               </code>
               <button
                 type="button"
-                onclick={() =>
-                  void onCopyToClipboard(item.password, item.id, 'secret')}
+                onclick={() => void onCopySecret(item.id)}
                 aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
@@ -264,7 +265,7 @@
             </div>
           </div>
 
-          {#if item.notes}
+          {#if decrypted?.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
                 >{vault.t('vault.fields.notes')}</span
@@ -272,7 +273,7 @@
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
               >
-                {item.notes}
+                {decrypted.notes}
               </div>
             </div>
           {/if}
@@ -314,18 +315,11 @@
                 class="break-all font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {revealSecrets[item.id]
-                  ? item.primaryCredential
-                  : '••••••••••••••••'}
+                {decrypted ? decrypted.primaryCredential : '••••••••••••••••'}
               </code>
               <button
                 type="button"
-                onclick={() =>
-                  void onCopyToClipboard(
-                    item.primaryCredential,
-                    item.id,
-                    'secret',
-                  )}
+                onclick={() => void onCopySecret(item.id)}
                 aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
@@ -395,8 +389,7 @@
               >
               <button
                 type="button"
-                onclick={() =>
-                  void onCopyToClipboard(item.seed, item.id, 'secret')}
+                onclick={() => void onCopySecret(item.id)}
                 aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
@@ -407,9 +400,9 @@
             </div>
             <SeedPhraseGrid
               {vault}
-              value={item.seed}
+              value={decrypted?.seed ?? ''}
               readonly
-              revealed={Boolean(revealSecrets[item.id])}
+              revealed={Boolean(decrypted)}
             />
           </div>
         {:else}
@@ -420,12 +413,12 @@
             <div
               class="flex items-start justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2.5 py-1.5 transition-colors border border-border/20"
             >
-              {#if revealSecrets[item.id]}
+              {#if decrypted}
                 <div
                   class="min-w-0 flex-1 text-[11px] leading-relaxed text-foreground"
                   data-testid="revealed-secret"
                 >
-                  <MarkdownContent source={item.note} />
+                  <MarkdownContent source={decrypted.note} />
                 </div>
               {:else}
                 <span
@@ -435,8 +428,7 @@
               {/if}
               <button
                 type="button"
-                onclick={() =>
-                  void onCopyToClipboard(item.note, item.id, 'secret')}
+                onclick={() => void onCopySecret(item.id)}
                 aria-label={vault.t('vault.copy_note')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >

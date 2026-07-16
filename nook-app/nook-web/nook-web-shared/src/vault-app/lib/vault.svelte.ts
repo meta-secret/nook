@@ -3,6 +3,7 @@ import {
   isoTimestamp,
   type JoinRequest,
   type NookBitwardenImportResult,
+  type NookSecretListItem,
   type NookSecretRecord,
   type NookVaultSyncResult,
   type VaultItemType,
@@ -257,7 +258,7 @@ export class VaultState {
   isAuthenticated = $state(false);
   /** True when the login gate should explain that the last lock was due to idle timeout. */
   sessionExpiredByIdle = $state(false);
-  secrets = $state<NookSecretRecord[]>([]);
+  secrets = $state<NookSecretListItem[]>([]);
   secretTotal = $state(0);
   secretPageOffset = $state(0);
   secretPageSize = 50;
@@ -2450,7 +2451,7 @@ export class VaultState {
         this.secretPageSize,
       ),
     );
-    let records = page.takeRecords();
+    let records = page.takeItems();
     let total = page.total;
     let offset = page.offset;
     page.free();
@@ -2461,7 +2462,7 @@ export class VaultState {
       const lastPage = await this.enqueueStorage(() =>
         this.manager!.querySecretPage(query, lastOffset, this.secretPageSize),
       );
-      records = lastPage.takeRecords();
+      records = lastPage.takeItems();
       total = lastPage.total;
       offset = lastPage.offset;
       lastPage.free();
@@ -2472,6 +2473,13 @@ export class VaultState {
     this.secretTotal = total;
     this.secretPageOffset = offset;
     this.secretQuery = query;
+  }
+
+  async decryptSecret(id: string): Promise<NookSecretRecord> {
+    if (!this.manager) {
+      throw new Error("Vault manager is not initialized.");
+    }
+    return this.enqueueStorage(() => this.manager!.decryptSecret(id));
   }
 
   async refreshDeviceState() {

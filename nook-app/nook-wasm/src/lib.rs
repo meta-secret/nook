@@ -1293,6 +1293,95 @@ pub fn read_vault_version(yaml: &str) -> u64 {
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookSecretListItem {
+    item: nook_core::SecretListItem,
+}
+
+#[wasm_bindgen]
+impl NookSecretListItem {
+    pub(crate) fn from_core(item: nook_core::SecretListItem) -> Self {
+        Self { item }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> String {
+        self.item.id.to_string()
+    }
+
+    #[wasm_bindgen(getter, js_name = "type")]
+    pub fn secret_type(&self) -> String {
+        self.item.secret_type().as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = displayTitle)]
+    pub fn display_title(&self) -> String {
+        self.item.display_title()
+    }
+
+    #[wasm_bindgen(getter, js_name = groupKey)]
+    pub fn group_key(&self) -> String {
+        self.item.group_key()
+    }
+
+    #[wasm_bindgen(getter, js_name = summary)]
+    pub fn summary(&self) -> String {
+        self.item.summary()
+    }
+
+    #[wasm_bindgen(getter, js_name = websiteUrl)]
+    pub fn website_url(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Login { website_url, .. }
+            | nook_core::SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn username(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::Login { username, .. } => username.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = expiresAt)]
+    pub fn expires_at(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::ApiKey { expires_at, .. } => expires_at.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::SeedPhrase { name, .. } => name.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = seedWordCount)]
+    pub fn seed_word_count(&self) -> u32 {
+        match self.item.data {
+            nook_core::SecretListItemData::SeedPhrase { word_count, .. } => {
+                u32::try_from(word_count).unwrap_or(u32::MAX)
+            }
+            _ => 0,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn title(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::SecureNote { title } => title.clone(),
+            _ => String::new(),
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookSecretRecord {
     record: nook_core::SecretRecord,
 }
@@ -1468,6 +1557,44 @@ mod wasm_tests {
             NookStorageProviderTypeUtil::value(NookStorageProviderKind::LocalFolder),
             "local-folder"
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn list_item_exports_metadata_without_secret_accessors() {
+        let item = NookSecretListItem::from_core(nook_core::SecretListItem {
+            id: nook_core::SecretId::from_vault_record("secret_login"),
+            data: nook_core::SecretListItemData::Login {
+                website_url: "https://example.com".to_owned(),
+                username: "alice".to_owned(),
+            },
+        });
+
+        assert_eq!(item.id(), "secret_login");
+        assert_eq!(item.secret_type(), "login");
+        assert_eq!(item.website_url(), "https://example.com");
+        assert_eq!(item.username(), "alice");
+        assert_eq!(item.summary(), "alice");
+    }
+
+    #[wasm_bindgen_test]
+    fn page_transfers_metadata_items_only_once() {
+        let mut page = NookSecretPage::from_core(nook_core::SecretPage {
+            records: vec![nook_core::SecretListItem {
+                id: nook_core::SecretId::from_vault_record("secret_note"),
+                data: nook_core::SecretListItemData::SecureNote {
+                    title: "Recovery".to_owned(),
+                },
+            }],
+            total: 1,
+            offset: 0,
+            limit: 50,
+        })
+        .expect("metadata page");
+
+        let items = page.take_items();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title(), "Recovery");
+        assert!(page.take_items().is_empty());
     }
 }
 

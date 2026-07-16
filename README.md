@@ -123,9 +123,9 @@ item, add a corrected copy and delete the old one.
   provider credentials locked. Authorize with the passkey or PIN when you want
   remote synchronization to resume.
 - You can also connect a sync provider to import an existing vault.
-- Decrypted secrets exist only in the active browser session, and the vault
-  decrypts list items page by page instead of retaining the full plaintext
-  database in memory.
+- Decrypted secrets exist only in the active browser session. List/search pages
+  retain metadata only; reveal and secret copy decrypt one item on demand, then
+  free it when the revealed/action state ends.
 - **Lock vault** clears the plaintext session; encrypted data and providers stay.
 
 ### When you add another device
@@ -150,7 +150,8 @@ local command
   → IndexedDB event store
   ↔ set union ↔ GitHub (nook-log/v1/events/…)
   → causal DAG + deterministic projection
-  → encrypted session + page-scoped plaintext (unlocked only)
+  → encrypted session + metadata pages
+  → one-record plaintext exposure on reveal/copy (unlocked only)
 ```
 
 Cryptography and domain logic run in Rust compiled to WebAssembly. Secret

@@ -4,8 +4,6 @@ use crate::types::{NookVaultSyncResult, joins_to_vec, members_to_vec};
 use crate::{NookError, NookVaultManager};
 use wasm_bindgen::JsError;
 
-pub(crate) use crate::types::records_to_vec;
-
 pub(crate) fn content_requires_genesis(
     content: &str,
     force_genesis: bool,
