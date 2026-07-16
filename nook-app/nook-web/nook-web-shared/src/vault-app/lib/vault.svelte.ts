@@ -2736,6 +2736,10 @@ export class VaultState {
     return secretsActions.handleBitwardenImport(this, json, password);
   }
 
+  async handleLastPassImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleLastPassImport(this, csv);
+  }
+
   async handleOnePasswordImport(
     archive: Uint8Array,
   ): Promise<NookImportResult> {
@@ -2748,6 +2752,12 @@ export class VaultState {
 
   async handleChromePasswordsImport(csv: string): Promise<NookImportResult> {
     return secretsActions.handleChromePasswordsImport(this, csv);
+  }
+
+  async handleProtonPassImport(
+    exportBytes: Uint8Array,
+  ): Promise<NookImportResult> {
+    return secretsActions.handleProtonPassImport(this, exportBytes);
   }
 
   scheduleRemoteEventOutboxFlush(): void {

@@ -884,12 +884,16 @@
                   onClearCode={() => vault.clearEnrollmentCode()}
                   onImportBitwarden={(json, password) =>
                     vault.handleBitwardenImport(json, password)}
+                  onImportLastPass={(csv) =>
+                    vault.handleLastPassImport(csv)}
                   onImportOnePassword={(archive) =>
                     vault.handleOnePasswordImport(archive)}
                   onImportApplePasswords={(csv) =>
                     vault.handleApplePasswordsImport(csv)}
                   onImportChromePasswords={(csv) =>
                     vault.handleChromePasswordsImport(csv)}
+                  onImportProtonPass={(exportBytes) =>
+                    vault.handleProtonPassImport(exportBytes)}
                 />
               {:else if vault.settingsOpen && vault.settingsSection === "onboard"}
                 <OnboardDevice
