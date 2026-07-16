@@ -55,7 +55,10 @@ Main publishes the development ZIP at
 `https://simple.dev.nokey.sh/`. Production releases publish a versioned ZIP at
 `https://nokey.sh/downloads/` and attach the same bytes to the GitHub Release.
 Every channel also exposes `/downloads/extension.json` and the archive's
-`.sha256` file.
+`.sha256` file. Metadata schema version 2 distinguishes the public installation
+path from the downloadable verification artifact: production's `install_url`
+opens the Chrome Web Store listing derived from the stable extension ID, while
+development and PR channels use their same-origin ZIP with manual installation.
 
 The build writes a Manifest V3 extension bundle to `nook-app/nook-web/nook-web-extension/dist` inside
 the sealed Docker image. Use `task docker:extract:extension` to copy that bundle

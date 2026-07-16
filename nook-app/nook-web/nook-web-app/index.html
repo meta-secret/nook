@@ -73,6 +73,10 @@
         box-sizing: border-box;
       }
 
+      [hidden] {
+        display: none !important;
+      }
+
       html {
         scroll-behavior: smooth;
       }
@@ -337,6 +341,19 @@
         align-items: center;
         gap: 14px;
         margin-top: 38px;
+      }
+
+      .hero-extension-link {
+        display: inline-block;
+        margin-top: 20px;
+        color: var(--muted-text);
+        font-size: 13px;
+        font-weight: 650;
+        text-underline-offset: 5px;
+      }
+
+      .hero-extension-link::after {
+        content: ' →';
       }
 
       .button {
@@ -639,6 +656,72 @@
         padding: 110px 0 120px;
       }
 
+      .extension-install {
+        border-top: 1px solid var(--line);
+        padding: 92px 0 104px;
+      }
+
+      .extension-install-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr);
+        gap: 72px;
+        align-items: start;
+      }
+
+      .extension-install h2 {
+        max-width: 760px;
+        margin: 0;
+        font-size: clamp(40px, 5.4vw, 76px);
+        font-weight: 350;
+        letter-spacing: -0.06em;
+        line-height: 0.98;
+      }
+
+      .extension-install-copy > p {
+        max-width: 680px;
+        margin: 28px 0 0;
+        color: var(--muted-text);
+        font-size: 17px;
+        line-height: 1.65;
+      }
+
+      .extension-install-action {
+        margin-top: 30px;
+      }
+
+      .extension-install-status {
+        margin: 18px 0 0;
+        color: var(--muted-text);
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        line-height: 1.6;
+        text-transform: uppercase;
+      }
+
+      .extension-store-note,
+      .extension-manual {
+        max-width: 680px;
+        margin-top: 28px;
+        border-top: 1px solid var(--line);
+        padding-top: 24px;
+        color: var(--muted-text);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      .extension-manual ol {
+        margin: 12px 0 0;
+        padding-left: 22px;
+      }
+
+      .extension-manual code {
+        color: inherit;
+        font-size: 0.92em;
+      }
+
       .manifest-heading {
         display: grid;
         grid-template-columns: 0.55fr 1.45fr;
@@ -873,6 +956,11 @@
           padding-top: 80px;
         }
 
+        .extension-install-grid {
+          grid-template-columns: 1fr;
+          gap: 34px;
+        }
+
         .capsule-stage {
           min-height: 720px;
         }
@@ -945,6 +1033,10 @@
 
         .manifest {
           padding: 80px 0;
+        }
+
+        .extension-install {
+          padding: 76px 0 82px;
         }
 
         .manifest-heading,
@@ -1136,6 +1228,13 @@
                 >Open Sentinel Vault</a
               >
             </div>
+            <a
+              class="hero-extension-link"
+              href="#browser-extension"
+              data-testid="hero-extension-link"
+              data-i18n="extension.hero_link"
+              >Get the browser extension</a
+            >
           </div>
 
           <div
@@ -1179,6 +1278,68 @@
               <li>Encrypted storage</li>
               <li>Distributed authority</li>
             </ul>
+          </div>
+        </section>
+
+        <section class="extension-install" id="browser-extension">
+          <div class="extension-install-grid">
+            <p class="eyebrow" data-i18n="extension.eyebrow">
+              Simple Vault companion / browser extension
+            </p>
+            <div class="extension-install-copy">
+              <h2 data-i18n="extension.title">
+                Fill passwords where you work.
+              </h2>
+              <p data-i18n="extension.description">
+                Add Nook to Chrome or Brave for permissioned password filling.
+                The extension is a separately protected device that pairs only
+                with Simple Vault; Sentinel Vault never participates.
+              </p>
+              <a
+                class="button primary extension-install-action"
+                data-testid="extension-install-action"
+                rel="noreferrer"
+                hidden
+              ></a>
+              <p
+                class="extension-install-status"
+                data-testid="extension-install-status"
+                aria-live="polite"
+                data-i18n="extension.loading"
+              >
+                Loading extension channel…
+              </p>
+              <p
+                class="extension-store-note"
+                data-testid="extension-store-note"
+                data-i18n="extension.store_note"
+                hidden
+              >
+                Production installs and updates through the Chrome Web Store.
+                Brave can install the same listing.
+              </p>
+              <div
+                class="extension-manual"
+                data-testid="extension-manual-instructions"
+                hidden
+              >
+                <strong data-i18n="extension.manual_title"
+                  >Install this preview manually</strong
+                >
+                <ol>
+                  <li data-i18n="extension.manual_download">
+                    Download and unzip the channel-specific archive.
+                  </li>
+                  <li data-i18n-html="extension.manual_extensions">
+                    Open <code>chrome://extensions</code> in Chrome or Brave and
+                    enable Developer mode.
+                  </li>
+                  <li data-i18n="extension.manual_load">
+                    Choose Load unpacked and select the extracted folder.
+                  </li>
+                </ol>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1448,6 +1609,9 @@
           <a href="https://sentinel.nokey.sh/" data-i18n="nav.open_sentinel"
             >Sentinel Vault</a
           >
+          <a href="#browser-extension" data-i18n="extension.footer_link"
+            >Browser extension</a
+          >
           <a href="./privacy.html" data-i18n="nav.privacy">Privacy</a>
           <a href="./terms.html" data-i18n="nav.terms">Terms</a>
           <a href="https://github.com/meta-secret/nook">GitHub</a>
@@ -1480,6 +1644,28 @@
           'hero.open_nook': 'Open Nook',
           'hero.open_simple': 'Open Simple Vault',
           'hero.open_sentinel': 'Open Sentinel Vault',
+          'extension.hero_link': 'Get the browser extension',
+          'extension.footer_link': 'Browser extension',
+          'extension.eyebrow': 'Simple Vault companion / browser extension',
+          'extension.title': 'Fill passwords where you work.',
+          'extension.description':
+            'Add Nook to Chrome or Brave for permissioned password filling. The extension is a separately protected device that pairs only with Simple Vault; Sentinel Vault never participates.',
+          'extension.loading': 'Loading extension channel…',
+          'extension.unavailable':
+            'Extension installation is unavailable for this deployment.',
+          'extension.channel': 'Channel',
+          'extension.version': 'Version',
+          'extension.add_store': 'Add to Chrome',
+          'extension.download_zip': 'Download extension ZIP',
+          'extension.store_note':
+            'Production installs and updates through the Chrome Web Store. Brave can install the same listing.',
+          'extension.manual_title': 'Install this preview manually',
+          'extension.manual_download':
+            'Download and unzip the channel-specific archive.',
+          'extension.manual_extensions':
+            'Open <code>chrome://extensions</code> in Chrome or Brave and enable Developer mode.',
+          'extension.manual_load':
+            'Choose Load unpacked and select the extracted folder.',
           'capsule.label':
             'Encrypted Nook vault capsule protected by a device identity and immutable event log',
           'capsule.principles_label': 'Nook principles',
@@ -1555,6 +1741,28 @@
           'hero.open_nook': 'Открыть Nook',
           'hero.open_simple': 'Открыть простой сейф',
           'hero.open_sentinel': 'Открыть сейф Sentinel',
+          'extension.hero_link': 'Установить расширение для браузера',
+          'extension.footer_link': 'Расширение для браузера',
+          'extension.eyebrow': 'Компаньон Simple Vault / расширение браузера',
+          'extension.title': 'Заполняйте пароли там, где работаете.',
+          'extension.description':
+            'Добавьте Nook в Chrome или Brave для разрешённого заполнения паролей. Расширение — это отдельно защищённое устройство, которое подключается только к Simple Vault; Sentinel Vault не участвует.',
+          'extension.loading': 'Загрузка канала расширения…',
+          'extension.unavailable':
+            'Установка расширения недоступна для этого deployment.',
+          'extension.channel': 'Канал',
+          'extension.version': 'Версия',
+          'extension.add_store': 'Добавить в Chrome',
+          'extension.download_zip': 'Скачать ZIP расширения',
+          'extension.store_note':
+            'Production-версия устанавливается и обновляется через Chrome Web Store. В Brave используется та же страница.',
+          'extension.manual_title': 'Установить эту preview-версию вручную',
+          'extension.manual_download':
+            'Скачайте и распакуйте архив для текущего канала.',
+          'extension.manual_extensions':
+            'Откройте <code>chrome://extensions</code> в Chrome или Brave и включите режим разработчика.',
+          'extension.manual_load':
+            'Нажмите «Загрузить распакованное расширение» и выберите распакованную папку.',
           'capsule.label':
             'Зашифрованная капсула Nook, защищённая device identity и immutable event log',
           'capsule.principles_label': 'Принципы Nook',
@@ -1613,7 +1821,17 @@
       const readoutTitle = document.querySelector('.readout-title')
       const readoutDetail = document.querySelector('.readout-detail')
       const themeToggle = document.querySelector('.theme-toggle')
+      const extensionInstallAction = document.querySelector(
+        '.extension-install-action',
+      )
+      const extensionInstallStatus = document.querySelector(
+        '.extension-install-status',
+      )
+      const extensionStoreNote = document.querySelector('.extension-store-note')
+      const extensionManual = document.querySelector('.extension-manual')
       const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
+      let extensionMetadata = null
+      let extensionMetadataUnavailable = false
       let followsSystemTheme = true
 
       function selectCryptoTerm(term) {
@@ -1646,6 +1864,85 @@
           }
         }
         return 'en'
+      }
+
+      function validateExtensionMetadata(metadata) {
+        if (
+          !metadata ||
+          metadata.schema_version !== 2 ||
+          typeof metadata.channel !== 'string' ||
+          typeof metadata.version !== 'string' ||
+          !/^[a-p]{32}$/.test(metadata.extension_id)
+        ) {
+          throw new Error('Invalid extension deployment metadata.')
+        }
+
+        const installUrl = new URL(metadata.install_url)
+        if (metadata.channel === 'production') {
+          const expectedStoreUrl = `https://chromewebstore.google.com/detail/${metadata.extension_id}`
+          if (
+            metadata.install_method !== 'chrome_web_store' ||
+            installUrl.toString() !== expectedStoreUrl
+          ) {
+            throw new Error('Invalid Chrome Web Store installation target.')
+          }
+        } else {
+          const downloadUrl = new URL(metadata.download_url)
+          if (
+            metadata.install_method !== 'manual_zip' ||
+            installUrl.toString() !== downloadUrl.toString() ||
+            downloadUrl.origin !== location.origin
+          ) {
+            throw new Error('Invalid manual extension installation target.')
+          }
+        }
+        return metadata
+      }
+
+      function updateExtensionInstallState(
+        locale = document.documentElement.lang,
+      ) {
+        const messages = landingMessages[locale]
+        if (extensionMetadataUnavailable) {
+          extensionInstallStatus.textContent = messages['extension.unavailable']
+          extensionInstallAction.hidden = true
+          extensionStoreNote.hidden = true
+          extensionManual.hidden = true
+          return
+        }
+        if (!extensionMetadata) {
+          extensionInstallStatus.textContent = messages['extension.loading']
+          return
+        }
+
+        const storeInstall =
+          extensionMetadata.install_method === 'chrome_web_store'
+        const actionKey = storeInstall
+          ? 'extension.add_store'
+          : 'extension.download_zip'
+        extensionInstallAction.dataset.i18n = actionKey
+        extensionInstallAction.textContent = messages[actionKey]
+        extensionInstallAction.href = extensionMetadata.install_url
+        extensionInstallAction.target = storeInstall ? '_blank' : ''
+        extensionInstallAction.toggleAttribute('download', !storeInstall)
+        extensionInstallAction.hidden = false
+        extensionStoreNote.hidden = !storeInstall
+        extensionManual.hidden = storeInstall
+        extensionInstallStatus.textContent = `${messages['extension.channel']}: ${extensionMetadata.channel} · ${messages['extension.version']}: ${extensionMetadata.version}`
+      }
+
+      async function loadExtensionMetadata() {
+        try {
+          const response = await fetch('./downloads/extension.json', {
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          })
+          if (!response.ok) throw new Error('Extension metadata unavailable.')
+          extensionMetadata = validateExtensionMetadata(await response.json())
+        } catch {
+          extensionMetadataUnavailable = true
+        }
+        updateExtensionInstallState()
       }
 
       function applyLandingLocale(locale, persist = false) {
@@ -1695,6 +1992,7 @@
         if (activeTerm) selectCryptoTerm(activeTerm)
 
         updateThemeToggleLabel(locale)
+        updateExtensionInstallState(locale)
 
         const structuredDataElement = document.querySelector('#structured-data')
         const structuredData = JSON.parse(structuredDataElement.textContent)
@@ -1743,6 +2041,7 @@
       }
 
       applyLandingLocale(resolveLandingLocale())
+      void loadExtensionMetadata()
 
       for (const button of document.querySelectorAll('[data-locale]')) {
         button.addEventListener('click', () => {

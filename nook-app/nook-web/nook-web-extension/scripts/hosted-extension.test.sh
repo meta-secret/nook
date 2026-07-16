@@ -81,7 +81,7 @@ commit='0123456789abcdef0123456789abcdef01234567'
 archive_name='nook-passwords-pr-410.zip'
 cat > "$fixture/metadata.json" <<EOF
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "channel": "pr-410",
   "version": "1.0.0",
   "manifest_version": "1.0.0",
@@ -91,7 +91,9 @@ cat > "$fixture/metadata.json" <<EOF
   "archive": "$archive_name",
   "download_url": "https://pr-410.nokey-sh.pages.dev/downloads/$archive_name",
   "checksum_url": "https://pr-410.nokey-sh.pages.dev/downloads/$archive_name.sha256",
-  "sha256": "$digest"
+  "sha256": "$digest",
+  "install_method": "manual_zip",
+  "install_url": "https://pr-410.nokey-sh.pages.dev/downloads/$archive_name"
 }
 EOF
 printf '%s  %s\n' "$digest" "$archive_name" > "$fixture/checksum"

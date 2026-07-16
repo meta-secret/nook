@@ -34,9 +34,12 @@ The Main channel mirrors that split at [dev.nokey.sh](https://dev.nokey.sh),
 Cloudflare's native `pr-<number>.<project>.pages.dev` branch aliases.
 Each PR site publishes its matching browser-extension ZIP under `/downloads/`;
 main does the same at `dev.nokey.sh`, and immutable production releases publish
-the versioned ZIP at `nokey.sh` plus the GitHub Release. These unsigned website
-artifacts must be unzipped and loaded with browser Developer mode; marketplace
-installation is intentionally separate.
+the versioned ZIP at `nokey.sh` plus the GitHub Release. The public site's
+browser-extension section reads the channel metadata: production sends users to
+the Chrome Web Store listing for the stable extension identity, while
+development and PR previews offer their unsigned ZIP with Developer-mode
+installation instructions. Production keeps the ZIP as a verifiable release
+artifact rather than the public installation path.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do

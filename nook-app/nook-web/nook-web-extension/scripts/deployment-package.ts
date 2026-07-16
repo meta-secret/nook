@@ -18,7 +18,7 @@ import {
 } from './channel-identity'
 
 export type ExtensionDeploymentMetadata = {
-  schema_version: 1
+  schema_version: 2
   channel: ExtensionChannel
   version: string
   manifest_version: string
@@ -29,6 +29,8 @@ export type ExtensionDeploymentMetadata = {
   download_url: string
   checksum_url: string
   sha256: string
+  install_method: 'chrome_web_store' | 'manual_zip'
+  install_url: string
 }
 
 const FIXED_ARCHIVE_TIMESTAMP = new Date('2000-01-01T00:00:00.000Z')
@@ -44,6 +46,23 @@ export function extensionArchiveName(
     throw new Error('NOOK_EXTENSION_VERSION is not safe for an archive name.')
   }
   return `nook-passwords-${version}.zip`
+}
+
+export function extensionInstallTarget(
+  channel: ExtensionChannel,
+  extensionId: string,
+  downloadUrl: string,
+): Pick<ExtensionDeploymentMetadata, 'install_method' | 'install_url'> {
+  if (!/^[a-p]{32}$/.test(extensionId)) {
+    throw new Error('Extension ID is not a valid Chrome extension ID.')
+  }
+  if (channel === 'production') {
+    return {
+      install_method: 'chrome_web_store',
+      install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
+    }
+  }
+  return { install_method: 'manual_zip', install_url: downloadUrl }
 }
 
 function normalizedHttpsBaseUrl(value: string, name: string): URL {
@@ -135,18 +154,20 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
     .digest('hex')
   const downloadUrl = new URL(`downloads/${archive}`, siteUrl).toString()
   const checksumUrl = new URL(`downloads/${archive}.sha256`, siteUrl).toString()
+  const extensionId = extensionIdFromManifestKey(manifest.key)
   const metadata: ExtensionDeploymentMetadata = {
-    schema_version: 1,
+    schema_version: 2,
     channel,
     version,
     manifest_version: manifest.version,
     commit,
     simple_vault_url: simpleVaultUrl.replace(/\*$/, ''),
-    extension_id: extensionIdFromManifestKey(manifest.key),
+    extension_id: extensionId,
     archive,
     download_url: downloadUrl,
     checksum_url: checksumUrl,
     sha256: digest,
+    ...extensionInstallTarget(channel, extensionId, downloadUrl),
   }
   await Promise.all([
     writeFile(
