@@ -44,6 +44,11 @@ export function installMockPasskeyRuntime() {
     }
   }
   const publicKeyCredential = {
+    [Symbol.hasInstance]: (candidate: unknown) =>
+      !!candidate &&
+      typeof candidate === 'object' &&
+      'type' in candidate &&
+      candidate.type === 'public-key',
     signalCurrentUserDetails: async (details: {
       displayName?: string
       name?: string
@@ -75,6 +80,7 @@ export function installMockPasskeyRuntime() {
     value: {
       create: async (options: {
         publicKey?: {
+          challenge?: ArrayBuffer | ArrayBufferView
           user?: {
             displayName?: string
             id?: ArrayBuffer | ArrayBufferView
@@ -102,6 +108,12 @@ export function installMockPasskeyRuntime() {
           throw new DOMException('This is an invalid domain.', 'SecurityError')
         }
         const createdUserHandle = options.publicKey?.user?.id
+        if (!(options.publicKey?.challenge instanceof Uint8Array)) {
+          throw new TypeError('WebAuthn creation challenge must be binary')
+        }
+        if (!(createdUserHandle instanceof Uint8Array)) {
+          throw new TypeError('WebAuthn creation user id must be binary')
+        }
         if (createdUserHandle) {
           userHandle = bytesFrom(createdUserHandle)
           saveUserHandle()
@@ -113,11 +125,15 @@ export function installMockPasskeyRuntime() {
             '',
         )
         const first = options.publicKey?.extensions?.prf?.eval?.first
+        if (!(first instanceof Uint8Array)) {
+          throw new TypeError('WebAuthn creation PRF input must be binary')
+        }
         if (!first) throw new Error('Missing E2E PRF create input')
         return result(first, mode !== 'unsupported')
       },
       get: async (options: {
         publicKey?: {
+          challenge?: ArrayBuffer | ArrayBufferView
           extensions?: {
             prf?: {
               eval?: { first?: ArrayBuffer | ArrayBufferView }
@@ -136,9 +152,15 @@ export function installMockPasskeyRuntime() {
           )
         }
         const prf = options.publicKey?.extensions?.prf
+        if (!(options.publicKey?.challenge instanceof Uint8Array)) {
+          throw new TypeError('WebAuthn request challenge must be binary')
+        }
         const first =
           prf?.eval?.first ??
           Object.values(prf?.evalByCredential ?? {})[0]?.first
+        if (!(first instanceof Uint8Array)) {
+          throw new TypeError('WebAuthn request PRF input must be binary')
+        }
         if (!first) throw new Error('Missing E2E PRF get input')
         return result(first, false)
       },

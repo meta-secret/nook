@@ -233,6 +233,18 @@ pub fn build_passkey_prf_request_options(
     passkey_browser::request_options(rp_id, &credential_id, &prf_input)
 }
 
+#[wasm_bindgen(js_name = buildPasskeyCreationOptions)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn build_passkey_creation_options(
+    rp_id: &str,
+    rp_name: &str,
+    passkey_label: &str,
+    user_handle: Vec<u8>,
+    prf_input: Vec<u8>,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    passkey_browser::creation_options(rp_id, rp_name, passkey_label, &user_handle, &prf_input)
+}
+
 #[wasm_bindgen(js_name = buildPasskeyRecoveryRequestOptions)]
 pub fn build_passkey_recovery_request_options(
     rp_id: &str,
