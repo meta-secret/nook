@@ -5,7 +5,9 @@ import {
 } from '../../../nook-web-shared/src/password/generator'
 import {
   default as initNookWasm,
+  buildPasskeyCreationOptions,
   buildPasskeyPrfRequestOptions,
+  buildPasskeyRecoveryRequestOptions,
   configureVaultApplication,
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
@@ -109,7 +111,9 @@ function prfOutput(credential: PublicKeyCredential): number[] {
   const prf = (
     credential as PublicKeyCredentialWithPrf
   ).getClientExtensionResults().prf
-  if (!prf?.enabled || !prf.results?.first) {
+  // `enabled` reports registration support; assertion results are authoritative
+  // when the browser returns the requested PRF output.
+  if (!prf?.results?.first) {
     throw new Error(
       'PASSKEY_PRF_UNAVAILABLE: The passkey did not return the required PRF output.',
     )
@@ -209,14 +213,19 @@ export async function createExtensionPasskey(
       setup: {
         userHandle: number[]
         prfInput: number[]
-        creationOptions: unknown
       }
     }>
   >({
     type: 'nook:extension-session-begin-passkey-setup',
-    payload: { passkeyLabel },
   })
-  const created = await createPasskey(setup.creationOptions)
+  const creationOptions = buildPasskeyCreationOptions(
+    '',
+    'Nook Extension',
+    passkeyLabel,
+    new Uint8Array(setup.userHandle),
+    new Uint8Array(setup.prfInput),
+  )
+  const created = await createPasskey(creationOptions)
   const prfRequest = buildPasskeyPrfRequestOptions(
     '',
     new Uint8Array(credentialId(created)),
@@ -240,11 +249,8 @@ export async function createExtensionPasskey(
 }
 
 export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
-  const { options } = await sessionMessage<
-    SessionResponse<{ options: unknown }>
-  >({
-    type: 'nook:extension-session-recovery-options',
-  })
+  await ensureNookWasm()
+  const options = buildPasskeyRecoveryRequestOptions('')
   const credential = await getPasskey(options)
   return (
     await sessionMessage<
@@ -261,11 +267,18 @@ export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtecti
 }
 
 export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
-  const { options } = await sessionMessage<
-    SessionResponse<{ options: unknown }>
+  const { material } = await sessionMessage<
+    SessionResponse<{
+      material: { credentialId: number[]; prfInput: number[] }
+    }>
   >({
     type: 'nook:extension-session-unlock-options',
   })
+  const options = buildPasskeyPrfRequestOptions(
+    '',
+    new Uint8Array(material.credentialId),
+    new Uint8Array(material.prfInput),
+  )
   const credential = await getPasskey(options)
   return (
     await sessionMessage<

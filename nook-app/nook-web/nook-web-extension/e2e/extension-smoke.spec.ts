@@ -396,6 +396,43 @@ test('sets up the extension device first and sends its public keys to Simple Vau
   }
 })
 
+test('creates a passkey from browser-native WASM options after extension messaging', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const userDataDir = testInfo.outputPath('chromium-profile')
+  await mkdir(userDataDir, { recursive: true })
+
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    executablePath: chromiumExecutablePath,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+    ],
+  })
+  await context.addInitScript(installMockPasskeyRuntime)
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const popupPage = await context.newPage()
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+
+    const openedConnectPage = context.waitForEvent('page')
+    await popupPage.getByTestId('device-protection-setup-btn').click()
+    const simplePage = await openedConnectPage
+
+    await expect(simplePage).toHaveURL((url) =>
+      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    )
+  } finally {
+    await context.close()
+  }
+})
+
 test('approves an extension device and imports the granted Simple Vault event log', async ({
   browserName,
 }, testInfo) => {
