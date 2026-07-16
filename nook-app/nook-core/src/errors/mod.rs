@@ -24,7 +24,25 @@ use thiserror::Error;
 pub type VaultResult<T> = Result<T, VaultError>;
 
 #[derive(Debug, Error)]
+pub enum ExtensionIdentityHandoffError {
+    #[error("Extension identity handoff nonce is invalid.")]
+    InvalidNonce,
+
+    #[error("Failed to serialize extension identity handoff.")]
+    Serialize(#[source] serde_json::Error),
+
+    #[error("Invalid extension identity handoff.")]
+    Deserialize(#[source] serde_json::Error),
+
+    #[error("Extension identity handoff does not match the requested device.")]
+    BindingMismatch,
+}
+
+#[derive(Debug, Error)]
 pub enum VaultError {
+    #[error(transparent)]
+    ExtensionIdentityHandoff(#[from] ExtensionIdentityHandoffError),
+
     #[error(transparent)]
     Event(#[from] EventError),
 

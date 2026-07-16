@@ -45,9 +45,21 @@ export type ExtensionLocalEventLogUpdatedMessage = {
   }
 }
 
+export type ExtensionIdentityHandoffRequestMessage = {
+  type: 'nook:extension-identity-handoff-request'
+  payload: {
+    recipientPublicKey: string
+    nonce: string
+    expectedDeviceId: string
+    expectedDevicePublicKey: string
+    expectedDeviceSigningPublicKey: string
+  }
+}
+
 export type RuntimeMessage =
   | OpenSimpleVaultMessage
   | BeginExtensionPairingMessage
+  | ExtensionIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
 
@@ -133,6 +145,32 @@ export function isExtensionPairingApprovedMessage(
     isExtensionEventLogRecords(
       (message as { eventLogRecords?: unknown }).eventLogRecords,
     )
+  )
+}
+
+export function isExtensionIdentityHandoffRequestMessage(
+  message: unknown,
+): message is ExtensionIdentityHandoffRequestMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-identity-handoff-request' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  return (
+    typeof payload.recipientPublicKey === 'string' &&
+    payload.recipientPublicKey.length > 0 &&
+    typeof payload.nonce === 'string' &&
+    payload.nonce.length > 0 &&
+    typeof payload.expectedDeviceId === 'string' &&
+    payload.expectedDeviceId.length > 0 &&
+    typeof payload.expectedDevicePublicKey === 'string' &&
+    payload.expectedDevicePublicKey.length > 0 &&
+    typeof payload.expectedDeviceSigningPublicKey === 'string' &&
+    payload.expectedDeviceSigningPublicKey.length > 0
   )
 }
 

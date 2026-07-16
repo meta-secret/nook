@@ -35,6 +35,7 @@
   } from '$lib/legal-content'
   import { isAppLogsPath } from '$lib/app-logs-api'
   import {
+    adoptExtensionIdentity,
     extensionConnectRequestFromLocation,
     isExtensionConnectPath,
     type ExtensionConnectRequest,
@@ -81,15 +82,25 @@
       ? isAppLogsPath(window.location.pathname)
       : false,
   )
+  const initialExtensionConnectRequest =
+    typeof window !== 'undefined' && SUPPORTS_EXTENSION
+      ? extensionConnectRequestFromLocation(window.location)
+      : undefined
   let extensionConnectRoute = $state<boolean>(
     typeof window !== 'undefined'
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
   )
   let extensionConnectRequest = $state<ExtensionConnectRequest | undefined>(
-    typeof window !== 'undefined' && SUPPORTS_EXTENSION
-      ? extensionConnectRequestFromLocation(window.location)
-      : undefined,
+    initialExtensionConnectRequest,
+  )
+  // Keep the public extension handoff request in memory after leaving the
+  // consent route. An extension-backed vault has no website passkey record,
+  // so an explicit vault lock must re-adopt the unlocked extension identity.
+  // Reloading the page intentionally clears this capability; the user can
+  // reopen Nook from the extension to establish a new handoff session.
+  let extensionIdentityRequest = $state<ExtensionConnectRequest | undefined>(
+    initialExtensionConnectRequest,
   )
   let sentinelInvitationRequest = $state(
     typeof window !== 'undefined' && APP_KIND !== 'simple'
@@ -116,6 +127,9 @@
     extensionConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
       : undefined
+    if (extensionConnectRequest) {
+      extensionIdentityRequest = extensionConnectRequest
+    }
     if (APP_KIND !== 'simple') {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
       if (invitationRequest) sentinelInvitationRequest = invitationRequest
@@ -251,6 +265,15 @@
       return
     }
     if (existingVaultNeedsDeviceUnlock) {
+      const connectRequest = extensionIdentityRequest
+      if (connectRequest) {
+        const adopted = await vault.authorizeWithExternalDeviceIdentity(
+          (manager) => adoptExtensionIdentity(manager, connectRequest),
+        )
+        if (!adopted) return
+        await vault.loadDb()
+        return
+      }
       pendingExistingVaultUnlock = true
       return
     }
@@ -322,6 +345,13 @@
   )
 
   async function handleCreateDeviceVault(label: string) {
+    const connectRequest = extensionIdentityRequest
+    if (connectRequest && vault.deviceId !== connectRequest.deviceId) {
+      const adopted = await vault.authorizeWithExternalDeviceIdentity(
+        (manager) => adoptExtensionIdentity(manager, connectRequest),
+      )
+      if (!adopted) return
+    }
     if (!vault.deviceProtectionReady) {
       pendingVaultCreation = { kind: 'simple', label }
       return
@@ -610,6 +640,8 @@
                 isVerifying={vault.isVerifying}
                 isInitializing={vault.isInitializing}
                 deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
+                usesExtensionDeviceIdentity={extensionIdentityRequest !==
+                  undefined}
                 onUnlock={handleUnlock}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}

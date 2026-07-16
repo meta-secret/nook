@@ -57,6 +57,7 @@
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
+    usesExtensionDeviceIdentity = false,
     sentinelInvitationRequest = '',
     sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
@@ -102,6 +103,7 @@
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
+    usesExtensionDeviceIdentity?: boolean
     sentinelInvitationRequest?: string
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
@@ -240,6 +242,7 @@
       {appKind}
       {isVerifying}
       {isInitializing}
+      {usesExtensionDeviceIdentity}
       {onCreateDeviceVault}
       onStartSentinelGenesis={onStartSentinelGenesis ??
         ((args) => vault.startSentinelGenesis(args))}

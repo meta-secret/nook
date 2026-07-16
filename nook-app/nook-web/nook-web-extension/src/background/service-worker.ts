@@ -2,12 +2,14 @@ export {}
 
 import {
   isBeginExtensionPairingMessage,
+  isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isExtensionPairingApprovedMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type {
   BeginExtensionPairingMessage,
+  ExtensionIdentityHandoffRequestMessage,
   ExtensionPairingApprovedMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -107,6 +109,41 @@ function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
     return isRuntimeSimpleVaultUrl(sender.url)
   } catch {
     return false
+  }
+}
+
+function sendSessionMessage(message: unknown): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      const error = chrome.runtime.lastError?.message
+      if (error) reject(new Error(error))
+      else resolve(response)
+    })
+  })
+}
+
+async function createIdentityHandoff(
+  message: ExtensionIdentityHandoffRequestMessage,
+): Promise<{ ok: boolean; envelope?: string; reason?: string }> {
+  try {
+    await ensureExtensionSessionDocument()
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-seal-identity-handoff',
+      payload: message.payload,
+    })
+    if (
+      typeof response === 'object' &&
+      response !== null &&
+      'ok' in response &&
+      response.ok === true &&
+      'envelope' in response &&
+      typeof response.envelope === 'string'
+    ) {
+      return { ok: true, envelope: response.envelope }
+    }
+    return { ok: false, reason: 'extension-identity-unavailable' }
+  } catch {
+    return { ok: false, reason: 'extension-identity-handoff-failed' }
   }
 }
 
@@ -288,6 +325,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
+    if (isExtensionIdentityHandoffRequestMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void createIdentityHandoff(message).then(sendResponse)
+      return true
+    }
+
     if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
       sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
       return false
