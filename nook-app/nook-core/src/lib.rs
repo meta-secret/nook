@@ -18,7 +18,8 @@ pub(crate) use auth::{
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, bip39, bitwarden_import, chrome_passwords_import,
-    onepassword_import, password, secret_fingerprint, secret_types, secret_view, session,
+    lastpass_import, onepassword_import, password, proton_pass_import, secret_fingerprint,
+    secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
@@ -87,6 +88,7 @@ pub use i18n::{
     resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_translation_catalog,
     translate, translate_from_catalog,
 };
+pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,
@@ -100,6 +102,9 @@ pub use nook_auth2::{
 };
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
+};
+pub use proton_pass_import::{
+    ProtonPassImportError, ProtonPassImportPlan, plan_proton_pass_import,
 };
 pub use secret_fingerprint::{
     SecretFingerprint, enrich_secret, secret_fingerprint, secret_identity_fingerprint,

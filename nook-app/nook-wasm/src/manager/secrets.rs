@@ -147,7 +147,9 @@ enum SecretImportSource {
     ApplePasswords,
     Bitwarden,
     ChromePasswords,
+    LastPass,
     OnePassword,
+    ProtonPass,
 }
 
 impl SecretImportSource {
@@ -156,7 +158,9 @@ impl SecretImportSource {
             Self::ApplePasswords => "IMPORT_APPLE_PASSWORDS_START",
             Self::Bitwarden => "IMPORT_BITWARDEN_START",
             Self::ChromePasswords => "IMPORT_CHROME_PASSWORDS_START",
+            Self::LastPass => "IMPORT_LASTPASS_START",
             Self::OnePassword => "IMPORT_ONEPASSWORD_START",
+            Self::ProtonPass => "IMPORT_PROTON_PASS_START",
         }
     }
 
@@ -165,7 +169,9 @@ impl SecretImportSource {
             Self::ApplePasswords => "import-apple-passwords",
             Self::Bitwarden => "import-bitwarden",
             Self::ChromePasswords => "import-chrome-passwords",
+            Self::LastPass => "import-lastpass",
             Self::OnePassword => "import-onepassword",
+            Self::ProtonPass => "import-proton-pass",
         }
     }
 
@@ -174,7 +180,9 @@ impl SecretImportSource {
             Self::ApplePasswords => "Apple Passwords",
             Self::Bitwarden => "Bitwarden",
             Self::ChromePasswords => "Chrome passwords",
+            Self::LastPass => "LastPass",
             Self::OnePassword => "1Password",
+            Self::ProtonPass => "Proton Pass",
         }
     }
 }
@@ -460,6 +468,23 @@ impl NookVaultManager {
         .await
     }
 
+    /// Import logins and secure notes from a plaintext `LastPass` generic CSV
+    /// export in one signed event. The CSV is parsed in memory and never
+    /// persisted.
+    #[wasm_bindgen(js_name = importLastPassCsv)]
+    pub async fn import_lastpass_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_lastpass_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::LastPass,
+        )
+        .await
+    }
+
     /// Import supported entries from an unencrypted 1Password 1PUX archive in
     /// one signed event. The archive is parsed in memory and never persisted.
     #[wasm_bindgen(js_name = importOnePasswordPux)]
@@ -513,6 +538,26 @@ impl NookVaultManager {
             plan.items,
             plan.skipped_unsupported,
             SecretImportSource::ChromePasswords,
+        )
+        .await
+    }
+
+    /// Import logins and secure notes from an unencrypted Proton Pass ZIP
+    /// export or decrypted data.json in one signed event. The export is parsed
+    /// in memory and never persisted.
+    #[wasm_bindgen(js_name = importProtonPass)]
+    pub async fn import_proton_pass(
+        &mut self,
+        export: Vec<u8>,
+    ) -> Result<NookImportResult, JsError> {
+        let export = zeroize::Zeroizing::new(export);
+        let plan = nook_core::plan_proton_pass_import(export.as_slice())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(export);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::ProtonPass,
         )
         .await
     }
