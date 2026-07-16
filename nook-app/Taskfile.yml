@@ -15,8 +15,8 @@ vars:
   DOCKER_RUN_LIMITS: '--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}'
   # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that the slim
   # web result is written straight into the containerd image store. Heavy Rust snapshots remain
-  # only in the local BuildKit cache unless an explicit Rust command loads one. Do NOT point this at a
-  # `docker-container` builder: that driver forces a full-image re-export on every build.
+  # in BuildKit cache unless an explicit Rust command loads one. Hosted CI intentionally overrides
+  # this with a `docker-container` builder because the GHA cache exporter requires that driver.
   #
   # buildx auto-creates a docker-driver builder named after the active docker context, so
   # `docker context show` yields the right builder everywhere: `desktop-linux` on Docker Desktop,

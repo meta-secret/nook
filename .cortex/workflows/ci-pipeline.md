@@ -7,8 +7,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
 | [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, internal harness plus isolated native Pages aliases, `github-pages` deployment status | No |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On persistent `nook`: verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No |
-| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On persistent `nook`: pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No |
+| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens and squash-merges its PR | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → marked PR → agent exits; [`agent-pr-monitor.yml`](../../.github/workflows/agent-pr-monitor.yml) wakes on repository workflow events → exact-head audit → **squash merge** or manual handoff | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -132,13 +132,12 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Runner placement separates delivery validation from long-running background
-work. The `pr.yml` verify/preview gate, main delivery, and production release use
-the self-hosted `nook` pool. All three reuse the dedicated delivery BuildKit
-builder only after the same bounded functional health check. AI
-implement/fix/smoke jobs use GitHub-hosted `ubuntu-latest`, where their six-hour
-background work cannot exhaust or block the Nook machine. Other scheduled,
-manual e2e, and research jobs also remain GitHub-hosted.
+PR, main, release, AI, scheduled, manual e2e, and research jobs use
+GitHub-hosted `ubuntu-latest`, so concurrent work scales across the repository's
+hosted-runner allowance instead of queueing on one Docker host. Delivery builds
+restore distinct GitHub Actions BuildKit cache scopes; main refreshes the
+default-branch scopes that new PRs may access. The self-hosted `nook` label is
+reserved for runner cleanup while that machine remains registered.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
@@ -154,11 +153,10 @@ a whole-build retry loop.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
-| `pr.yml` | `nook` | Health-checked persistent BuildKit verification and preview for developer-critical PRs |
-| `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Isolate long-running background AI work from the Nook machine |
-| `main.yml` `ci`, `release.yml` | `nook` | Reuse the same health-checked delivery BuildKit state for post-merge delivery and release instead of downloading multi-GB Rust/browser lineages into fresh VMs |
-| `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Isolate scheduled, manual, and research work from the delivery runner |
-| `runner-cleanup.yml` | `nook` | Maintain the self-hosted Docker cache and disk |
+| `pr.yml`, `main.yml`, `release.yml` | `ubuntu-latest` | Elastic delivery capacity with main-seeded GHA BuildKit caches |
+| `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Long-running background AI work scales independently |
+| `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Scheduled, manual, and research work scales independently |
+| `runner-cleanup.yml` | `nook` | Maintain the registered self-hosted Docker host and disk |
 
 The runner-cleanup workflow runs its age-filtered system prune separately from
 its unused-volume prune: Docker does not support its `until` filter together
@@ -300,11 +298,11 @@ as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
-**Self-hosted delivery CI uses a health-checked persistent BuildKit daemon.** The
-PR, main, and release workflows run on the self-hosted `nook` pool. Before every
-`task ci:pr` or `task ci:main`, a 60-second bounded probe reuses the dedicated
-delivery builder when healthy or terminates the stuck probe process group and
-replaces the builder when missing, failed, or stuck. `task ci:pr` runs
+**Delivery CI uses GitHub-hosted runners with remote BuildKit layers.** PR,
+main, and release run on fresh `ubuntu-latest` VMs. The shared Docker setup
+creates a `docker-container` builder, exposes GitHub's cache-service runtime,
+and enables separate v2 scopes for Rust/WASM, web dependencies, browser-free
+web, and e2e web. `task ci:pr` runs
 the standalone Rust **repository preflight** before app setup, then one parallel
 Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
 no browser e2e, Cloudflare preview,
@@ -324,22 +322,23 @@ External reviews and checks (Codex, Claude, Cursor, CodeRabbit, or any other
 service) are never requested, polled, or awaited. Existing actionable comments
 must still be addressed, but no external status may delay merge or handoff.
 
-**Delivery jobs keep host services local.** PR verification, main, and release use the
-persistent self-hosted `nook` runner. They reuse one dedicated local BuildKit
-builder behind the bounded health check; unrelated local and GitHub-hosted build
-commands may reuse their active Docker-context builder.
+**Delivery jobs are ephemeral but cache-aware.** PR verification, main, and
+release use GitHub-hosted runners. Main exports the default-branch cache that
+new PRs can restore under GitHub's cache visibility rules; a PR also updates its
+branch cache for later pushes. Separate scopes prevent parallel image lineages
+from overwriting one another.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
-`task setup` also ensures the host's Docker-host-only Redis-backed `sccache`
-service is running. It reuses compatible crate outputs when an exact BuildKit
-layer misses; it does not replace cargo-chef, transfer data between runners, or
-change the build result when empty. Linux publishes Redis only on the Docker
+`task setup` also ensures a Docker-host-only Redis-backed `sccache` service is
+running. On an ephemeral hosted VM it starts empty; restored BuildKit layers are
+the cross-run cache. It does not replace cargo-chef or change the build result
+when empty. Linux publishes Redis only on the Docker
 bridge gateway; Docker Desktop publishes only on host loopback. A shared
 resolver passes the concrete Docker-host IPv4 address to both Bake and runtime
 containers, independent of the selected BuildKit driver.
-Scheduled/manual e2e, research, and every AI-agent job remain on isolated
-GitHub-hosted runners. They build cold and never import registry cache snapshots.
+Scheduled/manual e2e, research, and every AI-agent job also use isolated
+GitHub-hosted runners and may restore the same scoped BuildKit layers.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
 prepared image and without a second setup. The combined `dist` tree is reserved
@@ -351,11 +350,10 @@ deploys an immutable semantic-version tag to GitHub Pages for the public
 Sentinel, then verifies app identity, security headers, exact commit, and
 extension-route presence/absence before publishing the GitHub Release.
 
-No delivery workflow logs into GHCR for BuildKit, imports a registry cache
-manifest, or publishes cache layers. The persistent `nook` runners reuse only
-their local BuildKit content store across the PR → main → release chain. This is
-an explicit reliability boundary: cache restoration must never block validation
-on a remote blob or registry session. `main.yml` attaches and upserts the three
+No delivery workflow logs into GHCR for BuildKit or imports a registry cache
+manifest. Docker layers use GitHub's Actions cache backend; local builds use
+only their local BuildKit content store. Cache restoration is an optimization:
+an unavailable cache falls back to a correct cold build. `main.yml` attaches and upserts the three
 custom domains, points the landing and both vault domains at their projects'
 `development` branch aliases so the main-channel build cannot replace a
 production deployment, and verifies landing-only routing, app identity markers,
@@ -455,7 +453,7 @@ Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT wi
 
 The `ci-fix` / `ci-agent:implement` jobs run **`task setup`** (bake sealed `nook-web:local`) then **`task ci-agent:fix`** / **`task ci-agent:implement`**, which build and run the **`nook-ci-agent:local`** image. That container includes both the Docker CLI and the Buildx CLI plugin because repository Task targets use `docker buildx bake`. It uses **`docker run --init`**, bind-mounts the checkout, and mounts **`/var/run/docker.sock`** so the agent can spawn sibling containers on the host Docker daemon (not Docker-in-Docker).
 
-**Runner placement:** nightly `ci-fix` and `agent-implement.yml` run on GitHub-hosted **`ubuntu-latest`** so agent work does not share the self-hosted Nook machine with other CI. Host Node is not required for these jobs.
+**Runner placement:** nightly `ci-fix` and `agent-implement.yml` run on GitHub-hosted **`ubuntu-latest`**, like delivery CI, so concurrent work scales across hosted capacity. Host Node is not required for these jobs.
 
 After the agent finishes, ci-agent **awaits** `agent[Symbol.asyncDispose]()` (not fire-and-forget `close()`), then calls `process.exit` (and best-effort SIGKILL of direct child PIDs) so orphaned SDK children cannot keep the container alive.
 

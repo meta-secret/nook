@@ -1,7 +1,7 @@
 // nook-wasm build target: wasm32 clippy + release build + wasm-pack bundle.
 // LINEAR CHAIN: FROM builder-debug (native warm-up), so wasm target/ + wasm pkg accumulate in the
-// same image lineage (no COPY --from of target/), cached in the selected builder's local content
-// store (platform is always amd64).
+// same image lineage (no COPY --from of target/), cached locally and in the hosted Rust GHA scope
+// (platform is always amd64).
 
 target "builder-wasm" {
   inherits   = ["_sccache-network"]
@@ -15,6 +15,7 @@ target "builder-wasm" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
+  cache-from = rust_cache_from
 }
 
 target "rust-format-check" {
@@ -25,6 +26,7 @@ target "rust-format-check" {
   contexts = {
     builder-debug = "target:builder-debug"
   }
+  cache-from = rust_cache_from
 }
 
 // Small scratch output exported to the host between the parallel prepare phase and slim web build.
@@ -40,6 +42,8 @@ target "web-artifacts" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
+  cache-from = rust_cache_from
+  cache-to   = rust_cache_to
 }
 
 // Source-sealed Rust runtime used only by explicit rust/wasm Task commands.
@@ -55,6 +59,7 @@ target "_nook-rust-common" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
+  cache-from = rust_cache_from
 }
 
 // Manual browser-wasm test image; Playwright is deliberately absent from the common Rust branch.
@@ -70,4 +75,5 @@ target "_nook-rust-browser-common" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
+  cache-from = rust_cache_from
 }

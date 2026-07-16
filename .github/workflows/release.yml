@@ -38,9 +38,8 @@ env:
 jobs:
   deploy:
     name: Verify and deploy production
-    # Reuse the exact Docker/BuildKit state warmed by PR and main. A fresh hosted runner would pull
-    # the full Rust cache again immediately before release.
-    runs-on: nook
+    # Release restores the main-seeded BuildKit cache on elastic GitHub-hosted capacity.
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -167,7 +166,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          # The self-hosted delivery runner guarantees Docker, not host Node/npm. Use the Node
+          # The delivery runner guarantees Docker, not a pinned host Node/npm. Use the Node
           # image already consumed by the web build so release deployment has an explicit CLI
           # runtime without adding npm or Wrangler to every PR image.
           docker run --rm \

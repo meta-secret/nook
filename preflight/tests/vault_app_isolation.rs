@@ -595,7 +595,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
 }
 
 #[test]
-fn delivery_ci_uses_runner_local_buildkit_cache_only() {
+fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let root = repository_root();
     for workflow in [
         ".github/workflows/pr.yml",
@@ -604,8 +604,8 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     ] {
         let content = read(&root, workflow);
         assert!(
-            content.contains("runs-on: nook"),
-            "{workflow} must reuse the persistent delivery runner's Docker layers"
+            content.contains("runs-on: ubuntu-latest"),
+            "{workflow} must use elastic GitHub-hosted capacity"
         );
         for run_scoped_image in [
             "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -619,37 +619,50 @@ fn delivery_ci_uses_runner_local_buildkit_cache_only() {
     }
 
     let bake = read(&root, "nook-app/docker-bake.hcl");
-    for retired in [
-        "type=registry",
-        "TOOLCHAIN_REGISTRY",
-        "TOOLCHAIN_PUSH",
-        "toolchain-push",
-        "buildcache",
-        "${GIT_COMMIT_ID}",
+    for required in [
+        "GHA_CACHE_ENABLED",
+        "type=gha,scope=nook-rust-v1",
+        "type=gha,scope=nook-web-deps-v1",
+        "type=gha,scope=nook-web-v1",
+        "type=gha,scope=nook-web-e2e-v1",
+        "mode=max,version=2",
     ] {
         assert!(
-            !bake.contains(retired),
-            "remote BuildKit cache transfer remains in bake configuration: {retired}"
+            bake.contains(required),
+            "hosted BuildKit cache contract is missing: {required}"
         );
     }
+    assert!(
+        !bake.contains("type=registry"),
+        "delivery caches must use the GitHub Actions cache service, not registry manifests"
+    );
+
+    let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
+    assert!(
+        rust_bake.contains("cache-to   = rust_cache_to"),
+        "the Rust/WASM leaf must export the complete reachable lineage"
+    );
+    let web_bake = read(&root, "nook-app/docker/toolchain.docker-bake.hcl");
+    assert!(
+        web_bake.contains("cache-to   = web_deps_cache_to"),
+        "web dependencies need an independent cache scope"
+    );
 
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
-    for retired in ["docker/login-action", "ghcr.io", "TOOLCHAIN_REGISTRY"] {
+    for required in [
+        "docker/setup-buildx-action@v3",
+        "crazy-max/ghaction-github-runtime@v3",
+        "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
+        "GHA_CACHE_ENABLED=1",
+    ] {
         assert!(
-            !setup.contains(retired),
-            "Docker setup must not authenticate or configure remote BuildKit caches: {retired}"
+            setup.contains(required),
+            "GitHub-hosted Docker setup is missing: {required}"
         );
     }
 
     let main = read(&root, ".github/workflows/main.yml");
     assert!(main.contains("          task ci:main\n"));
-    for retired in ["ci:main:publish", "PUSH_TOOLCHAIN", "TOOLCHAIN_REGISTRY"] {
-        assert!(
-            !main.contains(retired),
-            "main must not publish or import remote BuildKit caches: {retired}"
-        );
-    }
-
     let cleanup = read(&root, ".github/workflows/runner-cleanup.yml");
     assert!(
         cleanup.contains("--filter until=168h"),

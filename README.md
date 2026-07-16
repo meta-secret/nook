@@ -300,12 +300,12 @@ change, update this README in the same change (see [`.cortex/AGENTS.md`](.cortex
 ### Docker dependency caches
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) and
-independent **linux/amd64** Rust, web dependency, and browser lineages. Each
-The self-hosted delivery tasks (`task ci:pr` and `task ci:main`, including the
-release gate) reuse a dedicated `docker-container` BuildKit daemon. Before any
-repository build, a hard 60-second functional probe either confirms both daemon
-bootstrap and a minimal solve or force-kills the stuck process group, removes
-the builder container/state, and bootstraps a replacement. Workspace source is copied into
+independent **linux/amd64** Rust, web dependency, and browser lineages. GitHub
+Actions runs PR, main, and release validation on `ubuntu-latest`; each fresh VM
+restores distinct BuildKit v2 cache scopes for Rust/WASM, web dependencies, the
+browser-free web image, and the e2e image. Main refreshes the default-branch
+cache that new PRs may restore, while PR reruns reuse their branch cache.
+Workspace source is copied into
 the slim `nook-web:local` image (sealed image; no runtime bind mount except
 `task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a separate
 source-sealed Rust image on demand.
@@ -321,11 +321,11 @@ The service stores up to 8 GiB by default with LRU eviction and AOF
 persistence. It is an optimization only—Cargo, tests, and final linking remain
 the correctness boundary—and it never transfers cache data between machines.
 
-No BuildKit cache is imported from or exported to a registry. Healthy delivery
-builds retain local BuildKit layers across PR, main, and release; stale or stuck
-daemon state is bounded by the pre-build probe and replaceable without killing
-the host Docker daemon. The shared Redis-backed `sccache` also reuses compatible
-Rust compiler outputs below BuildKit. Details:
+No BuildKit cache is imported from or exported to a registry. Local builds keep
+using the selected builder's content store with no remote-cache traffic. The
+Docker-host-only Redis `sccache` remains a secondary local compiler cache; on a
+fresh hosted VM it starts empty, while restored Docker layers provide the
+cross-run cache. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

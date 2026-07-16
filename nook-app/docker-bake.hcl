@@ -12,8 +12,9 @@
 // parallel with web-base -> web-deps. web-artifacts is exported to a commit-scoped,
 // invocation-isolated host directory.
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
-// Rust snapshot never becomes a context or parent of the final image. All lineages reuse the
-// persistent delivery runner's local BuildKit content store; no combined Rust + web image exists.
+// Rust snapshot never becomes a context or parent of the final image. Local builds reuse the
+// selected builder's content store; GitHub-hosted CI additionally imports/exports distinct GHA
+// cache scopes for Rust, web dependencies, and the two final web-image variants.
 
 variable "DOCKER_IMAGE" {
   default = "nook-web:local"
@@ -45,6 +46,47 @@ variable "SCCACHE_REDIS_PORT" {
 variable "SCCACHE_REDIS_HOST_IP" {
   default = ""
 }
+
+// Enabled only by the GitHub Actions Docker setup. Keeping the default empty preserves zero-network
+// local builds. Separate scopes are mandatory: Docker's GHA backend overwrites a scope when a
+// different image exports to it, so sharing the default `buildkit` scope loses sibling lineages.
+variable "GHA_CACHE_ENABLED" {
+  default = ""
+}
+
+rust_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-v1,version=2",
+] : []
+
+rust_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-rust-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+] : []
+
+web_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-web-deps-v1,version=2",
+] : []
+
+web_deps_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-web-deps-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+] : []
+
+web_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-web-v1,version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+] : []
+
+web_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-web-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+] : []
+
+web_e2e_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-web-e2e-v1,version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+] : []
+
+web_e2e_cache_to = GHA_CACHE_ENABLED != "" ? [
+  "type=gha,scope=nook-web-e2e-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+] : []
 
 target "_sccache-network" {
   args = {
@@ -82,6 +124,8 @@ target "nook-web" {
   inherits = ["_nook-web-common"]
   tags     = [DOCKER_IMAGE]
   output   = ["type=docker"]
+  cache-from = web_cache_from
+  cache-to   = web_cache_to
 }
 
 # Main/nightly-only image. It has the same sealed app as nook-web, but swaps in the Chromium base.
@@ -91,8 +135,10 @@ target "nook-web-e2e" {
   contexts = {
     web-base = "target:web-e2e-base"
   }
-  tags   = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
-  output = ["type=docker"]
+  tags       = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
+  output     = ["type=docker"]
+  cache-from = web_e2e_cache_from
+  cache-to   = web_e2e_cache_to
 }
 
 // Explicit Rust/WASM commands load this source-sealed image on demand. Normal setup/CI does not.

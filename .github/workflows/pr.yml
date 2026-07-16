@@ -37,9 +37,9 @@ jobs:
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    # PR validation is developer-critical and runs on a health-checked persistent
-    # BuildKit daemon on the Nook pool. Long-running AI jobs stay on ubuntu-latest.
-    runs-on: nook
+    # GitHub-hosted capacity scales across concurrent PRs. BuildKit layers are restored from the
+    # main-seeded GHA cache and updated in the PR branch cache for fast follow-up pushes.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7

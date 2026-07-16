@@ -1,6 +1,6 @@
 // Independent Rust/WASM and web/e2e bases. BuildKit prepares both branches in parallel, and the
 // final web image consumes only web-base plus small artifacts copied from builder-wasm.
-// Each branch is cached independently in the selected builder's local content store.
+// Each branch is cached independently in the selected builder and its hosted GHA lineage scope.
 
 target "rust-base" {
   context    = "."

@@ -115,15 +115,15 @@ Codex Cloud review to begin or finish.
 
 ### 5. Local checks
 
-**Remote PR CI is health-bounded and remains a full validation gate.** `pr.yml`
-uses the self-hosted `nook` pool and reuses a dedicated PR BuildKit daemon after
-a hard 60-second probe; a stuck daemon is force-killed and replaced. Compatible
-Docker layers and Redis-backed compiler objects persist locally. **Focused local Docker commands can use
+**Remote PR CI is elastic and remains a full validation gate.** `pr.yml` uses
+GitHub-hosted `ubuntu-latest` and restores main-seeded, lineage-specific
+BuildKit caches through GitHub's cache service. Follow-up pushes may also reuse
+the PR branch cache. **Focused local Docker commands can use
 cached images** and are strongly preferred for checking tests, fixing issues,
 and iterating. Once the iteration is ready for final validation, push first and run
 the local gate immediately while remote CI runs. Remote CI validates the PR in
 the repository runner environment; local Docker remains the primary diagnostic
-loop. Long-running AI agents are isolated on GitHub-hosted runners.
+loop. Concurrent PR and AI jobs scale across GitHub-hosted runners.
 
 ```text
 implement/fix → commit → push/update PR → local required gate ‖ applicable PR workflows
