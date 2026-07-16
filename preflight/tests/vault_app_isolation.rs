@@ -704,6 +704,13 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         web_bake.contains("cache-to   = web_deps_cache_to"),
         "web dependencies need an independent cache scope"
     );
+    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    assert!(
+        docker_tasks.contains("for attempt in 1 2; do")
+            && docker_tasks
+                .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
+        "hosted web delivery must retry the immediate BuildKit frontend flake once"
+    );
 
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     for required in [

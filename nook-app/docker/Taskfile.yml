@@ -259,7 +259,14 @@ tasks:
         test -s "$artifacts/nook-wasm/nook_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web'
+        for attempt in 1 2; do
+          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 2 ]; then exit 1; fi;
+          echo "task docker:ci:web:build: transient Bake failure; retrying in 2s..." >&2;
+          sleep 2;
+        done'
 
   docker:web:dev:
     internal: true
