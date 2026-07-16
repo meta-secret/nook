@@ -93,12 +93,15 @@ browser's extension developer mode.
 The supported developer launcher resolves hosted builds from that metadata,
 binds the archive and checksum URLs to the selected deployment origin, verifies
 SHA-256 before extraction, and activates a release atomically through a stable
-channel-specific path. It always launches with `--load-extension` and an
-isolated Nook browser profile. Development, production, and every PR number
-have separate install and profile directories; the launcher never modifies or
-silently installs into the user's normal browser profile. Failed downloads,
-metadata checks, checksum checks, or archive validation leave the prior active
-release unchanged.
+channel-specific path. It uses an isolated Nook browser profile. Brave,
+Chromium, and Chrome for Testing receive the verified directory through
+`--load-extension`. Branded Google Chrome removed that switch in Chrome 137, so
+the launcher opens its extension manager and requires a one-time **Load
+unpacked** selection of the verified `current` directory. Development,
+production, and every PR number have separate install and profile directories;
+the launcher never modifies or silently installs into the user's normal browser
+profile. Failed downloads, metadata checks, checksum checks, or archive
+validation leave the prior active release unchanged.
 
 Interactive local development uses HTTPS so passkeys, CloudKit, OAuth, and
 extension-to-site messaging run under production-like secure-context rules.

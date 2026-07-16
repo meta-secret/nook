@@ -187,13 +187,42 @@ printf 'missing manifest\n' > "$fixture/invalid/readme.txt"
 expect_failure validate_archive "$fixture/invalid.zip" "$fixture/invalid.list"
 
 fake_browser="$fixture/chrome"
+fake_browser_log="$fixture/chrome.log"
 cat > "$fake_browser" <<'EOF'
 #!/bin/sh
+if [ "${1:-}" = --version ]; then
+  printf 'Chromium 150.0.0.0\n'
+  exit 0
+fi
+printf '%s\n' "$*" > "$FAKE_BROWSER_LOG"
 exit 0
 EOF
 chmod +x "$fake_browser"
 uname() { printf 'Linux\n'; }
-CHROME_BIN="$fake_browser" launch_browser chrome "$installed" >/dev/null
+FAKE_BROWSER_LOG="$fake_browser_log" CHROME_BIN="$fake_browser" launch_browser chrome "$installed" >/dev/null
+for _ in $(seq 1 20); do [ -f "$fake_browser_log" ] && break; sleep 0.05; done
+grep -Fq -- "--load-extension=$installed" "$fake_browser_log"
+
+fake_stable_chrome="$fixture/google-chrome"
+fake_stable_log="$fixture/google-chrome.log"
+cat > "$fake_stable_chrome" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = --version ]; then
+  printf 'Google Chrome 150.0.0.0\n'
+  exit 0
+fi
+printf '%s\n' "$*" > "$FAKE_STABLE_LOG"
+exit 0
+EOF
+chmod +x "$fake_stable_chrome"
+FAKE_STABLE_LOG="$fake_stable_log" CHROME_BIN="$fake_stable_chrome" \
+  launch_browser chrome "$installed" >/dev/null
+for _ in $(seq 1 20); do [ -f "$fake_stable_log" ] && break; sleep 0.05; done
+grep -Fq 'chrome://extensions' "$fake_stable_log"
+if grep -Fq -- '--load-extension' "$fake_stable_log"; then
+  echo 'branded Google Chrome must not receive the ignored --load-extension switch' >&2
+  exit 1
+fi
 unset -f uname
 [ -d "$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" ]
 
