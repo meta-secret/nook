@@ -631,6 +631,118 @@ test.describe('local vault', () => {
     )
   })
 
+  test('enriches matching imports and keeps different passwords', async ({
+    page,
+  }) => {
+    const bitwardenExport = JSON.stringify({
+      encrypted: false,
+      folders: [],
+      items: [
+        {
+          id: 'shared-login',
+          type: 1,
+          name: 'Shared login',
+          notes: 'Meaningful note',
+          fields: [{ name: 'source', value: 'Bitwarden' }],
+          login: {
+            username: 'shared-alice',
+            password: 'shared-secret',
+            uris: [{ uri: 'https://shared.example/login' }],
+          },
+        },
+      ],
+    })
+    const onePasswordArchive = (password: string) =>
+      storedZip({
+        'export.attributes': JSON.stringify({
+          version: 3,
+          description: '1Password Unencrypted Export',
+        }),
+        'export.data': JSON.stringify({
+          accounts: [
+            {
+              vaults: [
+                {
+                  attrs: { name: 'Personal' },
+                  items: [
+                    {
+                      categoryUuid: '001',
+                      state: 'active',
+                      overview: {
+                        title: 'Shared login',
+                        url: 'https://shared.example/login',
+                        tags: ['1password'],
+                      },
+                      details: {
+                        loginFields: [
+                          {
+                            value: 'shared-alice',
+                            designation: 'username',
+                          },
+                          {
+                            value: password,
+                            designation: 'password',
+                            fieldType: 'P',
+                          },
+                        ],
+                        notesPlain: 'Meaningful note',
+                        sections: [],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      })
+
+    await openBitwardenImport(page)
+    await page.getByTestId('bitwarden-json-file').setInputFiles({
+      name: 'bitwarden_export.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(bitwardenExport),
+    })
+    await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-result')).toContainText(
+      'Imported 1 item',
+    )
+
+    await openOnePasswordImport(page)
+    await page.getByTestId('onepassword-pux-file').setInputFiles({
+      name: 'account.1pux',
+      mimeType: 'application/zip',
+      buffer: onePasswordArchive('shared-secret'),
+    })
+    await page.getByTestId('onepassword-import-submit').click()
+    await expect(page.getByTestId('onepassword-import-result')).toContainText(
+      'Imported 1 item',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    let rows = page
+      .getByTestId('secret-row')
+      .filter({ hasText: 'shared-alice' })
+    await expect(rows).toHaveCount(1)
+    await revealSecretInRow(rows.first())
+    await expect(rows.first()).toContainText('field.source: Bitwarden')
+    await expect(rows.first()).toContainText('tags: 1password')
+
+    await openOnePasswordImport(page)
+    await page.getByTestId('onepassword-pux-file').setInputFiles({
+      name: 'account.1pux',
+      mimeType: 'application/zip',
+      buffer: onePasswordArchive('rotated-secret'),
+    })
+    await page.getByTestId('onepassword-import-submit').click()
+    await expect(page.getByTestId('onepassword-import-result')).toContainText(
+      'Imported 1 item',
+    )
+    await page.getByTestId('vault-secrets-tab').click()
+    rows = page.getByTestId('secret-row').filter({ hasText: 'shared-alice' })
+    await expect(rows).toHaveCount(2)
+  })
+
   test('imports a password-protected encrypted Bitwarden JSON export', async ({
     page,
   }) => {

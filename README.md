@@ -23,8 +23,11 @@ are not portable. 1Password logins, password items, and secure notes can be
 imported from an unencrypted 1PUX archive. Apple Passwords website logins and
 TOTP verification codes can be imported from its unencrypted CSV export.
 Website logins from Chrome, Chromium, Brave, and Edge can be imported from
-their unencrypted password CSV exports.
-Unsupported item types and attachments are skipped.
+their unencrypted password CSV exports. Unsupported item types and attachments
+are skipped. Overlapping records are reconciled with vault-keyed item-identity
+and secret-version HMAC fingerprints. Matching secret versions enrich the
+existing item with additional provider fields; differing passwords remain as
+separate items instead of being overwritten.
 Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 

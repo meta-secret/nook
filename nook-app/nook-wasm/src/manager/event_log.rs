@@ -61,6 +61,33 @@ pub(in crate::manager) struct ExtensionEventLogImportStatus {
 }
 
 impl NookVaultManager {
+    pub(in crate::manager) async fn live_secret_dedup_state(
+        &self,
+    ) -> Result<
+        Vec<(
+            nook_core::StoredSecretRecord,
+            Option<nook_core::SecretFingerprint>,
+            Option<nook_core::SecretFingerprint>,
+        )>,
+        NookError,
+    > {
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        let projection = project_vault(&graph, &self.vault.store_id)?;
+        Ok(projection
+            .secrets
+            .values()
+            .filter(|secret| secret.is_live(&graph))
+            .map(|secret| {
+                (
+                    secret.record.clone(),
+                    secret.identity_fingerprint.clone(),
+                    secret.fingerprint.clone(),
+                )
+            })
+            .collect())
+    }
+
     fn validate_event_record_id(
         expected_event_id: &EventId,
         event: &VaultEvent,
