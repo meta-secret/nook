@@ -86,8 +86,12 @@ task extension:test:e2e
 
 Chrome and Brave do not support silently installing an unsigned extension into
 a normal browser profile. The launch tasks therefore use stable, isolated Nook
-profiles and pass the verified directory through `--load-extension`. With no
-selector they build for trusted HTTPS localhost as before:
+profiles. Brave and Chrome for Testing receive the verified directory through
+`--load-extension`. Branded Google Chrome removed that switch in Chrome 137, so
+the task opens `chrome://extensions`; click **Load unpacked** once and select the
+printed `current` directory. Chrome remembers that unpacked extension in the
+isolated profile for later launches. With no selector the tasks build for
+trusted HTTPS localhost as before:
 
 ```bash
 task extension:run:chrome

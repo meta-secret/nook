@@ -135,15 +135,7 @@ tasks:
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:localhost;
         extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
         profile_dir="${NOOK_CHROME_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/chrome-extension-dev}";
-        mkdir -p "$profile_dir";
-        if [ -n "${CHROME_BIN:-}" ]; then
-          test -x "$CHROME_BIN" || { echo "Google Chrome binary not found at $CHROME_BIN" >&2; exit 1; };
-          nohup "$CHROME_BIN" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank >/dev/null 2>&1 </dev/null &
-        else
-          test -d "/Applications/Google Chrome.app" || { echo "Google Chrome application not found" >&2; exit 1; };
-          open -na "Google Chrome" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank;
-        fi;
-        printf "Launched Chrome with %s\n" "$extension_dir";'
+        exec bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" launch-local chrome "$extension_dir" "$profile_dir";'
 
   extension:run:brave:
     desc: Launch Brave with localhost by default, or a hosted build selected by CHANNEL=dev|prod or PR=<number>.
@@ -159,15 +151,7 @@ tasks:
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:localhost;
         extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
         profile_dir="${NOOK_BRAVE_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/brave-extension-dev}";
-        mkdir -p "$profile_dir";
-        if [ -n "${BRAVE_BIN:-}" ]; then
-          test -x "$BRAVE_BIN" || { echo "Brave binary not found at $BRAVE_BIN" >&2; exit 1; };
-          nohup "$BRAVE_BIN" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank >/dev/null 2>&1 </dev/null &
-        else
-          test -d "/Applications/Brave Browser.app" || { echo "Brave Browser application not found" >&2; exit 1; };
-          open -na "Brave Browser" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank;
-        fi;
-        printf "Launched Brave with %s\n" "$extension_dir";'
+        exec bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" launch-local brave "$extension_dir" "$profile_dir";'
 
   _extension:build:
     desc: Build the browser extension.
