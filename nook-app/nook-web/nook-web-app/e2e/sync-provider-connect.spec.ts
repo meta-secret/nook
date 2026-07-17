@@ -27,8 +27,12 @@ test.describe('sync provider settings', () => {
     await expect(
       page.getByTestId(`sync-provider-${E2E_OAUTH_ONBOARD_PROVIDER.id}`),
     ).toBeVisible()
-    await expect(
-      page.getByTestId(`sync-status-${E2E_OAUTH_ONBOARD_PROVIDER.id}`),
-    ).toContainText(/Not synced yet|Last synced/i)
+    const syncStatus = page.getByTestId(
+      `sync-status-${E2E_OAUTH_ONBOARD_PROVIDER.id}`,
+    )
+    await page
+      .getByTestId(`sync-provider-${E2E_OAUTH_ONBOARD_PROVIDER.id}`)
+      .click()
+    await expect(syncStatus).toHaveText(/^Last synced\s+.*\d/i)
   })
 })

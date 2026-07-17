@@ -29,6 +29,7 @@
     providerCapabilityLabelKey,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
+  import { formatProviderSyncStatus } from '$lib/provider-sync-status'
 
   let {
     vault,
@@ -85,15 +86,10 @@
   }
 
   function formatSyncStatus(provider: StorageProvider): string {
-    if (provider.lastSyncedAt) {
-      const version =
-        provider.lastSyncedVersion != undefined &&
-        provider.lastSyncedVersion > 0
-          ? ` · v${provider.lastSyncedVersion}`
-          : ''
-      return `${vault.t('auth_storage.last_synced')}${version}`
-    }
-    return vault.t('auth_storage.not_synced_yet')
+    return formatProviderSyncStatus(provider, vault.locale, {
+      lastSynced: vault.t('auth_storage.last_synced'),
+      notSyncedYet: vault.t('auth_storage.not_synced_yet'),
+    })
   }
 
   const showSetup = $derived(setupType !== undefined)
