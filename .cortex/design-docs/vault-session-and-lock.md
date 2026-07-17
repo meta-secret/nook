@@ -84,12 +84,14 @@ and its sealed provider credentials remain locked, and remote fan-out stays
 disabled until device authorization.
 
 After lock, the app stays in **`LoginGate`** without opening a passkey prompt.
-When the user explicitly chooses **This device's keys**, it presents
-`DeviceProtectionGate` in `PasskeyAuthOverlay` as the required
-device-authorization step. Successful passkey authorization or PIN fallback
-restores the identity in WASM memory and continues that same vault-unlock action
-automatically. **Backup password** is an alternative vault-key credential and
-must open the local vault directly without presenting the passkey/PIN form.
+When the user explicitly chooses **This device's keys**, a stored passkey wrapper
+starts browser passkey authorization directly from that click. Successful
+authorization restores the identity in WASM memory and continues that same
+vault-unlock action automatically. `DeviceProtectionGate` in
+`PasskeyAuthOverlay` remains the interactive surface for PIN input, missing
+identity/passkey recovery, and failed or cancelled passkey attempts. **Backup
+password** is an alternative vault-key credential and must open the local vault
+directly without presenting the passkey/PIN form.
 
 The gate presents itself as **Device setup — Step 1 of 2**, not as vault login.
 Its copy explains that it prepares or unlocks the browser's protected device
@@ -101,8 +103,9 @@ When no local passkey-protected device record exists, `DeviceProtectionGate`
 shows new-passkey setup as the primary form and a small **Use existing passkey**
 alternative. That alternative launches discoverable-passkey recovery immediately;
 it must not open a second confirmation widget. When `device_identity_wrapped`
-already identifies passkey protection, the gate shows authorization only and
-never renders passkey creation.
+already identifies passkey protection, the gate is a retry/recovery surface
+after a failed or cancelled direct authorization; it shows authorization only
+and never renders passkey creation.
 
 When the gate is embedded in `PasskeyAuthOverlay`, the overlay owns the single
 visible border, radius, and elevation. The embedded gate stays flat so the setup
