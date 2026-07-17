@@ -371,7 +371,13 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('save-secret-btn').click()
 
-    await expect(page.getByTestId('vault-group-login')).toContainText('alice')
+    const loginGroup = page.getByTestId('vault-group-login')
+    await expect(loginGroup.getByTestId('secret-row-heading')).toHaveText(
+      'login.example.com',
+    )
+    await expect(loginGroup.getByTestId('secret-row-account')).toHaveText(
+      'alice',
+    )
     await expandSecretRow(page, 'alice')
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'login.example.com',
