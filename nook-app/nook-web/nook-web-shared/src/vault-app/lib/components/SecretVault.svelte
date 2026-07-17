@@ -145,10 +145,11 @@
   function selectTypeFilter(value: string | undefined) {
     const nextFilter = typeFilters.find((filter) => filter.value === value)
     vault.secretTypeFilter = nextFilter?.value
-    void vault.loadSecretPage(vault.secretQuery, 0)
+    void vault.loadSecretPage(searchPattern.trim(), 0)
   }
 
   function openAddSecret() {
+    editLoadSequence += 1
     releaseEditingItem()
     formSelectedType = undefined
     addSecretOpen = true
@@ -169,6 +170,7 @@
   }
 
   async function openEditItem(item: NookSecretListItem) {
+    if (editsBlocked) return
     const sequence = ++editLoadSequence
     const record = await vault.decryptSecret(item.id)
     if (sequence !== editLoadSequence) {
@@ -489,6 +491,8 @@
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
+                    editDisabled={editsBlocked}
+                    editDisabledReason={editBlockReason}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
                     onCopySecret={copySecret}

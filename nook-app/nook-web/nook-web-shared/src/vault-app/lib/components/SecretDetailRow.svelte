@@ -37,6 +37,8 @@
     onCopyToClipboard,
     onCopySecret,
     vault,
+    editDisabled = false,
+    editDisabledReason = undefined,
     titleAsHeader = false,
   }: {
     item: NookSecretListItem;
@@ -56,6 +58,8 @@
     ) => Promise<void>;
     onCopySecret: (id: string) => Promise<void>;
     vault: VaultState;
+    editDisabled?: boolean;
+    editDisabledReason?: string | undefined;
     /** Use the title row as the card header (no duplicate group header). */
     titleAsHeader?: boolean;
   } = $props();
@@ -215,7 +219,9 @@
             onclick={() => void onEditItem(item)}
             aria-label={vault.t("common.edit")}
             data-testid="edit-secret-btn"
-            class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+            disabled={editDisabled}
+            title={editDisabled ? editDisabledReason : undefined}
+            class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <Pencil class="size-3.5" />
           </button>
