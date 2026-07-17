@@ -10,14 +10,18 @@ const vault = {
   },
 } as unknown as VaultState
 
-function loginItem(websiteUrl: string, groupKey: string): NookSecretListItem {
+function loginItem(
+  websiteUrl: string,
+  websiteHost: string,
+): NookSecretListItem {
   return {
     id: 'secret_login',
     type: 'login',
     displayTitle: websiteUrl,
-    groupKey,
+    groupKey: websiteHost || 'No Website',
     summary: 'alice@example.com',
     websiteUrl,
+    websiteHost,
     username: 'alice@example.com',
   } as unknown as NookSecretListItem
 }
@@ -55,7 +59,15 @@ describe('SecretDetailRow login card title', () => {
   })
 
   test('localizes the heading when the login has no website', () => {
-    const view = renderLogin(loginItem('', 'No Website'))
+    const view = renderLogin(loginItem('', ''))
+
+    expect(view.getByTestId('secret-row-heading').textContent).toBe(
+      'Localized no website',
+    )
+  })
+
+  test('localizes the heading when a non-empty website has no host', () => {
+    const view = renderLogin(loginItem('https://', ''))
 
     expect(view.getByTestId('secret-row-heading').textContent).toBe(
       'Localized no website',

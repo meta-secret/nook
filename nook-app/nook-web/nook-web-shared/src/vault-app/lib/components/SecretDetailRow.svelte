@@ -96,9 +96,7 @@
 
   const headerTitle = $derived.by(() => {
     if (item.type !== "login") return summary;
-    return item.websiteUrl.trim()
-      ? item.groupKey
-      : vault.t("vault.fields.no_website");
+    return item.websiteHost || vault.t("vault.fields.no_website");
   });
 </script>
 

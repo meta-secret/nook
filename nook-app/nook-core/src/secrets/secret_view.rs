@@ -255,6 +255,19 @@ impl SecretListItem {
         }
     }
 
+    /// Normalized website host for URL-backed secrets.
+    ///
+    /// Returns an empty string when the item is not URL-backed or the stored
+    /// value has no usable host.
+    #[must_use]
+    pub fn website_host(&self) -> String {
+        match &self.data {
+            SecretListItemData::Login { website_url, .. }
+            | SecretListItemData::ApiKey { website_url, .. } => hostname_from_url(website_url),
+            _ => String::new(),
+        }
+    }
+
     #[must_use]
     pub fn display_title(&self) -> String {
         match &self.data {
@@ -453,6 +466,7 @@ mod tests {
         let item = login_record().list_item();
 
         assert_eq!(item.secret_type(), SecretType::Login);
+        assert_eq!(item.website_host(), "github.com");
         assert_eq!(item.group_key(), "github.com");
         assert_eq!(item.summary(), "alice");
         assert_eq!(
@@ -463,6 +477,18 @@ mod tests {
             }
         );
         assert!(!format!("{item:?}").contains("correct horse battery staple"));
+    }
+
+    #[test]
+    fn list_item_reports_no_host_for_malformed_login_url() {
+        let mut item = login_record().list_item();
+        let SecretListItemData::Login { website_url, .. } = &mut item.data else {
+            panic!("expected login item");
+        };
+        *website_url = "https://".to_owned();
+
+        assert!(item.website_host().is_empty());
+        assert_eq!(item.group_key(), "No Website");
     }
 
     #[test]
