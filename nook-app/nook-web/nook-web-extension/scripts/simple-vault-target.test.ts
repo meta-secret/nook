@@ -77,7 +77,10 @@ describe('channel-agnostic Nook vault app hosts', () => {
       ),
     ).toBe(true)
     expect(
-      isNookVaultAppUrl('https://example.com/login', 'https://simple.nokey.sh/'),
+      isNookVaultAppUrl(
+        'https://example.com/login',
+        'https://simple.nokey.sh/',
+      ),
     ).toBe(false)
   })
 

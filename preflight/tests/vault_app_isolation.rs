@@ -194,8 +194,9 @@ fn extension_and_release_contract_preserve_origin_isolation() {
         &root,
         "nook-app/nook-web/nook-web-extension/src/lib/simple-vault-target.ts",
     );
-    assert!(manifest.contains("exclude_matches: ["));
     for required_contract in [
+        "nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)",
+        "exclude_matches: vaultAppExclusions",
         "simpleVaultMatchPattern(simpleVaultBaseUrl)",
         "sentinelVaultMatchPatterns(simpleVaultBaseUrl)",
         "externally_connectable: {",
@@ -206,7 +207,13 @@ fn extension_and_release_contract_preserve_origin_isolation() {
             "extension manifest must preserve dynamic vault isolation through {required_contract}"
         );
     }
-    for production_boundary in ["https://simple.nokey.sh/", "https://sentinel.nokey.sh/*"] {
+    for production_boundary in [
+        "https://simple.nokey.sh/",
+        "https://simple.dev.nokey.sh/*",
+        "https://sentinel.nokey.sh/*",
+        "https://*.nokey-simple.pages.dev/*",
+        "https://*.nokey-sentinel.pages.dev/*",
+    ] {
         assert!(
             vault_target.contains(production_boundary),
             "extension vault targeting must preserve production boundary {production_boundary}"

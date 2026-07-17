@@ -167,7 +167,11 @@
 {#if showCompanionHome}
   <main class="companion-home" data-testid="extension-companion-home">
     <p class="step-label">{i18n.t('extension.companion.step_label')}</p>
-    <NookIcon src="../icons/nook.png" alt="" class="popup-logo companion-logo" />
+    <NookIcon
+      src="../icons/nook.png"
+      alt=""
+      class="popup-logo companion-logo"
+    />
     <h1>
       {i18n.t(
         isConnected

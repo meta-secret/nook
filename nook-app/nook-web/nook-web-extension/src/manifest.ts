@@ -61,7 +61,8 @@ export function createManifest(
   },
 ): ExtensionManifest {
   const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
-  const vaultAppExclusions = nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)
+  const vaultAppExclusions =
+    nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)
   return {
     manifest_version: 3,
     default_locale: 'en',
