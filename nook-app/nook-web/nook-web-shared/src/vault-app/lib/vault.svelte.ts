@@ -842,6 +842,15 @@ export class VaultState {
         // Empty-device Landing → Sentinel: show create flow before passkey.
         // Existing-vault unlock stays in LoginGate with passkey authorization
         // presented by PasskeyAuthOverlay.
+        //
+        // `#enroll=` joins an existing vault — promote the code into LoginGate
+        // before returning so the create-vault landing never swallows onboarding.
+        if (this.pendingEnrollmentFromUrl) {
+          const code = this.pendingEnrollmentFromUrl;
+          this.pendingEnrollmentFromUrl = undefined;
+          this.prefillEnrollmentCode = code;
+          this.enrollmentFromUrlPending = true;
+        }
         if (!this.localVaultPresent && this.localVaults.length === 0) {
           try {
             await this.loadProviders({ ensureLocalRow: true });

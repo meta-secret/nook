@@ -143,11 +143,17 @@
       vault.localVaults[0] ??
       undefined,
   )
+  const showQrOnboarding = $derived(
+    Boolean(
+      enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
+    ),
+  )
   const showCreateVault = $derived(
     (vault.sentinelGenesisStatus === 'delivering' ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
         !hasProviders)) &&
+      !showQrOnboarding &&
       !showSetup &&
       !addProviderOpen &&
       !showProviderSetupLink &&
@@ -163,11 +169,6 @@
   )
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
-  )
-  const showQrOnboarding = $derived(
-    Boolean(
-      enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
-    ),
   )
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&

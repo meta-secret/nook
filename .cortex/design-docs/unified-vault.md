@@ -171,6 +171,9 @@ stateDiagram-v2
    the chosen setup) **before**
    passkey. Passkey/device protection runs when the user confirms Simple create,
    or first when unlocking an existing local vault. Then load the local cache.
+   **Exception:** opening `#enroll=` on an empty browser is join/onboarding for
+   an existing vault — skip create landing, require device protection, then show
+   Finish device onboarding (vault password).
 2. **First visit / GetStarted:** after the public site selects Simple or
    Sentinel, the isolated app presents **Create a new vault** and **Open an
    existing vault** as sibling intents. Creation either creates a Simple vault

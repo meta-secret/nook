@@ -5,6 +5,7 @@ import {
   assertVaultReady,
   clearBrowserVault,
   connectLocalVault,
+  createIsolatedContext,
   E2E_SYNC_ONBOARD_PROVIDER,
   expandSettingsSection,
   expectVaultPasswordStatus,
@@ -348,5 +349,81 @@ test.describe('enrollment link deep link (local)', () => {
 
     await pageA.close()
     await pageB.close()
+  })
+
+  test('empty browser without auto-passkey shows onboarding, not create vault', async ({
+    browser,
+    context,
+  }) => {
+    const pageA = await context.newPage()
+    await pageA.goto('/app/')
+    await clearBrowserVault(pageA)
+    await pageA.reload()
+    await connectLocalVault(pageA)
+    const secretKey = uniqueSecretKey('e2e-link-manual')
+    await addSecret(pageA, secretKey, 'via-hash-enroll-manual')
+
+    await openStorageSettings(pageA)
+    await addVaultPassword(pageA, 'Manual link test', 'manual-link-pass')
+
+    const stub = createLocalE2eFileSyncVaultStub(
+      '',
+      E2E_SYNC_ONBOARD_PROVIDER.fileName,
+    )
+    await reloadUnlockLocalVaultWithSync(pageA, stub)
+    await waitForSyncRemoteVaultState(
+      stub,
+      (snapshot) =>
+        snapshot.secretIds.length >= 1 && snapshot.hasPasswordEnvelope,
+    )
+
+    await openOnboardDevicePanel(pageA)
+    await submitOnboardEnrollmentCode(pageA, 'manual-link-pass')
+    const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
+    expect(link).toContain('#enroll=')
+
+    // Fresh empty browser: deferred-passkey create landing must not win over
+    // `#enroll=` onboarding (production path; e2e normally auto-creates passkeys).
+    const contextB = await createIsolatedContext(browser)
+    await contextB.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    const pageB = await contextB.newPage()
+    await stub.install(pageB, {
+      fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
+    })
+    await pageB.goto(link)
+
+    await expect(pageB.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(pageB.getByTestId('login-create-vault-chooser')).toHaveCount(0)
+    await expect(pageB.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(pageB.getByTestId('enrollment-scan-panel')).toContainText(
+      'existing vault',
+    )
+
+    await pageB.getByTestId('device-protection-setup-btn').click()
+    await expect(pageB.getByTestId('passkey-auth-overlay')).toBeHidden({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible()
+    await expect(
+      pageB.getByTestId('enrollment-password-entry-hint'),
+    ).toContainText('Manual link test')
+    await pageB.getByTestId('enrollment-password-input').fill('manual-link-pass')
+    await pageB.getByTestId('submit-enrollment-code-btn').click()
+    await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
+    await expect(row).toBeVisible()
+
+    await pageA.close()
+    await pageB.close()
+    await contextB.close()
   })
 })
