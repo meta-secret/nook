@@ -94,9 +94,12 @@
     return item.title.trim() || vault.t("vault.fields.no_title");
   });
 
-  const headerTitle = $derived(
-    item.type === "login" ? item.groupKey : summary,
-  );
+  const headerTitle = $derived.by(() => {
+    if (item.type !== "login") return summary;
+    return item.websiteUrl.trim()
+      ? item.groupKey
+      : vault.t("vault.fields.no_website");
+  });
 </script>
 
 <div data-testid="vault-group-{item.type}">
