@@ -119,7 +119,7 @@ fn is_generated_metadata_bullet(marker: &ImportMetadataMarker, bullet: &str) -> 
 fn metadata_section_index(normalized: &str, marker: &ImportMetadataMarker) -> Option<usize> {
     normalized
         .match_indices(marker.heading)
-        .filter_map(|(index, _)| {
+        .find_map(|(index, _)| {
             if index != 0 && !normalized[..index].ends_with("\n\n") {
                 return None;
             }
@@ -127,7 +127,6 @@ fn metadata_section_index(normalized: &str, marker: &ImportMetadataMarker) -> Op
             let first_bullet = metadata.strip_prefix("- ")?.lines().next()?;
             is_generated_metadata_bullet(marker, first_bullet).then_some(index)
         })
-        .next()
 }
 
 fn provider_neutral_notes(value: &str, markers: &[&ImportMetadataMarker]) -> String {
