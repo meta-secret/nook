@@ -34,7 +34,7 @@ pub use types::{
     NookPasswordEntrySummary, NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig,
     NookSecretFormFields, NookSecretPage, NookSecurityConflict, NookStorageConnectArgs,
     NookStorageProviderKind, NookStorageProviderTypeUtil, NookTotpCode, NookVaultAccessReport,
-    NookVaultMember, NookVaultSyncResult,
+    NookVaultMember, NookVaultSecurityRecommendations, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -76,6 +76,18 @@ pub enum NookError {
 #[must_use]
 pub fn translate_key(locale: &str, key: &str) -> String {
     nook_core::translate(locale, key)
+}
+
+#[wasm_bindgen(js_name = assessVaultSecurity)]
+#[must_use]
+pub fn assess_vault_security(
+    sync_provider_count: u32,
+    enrolled_device_count: u32,
+) -> NookVaultSecurityRecommendations {
+    NookVaultSecurityRecommendations::from_core(nook_core::assess_vault_security(
+        sync_provider_count as usize,
+        enrolled_device_count as usize,
+    ))
 }
 
 #[wasm_bindgen(js_name = parseAppLocale)]

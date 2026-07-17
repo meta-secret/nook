@@ -42,7 +42,7 @@
     type ExtensionConnectRequest,
   } from "$lib/extension-connect";
   import type { VaultItemType } from "$lib/nook";
-  import { configuredVaultApplication } from "$app-wasm";
+  import { assessVaultSecurity, configuredVaultApplication } from "$app-wasm";
   import { consumeSentinelOnboardingFromLocation } from "$lib/sentinel-onboarding-link";
   import {
     APP_KIND,
@@ -57,6 +57,9 @@
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
 
   const vault = new VaultState();
+  const vaultSecurityRecommendations = $derived(
+    assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
+  );
   type ColorMode = "light" | "dark";
   const THEME_STORAGE_KEY = "nook_color_mode";
 
@@ -906,11 +909,11 @@
                 ? 'space-y-4'
                 : 'flex min-h-0 flex-1 flex-col gap-4'}"
             >
-              {#if !vault.settingsOpen && (vault.syncProviders.length === 0 || vault.vaultMembers.length <= 1)}
+              {#if !vault.settingsOpen && vaultSecurityRecommendations.hasRecommendations}
                 <VaultSecurityGuideBanner
                   {vault}
-                  needsSyncProvider={vault.syncProviders.length === 0}
-                  needsAnotherDevice={vault.vaultMembers.length <= 1}
+                  needsSyncProvider={vaultSecurityRecommendations.needsSyncProvider}
+                  needsAnotherDevice={vaultSecurityRecommendations.needsAnotherDevice}
                   onAddSyncProvider={() => vault.openAdmin("storage")}
                   onAddDevice={() => vault.openSettings("onboard")}
                 />
