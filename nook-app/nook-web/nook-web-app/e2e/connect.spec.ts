@@ -40,20 +40,26 @@ test.describe('vault connect flow', () => {
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
-    await expect(page.getByTestId('local-only-vault-warning')).toBeVisible()
-    await expect(page.getByTestId('local-only-vault-warning')).toHaveAttribute(
+    await expect(page.getByTestId('vault-security-guide')).toBeVisible()
+    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
       'data-folded',
       'true',
     )
-    await expect(
-      page.getByTestId('local-only-warning-details'),
-    ).not.toBeVisible()
-    await page.getByTestId('local-only-warning-toggle').click()
-    await expect(page.getByTestId('local-only-warning-details')).toBeVisible()
-    await expect(page.getByTestId('local-only-vault-warning')).toHaveAttribute(
+    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
+      'data-recommendations',
+      '2',
+    )
+    await expect(page.getByTestId('security-guide-details')).not.toBeVisible()
+    await page.getByTestId('security-guide-toggle').click()
+    await expect(page.getByTestId('security-guide-details')).toBeVisible()
+    await expect(page.getByTestId('security-guide-sync-provider')).toBeVisible()
+    await expect(page.getByTestId('security-guide-device')).toBeVisible()
+    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
       'data-folded',
       'false',
     )
+    await page.getByTestId('security-guide-add-device').click()
+    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
   })
 
   test('github setup keeps sync step locked until token is entered', async ({

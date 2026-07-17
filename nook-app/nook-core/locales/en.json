@@ -309,15 +309,20 @@
     "sync_after_unlock": "Cloud sync providers can be connected in Settings after you unlock.",
     "use_storage_provider": "Use a cloud storage provider instead"
   },
-  "local_only_warning": {
-    "title": "No backup — your vault exists only on this device",
-    "body": "Your encrypted vault is stored only in this browser. If this copy is lost, your secrets may be gone permanently. Add at least one sync provider to keep an encrypted replica elsewhere.",
-    "risk_cleared_data": "Clearing browser data, cookies, or site storage can delete your vault.",
-    "risk_lost_device": "A lost, replaced, or reformatted device has no other copy unless you add a sync provider.",
-    "risk_no_guarantee": "Nook does not host, back up, or recover vault data — there are no guarantees at this stage.",
+  "security_guide": {
+    "title": "Vault security guide",
+    "intro": "Complete these recommendations so one lost browser or device cannot leave you without your vault.",
+    "recommendation_count_singular": "{count} security recommendation",
+    "recommendation_count_plural": "{count} security recommendations",
+    "sync_title": "Keep an encrypted copy elsewhere",
+    "sync_body": "Your encrypted vault is stored only in this browser. Clearing site data or losing this device can permanently delete the only copy. Nook does not host or recover vault data, so add a sync provider to keep an encrypted replica elsewhere.",
+    "device_title": "Secure vault access with another device",
+    "device_body": "No other enrolled device can currently open this vault. Add another device while this one is available so access does not depend on a single device key.",
+    "distinct_safeguards": "A sync provider protects the encrypted vault data; another enrolled device protects your ability to open it. You need both safeguards.",
     "add_sync_provider": "Add sync provider",
-    "collapse": "Collapse warning",
-    "expand": "Show backup warning"
+    "add_device": "Add another device",
+    "collapse": "Collapse security guide",
+    "expand": "Show security guide"
   },
   "vault": {
     "search_placeholder": "Search secrets...",
