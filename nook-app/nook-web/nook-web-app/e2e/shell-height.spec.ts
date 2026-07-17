@@ -41,4 +41,29 @@ test.describe('authenticated shell height', () => {
     const vaultAgainHeight = (await shell.boundingBox())?.height ?? 0
     expect(vaultAgainHeight).toBeCloseTo(vaultHeight, 0)
   })
+
+  test('keeps the mobile vault fixed to the horizontal viewport', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          clientWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        })),
+      )
+      .toEqual({ clientWidth: 390, scrollWidth: 390 })
+
+    await page.evaluate(() => window.scrollTo({ left: 100, top: 0 }))
+    await expect.poll(() => page.evaluate(() => window.scrollX)).toBe(0)
+    await expect(page.getByTestId('authenticated-shell')).toHaveCSS(
+      'touch-action',
+      'pan-y',
+    )
+  })
 })

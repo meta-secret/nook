@@ -602,7 +602,7 @@
   <AppLogsApiPage />
 {:else}
   <main
-    class="min-h-svh bg-background text-foreground"
+    class="min-h-svh min-w-0 max-w-full overflow-x-clip bg-background text-foreground"
     class:dark={colorMode === "dark"}
   >
     <header
@@ -888,7 +888,7 @@
       {:else if vault.isAuthenticated}
         <div
           class:authenticated-shell-editor={secretsAddOpen}
-          class="authenticated-shell flex w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+          class="authenticated-shell flex w-full min-w-0 max-w-full touch-pan-y flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
           data-testid="authenticated-shell"
         >
           <div
