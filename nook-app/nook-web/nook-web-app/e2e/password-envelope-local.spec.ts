@@ -405,8 +405,9 @@ test.describe('enrollment link deep link (local)', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(pageB.getByTestId('enrollment-scan-panel')).toContainText(
-      'existing vault',
+      'Finish device onboarding',
     )
+    await expect(pageB.getByTestId('login-vault-name-input')).toHaveCount(0)
 
     await pageB.getByTestId('device-protection-setup-btn').click()
     await expect(pageB.getByTestId('passkey-auth-overlay')).toBeHidden({
@@ -421,6 +422,9 @@ test.describe('enrollment link deep link (local)', () => {
       .fill('manual-link-pass')
     await pageB.getByTestId('submit-enrollment-code-btn').click()
     await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    await expect(pageB.getByTestId('vault-switcher-trigger')).toContainText(
+      'Test vault',
+    )
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 

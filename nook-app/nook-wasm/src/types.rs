@@ -1174,6 +1174,7 @@ impl From<nook_core::SyncProviderTarget> for NookSyncProviderTarget {
 #[wasm_bindgen]
 pub struct NookEnrollmentIssueInput {
     provider: NookEnrollmentProvider,
+    vault_name: String,
     entry_id: String,
     issued_at: String,
 }
@@ -1181,9 +1182,15 @@ pub struct NookEnrollmentIssueInput {
 #[wasm_bindgen]
 impl NookEnrollmentIssueInput {
     #[wasm_bindgen(constructor)]
-    pub fn new(provider: NookEnrollmentProvider, entry_id: String, issued_at: String) -> Self {
+    pub fn new(
+        provider: NookEnrollmentProvider,
+        vault_name: String,
+        entry_id: String,
+        issued_at: String,
+    ) -> Self {
         Self {
             provider,
+            vault_name,
             entry_id,
             issued_at,
         }
@@ -1194,6 +1201,7 @@ impl NookEnrollmentIssueInput {
     ) -> Result<nook_core::EnrollmentIssueInput, nook_core::EnrollmentError> {
         Ok(nook_core::EnrollmentIssueInput {
             provider: self.provider.to_core(),
+            vault_name: self.vault_name.clone(),
             entry_id: self.entry_id.clone(),
             issued_at: self.issued_at.clone(),
         })
@@ -1219,6 +1227,7 @@ impl NookEnrollmentIssueInput {
 #[derive(Clone)]
 pub struct NookDecryptedEnrollmentPayload {
     provider: NookEnrollmentProvider,
+    vault_name: Option<String>,
     entry_id: String,
     issued_at: String,
 }
@@ -1228,6 +1237,7 @@ impl NookDecryptedEnrollmentPayload {
     pub(crate) fn from_core(payload: nook_core::DecryptedEnrollmentPayload) -> Self {
         Self {
             provider: NookEnrollmentProvider::from_core(payload.provider),
+            vault_name: payload.vault_name,
             entry_id: payload.entry_id,
             issued_at: payload.issued_at,
         }
@@ -1236,6 +1246,11 @@ impl NookDecryptedEnrollmentPayload {
     #[wasm_bindgen(getter)]
     pub fn provider(&self) -> NookEnrollmentProvider {
         self.provider.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultName)]
+    pub fn vault_name(&self) -> Option<String> {
+        self.vault_name.clone()
     }
 
     #[wasm_bindgen(getter, js_name = onboardingType)]

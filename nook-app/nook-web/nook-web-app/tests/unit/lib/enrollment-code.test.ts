@@ -18,6 +18,7 @@ await initNookWasm()
 function samplePayload(): NookEnrollmentIssueInput {
   return new NookEnrollmentIssueInput(
     NookEnrollmentProvider.local(),
+    'Local vault',
     'entry-local',
     '2026-06-23T12:00:00Z',
   )
@@ -26,6 +27,7 @@ function samplePayload(): NookEnrollmentIssueInput {
 function githubPayload(): NookEnrollmentIssueInput {
   return new NookEnrollmentIssueInput(
     NookEnrollmentProvider.github('team-vault', 'github_pat_11AAAAbbbbCCCC'),
+    'Team vault',
     'entry-1',
     '2026-06-23T12:00:00Z',
   )
@@ -97,11 +99,13 @@ describe('enrollment payloads', () => {
     const serialized = JSON.stringify(outer)
     expect(serialized).not.toContain('vault-pass-99')
     expect(serialized).not.toContain('github_pat_11AAAAbbbbCCCC')
+    expect(serialized).not.toContain('Team vault')
     expect(outer.entry_id).toBe('entry-1')
     expect(outer.ct).toBeTruthy()
 
     const decrypted = decryptEnrollmentPayload(code, 'vault-pass-99')
     expect(decrypted.entryId).toBe('entry-1')
+    expect(decrypted.vaultName).toBe('Team vault')
     expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
     expect(decrypted.provider.type).toBe(StorageProviderType.Github)
     expect(decrypted.provider.githubPat).toBe('github_pat_11AAAAbbbbCCCC')

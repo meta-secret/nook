@@ -9,6 +9,7 @@ import {
   enrollmentProviderForArchitecture,
   encryptEnrollmentPayload,
   hasActiveLocalVault,
+  setLocalVaultLabel,
 } from "$app-wasm";
 import {
   bindGoogleDriveSharedFolder,
@@ -492,6 +493,17 @@ export async function connectWithEnrollmentCode(
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
     await state.loadSecretPage("", 0);
+    const vaultName = payload.vaultName?.trim();
+    const vaultStoreId = state.manager.vaultStoreId.trim();
+    if (vaultName && vaultStoreId) {
+      state.manager.setVaultName(vaultName);
+      await setLocalVaultLabel(vaultStoreId, vaultName);
+    }
+    // Password enrollment downloads an existing vault into this browser. Make
+    // that inherited store the active local catalog entry before saving the
+    // transferred provider credentials.
+    await state.refreshLocalVaultCatalog();
+    await state.syncActiveVaultStoreIdToAuth();
     await state.ensureProviderSaved();
     await state.loadProviders();
     await state.refreshPasswordEntriesList();
@@ -702,6 +714,7 @@ export async function issueEnrollmentCode(
     );
     const payload = new NookEnrollmentIssueInput(
       provider,
+      state.manager.vaultName ?? "",
       entryId,
       isoTimestamp(),
     );
