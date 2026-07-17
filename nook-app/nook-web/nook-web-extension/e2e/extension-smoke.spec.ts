@@ -634,6 +634,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const websiteCredentialId = await registerWebsitePasskey(website)
     expect(websiteCredentialId).toBeTruthy()
     await assertWebsitePasskey(website, websiteCredentialId)
+    await website.close()
 
     await simplePage.getByRole('button', { name: 'Done' }).click()
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
@@ -704,7 +705,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    await assertWebsitePasskey(website, websiteCredentialId)
+    const websiteAfterUnlock = await context.newPage()
+    await websiteAfterUnlock.goto(`${loginServer.origin}/login`)
+    await assertWebsitePasskey(websiteAfterUnlock, websiteCredentialId)
+    await websiteAfterUnlock.close()
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
 
     await context.close()
