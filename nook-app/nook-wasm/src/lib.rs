@@ -1337,6 +1337,11 @@ impl NookSecretListItem {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = websiteHost)]
+    pub fn website_host(&self) -> String {
+        self.item.website_host()
+    }
+
     #[wasm_bindgen(getter)]
     pub fn username(&self) -> String {
         match &self.item.data {
@@ -1716,6 +1721,7 @@ mod wasm_tests {
         assert_eq!(item.id(), "secret_login");
         assert_eq!(item.secret_type(), "login");
         assert_eq!(item.website_url(), "https://example.com");
+        assert_eq!(item.website_host(), "example.com");
         assert_eq!(item.username(), "alice");
         assert_eq!(item.summary(), "alice");
     }

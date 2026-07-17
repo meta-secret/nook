@@ -93,6 +93,15 @@
     }
     return item.title.trim() || vault.t("vault.fields.no_title");
   });
+
+  const headerTitle = $derived.by(() => {
+    if (item.type !== "login") return summary;
+    return item.websiteHost || vault.t("vault.fields.no_website");
+  });
+
+  const accountSubtitle = $derived(
+    item.type === "login" ? item.username.trim() : "",
+  );
 </script>
 
 <div data-testid="vault-group-{item.type}">
@@ -139,11 +148,20 @@
               <StickyNote class="size-3.5" />
             {/if}
           </div>
-          <h3
-            class="truncate text-sm font-semibold tracking-wide text-foreground"
-          >
-            {summary}
-          </h3>
+          <div class="min-w-0 flex-1">
+            <h3
+              data-testid="secret-row-heading"
+              class="truncate text-sm font-semibold tracking-wide text-foreground"
+            >
+              {headerTitle}
+            </h3>
+            {#if accountSubtitle}
+              <span
+                data-testid="secret-row-account"
+                class="block truncate text-xs text-muted-foreground"
+              >{accountSubtitle}</span>
+            {/if}
+          </div>
         {:else}
           <span
             class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
