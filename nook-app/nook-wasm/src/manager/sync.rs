@@ -78,7 +78,7 @@ impl NookVaultManager {
 
         if content.trim().is_empty() {
             self.vault.last_synced_content = content.clone();
-            return sync_result_access_status("new_vault");
+            return sync_result_access_status(nook_core::VaultAccessStatus::NewVault);
         }
 
         if self.vault.members_key.is_empty() {
@@ -86,7 +86,7 @@ impl NookVaultManager {
             self.vault.last_synced_content = content.clone();
             let identity = self.ensure_device_identity()?;
             let status = access_status_for_vault_content(&content, &identity)?;
-            return sync_result_access_status(&status);
+            return sync_result_access_status(status);
         }
 
         Err(NookError::Database("Vault event log is required.".to_owned()).into())

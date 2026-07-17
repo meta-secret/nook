@@ -1,6 +1,7 @@
 import {
   getVaultManager,
   isoTimestamp,
+  VaultAccessStatus,
   type JoinRequest,
   type NookImportResult,
   type NookSecretListItem,
@@ -1782,7 +1783,7 @@ export class VaultState {
 
   async assessVaultConnectStatus(
     argsOverride?: [string, string, string],
-  ): Promise<string> {
+  ): Promise<VaultAccessStatus> {
     const args =
       argsOverride ??
       (!this.isAuthenticated &&
@@ -1803,17 +1804,19 @@ export class VaultState {
           30_000,
         );
       });
-      return (await Promise.race([assessPromise, assessTimeout])) as string;
-    })) as string;
+      return await Promise.race([assessPromise, assessTimeout]);
+    })) as VaultAccessStatus;
   }
 
-  async handleRemoteVaultAssessStatus(accessStatus: string): Promise<boolean> {
-    if (accessStatus === "remote_missing_local_cache") {
+  async handleRemoteVaultAssessStatus(
+    accessStatus: VaultAccessStatus,
+  ): Promise<boolean> {
+    if (accessStatus === VaultAccessStatus.RemoteMissingLocalCache) {
       this.remoteVaultRecoveryPrompt = "with_cache";
       await this.refreshPasswordEntriesList();
       return true;
     }
-    if (accessStatus === "remote_missing") {
+    if (accessStatus === VaultAccessStatus.RemoteMissing) {
       const intent = this.loginRequiresExistingVault
         ? "open-existing"
         : this.isAuthenticated
@@ -1966,7 +1969,7 @@ export class VaultState {
 
     if (!result.changed) return;
 
-    if (result.accessStatus) {
+    if (result.accessStatus !== undefined) {
       vaultLog.info("sync state changed (login gate)", {
         accessStatus: result.accessStatus,
         pendingJoins: result.pendingJoins.length,
@@ -1974,19 +1977,22 @@ export class VaultState {
     }
 
     if (
-      result.accessStatus === "ready" &&
+      result.accessStatus === VaultAccessStatus.Ready &&
       this.joinEnrollmentPrompt === "pending"
     ) {
       this.joinEnrollmentPrompt = "none";
       this.showSuccess(this.t("toasts.device_approved"));
       this.scheduleAutoConnectAfterApproval();
-    } else if (result.accessStatus === "ready" && this.awaitingJoinApproval) {
+    } else if (
+      result.accessStatus === VaultAccessStatus.Ready &&
+      this.awaitingJoinApproval
+    ) {
       // Joiner whose approval landed after the join dialog was dismissed:
       // sync says the remote vault is ready for this device, so unlock it
       // instead of leaving the user stranded on the login gate.
       this.scheduleAutoConnectAfterApproval();
     } else if (
-      result.accessStatus === "join_pending" &&
+      result.accessStatus === VaultAccessStatus.JoinPending &&
       this.joinEnrollmentPrompt === "none"
     ) {
       this.joinEnrollmentPrompt = "pending";

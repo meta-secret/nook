@@ -12,6 +12,7 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
+import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
@@ -207,19 +208,11 @@ export function oauthTokensToConfig(
   tokens: GoogleOAuthTokens,
   existing?: OAuthFileConfig,
 ): OAuthFileConfig {
-  return {
-    preset: "google-drive",
-    accessToken: tokens.accessToken,
-    expiresAt: tokens.expiresAt,
-    fileId: existing?.fileId,
-    fileName: existing?.fileName,
-    accountEmail: existing?.accountEmail,
-    refreshToken: existing?.refreshToken,
-    driveMode:
-      existing?.driveMode ??
-      (existing?.folderId?.trim() ? "shared" : "private"),
-    folderId: existing?.folderId,
-  };
+  return googleOAuthTokensToConfigCore(
+    tokens.accessToken,
+    tokens.expiresAt,
+    existing ?? undefined,
+  ) as OAuthFileConfig;
 }
 
 export function isOAuthAccessTokenExpired(

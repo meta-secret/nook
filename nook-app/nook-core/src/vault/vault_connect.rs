@@ -8,14 +8,20 @@ use crate::{
     vault_has_multi_device_records,
 };
 use std::fmt;
+use wasm_bindgen::prelude::wasm_bindgen;
 
-/// Connect pre-flight status for the web layer (`new_vault` or enrolled-device access).
+/// Connect pre-flight status shared by every host adapter.
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultAccessStatus {
     NewVault,
     Ready,
     NeedsEnrollment,
     JoinPending,
+    /// The selected remote provider has no vault and no usable local cache.
+    RemoteMissing,
+    /// The selected remote provider has no vault, but a local recovery cache exists.
+    RemoteMissingLocalCache,
 }
 
 impl VaultAccessStatus {
@@ -26,6 +32,8 @@ impl VaultAccessStatus {
             Self::Ready => "ready",
             Self::NeedsEnrollment => "needs_enrollment",
             Self::JoinPending => "join_pending",
+            Self::RemoteMissing => "remote_missing",
+            Self::RemoteMissingLocalCache => "remote_missing_local_cache",
         }
     }
 }
@@ -239,6 +247,22 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vault_access_status_labels_are_stable_across_host_bindings() {
+        assert_eq!(VaultAccessStatus::NewVault.as_str(), "new_vault");
+        assert_eq!(VaultAccessStatus::Ready.as_str(), "ready");
+        assert_eq!(
+            VaultAccessStatus::NeedsEnrollment.as_str(),
+            "needs_enrollment"
+        );
+        assert_eq!(VaultAccessStatus::JoinPending.as_str(), "join_pending");
+        assert_eq!(VaultAccessStatus::RemoteMissing.as_str(), "remote_missing");
+        assert_eq!(
+            VaultAccessStatus::RemoteMissingLocalCache.as_str(),
+            "remote_missing_local_cache"
+        );
+    }
     use crate::{
         DeviceMode, ReplicationType, SentinelPolicy, VaultResult, generate_store_id,
         generate_vault_keys, genesis_auth_record, genesis_members_records, load_sentinel_vault,

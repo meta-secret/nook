@@ -208,19 +208,6 @@ impl NookPasskeyAssertion {
     }
 }
 
-const DEFAULT_VAULT_IDLE_TIMEOUT_MS: u32 = 5 * 60_000;
-const DEFAULT_VAULT_IDLE_WARNING_MS: u32 = 30_000;
-const MIN_IDLE_TIMEOUT_MS: u32 = 1_000;
-const DEFAULT_VAULT_SYNC_INTERVAL_MS: u32 = 60_000;
-const MIN_VAULT_SYNC_INTERVAL_MS: u32 = 250;
-const RUN_MODE_LOCAL_DEV: &str = "localDev";
-const RUN_MODE_LOCAL: &str = "local";
-const RUN_MODE_DEVELOPMENT: &str = "development";
-const RUN_MODE_TEST: &str = "test";
-const RUN_MODE_DEV: &str = "dev";
-const RUN_MODE_PROD: &str = "prod";
-const RUN_MODE_PRODUCTION: &str = "production";
-
 #[wasm_bindgen(typescript_custom_section)]
 const AUTH_PROVIDER_TYPES: &'static str = r#"
 export type NookAppLocale = 'en' | 'ru';
@@ -288,15 +275,6 @@ export interface NookLocalAuthProviderSnapshot {
 }
 "#;
 
-fn parse_config_millis(raw: Option<String>, min: u32) -> Option<u32> {
-    let raw = raw?;
-    if raw.is_empty() {
-        return None;
-    }
-    let value = raw.parse::<u32>().ok()?;
-    if value >= min { Some(value) } else { None }
-}
-
 fn browser_language_tags() -> Vec<String> {
     let navigator = window().navigator();
     let mut tags = navigator
@@ -363,22 +341,35 @@ pub enum NookClientRunMode {
     Prod,
 }
 
+impl From<NookClientRunMode> for nook_core::ClientRunMode {
+    fn from(value: NookClientRunMode) -> Self {
+        match value {
+            NookClientRunMode::Local => Self::Local,
+            NookClientRunMode::Dev => Self::Dev,
+            NookClientRunMode::Prod => Self::Prod,
+        }
+    }
+}
+
+impl From<nook_core::ClientRunMode> for NookClientRunMode {
+    fn from(value: nook_core::ClientRunMode) -> Self {
+        match value {
+            nook_core::ClientRunMode::Local => Self::Local,
+            nook_core::ClientRunMode::Dev => Self::Dev,
+            nook_core::ClientRunMode::Prod => Self::Prod,
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct NookClientRunModeUtil;
 
 #[wasm_bindgen]
 impl NookClientRunModeUtil {
     pub fn parse(mode: &str) -> Result<NookClientRunMode, wasm_bindgen::JsError> {
-        match mode {
-            RUN_MODE_LOCAL_DEV | RUN_MODE_LOCAL | RUN_MODE_DEVELOPMENT | RUN_MODE_TEST => {
-                Ok(NookClientRunMode::Local)
-            }
-            RUN_MODE_DEV => Ok(NookClientRunMode::Dev),
-            RUN_MODE_PROD | RUN_MODE_PRODUCTION => Ok(NookClientRunMode::Prod),
-            _ => Err(wasm_bindgen::JsError::new(&format!(
-                "Unknown client run mode: {mode}"
-            ))),
-        }
+        nook_core::ClientRunMode::parse(mode)
+            .map(Into::into)
+            .ok_or_else(|| wasm_bindgen::JsError::new(&format!("Unknown client run mode: {mode}")))
     }
 }
 
@@ -495,8 +486,7 @@ impl NookGoogleDriveFolder {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookRuntimeConfig {
-    run_mode: NookClientRunMode,
-    e2e_expose_vault: bool,
+    policy: nook_core::VaultRuntimePolicy,
 }
 
 #[wasm_bindgen]
@@ -504,85 +494,79 @@ impl NookRuntimeConfig {
     #[wasm_bindgen(constructor)]
     pub fn new(run_mode: NookClientRunMode, e2e_expose_vault: bool) -> Self {
         Self {
-            run_mode,
-            e2e_expose_vault,
+            policy: nook_core::VaultRuntimePolicy::new(run_mode.into(), e2e_expose_vault),
         }
     }
 
     #[wasm_bindgen(getter, js_name = runMode)]
     #[must_use]
     pub fn run_mode(&self) -> NookClientRunMode {
-        self.run_mode
+        self.policy.run_mode().into()
     }
 
     #[wasm_bindgen(getter, js_name = isLocal)]
     #[must_use]
     pub fn is_local(&self) -> bool {
-        self.run_mode == NookClientRunMode::Local
+        self.policy.run_mode() == nook_core::ClientRunMode::Local
     }
 
     #[wasm_bindgen(getter, js_name = isDev)]
     #[must_use]
     pub fn is_dev(&self) -> bool {
-        self.run_mode == NookClientRunMode::Dev
+        self.policy.run_mode() == nook_core::ClientRunMode::Dev
     }
 
     #[wasm_bindgen(getter, js_name = isProd)]
     #[must_use]
     pub fn is_prod(&self) -> bool {
-        self.run_mode == NookClientRunMode::Prod
+        self.policy.run_mode() == nook_core::ClientRunMode::Prod
     }
 
     #[wasm_bindgen(getter, js_name = e2eExposeVault)]
     #[must_use]
     pub fn e2e_expose_vault(&self) -> bool {
-        self.e2e_expose_vault
+        self.policy.expose_test_capabilities()
     }
 
     #[must_use]
     pub fn allow_fast_idle(&self) -> bool {
-        self.run_mode != NookClientRunMode::Prod || self.e2e_expose_vault
+        self.policy.allow_fast_idle()
     }
 
     #[wasm_bindgen(js_name = allowFastSync)]
     #[must_use]
     pub fn allow_fast_sync(&self) -> bool {
-        self.run_mode != NookClientRunMode::Prod || self.e2e_expose_vault
+        self.policy.allow_fast_sync()
     }
 
     #[wasm_bindgen(js_name = exposeDebugHooks)]
     #[must_use]
     pub fn expose_debug_hooks(&self) -> bool {
-        self.run_mode != NookClientRunMode::Prod || self.e2e_expose_vault
+        self.policy.expose_debug_hooks()
     }
 
     #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: Option<String>) -> u32 {
-        if !self.allow_fast_idle() {
-            return DEFAULT_VAULT_IDLE_TIMEOUT_MS;
-        }
-        parse_config_millis(raw_timeout_ms, MIN_IDLE_TIMEOUT_MS)
-            .unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
+        self.policy
+            .resolve_vault_idle_timeout_ms(raw_timeout_ms.as_deref())
     }
 
     #[wasm_bindgen(js_name = resolveVaultIdleWarningMs)]
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: Option<String>) -> u32 {
-        if !self.allow_fast_idle() {
-            return DEFAULT_VAULT_IDLE_WARNING_MS;
-        }
-        parse_config_millis(raw_warning_ms, 0).unwrap_or(DEFAULT_VAULT_IDLE_WARNING_MS)
+        self.policy
+            .resolve_vault_idle_warning_ms(raw_warning_ms.as_deref())
     }
 
     #[wasm_bindgen(js_name = resolveVaultSyncIntervalMs)]
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: Option<String>) -> u32 {
-        if !self.allow_fast_sync() {
-            return DEFAULT_VAULT_SYNC_INTERVAL_MS;
-        }
-        parse_config_millis(raw_interval_ms, MIN_VAULT_SYNC_INTERVAL_MS)
-            .unwrap_or(DEFAULT_VAULT_SYNC_INTERVAL_MS)
+        self.policy
+            .resolve_vault_sync_interval_ms(raw_interval_ms.as_deref())
     }
 }
 
@@ -1274,7 +1258,7 @@ impl NookDecryptedEnrollmentPayload {
 #[derive(Clone)]
 pub struct NookVaultSyncResult {
     changed: bool,
-    access_status: String,
+    access_status: Option<nook_core::VaultAccessStatus>,
     secrets: Vec<NookSecretRecord>,
     pending_joins: Vec<NookJoinRequest>,
     vault_members: Vec<NookVaultMember>,
@@ -1288,8 +1272,8 @@ impl NookVaultSyncResult {
     }
 
     #[wasm_bindgen(getter, js_name = accessStatus)]
-    pub fn access_status(&self) -> String {
-        self.access_status.clone()
+    pub fn access_status(&self) -> Option<nook_core::VaultAccessStatus> {
+        self.access_status
     }
 
     #[wasm_bindgen(getter)]
@@ -1310,17 +1294,17 @@ impl NookVaultSyncResult {
     pub(crate) fn unchanged() -> Self {
         Self {
             changed: false,
-            access_status: String::new(),
+            access_status: None,
             secrets: Vec::new(),
             pending_joins: Vec::new(),
             vault_members: Vec::new(),
         }
     }
 
-    pub(crate) fn with_access_status(status: String) -> Self {
+    pub(crate) fn with_access_status(status: nook_core::VaultAccessStatus) -> Self {
         Self {
             changed: true,
-            access_status: status,
+            access_status: Some(status),
             secrets: Vec::new(),
             pending_joins: Vec::new(),
             vault_members: Vec::new(),
@@ -1330,7 +1314,7 @@ impl NookVaultSyncResult {
     pub(crate) fn session(manager: &NookVaultManager, changed: bool) -> Result<Self, NookError> {
         Ok(Self {
             changed,
-            access_status: String::new(),
+            access_status: None,
             secrets: Vec::new(),
             pending_joins: manager.pending_joins().unwrap_or_default(),
             vault_members: manager.vault_members().unwrap_or_default(),

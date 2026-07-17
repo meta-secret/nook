@@ -7,6 +7,7 @@ import type {
 import {
   generatePassword as coreGeneratePassword,
   generateSecretId,
+  VaultAccessStatus,
 } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import { syncLocalFolderProvider } from "$lib/vault/sync";
@@ -70,8 +71,8 @@ export async function loadDb(state: VaultState) {
     });
 
     if (
-      accessStatus === "needs_enrollment" ||
-      accessStatus === "join_pending"
+      accessStatus === VaultAccessStatus.NeedsEnrollment ||
+      accessStatus === VaultAccessStatus.JoinPending
     ) {
       log.info("loadDb waiting on enrollment", { accessStatus });
     }
@@ -82,16 +83,16 @@ export async function loadDb(state: VaultState) {
     // forever. The sync provider remote is authoritative for enrollment
     // state, so re-assess against it and connect there when it is ready.
     if (
-      (accessStatus === "join_pending" ||
-        accessStatus === "needs_enrollment") &&
+      (accessStatus === VaultAccessStatus.JoinPending ||
+        accessStatus === VaultAccessStatus.NeedsEnrollment) &&
       !state.isAuthenticated &&
       state.syncProviders.length > 0
     ) {
       const providerArgs = state.providerWasmArgs(state.syncProviders[0]!);
       const remoteStatus = await state.assessVaultConnectStatus(providerArgs);
       log.debug("loadDb provider re-assess", { remoteStatus });
-      if (remoteStatus === "ready") {
-        accessStatus = "ready";
+      if (remoteStatus === VaultAccessStatus.Ready) {
+        accessStatus = VaultAccessStatus.Ready;
         connectArgsOverride = providerArgs;
       }
     }
@@ -103,7 +104,7 @@ export async function loadDb(state: VaultState) {
       return;
     }
 
-    if (accessStatus === "needs_enrollment") {
+    if (accessStatus === VaultAccessStatus.NeedsEnrollment) {
       await state.ensureProviderSaved();
       const hasPasswordFallback = await state.refreshPasswordEntriesList();
       if (hasPasswordFallback && state.passwordEntries.length > 0) {
@@ -115,7 +116,7 @@ export async function loadDb(state: VaultState) {
       state.startVaultSync();
       return;
     }
-    if (accessStatus === "join_pending") {
+    if (accessStatus === VaultAccessStatus.JoinPending) {
       await state.ensureProviderSaved();
       const hasPasswordFallback = await state.refreshPasswordEntriesList();
       if (hasPasswordFallback && state.passwordEntries.length > 0) {

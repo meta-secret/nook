@@ -536,6 +536,45 @@ pub fn bind_google_drive_shared_folder(
     )?)?)
 }
 
+fn optional_oauth_file_config(
+    value: JsValue,
+) -> Result<Option<nook_core::OAuthFileConfigData>, serde_wasm_bindgen::Error> {
+    if value.is_undefined() || value.is_null() {
+        Ok(None)
+    } else {
+        serde_wasm_bindgen::from_value(value).map(Some)
+    }
+}
+
+#[wasm_bindgen(js_name = googleOAuthTokensToConfig)]
+pub fn google_oauth_tokens_to_config(
+    access_token: &str,
+    expires_at: &str,
+    existing: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let existing = optional_oauth_file_config(existing)?;
+    Ok(to_js_value(&nook_core::google_oauth_tokens_to_config(
+        access_token,
+        expires_at,
+        existing.as_ref(),
+    ))?)
+}
+
+#[wasm_bindgen(js_name = iCloudOAuthTokensToConfig)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn icloud_oauth_tokens_to_config(
+    access_token: &str,
+    account_name: Option<String>,
+    existing: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let existing = optional_oauth_file_config(existing)?;
+    Ok(to_js_value(&nook_core::icloud_oauth_tokens_to_config(
+        access_token,
+        account_name.as_deref(),
+        existing.as_ref(),
+    ))?)
+}
+
 #[wasm_bindgen(js_name = defaultVaultArchitecture)]
 pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
     Ok(to_js_value(&nook_core::VaultArchitecture::default())?)
@@ -603,6 +642,35 @@ pub fn validate_provider_replication(
         &provider,
         replication_type,
     )?)?)
+}
+
+#[wasm_bindgen(js_name = providerSupportsReplication)]
+pub fn provider_supports_replication(
+    provider: JsValue,
+    replication_type: &str,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
+    Ok(nook_core::provider_supports_replication(
+        &provider,
+        replication_type,
+    ))
+}
+
+#[wasm_bindgen(js_name = firstCompatibleProviderId)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn first_compatible_provider_id(
+    providers: JsValue,
+    replication_type: &str,
+    preferred_id: Option<String>,
+) -> Result<Option<String>, wasm_bindgen::JsError> {
+    let providers: Vec<nook_core::StorageProviderData> = serde_wasm_bindgen::from_value(providers)?;
+    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
+    Ok(nook_core::first_compatible_provider_id(
+        &providers,
+        replication_type,
+        preferred_id.as_deref(),
+    ))
 }
 
 #[wasm_bindgen(js_name = enrollmentProviderForArchitecture)]

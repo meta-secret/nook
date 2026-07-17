@@ -1,8 +1,10 @@
 import {
   defaultVaultArchitecture as wasmDefaultVaultArchitecture,
+  firstCompatibleProviderId as wasmFirstCompatibleProviderId,
   prepareSharedStorageGrant as wasmPrepareSharedStorageGrant,
   providerOnboardingType as wasmProviderOnboardingType,
   providerReplicationCapability as wasmProviderReplicationCapability,
+  providerSupportsReplication as wasmProviderSupportsReplication,
   validateProviderReplication as wasmValidateProviderReplication,
   validateVaultArchitecture as wasmValidateVaultArchitecture,
   vaultArchitectureCanCreateSecret as wasmVaultArchitectureCanCreateSecret,
@@ -112,12 +114,7 @@ export function providerSupportsReplication(
   provider: StorageProvider,
   replicationType: ReplicationType,
 ): boolean {
-  try {
-    validateProviderReplication(provider, replicationType);
-    return true;
-  } catch {
-    return false;
-  }
+  return wasmProviderSupportsReplication(provider, replicationType);
 }
 
 /**
@@ -129,17 +126,12 @@ export function firstCompatibleProvider(
   replicationType: ReplicationType,
   preferredId?: string,
 ): StorageProvider | undefined {
-  const preferred = providers.find(
-    (provider) =>
-      provider.id === preferredId &&
-      providerSupportsReplication(provider, replicationType),
+  const selectedId = wasmFirstCompatibleProviderId(
+    providers,
+    replicationType,
+    preferredId ?? undefined,
   );
-  return (
-    preferred ??
-    providers.find((provider) =>
-      providerSupportsReplication(provider, replicationType),
-    )
-  );
+  return providers.find((provider) => provider.id === selectedId);
 }
 
 export type SharedStorageGrantRequest = {

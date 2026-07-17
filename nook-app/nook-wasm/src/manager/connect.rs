@@ -27,14 +27,13 @@ fn is_sentinel_ceremony_required(err: &NookError) -> bool {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Returns `ready`, `new_vault`, `needs_enrollment`, `join_pending`,
-    /// `remote_missing`, or `remote_missing_local_cache`.
+    /// Return the typed, core-owned connect status for the selected provider.
     pub async fn assess_vault_connect(
         &mut self,
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<String, JsError> {
+    ) -> Result<nook_core::VaultAccessStatus, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity()?;
@@ -44,9 +43,7 @@ impl NookVaultManager {
                 let status = nook_core::VaultAccessStatus::from(nook_core::assess_connect_access(
                     &self.stored_records_snapshot(),
                     &identity,
-                ))
-                .as_str()
-                .to_owned();
+                ));
                 let _ = self
                     .status
                     .tx
@@ -56,9 +53,9 @@ impl NookVaultManager {
             if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
                 && !cached.trim().is_empty()
             {
-                return Ok("remote_missing_local_cache".to_owned());
+                return Ok(nook_core::VaultAccessStatus::RemoteMissingLocalCache);
             }
-            return Ok("remote_missing".to_owned());
+            return Ok(nook_core::VaultAccessStatus::RemoteMissing);
         }
         let mut remote_content_missing = false;
         let content = self
@@ -73,9 +70,7 @@ impl NookVaultManager {
                         nook_core::VaultAccessStatus::from(nook_core::assess_connect_access(
                             &self.stored_records_snapshot(),
                             &identity,
-                        ))
-                        .as_str()
-                        .to_owned();
+                        ));
                     let _ = self
                         .status
                         .tx
@@ -90,11 +85,11 @@ impl NookVaultManager {
                 if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
                     && !cached.trim().is_empty()
                 {
-                    return Ok("remote_missing_local_cache".to_owned());
+                    return Ok(nook_core::VaultAccessStatus::RemoteMissingLocalCache);
                 }
-                return Ok("remote_missing".to_owned());
+                return Ok(nook_core::VaultAccessStatus::RemoteMissing);
             }
-            return Ok("new_vault".to_owned());
+            return Ok(nook_core::VaultAccessStatus::NewVault);
         }
 
         // First boot for this session — adopt the remote unlock mode.

@@ -92,6 +92,58 @@ impl OAuthFileConfigData {
     }
 }
 
+/// Merge a fresh Google OAuth access token into the persisted provider shape.
+/// Browser/native SDK adapters obtain the token; core owns which provider
+/// target metadata survives credential refresh.
+#[must_use]
+pub fn google_oauth_tokens_to_config(
+    access_token: &str,
+    expires_at: &str,
+    existing: Option<&OAuthFileConfigData>,
+) -> OAuthFileConfigData {
+    let existing = existing.cloned().unwrap_or_default();
+    let drive_mode = existing.resolved_google_drive_mode();
+    OAuthFileConfigData {
+        preset: OauthFilePreset::GoogleDrive.as_str().to_owned(),
+        access_token: access_token.to_owned(),
+        refresh_token: existing.refresh_token,
+        expires_at: Some(expires_at.to_owned()),
+        file_id: existing.file_id,
+        file_name: existing.file_name,
+        account_email: existing.account_email,
+        drive_mode: Some(drive_mode),
+        folder_id: existing.folder_id,
+        icloud_mode: None,
+        icloud_share_target: None,
+    }
+}
+
+/// Merge a fresh `CloudKit` web-auth token into the persisted provider shape.
+/// Provider SDK ceremony state stays in the host adapter; target preservation
+/// and private/shared mode inference stay portable.
+#[must_use]
+pub fn icloud_oauth_tokens_to_config(
+    access_token: &str,
+    account_name: Option<&str>,
+    existing: Option<&OAuthFileConfigData>,
+) -> OAuthFileConfigData {
+    let existing = existing.cloned().unwrap_or_default();
+    let icloud_mode = existing.resolved_icloud_mode();
+    OAuthFileConfigData {
+        preset: OauthFilePreset::ICloud.as_str().to_owned(),
+        access_token: access_token.to_owned(),
+        refresh_token: existing.refresh_token,
+        expires_at: existing.expires_at,
+        file_id: existing.file_id,
+        file_name: existing.file_name,
+        account_email: account_name.map(str::to_owned).or(existing.account_email),
+        drive_mode: None,
+        folder_id: None,
+        icloud_mode: Some(icloud_mode),
+        icloud_share_target: existing.icloud_share_target,
+    }
+}
+
 /// Switch iCloud storage mode without carrying an auth token or `CloudKit`
 /// share target issued for the previous mode into the new connection.
 #[must_use]
@@ -368,6 +420,40 @@ pub fn validate_provider_row_replication(
         ICloudSharedTarget::from_storage_id(&storage_target)?;
     }
     Ok(capability)
+}
+
+/// Whether a persisted provider row is fully usable for the requested
+/// replication mode. This includes provider-specific shared-target checks.
+#[must_use]
+pub fn provider_supports_replication(
+    provider: &StorageProviderData,
+    replication_type: ReplicationType,
+) -> bool {
+    validate_provider_row_replication(provider, replication_type).is_ok()
+}
+
+/// Select the preferred compatible provider, or the first compatible row.
+/// Returning the id lets host adapters retain their own object/reference while
+/// core owns the compatibility and ordering decision.
+#[must_use]
+pub fn first_compatible_provider_id(
+    providers: &[StorageProviderData],
+    replication_type: ReplicationType,
+    preferred_id: Option<&str>,
+) -> Option<String> {
+    preferred_id
+        .and_then(|preferred_id| {
+            providers.iter().find(|provider| {
+                provider.id == preferred_id
+                    && provider_supports_replication(provider, replication_type)
+            })
+        })
+        .or_else(|| {
+            providers
+                .iter()
+                .find(|provider| provider_supports_replication(provider, replication_type))
+        })
+        .map(|provider| provider.id.clone())
 }
 
 /// Resolve the enrollment handoff from both vault policy and the concrete
@@ -1198,6 +1284,57 @@ mod tests {
     }
 
     #[test]
+    fn oauth_token_merges_preserve_only_same_provider_targets() {
+        let google_existing = OAuthFileConfigData {
+            preset: "google-drive".to_owned(),
+            access_token: "old".to_owned(),
+            refresh_token: Some("refresh".to_owned()),
+            expires_at: Some("old-expiry".to_owned()),
+            file_id: Some("file".to_owned()),
+            file_name: Some("events".to_owned()),
+            account_email: Some("alex@example.com".to_owned()),
+            folder_id: Some("folder".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let google = google_oauth_tokens_to_config(
+            "new-google-token",
+            "2026-07-20T00:00:00Z",
+            Some(&google_existing),
+        );
+        assert_eq!(google.access_token, "new-google-token");
+        assert_eq!(google.expires_at.as_deref(), Some("2026-07-20T00:00:00Z"));
+        assert_eq!(google.drive_mode, Some(GoogleDriveMode::Shared));
+        assert_eq!(google.folder_id.as_deref(), Some("folder"));
+        assert!(google.icloud_mode.is_none());
+
+        let icloud_existing = OAuthFileConfigData {
+            preset: "icloud".to_owned(),
+            access_token: "old".to_owned(),
+            refresh_token: Some("refresh".to_owned()),
+            expires_at: Some("unchanged-expiry".to_owned()),
+            file_id: Some("record".to_owned()),
+            file_name: Some("events".to_owned()),
+            account_email: Some("old@example.com".to_owned()),
+            icloud_share_target: Some("icloud-share-v1:{\"role\":\"owner\"}".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let icloud = icloud_oauth_tokens_to_config(
+            "new-icloud-token",
+            Some("new@example.com"),
+            Some(&icloud_existing),
+        );
+        assert_eq!(icloud.access_token, "new-icloud-token");
+        assert_eq!(icloud.account_email.as_deref(), Some("new@example.com"));
+        assert_eq!(icloud.icloud_mode, Some(ICloudMode::Shared));
+        assert_eq!(
+            icloud.icloud_share_target,
+            icloud_existing.icloud_share_target
+        );
+        assert!(icloud.drive_mode.is_none());
+        assert!(icloud.folder_id.is_none());
+    }
+
+    #[test]
     fn binding_shared_drive_folder_preserves_credentials_and_internal_event_name() {
         let config = OAuthFileConfigData {
             preset: "google-drive".to_owned(),
@@ -1686,6 +1823,32 @@ mod tests {
             capability.shared_joiner_identity,
             Some(crate::SharedJoinerIdentityKind::Email)
         );
+    }
+
+    #[test]
+    fn compatible_provider_selection_is_core_owned() {
+        let github = github_provider("github", "nook", "github_pat_11AAAA");
+        let drive = oauth_provider("drive", "google-drive", None, "events");
+        let providers = vec![github, drive];
+
+        assert_eq!(
+            first_compatible_provider_id(&providers, ReplicationType::Shared, Some("github"))
+                .as_deref(),
+            Some("drive")
+        );
+        assert_eq!(
+            first_compatible_provider_id(&providers, ReplicationType::Personal, Some("github"))
+                .as_deref(),
+            Some("github")
+        );
+        assert!(!provider_supports_replication(
+            &providers[0],
+            ReplicationType::Shared
+        ));
+        assert!(provider_supports_replication(
+            &providers[1],
+            ReplicationType::Shared
+        ));
     }
 
     #[test]

@@ -16,6 +16,7 @@ import {
   generateId as wasmGenerateId,
   generatePassword as wasmGeneratePassword,
   generateSecretId as wasmGenerateSecretId,
+  VaultAccessStatus,
 } from "$app-wasm";
 import { createLogger, initWasmLogging } from "$lib/log";
 import { ensureAppWasm } from "$lib/wasm-bootstrap";
@@ -34,6 +35,7 @@ export type {
   NookVaultSyncResult,
   NookSecretFormFields,
 };
+export { VaultAccessStatus };
 
 /** UI alias — same typed object exported from WASM. */
 export type JoinRequest = NookJoinRequest;
@@ -86,12 +88,7 @@ export function isoTimestamp(): string {
   return new Date().toISOString();
 }
 
-export type VaultSyncAccessStatus =
-  | "ready"
-  | "new_vault"
-  | "needs_enrollment"
-  | "join_pending"
-  | "password_required";
+export type VaultSyncAccessStatus = VaultAccessStatus;
 
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
