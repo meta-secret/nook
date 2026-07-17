@@ -134,7 +134,7 @@
     } else if (item.type === 'secure-note') {
       noteTitle = item.title
       noteBody = item.note
-    } else {
+    } else if (item.type === 'authenticator') {
       authenticatorIssuer = item.issuer
       authenticatorAccount = item.account
       authenticatorSecret = item.totpSecret
@@ -388,6 +388,74 @@
           >{vault.t('add_secret.private_text_desc')}</span
         >
       </button>
+      <button
+        type="button"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid="item-type-passkey"
+        onclick={() => (selectedType = 'passkey')}
+      >
+        <div
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
+        >
+          <KeyRound class="size-6" />
+        </div>
+        <span class="block text-sm font-semibold text-foreground"
+          >{vault.t('vault.types.passkey')}</span
+        >
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >{vault.t('add_secret.passkey_desc')}</span
+        >
+      </button>
+    </div>
+  </div>
+{:else if selectedType === 'passkey' && !isEditMode}
+  <div class="space-y-4" data-testid="passkey-creation-guidance">
+    <div
+      class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          onclick={() => (selectedType = undefined)}
+        >
+          <ArrowLeft class="size-3.5" />
+          {vault.t('add_secret.change_type')}
+        </button>
+        <span class="text-muted-foreground/50" aria-hidden="true">·</span>
+        <h3 class="truncate text-sm font-semibold text-foreground">
+          {vault.t('add_secret.title_new_passkey')}
+        </h3>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        class="sm:min-w-[5rem]"
+        data-testid="add-secret-cancel-btn"
+        onclick={handleCancel}
+      >
+        {vault.t('common.done')}
+      </Button>
+    </div>
+
+    <div
+      class="rounded-xl border border-border/40 bg-muted/15 p-5 sm:border-border"
+    >
+      <div
+        class="mb-4 flex size-12 items-center justify-center rounded-xl border border-border/60 bg-background text-primary"
+      >
+        <KeyRound class="size-6" />
+      </div>
+      <h4 class="text-base font-semibold text-foreground">
+        {vault.t('add_secret.passkey_creation_title')}
+      </h4>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
+        {vault.t('add_secret.passkey_creation_description')}
+      </p>
+      <p class="mt-3 text-xs leading-relaxed text-muted-foreground text-pretty">
+        {vault.t('add_secret.passkey_creation_hint')}
+      </p>
     </div>
   </div>
 {:else}

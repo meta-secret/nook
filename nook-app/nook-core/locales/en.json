@@ -373,6 +373,7 @@
       "api_key": "API Key",
       "secure_note": "Secure Note",
       "seed_phrase": "Seed Phrase",
+      "passkey": "Passkey",
       "authenticator": "Authenticator"
     },
     "fields": {
@@ -400,7 +401,9 @@
       "authenticator_secret": "Setup key",
       "backup_codes": "Recovery codes",
       "current_code": "Current code",
-      "code_expires_in": "Refreshes in {count}s"
+      "code_expires_in": "Refreshes in {count}s",
+      "relying_party": "Website",
+      "passkey_managed_hint": "This passkey is created and used through website requests handled by the Nook extension. Its private key is never revealed or copied."
     },
     "status": {
       "synced": "Synced",
@@ -982,6 +985,7 @@
     "title_new_seed_phrase": "New seed phrase",
     "title_new_secure_note": "New secure note",
     "title_new_authenticator": "New authenticator",
+    "title_new_passkey": "Website passkey",
     "title_add_item": "Add item",
     "placeholder_website": "Enter website URL…",
     "placeholder_username": "Enter username…",
@@ -1022,6 +1026,10 @@
     "bip39_desc": "BIP39 recovery",
     "private_text_desc": "Private text (Markdown)",
     "authenticator_desc": "2FA verification codes",
+    "passkey_desc": "Passwordless website sign-in",
+    "passkey_creation_title": "Create passkeys from the website",
+    "passkey_creation_description": "When a website asks to create a passkey, choose Nook in the extension prompt. Nook creates the credential inside Rust/WASM and saves it as an encrypted item in this Simple Vault.",
+    "passkey_creation_hint": "Pair and unlock the Nook browser extension first. Passkeys cannot be typed, revealed, copied, or imported through this form.",
     "placeholder_issuer": "Google, GitHub, email provider…",
     "placeholder_authenticator_account": "alice@example.com",
     "placeholder_authenticator_secret": "Setup key or otpauth:// URI",

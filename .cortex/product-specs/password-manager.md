@@ -62,6 +62,11 @@ keys.
      payload is reserved for the authenticated extension WebAuthn provider flow;
      Rust rejects attempts to construct one from ordinary form fields. See
      [passkey-manager.md](../design-docs/passkey-manager.md).
+   - The type picker still lists Passkey so users can discover that creation
+     starts from a website's WebAuthn request through the paired extension. It
+     opens guidance, never a credential-entry form. Existing passkeys appear as
+     read-only RP/account metadata and can be deleted, but never revealed,
+     copied, or edited as raw key material.
 6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI. To fix a mistake or update content, the user **adds a new item and deletes the old one**. A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db` so storage never holds duplicates if the second step fails mid-flight.
 7. **Deleting Secrets:**
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
