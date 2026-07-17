@@ -189,7 +189,7 @@ test.describe('local vault', () => {
     page,
   }) => {
     const originalKey = uniqueSecretKey('e2e-local-edit')
-    const updatedKey = `${originalKey}-updated`
+    const updatedKey = uniqueSecretKey('e2e-local-replaced')
     const originalValue = 'edit-me-original'
     const updatedValue = 'edit-me-updated'
 

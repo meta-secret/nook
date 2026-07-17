@@ -177,7 +177,7 @@
     }
     releaseEditingItem()
     editingItem = record
-    formSelectedType = item.type
+    formSelectedType = item.type as VaultItemType
     addSecretOpen = true
     notifyAddMode()
   }
