@@ -303,8 +303,9 @@ All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` 
 PR delivery helpers live in `agentic-ai/ci-agent` and are exposed as `task
 pr:preflight` and `task pr:ready`. Both commands emit machine-readable
 exact-head state for inspection and never merge a PR. Nook has no event-driven
-PR auto-merger: passing checks and deployments are validation signals, not
-merge authorization. Extension
+PR auto-merger: workflows do not merge blindly from check events. Instead, the
+task-owning agent runs the readiness audit and squash-merges immediately when it
+passes. Extension
 iteration has a host-cached `task extension:check:fast` gate, while required
 full local validation still begins after the coherent iteration is pushed and
 runs in parallel with repository CI.

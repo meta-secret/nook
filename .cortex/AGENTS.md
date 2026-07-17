@@ -21,6 +21,16 @@ inside the authorized scope, and report that blocker precisely. Full contract:
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).
 
+## ⛔ Non-negotiable: implementation agents land their PRs
+
+Every implementation agent with GitHub write access must create or update a PR,
+monitor Nook's applicable repository-owned checks, fix failures, address and
+resolve actionable comments, update conflicts with `origin/main`, revalidate the
+exact head, and squash-merge when `task pr:ready PR=<number>` succeeds. Do not
+stop at a ready-PR handoff or ask for separate merge permission. Stop without a
+merge only for a concrete blocker or an explicitly read-only request. Full
+policy: [workflows/coding-bro.md](workflows/coding-bro.md).
+
 ## ⛔ Non-negotiable: never kill the Docker daemon
 
 **Killing the Docker daemon is strictly prohibited.** Only individual **Docker containers** may be stopped — never Docker Desktop, `dockerd`, or the Docker VM.
@@ -89,7 +99,7 @@ starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.
 * [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → commit/push first → local and applicable PR checks in parallel → fix loop → address comments already present → explicitly authorized squash merge or ready handoff). Green checks never authorize a merge. Prefer cached local Docker over cold GH Actions.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → commit/push first → local and applicable PR checks in parallel → fix loop → address comments and conflicts → readiness audit → automatic agent-owned squash merge). Prefer cached local Docker over cold GH Actions.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.

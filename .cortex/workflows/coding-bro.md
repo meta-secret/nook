@@ -14,8 +14,9 @@ on that same PR branch.
 
 Do not treat implementation as complete after local edits, a push, or a PR link.
 The agent owns the loop through local validation, Nook's applicable
-repository-owned PR test checks, fixes, re-pushes, comments already present, and squash merge when
-the user explicitly authorized merging that PR. Green checks alone never authorize a merge.
+repository-owned PR test checks, fixes, re-pushes, comments already present,
+conflict resolution, the exact-head readiness audit, and squash merge. A ready
+PR must be merged without asking the user for separate authorization.
 
 Default PR-first loop:
 
@@ -34,10 +35,11 @@ Default PR-first loop:
 6. **Address comments already present** — reply to actionable human, Codex, and
    automated review comments with the fix, validation, or no-change rationale
    before resolving/considering them complete. Never wait for new feedback.
-7. **Merge only when authorized** — require `task pr:ready PR=<number>`, then when the branch is current, Nook's applicable
-   repository-owned PR test checks are green, and actionable comments currently present are
-   handled, squash-merge only if the user explicitly authorized merging that
-   PR. Readiness is evidence, not authorization.
+7. **Merge automatically when ready** — require `task pr:ready PR=<number>`, then
+   squash-merge as soon as the branch is current, Nook's applicable
+   repository-owned PR test checks are green, and actionable comments currently
+   present are handled. Do not pause for a ready-PR handoff or separate merge
+   permission.
 
 ## Testing strategy — parallel final validation
 
@@ -91,8 +93,8 @@ Default agent flow:
 4. **Validate locally in parallel** — immediately run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e:pr` or `task ci:pr:e2e` when web/vault/sync flows change.
 5. **Inspect Nook's applicable PR workflows** — inspect `PR / Verify and
    preview`, plus `Web research / Build and deploy research catalog` for
-   web-research paths, while the local gate runs. Never treat green status as
-   merge authorization. See [code-review.md](code-review.md).
+   web-research paths, while the local gate runs. Green status is necessary but
+   the full readiness audit must also pass. See [code-review.md](code-review.md).
 6. **On any local or Nook PR-test failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
    debugging) → commit and push the completed fix → run local validation in
@@ -100,10 +102,10 @@ Default agent flow:
 7. **Address actionable PR comments currently present** — reply with the fix,
    validation, or no-change rationale, and push any needed changes; GitHub
    events re-evaluate Nook's applicable PR test checks. Do not wait for another review cycle.
-8. **Merge only with explicit authorization** — before merging, verify the PR branch is not stale against
-   `origin/main`; update it and let the synchronize event re-evaluate Nook's applicable PR test checks if
-   needed. After a push, re-run readiness and confirm the user's authorization
-   still applies to the current PR before squash merging.
+8. **Resolve conflicts and merge** — before merging, verify the PR branch is not
+   stale against `origin/main`; update it and let the synchronize event
+   re-evaluate Nook's applicable PR test checks if needed. After every push,
+   re-run readiness, then squash-merge automatically when it passes.
 
 Never merge until the latest pushed branch has green applicable repository-owned
 PR test checks and has passed the required local gate for the change. External checks do
@@ -159,7 +161,8 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    Nook's applicable PR test checks. Never wait for new feedback or another review response.
 9. **Repeat** — Return to step 7 until Nook's applicable PR test checks are green and the
     actionable comments currently present are handled.
-10. **Authorized squash merge or handoff** — if explicitly authorized, run `gh pr merge <n> --squash`; otherwise hand off the ready PR. Report task duration.
+10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
+    readiness audit succeeds. Report task duration after the merge.
 
 ```mermaid
 flowchart TD
@@ -316,8 +319,8 @@ task pr:ready PR=<number>
 
 ### 11 — Merge
 
-When Nook's applicable repository-owned PR test checks pass and the user has
-explicitly authorized merging this PR:
+When Nook's applicable repository-owned PR test checks pass and `task pr:ready`
+succeeds on the current head:
 
 ```bash
 gh pr merge <number> --squash
@@ -332,13 +335,16 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 ## Non-negotiables
 
 - **Never push directly to `main`.** Branch → PR → squash merge.
-- **Never stop after push.** Monitor Nook's applicable PR test checks through merge or explicit handoff.
+- **Never stop after push.** Monitor Nook's applicable PR test checks through
+  squash merge, fixing failures, comments, and conflicts along the way.
 - **Prefer local Docker over remote CI for iteration** — cached images, faster feedback; push at the final-validation boundary, then run local validation while Nook's applicable PR test checks run.
 - **During e2e debug, run one spec at a time** (`E2E_SPEC=… task web:test:e2e:file`) — do not re-run the full suite after every fix.
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call
   `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never merge after a Nook PR-test failure without green local validation on the latest head** (`task ci:pr` for broad failures; a matching subset is enough for trivial fmt/lint).
-- **Never merge because checks are green.** Require explicit user authorization for the PR; automated agents and workflows only open PRs and report readiness.
+- **Never merge on checks alone.** Require the exact-head `task pr:ready` audit;
+  once it succeeds, the task-owning agent must squash-merge without asking
+  again. Workflows do not blindly merge based on a check event.
 - **Never wait for external reviews or checks.** Codex reviews are not required.
   Monitor only Nook's applicable repository-owned PR test checks; address actionable comments
   that already exist, then proceed without waiting for another service response.
