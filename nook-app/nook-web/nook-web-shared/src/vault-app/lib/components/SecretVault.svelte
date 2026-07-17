@@ -88,6 +88,7 @@
     { value: 'api-key', labelKey: 'vault.types.api_key' },
     { value: 'seed-phrase', labelKey: 'vault.types.seed_phrase' },
     { value: 'secure-note', labelKey: 'vault.types.secure_note' },
+    { value: 'passkey', labelKey: 'vault.types.passkey' },
   ]
 
   const filteredItems = $derived(secrets)
@@ -257,6 +258,7 @@
   $effect(() => {
     void vault.secretQuery
     void vault.secretPageOffset
+    void vault.secretTypeFilter
     freeDecryptedSecrets(untrack(() => decryptedSecrets))
     decryptedSecrets = {}
     authenticatorCodes = {}
