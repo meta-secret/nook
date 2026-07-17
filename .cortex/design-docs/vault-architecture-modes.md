@@ -31,7 +31,7 @@ create/join intent.
 
 | Stage / surface | Choice or state | Transition |
 | --- | --- | --- |
-| Landing handoff (empty device) | Vault name | Collect the vault name before path choice. Passkey is **not** required yet. |
+| Landing handoff (empty device) | Vault name | Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (passkey + vault password). |
 | Path chooser | Path | Choose exactly one: Create Simple, Create Sentinel, or Join Sentinel. |
 | Create Simple confirm | Create action | Confirm local create; **then** show the passkey/device-protection form (top-right overlay) before sealing the vault. |
 | Existing vault unlock | Device protection | Passkey/PIN gate runs **first** when a local vault already exists on this browser. |

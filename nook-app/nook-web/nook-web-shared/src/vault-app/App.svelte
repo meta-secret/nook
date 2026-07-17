@@ -376,9 +376,12 @@
         ? authenticatedShellSpacing
         : "py-5 sm:py-6",
   );
-  /** Existing vault unlock keeps passkey-first; empty create defers passkey. */
+  /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
+  const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending);
   const requiresPasskeyFirst = $derived(
-    vault.localVaultPresent || vault.localVaults.length > 0,
+    vault.localVaultPresent ||
+      vault.localVaults.length > 0 ||
+      urlEnrollmentPending,
   );
   const existingVaultNeedsDeviceUnlock = $derived(
     requiresPasskeyFirst && !vault.deviceProtectionReady,
@@ -396,12 +399,31 @@
     undefined,
   );
   let pendingExistingVaultUnlock = $state(false);
+  let pendingEnrollmentDeviceUnlock = $state(false);
+  let pendingEnrollmentSubmit = $state<
+    { code: string; password: string } | undefined
+  >(undefined);
   const showPasskeyOverlay = $derived(
     pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
   );
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
   );
+  const showEnrollmentPasskeyOverlay = $derived(
+    pendingEnrollmentDeviceUnlock &&
+      urlEnrollmentPending &&
+      !vault.deviceProtectionReady,
+  );
+
+  async function handleUseEnrollmentCode(code: string, password: string) {
+    if (!vault.deviceProtectionReady) {
+      pendingEnrollmentSubmit = { code, password };
+      pendingEnrollmentDeviceUnlock = true;
+      return;
+    }
+    pendingEnrollmentSubmit = undefined;
+    await vault.connectWithEnrollmentCode(code, password);
+  }
 
   async function resumePairedExtensionVault(storeId: string) {
     extensionDiscoveryStoreId = storeId;
@@ -547,6 +569,29 @@
     }
     pendingExistingVaultUnlock = false;
     void vault.loadDb();
+  });
+
+  // `#enroll=` lands on an empty browser: open device protection immediately so
+  // the create-vault landing never appears as the primary action.
+  $effect(() => {
+    if (
+      !urlEnrollmentPending ||
+      vault.deviceProtectionReady ||
+      vault.isInitializing
+    ) {
+      return;
+    }
+    pendingEnrollmentDeviceUnlock = true;
+  });
+
+  $effect(() => {
+    const pending = pendingEnrollmentSubmit;
+    if (!pending || !vault.deviceProtectionReady || vault.isVerifying) {
+      return;
+    }
+    pendingEnrollmentSubmit = undefined;
+    pendingEnrollmentDeviceUnlock = false;
+    void vault.connectWithEnrollmentCode(pending.code, pending.password);
   });
 </script>
 
@@ -765,8 +810,7 @@
                   vault.beginProviderSetup(type, preset)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
                 onOpenHelp={() => vault.openHelp()}
-                onUseEnrollmentCode={(code, password) =>
-                  vault.connectWithEnrollmentCode(code, password)}
+                onUseEnrollmentCode={handleUseEnrollmentCode}
                 prefillEnrollmentCode={vault.prefillEnrollmentCode}
                 enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
                 {sentinelInvitationRequest}
@@ -797,12 +841,18 @@
                 onDismissError={() => vault.dismissError()}
               />
             {/if}
-            {#if showPasskeyOverlay || showExistingVaultPasskeyOverlay}
+            {#if showPasskeyOverlay ||
+              showExistingVaultPasskeyOverlay ||
+              showEnrollmentPasskeyOverlay}
               <PasskeyAuthOverlay
                 {vault}
                 onDismiss={() => {
                   if (showExistingVaultPasskeyOverlay) {
                     pendingExistingVaultUnlock = false;
+                    return;
+                  }
+                  if (showEnrollmentPasskeyOverlay) {
+                    pendingEnrollmentDeviceUnlock = false;
                     return;
                   }
                   pendingVaultCreation = undefined;

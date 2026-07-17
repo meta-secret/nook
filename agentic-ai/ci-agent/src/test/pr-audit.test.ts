@@ -62,7 +62,13 @@ function mockOctokit(options: MockOptions = {}): Octokit {
   };
   const issues = {
     listComments: async () => ({
-      data: [{ body: "### Preview deployed\n\nhttps://preview.test" }],
+      data: [
+        { body: "### Preview deployed\n\nhttps://preview.test" },
+        {
+          body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
+        },
+        { body: "<!-- nook-core-coverage -->\n### nook-core + nook-auth2 coverage\n\nPASS" },
+      ],
     }),
   };
   const repos = {
