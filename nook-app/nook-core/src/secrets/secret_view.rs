@@ -3,6 +3,7 @@
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{AuthenticatorSecret, SecretId, SecretRecord, SecretType, SecretValue};
+use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretListItemData {
@@ -40,16 +41,24 @@ pub struct SecretListItem {
 }
 
 fn hostname_from_url(raw: &str) -> String {
-    let mut host = raw.trim();
-    if host.is_empty() {
+    let value = raw.trim();
+    if value.is_empty() {
         return String::new();
     }
-    if let Some(rest) = host.split("://").nth(1) {
-        host = rest;
-    }
-    host = host.split('/').next().unwrap_or(host);
-    host = host.split(':').next().unwrap_or(host);
-    host.trim_start_matches("www.").to_owned()
+
+    Url::parse(value)
+        .or_else(|error| {
+            if value.contains("://") {
+                Err(error)
+            } else {
+                Url::parse(&format!("https://{value}"))
+            }
+        })
+        .ok()
+        .and_then(|url| url.host_str().map(ToOwned::to_owned))
+        .unwrap_or_default()
+        .trim_start_matches("www.")
+        .to_owned()
 }
 
 impl SecretRecord {
@@ -255,6 +264,19 @@ impl SecretListItem {
         }
     }
 
+    /// Normalized website host for URL-backed secrets.
+    ///
+    /// Returns an empty string when the item is not URL-backed or the stored
+    /// value has no usable host.
+    #[must_use]
+    pub fn website_host(&self) -> String {
+        match &self.data {
+            SecretListItemData::Login { website_url, .. }
+            | SecretListItemData::ApiKey { website_url, .. } => hostname_from_url(website_url),
+            _ => String::new(),
+        }
+    }
+
     #[must_use]
     pub fn display_title(&self) -> String {
         match &self.data {
@@ -442,6 +464,24 @@ mod tests {
     }
 
     #[test]
+    fn website_host_strips_url_credentials_query_and_fragment() {
+        for (url, expected) in [
+            ("https://example.com?next=/vault", "example.com"),
+            ("https://user@example.com/", "example.com"),
+            ("https://example.com/#vault", "example.com"),
+            ("example.com/login", "example.com"),
+        ] {
+            let mut item = login_record().list_item();
+            let SecretListItemData::Login { website_url, .. } = &mut item.data else {
+                panic!("expected login item");
+            };
+            *website_url = url.to_owned();
+
+            assert_eq!(item.website_host(), expected, "{url}");
+        }
+    }
+
+    #[test]
     fn matches_search_uses_metadata_not_secrets() {
         let record = login_record();
         assert!(record.matches_search("alice"));
@@ -453,6 +493,7 @@ mod tests {
         let item = login_record().list_item();
 
         assert_eq!(item.secret_type(), SecretType::Login);
+        assert_eq!(item.website_host(), "github.com");
         assert_eq!(item.group_key(), "github.com");
         assert_eq!(item.summary(), "alice");
         assert_eq!(
@@ -463,6 +504,18 @@ mod tests {
             }
         );
         assert!(!format!("{item:?}").contains("correct horse battery staple"));
+    }
+
+    #[test]
+    fn list_item_reports_no_host_for_malformed_login_url() {
+        let mut item = login_record().list_item();
+        let SecretListItemData::Login { website_url, .. } = &mut item.data else {
+            panic!("expected login item");
+        };
+        *website_url = "https://".to_owned();
+
+        assert!(item.website_host().is_empty());
+        assert_eq!(item.group_key(), "No Website");
     }
 
     #[test]
