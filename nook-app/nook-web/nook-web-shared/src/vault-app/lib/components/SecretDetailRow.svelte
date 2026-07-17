@@ -93,6 +93,10 @@
     }
     return item.title.trim() || vault.t("vault.fields.no_title");
   });
+
+  const headerTitle = $derived(
+    item.type === "login" ? item.groupKey : summary,
+  );
 </script>
 
 <div data-testid="vault-group-{item.type}">
@@ -139,11 +143,20 @@
               <StickyNote class="size-3.5" />
             {/if}
           </div>
-          <h3
-            class="truncate text-sm font-semibold tracking-wide text-foreground"
-          >
-            {summary}
-          </h3>
+          <div class="min-w-0 flex-1">
+            <h3
+              data-testid="secret-row-heading"
+              class="truncate text-sm font-semibold tracking-wide text-foreground"
+            >
+              {headerTitle}
+            </h3>
+            {#if item.type === "login" && summary !== headerTitle}
+              <span
+                data-testid="secret-row-account"
+                class="block truncate text-xs text-muted-foreground"
+              >{summary}</span>
+            {/if}
+          </div>
         {:else}
           <span
             class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
