@@ -1,5 +1,15 @@
 export const DEFAULT_SIMPLE_VAULT_URL = 'https://simple.nokey.sh/'
 
+/** Channel-agnostic match patterns for every Simple/Sentinel Nook host. */
+const NOOK_VAULT_APP_EXCLUDE_MATCH_PATTERNS = [
+  'https://simple.nokey.sh/*',
+  'https://simple.dev.nokey.sh/*',
+  'https://sentinel.nokey.sh/*',
+  'https://sentinel.dev.nokey.sh/*',
+  'https://*.nokey-simple.pages.dev/*',
+  'https://*.nokey-sentinel.pages.dev/*',
+] as const
+
 export function normalizeSimpleVaultBaseUrl(value: string): string {
   const url = new URL(value)
   const localHttp =
@@ -52,6 +62,57 @@ export function sentinelVaultMatchPatterns(baseUrl: string): string[] {
   const matches = ['https://sentinel.nokey.sh/*']
   if (matchingSentinel) matches.push(`${matchingSentinel}*`)
   return [...new Set(matches)]
+}
+
+export function isSimpleVaultHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  if (host === 'simple.nokey.sh') return true
+  if (host.startsWith('simple.') && host.endsWith('.nokey.sh')) return true
+  return host.endsWith('.nokey-simple.pages.dev')
+}
+
+export function isSentinelVaultHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  if (host === 'sentinel.nokey.sh') return true
+  if (host.startsWith('sentinel.') && host.endsWith('.nokey.sh')) return true
+  return host.endsWith('.nokey-sentinel.pages.dev')
+}
+
+/**
+ * Autofill / website-WebAuthn exclusions for every Simple and Sentinel host,
+ * plus the build's configured Simple/Sentinel patterns (covers legacy path
+ * isolation on shared preview hosts).
+ */
+export function nookVaultAppExcludeMatchPatterns(baseUrl: string): string[] {
+  return [
+    ...new Set([
+      ...NOOK_VAULT_APP_EXCLUDE_MATCH_PATTERNS,
+      simpleVaultMatchPattern(baseUrl),
+      ...sentinelVaultMatchPatterns(baseUrl),
+    ]),
+  ]
+}
+
+export function isNookVaultAppUrl(
+  candidateUrl: string,
+  baseUrl?: string,
+): boolean {
+  try {
+    const url = new URL(candidateUrl)
+    if (
+      isSimpleVaultHostname(url.hostname) ||
+      isSentinelVaultHostname(url.hostname)
+    ) {
+      return true
+    }
+    if (!baseUrl) return false
+    return (
+      belongsToSimpleVault(baseUrl, candidateUrl) ||
+      belongsToSentinelVault(baseUrl, candidateUrl)
+    )
+  } catch {
+    return false
+  }
 }
 
 export function belongsToSimpleVault(

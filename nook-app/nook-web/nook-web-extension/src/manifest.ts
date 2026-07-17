@@ -1,5 +1,6 @@
 import {
   DEFAULT_SIMPLE_VAULT_URL,
+  nookVaultAppExcludeMatchPatterns,
   sentinelVaultMatchPatterns,
   simpleVaultMatchPattern,
 } from './lib/simple-vault-target'
@@ -40,6 +41,10 @@ export type ExtensionManifest = {
   icons: ManifestIconSet
   permissions: Array<'activeTab' | 'offscreen' | 'storage'>
   host_permissions: string[]
+  web_accessible_resources: Array<{
+    resources: string[]
+    matches: string[]
+  }>
 }
 
 const iconSet: ManifestIconSet = {
@@ -60,6 +65,8 @@ export function createManifest(
   },
 ): ExtensionManifest {
   const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
+  const vaultAppExclusions =
+    nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)
   return {
     manifest_version: 3,
     default_locale: 'en',
@@ -87,29 +94,20 @@ export function createManifest(
     content_scripts: [
       {
         matches: ['<all_urls>'],
-        exclude_matches: [
-          simpleVaultMatch,
-          ...sentinelVaultMatchPatterns(simpleVaultBaseUrl),
-        ],
+        exclude_matches: vaultAppExclusions,
         js: ['content/autofill.js'],
         run_at: 'document_idle',
       },
       {
         matches: ['<all_urls>'],
-        exclude_matches: [
-          simpleVaultMatch,
-          ...sentinelVaultMatchPatterns(simpleVaultBaseUrl),
-        ],
+        exclude_matches: vaultAppExclusions,
         js: ['content/webauthn-content.js'],
         run_at: 'document_start',
         world: 'ISOLATED',
       },
       {
         matches: ['<all_urls>'],
-        exclude_matches: [
-          simpleVaultMatch,
-          ...sentinelVaultMatchPatterns(simpleVaultBaseUrl),
-        ],
+        exclude_matches: vaultAppExclusions,
         js: ['content/webauthn-page.js'],
         run_at: 'document_start',
         world: 'MAIN',
@@ -127,5 +125,11 @@ export function createManifest(
     icons: iconSet,
     permissions: ['activeTab', 'offscreen', 'storage'],
     host_permissions: ['<all_urls>'],
+    web_accessible_resources: [
+      {
+        resources: ['icons/nook.png'],
+        matches: ['<all_urls>'],
+      },
+    ],
   }
 }

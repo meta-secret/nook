@@ -1393,9 +1393,27 @@
       "invalid_description": "Open this page from the installed Nook extension. A valid request must identify the extension or include its protected device request.",
       "return_to_nook": "Return to Nook"
     },
+    "companion": {
+      "step_label": "Browser companion",
+      "ready_title": "Ready for this browser",
+      "ready_description": "Nook can help on login pages. Open Simple Vault only when you need to manage secrets.",
+      "connect_title": "Connect your vault",
+      "connect_description": "Pair this browser with Simple Vault when you are ready. You can keep the companion available without opening the vault.",
+      "stay_ready": "Stay ready",
+      "not_now": "Not now"
+    },
     "widget": {
       "open_vault": "Open vault",
-      "dismiss": "Dismiss Nook"
+      "dismiss": "Dismiss Nook",
+      "gate_step": "Sign in with Nook",
+      "gate_title": "Continue through Nook",
+      "gate_description": "Skip the site's login chrome. Nook fills your credentials and continues sign-in for you.",
+      "continue": "Continue with Nook",
+      "working": "Looking up a matching login…",
+      "unlock_then_continue": "Unlock Nook in the companion window, then click Continue with Nook again.",
+      "no_match": "No saved login matches this site yet. Open the vault to add one.",
+      "choose_account": "Choose which login to use.",
+      "fill_failed": "Nook could not fill this login. Try Open vault or unlock and continue again."
     },
     "passkey": {
       "save_title": "Save a passkey with Nook?",

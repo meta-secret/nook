@@ -7,6 +7,7 @@ import {
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairingApprovedMessage,
+  isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type {
@@ -30,6 +31,11 @@ import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
+import {
+  isWebsiteLoginOptionsMessage,
+  isWebsiteLoginRevealMessage,
+  type WebsiteLoginAccountOption,
+} from '../lib/login-fill-messages'
 import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
@@ -103,6 +109,21 @@ function isExtensionSessionEnsureMessage(
 
 function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
+}
+
+function openCompanionLauncher(): void {
+  const popupUrl = chrome.runtime.getURL('popup/index.html')
+  if (chrome.windows?.create) {
+    void chrome.windows.create({
+      url: popupUrl,
+      type: 'popup',
+      width: 440,
+      height: 620,
+      focused: true,
+    })
+    return
+  }
+  chrome.tabs.create({ url: popupUrl })
 }
 
 function randomNonce(): string {
@@ -497,6 +518,128 @@ async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
   )
 }
 
+async function passwordPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
+  const stored = await getLocalStorage(null)
+  return Object.values(stored).filter(
+    (value): value is StoredExtensionPairingGrant =>
+      isStoredExtensionPairingGrant(value) &&
+      value.scopes.includes('password-filling'),
+  )
+}
+
+async function websiteLoginOptions(
+  message: {
+    payload: {
+      origin: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'login-forbidden-origin' }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { ok: true, status: 'unavailable', accounts: [] }
+  }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: true, status: 'locked', accounts: [] }
+  }
+
+  const accounts: WebsiteLoginAccountOption[] = []
+  for (const grant of grants) {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-list-logins',
+      payload: { ...grant, origin: message.payload.origin },
+    })
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true ||
+      !('accounts' in response) ||
+      !Array.isArray(response.accounts)
+    ) {
+      continue
+    }
+    for (const account of response.accounts) {
+      if (
+        !account ||
+        typeof account !== 'object' ||
+        !('secretId' in account) ||
+        typeof account.secretId !== 'string' ||
+        !('username' in account) ||
+        typeof account.username !== 'string' ||
+        !('websiteUrl' in account) ||
+        typeof account.websiteUrl !== 'string' ||
+        !('websiteHost' in account) ||
+        typeof account.websiteHost !== 'string'
+      ) {
+        continue
+      }
+      accounts.push({
+        vaultStoreId: grant.vaultStoreId,
+        vaultName: grant.vaultName,
+        secretId: account.secretId,
+        username: account.username,
+        websiteUrl: account.websiteUrl,
+        websiteHost: account.websiteHost,
+      })
+    }
+  }
+  return { ok: true, status: 'ready', accounts }
+}
+
+async function websiteLoginFill(
+  message: {
+    payload: {
+      origin: string
+      vaultStoreId: string
+      secretId: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'login-forbidden-origin' }
+  }
+  const grant = (await passwordPairingGrants()).find(
+    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  )
+  if (!grant) return { ok: false, reason: 'login-vault-not-granted' }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: false, reason: 'login-locked' }
+  }
+  return sendSessionMessage({
+    type: 'nook:extension-session-reveal-login',
+    payload: {
+      ...grant,
+      origin: message.payload.origin,
+      secretId: message.payload.secretId,
+    },
+  })
+}
+
 function passkeyRequestKey(
   sender: chrome.runtime.MessageSender,
   requestId: string,
@@ -739,6 +882,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (isWebsiteLoginOptionsMessage(message)) {
+    void websiteLoginOptions(message, sender)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: 'login-options-failed' }))
+    return true
+  }
+
+  if (isWebsiteLoginRevealMessage(message)) {
+    void websiteLoginFill(message, sender)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: 'login-fill-failed' }))
+    return true
+  }
+
   if (isExtensionSessionEnsureMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
@@ -801,6 +958,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false
     }
     openSimpleVault()
+    sendResponse({ ok: true })
+    return false
+  }
+
+  if (isOpenCompanionLauncherMessage(message)) {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    openCompanionLauncher()
     sendResponse({ ok: true })
     return false
   }

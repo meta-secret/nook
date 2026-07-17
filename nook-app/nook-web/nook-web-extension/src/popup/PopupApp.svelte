@@ -38,8 +38,10 @@
   let deviceMode = $state<ExtensionDeviceMode>('standard')
   let pin = $state('')
   let pinConfirm = $state('')
+  let pendingDevice = $state<ExtensionDeviceProtectionResult | undefined>()
 
   const needsSetup = $derived(status === 'missing' || status === 'plaintext')
+  const showCompanionHome = $derived(status === 'unlocked')
 
   function errorMessage(caught: unknown, fallbackKey: string): string {
     if (!(caught instanceof Error)) return i18n.t(fallbackKey)
@@ -64,6 +66,8 @@
   }
 
   function beginPairing(device: ExtensionDeviceProtectionResult): void {
+    busy = true
+    error = ''
     chrome.runtime.sendMessage(
       {
         type: 'nook:begin-extension-pairing',
@@ -83,17 +87,20 @@
     )
   }
 
-  function continueWithDevice(device: ExtensionDeviceProtectionResult): void {
-    if (isConnected) {
-      openSimpleVault()
-      return
-    }
-    beginPairing(device)
+  function stayAsCompanion(): void {
+    window.close()
+  }
+
+  function enterCompanionHome(device: ExtensionDeviceProtectionResult): void {
+    pendingDevice = device
+    status = 'unlocked'
+    busy = false
+    error = ''
   }
 
   $effect(() => {
     if (!activeSessionDevice) return
-    continueWithDevice(activeSessionDevice)
+    enterCompanionHome(activeSessionDevice)
   })
 
   async function runDeviceAction(
@@ -103,7 +110,7 @@
     busy = true
     error = ''
     try {
-      continueWithDevice(await action())
+      enterCompanionHome(await action())
     } catch (caught) {
       busy = false
       if (
@@ -157,16 +164,72 @@
   }
 </script>
 
-{#if isConnected && status === 'unlocked'}
-  <main class="connected-shell">
-    <NookIcon src="../icons/nook.png" alt="" class="popup-logo" />
+{#if showCompanionHome}
+  <main class="companion-home" data-testid="extension-companion-home">
+    <p class="step-label">{i18n.t('extension.companion.step_label')}</p>
+    <NookIcon
+      src="../icons/nook.png"
+      alt=""
+      class="popup-logo companion-logo"
+    />
+    <h1>
+      {i18n.t(
+        isConnected
+          ? 'extension.companion.ready_title'
+          : 'extension.companion.connect_title',
+      )}
+    </h1>
+    <p class="description">
+      {i18n.t(
+        isConnected
+          ? 'extension.companion.ready_description'
+          : 'extension.companion.connect_description',
+      )}
+    </p>
+
+    {#if isConnected}
+      <button
+        type="button"
+        data-testid="stay-as-companion-btn"
+        onclick={stayAsCompanion}
+      >
+        {i18n.t('extension.companion.stay_ready')}
+      </button>
+    {:else if pendingDevice}
+      <button
+        type="button"
+        disabled={busy}
+        data-testid="connect-simple-vault-btn"
+        onclick={() => {
+          if (pendingDevice) beginPairing(pendingDevice)
+        }}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('extension.setup.connect_simple_vault')}
+      </button>
+    {/if}
+
     <button
       type="button"
+      class="secondary-button"
       data-testid="open-simple-vault-btn"
       onclick={openSimpleVault}
     >
       {i18n.t('extension.setup.open_simple_vault')}
     </button>
+
+    {#if !isConnected}
+      <button
+        type="button"
+        class="secondary-button"
+        data-testid="stay-as-companion-btn"
+        onclick={stayAsCompanion}
+      >
+        {i18n.t('extension.companion.not_now')}
+      </button>
+    {/if}
+
     {#if error}
       <p class="error-message" role="alert">{error}</p>
     {/if}

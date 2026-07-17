@@ -46,6 +46,15 @@ describe('extension origin isolation', () => {
         ),
       ).toBe(true)
       expect(
+        broadScripts.every(
+          ({ exclude_matches }) =>
+            exclude_matches.includes('https://simple.nokey.sh/*') &&
+            exclude_matches.includes('https://simple.dev.nokey.sh/*') &&
+            exclude_matches.includes('https://*.nokey-simple.pages.dev/*') &&
+            exclude_matches.includes('https://*.nokey-sentinel.pages.dev/*'),
+        ),
+      ).toBe(true)
+      expect(
         manifest.content_scripts.some(
           ({ matches, exclude_matches }) =>
             matches.includes(simpleMatch) &&
@@ -62,6 +71,15 @@ describe('extension origin isolation', () => {
 
   test('declares the offscreen permission for its memory-only device session', () => {
     expect(createManifest('1.0.0').permissions).toContain('offscreen')
+  })
+
+  test('exposes the official Nook icon to in-page auth gate content scripts', () => {
+    expect(createManifest('1.0.0').web_accessible_resources).toEqual([
+      {
+        resources: ['icons/nook.png'],
+        matches: ['<all_urls>'],
+      },
+    ])
   })
 
   test('installs isolated transport and page-world WebAuthn bridges at document start', () => {

@@ -1,16 +1,33 @@
 export {}
 
-import { summarizePasswordForms } from '../../../nook-web-shared/src/extension/password-forms'
 import {
-  isRuntimeSentinelVaultUrl,
-  isRuntimeSimpleVaultUrl,
-} from '../lib/simple-vault-runtime'
+  fillLoginCredentials,
+  submitLoginForm,
+  summarizePasswordForms,
+} from '../../../nook-web-shared/src/extension/password-forms'
+import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
+import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
 
 let pendingScan: number | undefined
 let widgetHost: HTMLElement | undefined
 let dismissed = false
+let busy = false
+
+type LoginOptionsResponse = {
+  ok?: boolean
+  status?: 'ready' | 'locked' | 'unavailable'
+  accounts?: WebsiteLoginAccountOption[]
+  reason?: string
+}
+
+type LoginFillResponse = {
+  ok?: boolean
+  username?: string
+  password?: string
+  reason?: string
+}
 
 function translatedMessage(key: string): string {
   return chrome.i18n.getMessage(key) || 'Nook'
@@ -19,6 +36,179 @@ function translatedMessage(key: string): string {
 function removeWidget(): void {
   widgetHost?.remove()
   widgetHost = undefined
+}
+
+function sendRuntimeMessage<T>(message: unknown): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+      if (chrome.runtime.lastError) {
+        resolve(undefined)
+        return
+      }
+      resolve(response)
+    })
+  })
+}
+
+function setStatus(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  text: string,
+  enableContinue: boolean,
+): void {
+  description.textContent = text
+  continueButton.disabled = !enableContinue || busy
+}
+
+async function fillAndSubmitAccount(
+  account: WebsiteLoginAccountOption,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<void> {
+  const response = await sendRuntimeMessage<LoginFillResponse>({
+    type: 'nook:website-login-fill',
+    payload: {
+      origin: location.origin,
+      vaultStoreId: account.vaultStoreId,
+      secretId: account.secretId,
+    },
+  })
+  if (!response?.ok || !response.username || response.password === undefined) {
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+
+  const credentials = {
+    username: response.username,
+    password: response.password,
+  }
+  response.password = ''
+  const filled = fillLoginCredentials(credentials)
+  credentials.password = ''
+  credentials.username = ''
+  if (!filled) {
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  submitLoginForm()
+  dismissed = true
+  removeWidget()
+}
+
+function renderAccountChooser(
+  panel: HTMLElement,
+  accounts: WebsiteLoginAccountOption[],
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+): void {
+  continueButton.hidden = true
+  openVaultButton.hidden = true
+  description.textContent = translatedMessage('widgetChooseAccount')
+
+  const list = document.createElement('div')
+  list.className = 'account-list'
+  for (const account of accounts) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'secondary-button account-button'
+    button.textContent = account.username || account.websiteHost
+    button.addEventListener('click', () => {
+      if (busy) return
+      busy = true
+      button.disabled = true
+      void fillAndSubmitAccount(account, description, continueButton).finally(
+        () => {
+          busy = false
+        },
+      )
+    })
+    list.append(button)
+  }
+  panel.append(list)
+}
+
+async function continueWithNook(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+  panel: HTMLElement,
+): Promise<void> {
+  if (busy) return
+  busy = true
+  continueButton.disabled = true
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetWorking'),
+    false,
+  )
+
+  try {
+    const response = await sendRuntimeMessage<LoginOptionsResponse>({
+      type: 'nook:website-login-options',
+      payload: { origin: location.origin },
+    })
+
+    if (!response?.ok) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetFillFailed'),
+        true,
+      )
+      return
+    }
+
+    if (response.status === 'locked') {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetUnlockThenContinue'),
+        true,
+      )
+      return
+    }
+
+    const accounts = response.accounts ?? []
+    if (accounts.length === 0) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetNoMatch'),
+        true,
+      )
+      return
+    }
+
+    if (accounts.length === 1) {
+      await fillAndSubmitAccount(accounts[0], description, continueButton)
+      return
+    }
+
+    renderAccountChooser(
+      panel,
+      accounts,
+      description,
+      continueButton,
+      openVaultButton,
+    )
+  } finally {
+    busy = false
+    if (continueButton.isConnected && !continueButton.hidden) {
+      continueButton.disabled = false
+    }
+  }
 }
 
 function renderWidget(): void {
@@ -36,25 +226,7 @@ function renderWidget(): void {
 
   const panel = document.createElement('div')
   panel.className = 'panel'
-
-  const openButton = document.createElement('button')
-  openButton.type = 'button'
-  openButton.className = 'open-button'
-  openButton.setAttribute('aria-label', translatedMessage('widgetOpenVault'))
-  const mark = document.createElement('span')
-  mark.className = 'mark'
-  mark.ariaHidden = 'true'
-  mark.textContent = 'N'
-  const labels = document.createElement('span')
-  const brand = document.createElement('strong')
-  brand.textContent = 'Nook'
-  const action = document.createElement('small')
-  action.textContent = translatedMessage('widgetOpenVault')
-  labels.append(brand, action)
-  openButton.append(mark, labels)
-  openButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
-  })
+  panel.setAttribute('data-testid', 'nook-auth-gate')
 
   const dismissButton = document.createElement('button')
   dismissButton.type = 'button'
@@ -66,22 +238,166 @@ function renderWidget(): void {
     removeWidget()
   })
 
+  const step = document.createElement('p')
+  step.className = 'step-label'
+  step.textContent = translatedMessage('widgetGateStep')
+
+  const mark = document.createElement('img')
+  mark.className = 'mark'
+  mark.src = chrome.runtime.getURL('icons/nook.png')
+  mark.alt = ''
+  mark.setAttribute('aria-hidden', 'true')
+  mark.width = 52
+  mark.height = 52
+
+  const title = document.createElement('h1')
+  title.textContent = translatedMessage('widgetGateTitle')
+
+  const description = document.createElement('p')
+  description.className = 'description'
+  description.textContent = translatedMessage('widgetGateDescription')
+
+  const continueButton = document.createElement('button')
+  continueButton.type = 'button'
+  continueButton.className = 'primary-button'
+  continueButton.setAttribute('aria-label', translatedMessage('widgetContinue'))
+  continueButton.textContent = translatedMessage('widgetContinue')
+
+  const openVaultButton = document.createElement('button')
+  openVaultButton.type = 'button'
+  openVaultButton.className = 'secondary-button'
+  openVaultButton.setAttribute(
+    'aria-label',
+    translatedMessage('widgetOpenVault'),
+  )
+  openVaultButton.textContent = translatedMessage('widgetOpenVault')
+  openVaultButton.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
+  })
+
+  continueButton.addEventListener('click', () => {
+    void continueWithNook(description, continueButton, openVaultButton, panel)
+  })
+
   const style = document.createElement('style')
   style.textContent = `
-    :host { all: initial; position: fixed; z-index: 2147483647; top: 18px; right: 18px; }
-    .panel { align-items: center; background: #f8faf8; border: 1px solid #cbd8ce; border-radius: 12px; box-shadow: 0 12px 32px rgba(23, 32, 26, .18); display: flex; font-family: Inter, ui-sans-serif, system-ui, sans-serif; padding: 5px; }
-    button { appearance: none; border: 0; cursor: pointer; font: inherit; }
-    .open-button { align-items: center; background: transparent; color: #17201a; display: flex; gap: 9px; padding: 5px 8px 5px 5px; text-align: left; }
-    .open-button > span:last-child { display: grid; gap: 1px; }
-    .mark { align-items: center; background: #203c2a; border-radius: 8px; color: white; display: flex; font-size: 14px; font-weight: 800; height: 30px; justify-content: center; width: 30px; }
-    strong { font-size: 13px; line-height: 1.1; }
-    small { color: #58645b; font-size: 11px; line-height: 1.2; }
-    .dismiss-button { background: transparent; border-radius: 6px; color: #68736b; font-size: 18px; line-height: 1; padding: 6px 8px; }
-    .dismiss-button:hover, .open-button:hover { background: #edf3ee; }
-    button:focus-visible { outline: 2px solid #356f49; outline-offset: 2px; }
+    :host {
+      all: initial;
+      position: fixed;
+      z-index: 2147483647;
+      top: 18px;
+      right: 18px;
+      color-scheme: dark;
+    }
+    .panel {
+      position: relative;
+      width: min(320px, calc(100vw - 36px));
+      display: grid;
+      gap: 12px;
+      padding: 18px 16px 16px;
+      border: 1px solid rgb(255 255 255 / 10%);
+      border-radius: 12px;
+      background: oklch(0.141 0.005 285.823);
+      color: oklch(0.985 0 0);
+      box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    .dismiss-button {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      appearance: none;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: oklch(0.705 0.015 286.067);
+      cursor: pointer;
+      font: inherit;
+      font-size: 18px;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+    .dismiss-button:hover { background: oklch(0.274 0.006 286.033); }
+    .step-label {
+      margin: 0 24px 0 0;
+      color: oklch(0.705 0.015 286.067);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+    .mark {
+      display: block;
+      width: 52px;
+      height: 52px;
+      margin: 0 auto;
+      border-radius: 12px;
+      object-fit: contain;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      text-align: center;
+    }
+    .description {
+      margin: 0;
+      color: oklch(0.705 0.015 286.067);
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: center;
+    }
+    .account-list {
+      display: grid;
+      gap: 8px;
+    }
+    button.primary-button,
+    button.secondary-button {
+      appearance: none;
+      min-height: 40px;
+      border-radius: 9px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 9px 12px;
+    }
+    button:disabled {
+      cursor: wait;
+      opacity: 0.68;
+    }
+    .primary-button {
+      border: 1px solid transparent;
+      background: oklch(0.92 0.004 286.32);
+      color: oklch(0.21 0.006 285.885);
+    }
+    .primary-button:hover:not(:disabled) {
+      background: color-mix(in oklab, oklch(0.92 0.004 286.32) 90%, black);
+    }
+    .secondary-button {
+      border: 1px solid rgb(255 255 255 / 10%);
+      background: transparent;
+      color: oklch(0.985 0 0);
+    }
+    .secondary-button:hover:not(:disabled) {
+      background: oklch(0.274 0.006 286.033);
+    }
+    button:focus-visible {
+      outline: 2px solid rgb(180 186 198 / 45%);
+      outline-offset: 2px;
+    }
   `
 
-  panel.append(openButton, dismissButton)
+  panel.append(
+    dismissButton,
+    step,
+    mark,
+    title,
+    description,
+    continueButton,
+    openVaultButton,
+  )
   shadow.append(style, panel)
   document.documentElement.append(host)
   widgetHost = host
@@ -98,10 +414,7 @@ function scheduleScan() {
   }, 150)
 }
 
-if (
-  !isRuntimeSimpleVaultUrl(location.href) &&
-  !isRuntimeSentinelVaultUrl(location.href)
-) {
+if (!isRuntimeNookVaultAppUrl(location.href)) {
   renderWidget()
 
   const observer = new MutationObserver(scheduleScan)

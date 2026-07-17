@@ -1,6 +1,6 @@
 # Browser Extension Product Spec
 
-Status: Implemented direction for #234, #235, #237, #244, and #441.
+Status: Implemented direction for #234, #235, #237, #244, #441, and #461.
 
 `nook-web-extension` is the browser integration for Simple Vault. It does not
 duplicate the vault application UI. On first run, clicking the extension opens
@@ -30,9 +30,9 @@ application capability checks enforce the vault-type boundary.
 | Surface                           | Responsibility                                                                                           |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                            |
-| Extension toolbar action          | Create or unlock the extension device before approval; show “Open Simple Vault” afterward                |
+| Extension toolbar action          | Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault |
 | Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization                          |
-| In-page widget                    | Contextual open/unlock/select/fill/save actions only                                                     |
+| In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                     |
 | Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials |
 
 "No vault UI in the extension" means no second vault-management UI. The toolbar
@@ -104,15 +104,20 @@ private identity.
 
 - The toolbar always opens the extension-owned launcher.
 - Before approval, the popup shows device setup or device unlock. Completing
-  that action opens Simple Vault with the resulting public keys.
-- After a grant and usable encrypted event-log projection are persisted, the
-  action becomes “Open Simple Vault” and opens the configured Simple Vault home
-  route. Grant metadata by itself never produces connected state.
+  that action lands on a companion-home choice: connect/pair with Simple Vault,
+  open Simple Vault, or stay ready without opening a vault tab.
+- After a grant and usable encrypted event-log projection are persisted, unlock
+  or a ready session shows the same companion home: stay ready for site auth,
+  with Open Simple Vault as an explicit secondary option. Grant metadata by
+  itself never produces connected state, and a connected unlock never auto-opens
+  Simple Vault.
 - The popup starts the Simple Vault approval route only after an explicit
-  device create, recover, or unlock action.
+  Connect / pair action (or Open Simple Vault).
 - Never put vault browsing or management in the launcher.
 - Management actions originating from the widget open the corresponding Simple
   Vault route rather than recreating that interface in the extension.
+- Primary popup controls use the same neutral primary tokens as nook-web dark
+  mode rather than a separate green button style.
 
 The Simple Vault base URL is build-selected rather than hard-coded:
 
@@ -153,27 +158,41 @@ identity and provider ceremonies are stubbed.
 
 The manifest and runtime authorization bind each deployed extension to the
 matching isolated Simple origin. Sentinel origins cannot message or approve the
-extension.
+extension. Autofill and website-WebAuthn content scripts exclude every Simple
+and Sentinel Nook host (production, development, and PR previews), not only the
+build's configured Simple origin, so a mismatched channel never shows the
+in-page auth gate on vault apps. The Simple Vault bridge content script remains
+bound to the configured Simple origin only.
 
-## In-Page Widget
+## In-Page Auth Gate
 
-When a likely login flow is present, the content script may show a compact Nook
-widget near the top-right of the viewport.
+When a likely login flow is present, the content script may show a Nook-owned
+auth gate near the top-right of the viewport. The gate follows the same
+icon → title → description → primary action pattern as the extension device
+form so every site gets a universal authentication surface instead of forcing
+users through site-specific login chrome.
 
-The widget must:
+The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
 - support dismissal without blocking the host page;
+- offer a primary Continue with Nook action that lists matching logins for the
+  page origin, reveals one credential after explicit choice, fills the form,
+  and submits; when locked, open the companion launcher and ask the user to
+  unlock then continue again;
+- keep Open vault as an optional secondary action;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
-- show only contextual accounts returned by the background/WASM boundary;
+- show only contextual accounts returned by the background/WASM boundary when
+  matched-account fill is available;
 - open a browser-native or extension-controlled authorization surface when the
   extension is locked;
 - open Simple Vault for full search, creation, editing, and settings.
 
 An injected DOM widget is not a trusted place for primary authentication because
 the host page can imitate it. Passkey authorization stays browser-native or in
-an extension-controlled top-level window.
+an extension-controlled top-level window. Future auth-agent automation
+(automatic passkey create or sign-in) is policy-gated and tracked separately.
 
 ## Device And Storage Boundary
 
