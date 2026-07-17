@@ -706,6 +706,54 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       .toBe(3)
     await assertWebsitePasskey(website, websiteCredentialId)
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
+
+    await context.close()
+    const restartedContext = await chromium.launchPersistentContext(
+      userDataDir,
+      {
+        headless: false,
+        executablePath: chromiumExecutablePath,
+        args: [
+          `--disable-extensions-except=${extensionDir}`,
+          `--load-extension=${extensionDir}`,
+        ],
+      },
+    )
+    await restartedContext.addInitScript(installMockPasskeyRuntime)
+    try {
+      const restartedWorker = await getServiceWorker(restartedContext)
+      const restartedExtensionId = new URL(restartedWorker.url()).host
+      expect(restartedExtensionId).toBe(extensionId)
+
+      const lockedPopupPage = await restartedContext.newPage()
+      await lockedPopupPage.goto(
+        `chrome-extension://${restartedExtensionId}/popup/index.html`,
+      )
+      await expect(
+        lockedPopupPage.getByTestId('extension-device-setup'),
+      ).toBeVisible()
+      await expect(
+        lockedPopupPage.getByTestId('device-protection-unlock-btn'),
+      ).toBeVisible()
+
+      const unlockedVaultPagePromise = restartedContext.waitForEvent('page')
+      await lockedPopupPage.getByTestId('device-protection-unlock-btn').click()
+      const unlockedVaultPage = await unlockedVaultPagePromise
+      await expect(unlockedVaultPage).toHaveURL((url) => {
+        const expected = new URL(simpleVaultBaseUrl)
+        return (
+          url.origin === expected.origin && url.pathname === expected.pathname
+        )
+      })
+      await expect(
+        unlockedVaultPage.getByTestId('authenticated-shell'),
+      ).toBeVisible({ timeout: 15_000 })
+      await expect(
+        unlockedVaultPage.getByTestId('passkey-auth-overlay'),
+      ).toHaveCount(0)
+    } finally {
+      await restartedContext.close()
+    }
   } finally {
     await context.close()
     await loginServer.close()
