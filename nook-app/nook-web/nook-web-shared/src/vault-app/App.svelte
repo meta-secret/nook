@@ -17,7 +17,7 @@
   import LocalFolderMultipleVaultsDialog from "$lib/components/LocalFolderMultipleVaultsDialog.svelte";
   import VaultSyncConflictDialog from "$lib/components/VaultSyncConflictDialog.svelte";
   import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
-  import LocalOnlyVaultWarningBanner from "$lib/components/LocalOnlyVaultWarningBanner.svelte";
+  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
@@ -42,7 +42,7 @@
     type ExtensionConnectRequest,
   } from "$lib/extension-connect";
   import type { VaultItemType } from "$lib/nook";
-  import { configuredVaultApplication } from "$app-wasm";
+  import { assessVaultSecurity, configuredVaultApplication } from "$app-wasm";
   import { consumeSentinelOnboardingFromLocation } from "$lib/sentinel-onboarding-link";
   import {
     APP_KIND,
@@ -57,6 +57,9 @@
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
 
   const vault = new VaultState();
+  const vaultSecurityRecommendations = $derived(
+    assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
+  );
   type ColorMode = "light" | "dark";
   const THEME_STORAGE_KEY = "nook_color_mode";
 
@@ -851,9 +854,7 @@
                 onDismissError={() => vault.dismissError()}
               />
             {/if}
-            {#if showPasskeyOverlay ||
-              showExistingVaultPasskeyOverlay ||
-              showEnrollmentPasskeyOverlay}
+            {#if showPasskeyOverlay || showExistingVaultPasskeyOverlay || showEnrollmentPasskeyOverlay}
               <PasskeyAuthOverlay
                 {vault}
                 onDismiss={() => {
@@ -908,10 +909,13 @@
                 ? 'space-y-4'
                 : 'flex min-h-0 flex-1 flex-col gap-4'}"
             >
-              {#if vault.syncProviders.length === 0}
-                <LocalOnlyVaultWarningBanner
+              {#if !vault.settingsOpen && vaultSecurityRecommendations.hasRecommendations}
+                <VaultSecurityGuideBanner
                   {vault}
+                  needsSyncProvider={vaultSecurityRecommendations.needsSyncProvider}
+                  needsAnotherDevice={vaultSecurityRecommendations.needsAnotherDevice}
                   onAddSyncProvider={() => vault.openAdmin("storage")}
+                  onAddDevice={() => vault.openSettings("onboard")}
                 />
               {/if}
               {#if vault.settingsOpen && vault.settingsSection === "admin"}
@@ -949,8 +953,7 @@
                   onClearCode={() => vault.clearEnrollmentCode()}
                   onImportBitwarden={(json, password) =>
                     vault.handleBitwardenImport(json, password)}
-                  onImportLastPass={(csv) =>
-                    vault.handleLastPassImport(csv)}
+                  onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
                   onImportOnePassword={(archive) =>
                     vault.handleOnePasswordImport(archive)}
                   onImportApplePasswords={(csv) =>
