@@ -73,6 +73,15 @@ describe('extension origin isolation', () => {
     expect(createManifest('1.0.0').permissions).toContain('offscreen')
   })
 
+  test('exposes the official Nook icon to in-page auth gate content scripts', () => {
+    expect(createManifest('1.0.0').web_accessible_resources).toEqual([
+      {
+        resources: ['icons/nook.png'],
+        matches: ['<all_urls>'],
+      },
+    ])
+  })
+
   test('installs isolated transport and page-world WebAuthn bridges at document start', () => {
     const scripts = createManifest('1.0.0').content_scripts
     expect(

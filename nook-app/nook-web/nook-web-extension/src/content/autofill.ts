@@ -242,10 +242,13 @@ function renderWidget(): void {
   step.className = 'step-label'
   step.textContent = translatedMessage('widgetGateStep')
 
-  const mark = document.createElement('div')
+  const mark = document.createElement('img')
   mark.className = 'mark'
-  mark.ariaHidden = 'true'
-  mark.textContent = 'N'
+  mark.src = chrome.runtime.getURL('icons/nook.png')
+  mark.alt = ''
+  mark.setAttribute('aria-hidden', 'true')
+  mark.width = 52
+  mark.height = 52
 
   const title = document.createElement('h1')
   title.textContent = translatedMessage('widgetGateTitle')
@@ -325,16 +328,12 @@ function renderWidget(): void {
       text-transform: uppercase;
     }
     .mark {
-      display: grid;
-      place-items: center;
-      width: 44px;
-      height: 44px;
+      display: block;
+      width: 52px;
+      height: 52px;
       margin: 0 auto;
-      border-radius: 999px;
-      background: color-mix(in oklab, oklch(0.92 0.004 286.32) 12%, transparent);
-      color: oklch(0.92 0.004 286.32);
-      font-size: 16px;
-      font-weight: 800;
+      border-radius: 12px;
+      object-fit: contain;
     }
     h1 {
       margin: 0;

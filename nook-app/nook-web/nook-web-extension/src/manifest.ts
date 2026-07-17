@@ -41,6 +41,10 @@ export type ExtensionManifest = {
   icons: ManifestIconSet
   permissions: Array<'activeTab' | 'offscreen' | 'storage'>
   host_permissions: string[]
+  web_accessible_resources: Array<{
+    resources: string[]
+    matches: string[]
+  }>
 }
 
 const iconSet: ManifestIconSet = {
@@ -121,5 +125,11 @@ export function createManifest(
     icons: iconSet,
     permissions: ['activeTab', 'offscreen', 'storage'],
     host_permissions: ['<all_urls>'],
+    web_accessible_resources: [
+      {
+        resources: ['icons/nook.png'],
+        matches: ['<all_urls>'],
+      },
+    ],
   }
 }
