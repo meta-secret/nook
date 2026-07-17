@@ -171,6 +171,153 @@ test.describe('local vault', () => {
     await deleteSecret(page, key)
   })
 
+  test('deletes the complete local browser copy from settings', async ({
+    page,
+  }) => {
+    await addSecret(page, 'local-cleanup-proof', 'must-be-erased')
+    await page.evaluate(async () => {
+      localStorage.setItem('nook_cleanup_probe', 'local')
+      sessionStorage.setItem('nook_cleanup_probe', 'session')
+      document.cookie = 'nook_cleanup_probe=cookie; Path=/; SameSite=Lax'
+      const cache = await caches.open('nook-cleanup-probe')
+      await cache.put('/cleanup-probe', new Response('cached'))
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_file_sync', 1)
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('directory_handles', {
+            keyPath: 'id',
+          })
+        }
+        request.onerror = () =>
+          reject(request.error ?? new Error('local folder db open failed'))
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction('directory_handles', 'readwrite')
+          transaction.objectStore('directory_handles').put({
+            id: 'nook-cleanup-probe',
+            handle: 'probe',
+          })
+          transaction.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          transaction.onerror = () =>
+            reject(transaction.error ?? new Error('local folder seed failed'))
+        }
+      })
+    })
+
+    const otherTab = await page.context().newPage()
+    await otherTab.goto('/')
+    await otherTab.waitForFunction(() =>
+      Boolean(
+        (
+          window as Window & {
+            __nookVault?: { enqueueStorage: (operation: () => void) => void }
+          }
+        ).__nookVault,
+      ),
+    )
+    await otherTab.evaluate(() => {
+      sessionStorage.setItem('nook_cleanup_probe', 'other-tab-session')
+    })
+
+    await page.getByTestId('vault-settings-tab').click()
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    const dangerSection = page.getByTestId('vault-danger-section')
+    await dangerSection.getByRole('button').first().click()
+    await page.getByTestId('delete-local-vault-button').click()
+    await expect(
+      page.getByTestId('delete-local-vault-confirmation'),
+    ).toBeVisible()
+    await page.getByTestId('delete-local-vault-cancel').click()
+    await expect(
+      page.getByTestId('delete-local-vault-confirmation'),
+    ).not.toBeVisible()
+
+    await page.getByTestId('delete-local-vault-button').click()
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === '/'),
+      page.getByTestId('delete-local-vault-confirm').click(),
+    ])
+
+    const remaining = await page.evaluate(async () => {
+      const countRecords = (databaseName: string) =>
+        new Promise<number>((resolve, reject) => {
+          const request = indexedDB.open(databaseName)
+          request.onerror = () =>
+            reject(request.error ?? new Error(`${databaseName} open failed`))
+          request.onsuccess = () => {
+            const db = request.result
+            const storeNames = Array.from(db.objectStoreNames)
+            if (storeNames.length === 0) {
+              db.close()
+              resolve(0)
+              return
+            }
+            const transaction = db.transaction(storeNames, 'readonly')
+            let count = 0
+            for (const storeName of storeNames) {
+              const countRequest = transaction.objectStore(storeName).count()
+              countRequest.onsuccess = () => {
+                count += countRequest.result
+              }
+            }
+            transaction.oncomplete = () => {
+              db.close()
+              resolve(count)
+            }
+            transaction.onerror = () =>
+              reject(
+                transaction.error ?? new Error(`${databaseName} count failed`),
+              )
+          }
+        })
+      const recordCounts = await Promise.all(
+        ['nook_db', 'nook_auth', 'nook_logs', 'nook_file_sync'].map(
+          countRecords,
+        ),
+      )
+      return {
+        recordCounts,
+        local: localStorage.getItem('nook_cleanup_probe'),
+        session: sessionStorage.getItem('nook_cleanup_probe'),
+        caches: await caches.keys(),
+        cookie: document.cookie,
+      }
+    })
+    expect(remaining.recordCounts).toEqual([0, 0, 0, 0])
+    expect(remaining.local).toBeNull()
+    expect(remaining.session).toBeNull()
+    expect(remaining.caches).not.toContain('nook-cleanup-probe')
+    expect(remaining.cookie).not.toContain('nook_cleanup_probe=')
+    await expect
+      .poll(() =>
+        otherTab.evaluate(async () => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                enqueueStorage: (operation: () => void) => Promise<void>
+                isAuthenticated: boolean
+              }
+            }
+          ).__nookVault
+          if (!vault || vault.isAuthenticated) return false
+          if (sessionStorage.getItem('nook_cleanup_probe') !== null) {
+            return false
+          }
+          try {
+            await vault.enqueueStorage(() => undefined)
+            return false
+          } catch {
+            return true
+          }
+        }),
+      )
+      .toBe(true)
+    await otherTab.close()
+  })
+
   test('password generator fills the secret value field', async ({ page }) => {
     await assertVaultReady(page)
     await page.getByTestId('add-secret-btn').click()

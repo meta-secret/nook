@@ -1,6 +1,6 @@
 # Vault Session, Lock, and Multi-Vault Model
 
-How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, and the **Lock** action.
+How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, the **Lock** action, and deleting a browser's local working copy.
 
 **Related:** [unified-vault.md](unified-vault.md), [secret-store-identity.md](secret-store-identity.md), [auth-providers.md](auth-providers.md), [ARCHITECTURE.md](../ARCHITECTURE.md) §4.
 
@@ -46,6 +46,16 @@ flowchart TB
 5. **Lock** does not delete vaults or providers — it drops vault keys, the
    current metadata page, any explicitly revealed records, and plaintext device
    identity from memory.
+6. **Settings → Delete local vault data** is the destructive browser reset. It
+   first locks other open Nook tabs, zeroizes their WASM sessions, clears their
+   tab-scoped storage, and waits for their storage work to drain. The reset
+   fails closed when safe cross-tab coordination is unavailable or a tab does
+   not acknowledge. It then zeroizes the active WASM session; independently clears every object store in
+   `nook_db`, `nook_auth`, `nook_file_sync`, and `nook_logs`; clears Web
+   Storage, Cache Storage, and accessible site cookies; and returns to the
+   landing page. Cleanup continues after individual store failures and reports
+   the aggregate error from a locked state. It never deletes remote sync
+   replicas or platform-authenticator passkeys.
 
 ---
 
@@ -162,6 +172,7 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 | **Header Lock / Switch vault** | End session; switch vault when multiple exist |
 | **Login gate chooser** | Vault picker, create local vault, or connect sync provider |
 | **Settings → Sync providers** | Manage replica targets for the **active** vault only |
+| **Settings → Delete local vault data** | Remove every Nook vault and credential persisted by this browser; remote replicas remain |
 
 **Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `sync-conflict-import-new-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
 

@@ -80,6 +80,53 @@ async fn open_vault_db() -> Result<rexie::Rexie, NookError> {
         .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))
 }
 
+pub(crate) async fn clear_vault_db() -> Result<(), NookError> {
+    const STORES: [&str; 5] = [
+        "vault",
+        "events",
+        "projections",
+        "provider_receipts",
+        "outbox",
+    ];
+    let rexie = open_vault_db().await?;
+    let mut errors = Vec::new();
+    for store_name in STORES {
+        if let Err(error) = clear_vault_store(&rexie, store_name).await {
+            errors.push(error.to_string());
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(NookError::IndexedDb(format!(
+            "nook_db clear errors: {}",
+            errors.join("; ")
+        )))
+    }
+}
+
+async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(), NookError> {
+    let transaction = rexie
+        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| {
+            NookError::IndexedDb(format!(
+                "nook_db {store_name} clear transaction error: {e:?}"
+            ))
+        })?;
+    transaction
+        .store(store_name)
+        .map_err(|e| NookError::IndexedDb(format!("nook_db {store_name} store error: {e:?}")))?
+        .clear()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("nook_db {store_name} clear error: {e:?}")))?;
+    transaction.done().await.map_err(|e| {
+        NookError::IndexedDb(format!(
+            "nook_db {store_name} clear completion error: {e:?}"
+        ))
+    })?;
+    Ok(())
+}
+
 async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_vault_db().await?;
     let transaction = rexie

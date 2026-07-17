@@ -102,6 +102,10 @@ import * as passwordUnlockActions from "$lib/vault/password-unlock";
 import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
 import * as idleSessionActions from "$lib/vault/idle-session";
 import * as lifecycleActions from "$lib/vault/lifecycle";
+import {
+  clearTabScopedBrowserData,
+  deleteLocalBrowserData as deleteBrowserData,
+} from "$lib/browser-data";
 import type {
   SentinelStoredDeliverySummary,
   SentinelUnlockSessionStatus,
@@ -197,9 +201,9 @@ export class VaultState {
 
   settingsOpen = $state(false);
   settingsSection = $state<"storage" | "onboard" | "admin">("storage");
-  settingsAccordionSection = $state<"devices" | "language" | undefined>(
-    "devices",
-  );
+  settingsAccordionSection = $state<
+    "devices" | "language" | "danger" | undefined
+  >("devices");
   adminAccordionSection = $state<
     "vaults" | "storage" | "passwords" | "import-export" | undefined
   >("vaults");
@@ -414,11 +418,15 @@ export class VaultState {
   syncTimer: ReturnType<typeof setInterval> | undefined = undefined;
   initPromise: Promise<void> | undefined = undefined;
   storageChain: Promise<unknown> = Promise.resolve();
+  private localDataDeletionStarted = false;
   private deviceAuthorizationInProgress = false;
   pendingEnrollmentFromUrl: string | undefined =
     typeof window !== "undefined" ? consumeEnrollmentFromLocation() : undefined;
 
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
+    if (this.localDataDeletionStarted) {
+      return Promise.reject(new Error("Local browser data deletion is active"));
+    }
     const next = this.storageChain.then(() => operation());
     this.storageChain = next.then(
       () => undefined,
@@ -1817,8 +1825,8 @@ export class VaultState {
   }
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
-  resetVaultSessionState() {
-    if (this.manager) {
+  resetVaultSessionState(resetManager = true) {
+    if (resetManager && this.manager) {
       void this.enqueueStorage(() => this.manager!.resetVaultSession()).catch(
         () => {
           // Engine may be tearing down.
@@ -1886,7 +1894,7 @@ export class VaultState {
     void this.publishExtensionEventLogUpdate();
   }
 
-  clearUnlockedSession() {
+  clearUnlockedSession(resetManager = true) {
     this.secretPageGeneration += 1;
     this.stopIdleSessionTracking();
     this.stopVaultSync();
@@ -1907,7 +1915,7 @@ export class VaultState {
     this.enrollmentCode = "";
     this.errorMsg = "";
     const wasSentinel = this.vaultArchitecture.vault_type === "sentinel";
-    this.resetVaultSessionState();
+    this.resetVaultSessionState(resetManager);
     if (wasSentinel) {
       this.sentinelCeremonyPrompt = true;
       this.sentinelUnlockStatus = "ceremony_required";
@@ -2381,7 +2389,7 @@ export class VaultState {
 
   openSettings(
     section: "storage" | "onboard" | "admin" = "storage",
-    accordion: "devices" | "language" = "devices",
+    accordion: "devices" | "language" | "danger" = "devices",
   ) {
     this.helpOpen = false;
     this.settingsSection = section;
@@ -2411,6 +2419,49 @@ export class VaultState {
     this.cancelProviderSetup();
     this.cancelAddProvider();
     this.settingsOpen = false;
+  }
+
+  async deleteLocalBrowserData(): Promise<void> {
+    if (!this.manager || this.isSaving || this.localDataDeletionStarted) return;
+    this.errorMsg = "";
+    this.dismissSuccess();
+    this.isSaving = true;
+    this.stopIdleSessionTracking();
+    this.stopVaultSync();
+    try {
+      const manager = this.manager;
+      await deleteBrowserData(() => {
+        const deletion = this.enqueueStorage(() =>
+          manager.deleteLocalBrowserData(),
+        );
+        this.localDataDeletionStarted = true;
+        return deletion;
+      });
+    } catch (error: unknown) {
+      const managerWasZeroized = this.localDataDeletionStarted;
+      setVaultSessionLocked(true);
+      this.clearUnlockedSession(!managerWasZeroized);
+      this.localDataDeletionStarted = false;
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : this.t("settings.delete_local_error");
+      this.isSaving = false;
+    }
+  }
+
+  async handleRemoteLocalBrowserDataDeletion(): Promise<void> {
+    if (this.localDataDeletionStarted) return;
+    const resetManager = this.manager
+      ? this.enqueueStorage(() => this.manager!.resetVaultSession())
+      : this.waitForStorageChain();
+    this.localDataDeletionStarted = true;
+    this.stopIdleSessionTracking();
+    this.stopVaultSync();
+    setVaultSessionLocked(true);
+    this.clearUnlockedSession(false);
+    await resetManager;
+    clearTabScopedBrowserData();
   }
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */

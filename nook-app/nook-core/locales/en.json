@@ -533,7 +533,16 @@
     "device_count_plural": "{count} devices",
     "password_count_singular": "1 password",
     "password_count_plural": "{count} passwords",
-    "no_passwords": "None"
+    "no_passwords": "None",
+    "danger_zone": "Danger zone",
+    "delete_local_title": "Delete local vault data",
+    "delete_local_desc": "Remove Nook data from this browser",
+    "delete_local_details": "Deletes every local vault copy, device key wrapper, saved sync credential, folder permission, log, and browser preference on this site. Remote sync copies and passkeys saved by your device are not deleted.",
+    "delete_local_button": "Delete data from this browser",
+    "delete_local_confirm": "Delete all Nook data stored by this browser? This cannot be undone unless you have a remote copy or another recovery method.",
+    "delete_local_confirm_button": "Delete all local data",
+    "deleting_local": "Deleting…",
+    "delete_local_error": "Could not delete all local browser data."
   },
   "help": {
     "title": "Your vault, optional sync replicas",

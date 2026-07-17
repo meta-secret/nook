@@ -162,6 +162,24 @@ pub(crate) async fn delete_auth_providers_db() -> Result<(), NookError> {
         .map_err(|e| idb_err("nook_auth delete error", e))
 }
 
+pub(crate) async fn clear_auth_providers_db() -> Result<(), NookError> {
+    let rexie = open_auth_db().await?;
+    let transaction = rexie
+        .transaction(&[STORE], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| idb_err("nook_auth clear transaction error", e))?;
+    transaction
+        .store(STORE)
+        .map_err(|e| idb_err("nook_auth clear store error", e))?
+        .clear()
+        .await
+        .map_err(|e| idb_err("nook_auth clear error", e))?;
+    transaction
+        .done()
+        .await
+        .map_err(|e| idb_err("nook_auth clear completion error", e))?;
+    Ok(())
+}
+
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
     use super::*;
