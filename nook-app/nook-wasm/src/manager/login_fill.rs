@@ -1,8 +1,8 @@
 //! Website login list/reveal for the unlocked extension vault session.
 
 use super::NookVaultManager;
-use crate::types::{NookLoginAccount, NookLoginFillCredential};
 use crate::NookError;
+use crate::types::{NookLoginAccount, NookLoginFillCredential};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 impl NookVaultManager {

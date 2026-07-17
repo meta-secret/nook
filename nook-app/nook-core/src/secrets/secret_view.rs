@@ -519,7 +519,10 @@ mod tests {
             "https://notexample.com",
             "https://example.com",
         ));
-        assert!(!login_host_matches_origin("https://", "https://example.com"));
+        assert!(!login_host_matches_origin(
+            "https://",
+            "https://example.com"
+        ));
     }
 
     #[test]

@@ -57,10 +57,7 @@ pub struct NookLoginFillCredential {
 #[wasm_bindgen]
 impl NookLoginFillCredential {
     pub(crate) fn new(username: String, password: String) -> Self {
-        Self {
-            username,
-            password,
-        }
+        Self { username, password }
     }
 
     #[wasm_bindgen(getter)]
