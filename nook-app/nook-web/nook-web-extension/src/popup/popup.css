@@ -194,3 +194,8 @@ button:disabled {
   border-radius: 9px;
   margin: 0 auto;
 }
+
+.companion-logo {
+  width: 52px;
+  height: 52px;
+}
