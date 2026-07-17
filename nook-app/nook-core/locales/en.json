@@ -498,7 +498,6 @@
     "passwords_desc": "Passwords available for unlock and device onboarding",
     "import_export": "Import & Export",
     "import_export_desc": "Move supported data into or out of this vault",
-    "import_sources": "Apple Passwords · Chrome · Bitwarden · LastPass · 1Password · Proton Pass",
     "devices": "Devices & Roster",
     "devices_desc": "Enrolled browsers and pending access requests",
     "add_provider": "Add Storage Provider",

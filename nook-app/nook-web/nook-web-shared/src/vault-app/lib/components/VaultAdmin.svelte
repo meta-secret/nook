@@ -3,7 +3,6 @@
     Check,
     CheckCircle2,
     FolderKey,
-    FileUp,
     Lock,
     PencilLine,
     Plus,
@@ -521,14 +520,6 @@
     bind:activeSection
     testId="vault-import-export-section"
   >
-    {#snippet badge()}
-      <span
-        class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
-      >
-        <FileUp class="size-3" />
-        {vault.t("settings.import_sources")}
-      </span>
-    {/snippet}
     <div class="space-y-2">
       <SettingsAccordionSection
         title={vault.t("apple_passwords_import.title")}
