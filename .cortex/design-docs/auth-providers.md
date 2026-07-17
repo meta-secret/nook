@@ -261,6 +261,14 @@ OAuth should be tested on `https://simple.nokey.sh`,
 `https://sentinel.nokey.sh`, the matching `*.dev.nokey.sh` vault origin, or
 local dev. Per-PR aliases intentionally never receive provider credentials.
 
+Vault CSP (`security-headers.ts` → Cloudflare `_headers`) must keep
+`script-src` allowances for `https://accounts.google.com/gsi/client` and
+`https://cdn.apple-cloudkit.com`, plus GIS `frame-src` /
+`https://accounts.google.com/gsi/`. A CSP that only allows `'self'` scripts
+surfaces as **Failed to load Google Identity Services** (or CloudKit JS) before
+any OAuth client-id / origin check runs — that is an app header bug, not a
+Google Cloud Console misconfiguration.
+
 For CloudKit JS diagnostics, a `421` response from `/public/users/caller`
 usually means CloudKit issued the unauthenticated web-auth challenge; it is not
 by itself proof that the API token or origin is wrong. The failure signal is

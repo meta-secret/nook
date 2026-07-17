@@ -174,6 +174,8 @@ for (const root of [simpleRoot, sentinelRoot]) {
   for (const required of [
     'Content-Security-Policy:',
     "frame-ancestors 'none'",
+    'https://accounts.google.com/gsi/client',
+    'https://cdn.apple-cloudkit.com',
     'X-Content-Type-Options: nosniff',
   ]) {
     if (!headers.includes(required)) {
