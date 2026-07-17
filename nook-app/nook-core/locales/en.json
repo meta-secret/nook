@@ -90,7 +90,7 @@
     "icloud_shared_enrollment_hint": "Sign in with the Apple account that received the share before enrolling. The owner's credentials are never included.",
     "enrolling": "Enrolling…",
     "finish_device_onboarding": "Finish device onboarding",
-    "onboarding_card_desc": "This link is for onboarding onto an existing vault — not creating a new one. Authorize this device with a passkey, then enter the vault password (shared separately) to unlock.",
+    "onboarding_card_desc": "This device scanned an onboarding QR. Enter the vault password to pull the vault from the sync provider into local storage and unlock.",
     "password_entry_placeholder": "Password for the vault entry shown in the QR",
     "password_help_text": "The password is not stored in the QR. Shared providers may ask you to sign in with your own account; the owner's credentials are never included.",
     "onboarding_progress": "Onboarding…",
@@ -1405,6 +1405,8 @@
     "widget": {
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook",
+      "collapse": "Collapse Nook",
+      "expand": "Expand Nook",
       "gate_step": "Sign in with Nook",
       "gate_title": "Continue through Nook",
       "gate_description": "Skip the site's login chrome. Nook fills your credentials and continues sign-in for you.",
