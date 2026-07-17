@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
-import type { NookSecretListItem, VaultItemType } from '$lib/nook'
+import type { NookSecretListItem } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
@@ -16,9 +16,7 @@ const vault = {
 
 describe('passkey item discovery', () => {
   test('shows the website ceremony path without a manual credential form', async () => {
-    const onAddSecret = vi.fn(
-      async (_id: string, _type: VaultItemType, _data: string) => {},
-    )
+    const onAddSecret = vi.fn(async () => {})
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
