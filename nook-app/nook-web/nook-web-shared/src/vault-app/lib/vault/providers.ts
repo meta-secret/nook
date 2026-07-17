@@ -24,8 +24,12 @@ import { createLogger } from "$lib/log";
 const log = createLogger("vault-providers");
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
-function vaultStoreIdForProviderSave(state: VaultState): string | undefined {
-  const fromManager = state.manager?.vaultStoreId.trim();
+async function vaultStoreIdForProviderSave(
+  state: VaultState,
+): Promise<string | undefined> {
+  const fromManager = state.manager
+    ? (await state.enqueueStorage(() => state.manager!.vaultStoreId)).trim()
+    : "";
   if (fromManager) {
     return fromManager;
   }
@@ -252,7 +256,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const type = state.loginSetupType ?? state.storageMode;
   const isNewSetup = state.loginSetupType !== undefined;
   let oauthProviderToUpdateId: string | undefined;
-  const vaultStoreId = vaultStoreIdForProviderSave(state);
+  const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? "google-drive";
   const oauthSnapshot: OAuthFileConfig | undefined =

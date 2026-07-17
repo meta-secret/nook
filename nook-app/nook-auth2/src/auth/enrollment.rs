@@ -301,6 +301,7 @@ impl EnrollmentProvider {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrollmentIssueInput {
     pub provider: EnrollmentProvider,
+    pub vault_name: String,
     pub entry_id: String,
     pub issued_at: String,
 }
@@ -308,6 +309,7 @@ pub struct EnrollmentIssueInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptedEnrollmentPayload {
     pub provider: EnrollmentProvider,
+    pub vault_name: Option<String>,
     pub entry_id: String,
     pub issued_at: String,
 }
@@ -329,6 +331,8 @@ pub struct EnrollmentCodeEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct EnrollmentProviderPayload {
     provider: EnrollmentProvider,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    vault_name: Option<String>,
 }
 
 /// Compatibility decoder for enrollment codes issued before onboarding mode
@@ -394,6 +398,8 @@ pub fn encrypt_enrollment_payload(
 
     let inner = EnrollmentProviderPayload {
         provider: payload.provider.clone(),
+        vault_name: (!payload.vault_name.trim().is_empty())
+            .then(|| payload.vault_name.trim().to_owned()),
     };
     let mut salt = [0u8; SALT_LEN];
     let mut iv = [0u8; IV_LEN];
@@ -443,11 +449,17 @@ pub fn decrypt_enrollment_payload(
         .map_err(|_| EnrollmentError::WrongPassword)?;
     let provider_payload: DecodableEnrollmentProviderPayload =
         serde_json::from_slice(&plaintext).map_err(|_| EnrollmentError::WrongPassword)?;
-    let provider = provider_payload.into_provider();
+    let (provider, vault_name) = match provider_payload {
+        DecodableEnrollmentProviderPayload::Typed(payload) => {
+            (payload.provider, payload.vault_name)
+        }
+        legacy @ DecodableEnrollmentProviderPayload::Legacy(_) => (legacy.into_provider(), None),
+    };
     validate_provider(&provider)?;
 
     Ok(DecryptedEnrollmentPayload {
         provider,
+        vault_name,
         entry_id: envelope.entry_id,
         issued_at: envelope.issued_at,
     })
@@ -679,6 +691,7 @@ mod tests {
                 "github_pat_11AAAAbbbbCCCC".to_owned(),
                 "team-vault".to_owned(),
             )),
+            vault_name: "Team vault".to_owned(),
             entry_id: "entry-1".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         }
@@ -702,6 +715,7 @@ mod tests {
         let serialized = serde_json::to_string(&envelope).unwrap();
         assert!(!serialized.contains("vault-pass-99"));
         assert!(!serialized.contains("github_pat_11AAAAbbbbCCCC"));
+        assert!(!serialized.contains("Team vault"));
         assert!(!envelope.ct.is_empty());
     }
 
@@ -725,6 +739,7 @@ mod tests {
         let code = encrypt_enrollment_payload(&input, "vault-pass-99", "").unwrap();
         let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99").unwrap();
         assert_eq!(decrypted.provider, input.provider);
+        assert_eq!(decrypted.vault_name.as_deref(), Some("Team vault"));
         assert_eq!(decrypted.entry_id, input.entry_id);
         assert_eq!(decrypted.issued_at, input.issued_at);
     }
@@ -755,6 +770,7 @@ mod tests {
     fn preserves_local_provider() {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
+            vault_name: "Local vault".to_owned(),
             entry_id: "entry-local".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -773,6 +789,7 @@ mod tests {
                 "joiner@example.com".to_owned(),
                 "shared-folder-abc".to_owned(),
             )),
+            vault_name: "Shared vault".to_owned(),
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -801,7 +818,11 @@ mod tests {
             "joiner@example.com".to_owned(),
             "shared-folder-abc".to_owned(),
         ));
-        let value = serde_json::to_value(EnrollmentProviderPayload { provider }).unwrap();
+        let value = serde_json::to_value(EnrollmentProviderPayload {
+            provider,
+            vault_name: Some("Shared vault".to_owned()),
+        })
+        .unwrap();
         assert_eq!(value["provider"]["onboardingType"], "shared-provider-grant");
         assert_eq!(
             value["provider"]["provider"]["type"],
@@ -854,6 +875,7 @@ mod tests {
             provider: EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
                 storage_target_id.clone(),
             )),
+            vault_name: "Shared iCloud vault".to_owned(),
             entry_id: "entry-icloud-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -874,6 +896,7 @@ mod tests {
                 "joiner@example.com".to_owned(),
                 None,
             )),
+            vault_name: "Shared vault".to_owned(),
             entry_id: "entry-shared-legacy".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -895,6 +918,7 @@ mod tests {
                 Some("nook-backup.yaml".to_owned()),
                 Some("owner@example.com".to_owned()),
             )),
+            vault_name: "OAuth vault".to_owned(),
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -918,6 +942,7 @@ mod tests {
                 None,
                 None,
             )),
+            vault_name: "OAuth vault".to_owned(),
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -937,6 +962,7 @@ mod tests {
                 "joiner@example.com".to_owned(),
                 None,
             )),
+            vault_name: "Shared vault".to_owned(),
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };

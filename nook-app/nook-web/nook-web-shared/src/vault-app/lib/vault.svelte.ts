@@ -39,6 +39,7 @@ import {
   type NookLocalVaultEntry,
   type NookLocalAuthProviderSnapshot,
   type NookPasswordEntrySummary,
+  type NookSecretPage,
   type NookStorageConnectArgs,
   type NookVaultManager,
   type NookAppLocale,
@@ -2549,6 +2550,18 @@ export class VaultState {
       }
     }
 
+    for (const secret of this.secrets) secret.free();
+    this.secrets = records;
+    this.secretTotal = total;
+    this.secretPageOffset = offset;
+    this.secretQuery = query;
+  }
+
+  applyConnectedSecretPage(page: NookSecretPage, query: string) {
+    const records = page.takeItems();
+    const total = page.total;
+    const offset = page.offset;
+    page.free();
     for (const secret of this.secrets) secret.free();
     this.secrets = records;
     this.secretTotal = total;
