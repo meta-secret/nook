@@ -22,7 +22,15 @@ const BITWARDEN_METADATA: ImportMetadataMarker = ImportMetadataMarker {
 };
 const ONEPASSWORD_METADATA: ImportMetadataMarker = ImportMetadataMarker {
     heading: "## 1Password",
-    key_prefixes: &["vault:", "state:", "tags:", "url.", "url[", "field["],
+    key_prefixes: &[
+        "format: 1PUX",
+        "vault:",
+        "state:",
+        "tags:",
+        "url.",
+        "url[",
+        "field[",
+    ],
 };
 const LASTPASS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
     heading: "## LastPass",
@@ -96,29 +104,37 @@ fn normalized_text(value: &str) -> String {
     value.replace("\r\n", "\n").trim().to_owned()
 }
 
+fn is_generated_metadata_bullet(marker: &ImportMetadataMarker, bullet: &str) -> bool {
+    let is_dotted_onepassword_field = marker.heading == "## 1Password"
+        && bullet
+            .split_once(':')
+            .is_some_and(|(key, _)| key.contains('.'));
+    is_dotted_onepassword_field
+        || marker
+            .key_prefixes
+            .iter()
+            .any(|prefix| bullet.starts_with(prefix))
+}
+
+fn metadata_section_index(normalized: &str, marker: &ImportMetadataMarker) -> Option<usize> {
+    normalized
+        .match_indices(marker.heading)
+        .filter_map(|(index, _)| {
+            if index != 0 && !normalized[..index].ends_with("\n\n") {
+                return None;
+            }
+            let metadata = normalized[index + marker.heading.len()..].strip_prefix('\n')?;
+            let first_bullet = metadata.strip_prefix("- ")?.lines().next()?;
+            is_generated_metadata_bullet(marker, first_bullet).then_some(index)
+        })
+        .next()
+}
+
 fn provider_neutral_notes(value: &str, markers: &[&ImportMetadataMarker]) -> String {
     let normalized = normalized_text(value);
     let marker_index = markers
         .iter()
-        .filter_map(|marker| {
-            let heading = marker.heading;
-            let index = normalized
-                .find(&format!("\n\n{heading}"))
-                .map(|index| index + 2)
-                .or_else(|| normalized.starts_with(heading).then_some(0))?;
-            let metadata = normalized[index + heading.len()..].strip_prefix('\n')?;
-            let first_bullet = metadata.strip_prefix("- ")?.lines().next()?;
-            let is_dotted_onepassword_field = marker.heading == "## 1Password"
-                && first_bullet
-                    .split_once(':')
-                    .is_some_and(|(key, _)| key.contains('.'));
-            (is_dotted_onepassword_field
-                || marker
-                    .key_prefixes
-                    .iter()
-                    .any(|prefix| first_bullet.starts_with(prefix)))
-            .then_some(index)
-        })
+        .filter_map(|marker| metadata_section_index(&normalized, marker))
         .min();
     marker_index.map_or(normalized.clone(), |index| {
         normalized[..index].trim_end().to_owned()
@@ -462,7 +478,7 @@ mod tests {
     fn secure_note_versions_ignore_all_provider_metadata() {
         let providers = [
             "## Bitwarden\n- field.folder: Personal",
-            "## 1Password\n- vault: Personal",
+            "## 1Password\n- format: 1PUX\n- PIN: 1234",
             "## LastPass\n- group: Personal",
             "## Proton Pass\n- vault: Personal",
         ];
@@ -500,6 +516,25 @@ mod tests {
                 secret_fingerprint(&second, &key('a'))
             );
         }
+    }
+
+    #[test]
+    fn generated_metadata_after_a_user_provider_section_is_still_ignored() {
+        let first = SecretValue::SecureNote(SecureNoteSecret {
+            title: "Migration diary".to_owned(),
+            note: "Notes\n\n## LastPass\n- diary: first export\n\n## LastPass\n- group: Personal"
+                .to_owned(),
+        });
+        let second = SecretValue::SecureNote(SecureNoteSecret {
+            title: "Migration diary".to_owned(),
+            note: "Notes\n\n## LastPass\n- diary: first export\n\n## LastPass\n- group: Work"
+                .to_owned(),
+        });
+
+        assert_eq!(
+            secret_fingerprint(&first, &key('a')),
+            secret_fingerprint(&second, &key('a'))
+        );
     }
 
     #[test]
