@@ -39,7 +39,10 @@ by sibling containers on GitHub-hosted runners.
 ## Rules
 
 - Do **not** run any `git` commands — the harness commits and pushes `${AGENT_BRANCH}` after you finish.
-- Do **not** create or merge a PR — GitHub Actions opens the PR for explicit review and merge authorization.
+- Do **not** create, monitor, or merge a PR from this bounded worker. The harness
+  opens the PR after you finish; a continuing task-owning agent then monitors it,
+  fixes failures/comments/conflicts, runs the exact-head readiness audit, and
+  squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
 - Follow `.cortex/rules.md` (squash merge only; never kill Docker daemon — only stop containers).

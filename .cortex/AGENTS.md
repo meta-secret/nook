@@ -23,13 +23,17 @@ inside the authorized scope, and report that blocker precisely. Full contract:
 
 ## ⛔ Non-negotiable: implementation agents land their PRs
 
-Every implementation agent with GitHub write access must create or update a PR,
-monitor Nook's applicable repository-owned checks, fix failures, address and
-resolve actionable comments, update conflicts with `origin/main`, revalidate the
-exact head, and squash-merge when `task pr:ready PR=<number>` succeeds. Do not
-stop at a ready-PR handoff or ask for separate merge permission. Stop without a
-merge only for a concrete blocker or an explicitly read-only request. Full
-policy: [workflows/coding-bro.md](workflows/coding-bro.md).
+Every task-owning implementation agent with GitHub write access must create or
+update a PR, monitor Nook's applicable repository-owned checks, fix failures,
+address and resolve actionable comments, update conflicts with `origin/main`,
+revalidate the exact head, and squash-merge when
+`task pr:ready PR=<number>` succeeds. Do not stop at a ready-PR handoff or ask
+for separate merge permission. Stop without a merge only for a concrete blocker
+or an explicitly read-only request. The bounded `agent-implement.yml` worker is
+not a continuing task owner: its harness owns git/push/PR creation and exits
+after opening the PR, so a continuing agent must take ownership of that PR and
+carry this lifecycle through merge. Full policy:
+[workflows/coding-bro.md](workflows/coding-bro.md).
 
 ## ⛔ Non-negotiable: never kill the Docker daemon
 
