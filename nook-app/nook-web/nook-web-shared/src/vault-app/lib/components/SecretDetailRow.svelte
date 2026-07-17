@@ -5,6 +5,7 @@
     Sprout,
     StickyNote,
     ShieldCheck,
+    KeyRound,
     Eye,
     EyeOff,
     Pencil,
@@ -82,6 +83,14 @@
     if (item.type === "authenticator") {
       return item.account.trim() || item.issuer.trim();
     }
+    if (item.type === "passkey") {
+      return (
+        item.passkeyUserDisplayName.trim() ||
+        item.passkeyUserName.trim() ||
+        item.rpId.trim() ||
+        vault.t("vault.types.passkey")
+      );
+    }
     return item.title.trim() || vault.t("vault.fields.no_title");
   });
 </script>
@@ -124,6 +133,8 @@
               <Globe class="size-3.5" />
             {:else if item.type === "authenticator"}
               <ShieldCheck class="size-3.5" />
+            {:else if item.type === "passkey"}
+              <KeyRound class="size-3.5" />
             {:else}
               <StickyNote class="size-3.5" />
             {/if}
@@ -149,6 +160,9 @@
             {:else if item.type === "authenticator"}
               <ShieldCheck class="size-3 text-primary/70" />
               {vault.t("vault.types.authenticator")}
+            {:else if item.type === "passkey"}
+              <KeyRound class="size-3 text-primary/70" />
+              {vault.t("vault.types.passkey")}
             {:else}
               <StickyNote class="size-3 text-primary/70" />
               {vault.t("vault.types.secure_note")}
@@ -163,29 +177,31 @@
       <div
         class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}"
       >
-        <button
-          type="button"
-          onclick={() => void onToggleReveal(item.id)}
-          aria-label={decrypted
-            ? vault.t("vault.hide_value")
-            : vault.t("vault.show_value")}
-          aria-pressed={Boolean(decrypted)}
-          data-testid="reveal-secret-btn"
-          class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
-        >
-          {#if decrypted}<EyeOff class="size-3.5" />{:else}<Eye
-              class="size-3.5"
-            />{/if}
-        </button>
-        <button
-          type="button"
-          onclick={() => void onEditItem(item)}
-          aria-label={vault.t("common.edit")}
-          data-testid="edit-secret-btn"
-          class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
-        >
-          <Pencil class="size-3.5" />
-        </button>
+        {#if item.type !== "passkey"}
+          <button
+            type="button"
+            onclick={() => void onToggleReveal(item.id)}
+            aria-label={decrypted
+              ? vault.t("vault.hide_value")
+              : vault.t("vault.show_value")}
+            aria-pressed={Boolean(decrypted)}
+            data-testid="reveal-secret-btn"
+            class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+          >
+            {#if decrypted}<EyeOff class="size-3.5" />{:else}<Eye
+                class="size-3.5"
+              />{/if}
+          </button>
+          <button
+            type="button"
+            onclick={() => void onEditItem(item)}
+            aria-label={vault.t("common.edit")}
+            data-testid="edit-secret-btn"
+            class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <Pencil class="size-3.5" />
+          </button>
+        {/if}
         <button
           type="button"
           onclick={() => void onDeleteSecret(item.id)}
@@ -546,6 +562,48 @@
               {/if}
             </div>
           </div>
+        {:else if item.type === "passkey"}
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.relying_party")}</span
+            >
+            <div
+              class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+            >
+              <span class="truncate text-foreground">{item.rpId}</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.account")}</span
+            >
+            <div
+              class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+            >
+              <span class="truncate text-foreground"
+                >{item.passkeyUserDisplayName ||
+                  item.passkeyUserName ||
+                  vault.t("common.none")}</span
+              >
+            </div>
+          </div>
+          {#if item.passkeyUserDisplayName && item.passkeyUserName}
+            <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+              <span class="text-muted-foreground/70 font-medium"
+                >{vault.t("vault.fields.username")}</span
+              >
+              <div
+                class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+              >
+                <span class="truncate text-foreground"
+                  >{item.passkeyUserName}</span
+                >
+              </div>
+            </div>
+          {/if}
+          <p class="text-[11px] leading-relaxed text-muted-foreground">
+            {vault.t("vault.fields.passkey_managed_hint")}
+          </p>
         {:else}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium pt-1"
