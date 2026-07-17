@@ -16,8 +16,8 @@ There is no Nook account. There is no master password. Approved devices unlock
 the vault.
 
 Store website logins, API keys, BIP39 seed phrases, Markdown secure notes,
-Google Authenticator-compatible TOTP items with encrypted backup codes, and
-website passkeys. The Chromium extension can save and use passkeys from an
+Google Authenticator-compatible TOTP items with simple setup-key or URI entry,
+and website passkeys. The Chromium extension can save and use passkeys from an
 approved, unlocked Simple Vault while preserving an explicit browser/security
 key fallback. Passkeys cannot be created from the generic item form; key
 generation, RP validation, signing, and counter updates stay in Rust/WASM.
@@ -101,7 +101,7 @@ path you configured), you lose the vault. Approve at least two devices.
 | BIP39 seed phrase | Account name, seed phrase |
 | Secure note | Title, note (Markdown) |
 | Passkey | Website/RP and account metadata; encrypted ES256 credential |
-| Authenticator | Service, account, TOTP setup key or `otpauth://` URI, optional backup codes |
+| Authenticator | Service, account, and TOTP setup key or `otpauth://` URI |
 
 Items are searchable. Secret values stay masked until revealed. Secure notes use
 an Edit / Preview Markdown editor. Authenticator items derive the current

@@ -500,6 +500,7 @@
             </div>
           </div>
 
+          {#if item.backupCodeCount > 0}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="pt-1 text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.backup_codes")}</span
@@ -539,13 +540,12 @@
                 {/if}
               {:else}
                 <span class="font-mono text-foreground"
-                  >{item.backupCodeCount > 0
-                    ? "••••••••"
-                    : vault.t("common.none")}</span
+                  >••••••••</span
                 >
               {/if}
             </div>
           </div>
+          {/if}
         {:else}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium pt-1"
