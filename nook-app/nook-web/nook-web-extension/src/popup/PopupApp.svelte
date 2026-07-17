@@ -83,8 +83,17 @@
     )
   }
 
+  function continueWithDevice(device: ExtensionDeviceProtectionResult): void {
+    if (isConnected) {
+      openSimpleVault()
+      return
+    }
+    beginPairing(device)
+  }
+
   $effect(() => {
-    if (activeSessionDevice) beginPairing(activeSessionDevice)
+    if (!activeSessionDevice) return
+    continueWithDevice(activeSessionDevice)
   })
 
   async function runDeviceAction(
@@ -94,7 +103,7 @@
     busy = true
     error = ''
     try {
-      beginPairing(await action())
+      continueWithDevice(await action())
     } catch (caught) {
       busy = false
       if (
