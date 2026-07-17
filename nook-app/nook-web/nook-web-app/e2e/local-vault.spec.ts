@@ -185,6 +185,59 @@ test.describe('local vault', () => {
     await deleteSecret(page, key)
   })
 
+  test('edits an existing secret and persists the replacement', async ({
+    page,
+  }) => {
+    const originalKey = uniqueSecretKey('e2e-local-edit')
+    const updatedKey = `${originalKey}-updated`
+    const originalValue = 'edit-me-original'
+    const updatedValue = 'edit-me-updated'
+
+    await addSecret(page, originalKey, originalValue)
+
+    const originalRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: originalKey })
+    await originalRow.getByTestId('edit-secret-btn').click()
+    const editForm = page.getByTestId('edit-secret-form')
+    await expect(editForm).toBeVisible()
+    await expect(editForm.getByTestId('secret-label')).toHaveValue(originalKey)
+    await expect(editForm.getByTestId('secret-value')).toHaveValue(
+      originalValue,
+    )
+
+    await editForm.getByTestId('secret-label').fill(updatedKey)
+    await editForm.getByTestId('secret-value').fill(updatedValue)
+    await editForm.getByTestId('save-secret-btn').click()
+    await expect(editForm).not.toBeVisible()
+    await expect(originalRow).toHaveCount(0)
+
+    const updatedRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: updatedKey })
+    await expect(updatedRow).toBeVisible()
+    await revealSecretInRow(updatedRow)
+    await expect(updatedRow.getByText(updatedValue)).toBeVisible()
+
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await unlockVaultOnLogin(page)
+    await waitForVaultUnlocked(page)
+    await assertVaultReady(page)
+
+    const persistedRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: updatedKey })
+    await expect(persistedRow).toBeVisible()
+    await revealSecretInRow(persistedRow)
+    await expect(persistedRow.getByText(updatedValue)).toBeVisible()
+
+    await deleteSecret(page, updatedKey)
+  })
+
   test('deletes the complete local browser copy from settings', async ({
     page,
   }) => {

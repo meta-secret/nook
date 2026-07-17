@@ -23,6 +23,7 @@
   import type {
     AuthenticatorCodeView,
     NookSecretListItem,
+    NookSecretRecord,
     VaultItemType,
   } from '$lib/nook'
   import {
@@ -77,6 +78,8 @@
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
+  let editingItem = $state<NookSecretRecord | undefined>(undefined)
+  let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
   const typeFilters: Array<{
@@ -146,19 +149,36 @@
   }
 
   function openAddSecret() {
+    releaseEditingItem()
     formSelectedType = undefined
     addSecretOpen = true
     notifyAddMode()
   }
 
   function closeAddSecret() {
+    editLoadSequence += 1
+    releaseEditingItem()
     addSecretOpen = false
     formSelectedType = undefined
     notifyAddMode()
   }
 
-  async function openEditItem() {
-    addSecretOpen = false
+  function releaseEditingItem() {
+    editingItem?.free()
+    editingItem = undefined
+  }
+
+  async function openEditItem(item: NookSecretListItem) {
+    const sequence = ++editLoadSequence
+    const record = await vault.decryptSecret(item.id)
+    if (sequence !== editLoadSequence) {
+      record.free()
+      return
+    }
+    releaseEditingItem()
+    editingItem = record
+    formSelectedType = item.type
+    addSecretOpen = true
     notifyAddMode()
   }
 
@@ -265,6 +285,8 @@
   })
 
   onDestroy(() => {
+    editLoadSequence += 1
+    releaseEditingItem()
     freeDecryptedSecrets(decryptedSecrets)
   })
 </script>
@@ -306,6 +328,7 @@
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
+        initialItem={editingItem}
       />
     </div>
   {:else}
