@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
-import type { NookSecretRecord } from '$lib/nook'
+import type { NookSecretRecord, VaultItemType } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 
@@ -27,7 +27,9 @@ const legacyAuthenticator = {
 
 describe('AddSecretForm authenticator editing', () => {
   test('resets hidden protocol settings and recovery codes when the setup key changes', async () => {
-    const onReplaceSecret = vi.fn(async () => undefined)
+    const onReplaceSecret = vi.fn(
+      async (_oldId: string, _type: VaultItemType, _data: string) => undefined,
+    )
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
