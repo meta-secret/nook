@@ -7,7 +7,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookPasswordEntrySummary;
-use crate::NookSecretRecord;
+use crate::NookSecretPage;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::event_db::load_local_event_store;
 use crate::storage::indexed_db::{load_vault_local_cache, save_to_indexed_db};
@@ -259,7 +259,8 @@ impl NookVaultManager {
         github_repo: String,
         entry_id: String,
         password: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+        page_limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
         let _ = self.status.tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
@@ -322,7 +323,8 @@ impl NookVaultManager {
             save_to_indexed_db(&yaml).await?;
         }
         let _ = self.status.tx.send("READY".to_owned());
-        Ok(self.get_records()?)
+        NookSecretPage::from_core(self.query_secret_page("", None, 0, page_limit)?)
+            .map_err(Into::into)
     }
 
     async fn load_password_unlock_records(
@@ -494,6 +496,7 @@ mod wasm_tests {
                 String::new(),
                 password_entry.id.clone(),
                 "correct horse battery staple".to_owned(),
+                50,
             )
             .await;
         assert!(result.is_err(), "missing event log must be rejected");

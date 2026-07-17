@@ -1,5 +1,5 @@
 import { VaultState } from "$lib/vault.svelte";
-import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
+import { isoTimestamp } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
   NookEnrollmentIssueInput,
@@ -199,15 +199,15 @@ export async function unlockWithPassword(
   state.dismissSuccess();
   state.isVerifying = true;
   try {
-    const rawRecords = (await state.enqueueStorage(() =>
+    const page = await state.enqueueStorage(() =>
       state.manager!.connectWithPassword(
         ...state.wasmStorageArgs(),
         entryId,
         password,
+        state.secretPageSize,
       ),
-    )) as NookSecretRecord[];
-    for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    );
+    state.applyConnectedSecretPage(page, "");
     if (state.deviceProtectionReady) {
       await state.ensureProviderSaved();
       await state.loadProviders();
@@ -219,7 +219,7 @@ export async function unlockWithPassword(
     state.markVaultUnlocked();
     log.info("vault unlocked with password", {
       mode: state.storageMode,
-      secrets: rawRecords.length,
+      secrets: state.secretTotal,
       entryId,
     });
     state.joinEnrollmentPrompt = "none";
@@ -339,6 +339,7 @@ export async function connectWithEnrollmentCode(
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
+  state.isPasswordBusy = true;
   try {
     const payload = decryptEnrollmentPayload(code, password);
     const entryId = payload.entryId.trim();
@@ -484,19 +485,23 @@ export async function connectWithEnrollmentCode(
 
     await state.initDeviceIdentity();
 
-    const rawRecords = (await state.enqueueStorage(() =>
+    const page = await state.enqueueStorage(() =>
       state.manager!.connectWithPassword(
         ...enrollmentStorageArgs,
         entryId,
         unlockPassword,
+        state.secretPageSize,
       ),
-    )) as NookSecretRecord[];
-    for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    );
+    state.applyConnectedSecretPage(page, "");
     const vaultName = payload.vaultName?.trim();
-    const vaultStoreId = state.manager.vaultStoreId.trim();
+    const vaultStoreId = (
+      await state.enqueueStorage(() => state.manager!.vaultStoreId)
+    ).trim();
     if (vaultName && vaultStoreId) {
-      state.manager.setVaultName(vaultName);
+      await state.enqueueStorage(() => {
+        state.manager!.setVaultName(vaultName);
+      });
       await setLocalVaultLabel(vaultStoreId, vaultName);
     }
     // Password enrollment downloads an existing vault into this browser. Make
@@ -523,6 +528,7 @@ export async function connectWithEnrollmentCode(
         ? e.message
         : "Failed to enroll with the provided code.";
   } finally {
+    state.isPasswordBusy = false;
     state.isVerifying = false;
   }
 }
@@ -712,9 +718,12 @@ export async function issueEnrollmentCode(
         : undefined,
       sharedStorageTargetId,
     );
+    const vaultName = await state.enqueueStorage(
+      () => state.manager!.vaultName ?? "",
+    );
     const payload = new NookEnrollmentIssueInput(
       provider,
-      state.manager.vaultName ?? "",
+      vaultName,
       entryId,
       isoTimestamp(),
     );
