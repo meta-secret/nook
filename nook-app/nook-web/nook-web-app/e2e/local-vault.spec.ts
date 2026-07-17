@@ -164,6 +164,18 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-empty-search')).toBeVisible()
 
     await page.getByTestId('search-secrets').fill('')
+    await page.getByTestId('secret-type-filter').click()
+    await page.getByTestId('secret-type-filter-secure-note').click()
+    await expect(page.getByTestId('vault-empty-search')).toBeVisible()
+
+    await page.getByTestId('secret-type-filter').click()
+    await page.getByTestId('secret-type-filter-api-key').click()
+    await expect(row).toBeVisible()
+
+    await page.getByTestId('secret-type-filter').click()
+    await page.getByTestId('secret-type-filter-all').click()
+    await expect(row).toBeVisible()
+
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await row.getByRole('button', { name: 'Copy secret' }).click()
     await expect(row.getByRole('button', { name: 'Copy secret' })).toBeVisible()

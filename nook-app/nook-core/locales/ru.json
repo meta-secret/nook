@@ -321,6 +321,8 @@
   },
   "vault": {
     "search_placeholder": "Поиск секретов...",
+    "filter_by_type": "Фильтр секретов по типу",
+    "filter_all_types": "Все типы",
     "no_secrets": "Секреты не найдены",
     "add_secret": "Добавить секрет",
     "edit_secret": "Редактировать секрет",

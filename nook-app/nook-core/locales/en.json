@@ -321,6 +321,8 @@
   },
   "vault": {
     "search_placeholder": "Search secrets...",
+    "filter_by_type": "Filter secrets by type",
+    "filter_all_types": "All types",
     "no_secrets": "No secrets found",
     "add_secret": "Add Secret",
     "edit_secret": "Edit Secret",
