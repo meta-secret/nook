@@ -303,8 +303,8 @@
 >
   {#if addSecretOpen}
     <div
-      class="animate-in fade-in slide-in-from-right-2 duration-200 {isSecureNoteEditor
-        ? 'flex min-h-0 flex-1 flex-col'
+      class="animate-in min-w-0 max-w-full fade-in slide-in-from-right-2 duration-200 {isSecureNoteEditor
+        ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
         : ''}"
       data-testid="add-secret-panel"
     >

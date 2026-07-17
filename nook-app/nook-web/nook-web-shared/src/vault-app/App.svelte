@@ -379,6 +379,11 @@
         ? authenticatedShellSpacing
         : "py-5 sm:py-6",
   );
+
+  function leaveSecretsEditor() {
+    secretsAddOpen = false;
+    secretsAddFormType = undefined;
+  }
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
   const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending);
   const requiresPasskeyFirst = $derived(
@@ -1057,17 +1062,27 @@
               onDismissSuccess={() => vault.dismissSuccess()}
               onDismissError={() => vault.dismissError()}
             />
-            {#if !secretsAddOpen}
-              <VaultBottomNav
-                {vault}
-                settingsOpen={vault.settingsOpen}
-                settingsSection={vault.settingsSection}
-                onSelectSecrets={() => vault.closeSettings()}
-                onSelectOnboard={() => vault.openSettings("onboard")}
-                onSelectAdmin={() => vault.openAdmin()}
-                onSelectSettings={() => vault.openSettings()}
-              />
-            {/if}
+            <VaultBottomNav
+              {vault}
+              settingsOpen={vault.settingsOpen}
+              settingsSection={vault.settingsSection}
+              onSelectSecrets={() => {
+                leaveSecretsEditor();
+                vault.closeSettings();
+              }}
+              onSelectOnboard={() => {
+                leaveSecretsEditor();
+                vault.openSettings("onboard");
+              }}
+              onSelectAdmin={() => {
+                leaveSecretsEditor();
+                vault.openAdmin();
+              }}
+              onSelectSettings={() => {
+                leaveSecretsEditor();
+                vault.openSettings();
+              }}
+            />
           </div>
         </div>
       {/if}

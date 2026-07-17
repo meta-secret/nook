@@ -167,7 +167,8 @@
   }
 
   .authenticated-shell.authenticated-shell-editor {
-    min-height: calc(100svh - 5rem);
+    height: calc(100dvh - 9rem);
+    min-height: 0;
   }
 
   @media (width >= 40rem) {
