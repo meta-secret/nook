@@ -73,6 +73,19 @@ async function openExistingVaultProtectionOverlay(page: Page) {
   })
 }
 
+async function unlockExistingVaultWithPasskey(page: Page) {
+  await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
+  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  await expect(unlockVaultButton).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await unlockVaultButton.click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+}
+
 async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -327,23 +340,10 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await openExistingVaultProtectionOverlay(page)
-    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
-    await expect(page.getByTestId('device-protection-unlock-btn')).toHaveText(
-      'Continue with passkey',
-    )
-    await expect(
-      page.getByTestId('device-protection-use-existing-choice'),
-    ).toBeHidden()
-    await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
-    await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await unlockExistingVaultWithPasskey(page)
 
     await page.reload()
-    await openExistingVaultProtectionOverlay(page)
-    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
-    await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await unlockExistingVaultWithPasskey(page)
   })
 
   test('reuses high-security device mode without showing it during vault naming', async ({
@@ -364,9 +364,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await openExistingVaultProtectionOverlay(page)
-    await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await unlockExistingVaultWithPasskey(page)
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     await expect
       .poll(() =>
@@ -592,6 +590,9 @@ test.describe('passkey device-key protection', () => {
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
     })
     await page.reload()
     await openExistingVaultProtectionOverlay(page)

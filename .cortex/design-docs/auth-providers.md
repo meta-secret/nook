@@ -152,7 +152,7 @@ stateDiagram-v2
 
 ### Lock
 
-See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears the WASM typed session database, the in-memory device identity, and sensitive Svelte state. The normal vault login gate remains visible; choosing device keys opens the passkey/PIN gate, while a backup password can unlock the local vault without opening it.
+See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears the WASM typed session database, the in-memory device identity, and sensitive Svelte state. The normal vault login gate remains visible; choosing device keys starts passkey authorization directly, while PIN input, passkey recovery, and failed/cancelled attempts use the device-protection gate. A backup password can unlock the local vault without opening it.
 
 **Test ids:** `header-lock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `unlock-vault-btn`, `add-provider-btn`, `remove-provider-{id}`.
 

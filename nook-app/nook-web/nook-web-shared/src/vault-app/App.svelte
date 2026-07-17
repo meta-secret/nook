@@ -328,6 +328,13 @@
         return;
       }
       pendingExistingVaultUnlock = true;
+      if (vault.deviceProtectionStatus === "passkey") {
+        await vault.unlockDeviceProtection();
+        if (vault.deviceProtectionReady) {
+          pendingExistingVaultUnlock = false;
+          await vault.loadDb();
+        }
+      }
       return;
     }
     if (vault.loginSetupType) {
