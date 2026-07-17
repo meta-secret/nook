@@ -488,6 +488,12 @@ test.describe('local vault', () => {
   test('keeps password-manager import forms folded until selected', async ({
     page,
   }) => {
+    await page.getByTestId('vault-admin-tab').click()
+    const importSection = page.getByTestId('vault-import-export-section')
+    await expect(importSection).toBeVisible()
+    await expect(importSection).not.toContainText('Apple Passwords')
+    await expect(importSection).not.toContainText('Proton Pass')
+
     await expandSettingsSection(page, 'import')
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
