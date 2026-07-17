@@ -88,11 +88,13 @@ export async function runCiImplement(): Promise<void> {
         octokit,
         repoRef,
         issueNumber,
-        `Opened PR ${url} for this issue. The implementation job has exited; the PR requires normal review and explicit merge authorization.`,
+        `Opened PR ${url} for this issue. This bounded implementation job has exited; a continuing task-owning agent must monitor checks, fix failures/comments/conflicts, run the exact-head readiness audit, and squash-merge without separate merge authorization.`,
       );
     }
   }
 
-  log.info(`PR #${prNumber} opened for review; no automatic merge is configured`);
-  log.info(`Done — implement run ${runId} requires explicit merge authorization`);
+  log.info(
+    `PR #${prNumber} opened; this bounded worker hands it to a continuing task-owning agent`,
+  );
+  log.info(`Done — implement run ${runId} exits before the monitor-and-merge lifecycle`);
 }

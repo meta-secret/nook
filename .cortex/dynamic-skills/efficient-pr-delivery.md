@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Minimize agent wall time by batching feedback and parallelizing local and remote
-validation without turning green checks into merge authorization.
+Minimize agent wall time by batching feedback, parallelizing local and remote
+validation, and carrying ready PRs directly through squash merge.
 
 ## Problem Pattern
 
@@ -18,12 +18,11 @@ Run `task pr:preflight PR=<number>` as soon as a PR exists. Use focused checks
 while editing, then commit and push the coherent iteration before starting the
 long local gate. Inspect repository-owned checks directly while local validation
 runs. The read-only `task pr:ready PR=<number>` audit may summarize exact-head
-state, but it never authorizes or performs a merge.
+state, but it never performs a merge by itself.
 
-Inspect feedback at the readiness boundary. A green audit is necessary evidence,
-not permission: merge only after the user explicitly authorizes that specific
-PR. A later push invalidates the prior readiness result and requires a fresh
-audit before any authorized merge.
+Inspect feedback at the readiness boundary. A green audit is the task-owning
+agent's signal to squash-merge immediately. A later push invalidates the prior
+readiness result and requires a fresh audit before merge.
 
 ## Scope
 
@@ -56,11 +55,11 @@ Does not apply to:
 - [ ] Commit and push before required full local validation.
 - [ ] Inspect only feedback already present; never wait for new external review.
 - [ ] Run `task pr:ready` on the exact head.
-- [ ] Confirm explicit merge authorization, then squash merge and report duration.
+- [ ] Squash-merge immediately when readiness succeeds, then report duration.
 
 ## Validation
 
 Run `cd agentic-ai/ci-agent && npm test` and verify the read-only Task commands.
 The readiness audit must reject stale heads, missing/failed Nook runs, missing
-exact-head deployment, and feedback already requiring handling. No workflow or
-CLI command may merge based only on the audit result.
+exact-head deployment, and feedback already requiring handling. The audit stays
+read-only; the task-owning agent performs the squash merge after it succeeds.

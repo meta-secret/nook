@@ -31,8 +31,8 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done). See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
-* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → local checks → push → PR → inspect CI → fix until green → explicit merge authorization or ready handoff. Green checks never authorize a merge.
-* **Do not stop at push.** The agent owns the PR through merge (when requested) or explicit handoff.
+* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → local checks → push → PR → inspect CI → fix failures/comments/conflicts → exact-head readiness audit → automatic agent-owned squash merge.
+* **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
 * **Question-only turns** (no code changes) skip the pipeline.
 
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
