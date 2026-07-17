@@ -10,6 +10,7 @@
     Sprout,
     StickyNote,
     ShieldCheck,
+    KeyRound,
     TriangleAlert,
   } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -91,6 +92,7 @@
     if (items.some((item) => item.type === 'api-key')) return Braces
     if (items.some((item) => item.type === 'seed-phrase')) return Sprout
     if (items.some((item) => item.type === 'authenticator')) return ShieldCheck
+    if (items.some((item) => item.type === 'passkey')) return KeyRound
     return StickyNote
   }
 

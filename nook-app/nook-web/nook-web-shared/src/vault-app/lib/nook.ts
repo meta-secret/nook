@@ -44,6 +44,7 @@ export type VaultItemType =
   | "api-key"
   | "seed-phrase"
   | "secure-note"
+  | "passkey"
   | "authenticator";
 
 export type AuthenticatorCodeView = {
