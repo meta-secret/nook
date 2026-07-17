@@ -28,9 +28,7 @@ async function vaultStoreIdForProviderSave(
   state: VaultState,
 ): Promise<string | undefined> {
   const fromManager = state.manager
-    ? (
-        await state.enqueueStorage(() => state.manager!.vaultStoreId)
-      ).trim()
+    ? (await state.enqueueStorage(() => state.manager!.vaultStoreId)).trim()
     : "";
   if (fromManager) {
     return fromManager;
