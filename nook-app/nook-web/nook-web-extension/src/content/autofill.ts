@@ -442,6 +442,9 @@ function renderWidget(): void {
       cursor: grabbing;
       user-select: none;
     }
+    [hidden] {
+      display: none !important;
+    }
     .panel {
       position: relative;
       width: min(320px, calc(100vw - 36px));
