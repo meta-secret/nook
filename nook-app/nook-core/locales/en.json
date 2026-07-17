@@ -1407,8 +1407,13 @@
       "dismiss": "Dismiss Nook",
       "gate_step": "Sign in with Nook",
       "gate_title": "Continue through Nook",
-      "gate_description": "Skip the site's login chrome. Unlock Nook, then continue when credentials or a passkey are ready.",
-      "continue": "Continue with Nook"
+      "gate_description": "Skip the site's login chrome. Nook fills your credentials and continues sign-in for you.",
+      "continue": "Continue with Nook",
+      "working": "Looking up a matching login…",
+      "unlock_then_continue": "Unlock Nook in the companion window, then click Continue with Nook again.",
+      "no_match": "No saved login matches this site yet. Open the vault to add one.",
+      "choose_account": "Choose which login to use.",
+      "fill_failed": "Nook could not fill this login. Try Open vault or unlock and continue again."
     },
     "passkey": {
       "save_title": "Save a passkey with Nook?",

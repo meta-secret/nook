@@ -9,6 +9,81 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookLoginAccount {
+    secret_id: String,
+    username: String,
+    website_url: String,
+    website_host: String,
+}
+
+#[wasm_bindgen]
+impl NookLoginAccount {
+    pub(crate) fn from_login(id: &nook_core::SecretId, login: &nook_core::LoginSecret) -> Self {
+        Self {
+            secret_id: id.to_string(),
+            username: login.username.clone(),
+            website_url: login.website_url.clone(),
+            website_host: nook_core::hostname_from_url(&login.website_url),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = secretId)]
+    pub fn secret_id(&self) -> String {
+        self.secret_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn username(&self) -> String {
+        self.username.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = websiteUrl)]
+    pub fn website_url(&self) -> String {
+        self.website_url.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = websiteHost)]
+    pub fn website_host(&self) -> String {
+        self.website_host.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookLoginFillCredential {
+    username: String,
+    password: String,
+}
+
+#[wasm_bindgen]
+impl NookLoginFillCredential {
+    pub(crate) fn new(username: String, password: String) -> Self {
+        Self {
+            username,
+            password,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn username(&self) -> String {
+        self.username.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn password(&self) -> String {
+        self.password.clone()
+    }
+}
+
+impl Drop for NookLoginFillCredential {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.username.zeroize();
+        self.password.zeroize();
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookPasskeyAccount {
     credential_id: String,
     user_name: String,

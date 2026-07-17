@@ -1,6 +1,11 @@
 export {}
 
-import { summarizePasswordForms } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  fillLoginCredentials,
+  submitLoginForm,
+  summarizePasswordForms,
+} from '../../../nook-web-shared/src/extension/password-forms'
+import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
 import {
   isRuntimeSentinelVaultUrl,
   isRuntimeSimpleVaultUrl,
@@ -11,6 +16,21 @@ const WIDGET_HOST_ID = 'nook-auth-widget'
 let pendingScan: number | undefined
 let widgetHost: HTMLElement | undefined
 let dismissed = false
+let busy = false
+
+type LoginOptionsResponse = {
+  ok?: boolean
+  status?: 'ready' | 'locked' | 'unavailable'
+  accounts?: WebsiteLoginAccountOption[]
+  reason?: string
+}
+
+type LoginFillResponse = {
+  ok?: boolean
+  username?: string
+  password?: string
+  reason?: string
+}
 
 function translatedMessage(key: string): string {
   return chrome.i18n.getMessage(key) || 'Nook'
@@ -19,6 +39,179 @@ function translatedMessage(key: string): string {
 function removeWidget(): void {
   widgetHost?.remove()
   widgetHost = undefined
+}
+
+function sendRuntimeMessage<T>(message: unknown): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+      if (chrome.runtime.lastError) {
+        resolve(undefined)
+        return
+      }
+      resolve(response)
+    })
+  })
+}
+
+function setStatus(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  text: string,
+  enableContinue: boolean,
+): void {
+  description.textContent = text
+  continueButton.disabled = !enableContinue || busy
+}
+
+async function fillAndSubmitAccount(
+  account: WebsiteLoginAccountOption,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<void> {
+  const response = await sendRuntimeMessage<LoginFillResponse>({
+    type: 'nook:website-login-fill',
+    payload: {
+      origin: location.origin,
+      vaultStoreId: account.vaultStoreId,
+      secretId: account.secretId,
+    },
+  })
+  if (!response?.ok || !response.username || response.password === undefined) {
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+
+  const credentials = {
+    username: response.username,
+    password: response.password,
+  }
+  response.password = ''
+  const filled = fillLoginCredentials(credentials)
+  credentials.password = ''
+  credentials.username = ''
+  if (!filled) {
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  submitLoginForm()
+  dismissed = true
+  removeWidget()
+}
+
+function renderAccountChooser(
+  panel: HTMLElement,
+  accounts: WebsiteLoginAccountOption[],
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+): void {
+  continueButton.hidden = true
+  openVaultButton.hidden = true
+  description.textContent = translatedMessage('widgetChooseAccount')
+
+  const list = document.createElement('div')
+  list.className = 'account-list'
+  for (const account of accounts) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'secondary-button account-button'
+    button.textContent = account.username || account.websiteHost
+    button.addEventListener('click', () => {
+      if (busy) return
+      busy = true
+      button.disabled = true
+      void fillAndSubmitAccount(account, description, continueButton).finally(
+        () => {
+          busy = false
+        },
+      )
+    })
+    list.append(button)
+  }
+  panel.append(list)
+}
+
+async function continueWithNook(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+  panel: HTMLElement,
+): Promise<void> {
+  if (busy) return
+  busy = true
+  continueButton.disabled = true
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetWorking'),
+    false,
+  )
+
+  try {
+    const response = await sendRuntimeMessage<LoginOptionsResponse>({
+      type: 'nook:website-login-options',
+      payload: { origin: location.origin },
+    })
+
+    if (!response?.ok) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetFillFailed'),
+        true,
+      )
+      return
+    }
+
+    if (response.status === 'locked') {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetUnlockThenContinue'),
+        true,
+      )
+      return
+    }
+
+    const accounts = response.accounts ?? []
+    if (accounts.length === 0) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetNoMatch'),
+        true,
+      )
+      return
+    }
+
+    if (accounts.length === 1) {
+      await fillAndSubmitAccount(accounts[0], description, continueButton)
+      return
+    }
+
+    renderAccountChooser(
+      panel,
+      accounts,
+      description,
+      continueButton,
+      openVaultButton,
+    )
+  } finally {
+    busy = false
+    if (continueButton.isConnected && !continueButton.hidden) {
+      continueButton.disabled = false
+    }
+  }
 }
 
 function renderWidget(): void {
@@ -69,9 +262,6 @@ function renderWidget(): void {
   continueButton.className = 'primary-button'
   continueButton.setAttribute('aria-label', translatedMessage('widgetContinue'))
   continueButton.textContent = translatedMessage('widgetContinue')
-  continueButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'nook:open-companion-launcher' })
-  })
 
   const openVaultButton = document.createElement('button')
   openVaultButton.type = 'button'
@@ -83,6 +273,10 @@ function renderWidget(): void {
   openVaultButton.textContent = translatedMessage('widgetOpenVault')
   openVaultButton.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
+  })
+
+  continueButton.addEventListener('click', () => {
+    void continueWithNook(description, continueButton, openVaultButton, panel)
   })
 
   const style = document.createElement('style')
@@ -158,6 +352,10 @@ function renderWidget(): void {
       line-height: 1.4;
       text-align: center;
     }
+    .account-list {
+      display: grid;
+      gap: 8px;
+    }
     button.primary-button,
     button.secondary-button {
       appearance: none;
@@ -169,12 +367,16 @@ function renderWidget(): void {
       font-weight: 700;
       padding: 9px 12px;
     }
+    button:disabled {
+      cursor: wait;
+      opacity: 0.68;
+    }
     .primary-button {
       border: 1px solid transparent;
       background: oklch(0.92 0.004 286.32);
       color: oklch(0.21 0.006 285.885);
     }
-    .primary-button:hover {
+    .primary-button:hover:not(:disabled) {
       background: color-mix(in oklab, oklch(0.92 0.004 286.32) 90%, black);
     }
     .secondary-button {
@@ -182,7 +384,7 @@ function renderWidget(): void {
       background: transparent;
       color: oklch(0.985 0 0);
     }
-    .secondary-button:hover {
+    .secondary-button:hover:not(:disabled) {
       background: oklch(0.274 0.006 286.033);
     }
     button:focus-visible {

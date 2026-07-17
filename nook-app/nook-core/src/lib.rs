@@ -121,7 +121,10 @@ pub use secret_types::{
     PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose, PasskeySecret, SecretRecord, SecretType,
     SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
-pub use secret_view::{SecretListItem, SecretListItemData, build_secret_yaml};
+pub use secret_view::{
+    SecretListItem, SecretListItemData, build_secret_yaml, hostname_from_url,
+    login_host_matches_origin,
+};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
     create_sentinel_onboarding_package, decode_sentinel_onboarding_package,

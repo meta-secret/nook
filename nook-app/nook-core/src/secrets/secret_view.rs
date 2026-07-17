@@ -40,7 +40,9 @@ pub struct SecretListItem {
     pub data: SecretListItemData,
 }
 
-fn hostname_from_url(raw: &str) -> String {
+/// Normalize a website URL or origin to a comparable host (no leading `www.`).
+#[must_use]
+pub fn hostname_from_url(raw: &str) -> String {
     let value = raw.trim();
     if value.is_empty() {
         return String::new();
@@ -59,6 +61,20 @@ fn hostname_from_url(raw: &str) -> String {
         .unwrap_or_default()
         .trim_start_matches("www.")
         .to_owned()
+}
+
+/// True when a stored login website URL targets the same host as a page origin.
+///
+/// Matching is host equality after URL normalization (credentials, path, query,
+/// fragment, and a leading `www.` are ignored). Substring traps such as
+/// `evil-example.com` vs `example.com` do not match.
+#[must_use]
+pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
+    let secret_host = hostname_from_url(website_url);
+    let origin_host = hostname_from_url(origin);
+    !secret_host.is_empty()
+        && !origin_host.is_empty()
+        && secret_host.eq_ignore_ascii_case(&origin_host)
 }
 
 impl SecretRecord {
@@ -479,6 +495,31 @@ mod tests {
 
             assert_eq!(item.website_host(), expected, "{url}");
         }
+    }
+
+    #[test]
+    fn login_host_matches_origin_uses_normalized_host_equality() {
+        assert!(login_host_matches_origin(
+            "https://www.example.com/login",
+            "https://example.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "example.com",
+            "http://127.0.0.1:4173/login",
+        ));
+        assert!(login_host_matches_origin(
+            "http://127.0.0.1:4173/account",
+            "http://127.0.0.1:4199/login",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://example.com",
+            "https://evil-example.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://notexample.com",
+            "https://example.com",
+        ));
+        assert!(!login_host_matches_origin("https://", "https://example.com"));
     }
 
     #[test]

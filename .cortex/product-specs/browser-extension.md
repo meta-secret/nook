@@ -172,8 +172,10 @@ The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
 - support dismissal without blocking the host page;
-- offer a primary Continue with Nook action that opens the extension-controlled
-  companion launcher (unlock / connect / ready), not only Open vault;
+- offer a primary Continue with Nook action that lists matching logins for the
+  page origin, reveals one credential after explicit choice, fills the form,
+  and submits; when locked, open the companion launcher and ask the user to
+  unlock then continue again;
 - keep Open vault as an optional secondary action;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;

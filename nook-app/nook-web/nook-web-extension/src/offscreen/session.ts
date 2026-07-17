@@ -403,6 +403,56 @@ async function handleMessage(message: unknown): Promise<unknown> {
         accounts.forEach((account) => account.free())
       }
     }
+    case 'nook:extension-session-list-logins': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (typeof payload.origin !== 'string') {
+        throw new Error('Extension session received an invalid login lookup.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const accounts = await activeManager.listWebsiteLoginAccounts(
+        payload.origin,
+      )
+      try {
+        return {
+          ok: true,
+          accounts: accounts.map((account) => ({
+            secretId: account.secretId,
+            username: account.username,
+            websiteUrl: account.websiteUrl,
+            websiteHost: account.websiteHost,
+          })),
+        }
+      } finally {
+        accounts.forEach((account) => account.free())
+      }
+    }
+    case 'nook:extension-session-reveal-login': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (
+        typeof payload.origin !== 'string' ||
+        typeof payload.secretId !== 'string'
+      ) {
+        throw new Error('Extension session received an invalid login reveal.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const credential = await activeManager.revealWebsiteLoginForFill(
+        payload.secretId,
+        payload.origin,
+      )
+      try {
+        return {
+          ok: true,
+          username: credential.username,
+          password: credential.password,
+        }
+      } finally {
+        credential.free()
+      }
+    }
     case 'nook:extension-session-register-passkey': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)

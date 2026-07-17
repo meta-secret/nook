@@ -72,12 +72,23 @@ async function startLoginServer(): Promise<TestServer> {
         <body>
           <main>
             <h1>Sign in</h1>
-            <form>
+            <form id="login-form">
               <label>Email <input autocomplete="username" name="email" type="email" /></label>
               <label>Password <input autocomplete="current-password" name="password" type="password" /></label>
               <button type="submit">Sign in</button>
             </form>
           </main>
+          <script>
+            window.__nookLoginSubmitted = null
+            document.getElementById('login-form').addEventListener('submit', (event) => {
+              event.preventDefault()
+              const form = event.currentTarget
+              window.__nookLoginSubmitted = {
+                email: form.querySelector('[name="email"]').value,
+                password: form.querySelector('[name="password"]').value,
+              }
+            })
+          </script>
         </body>
       </html>`)
   })
@@ -646,7 +657,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     )?.[1]
     expect(pairedGrant).toEqual(
       expect.objectContaining({
-        scopes: expect.arrayContaining(['passkey-management']),
+        scopes: expect.arrayContaining([
+          'passkey-management',
+          'password-filling',
+        ]),
       }),
     )
 
@@ -700,6 +714,49 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
           ).__nookVault?.deviceId,
       ),
     ).toBe(extensionDeviceId)
+
+    await reopenedVaultPage.getByTestId('add-secret-btn').click()
+    await reopenedVaultPage.getByTestId('item-type-login').click()
+    await reopenedVaultPage.getByTestId('secret-label').fill(loginServer.origin)
+    await reopenedVaultPage
+      .getByTestId('login-username')
+      .fill('alice@nook.test')
+    await reopenedVaultPage
+      .getByTestId('secret-value')
+      .fill('extension-fill-password')
+    await reopenedVaultPage.getByTestId('save-secret-btn').click()
+    await expect(
+      reopenedVaultPage
+        .getByTestId('vault-group-login')
+        .getByTestId('secret-row'),
+    ).toBeVisible({ timeout: 15_000 })
+
+    const fillLoginPage = await context.newPage()
+    await fillLoginPage.goto(`${loginServer.origin}/login`)
+    const fillWidget = fillLoginPage.locator('#nook-auth-widget')
+    await expect(fillWidget).toBeVisible()
+    await fillWidget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await expect
+      .poll(
+        async () =>
+          fillLoginPage.evaluate(
+            () =>
+              (
+                window as Window & {
+                  __nookLoginSubmitted?: {
+                    email: string
+                    password: string
+                  } | null
+                }
+              ).__nookLoginSubmitted,
+          ),
+        { timeout: 20_000 },
+      )
+      .toEqual({
+        email: 'alice@nook.test',
+        password: 'extension-fill-password',
+      })
+    await fillLoginPage.close()
 
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()
     await expect(

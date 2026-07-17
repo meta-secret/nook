@@ -137,6 +137,11 @@ type NookLocaleCatalog = {
       gate_title: string
       gate_description: string
       continue: string
+      working: string
+      unlock_then_continue: string
+      no_match: string
+      choose_account: string
+      fill_failed: string
     }
     passkey: {
       save_title: string
@@ -161,6 +166,15 @@ async function buildChromeLocales() {
           message: catalog.extension.widget.gate_description,
         },
         widgetContinue: { message: catalog.extension.widget.continue },
+        widgetWorking: { message: catalog.extension.widget.working },
+        widgetUnlockThenContinue: {
+          message: catalog.extension.widget.unlock_then_continue,
+        },
+        widgetNoMatch: { message: catalog.extension.widget.no_match },
+        widgetChooseAccount: {
+          message: catalog.extension.widget.choose_account,
+        },
+        widgetFillFailed: { message: catalog.extension.widget.fill_failed },
         passkeySaveTitle: { message: catalog.extension.passkey.save_title },
         passkeyUseTitle: { message: catalog.extension.passkey.use_title },
         passkeyUseBrowser: { message: catalog.extension.passkey.use_browser },

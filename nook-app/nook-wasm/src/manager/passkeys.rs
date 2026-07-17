@@ -80,7 +80,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    fn ensure_passkey_extension_capability(&self) -> Result<(), NookError> {
+    pub(super) fn ensure_passkey_extension_capability(&self) -> Result<(), NookError> {
         if self.application != nook_core::VaultApplication::Extension
             && self.application != nook_core::VaultApplication::UnifiedDevelopment
         {
