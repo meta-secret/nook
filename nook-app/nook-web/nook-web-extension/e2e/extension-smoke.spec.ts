@@ -503,6 +503,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
   const loginServer = await startLoginServer()
   const website = await context.newPage()
   await website.goto(`${loginServer.origin}/login`)
+  const websiteAfterUnlock = await context.newPage()
+  await websiteAfterUnlock.goto(`${loginServer.origin}/login`)
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
@@ -705,8 +707,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    const websiteAfterUnlock = await context.newPage()
-    await websiteAfterUnlock.goto(`${loginServer.origin}/login`)
     await assertWebsitePasskey(websiteAfterUnlock, websiteCredentialId)
     await websiteAfterUnlock.close()
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
