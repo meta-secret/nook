@@ -416,7 +416,9 @@ test.describe('enrollment link deep link (local)', () => {
     await expect(
       pageB.getByTestId('enrollment-password-entry-hint'),
     ).toContainText('Manual link test')
-    await pageB.getByTestId('enrollment-password-input').fill('manual-link-pass')
+    await pageB
+      .getByTestId('enrollment-password-input')
+      .fill('manual-link-pass')
     await pageB.getByTestId('submit-enrollment-code-btn').click()
     await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
