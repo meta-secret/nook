@@ -67,10 +67,7 @@ function renderWidget(): void {
   const continueButton = document.createElement('button')
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
-  continueButton.setAttribute(
-    'aria-label',
-    translatedMessage('widgetContinue'),
-  )
+  continueButton.setAttribute('aria-label', translatedMessage('widgetContinue'))
   continueButton.textContent = translatedMessage('widgetContinue')
   continueButton.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'nook:open-companion-launcher' })

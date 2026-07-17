@@ -479,7 +479,9 @@ test('creates a passkey from browser-native WASM options after extension messagi
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
 
     await popupPage.getByTestId('device-protection-setup-btn').click()
-    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
+    await expect(
+      popupPage.getByTestId('extension-companion-home'),
+    ).toBeVisible()
     await expect(popupPage.getByTestId('open-simple-vault-btn')).toBeVisible()
     await expect(popupPage.getByTestId('stay-as-companion-btn')).toBeVisible()
 
@@ -525,7 +527,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
     await popupPage.getByTestId('device-protection-setup-btn').click()
-    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
+    await expect(
+      popupPage.getByTestId('extension-companion-home'),
+    ).toBeVisible()
     const openedConnectPage = context.waitForEvent('page')
     await popupPage.getByTestId('connect-simple-vault-btn').click()
     const simplePage = await openedConnectPage
@@ -764,8 +768,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedPopupPage.getByTestId('device-protection-unlock-btn'),
       ).toBeVisible()
 
-      const unlockedVaultPagePromise = restartedContext.waitForEvent('page')
       await lockedPopupPage.getByTestId('device-protection-unlock-btn').click()
+      await expect(
+        lockedPopupPage.getByTestId('extension-companion-home'),
+      ).toBeVisible()
+      await expect(
+        lockedPopupPage.getByTestId('stay-as-companion-btn'),
+      ).toBeVisible()
+
+      const unlockedVaultPagePromise = restartedContext.waitForEvent('page')
+      await lockedPopupPage.getByTestId('open-simple-vault-btn').click()
       const unlockedVaultPage = await unlockedVaultPagePromise
       await expect(unlockedVaultPage).toHaveURL((url) => {
         const expected = new URL(simpleVaultBaseUrl)
