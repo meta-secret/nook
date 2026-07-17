@@ -279,6 +279,8 @@ function isRepositoryStatusComment(body: string): boolean {
   return (
     trimmed.startsWith("### Preview deployed") ||
     trimmed.startsWith("### Web research preview") ||
-    trimmed.startsWith("<!-- nook-core-coverage -->")
+    trimmed.startsWith("<!-- nook-core-coverage -->") ||
+    // Codex posts this when it cannot review; it is status, not a finding.
+    trimmed.includes("Codex usage limits for code reviews")
   );
 }
