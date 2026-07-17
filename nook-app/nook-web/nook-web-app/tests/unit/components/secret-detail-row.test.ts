@@ -10,10 +10,7 @@ const vault = {
   },
 } as unknown as VaultState
 
-function loginItem(
-  websiteUrl: string,
-  groupKey: string,
-): NookSecretListItem {
+function loginItem(websiteUrl: string, groupKey: string): NookSecretListItem {
   return {
     id: 'secret_login',
     type: 'login',
