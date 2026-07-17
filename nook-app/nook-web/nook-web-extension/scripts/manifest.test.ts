@@ -46,6 +46,15 @@ describe('extension origin isolation', () => {
         ),
       ).toBe(true)
       expect(
+        broadScripts.every(
+          ({ exclude_matches }) =>
+            exclude_matches.includes('https://simple.nokey.sh/*') &&
+            exclude_matches.includes('https://simple.dev.nokey.sh/*') &&
+            exclude_matches.includes('https://*.nokey-simple.pages.dev/*') &&
+            exclude_matches.includes('https://*.nokey-sentinel.pages.dev/*'),
+        ),
+      ).toBe(true)
+      expect(
         manifest.content_scripts.some(
           ({ matches, exclude_matches }) =>
             matches.includes(simpleMatch) &&

@@ -6,10 +6,7 @@ import {
   summarizePasswordForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
-import {
-  isRuntimeSentinelVaultUrl,
-  isRuntimeSimpleVaultUrl,
-} from '../lib/simple-vault-runtime'
+import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
 
@@ -418,10 +415,7 @@ function scheduleScan() {
   }, 150)
 }
 
-if (
-  !isRuntimeSimpleVaultUrl(location.href) &&
-  !isRuntimeSentinelVaultUrl(location.href)
-) {
+if (!isRuntimeNookVaultAppUrl(location.href)) {
   renderWidget()
 
   const observer = new MutationObserver(scheduleScan)

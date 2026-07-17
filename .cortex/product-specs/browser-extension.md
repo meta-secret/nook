@@ -158,7 +158,11 @@ identity and provider ceremonies are stubbed.
 
 The manifest and runtime authorization bind each deployed extension to the
 matching isolated Simple origin. Sentinel origins cannot message or approve the
-extension.
+extension. Autofill and website-WebAuthn content scripts exclude every Simple
+and Sentinel Nook host (production, development, and PR previews), not only the
+build's configured Simple origin, so a mismatched channel never shows the
+in-page auth gate on vault apps. The Simple Vault bridge content script remains
+bound to the configured Simple origin only.
 
 ## In-Page Auth Gate
 

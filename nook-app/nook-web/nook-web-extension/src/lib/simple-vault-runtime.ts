@@ -1,6 +1,7 @@
 import {
   belongsToSentinelVault,
   belongsToSimpleVault,
+  isNookVaultAppUrl,
   normalizeSimpleVaultBaseUrl,
   simpleVaultUrl,
 } from './simple-vault-target'
@@ -19,4 +20,9 @@ export function isRuntimeSimpleVaultUrl(candidateUrl: string): boolean {
 
 export function isRuntimeSentinelVaultUrl(candidateUrl: string): boolean {
   return belongsToSentinelVault(SIMPLE_VAULT_BASE_URL, candidateUrl)
+}
+
+/** True for any Simple/Sentinel Nook host, not only this build's channel. */
+export function isRuntimeNookVaultAppUrl(candidateUrl: string): boolean {
+  return isNookVaultAppUrl(candidateUrl, SIMPLE_VAULT_BASE_URL)
 }
