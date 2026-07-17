@@ -248,6 +248,7 @@ fn append_onepassword_metadata(
         notes.push_str("\n\n");
     }
     notes.push_str("## 1Password");
+    notes.push_str("\n- format: 1PUX");
     for (key, value) in metadata {
         notes.push_str("\n- ");
         notes.push_str(&key);
@@ -559,7 +560,7 @@ mod tests {
         assert_eq!(login.password, "secret");
         assert_eq!(
             login.notes,
-            "Recovery codes elsewhere\n\n## 1Password\n- vault: Personal\n- tags: work, code\n- url.gist: https://gist.github.com\n- Security.PIN: 1234\n- Security.TOTP: otpauth://secret"
+            "Recovery codes elsewhere\n\n## 1Password\n- format: 1PUX\n- vault: Personal\n- tags: work, code\n- url.gist: https://gist.github.com\n- Security.PIN: 1234\n- Security.TOTP: otpauth://secret"
         );
 
         let SecretValue::Login(password) = &plan.items[1] else {
@@ -572,7 +573,8 @@ mod tests {
             plan.items[2],
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
-                note: "hello\n\n## 1Password\n- vault: Personal\n- state: archived".to_owned(),
+                note: "hello\n\n## 1Password\n- format: 1PUX\n- vault: Personal\n- state: archived"
+                    .to_owned(),
             })
         );
     }

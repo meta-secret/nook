@@ -91,6 +91,8 @@ struct ProtonPassContent {
     #[serde(default)]
     item_username: String,
     #[serde(default)]
+    username: String,
+    #[serde(default)]
     password: String,
     #[serde(default)]
     urls: Vec<String>,
@@ -256,11 +258,14 @@ fn convert_login(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
             || item.data.metadata.name.trim().to_owned(),
             |url| url.trim().to_owned(),
         );
-    let username = if content.item_username.trim().is_empty() {
-        content.item_email.trim()
-    } else {
-        content.item_username.trim()
-    };
+    let username = [
+        content.item_username.as_str(),
+        content.username.as_str(),
+        content.item_email.as_str(),
+    ]
+    .into_iter()
+    .find(|candidate| !candidate.trim().is_empty())
+    .map_or("", str::trim);
     let mut notes = item.data.metadata.note.clone();
     append_proton_metadata(
         &mut notes,
@@ -443,6 +448,20 @@ mod tests {
         };
         assert_eq!(login.username, "alice@example.com");
         assert!(!login.notes.contains("- email:"));
+    }
+
+    #[test]
+    fn preserves_legacy_content_username() {
+        let json = export_json().replace(
+            r#""itemUsername":"alice""#,
+            r#""itemUsername":"","username":"legacy-alice""#,
+        );
+        let plan = plan_proton_pass_import(json.as_bytes()).unwrap();
+        let SecretValue::Login(login) = &plan.items[0] else {
+            panic!("expected login")
+        };
+        assert_eq!(login.username, "legacy-alice");
+        assert!(login.notes.contains("- email: alice@example.com"));
     }
 
     #[test]
