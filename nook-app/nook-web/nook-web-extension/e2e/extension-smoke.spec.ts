@@ -635,30 +635,32 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     expect(websiteCredentialId).toBeTruthy()
     await assertWebsitePasskey(website, websiteCredentialId)
 
+    await simplePage.getByRole('button', { name: 'Done' }).click()
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    await simplePage.close()
+
     const connectedPopupPage = await context.newPage()
-    const reopenedConnectPagePromise = context.waitForEvent('page')
+    const reopenedVaultPagePromise = context.waitForEvent('page')
     await connectedPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
-    const reopenedConnectPage = await reopenedConnectPagePromise
-    await expect(reopenedConnectPage).toHaveURL((url) =>
-      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
-    )
-    expect(new URL(reopenedConnectPage.url()).pathname).toContain(
-      'extension-connect',
-    )
-    await reopenedConnectPage.close()
-
-    await simplePage.getByRole('button', { name: 'Done' }).click()
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
-
-    await simplePage.reload()
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
+    const reopenedVaultPage = await reopenedVaultPagePromise
+    await expect(reopenedVaultPage).toHaveURL((url) => {
+      const expected = new URL(simpleVaultBaseUrl)
+      return (
+        url.origin === expected.origin && url.pathname === expected.pathname
+      )
+    })
+    await expect(
+      reopenedVaultPage.getByTestId('authenticated-shell'),
+    ).toBeVisible({
       timeout: 15_000,
     })
-    await expect(simplePage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(
+      reopenedVaultPage.getByTestId('passkey-auth-overlay'),
+    ).toHaveCount(0)
     expect(
-      await simplePage.evaluate(
+      await reopenedVaultPage.evaluate(
         () =>
           (
             window as Window & {
@@ -668,17 +670,21 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       ),
     ).toBe(extensionDeviceId)
 
-    await simplePage.getByTestId('header-lock-vault-btn').click()
+    await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()
     await expect(
-      simplePage.getByTestId('login-local-unlock-step'),
+      reopenedVaultPage.getByTestId('login-local-unlock-step'),
     ).toBeVisible()
 
-    await simplePage.getByTestId('unlock-vault-btn').click()
+    await reopenedVaultPage.getByTestId('unlock-vault-btn').click()
 
-    await expect(simplePage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(
+      reopenedVaultPage.getByTestId('passkey-auth-overlay'),
+    ).toHaveCount(0)
+    await expect(
+      reopenedVaultPage.getByTestId('authenticated-shell'),
+    ).toBeVisible()
     expect(
-      await simplePage.evaluate(
+      await reopenedVaultPage.evaluate(
         () =>
           (
             window as Window & {
@@ -689,7 +695,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBe(extensionDeviceId)
     await expect
       .poll(async () => {
-        const entries = await readPersistedAppLogs(simplePage)
+        const entries = await readPersistedAppLogs(reopenedVaultPage)
         return (entries ?? []).filter(
           (entry) =>
             entry.scope === 'vault' &&
@@ -699,7 +705,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       })
       .toBe(3)
     await assertWebsitePasskey(website, websiteCredentialId)
-    await attachNookLogsForTest(simplePage, testInfo)
+    await attachNookLogsForTest(reopenedVaultPage, testInfo)
   } finally {
     await context.close()
     await loginServer.close()

@@ -84,7 +84,12 @@
   }
 
   $effect(() => {
-    if (activeSessionDevice) beginPairing(activeSessionDevice)
+    if (!activeSessionDevice) return
+    if (isConnected) {
+      openSimpleVault()
+      return
+    }
+    beginPairing(activeSessionDevice)
   })
 
   async function runDeviceAction(
