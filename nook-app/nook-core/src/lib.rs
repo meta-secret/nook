@@ -28,8 +28,9 @@ pub(crate) use sync::{
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
     vault_event, vault_event_builder, vault_event_graph, vault_event_session, vault_event_store,
-    vault_format, vault_ids, vault_projection, vault_sentinel_genesis, vault_sentinel_onboarding,
-    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
+    vault_format, vault_ids, vault_projection, vault_security, vault_sentinel_genesis,
+    vault_sentinel_onboarding, vault_sentinel_unlock, vault_session, vault_session_cache,
+    vault_wire,
 };
 
 pub use apple_passwords_import::{
@@ -125,6 +126,7 @@ pub use secret_view::{
     SecretListItem, SecretListItemData, build_secret_yaml, hostname_from_url,
     login_host_matches_origin,
 };
+pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
     create_sentinel_onboarding_package, decode_sentinel_onboarding_package,

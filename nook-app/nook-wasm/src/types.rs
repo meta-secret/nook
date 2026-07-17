@@ -1803,6 +1803,40 @@ pub(crate) fn security_conflicts_to_vec(
 }
 
 #[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub struct NookVaultSecurityRecommendations {
+    needs_sync_provider: bool,
+    needs_another_device: bool,
+    has_recommendations: bool,
+}
+
+#[wasm_bindgen]
+impl NookVaultSecurityRecommendations {
+    #[wasm_bindgen(getter, js_name = needsSyncProvider)]
+    pub fn needs_sync_provider(&self) -> bool {
+        self.needs_sync_provider
+    }
+
+    #[wasm_bindgen(getter, js_name = needsAnotherDevice)]
+    pub fn needs_another_device(&self) -> bool {
+        self.needs_another_device
+    }
+
+    #[wasm_bindgen(getter, js_name = hasRecommendations)]
+    pub fn has_recommendations(&self) -> bool {
+        self.has_recommendations
+    }
+
+    pub(crate) fn from_core(recommendations: nook_core::VaultSecurityRecommendations) -> Self {
+        Self {
+            needs_sync_provider: recommendations.needs_sync_provider,
+            needs_another_device: recommendations.needs_another_device,
+            has_recommendations: recommendations.has_recommendations(),
+        }
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookVaultAccessReport {
     device_id: String,
