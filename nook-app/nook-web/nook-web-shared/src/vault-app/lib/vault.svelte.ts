@@ -268,6 +268,7 @@ export class VaultState {
   secretPageOffset = $state(0);
   secretPageSize = 50;
   secretQuery = $state("");
+  secretTypeFilter = $state<VaultItemType | undefined>(undefined);
   private secretPageGeneration = 0;
 
   errorMsg = $state("");
@@ -1904,6 +1905,7 @@ export class VaultState {
     this.secretTotal = 0;
     this.secretPageOffset = 0;
     this.secretQuery = "";
+    this.secretTypeFilter = undefined;
     this.pendingJoins = [];
     this.vaultMembers = [];
     this.joinEnrollmentPrompt = "none";
@@ -2503,6 +2505,7 @@ export class VaultState {
     const page = await this.enqueueStorage(() =>
       this.manager!.querySecretPage(
         query,
+        this.secretTypeFilter,
         requestedOffset,
         this.secretPageSize,
       ),
@@ -2520,7 +2523,12 @@ export class VaultState {
       const lastOffset =
         Math.floor((total - 1) / this.secretPageSize) * this.secretPageSize;
       const lastPage = await this.enqueueStorage(() =>
-        this.manager!.querySecretPage(query, lastOffset, this.secretPageSize),
+        this.manager!.querySecretPage(
+          query,
+          this.secretTypeFilter,
+          lastOffset,
+          this.secretPageSize,
+        ),
       );
       records = lastPage.takeItems();
       total = lastPage.total;

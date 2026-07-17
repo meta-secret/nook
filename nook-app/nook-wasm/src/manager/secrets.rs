@@ -374,16 +374,25 @@ impl NookVaultManager {
         Ok(records)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[wasm_bindgen(js_name = querySecretPage)]
     pub fn query_secret_page_js(
         &self,
         query: &str,
+        secret_type_filter: Option<String>,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        Ok(NookSecretPage::from_core(
-            self.query_secret_page(query, offset, limit)?,
-        )?)
+        let secret_type_filter = secret_type_filter
+            .as_deref()
+            .map(nook_core::SecretType::parse)
+            .transpose()?;
+        Ok(NookSecretPage::from_core(self.query_secret_page(
+            query,
+            secret_type_filter,
+            offset,
+            limit,
+        )?)?)
     }
 
     /// Decrypt one full record only after an explicit reveal or secret-value copy.

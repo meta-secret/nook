@@ -409,6 +409,7 @@ impl NookVaultManager {
     pub(crate) fn query_secret_page(
         &self,
         query: &str,
+        secret_type_filter: Option<nook_core::SecretType>,
         offset: u32,
         limit: u32,
     ) -> Result<nook_core::SecretPage, NookError> {
@@ -421,6 +422,7 @@ impl NookVaultManager {
             &self.vault.meta.secrets,
             crypto,
             query,
+            secret_type_filter,
             usize::try_from(offset).unwrap_or(usize::MAX),
             usize::try_from(limit).unwrap_or(nook_core::DEFAULT_SECRET_PAGE_SIZE),
         )?)

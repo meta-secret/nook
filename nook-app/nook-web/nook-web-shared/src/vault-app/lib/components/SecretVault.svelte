@@ -5,6 +5,7 @@
     ChevronRight,
     Plus,
     Search,
+    ListFilter,
     Globe,
     Braces,
     Sprout,
@@ -16,11 +17,13 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
+  import * as Select from '$lib/components/ui/select'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
   import type {
     AuthenticatorCodeView,
     NookSecretListItem,
+    NookSecretRecord,
     VaultItemType,
   } from '$lib/nook'
   import {
@@ -75,11 +78,33 @@
   let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | undefined>(undefined)
+  let editingItem = $state<NookSecretRecord | undefined>(undefined)
+  let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
+
+  const typeFilters: Array<{
+    value: VaultItemType
+    labelKey: string
+  }> = [
+    { value: 'login', labelKey: 'vault.types.login' },
+    { value: 'authenticator', labelKey: 'vault.types.authenticator' },
+    { value: 'api-key', labelKey: 'vault.types.api_key' },
+    { value: 'seed-phrase', labelKey: 'vault.types.seed_phrase' },
+    { value: 'secure-note', labelKey: 'vault.types.secure_note' },
+    { value: 'passkey', labelKey: 'vault.types.passkey' },
+  ]
 
   const filteredItems = $derived(secrets)
 
   const visibleItemCount = $derived(secrets.length)
+  const activeTypeFilterLabel = $derived.by(() => {
+    const active = typeFilters.find(
+      ({ value }) => value === vault.secretTypeFilter,
+    )
+    return active
+      ? vault.t(active.labelKey)
+      : vault.t('vault.filter_all_types')
+  })
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
   )
@@ -117,20 +142,45 @@
     onAddModeChange?.(addSecretOpen, formSelectedType)
   }
 
+  function selectTypeFilter(value: string | undefined) {
+    const nextFilter = typeFilters.find((filter) => filter.value === value)
+    vault.secretTypeFilter = nextFilter?.value
+    void vault.loadSecretPage(searchPattern.trim(), 0)
+  }
+
   function openAddSecret() {
+    editLoadSequence += 1
+    releaseEditingItem()
     formSelectedType = undefined
     addSecretOpen = true
     notifyAddMode()
   }
 
   function closeAddSecret() {
+    editLoadSequence += 1
+    releaseEditingItem()
     addSecretOpen = false
     formSelectedType = undefined
     notifyAddMode()
   }
 
-  async function openEditItem() {
-    addSecretOpen = false
+  function releaseEditingItem() {
+    editingItem?.free()
+    editingItem = undefined
+  }
+
+  async function openEditItem(item: NookSecretListItem) {
+    if (editsBlocked) return
+    const sequence = ++editLoadSequence
+    const record = await vault.decryptSecret(item.id)
+    if (sequence !== editLoadSequence) {
+      record.free()
+      return
+    }
+    releaseEditingItem()
+    editingItem = record
+    formSelectedType = item.type as VaultItemType
+    addSecretOpen = true
     notifyAddMode()
   }
 
@@ -230,12 +280,15 @@
   $effect(() => {
     void vault.secretQuery
     void vault.secretPageOffset
+    void vault.secretTypeFilter
     freeDecryptedSecrets(untrack(() => decryptedSecrets))
     decryptedSecrets = {}
     authenticatorCodes = {}
   })
 
   onDestroy(() => {
+    editLoadSequence += 1
+    releaseEditingItem()
     freeDecryptedSecrets(decryptedSecrets)
   })
 </script>
@@ -277,6 +330,7 @@
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
+        initialItem={editingItem}
       />
     </div>
   {:else}
@@ -324,15 +378,47 @@
         </div>
       {/if}
 
-      <div class="relative">
+      <div class="relative" data-testid="secret-search-and-filter">
         <Search class="absolute left-3 top-3 size-4 text-muted-foreground/60" />
         <input
           type="search"
           bind:value={searchPattern}
           data-testid="search-secrets"
           placeholder={vault.t('vault.search_placeholder')}
-          class="flex h-10 w-full rounded-lg border border-border/45 bg-background/80 py-2 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          class="flex h-10 w-full rounded-lg border border-border/45 bg-background/80 py-2 pl-10 pr-36 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
+        <div class="absolute right-1 top-1/2 -translate-y-1/2">
+          <Select.Root
+            type="single"
+            value={vault.secretTypeFilter ?? 'all'}
+            onValueChange={selectTypeFilter}
+          >
+            <Select.Trigger
+              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault.secretTypeFilter
+                ? 'border-primary/40 bg-primary/10 text-foreground'
+                : 'text-muted-foreground'}"
+              data-testid="secret-type-filter"
+              aria-label={vault.t('vault.filter_by_type')}
+              title={vault.t('vault.filter_by_type')}
+            >
+              <ListFilter class="size-3.5" />
+              <span class="truncate">{activeTypeFilterLabel}</span>
+            </Select.Trigger>
+            <Select.Content>
+              <Select.Item value="all" data-testid="secret-type-filter-all">
+                {vault.t('vault.filter_all_types')}
+              </Select.Item>
+              {#each typeFilters as filter (filter.value)}
+                <Select.Item
+                  value={filter.value}
+                  data-testid={`secret-type-filter-${filter.value}`}
+                >
+                  {vault.t(filter.labelKey)}
+                </Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+        </div>
       </div>
 
       {#if filteredItems.length === 0}
@@ -405,6 +491,8 @@
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
+                    editDisabled={editsBlocked}
+                    editDisabledReason={editBlockReason}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
                     onCopySecret={copySecret}

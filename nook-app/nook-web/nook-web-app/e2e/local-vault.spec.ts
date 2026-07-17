@@ -164,11 +164,78 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-empty-search')).toBeVisible()
 
     await page.getByTestId('search-secrets').fill('')
+    await page.getByTestId('secret-type-filter').click()
+    await expect(page.getByTestId('secret-type-filter-passkey')).toBeVisible()
+    await page.getByTestId('secret-type-filter-secure-note').click()
+    await expect(page.getByTestId('vault-empty-search')).toBeVisible()
+
+    await page.getByTestId('secret-type-filter').click()
+    await page.getByTestId('secret-type-filter-api-key').click()
+    await expect(row).toBeVisible()
+    await expect(row.getByText('••••••••••••••••')).toBeVisible()
+
+    await page.getByTestId('secret-type-filter').click()
+    await page.getByTestId('secret-type-filter-all').click()
+    await expect(row).toBeVisible()
+
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await row.getByRole('button', { name: 'Copy secret' }).click()
     await expect(row.getByRole('button', { name: 'Copy secret' })).toBeVisible()
 
     await deleteSecret(page, key)
+  })
+
+  test('edits an existing secret and persists the replacement', async ({
+    page,
+  }) => {
+    const originalKey = uniqueSecretKey('e2e-local-edit')
+    const updatedKey = uniqueSecretKey('e2e-local-replaced')
+    const originalValue = 'edit-me-original'
+    const updatedValue = 'edit-me-updated'
+
+    await addSecret(page, originalKey, originalValue)
+
+    const originalRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: originalKey })
+    await originalRow.getByTestId('edit-secret-btn').click()
+    const editForm = page.getByTestId('edit-secret-form')
+    await expect(editForm).toBeVisible()
+    await expect(editForm.getByTestId('secret-label')).toHaveValue(originalKey)
+    await expect(editForm.getByTestId('secret-value')).toHaveValue(
+      originalValue,
+    )
+
+    await editForm.getByTestId('secret-label').fill(updatedKey)
+    await editForm.getByTestId('secret-value').fill(updatedValue)
+    await editForm.getByTestId('save-secret-btn').click()
+    await expect(editForm).not.toBeVisible()
+    await expect(originalRow).toHaveCount(0)
+
+    const updatedRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: updatedKey })
+    await expect(updatedRow).toBeVisible()
+    await revealSecretInRow(updatedRow)
+    await expect(updatedRow.getByText(updatedValue)).toBeVisible()
+
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await unlockVaultOnLogin(page)
+    await waitForVaultUnlocked(page)
+    await assertVaultReady(page)
+
+    const persistedRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: updatedKey })
+    await expect(persistedRow).toBeVisible()
+    await revealSecretInRow(persistedRow)
+    await expect(persistedRow.getByText(updatedValue)).toBeVisible()
+
+    await deleteSecret(page, updatedKey)
   })
 
   test('deletes the complete local browser copy from settings', async ({

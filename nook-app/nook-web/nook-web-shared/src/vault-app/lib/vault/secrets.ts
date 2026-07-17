@@ -570,8 +570,8 @@ export async function handleReplaceSecret(
     });
     await state.refreshSecretsFromSession();
     log.info("secret replaced", { oldId, newId, type });
+    await state.runFanOutSyncAfterLocalSave();
     state.showSuccess(state.t("toasts.item_updated"));
-    state.scheduleFanOutSyncAfterLocalSave();
   } catch (e: unknown) {
     state.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`;
     throw e;

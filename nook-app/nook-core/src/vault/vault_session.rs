@@ -57,6 +57,7 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     secrets: &HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
     crypto: &VaultCrypto,
     query: &str,
+    secret_type_filter: Option<SecretType>,
     offset: usize,
     limit: usize,
 ) -> VaultResult<SecretPage> {
@@ -66,9 +67,25 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     ids.sort();
 
     if needle.is_empty() {
-        let total = ids.len();
+        let total = ids
+            .iter()
+            .filter(|id| {
+                secret_type_filter.is_none_or(|expected| {
+                    secrets
+                        .get(id)
+                        .is_some_and(|(secret_type, _)| *secret_type == expected)
+                })
+            })
+            .count();
         let records = ids
             .into_iter()
+            .filter(|id| {
+                secret_type_filter.is_none_or(|expected| {
+                    secrets
+                        .get(id)
+                        .is_some_and(|(secret_type, _)| *secret_type == expected)
+                })
+            })
             .skip(offset)
             .take(limit)
             .map(|id| {
@@ -92,6 +109,9 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     let mut records = Vec::with_capacity(limit);
     for id in ids {
         let (secret_type, payload) = secrets.get(&id).expect("secret id came from the same map");
+        if secret_type_filter.is_some_and(|expected| *secret_type != expected) {
+            continue;
+        }
         let mut record = decrypt_secret_record(&id, *secret_type, payload, crypto)?;
         if record.matches_search(needle) {
             if total >= offset && records.len() < limit {
@@ -217,6 +237,26 @@ mod tests {
         ))
     }
 
+    fn encrypted_note(
+        crypto: &VaultCrypto,
+        id: &str,
+        title: &str,
+    ) -> VaultResult<(SecretId, (crate::SecretType, StoredRecordPayload))> {
+        let id = SecretId::from_vault_record(id);
+        let value = SecretValue::SecureNote(crate::SecureNoteSecret {
+            title: title.to_owned(),
+            note: "private note body".to_owned(),
+        });
+        let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+        Ok((
+            id,
+            (
+                crate::SecretType::SecureNote,
+                StoredRecordPayload::from_age_armored(ciphertext),
+            ),
+        ))
+    }
+
     #[test]
     fn empty_query_decrypts_only_requested_page() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
@@ -228,7 +268,7 @@ mod tests {
             encrypted_record(&crypto, "secret_b", "bob", "pw-b")?,
         ]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "", 1, 1)?;
+        let page = query_encrypted_secrets(&secrets, &crypto, "", None, 1, 1)?;
 
         assert_eq!(page.total, 3);
         assert_eq!(page.records.len(), 1);
@@ -248,11 +288,62 @@ mod tests {
             encrypted_record(&crypto, "secret_c", "team-carol", "hidden-c")?,
         ]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "team", 1, 1)?;
+        let page = query_encrypted_secrets(&secrets, &crypto, "team", None, 1, 1)?;
 
         assert_eq!(page.total, 2);
         assert_eq!(page.records.len(), 1);
         assert_eq!(page.records[0].id.as_str(), "secret_c");
+        Ok(())
+    }
+
+    #[test]
+    fn type_filter_counts_and_pages_only_matching_records() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let mut secrets = HashMap::new();
+        secrets.extend([
+            encrypted_record(&crypto, "secret_a", "alice", "hidden-a")?,
+            encrypted_note(&crypto, "secret_b", "Recovery")?,
+            encrypted_note(&crypto, "secret_c", "Operations")?,
+        ]);
+
+        let page = query_encrypted_secrets(
+            &secrets,
+            &crypto,
+            "",
+            Some(crate::SecretType::SecureNote),
+            1,
+            1,
+        )?;
+
+        assert_eq!(page.total, 2);
+        assert_eq!(page.records.len(), 1);
+        assert_eq!(page.records[0].id.as_str(), "secret_c");
+        assert_eq!(page.records[0].secret_type(), crate::SecretType::SecureNote);
+        Ok(())
+    }
+
+    #[test]
+    fn type_filter_combines_with_metadata_search() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let secrets = HashMap::from([
+            encrypted_record(&crypto, "secret_a", "recovery-user", "hidden")?,
+            encrypted_note(&crypto, "secret_b", "Recovery plan")?,
+            encrypted_note(&crypto, "secret_c", "Operations")?,
+        ]);
+
+        let page = query_encrypted_secrets(
+            &secrets,
+            &crypto,
+            "recovery",
+            Some(crate::SecretType::SecureNote),
+            0,
+            50,
+        )?;
+
+        assert_eq!(page.total, 1);
+        assert_eq!(page.records[0].id.as_str(), "secret_b");
         Ok(())
     }
 
@@ -267,7 +358,7 @@ mod tests {
             "credential-must-not-cross-page-boundary",
         )?]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "", 0, 50)?;
+        let page = query_encrypted_secrets(&secrets, &crypto, "", None, 0, 50)?;
         let debug = format!("{:?}", page.records);
 
         assert_eq!(page.records[0].summary(), "alice");
@@ -327,7 +418,8 @@ mod tests {
             "find-me-only-in-password",
         )?]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "find-me-only-in-password", 0, 50)?;
+        let page =
+            query_encrypted_secrets(&secrets, &crypto, "find-me-only-in-password", None, 0, 50)?;
 
         assert_eq!(page.total, 0);
         assert!(page.records.is_empty());
