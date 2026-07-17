@@ -241,12 +241,34 @@ if (
 ) {
   throw new Error('Extension content scripts do not exclude Sentinel Vault.')
 }
+const broadScripts = manifest.content_scripts.filter((script) =>
+  script.matches.includes('<all_urls>'),
+)
+for (const requiredExclusion of [
+  'https://simple.nokey.sh/*',
+  'https://simple.dev.nokey.sh/*',
+  'https://sentinel.dev.nokey.sh/*',
+  'https://*.nokey-simple.pages.dev/*',
+  'https://*.nokey-sentinel.pages.dev/*',
+]) {
+  if (
+    !broadScripts.every((script) =>
+      script.exclude_matches.includes(requiredExclusion),
+    )
+  ) {
+    throw new Error(
+      `Extension autofill scripts do not exclude every vault channel (${requiredExclusion}).`,
+    )
+  }
+}
 const contentScript = await readFile(
   join(webRoot, 'nook-web-extension/src/content/autofill.ts'),
   'utf8',
 )
-if (!contentScript.includes('isRuntimeSentinelVaultUrl(location.href)')) {
-  throw new Error('Extension content script lacks a Sentinel runtime guard.')
+if (!contentScript.includes('isRuntimeNookVaultAppUrl(location.href)')) {
+  throw new Error(
+    'Extension content script lacks a channel-agnostic Nook vault runtime guard.',
+  )
 }
 
 const previewManifest = createManifest(
