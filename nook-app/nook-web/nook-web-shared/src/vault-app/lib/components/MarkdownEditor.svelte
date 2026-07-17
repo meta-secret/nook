@@ -37,8 +37,8 @@
 </script>
 
 <div
-  class="overflow-hidden rounded-md border border-border bg-background {fill
-    ? 'flex h-full min-h-0 flex-1 flex-col'
+  class="min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-background {fill
+    ? 'flex min-h-48 flex-1 flex-col sm:h-full sm:min-h-0'
     : ''}"
   data-testid="markdown-editor"
 >
