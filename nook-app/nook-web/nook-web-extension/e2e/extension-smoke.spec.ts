@@ -352,7 +352,13 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await loginPage.goto(`${loginServer.origin}/login`)
     const widget = loginPage.locator('#nook-auth-widget')
     await expect(widget).toBeVisible()
-    await expect(widget.getByText('Open vault')).toBeVisible()
+    await expect(widget.getByText('Continue through Nook')).toBeVisible()
+    await expect(
+      widget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
+    await expect(
+      widget.getByRole('button', { name: 'Open vault' }),
+    ).toBeVisible()
 
     const openedVault = context.waitForEvent('page')
     await widget.getByRole('button', { name: 'Open vault' }).click()
@@ -472,8 +478,13 @@ test('creates a passkey from browser-native WASM options after extension messagi
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
 
-    const openedConnectPage = context.waitForEvent('page')
     await popupPage.getByTestId('device-protection-setup-btn').click()
+    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
+    await expect(popupPage.getByTestId('open-simple-vault-btn')).toBeVisible()
+    await expect(popupPage.getByTestId('stay-as-companion-btn')).toBeVisible()
+
+    const openedConnectPage = context.waitForEvent('page')
+    await popupPage.getByTestId('connect-simple-vault-btn').click()
     const simplePage = await openedConnectPage
 
     await expect(simplePage).toHaveURL((url) =>
@@ -513,8 +524,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
-    const openedConnectPage = context.waitForEvent('page')
     await popupPage.getByTestId('device-protection-setup-btn').click()
+    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
+    const openedConnectPage = context.waitForEvent('page')
+    await popupPage.getByTestId('connect-simple-vault-btn').click()
     const simplePage = await openedConnectPage
     await expect(simplePage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
@@ -643,10 +656,21 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await simplePage.close()
 
     const connectedPopupPage = await context.newPage()
-    const reopenedVaultPagePromise = context.waitForEvent('page')
     await connectedPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
+    await expect(
+      connectedPopupPage.getByTestId('extension-companion-home'),
+    ).toBeVisible()
+    await expect(
+      connectedPopupPage.getByTestId('stay-as-companion-btn'),
+    ).toBeVisible()
+    await expect(
+      connectedPopupPage.getByTestId('open-simple-vault-btn'),
+    ).toBeVisible()
+
+    const reopenedVaultPagePromise = context.waitForEvent('page')
+    await connectedPopupPage.getByTestId('open-simple-vault-btn').click()
     const reopenedVaultPage = await reopenedVaultPagePromise
     await expect(reopenedVaultPage).toHaveURL((url) => {
       const expected = new URL(simpleVaultBaseUrl)

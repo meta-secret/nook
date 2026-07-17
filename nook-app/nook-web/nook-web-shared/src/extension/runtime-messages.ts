@@ -2,6 +2,10 @@ export type OpenSimpleVaultMessage = {
   type: 'nook:open-simple-vault'
 }
 
+export type OpenCompanionLauncherMessage = {
+  type: 'nook:open-companion-launcher'
+}
+
 export type BeginExtensionPairingMessage = {
   type: 'nook:begin-extension-pairing'
   payload: {
@@ -99,6 +103,7 @@ export type ExtensionPairedVaultIdentityHandoffRequestMessage = {
 
 export type RuntimeMessage =
   | OpenSimpleVaultMessage
+  | OpenCompanionLauncherMessage
   | BeginExtensionPairingMessage
   | ExtensionIdentityHandoffRequestMessage
   | ExtensionPairedVaultIdentityDiscoveryMessage
@@ -145,6 +150,14 @@ export function isOpenSimpleVaultMessage(
   message: unknown,
 ): message is OpenSimpleVaultMessage {
   return isRuntimeMessage(message) && message.type === 'nook:open-simple-vault'
+}
+
+export function isOpenCompanionLauncherMessage(
+  message: unknown,
+): message is OpenCompanionLauncherMessage {
+  return (
+    isRuntimeMessage(message) && message.type === 'nook:open-companion-launcher'
+  )
 }
 
 export function isBeginExtensionPairingMessage(

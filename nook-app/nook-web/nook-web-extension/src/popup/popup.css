@@ -1,6 +1,23 @@
 :root {
-  color: #f6f7f6;
-  background: #090a0b;
+  /* Mirrored from nook-web-shared vault-app dark tokens (app.css .dark). */
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --primary: oklch(0.92 0.004 286.32);
+  --primary-foreground: oklch(0.21 0.006 285.885);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: rgb(180 186 198 / 45%);
+  --destructive-border: oklch(0.45 0.12 25);
+  --destructive-bg: oklch(0.22 0.05 25);
+  --destructive-fg: oklch(0.85 0.08 30);
+  --radius: 0.375rem;
+
+  color: var(--foreground);
+  background: var(--background);
   color-scheme: dark;
   font-family:
     Inter,
@@ -23,33 +40,18 @@ body {
   overflow-y: auto;
 }
 
-.connected-shell {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 18px;
-  background: #f8faf8;
-  color: #17201a;
-}
-
-.popup-logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 9px;
-}
-
-.device-setup {
+.device-setup,
+.companion-home {
   display: grid;
   gap: 14px;
   padding: 22px;
-  border: 1px solid #25282b;
-  background: #090a0b;
+  border: 1px solid var(--border);
+  background: var(--background);
 }
 
 .step-label {
   margin: 0;
-  color: #a8a8b3;
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -64,8 +66,8 @@ body {
   margin: 0 auto;
   place-items: center;
   border-radius: 50%;
-  background: #26262c;
-  color: #f4f5f4;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--primary);
 }
 
 h1 {
@@ -77,7 +79,7 @@ h1 {
 
 .description {
   margin: -6px 8px 6px;
-  color: #a9a9b2;
+  color: var(--muted-foreground);
   font-size: 15px;
   line-height: 1.45;
   text-align: center;
@@ -97,29 +99,29 @@ input,
 select {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #3b3d42;
-  border-radius: 8px;
-  background: #151618;
-  color: #f6f7f6;
+  border: 1px solid var(--input);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--card);
+  color: var(--foreground);
   font: inherit;
   font-size: 14px;
   padding: 10px 12px;
 }
 
 input::placeholder {
-  color: #797b82;
+  color: var(--muted-foreground);
 }
 
 input:focus-visible,
 select:focus-visible,
 button:focus-visible {
-  outline: 2px solid #5d8d6c;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
 .field-hint {
   margin: 0;
-  color: #92939c;
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.42;
 }
@@ -127,10 +129,10 @@ button:focus-visible {
 button {
   appearance: none;
   min-height: 44px;
-  border: 1px solid #274a33;
-  border-radius: 9px;
-  background: #203c2a;
-  color: #ffffff;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) + 3px);
+  background: var(--primary);
+  color: var(--primary-foreground);
   cursor: pointer;
   font: inherit;
   font-size: 14px;
@@ -139,7 +141,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #2d5139;
+  background: color-mix(in oklab, var(--primary) 90%, black);
 }
 
 button:disabled {
@@ -148,13 +150,13 @@ button:disabled {
 }
 
 .secondary-button {
-  border-color: transparent;
+  border-color: var(--border);
   background: transparent;
-  color: #e2e3e2;
+  color: var(--secondary-foreground);
 }
 
 .secondary-button:hover:not(:disabled) {
-  background: #1b1c1f;
+  background: var(--secondary);
 }
 
 .divider {
@@ -162,12 +164,12 @@ button:disabled {
   grid-template-columns: 1fr auto 1fr;
   gap: 10px;
   align-items: center;
-  color: #92939c;
+  color: var(--muted-foreground);
 }
 
 .divider span {
   height: 1px;
-  background: #2e3034;
+  background: var(--border);
 }
 
 .divider small {
@@ -177,11 +179,18 @@ button:disabled {
 .error-message {
   grid-column: 1 / -1;
   margin: 0;
-  border: 1px solid #6f392f;
-  border-radius: 8px;
-  background: #2b1714;
-  color: #f5b8aa;
+  border: 1px solid var(--destructive-border);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--destructive-bg);
+  color: var(--destructive-fg);
   font-size: 12px;
   line-height: 1.4;
   padding: 10px 12px;
+}
+
+.popup-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  margin: 0 auto;
 }

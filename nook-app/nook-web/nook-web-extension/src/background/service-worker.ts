@@ -7,6 +7,7 @@ import {
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairingApprovedMessage,
+  isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type {
@@ -103,6 +104,21 @@ function isExtensionSessionEnsureMessage(
 
 function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
+}
+
+function openCompanionLauncher(): void {
+  const popupUrl = chrome.runtime.getURL('popup/index.html')
+  if (chrome.windows?.create) {
+    void chrome.windows.create({
+      url: popupUrl,
+      type: 'popup',
+      width: 440,
+      height: 620,
+      focused: true,
+    })
+    return
+  }
+  chrome.tabs.create({ url: popupUrl })
 }
 
 function randomNonce(): string {
@@ -801,6 +817,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false
     }
     openSimpleVault()
+    sendResponse({ ok: true })
+    return false
+  }
+
+  if (isOpenCompanionLauncherMessage(message)) {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    openCompanionLauncher()
     sendResponse({ ok: true })
     return false
   }
