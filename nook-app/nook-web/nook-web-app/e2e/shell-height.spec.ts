@@ -63,8 +63,11 @@ test.describe('authenticated shell height', () => {
     await expect.poll(() => page.evaluate(() => window.scrollX)).toBe(0)
     await expect(page.getByTestId('authenticated-shell')).toHaveCSS(
       'touch-action',
-      'pan-y',
+      'pan-y pinch-zoom',
     )
+    await expect(page.getByTestId('header-lock-vault-btn')).toBeInViewport()
+    await expect(page.getByTestId('header-language-select')).toBeInViewport()
+    await expect(page.getByTestId('theme-toggle-btn')).toBeInViewport()
   })
 
   test('keeps secure-note editing and navigation usable above the mobile keyboard', async ({
@@ -77,6 +80,11 @@ test.describe('authenticated shell height', () => {
     await expect(page.getByTestId('vault-bottom-nav')).toBeVisible()
     await expect(page.getByTestId('add-secret-cancel-btn')).toBeInViewport()
     await expect(page.getByTestId('save-secret-btn')).toBeInViewport()
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('add-secret-panel')).toHaveCount(0)
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-secure-note').click()
 
     await page.getByTestId('secret-label').fill('Mobile note')
     await page.getByTestId('secret-value').focus()
