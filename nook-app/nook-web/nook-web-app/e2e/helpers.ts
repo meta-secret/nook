@@ -2458,6 +2458,8 @@ export async function authorizeDeviceProtection(
   opts?: { storeId?: string },
 ) {
   const overlay = page.getByTestId('passkey-auth-overlay')
+  const vaultPanel = page.getByTestId('vault-panel')
+  const button = page.getByTestId('device-protection-unlock-btn')
   if (!(await overlay.isVisible())) {
     const vaultPicker = page.getByTestId('login-vault-picker')
     if (await vaultPicker.isVisible()) {
@@ -2472,12 +2474,25 @@ export async function authorizeDeviceProtection(
     const unlockVaultButton = page.getByTestId('unlock-vault-btn')
     await expect(unlockVaultButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await unlockVaultButton.click()
-    await expect(overlay).toBeVisible({ timeout: UI_TIMEOUT_MS })
   }
-  const button = page.getByTestId('device-protection-unlock-btn')
-  await expect(button).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect
+    .poll(
+      async () => {
+        if (await vaultPanel.isVisible()) return 'unlocked'
+        if ((await button.isVisible()) && (await button.isEnabled())) {
+          return 'authorize'
+        }
+        return 'waiting'
+      },
+      { timeout: UI_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
+  if (await vaultPanel.isVisible()) {
+    await waitForVaultOperationsIdle(page)
+    return
+  }
   await button.click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(vaultPanel).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await waitForVaultOperationsIdle(page)
