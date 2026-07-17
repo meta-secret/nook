@@ -463,12 +463,12 @@ test.describe('local vault', () => {
     await deleteSecret(page, issuer)
   })
 
-  test('adds an authenticator from an otpauth URI without separate issuer input', async ({
+  test('adds a non-default authenticator from an otpauth URI without separate protocol controls', async ({
     page,
   }) => {
     const issuer = uniqueSecretKey('e2e-authenticator-uri')
     const account = `${issuer}+alerts@example.com`
-    const uri = `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=JBSWY3DPEHPK3PXP&issuer=${encodeURIComponent(issuer)}`
+    const uri = `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=JBSWY3DPEHPK3PXP&issuer=${encodeURIComponent(issuer)}&algorithm=SHA256&digits=8&period=45`
 
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-authenticator').click()
@@ -478,6 +478,16 @@ test.describe('local vault', () => {
 
     const row = page.getByTestId('secret-row').filter({ hasText: account })
     await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await row.getByTestId('secret-row-toggle').click()
+    await revealSecretInRow(row)
+    await expect(row.getByTestId('authenticator-current-code')).toHaveText(
+      /^\d{8}$/,
+      { timeout: UI_TIMEOUT_MS },
+    )
+    await expect(row.getByTestId('authenticator-current-code')).toHaveAttribute(
+      'data-period',
+      '45',
+    )
 
     await deleteSecret(page, issuer)
   })

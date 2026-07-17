@@ -432,6 +432,7 @@
                 <code
                   class="font-mono text-xl font-semibold tracking-[0.2em] text-foreground"
                   data-testid="authenticator-current-code"
+                  data-period={authenticatorCode?.period}
                   >{authenticatorCode?.code ?? "••••••"}</code
                 >
                 {#if authenticatorCode}

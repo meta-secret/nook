@@ -168,14 +168,17 @@
       }
     }
     if (selectedType === 'authenticator') {
+      const setupKeyChanged =
+        initialItem?.type === 'authenticator' &&
+        authenticatorSecret.trim() !== initialItem.totpSecret
       return {
         issuer: authenticatorIssuer.trim(),
         account: authenticatorAccount.trim(),
         totpSecret: authenticatorSecret.trim(),
-        algorithm: authenticatorAlgorithm,
-        digits: authenticatorDigits,
-        period: authenticatorPeriod,
-        backupCodes: authenticatorBackupCodes,
+        algorithm: setupKeyChanged ? 'SHA1' : authenticatorAlgorithm,
+        digits: setupKeyChanged ? '6' : authenticatorDigits,
+        period: setupKeyChanged ? '30' : authenticatorPeriod,
+        backupCodes: setupKeyChanged ? '' : authenticatorBackupCodes,
       }
     }
     return {
