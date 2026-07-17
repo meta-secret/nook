@@ -6,7 +6,7 @@ Use this checklist for every change that lands on `main`. **AI agents must follo
 
 For implementation tasks, the agent's default job is not "make local edits"; it
 is "land a locally validated PR with Nook's applicable PR test checks green." Start by
-establishing the PR path, then keep ownership until merge or an explicit blocked
+establishing the PR path, then keep ownership until merge or a concrete blocked
 handoff:
 
 1. **Prepare the PR path first** — fetch `origin/main`, create a feature branch,
@@ -25,11 +25,10 @@ handoff:
    automated comments with the fix, validation, or no-change rationale, then
    push any needed changes and let Nook's PR workflows re-evaluate. Do not wait for
    new comments or another review cycle.
-7. **Merge only when explicitly authorized** — after the branch is current with
-   `origin/main`, Nook's applicable repository-owned PR test checks are green, and actionable
-   comments currently present are handled, squash-merge only when the user has
-   explicitly authorized merging that PR. Green checks alone are never merge
-   authorization.
+7. **Merge automatically when ready** — after the branch is current with
+   `origin/main`, Nook's applicable repository-owned PR test checks are green,
+   actionable comments currently present are handled, and `task pr:ready`
+   succeeds, squash-merge immediately without requesting separate permission.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -64,9 +63,9 @@ flowchart TD
   PUSH --> B
   PUSH --> F
   G -->|yes| C[8 Address comments]
-  C --> AUTH{Explicit merge authorization?}
-  AUTH -->|no| HANDOFF[Handoff ready PR]
-  AUTH -->|yes| M[Squash merge PR]
+  C --> R[Run exact-head readiness audit]
+  R -->|blocked| H
+  R -->|ready| M[Squash merge PR]
   M --> J[Report task duration]
   J --> K[Done]
 ```
@@ -217,7 +216,8 @@ task pr:preflight PR=<number>
 ```
 
 Use `task pr:ready PR=<number>` for a read-only exact-head readiness assertion.
-The command never merges and its success is not authorization to merge.
+The command never merges by itself. Its success is the final signal for the
+task-owning agent to squash-merge immediately.
 
 Do not request, poll, or wait for Codex, Claude, Cursor, CodeRabbit, or any other
 external review/check/deployment. Do not add a grace period after the Nook PR
@@ -239,8 +239,8 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 ```
 
 If the branch is behind `origin/main`, merge the base branch into the PR branch,
-push; the synchronize event re-evaluates Nook's workflows from the new head SHA. Do not attempt to
-merge or enable auto-merge until this freshness check passes:
+push; the synchronize event re-evaluates Nook's workflows from the new head SHA.
+Do not merge until this freshness check passes:
 
 ```bash
 git merge origin/main --no-edit
@@ -304,15 +304,15 @@ the local gate on the latest pushed head before merge or handoff.
 
 ### 8. Merge and finish
 
-When **Nook's applicable repository-owned PR test checks pass**, the branch is current
-with `origin/main`, actionable comments currently present are handled, and the
-user explicitly authorized merging this PR:
+When **Nook's applicable repository-owned PR test checks pass**, the branch is
+current with `origin/main`, actionable comments currently present are handled,
+and `task pr:ready` succeeds:
 
 ```bash
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a repair PR for explicit review and merge authorization.
+After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a repair PR; any task-owning agent that continues that PR follows the same readiness-and-squash-merge contract.
 
 ### 9. Task completion report
 
@@ -349,7 +349,8 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 4. Monitor only `PR / Verify and preview`, plus `Web research / Build and deploy research catalog` for web-research paths; never request or wait for an external review/check.
 5. Inspect and address every actionable comment currently present, then proceed without waiting for another review cycle.
 6. On failure: fix → push completed fix → run the required local gate while CI refreshes.
-7. **Squash merge** into `main` only when explicitly authorized; green checks alone are insufficient.
+7. **Squash merge** into `main` immediately after the exact-head readiness audit
+   succeeds; green checks alone are insufficient.
 8. Delete the branch (optional).
 9. **Report task duration** in the final message (see [§ Task completion report](#9-task-completion-report)).
 

@@ -204,9 +204,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > before rerunning the required local gate in parallel with refreshed PR checks.
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
-- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, commit and push/open/update the PR before required final checks, run local validation while Nook's applicable PR test checks run, fix failures, address comments already present, and squash merge only with explicit user authorization. Green checks alone never authorize a merge.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, commit and push/open/update the PR before required final checks, run local validation while Nook's applicable PR test checks run, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically when ready. Do not stop at a ready-PR handoff or ask for separate merge permission.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
-- **Always open a pull request.** After pushing a branch, create a PR with a summary and test plan; do not merge or push to `main` yourself unless the user explicitly asks.
+- **Always open and land a pull request.** After pushing a branch, create a PR with a summary and test plan, own it through validation and conflict/comment resolution, then squash-merge it after the readiness audit succeeds. Never push directly to `main`.
 - **Squash merge when closing a PR.** When merging (yourself or via `gh`), use **Squash and merge** only:
   ```bash
   gh pr merge <number> --squash

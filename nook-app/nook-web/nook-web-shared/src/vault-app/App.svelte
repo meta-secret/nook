@@ -328,6 +328,9 @@
         return;
       }
       pendingExistingVaultUnlock = true;
+      if (vault.deviceProtectionStatus === "passkey") {
+        await vault.unlockDeviceProtection();
+      }
       return;
     }
     if (vault.loginSetupType) {
@@ -363,6 +366,7 @@
   const appVersion = "0.1.0";
   let secretsAddOpen = $state(false);
   let secretsAddFormType = $state<VaultItemType | undefined>(undefined);
+  let secretsEditorResetKey = $state(0);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen && secretsAddFormType === "secure-note",
   );
@@ -376,6 +380,12 @@
         ? authenticatedShellSpacing
         : "py-5 sm:py-6",
   );
+
+  function leaveSecretsEditor() {
+    secretsAddOpen = false;
+    secretsAddFormType = undefined;
+    secretsEditorResetKey += 1;
+  }
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
   const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending);
   const requiresPasskeyFirst = $derived(
@@ -599,7 +609,7 @@
   <AppLogsApiPage />
 {:else}
   <main
-    class="min-h-svh bg-background text-foreground"
+    class="min-h-svh min-w-0 max-w-full overflow-x-clip bg-background text-foreground"
     class:dark={colorMode === "dark"}
   >
     <header
@@ -608,14 +618,14 @@
       <div
         class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
       >
-        <div class="flex min-w-0 items-center gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <NookLogo {colorMode} size="sm" class="rounded-lg overflow-hidden" />
           {#if vault.isAuthenticated && !legalPage && !logsPage && !vault.helpOpen}
             <VaultSwitcher {vault} />
           {/if}
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex shrink-0 items-center gap-2">
           {#if vault.isAuthenticated && !vault.helpOpen && !legalPage}
             <Button
               type="button"
@@ -674,9 +684,9 @@
             href="https://github.com/meta-secret/nook"
             target="_blank"
             rel="noreferrer"
-            class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
-              ? 'w-10'
-              : 'px-3.5'}"
+            class="h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
+              ? 'hidden w-10 sm:inline-flex'
+              : 'inline-flex px-3.5'}"
             aria-label={vault.t("app.github_aria")}
             title={vault.t("app.github_title")}
             data-testid="github-source-link"
@@ -885,7 +895,7 @@
       {:else if vault.isAuthenticated}
         <div
           class:authenticated-shell-editor={secretsAddOpen}
-          class="authenticated-shell flex w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+          class="authenticated-shell flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm [touch-action:pan-y_pinch-zoom] sm:border sm:border-border/60"
           data-testid="authenticated-shell"
         >
           <div
@@ -1005,36 +1015,38 @@
                   />
                 {/if}
                 <div class="flex min-h-0 flex-1 flex-col">
-                  <SecretVault
-                    {vault}
-                    isSaving={vault.isSaving}
-                    editsBlocked={vault.editsBlocked}
-                    editBlockReason={vault.editBlockReason}
-                    secrets={vault.secrets}
-                    onAddModeChange={(open, type = undefined) => {
-                      secretsAddOpen = open;
-                      secretsAddFormType = type;
-                    }}
-                    onAddSecret={(id, type, data) =>
-                      vault.handleAddSecret(id, type, data)}
-                    onReplaceSecret={(oldId, type, data) =>
-                      vault.handleReplaceSecret(oldId, type, data)}
-                    onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
-                    onGeneratePassword={(
-                      length,
-                      lowercase,
-                      uppercase,
-                      numbers,
-                      symbols,
-                    ) =>
-                      vault.generatePassword(
+                  {#key secretsEditorResetKey}
+                    <SecretVault
+                      {vault}
+                      isSaving={vault.isSaving}
+                      editsBlocked={vault.editsBlocked}
+                      editBlockReason={vault.editBlockReason}
+                      secrets={vault.secrets}
+                      onAddModeChange={(open, type = undefined) => {
+                        secretsAddOpen = open;
+                        secretsAddFormType = type;
+                      }}
+                      onAddSecret={(id, type, data) =>
+                        vault.handleAddSecret(id, type, data)}
+                      onReplaceSecret={(oldId, type, data) =>
+                        vault.handleReplaceSecret(oldId, type, data)}
+                      onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
+                      onGeneratePassword={(
                         length,
                         lowercase,
                         uppercase,
                         numbers,
                         symbols,
-                      )}
-                  />
+                      ) =>
+                        vault.generatePassword(
+                          length,
+                          lowercase,
+                          uppercase,
+                          numbers,
+                          symbols,
+                        )}
+                    />
+                  {/key}
                 </div>
               {/if}
             </div>
@@ -1054,17 +1066,27 @@
               onDismissSuccess={() => vault.dismissSuccess()}
               onDismissError={() => vault.dismissError()}
             />
-            {#if !secretsAddOpen}
-              <VaultBottomNav
-                {vault}
-                settingsOpen={vault.settingsOpen}
-                settingsSection={vault.settingsSection}
-                onSelectSecrets={() => vault.closeSettings()}
-                onSelectOnboard={() => vault.openSettings("onboard")}
-                onSelectAdmin={() => vault.openAdmin()}
-                onSelectSettings={() => vault.openSettings()}
-              />
-            {/if}
+            <VaultBottomNav
+              {vault}
+              settingsOpen={vault.settingsOpen}
+              settingsSection={vault.settingsSection}
+              onSelectSecrets={() => {
+                leaveSecretsEditor();
+                vault.closeSettings();
+              }}
+              onSelectOnboard={() => {
+                leaveSecretsEditor();
+                vault.openSettings("onboard");
+              }}
+              onSelectAdmin={() => {
+                leaveSecretsEditor();
+                vault.openAdmin();
+              }}
+              onSelectSettings={() => {
+                leaveSecretsEditor();
+                vault.openSettings();
+              }}
+            />
           </div>
         </div>
       {/if}
