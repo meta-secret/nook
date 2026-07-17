@@ -27,9 +27,9 @@ const legacyAuthenticator = {
 
 describe('AddSecretForm authenticator editing', () => {
   test('resets hidden protocol settings and recovery codes when the setup key changes', async () => {
-    const onReplaceSecret = vi.fn(
-      async (_oldId: string, _type: VaultItemType, _data: string) => undefined,
-    )
+    const onReplaceSecret = vi
+      .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
+      .mockResolvedValue(undefined)
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
