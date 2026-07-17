@@ -14,6 +14,7 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
+    authenticatorSetupKeyChanged,
     buildSecretYaml,
     generateSecretId,
     type NookSecretRecord,
@@ -168,14 +169,20 @@
       }
     }
     if (selectedType === 'authenticator') {
+      const setupKeyChanged =
+        initialItem?.type === 'authenticator' &&
+        authenticatorSetupKeyChanged(
+          initialItem.totpSecret,
+          authenticatorSecret,
+        )
       return {
         issuer: authenticatorIssuer.trim(),
         account: authenticatorAccount.trim(),
         totpSecret: authenticatorSecret.trim(),
-        algorithm: authenticatorAlgorithm,
-        digits: authenticatorDigits,
-        period: authenticatorPeriod,
-        backupCodes: authenticatorBackupCodes,
+        algorithm: setupKeyChanged ? 'SHA1' : authenticatorAlgorithm,
+        digits: setupKeyChanged ? '6' : authenticatorDigits,
+        period: setupKeyChanged ? '30' : authenticatorPeriod,
+        backupCodes: setupKeyChanged ? '' : authenticatorBackupCodes,
       }
     }
     return {
@@ -776,69 +783,6 @@
         ></textarea>
         <p class="text-xs text-muted-foreground text-pretty">
           {vault.t('add_secret.authenticator_secret_hint')}
-        </p>
-      </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="authenticator-algorithm"
-            >{vault.t('vault.fields.algorithm')}</label
-          >
-          <select
-            id="authenticator-algorithm"
-            data-testid="authenticator-algorithm"
-            bind:value={authenticatorAlgorithm}
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          >
-            <option value="SHA1">SHA-1</option>
-            <option value="SHA256">SHA-256</option>
-            <option value="SHA512">SHA-512</option>
-          </select>
-        </div>
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="authenticator-digits"
-            >{vault.t('vault.fields.digits')}</label
-          >
-          <select
-            id="authenticator-digits"
-            data-testid="authenticator-digits"
-            bind:value={authenticatorDigits}
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          >
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-          </select>
-        </div>
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="authenticator-period"
-            >{vault.t('vault.fields.period_seconds')}</label
-          >
-          <input
-            id="authenticator-period"
-            data-testid="authenticator-period"
-            type="number"
-            min="15"
-            max="300"
-            bind:value={authenticatorPeriod}
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          />
-        </div>
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="authenticator-backup-codes"
-          >{vault.t('vault.fields.backup_codes')}</label
-        >
-        <textarea
-          id="authenticator-backup-codes"
-          data-testid="authenticator-backup-codes"
-          bind:value={authenticatorBackupCodes}
-          rows="4"
-          spellcheck="false"
-          placeholder={vault.t('add_secret.placeholder_backup_codes')}
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        ></textarea>
-        <p class="text-xs text-muted-foreground">
-          {vault.t('add_secret.backup_codes_hint')}
         </p>
       </div>
     {:else}

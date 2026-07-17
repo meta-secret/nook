@@ -11,6 +11,7 @@ import {
   default as initNookWasm,
   NookVaultManager as NookVaultManagerClass,
   NookSecretFormFields,
+  authenticatorSetupKeyChanged as wasmAuthenticatorSetupKeyChanged,
   buildSecretYaml as wasmBuildSecretYaml,
   generateId as wasmGenerateId,
   generatePassword as wasmGeneratePassword,
@@ -165,4 +166,12 @@ export function buildSecretYaml(
       fields.backupCodes ?? undefined,
     ),
   );
+}
+
+/** Compare edited authenticator setup keys through canonical Rust validation. */
+export function authenticatorSetupKeyChanged(
+  storedKey: string,
+  candidateKey: string,
+): boolean {
+  return wasmAuthenticatorSetupKeyChanged(storedKey, candidateKey);
 }

@@ -84,8 +84,9 @@ keys.
    - WASM encrypts every accepted item and appends the import, enrichment, and fingerprint-backfill operations in one signed event. The plaintext export is never persisted or logged by Nook.
 9. **Authenticator items:**
    - Users can store Google Authenticator-compatible TOTP secrets as standalone
-     secure items with issuer, optional account label, algorithm, digits,
-     period, and encrypted backup codes.
+     secure items with a service, optional account label, and setup key or
+     `otpauth://` URI. Manual keys use standard defaults; URI parameters are
+     parsed by Rust without adding protocol controls to the ordinary form.
    - Rust parses Base32 setup keys and `otpauth://totp/...` URIs, validates the
      parameters, and derives the current code. Generated codes are ephemeral
      and are never added to the event log.

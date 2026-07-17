@@ -305,6 +305,23 @@ impl Drop for AuthenticatorSecret {
     }
 }
 
+/// Decide whether an edited setup key represents a different authenticator.
+///
+/// Stored keys are canonical Base32. Manual keys are compared after the same
+/// normalization, while an `otpauth://` URI is treated as a replacement because
+/// it can also change the algorithm, digits, and period.
+pub fn authenticator_setup_key_changed(
+    stored_key: &str,
+    candidate_key: &str,
+) -> Result<bool, ValidationError> {
+    let stored = TotpSecret::parse(stored_key)?;
+    if candidate_key.trim().starts_with("otpauth://") {
+        AuthenticatorSecret::from_otpauth_uri(candidate_key)?;
+        return Ok(true);
+    }
+    Ok(stored != TotpSecret::parse(candidate_key)?)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TotpCode {
     pub code: String,
@@ -513,6 +530,20 @@ mod tests {
 
         assert_eq!(padded, unpadded);
         assert_eq!(padded.as_str(), "JBSWY3DPEHPK3PXP");
+    }
+
+    #[test]
+    fn setup_key_change_detection_uses_canonical_base32() {
+        assert!(
+            !authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "jbsw-y3dp ehpk-3pxp====",)
+                .unwrap()
+        );
+        assert!(authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "KRUGS4ZANFZSAYJA",).unwrap());
+        assert!(authenticator_setup_key_changed(
+            "JBSWY3DPEHPK3PXP",
+            "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA256",
+        )
+        .unwrap());
     }
 
     #[test]

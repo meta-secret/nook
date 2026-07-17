@@ -493,7 +493,7 @@ test.describe('local vault', () => {
     await deleteSecret(page, title)
   })
 
-  test('adds an authenticator with a live TOTP code and backup codes', async ({
+  test('adds an authenticator with a simple setup-key form and live TOTP code', async ({
     page,
   }) => {
     const issuer = uniqueSecretKey('e2e-authenticator')
@@ -504,9 +504,10 @@ test.describe('local vault', () => {
     await page.getByTestId('authenticator-issuer').fill(issuer)
     await page.getByTestId('authenticator-account').fill(account)
     await page.getByTestId('authenticator-secret').fill('not-valid!')
-    await page
-      .getByTestId('authenticator-backup-codes')
-      .fill('backup-one\nbackup-two')
+    await expect(page.getByTestId('authenticator-algorithm')).toHaveCount(0)
+    await expect(page.getByTestId('authenticator-digits')).toHaveCount(0)
+    await expect(page.getByTestId('authenticator-period')).toHaveCount(0)
+    await expect(page.getByTestId('authenticator-backup-codes')).toHaveCount(0)
     await page.getByTestId('save-secret-btn').click()
     await expect(page.getByTestId('secret-form-error')).toBeVisible()
     await expect(page.getByTestId('secret-form-error')).toContainText(
@@ -522,9 +523,7 @@ test.describe('local vault', () => {
     await expect(row.getByTestId('authenticator-current-code')).toHaveText(
       '••••••',
     )
-    await expect(row.getByTestId('authenticator-backup-codes')).toContainText(
-      '••••••••',
-    )
+    await expect(row.getByTestId('authenticator-backup-codes')).toHaveCount(0)
 
     await revealSecretInRow(row)
     await expect(row.getByTestId('authenticator-current-code')).toHaveText(
@@ -532,19 +531,17 @@ test.describe('local vault', () => {
       { timeout: UI_TIMEOUT_MS },
     )
 
-    await expect(row.getByText('backup-one')).toBeVisible()
-    await expect(row.getByText('backup-two')).toBeVisible()
     await expect(row.getByText('JBSWY3DPEHPK3PXP')).toBeVisible()
 
     await deleteSecret(page, issuer)
   })
 
-  test('adds an authenticator from an otpauth URI without separate issuer input', async ({
+  test('adds a non-default authenticator from an otpauth URI without separate protocol controls', async ({
     page,
   }) => {
     const issuer = uniqueSecretKey('e2e-authenticator-uri')
     const account = `${issuer}+alerts@example.com`
-    const uri = `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=JBSWY3DPEHPK3PXP&issuer=${encodeURIComponent(issuer)}`
+    const uri = `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=JBSWY3DPEHPK3PXP&issuer=${encodeURIComponent(issuer)}&algorithm=SHA256&digits=8&period=45`
 
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-authenticator').click()
@@ -554,6 +551,16 @@ test.describe('local vault', () => {
 
     const row = page.getByTestId('secret-row').filter({ hasText: account })
     await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await row.getByTestId('secret-row-toggle').click()
+    await revealSecretInRow(row)
+    await expect(row.getByTestId('authenticator-current-code')).toHaveText(
+      /^\d{8}$/,
+      { timeout: UI_TIMEOUT_MS },
+    )
+    await expect(row.getByTestId('authenticator-current-code')).toHaveAttribute(
+      'data-period',
+      '45',
+    )
 
     await deleteSecret(page, issuer)
   })
