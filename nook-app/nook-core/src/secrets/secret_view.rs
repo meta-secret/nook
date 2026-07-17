@@ -3,6 +3,7 @@
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{AuthenticatorSecret, SecretId, SecretRecord, SecretType, SecretValue};
+use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretListItemData {
@@ -40,16 +41,24 @@ pub struct SecretListItem {
 }
 
 fn hostname_from_url(raw: &str) -> String {
-    let mut host = raw.trim();
-    if host.is_empty() {
+    let value = raw.trim();
+    if value.is_empty() {
         return String::new();
     }
-    if let Some(rest) = host.split("://").nth(1) {
-        host = rest;
-    }
-    host = host.split('/').next().unwrap_or(host);
-    host = host.split(':').next().unwrap_or(host);
-    host.trim_start_matches("www.").to_owned()
+
+    Url::parse(value)
+        .or_else(|error| {
+            if value.contains("://") {
+                Err(error)
+            } else {
+                Url::parse(&format!("https://{value}"))
+            }
+        })
+        .ok()
+        .and_then(|url| url.host_str().map(ToOwned::to_owned))
+        .unwrap_or_default()
+        .trim_start_matches("www.")
+        .to_owned()
 }
 
 impl SecretRecord {
@@ -452,6 +461,24 @@ mod tests {
     #[test]
     fn group_key_strips_www_from_login_url() {
         assert_eq!(login_record().group_key(), "github.com");
+    }
+
+    #[test]
+    fn website_host_strips_url_credentials_query_and_fragment() {
+        for (url, expected) in [
+            ("https://example.com?next=/vault", "example.com"),
+            ("https://user@example.com/", "example.com"),
+            ("https://example.com/#vault", "example.com"),
+            ("example.com/login", "example.com"),
+        ] {
+            let mut item = login_record().list_item();
+            let SecretListItemData::Login { website_url, .. } = &mut item.data else {
+                panic!("expected login item");
+            };
+            *website_url = url.to_owned();
+
+            assert_eq!(item.website_host(), expected, "{url}");
+        }
     }
 
     #[test]

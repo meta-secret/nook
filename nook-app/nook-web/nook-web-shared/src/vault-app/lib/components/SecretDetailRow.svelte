@@ -98,6 +98,10 @@
     if (item.type !== "login") return summary;
     return item.websiteHost || vault.t("vault.fields.no_website");
   });
+
+  const accountSubtitle = $derived(
+    item.type === "login" ? item.username.trim() : "",
+  );
 </script>
 
 <div data-testid="vault-group-{item.type}">
@@ -151,11 +155,11 @@
             >
               {headerTitle}
             </h3>
-            {#if item.type === "login" && summary !== headerTitle}
+            {#if accountSubtitle}
               <span
                 data-testid="secret-row-account"
                 class="block truncate text-xs text-muted-foreground"
-              >{summary}</span>
+              >{accountSubtitle}</span>
             {/if}
           </div>
         {:else}

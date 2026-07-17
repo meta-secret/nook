@@ -13,16 +13,17 @@ const vault = {
 function loginItem(
   websiteUrl: string,
   websiteHost: string,
+  username = 'alice@example.com',
 ): NookSecretListItem {
   return {
     id: 'secret_login',
     type: 'login',
     displayTitle: websiteUrl,
     groupKey: websiteHost || 'No Website',
-    summary: 'alice@example.com',
+    summary: username || websiteUrl,
     websiteUrl,
     websiteHost,
-    username: 'alice@example.com',
+    username,
   } as unknown as NookSecretListItem
 }
 
@@ -72,5 +73,13 @@ describe('SecretDetailRow login card title', () => {
     expect(view.getByTestId('secret-row-heading').textContent).toBe(
       'Localized no website',
     )
+  })
+
+  test('omits the account subtitle when the username is empty', () => {
+    const view = renderLogin(
+      loginItem('https://example.com', 'example.com', ''),
+    )
+
+    expect(view.queryByTestId('secret-row-account')).toBeNull()
   })
 })
