@@ -14,6 +14,7 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
+    authenticatorSetupKeyChanged,
     buildSecretYaml,
     generateSecretId,
     type NookSecretRecord,
@@ -170,7 +171,10 @@
     if (selectedType === 'authenticator') {
       const setupKeyChanged =
         initialItem?.type === 'authenticator' &&
-        authenticatorSecret.trim() !== initialItem.totpSecret
+        authenticatorSetupKeyChanged(
+          initialItem.totpSecret,
+          authenticatorSecret,
+        )
       return {
         issuer: authenticatorIssuer.trim(),
         account: authenticatorAccount.trim(),

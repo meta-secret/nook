@@ -37,6 +37,7 @@ pub use apple_passwords_import::{
 };
 pub use authenticator::{
     AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,
+    authenticator_setup_key_changed,
 };
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,

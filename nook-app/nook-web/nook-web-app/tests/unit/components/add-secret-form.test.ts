@@ -26,6 +26,37 @@ const legacyAuthenticator = {
 } as unknown as NookSecretRecord
 
 describe('AddSecretForm authenticator editing', () => {
+  test('preserves hidden settings when only setup-key formatting changes', async () => {
+    const onReplaceSecret = vi
+      .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
+      .mockResolvedValue(undefined)
+    const view = render(AddSecretForm, {
+      vault,
+      isSaving: false,
+      onAddSecret: vi.fn(async () => undefined),
+      onReplaceSecret,
+      onGeneratePassword: vi.fn(() => ''),
+      onCancel: vi.fn(),
+      initialItem: legacyAuthenticator,
+      selectedType: 'authenticator',
+    })
+
+    const setupKey = await view.findByTestId('authenticator-secret')
+    await fireEvent.input(setupKey, {
+      target: { value: 'jbsw-y3dp ehpk-3pxp====' },
+    })
+    await fireEvent.click(view.getByTestId('save-secret-btn'))
+
+    await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
+    const [, type, yaml] = onReplaceSecret.mock.calls[0]
+    expect(type).toBe('authenticator')
+    expect(yaml).toContain('algorithm: SHA256')
+    expect(yaml).toContain('digits: 8')
+    expect(yaml).toContain('period: 45')
+    expect(yaml).toContain('recovery-one')
+    expect(yaml).toContain('recovery-two')
+  })
+
   test('resets hidden protocol settings and recovery codes when the setup key changes', async () => {
     const onReplaceSecret = vi
       .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()

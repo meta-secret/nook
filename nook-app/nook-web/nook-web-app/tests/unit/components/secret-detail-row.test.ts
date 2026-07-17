@@ -51,7 +51,7 @@ describe('SecretDetailRow authenticator recovery codes', () => {
     expect(
       view.getByTestId('authenticator-backup-codes').textContent,
     ).toContain('••••••••')
-    expect(view.queryByText('recovery-one')).toBeNull()
+    expect(view.queryByText('recovery-one')).not.toBeTruthy()
 
     await view.rerender(props(decrypted))
 

@@ -1670,6 +1670,16 @@ pub fn build_secret_yaml(
     build_secret_yaml_inner(secret_type, fields).map_err(Into::into)
 }
 
+#[wasm_bindgen(js_name = authenticatorSetupKeyChanged)]
+pub fn authenticator_setup_key_changed(
+    stored_key: &str,
+    candidate_key: &str,
+) -> Result<bool, wasm_bindgen::JsError> {
+    nook_core::authenticator_setup_key_changed(stored_key, candidate_key)
+        .map_err(NookError::from)
+        .map_err(Into::into)
+}
+
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
