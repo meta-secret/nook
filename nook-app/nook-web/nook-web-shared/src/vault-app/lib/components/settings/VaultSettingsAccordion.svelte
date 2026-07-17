@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { Laptop, Globe } from '@lucide/svelte'
+  import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
   import type { JoinRequest, VaultMember } from '$lib/nook'
+  import { Button } from '$lib/components/ui/button'
 
-  export type VaultSettingsAccordionSection = 'devices' | 'language'
+  export type VaultSettingsAccordionSection = 'devices' | 'language' | 'danger'
+
+  let deleteConfirmationOpen = $state(false)
 
   let {
     vault,
@@ -112,6 +115,74 @@
         <option value="en">English</option>
         <option value="ru">Русский</option>
       </select>
+    </div>
+  </SettingsAccordionSection>
+
+  <SettingsAccordionSection
+    title={vault.t('settings.delete_local_title')}
+    subtitle={vault.t('settings.delete_local_desc')}
+    section="danger"
+    bind:activeSection={accordionSection}
+    testId="vault-danger-section"
+  >
+    {#snippet badge()}
+      <span
+        class="inline-flex items-center gap-1 rounded-full border border-destructive/25 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+      >
+        <TriangleAlert class="size-3" />
+        {vault.t('settings.danger_zone')}
+      </span>
+    {/snippet}
+    <div class="space-y-3 p-4">
+      <p class="text-sm text-muted-foreground text-pretty">
+        {vault.t('settings.delete_local_details')}
+      </p>
+      {#if deleteConfirmationOpen}
+        <div
+          class="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3"
+          data-testid="delete-local-vault-confirmation"
+        >
+          <p class="text-sm font-medium text-foreground">
+            {vault.t('settings.delete_local_confirm')}
+          </p>
+          <div class="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={vault.isSaving}
+              data-testid="delete-local-vault-cancel"
+              onclick={() => (deleteConfirmationOpen = false)}
+            >
+              {vault.t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={vault.isSaving}
+              data-testid="delete-local-vault-confirm"
+              onclick={() => void vault.deleteLocalBrowserData()}
+            >
+              <Trash2 class="size-3.5" />
+              {vault.isSaving
+                ? vault.t('settings.deleting_local')
+                : vault.t('settings.delete_local_confirm_button')}
+            </Button>
+          </div>
+        </div>
+      {:else}
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          data-testid="delete-local-vault-button"
+          onclick={() => (deleteConfirmationOpen = true)}
+        >
+          <Trash2 class="size-3.5" />
+          {vault.t('settings.delete_local_button')}
+        </Button>
+      {/if}
     </div>
   </SettingsAccordionSection>
 </div>

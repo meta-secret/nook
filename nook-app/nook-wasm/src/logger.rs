@@ -471,3 +471,22 @@ pub async fn log_clear() -> Result<(), wasm_bindgen::JsError> {
         .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
     Ok(())
 }
+
+pub(crate) async fn clear_logs_db() -> Result<(), NookError> {
+    LOGGER.with(|logger| logger.borrow_mut().pending.clear());
+    let db = logs_db().await?;
+    let transaction = db
+        .transaction(&[LOG_STORE], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| NookError::IndexedDb(format!("logs clear transaction error: {e:?}")))?;
+    transaction
+        .store(LOG_STORE)
+        .map_err(|e| NookError::IndexedDb(format!("logs clear store error: {e:?}")))?
+        .clear()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("logs clear error: {e:?}")))?;
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("logs clear completion error: {e:?}")))?;
+    Ok(())
+}

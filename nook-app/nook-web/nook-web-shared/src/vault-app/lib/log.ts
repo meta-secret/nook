@@ -409,6 +409,19 @@ export async function flushLogs(): Promise<void> {
   await nookLogFlush();
 }
 
+/** Stop all persistence before the destructive local-browser cleanup runs. */
+export async function suspendWasmLogging(): Promise<void> {
+  if (flushTimer) {
+    clearInterval(flushTimer);
+    flushTimer = undefined;
+  }
+  while (flushing) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  wasmReady = false;
+  preInitQueue.length = 0;
+}
+
 /**
  * Patch `console.*` so every call still prints (via the captured originals) and
  * is persisted with the `console` scope. Idempotent; only the persist side is
