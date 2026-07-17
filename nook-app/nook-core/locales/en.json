@@ -1405,6 +1405,8 @@
     "widget": {
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook",
+      "collapse": "Collapse Nook",
+      "expand": "Expand Nook",
       "gate_step": "Sign in with Nook",
       "gate_title": "Continue through Nook",
       "gate_description": "Skip the site's login chrome. Nook fills your credentials and continues sign-in for you.",

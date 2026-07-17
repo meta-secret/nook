@@ -175,6 +175,8 @@ users through site-specific login chrome.
 The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
+- be draggable so the user can move it away from site chrome;
+- support collapsing to a compact Nook mark and expanding again;
 - support dismissal without blocking the host page;
 - offer a primary Continue with Nook action that lists matching logins for the
   page origin, reveals one credential after explicit choice, fills the form,
