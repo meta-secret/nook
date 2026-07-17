@@ -43,7 +43,6 @@ fn import_fingerprints(
     for (record, identity_fingerprint, fingerprint) in dedup_state {
         let (identity_fingerprint, fingerprint) =
             if has_current_import_fingerprints(identity_fingerprint.as_ref(), fingerprint.as_ref())
-                && record.secret_type != Some(nook_core::SecretType::Authenticator)
             {
                 (
                     identity_fingerprint.expect("checked above"),
