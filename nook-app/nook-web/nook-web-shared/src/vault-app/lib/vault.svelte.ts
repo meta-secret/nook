@@ -22,11 +22,9 @@ import {
   JoinEnrollmentState,
   NookBrowserLocale,
   NookClientRunModeUtil,
-  NookOAuthFileConfigValue,
   NookRuntimeConfig,
-  NookStorageProviderList,
-  NookStorageProviderValue,
   NookVaultClientPolicy,
+  NookVaultArchitecture,
   RemoteVaultAssessDecision,
   UnauthenticatedSyncDecision,
   VaultEditBlockReason,
@@ -48,6 +46,7 @@ import {
   updateProviderSyncMetadata as wasmUpdateProviderSyncMetadata,
   wasmStorageArgs as wasmStorageArgsCore,
   type NookLocalVaultEntry,
+  type NookPendingSyncConflict,
   type NookPasswordEntrySummary,
   type NookSecretPage,
   type NookStorageConnectArgs,
@@ -58,12 +57,11 @@ import { APP_KIND } from "$lib/app-kind";
 import {
   DEFAULT_GITHUB_REPO,
   LOCAL_FOLDER_PROVIDER_TYPE,
-  loadAuthProviders,
   LOCAL_PROVIDER_TYPE,
-  NookStorageProviderKind,
+  OAUTH_FILE_PROVIDER_TYPE,
   providerDefaultLabel,
-  storageProviderKind,
   wasmStorageModeForProvider,
+  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type GoogleDriveMode,
   type ICloudMode,
@@ -73,7 +71,6 @@ import {
   type StorageProviderType,
 } from "$lib/auth-providers";
 import { createLogger } from "$lib/log";
-import type { PendingSyncConflict } from "$lib/vault/sync";
 import type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync";
 import {
   createVaultIdleSessionTracker,
@@ -86,7 +83,6 @@ import {
 import {
   canCreateSecret as architectureCanCreateSecret,
   defaultVaultArchitecture,
-  draftVaultArchitecture,
   type DeviceMode,
   type ReplicationType,
   type VaultArchitecture,
@@ -162,54 +158,19 @@ function plainProviders(providers: StorageProvider[]): StorageProvider[] {
   return JSON.parse(JSON.stringify(providers)) as StorageProvider[];
 }
 
+function plainProviderSnapshot(
+  providers: StorageProvider[],
+  activeVaultStoreId?: string,
+): AuthProvidersSnapshot {
+  const snapshot: AuthProvidersSnapshot = {
+    providers: plainProviders(providers),
+  };
+  if (activeVaultStoreId) snapshot.activeVaultStoreId = activeVaultStoreId;
+  return snapshot;
+}
+
 function plainOAuthFile(config: OAuthFileConfig): OAuthFileConfig {
   return JSON.parse(JSON.stringify(config)) as OAuthFileConfig;
-}
-
-function withProviderValue<T>(
-  provider: StorageProvider,
-  operation: (value: NookStorageProviderValue) => T,
-): T {
-  const value = NookStorageProviderValue.fromObject(plainProvider(provider));
-  try {
-    return operation(value);
-  } finally {
-    value.free();
-  }
-}
-
-function withProviderList<T>(
-  providers: StorageProvider[],
-  operation: (value: NookStorageProviderList) => T,
-): T {
-  const value = NookStorageProviderList.fromArray(plainProviders(providers));
-  try {
-    return operation(value);
-  } finally {
-    value.free();
-  }
-}
-
-function providerListToPlain(
-  value: NookStorageProviderList,
-): StorageProvider[] {
-  try {
-    return value.toArray() as StorageProvider[];
-  } finally {
-    value.free();
-  }
-}
-
-function withOAuthFileValue<T>(
-  config: OAuthFileConfig,
-  operation: (value: NookOAuthFileConfigValue) => T,
-): T {
-  const value = NookOAuthFileConfigValue.fromObject(plainOAuthFile(config));
-  try {
-    return operation(value);
-  } finally {
-    value.free();
-  }
 }
 
 export class VaultState {
@@ -336,7 +297,7 @@ export class VaultState {
     [],
   );
   /** User must pick local vs remote before editing when versions match but content differs. */
-  pendingSyncConflict = $state<PendingSyncConflict | undefined>(undefined);
+  pendingSyncConflict = $state<NookPendingSyncConflict | undefined>(undefined);
   /** Local-folder provider points at a folder that contains several vault event logs. */
   localFolderMultipleVaultsIssue = $state<
     LocalFolderMultipleVaultsIssue | undefined
@@ -387,8 +348,9 @@ export class VaultState {
 
   get syncingProviderLabel(): string | undefined {
     if (!this.syncingProviderId) return undefined;
-    return withProviderList(this.providers, (providers) =>
-      providerLabelById(providers, this.syncingProviderId!),
+    return providerLabelById(
+      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      this.syncingProviderId,
     );
   }
 
@@ -497,22 +459,18 @@ export class VaultState {
 
   wasmStorageArgs(): [string, string, string] {
     const syncProvider = this.syncProviders[0];
-    const provider = syncProvider
-      ? NookStorageProviderValue.fromObject(plainProvider(syncProvider))
-      : undefined;
-    // This argument crosses by value; wasm-bindgen transfers ownership.
     return storageArgsTuple(
       wasmStorageArgsCore(
         this.localVaultPresent,
         this.isAuthenticated,
-        provider,
+        syncProvider ? plainProvider(syncProvider) : undefined,
         this.storageMode,
         this.githubPat,
         this.githubRepo,
         this.oauthFile?.preset ?? undefined,
         this.oauthFile?.accessToken ?? undefined,
         this.oauthFile
-          ? withOAuthFileValue(this.oauthFile, oauthRemoteStorageRef)
+          ? oauthRemoteStorageRef(plainOAuthFile(this.oauthFile))
           : undefined,
         this.oauthFile?.fileName ?? undefined,
       ),
@@ -533,15 +491,11 @@ export class VaultState {
 
   stagedRemoteStorageArgs(): [string, string, string] | undefined {
     const type = this.loginSetupType ?? this.storageMode;
-    const oauthFile = this.oauthFile
-      ? NookOAuthFileConfigValue.fromObject(plainOAuthFile(this.oauthFile))
-      : undefined;
-    // This argument crosses by value; wasm-bindgen transfers ownership.
     const args = wasmStagedRemoteStorageArgs(
       type,
       this.githubPat || undefined,
       this.githubRepo || undefined,
-      oauthFile,
+      this.oauthFile ? plainOAuthFile(this.oauthFile) : undefined,
     );
     if (!args) return undefined;
     try {
@@ -583,23 +537,17 @@ export class VaultState {
 
   syncOAuthRemoteRefFromManager() {
     if (
-      storageProviderKind(this.storageMode) !==
-        NookStorageProviderKind.OauthFile ||
+      this.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       !this.manager ||
       !this.oauthFile
     ) {
       return;
     }
-    const updated = withOAuthFileValue(this.oauthFile, (config) =>
-      updateOauthRemoteRef(config, this.manager!.storage_remote_ref ?? ""),
+    const updated = updateOauthRemoteRef(
+      plainOAuthFile(this.oauthFile),
+      this.manager.storage_remote_ref ?? "",
     );
-    if (updated) {
-      try {
-        this.oauthFile = updated.toObject() as OAuthFileConfig;
-      } finally {
-        updated.free();
-      }
-    }
+    if (updated) this.oauthFile = updated;
   }
 
   async ensureOAuthTokensFresh(): Promise<void> {
@@ -696,11 +644,9 @@ export class VaultState {
   }
 
   get localProvider(): StorageProvider | undefined {
-    const id = withProviderList(this.providers, (providers) =>
-      localProviderIdForActiveVault(
-        providers,
-        this.activeVaultStoreId ?? undefined,
-      ),
+    const id = localProviderIdForActiveVault(
+      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      this.activeVaultStoreId ?? undefined,
     );
     return id
       ? this.providers.find((provider) => provider.id === id)
@@ -714,26 +660,18 @@ export class VaultState {
 
   /** Providers belonging to the active vault only. */
   get activeVaultProviders(): StorageProvider[] {
-    return withProviderList(this.providers, (providers) =>
-      providerListToPlain(
-        wasmActiveVaultProviders(
-          providers,
-          this.activeVaultStoreId ?? undefined,
-        ),
-      ),
-    );
+    return wasmActiveVaultProviders(
+      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      this.activeVaultStoreId ?? undefined,
+    ).providers;
   }
 
   /** Cloud sync destinations for the active vault — local row omitted. */
   get syncProviders(): StorageProvider[] {
-    return withProviderList(this.providers, (providers) =>
-      providerListToPlain(
-        wasmSyncProvidersForActiveVault(
-          providers,
-          this.activeVaultStoreId ?? undefined,
-        ),
-      ),
-    );
+    return wasmSyncProvidersForActiveVault(
+      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      this.activeVaultStoreId ?? undefined,
+    ).providers;
   }
 
   get hasMultipleLocalVaults(): boolean {
@@ -752,9 +690,7 @@ export class VaultState {
   }
 
   providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    return withProviderValue(provider, (value) =>
-      storageArgsTuple(wasmProviderWasmArgs(value)),
-    );
+    return storageArgsTuple(wasmProviderWasmArgs(plainProvider(provider)));
   }
 
   get hasProviders(): boolean {
@@ -1040,7 +976,7 @@ export class VaultState {
   }
 
   get draftVaultArchitecture(): VaultArchitecture {
-    return draftVaultArchitecture(
+    return NookVaultArchitecture.draft(
       this.draftDeviceMode,
       this.draftVaultType,
       this.draftReplicationType,
@@ -1222,7 +1158,7 @@ export class VaultState {
 
   async reloadProvidersForActiveVault(): Promise<void> {
     const snapshot = await this.enqueueStorage(() =>
-      loadAuthProviders(this.manager!),
+      this.manager!.loadAuthProviders(),
     );
     this.providers = snapshot.providers;
     if (snapshot.activeVaultStoreId) {
@@ -1287,9 +1223,9 @@ export class VaultState {
     // Sync-provider credentials are sealed to the protected device identity.
     // Keep only the non-secret local row in memory while that identity is
     // locked; passkey/PIN authorization reloads the sealed providers.
-    this.providers = withProviderList(this.providers, (providers) =>
-      providerListToPlain(providersVisibleWhileDeviceLocked(providers)),
-    );
+    this.providers = providersVisibleWhileDeviceLocked(
+      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+    ).providers;
     this.providersLoaded = this.providers.length > 0;
     this.githubPat = "";
     this.oauthFile = undefined;
@@ -1622,10 +1558,7 @@ export class VaultState {
     const mergedJoins: JoinRequest[] = [];
     try {
       for (const provider of this.syncProviders) {
-        if (
-          storageProviderKind(provider.type) ===
-          NookStorageProviderKind.LocalFolder
-        ) {
+        if (provider.type === LOCAL_FOLDER_PROVIDER_TYPE) {
           await syncActions.syncLocalFolderProvider(this, provider);
           continue;
         }
@@ -1796,10 +1729,7 @@ export class VaultState {
   remoteEventProviderArgs(
     provider?: StorageProvider,
   ): [string, string, string] | undefined {
-    if (
-      provider &&
-      storageProviderKind(provider.type) === NookStorageProviderKind.LocalFolder
-    ) {
+    if (provider && provider.type === LOCAL_FOLDER_PROVIDER_TYPE) {
       return undefined;
     }
     if (provider) {
@@ -1807,8 +1737,7 @@ export class VaultState {
     }
     if (
       this.syncProviders[0] &&
-      storageProviderKind(this.syncProviders[0].type) ===
-        NookStorageProviderKind.LocalFolder
+      this.syncProviders[0].type === LOCAL_FOLDER_PROVIDER_TYPE
     ) {
       return undefined;
     }
@@ -1831,18 +1760,14 @@ export class VaultState {
     const managerStoreId = this.manager
       ? await this.enqueueStorage(() => this.manager!.vaultStoreId)
       : "";
-    this.providers = withProviderList(this.providers, (providers) =>
-      providerListToPlain(
-        wasmUpdateProviderSyncMetadata(
-          providers,
-          providerId,
-          yaml,
-          revision ?? undefined,
-          managerStoreId || undefined,
-          isoTimestamp(),
-        ),
-      ),
-    );
+    this.providers = wasmUpdateProviderSyncMetadata(
+      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      providerId,
+      yaml,
+      revision ?? undefined,
+      managerStoreId || undefined,
+      isoTimestamp(),
+    ).providers;
     await this.persistProviders();
     this.lastSyncedAt = new SvelteDate();
   }
@@ -1908,7 +1833,7 @@ export class VaultState {
   }
 
   /** E2E / dev: open the conflict dialog without reaching remote storage. */
-  stageSyncConflict(conflict: PendingSyncConflict) {
+  stageSyncConflict(conflict: NookPendingSyncConflict) {
     return syncActions.stageSyncConflict(this, conflict);
   }
 
@@ -1925,7 +1850,7 @@ export class VaultState {
   }
 
   finishStagedProviderConnectAfterConflict(
-    conflict: PendingSyncConflict,
+    conflict: NookPendingSyncConflict,
   ): void {
     if (!conflict.isPendingProvider) {
       return;
@@ -1935,7 +1860,7 @@ export class VaultState {
   }
 
   async ensureProviderSavedAfterConflict(
-    conflict: PendingSyncConflict,
+    conflict: NookPendingSyncConflict,
   ): Promise<string> {
     if (
       !conflict.isPendingProvider &&
@@ -1950,10 +1875,7 @@ export class VaultState {
     const provider =
       this.syncProviders[this.syncProviders.length - 1] ??
       this.providers[this.providers.length - 1];
-    if (
-      !provider ||
-      storageProviderKind(provider.type) === NookStorageProviderKind.Local
-    ) {
+    if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
       throw new Error(this.t("errors.cloud_sync_provider_required"));
     }
     return provider.id;
@@ -2411,13 +2333,11 @@ export class VaultState {
   async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return;
     const folderProvider =
-      provider &&
-      storageProviderKind(provider.type) === NookStorageProviderKind.LocalFolder
+      provider && provider.type === LOCAL_FOLDER_PROVIDER_TYPE
         ? provider
         : !provider &&
             this.syncProviders[0] &&
-            storageProviderKind(this.syncProviders[0].type) ===
-              NookStorageProviderKind.LocalFolder
+            this.syncProviders[0].type === LOCAL_FOLDER_PROVIDER_TYPE
           ? this.syncProviders[0]
           : undefined;
     if (folderProvider) {

@@ -190,6 +190,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > applicable repository-owned PR workflows run**. Never finish `task check`, a
 > full test suite, build, e2e, or another final gate before pushing the checkable
 > change; serializing local then remote validation wastes wall-clock time.
+> GitHub Actions PR checks are the primary validation pipeline and are attached
+> to the pushed head SHA. Push the coherent commit first so those checks start;
+> local Docker validation is complementary and must not delay that event.
 >
 > Fast focused commands needed during implementation are allowed before the
 > commit. Required final validation and post-fix validation run on the latest

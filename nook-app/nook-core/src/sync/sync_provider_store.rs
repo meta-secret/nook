@@ -7,6 +7,7 @@
 //! web layer keeps only thin call adapters plus i18n presentation.
 
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
@@ -24,9 +25,11 @@ use crate::{
 ///
 /// Field names are `camelCase` on the wire to match the structured-clone object
 /// the web layer and e2e seeders read/write directly in `IndexedDB`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct OAuthFileConfigData {
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct OAuthFileConfig {
+    #[tsify(type = "OAuthFilePreset")]
     pub preset: String,
     #[serde(default)]
     pub access_token: String,
@@ -67,6 +70,8 @@ pub struct OAuthFileConfigData {
     )]
     pub icloud_share_target: Option<String>,
 }
+
+pub type OAuthFileConfigData = OAuthFileConfig;
 
 impl OAuthFileConfigData {
     #[must_use]
@@ -197,21 +202,26 @@ pub fn bind_google_drive_shared_folder(
 }
 
 /// Browser-local File System Access folder handle metadata.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalFolderConfigData {
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct LocalFolderConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handle_id: Option<String>,
 }
 
+pub type LocalFolderConfigData = LocalFolderConfig;
+
 /// One persisted sync provider row.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct StorageProviderData {
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct StorageProvider {
     pub id: String,
     #[serde(rename = "type")]
+    #[tsify(type = "StorageProviderType")]
     pub provider_type: String,
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -219,9 +229,9 @@ pub struct StorageProviderData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_repo: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub oauth_file: Option<OAuthFileConfigData>,
+    pub oauth_file: Option<OAuthFileConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub local_folder: Option<LocalFolderConfigData>,
+    pub local_folder: Option<LocalFolderConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub store_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -235,21 +245,25 @@ pub struct StorageProviderData {
     pub created_at: String,
 }
 
+pub type StorageProviderData = StorageProvider;
+
 /// The full persisted snapshot: provider rows plus the active vault scope.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct AuthProvidersSnapshotData {
-    #[serde(default)]
-    pub providers: Vec<StorageProviderData>,
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthProvidersSnapshot {
+    pub providers: Vec<StorageProvider>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_vault_store_id: Option<String>,
 }
+
+pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
 
 /// Result of [`normalize_auth_snapshot`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedAuthSnapshot {
-    pub snapshot: AuthProvidersSnapshotData,
+    pub snapshot: AuthProvidersSnapshot,
     pub changed: bool,
 }
 

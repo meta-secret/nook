@@ -3,8 +3,9 @@ import {
   NookClientRunModeUtil,
   NookPendingSyncConflict,
   NookRuntimeConfig,
+  type NookPendingSyncConflict as PendingSyncConflict,
 } from '$app-wasm'
-import { syncConflictLabel, type PendingSyncConflict } from '$lib/vault/sync'
+import { syncConflictLabel } from '$lib/vault/sync'
 
 function buildConflict(kind?: string): PendingSyncConflict {
   return kind === 'store_id'

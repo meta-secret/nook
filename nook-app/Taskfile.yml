@@ -27,6 +27,7 @@ vars:
   # rust/wasm commands (and the browser variant only by manual browser-wasm tests).
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
+  DOCKER_RUST_FAST_IMAGE: '{{default "nook-rust-fast:local" .DOCKER_RUST_FAST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
@@ -242,6 +243,17 @@ tasks:
           echo "task setup:rust: bake attempt $attempt failed; retrying in 5s..." >&2;
           sleep 5;
         done'
+
+  setup:rust:fast:
+    desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}} nook-rust-fast
 
   setup:rust:browser:
     desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.

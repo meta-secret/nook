@@ -3,7 +3,6 @@ import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment-code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
-  StorageProviderType,
   default as initNookWasm,
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
@@ -107,7 +106,7 @@ describe('enrollment payloads', () => {
     expect(decrypted.entryId).toBe('entry-1')
     expect(decrypted.vaultName).toBe('Team vault')
     expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
-    expect(decrypted.provider.type).toBe(StorageProviderType.Github)
+    expect(decrypted.provider.type).toBe('github')
     expect(decrypted.provider.githubPat).toBe('github_pat_11AAAAbbbbCCCC')
     expect(decrypted.provider.githubRepo).toBe('team-vault')
   })

@@ -5,7 +5,6 @@
     ExtensionPairingApprovedMessage,
   } from '$web-shared/extension/runtime-messages'
   import {
-    loadAuthProviders,
     sealAuthProvidersForDevicePublicKey,
     type StorageProvider,
   } from '$lib/auth-providers'
@@ -167,7 +166,7 @@
       let grantedProviders: StorageProvider[] = []
       if (request.scopes.includes('sync-provider-credentials')) {
         const authProviders = await vault.enqueueStorage(() =>
-          loadAuthProviders(vault.manager!),
+          vault.manager!.loadAuthProviders(),
         )
         const matchingProviders = authProviders.providers.filter(
           (provider) => !provider.storeId || provider.storeId === vaultStoreId,

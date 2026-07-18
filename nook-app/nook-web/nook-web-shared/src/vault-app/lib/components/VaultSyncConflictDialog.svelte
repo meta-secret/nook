@@ -8,7 +8,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import type { PendingSyncConflict } from '$lib/vault/sync'
+  import type { NookPendingSyncConflict } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultSyncConflictKind } from '$app-wasm'
 
@@ -22,7 +22,7 @@
     onCancel,
   }: {
     vault: VaultState
-    conflict: PendingSyncConflict
+    conflict: NookPendingSyncConflict
     isBusy?: boolean
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>

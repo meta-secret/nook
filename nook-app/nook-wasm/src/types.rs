@@ -5,130 +5,7 @@ use crate::NookSecretListItem;
 use crate::NookSecretRecord;
 use crate::NookVaultManager;
 use gloo_utils::window;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-fn deserialize_object<T: DeserializeOwned>(
-    value: js_sys::Object,
-) -> Result<T, wasm_bindgen::JsError> {
-    Ok(serde_wasm_bindgen::from_value(value.into())?)
-}
-
-fn serialize_object<T: Serialize>(value: &T) -> Result<js_sys::Object, wasm_bindgen::JsError> {
-    Ok(serde_wasm_bindgen::to_value(value)?.unchecked_into())
-}
-
-macro_rules! wasm_object_value {
-    ($name:ident, $core:ty) => {
-        #[wasm_bindgen]
-        #[derive(Clone)]
-        pub struct $name($core);
-
-        #[allow(dead_code)]
-        impl $name {
-            pub(crate) fn from_core(value: $core) -> Self {
-                Self(value)
-            }
-
-            pub(crate) fn to_core(&self) -> $core {
-                self.0.clone()
-            }
-        }
-
-        #[wasm_bindgen]
-        impl $name {
-            #[wasm_bindgen(js_name = fromObject)]
-            pub fn from_object(value: js_sys::Object) -> Result<Self, wasm_bindgen::JsError> {
-                Ok(Self(deserialize_object(value)?))
-            }
-
-            #[wasm_bindgen(js_name = toObject)]
-            pub fn to_object(&self) -> Result<js_sys::Object, wasm_bindgen::JsError> {
-                serialize_object(&self.0)
-            }
-        }
-    };
-}
-
-wasm_object_value!(NookOAuthFileConfigValue, nook_core::OAuthFileConfigData);
-wasm_object_value!(NookStorageProviderValue, nook_core::StorageProviderData);
-wasm_object_value!(
-    NookAuthProvidersSnapshotValue,
-    nook_core::AuthProvidersSnapshotData
-);
-wasm_object_value!(
-    NookNormalizedAuthSnapshotValue,
-    nook_core::NormalizedAuthSnapshot
-);
-wasm_object_value!(
-    NookICloudSharedStorageTargetValue,
-    nook_core::ICloudSharedTarget
-);
-wasm_object_value!(
-    NookSharedStorageGrantRequestValue,
-    nook_core::SharedStorageGrantRequest
-);
-wasm_object_value!(
-    NookSharedStorageGrantOutcomeValue,
-    nook_core::SharedStorageGrantOutcome
-);
-
-#[wasm_bindgen]
-pub struct NookLocalAuthProviderSnapshotValue {
-    snapshot: nook_core::AuthProvidersSnapshotData,
-    migrated: bool,
-}
-
-impl NookLocalAuthProviderSnapshotValue {
-    pub(crate) fn new(snapshot: nook_core::AuthProvidersSnapshotData, migrated: bool) -> Self {
-        Self { snapshot, migrated }
-    }
-}
-
-#[wasm_bindgen]
-impl NookLocalAuthProviderSnapshotValue {
-    #[wasm_bindgen(getter)]
-    pub fn snapshot(&self) -> NookAuthProvidersSnapshotValue {
-        NookAuthProvidersSnapshotValue::from_core(self.snapshot.clone())
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn migrated(&self) -> bool {
-        self.migrated
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookStorageProviderList(Vec<nook_core::StorageProviderData>);
-
-impl NookStorageProviderList {
-    pub(crate) fn from_core(values: Vec<nook_core::StorageProviderData>) -> Self {
-        Self(values)
-    }
-
-    pub(crate) fn as_core(&self) -> &[nook_core::StorageProviderData] {
-        &self.0
-    }
-}
-
-#[wasm_bindgen]
-impl NookStorageProviderList {
-    #[wasm_bindgen(js_name = fromArray)]
-    pub fn from_array(values: &js_sys::Array) -> Result<Self, wasm_bindgen::JsError> {
-        let providers = values
-            .iter()
-            .map(serde_wasm_bindgen::from_value)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self(providers))
-    }
-
-    #[wasm_bindgen(js_name = toArray)]
-    pub fn to_array(&self) -> Result<js_sys::Array, wasm_bindgen::JsError> {
-        Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
-    }
-}
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -150,14 +27,15 @@ impl NookVaultArchitecture {
     }
 
     #[wasm_bindgen(js_name = simple)]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn simple(
-        device_mode: &str,
-        replication_type: &str,
+        device_mode: nook_core::DeviceMode,
+        replication_type: nook_core::ReplicationType,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let architecture = nook_core::VaultArchitecture {
-            device_mode: nook_core::DeviceMode::parse(device_mode)?,
+            device_mode,
             vault_type: nook_core::VaultType::Simple,
-            replication_type: nook_core::ReplicationType::parse(replication_type)?,
+            replication_type,
             sentinel: None,
         };
         architecture.validate()?;
@@ -165,17 +43,18 @@ impl NookVaultArchitecture {
     }
 
     #[wasm_bindgen(js_name = sentinel)]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn sentinel(
-        device_mode: &str,
-        replication_type: &str,
+        device_mode: nook_core::DeviceMode,
+        replication_type: nook_core::ReplicationType,
         threshold: u8,
         required_participants: u8,
         ready_participants: u8,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let architecture = nook_core::VaultArchitecture {
-            device_mode: nook_core::DeviceMode::parse(device_mode)?,
+            device_mode,
             vault_type: nook_core::VaultType::Sentinel,
-            replication_type: nook_core::ReplicationType::parse(replication_type)?,
+            replication_type,
             sentinel: Some(nook_core::SentinelPolicy {
                 threshold,
                 required_participants,
@@ -187,18 +66,18 @@ impl NookVaultArchitecture {
     }
 
     #[wasm_bindgen(getter, js_name = device_mode)]
-    pub fn device_mode(&self) -> String {
-        self.0.device_mode.as_str().to_owned()
+    pub fn device_mode(&self) -> nook_core::DeviceMode {
+        self.0.device_mode
     }
 
     #[wasm_bindgen(getter, js_name = vault_type)]
-    pub fn vault_type(&self) -> String {
-        self.0.vault_type.as_str().to_owned()
+    pub fn vault_type(&self) -> nook_core::VaultType {
+        self.0.vault_type
     }
 
     #[wasm_bindgen(getter, js_name = replication_type)]
-    pub fn replication_type(&self) -> String {
-        self.0.replication_type.as_str().to_owned()
+    pub fn replication_type(&self) -> nook_core::ReplicationType {
+        self.0.replication_type
     }
 
     #[wasm_bindgen(getter, js_name = sentinel_threshold)]
@@ -792,70 +671,8 @@ impl NookPasskeyAssertion {
 }
 
 #[wasm_bindgen(typescript_custom_section)]
-const AUTH_PROVIDER_TYPES: &'static str = r#"
+const WEB_TYPES: &'static str = r#"
 export type NookAppLocale = 'en' | 'ru';
-
-export type NookStorageProviderType =
-  | 'local'
-  | 'local-folder'
-  | 'github'
-  | 'oauth-file';
-
-export type NookOAuthFilePreset = 'google-drive' | 'icloud';
-export type NookGoogleDriveMode = 'private' | 'shared';
-export type NookICloudMode = 'private' | 'shared';
-
-export interface NookOAuthFileConfig {
-  preset: NookOAuthFilePreset;
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt?: string;
-  fileId?: string;
-  fileName?: string;
-  accountEmail?: string;
-  driveMode?: NookGoogleDriveMode;
-  /** Shared-mode My Drive folder id (`drive.file` + `drive.readonly`). */
-  folderId?: string;
-  iCloudMode?: NookICloudMode;
-  /** Non-secret serialized CloudKit share/zone routing target. */
-  iCloudShareTarget?: string;
-}
-
-export interface NookLocalFolderProviderConfig {
-  directoryName?: string;
-  handleId?: string;
-}
-
-export interface NookStorageProvider {
-  id: string;
-  type: NookStorageProviderType;
-  label: string;
-  githubPat?: string;
-  githubRepo?: string;
-  oauthFile?: NookOAuthFileConfig;
-  localFolder?: NookLocalFolderProviderConfig;
-  storeId?: string;
-  lastSyncedVersion?: number;
-  lastSyncedAt?: string;
-  lastSyncRevision?: string;
-  lastCommonContentHash?: string;
-  createdAt: string;
-}
-
-export interface NookAuthProvidersSnapshot {
-  providers: NookStorageProvider[];
-  activeVaultStoreId?: string;
-}
-
-export interface NookLoadedAuthProviders {
-  snapshot: NookAuthProvidersSnapshot;
-  changed: boolean;
-}
-
-export interface NookLocalAuthProviderSnapshot {
-  snapshot: NookAuthProvidersSnapshot;
-  migrated: boolean;
-}
 "#;
 
 fn browser_language_tags() -> Vec<String> {
@@ -953,49 +770,6 @@ impl NookClientRunModeUtil {
         nook_core::ClientRunMode::parse(mode)
             .map(Into::into)
             .ok_or_else(|| wasm_bindgen::JsError::new(&format!("Unknown client run mode: {mode}")))
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookStorageProviderKind {
-    Local,
-    LocalFolder,
-    Github,
-    OauthFile,
-}
-
-impl From<nook_core::StorageProviderType> for NookStorageProviderKind {
-    fn from(provider_type: nook_core::StorageProviderType) -> Self {
-        match provider_type {
-            nook_core::StorageProviderType::Local => Self::Local,
-            nook_core::StorageProviderType::LocalFolder => Self::LocalFolder,
-            nook_core::StorageProviderType::Github => Self::Github,
-            nook_core::StorageProviderType::OauthFile => Self::OauthFile,
-        }
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookStorageProviderTypeUtil;
-
-#[wasm_bindgen]
-impl NookStorageProviderTypeUtil {
-    pub fn parse(provider_type: &str) -> Result<NookStorageProviderKind, wasm_bindgen::JsError> {
-        Ok(nook_core::StorageProviderType::parse(provider_type)?.into())
-    }
-
-    #[wasm_bindgen(js_name = value)]
-    #[must_use]
-    pub fn value(kind: NookStorageProviderKind) -> String {
-        match kind {
-            NookStorageProviderKind::Local => nook_core::StorageProviderType::Local,
-            NookStorageProviderKind::LocalFolder => nook_core::StorageProviderType::LocalFolder,
-            NookStorageProviderKind::Github => nook_core::StorageProviderType::Github,
-            NookStorageProviderKind::OauthFile => nook_core::StorageProviderType::OauthFile,
-        }
-        .as_str()
-        .to_owned()
     }
 }
 

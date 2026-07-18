@@ -2,15 +2,15 @@ import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
   NookVaultClientPolicy,
-  NookOAuthFileConfigValue,
-  NookStorageProviderList,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
   activeVaultProviders,
   providersVisibleWhileDeviceLocked,
   stagedRemoteStorageArgs,
   syncProvidersForActiveVault,
+  type AuthProvidersSnapshot,
 } from '$app-wasm'
+import type { OAuthFilePreset } from '$app-wasm'
 
 const providers = [
   {
@@ -39,6 +39,7 @@ const providers = [
     createdAt: '2026-07-17T00:00:00.000Z',
   },
 ]
+const snapshot = { providers } as AuthProvidersSnapshot
 
 describe('portable vault client policy', () => {
   test('owns automatic unlock and join approval transitions', () => {
@@ -70,43 +71,34 @@ describe('portable vault client policy', () => {
   })
 
   test('scopes providers and provider roles to the active vault', () => {
-    const providerValues = NookStorageProviderList.fromArray(providers)
-    try {
-      const active = activeVaultProviders(providerValues, 'store-a')
-      const sync = syncProvidersForActiveVault(providerValues, 'store-a')
-      const locked = providersVisibleWhileDeviceLocked(providerValues)
-      try {
-        expect(
-          (active.toArray() as typeof providers).map((provider) => provider.id),
-        ).toEqual(['local-a', 'github-a'])
-        expect(
-          (sync.toArray() as typeof providers).map((provider) => provider.id),
-        ).toEqual(['github-a'])
-        expect(
-          (locked.toArray() as typeof providers).map((provider) => provider.id),
-        ).toEqual(['local-a'])
-      } finally {
-        active.free()
-        sync.free()
-        locked.free()
-      }
-    } finally {
-      providerValues.free()
-    }
+    expect(
+      activeVaultProviders(snapshot, 'store-a').providers.map(
+        (provider) => provider.id,
+      ),
+    ).toEqual(['local-a', 'github-a'])
+    expect(
+      syncProvidersForActiveVault(snapshot, 'store-a').providers.map(
+        (provider) => provider.id,
+      ),
+    ).toEqual(['github-a'])
+    expect(
+      providersVisibleWhileDeviceLocked(snapshot).providers.map(
+        (provider) => provider.id,
+      ),
+    ).toEqual(['local-a'])
   })
 
   test('normalizes a legacy Google Drive draft before manager connection', () => {
-    const config = NookOAuthFileConfigValue.fromObject({
-      preset: '',
-      accessToken: 'token',
-      fileId: 'file-id',
-      fileName: 'stored-name',
-    })
     const args = stagedRemoteStorageArgs(
       'oauth-file',
       undefined,
       'nook-events',
-      config,
+      {
+        preset: '' as OAuthFilePreset,
+        accessToken: 'token',
+        fileId: 'file-id',
+        fileName: 'stored-name',
+      },
     )
     expect(args).toBeDefined()
     try {

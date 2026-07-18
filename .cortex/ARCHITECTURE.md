@@ -168,10 +168,12 @@ root/
   the Unified, Simple, and Sentinel projects. Do not recreate an app-local
   `src/lib` symlink or copy shared entrypoints/components into those projects.
 - **No ownership of domain policy:** Shared TS/Svelte code may coordinate UI,
-  browser-page scanning, message DTOs, or wrapper helpers around WASM exports,
-  but it must not own vault format logic, crypto, validation, password
-  generation, or secret search. Those remain in `nook-core` and are exposed
-  through `nook-wasm`.
+  browser-page scanning, message DTOs, or adapters around WASM exports, but it
+  must not own vault format logic, crypto, validation, password generation, or
+  secret search. Generated WASM types/functions are imported or re-exported
+  directly; a TypeScript wrapper must perform an actual lifecycle, reactive
+  proxy, UI-default, or browser-state translation. Those domain behaviors and
+  types remain in `nook-core` and are exposed through `nook-wasm`.
 - **One generated WASM package:** `nook-wasm` is compiled and optimized once into
   `nook-web-shared/src/vault-app/lib/nook-wasm`. Unified, Simple, Sentinel, and
   extension bootstraps configure distinct immutable Rust application
@@ -309,7 +311,7 @@ members:  members_key-encrypted catalog entries
 
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preflight` | `task preflight` — standalone Rust tests for whole-repository invariants; runs before app setup in PR/main CI                                                                                            |
+| `preflight` | `task preflight` — standalone Rust tests for whole-repository invariants, including Rust/WASM-to-TypeScript boundary mirrors, no-op forwarding wrappers, unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures; runs before app setup in PR/main CI                                                                                            |
 | `nook-core` / `nook-auth2` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web/nook-web-app`  | Playwright e2e: `task web:test:e2e` (main stub gate and explicit PR validation), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |

@@ -20,7 +20,7 @@ tasks:
   wasm:build:fast:
     desc: Build nook-wasm for the mounted web app without wasm-opt (local iteration).
     deps:
-      - setup:rust
+      - setup:rust:fast
     cmds:
       - task: docker:wasm:build:fast
 

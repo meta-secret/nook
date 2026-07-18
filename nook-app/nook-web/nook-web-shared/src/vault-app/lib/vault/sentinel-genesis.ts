@@ -1,6 +1,6 @@
 import {
-  NookAuthProvidersSnapshotValue,
   setActiveVault,
+  type AuthProvidersSnapshot,
   type NookSentinelGenesisFinalizeResult,
   type NookSentinelGenesisStatus,
 } from "$app-wasm";
@@ -260,36 +260,30 @@ export async function prepareOnboardingLinks(state: VaultState): Promise<void> {
   if (!state.manager || !state.sentinelGenesisStoreId) return;
   const provider = state.syncProviders[0];
   if (!provider || provider.type === "local-folder") return;
-  const providerSnapshot = NookAuthProvidersSnapshotValue.fromObject(
-    JSON.parse(
-      JSON.stringify({
-        providers: [provider],
-        activeVaultStoreId: state.sentinelGenesisStoreId,
-      }),
-    ) as object,
+  const providerSnapshot = JSON.parse(
+    JSON.stringify({
+      providers: [provider],
+      activeVaultStoreId: state.sentinelGenesisStoreId,
+    }),
+  ) as AuthProvidersSnapshot;
+  state.sentinelGenesisDeliveries = state.sentinelGenesisDeliveries.map(
+    (delivery) => {
+      const sharePayload = delivery.sharePayload ?? delivery.payload;
+      if (delivery.participantId === state.deviceId) {
+        return { ...delivery, sharePayload };
+      }
+      const packageJson = state.manager!.createSentinelOnboardingPackage(
+        state.sentinelGenesisRequest,
+        sharePayload,
+        providerSnapshot,
+      );
+      return {
+        ...delivery,
+        sharePayload,
+        payload: buildSentinelOnboardingLink(packageJson),
+      };
+    },
   );
-  try {
-    state.sentinelGenesisDeliveries = state.sentinelGenesisDeliveries.map(
-      (delivery) => {
-        const sharePayload = delivery.sharePayload ?? delivery.payload;
-        if (delivery.participantId === state.deviceId) {
-          return { ...delivery, sharePayload };
-        }
-        const packageJson = state.manager!.createSentinelOnboardingPackage(
-          state.sentinelGenesisRequest,
-          sharePayload,
-          providerSnapshot,
-        );
-        return {
-          ...delivery,
-          sharePayload,
-          payload: buildSentinelOnboardingLink(packageJson),
-        };
-      },
-    );
-  } finally {
-    providerSnapshot.free();
-  }
 }
 
 export async function acceptOnboardingPackage(

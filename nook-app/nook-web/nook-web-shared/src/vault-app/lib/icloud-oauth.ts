@@ -6,14 +6,12 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
-import {
-  NookOAuthFileConfigValue,
-  iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore,
-} from "$app-wasm";
+import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
 import {
   default as initNookWasm,
   createICloudSharedStorageTarget,
   parseICloudSharedStorageTarget,
+  type ICloudSharedTarget,
 } from "$app-wasm";
 import {
   ICLOUD_API_TOKEN,
@@ -901,12 +899,7 @@ function requireStoredWebAuthToken(
   };
 }
 
-export type ICloudSharedStorageTarget = {
-  role: "owner" | "participant";
-  zoneName: string;
-  ownerRecordName: string;
-  rootRecordName: string;
-  shortGuid: string;
+export type ICloudSharedStorageTarget = ICloudSharedTarget & {
   storageTargetId: string;
 };
 
@@ -916,13 +909,8 @@ function normalizedICloudShortGuid(value: string): string {
     throw new Error("provider_setup.icloud_shared_link_required");
   }
   if (trimmed.startsWith("icloud-share-v1:")) {
-    const targetValue = parseICloudSharedStorageTarget(trimmed);
-    try {
-      const target = targetValue.toObject() as { shortGuid?: string };
-      if (target.shortGuid?.trim()) return target.shortGuid.trim();
-    } finally {
-      targetValue.free();
-    }
+    const target = parseICloudSharedStorageTarget(trimmed);
+    if (target.shortGuid?.trim()) return target.shortGuid.trim();
   }
   try {
     const url = new URL(trimmed);
@@ -1021,23 +1009,9 @@ export async function acceptICloudSharedVault(
   await initICloudAuth();
   await initNookWasm();
   const container = window.CloudKit!.getDefaultContainer();
-  let encodedTarget:
-    | {
-        role: "owner" | "participant";
-        zoneName: string;
-        ownerRecordName: string;
-        rootRecordName: string;
-        shortGuid: string;
-      }
-    | undefined;
-  if (shareReference.trim().startsWith("icloud-share-v1:")) {
-    const targetValue = parseICloudSharedStorageTarget(shareReference.trim());
-    try {
-      encodedTarget = targetValue.toObject() as typeof encodedTarget;
-    } finally {
-      targetValue.free();
-    }
-  }
+  const encodedTarget = shareReference.trim().startsWith("icloud-share-v1:")
+    ? parseICloudSharedStorageTarget(shareReference.trim())
+    : undefined;
   const shortGuid = normalizedICloudShortGuid(shareReference);
   const identity =
     authSetupUserIdentity ?? (await container.fetchCurrentUserIdentity?.());
@@ -1361,21 +1335,13 @@ export function oauthTokensToICloudConfig(
   tokens: ICloudOAuthTokens,
   existing?: OAuthFileConfig,
 ): OAuthFileConfig {
-  const existingValue = existing
-    ? NookOAuthFileConfigValue.fromObject(
-        JSON.parse(JSON.stringify(existing)) as object,
-      )
-    : undefined;
-  const config = iCloudOAuthTokensToConfigCore(
+  return iCloudOAuthTokensToConfigCore(
     tokens.accessToken,
     tokens.accountName ?? undefined,
-    existingValue,
+    existing
+      ? (JSON.parse(JSON.stringify(existing)) as OAuthFileConfig)
+      : undefined,
   );
-  try {
-    return config.toObject() as OAuthFileConfig;
-  } finally {
-    config.free();
-  }
 }
 
 export async function ensureValidICloudOAuthFileConfig(

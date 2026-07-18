@@ -62,15 +62,18 @@ validation may not. If a local check fails after the push, fix it, commit and
 push the complete fix immediately, then rerun local validation in parallel with
 the refreshed PR workflow.
 
-**PR GitHub Actions is elastic and developer-critical.** `pr.yml` runs on
-GitHub-hosted `ubuntu-latest`. The Docker setup restores separate GitHub Actions
+**PR GitHub Actions is the primary validation pipeline.** `pr.yml` runs on
+GitHub-hosted `ubuntu-latest` and every result is bound to the pushed PR head.
+Once a coherent change is ready, push immediately to trigger or refresh these
+checks; do not postpone the push for a full local gate, benchmark, PR metadata
+edit, or other optional follow-up. The Docker setup restores separate GitHub Actions
 BuildKit cache scopes for Rust/WASM, web dependencies, and the final web image;
 main refreshes the default-branch cache visible to new PRs, and follow-up pushes
 reuse the PR branch cache. A failing fmt, clippy,
 unit test, or e2e spec still burns a remote validation cycle, so do not use PR
 CI as the primary debug loop.
 
-**Local Docker is warm and fast.** The same Task commands reuse independently cached Rust/WASM and web image lineages on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating.
+**Local Docker is warm and fast.** The same Task commands reuse independently cached Rust/WASM and web image lineages on the developer machine. Local runs are **strongly preferred** for focused debugging and iteration, but they complement rather than precede the primary PR pipeline.
 
 When functionality for the current iteration is complete, **commit and push/open/update the PR before starting any required final local gate**, then immediately run the local gate while Nook's PR workflows start remotely. This is for final-validation parallelism, not half-finished work: do only focused development checks before the push, and do not merge until the latest branch has both passing local validation and green applicable repository-owned PR test checks.
 

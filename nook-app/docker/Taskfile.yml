@@ -98,7 +98,7 @@ tasks:
 
   docker:wasm:build:fast:
     internal: true
-    # Mounted fast path uses the explicit Rust image and writes the generated wasm pkg to the host.
+    # Mounted fast path uses a manifest-keyed image whose Cargo target lives outside the bind mount.
     cmds:
       - >-
         {{.DOCKER}} run --rm
@@ -108,10 +108,12 @@ tasks:
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e CI_AGENT_IMAGE=nook-ci-agent:local
         -e WASM_BUILD_MODE=dev
+        -e CARGO_TARGET_DIR=/opt/nook/cargo-target
         -v "{{.REPO_ROOT}}:/meta-secret/nook"
         -w /meta-secret/nook
-        {{.DOCKER_RUST_IMAGE}}
+        {{.DOCKER_RUST_FAST_IMAGE}}
         task _wasm:build:fast
 
   docker:e2e:run:

@@ -65,6 +65,13 @@ gate as `local checks → push → remote checks`; that wastes the entire local-
 duration. The required order is `commit → push/open or update PR → local checks
 and repository-owned PR checks in parallel`.
 
+The repository-owned GitHub Actions PR workflow is the primary validation
+pipeline and its checks are bound to the pushed head SHA. Therefore publishing
+the coherent commit is the first final-validation action, not an optional step
+after local validation, timing measurements, PR-description cleanup, or other
+follow-up work. Local Docker checks are complementary diagnostics and must not
+delay triggering or refreshing the PR workflow.
+
 Tiny focused commands used to develop or make the commit coherent may run before
 the push. The minimum local gate, full suites, builds, e2e, and any repeated
 post-fix validation must run after the completed change is pushed so remote work

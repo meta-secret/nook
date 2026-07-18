@@ -24,6 +24,10 @@ variable "DOCKER_RUST_IMAGE" {
   default = "nook-rust:local"
 }
 
+variable "DOCKER_RUST_FAST_IMAGE" {
+  default = "nook-rust-fast:local"
+}
+
 variable "DOCKER_RUST_BROWSER_IMAGE" {
   default = "nook-rust-browser:local"
 }
@@ -179,6 +183,12 @@ target "nook-web-e2e" {
 target "nook-rust" {
   inherits = ["_nook-rust-common"]
   tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
+target "nook-rust-fast" {
+  inherits = ["_nook-rust-fast-common"]
+  tags     = [DOCKER_RUST_FAST_IMAGE]
   output   = ["type=docker"]
 }
 

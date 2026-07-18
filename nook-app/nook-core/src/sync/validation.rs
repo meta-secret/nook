@@ -1,6 +1,7 @@
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{is_auth_key_id, is_device_id};
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Backend that persists the encrypted vault file.
@@ -77,8 +78,9 @@ pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 /// wasm connect `github_repo` argument for `google-drive` mode.
 pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum StorageProviderType {
     Local,
     LocalFolder,
@@ -110,21 +112,25 @@ impl StorageProviderType {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OauthFilePreset {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum OAuthFilePreset {
     GoogleDrive,
+    #[serde(rename = "icloud")]
     ICloud,
 }
+
+pub type OauthFilePreset = OAuthFilePreset;
 
 /// Google Drive storage visibility selected for one provider connection.
 ///
 /// This is intentionally independent from vault membership/replication policy:
 /// a Simple or Sentinel vault may use either a private app-data replica or a
 /// folder shared through Google Drive ACLs.
-#[wasm_bindgen]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum GoogleDriveMode {
     #[default]
     Private,
@@ -157,9 +163,9 @@ impl GoogleDriveMode {
 /// `CloudKit` zone. Shared providers use a custom record hierarchy: owners write
 /// through their private database while participants write through their
 /// shared database with their own `CloudKit` web-auth token.
-#[wasm_bindgen]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ICloudMode {
     #[default]
     Private,
@@ -187,8 +193,9 @@ impl ICloudMode {
 }
 
 /// Which `CloudKit` database exposes a shared record hierarchy to this account.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ICloudShareRole {
     Owner,
     Participant,
@@ -200,8 +207,9 @@ pub enum ICloudShareRole {
 /// deliberately contains no `CloudKit` web-auth token; every account signs in
 /// independently. `short_guid` is the acceptance handle, while the zone/root
 /// fields route `CloudKit` Web Services after the share has been accepted.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct ICloudSharedTarget {
     pub role: ICloudShareRole,
     pub zone_name: String,
@@ -280,7 +288,7 @@ impl ICloudEventTarget {
     }
 }
 
-impl OauthFilePreset {
+impl OAuthFilePreset {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {

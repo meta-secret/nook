@@ -13,9 +13,6 @@ import * as localLoginActions from "$lib/vault/local-login";
 
 const log = createLogger("vault-sync");
 
-/** Pending user choice when local and remote vaults diverge. */
-export type PendingSyncConflict = NookPendingSyncConflict;
-
 /** A local folder was chosen at a level that contains event logs for many vaults. */
 export type LocalFolderMultipleVaultsIssue = {
   providerId: string;
@@ -29,7 +26,7 @@ async function readLocalVaultBlob(): Promise<string> {
 }
 
 type SyncConflictLabelState = {
-  pendingSyncConflict: PendingSyncConflict | undefined;
+  pendingSyncConflict: NookPendingSyncConflict | undefined;
   t(key: string, values?: Record<string, string>): string;
 };
 
@@ -339,7 +336,7 @@ export async function refreshReplacementConflicts(
 
 export function stageSyncConflict(
   state: VaultState,
-  conflict: PendingSyncConflict,
+  conflict: NookPendingSyncConflict,
 ) {
   state.pendingSyncConflict = conflict;
   state.errorMsg = "";
