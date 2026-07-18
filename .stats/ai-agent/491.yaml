@@ -1,0 +1,193 @@
+schema_version: 1
+source_pr:
+  number: 491
+  url: https://github.com/meta-secret/nook/pull/491
+  title: Fix onboarding provider conflict dialog
+  change_surface: rust_wasm_web_browser_flow
+  head_sha: fb161a60977276ef1c74a91218913d93ef52e9ab
+  started_at: 2026-07-18T09:42:00Z
+  opened_at: 2026-07-18T09:57:25Z
+  merged_at: 2026-07-18T10:37:55Z
+  elapsed_seconds: 3355
+  open_to_merge_seconds: 2430
+summary:
+  local_execution_count: 16
+  local_check_count: 7
+  local_test_count: 5
+  local_combined_count: 4
+  local_execution_seconds: 1807
+  github_actions_run_count: 3
+  github_actions_seconds: 1590
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: task wasm:build:fast
+    category: check
+    started_at: 2026-07-18T09:43:30Z
+    finished_at: 2026-07-18T09:44:40Z
+    duration_seconds: 70
+    outcome: passed
+    reason: focused_validation
+  - command: E2E_SPEC=e2e/sync-conflict-resolution.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-18T09:44:45Z
+    finished_at: 2026-07-18T09:47:55Z
+    duration_seconds: 190
+    outcome: passed
+    reason: focused_browser_regression
+  - command: task format
+    category: check
+    started_at: 2026-07-18T09:48:00Z
+    finished_at: 2026-07-18T09:49:05Z
+    duration_seconds: 65
+    outcome: passed
+    reason: implementation_formatting
+  - command: task check
+    category: combined
+    started_at: 2026-07-18T09:49:10Z
+    finished_at: 2026-07-18T09:52:00Z
+    duration_seconds: 170
+    outcome: passed
+    reason: implementation_validation
+  - command: PR_NUMBER=491 task ci:pr
+    category: combined
+    started_at: 2026-07-18T09:52:05Z
+    finished_at: 2026-07-18T09:56:30Z
+    duration_seconds: 265
+    outcome: passed
+    reason: pr_equivalent_validation
+  - command: task pr:ready PR=491
+    category: check
+    started_at: 2026-07-18T10:13:20Z
+    finished_at: 2026-07-18T10:13:25Z
+    duration_seconds: 5
+    outcome: failed
+    reason: actionable_review_threads
+  - command: task wasm:build:fast
+    category: check
+    started_at: 2026-07-18T10:16:00Z
+    finished_at: 2026-07-18T10:17:08Z
+    duration_seconds: 68
+    outcome: passed
+    reason: review_fix_wasm_build
+  - command: task wasm:test
+    category: test
+    started_at: 2026-07-18T10:17:10Z
+    finished_at: 2026-07-18T10:18:02Z
+    duration_seconds: 52
+    outcome: passed
+    reason: review_fix_domain_boundary_test
+  - command: task format
+    category: check
+    started_at: 2026-07-18T10:18:05Z
+    finished_at: 2026-07-18T10:19:15Z
+    duration_seconds: 70
+    outcome: passed
+    reason: review_fix_formatting
+  - command: E2E_SPEC=e2e/sync-conflict-resolution.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-18T10:20:00Z
+    finished_at: 2026-07-18T10:20:45Z
+    duration_seconds: 45
+    outcome: failed
+    reason: rust_format_gate_found_long_assertion
+  - command: E2E_SPEC=e2e/sync-conflict-resolution.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-18T10:23:45Z
+    finished_at: 2026-07-18T10:28:30Z
+    duration_seconds: 285
+    outcome: failed
+    reason: test_used_incorrect_generated_wasm_getter_name
+  - command: E2E_SPEC=e2e/sync-conflict-resolution.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-18T10:28:40Z
+    finished_at: 2026-07-18T10:30:45Z
+    duration_seconds: 125
+    outcome: passed
+    reason: review_fix_browser_regression
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-18T10:30:50Z
+    finished_at: 2026-07-18T10:30:50Z
+    duration_seconds: 0
+    outcome: passed
+    reason: final_diff_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-18T10:31:00Z
+    finished_at: 2026-07-18T10:34:00Z
+    duration_seconds: 180
+    outcome: passed
+    reason: exact_head_validation
+  - command: PR_NUMBER=491 task ci:pr
+    category: combined
+    started_at: 2026-07-18T10:34:05Z
+    finished_at: 2026-07-18T10:37:38Z
+    duration_seconds: 213
+    outcome: passed
+    reason: exact_head_pr_equivalent_validation
+  - command: task pr:ready PR=491
+    category: check
+    started_at: 2026-07-18T10:37:40Z
+    finished_at: 2026-07-18T10:37:44Z
+    duration_seconds: 4
+    outcome: passed
+    reason: merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29640032684
+    run_attempt: 1
+    head_sha: 6c162de23550e3715cfdc4712f0b054a8b0bdfee
+    trigger: pull_request
+    started_at: 2026-07-18T09:57:28Z
+    finished_at: 2026-07-18T10:04:25Z
+    duration_seconds: 417
+    conclusion: success
+  - workflow: PR
+    run_id: 29640951265
+    run_attempt: 1
+    head_sha: fb161a60977276ef1c74a91218913d93ef52e9ab
+    trigger: pull_request
+    started_at: 2026-07-18T10:30:26Z
+    finished_at: 2026-07-18T10:36:25Z
+    duration_seconds: 359
+    conclusion: success
+  - workflow: Main
+    run_id: 29641165304
+    run_attempt: 1
+    head_sha: ddd8e4bbc643d0d57210110f5a416283f976b10a
+    trigger: push
+    started_at: 2026-07-18T10:37:57Z
+    finished_at: 2026-07-18T10:51:31Z
+    duration_seconds: 814
+    conclusion: failure
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-18T10:30:19Z
+    reason: review_fixes_for_timeout_argument_race_and_storage_restoration
+    initiated_by_agent: true
+merge_attempts:
+  - at: 2026-07-18T10:37:55Z
+    method: squash
+    outcome: success
+    reason: readiness_passed_remote_merge_succeeded_local_cleanup_blocked_by_main_worktree
+comparison:
+  baseline_prs: [488]
+  baseline_quality: weak
+  baseline_note: Only one prior record exists and it covers docs and CI rather than a Rust WASM browser flow
+  elapsed_seconds_change_percent: -5.4
+  local_execution_seconds_change_percent: 187.3
+  github_actions_seconds_change_percent: -4.3
+  regression: false
+  regression_reasons:
+    - The only baseline has a different change surface and gate set
+waste_assessment:
+  wasteful: false
+  findings:
+    - One focused browser run stopped at the mandatory Rust formatting gate after the formatter output required a manual patch
+    - One focused browser run exposed an incorrect test-only generated getter and the next changed-head run passed
+    - Review fixes required a second exact-head local and remote validation cycle
+    - No suite or workflow was rerun on an unchanged head without a code or formatting correction
+    - The post-merge Main run failed on the same pre-existing extension pairing assertion as the preceding product Main run, so an unchanged-head rerun was not requested
+  required_actions: []
