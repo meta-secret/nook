@@ -6,6 +6,7 @@ import {
   isExtensionLocalEventLogUpdatedMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
+  isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
@@ -16,6 +17,7 @@ import type {
   ExtensionPairedVaultIdentityDiscoveryMessage,
   ExtensionPairedVaultIdentityHandoffRequestMessage,
   ExtensionPairedVaultIdentityStatusMessage,
+  ExtensionPairedVaultUnlockRequestMessage,
   ExtensionPairingApprovedMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -111,10 +113,10 @@ function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
-function openCompanionLauncher(): void {
+async function openCompanionLauncher(): Promise<void> {
   const popupUrl = chrome.runtime.getURL('popup/index.html')
   if (chrome.windows?.create) {
-    void chrome.windows.create({
+    await chrome.windows.create({
       url: popupUrl,
       type: 'popup',
       width: 440,
@@ -123,7 +125,7 @@ function openCompanionLauncher(): void {
     })
     return
   }
-  chrome.tabs.create({ url: popupUrl })
+  await chrome.tabs.create({ url: popupUrl })
 }
 
 function randomNonce(): string {
@@ -436,6 +438,31 @@ async function discoverPairedVaultIdentity(
   } catch {
     return unavailable
   }
+}
+
+async function requestPairedVaultUnlock(
+  message: ExtensionPairedVaultUnlockRequestMessage,
+): Promise<Record<string, unknown>> {
+  const { requestId, vaultStoreId } = message.payload
+  const key = pairingGrantStorageKey(vaultStoreId)
+  const stored = await getLocalStorage(key)
+  if (!isStoredExtensionPairingGrant(stored[key])) {
+    return {
+      ok: false,
+      requestId,
+      vaultStoreId,
+      reason: 'vault-not-paired',
+    }
+  }
+
+  await ensureExtensionSessionDocument()
+  const statusResponse = (await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })) as ExtensionSessionStatusResponse
+  if (statusResponse.status !== 'unlocked') {
+    await openCompanionLauncher()
+  }
+  return { ok: true, requestId, vaultStoreId }
 }
 
 function hasPairingApprovedType(
@@ -967,9 +994,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
     }
-    openCompanionLauncher()
-    sendResponse({ ok: true })
-    return false
+    void openCompanionLauncher()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false, reason: 'launcher-failed' }))
+    return true
   }
 
   if (isBeginExtensionPairingMessage(message)) {
@@ -994,6 +1022,24 @@ chrome.runtime.onMessageExternal.addListener(
         return false
       }
       void discoverPairedVaultIdentity(message).then(sendResponse)
+      return true
+    }
+
+    if (isExtensionPairedVaultUnlockRequestMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void requestPairedVaultUnlock(message)
+        .then(sendResponse)
+        .catch(() =>
+          sendResponse({
+            ok: false,
+            requestId: message.payload.requestId,
+            vaultStoreId: message.payload.vaultStoreId,
+            reason: 'unlock-launch-failed',
+          }),
+        )
       return true
     }
 

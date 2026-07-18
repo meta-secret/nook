@@ -44,6 +44,13 @@ export async function discoverPairedExtensionIdentity(
   return { status: "unavailable" };
 }
 
+export async function requestPairedExtensionUnlock(
+  _vaultStoreId: string,
+): Promise<boolean> {
+  void _vaultStoreId;
+  return false;
+}
+
 export function scopeLabel(): never {
   throw new Error("errors.validation.sentinel_extension_forbidden");
 }

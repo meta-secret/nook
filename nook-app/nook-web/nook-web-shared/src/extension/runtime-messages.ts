@@ -68,6 +68,14 @@ export type ExtensionPairedVaultIdentityDiscoveryMessage = {
   }
 }
 
+export type ExtensionPairedVaultUnlockRequestMessage = {
+  type: 'nook:extension-paired-vault-unlock-request'
+  payload: {
+    requestId: string
+    vaultStoreId: string
+  }
+}
+
 type ExtensionPairedVaultIdentityStatusBase = {
   requestId: string
   vaultStoreId: string
@@ -107,6 +115,7 @@ export type RuntimeMessage =
   | BeginExtensionPairingMessage
   | ExtensionIdentityHandoffRequestMessage
   | ExtensionPairedVaultIdentityDiscoveryMessage
+  | ExtensionPairedVaultUnlockRequestMessage
   | ExtensionPairedVaultIdentityStatusMessage
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
@@ -237,6 +246,26 @@ export function isExtensionPairedVaultIdentityDiscoveryMessage(
   if (
     !isRuntimeMessage(message) ||
     message.type !== 'nook:extension-paired-vault-identity-discovery' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  return (
+    typeof payload.requestId === 'string' &&
+    payload.requestId.length > 0 &&
+    typeof payload.vaultStoreId === 'string' &&
+    payload.vaultStoreId.length > 0
+  )
+}
+
+export function isExtensionPairedVaultUnlockRequestMessage(
+  message: unknown,
+): message is ExtensionPairedVaultUnlockRequestMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-paired-vault-unlock-request' ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {

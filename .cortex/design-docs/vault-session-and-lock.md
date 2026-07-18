@@ -138,6 +138,15 @@ popup does not repeat the ceremony. It never persists the decrypted identity,
 PIN, or passkey PRF output to `chrome.storage`; expiry or browser shutdown
 zeroizes the manager and requires authorization again.
 
+Simple Vault silently checks a paired extension every three seconds while both
+the site and extension identity are locked. Automatic discovery must never open
+an authentication surface. When the user explicitly chooses **Unlock**, a
+paired locked extension opens its own authorization window; the website waits
+for the extension's memory-only identity handoff and must not fall through to a
+second website passkey ceremony. Site-to-extension requests have a bounded
+five-second response deadline so a suspended or broken runtime cannot leave the
+website unlock action pending forever.
+
 ---
 
 ## 3. Multiple vaults on one browser (#120)

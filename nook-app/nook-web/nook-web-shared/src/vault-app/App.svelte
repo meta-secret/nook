@@ -39,6 +39,7 @@
     discoverPairedExtensionIdentity,
     extensionConnectRequestFromLocation,
     isExtensionConnectPath,
+    requestPairedExtensionUnlock,
     type ExtensionConnectRequest,
   } from "$lib/extension-connect";
   import type { VaultItemType } from "$lib/nook";
@@ -108,6 +109,7 @@
   );
   let extensionBackedVaultSession = $state(false);
   let extensionDiscoveryStoreId = $state("");
+  const EXTENSION_LOCKED_RETRY_MS = 3_000;
   let sentinelInvitationRequest = $state(
     typeof window !== "undefined" && APP_KIND !== "simple"
       ? consumeSentinelGenesisRequestFromLocation()
@@ -295,8 +297,12 @@
       activeStoreId
     ) {
       extensionDiscoveryStoreId = "";
-      await resumePairedExtensionVault(activeStoreId);
+      const discoveryStatus = await resumePairedExtensionVault(activeStoreId);
       if (vault.isAuthenticated) return;
+      if (discoveryStatus === "locked") {
+        await requestPairedExtensionUnlock(activeStoreId);
+        return;
+      }
     }
     if (existingVaultNeedsDeviceUnlock) {
       const extensionIdentityCanUnlock =
@@ -423,7 +429,9 @@
     await vault.connectWithEnrollmentCode(code, password);
   }
 
-  async function resumePairedExtensionVault(storeId: string) {
+  async function resumePairedExtensionVault(
+    storeId: string,
+  ): Promise<"unavailable" | "locked" | "unlocked"> {
     extensionDiscoveryStoreId = storeId;
     const discovery = await discoverPairedExtensionIdentity(storeId);
     if (
@@ -431,7 +439,7 @@
       extensionConnectRoute ||
       vault.activeVaultStoreId !== storeId
     ) {
-      return;
+      return discovery.status;
     }
     if (discovery.status === "locked") {
       window.setTimeout(() => {
@@ -442,12 +450,13 @@
         ) {
           extensionDiscoveryStoreId = "";
         }
-      }, 1_000);
-      return;
+      }, EXTENSION_LOCKED_RETRY_MS);
+      return "locked";
     }
-    if (discovery.status !== "unlocked") return;
+    if (discovery.status !== "unlocked") return "unavailable";
     extensionIdentityRequest = discovery.request;
     await handleUnlock(true);
+    return "unlocked";
   }
 
   async function handleCreateDeviceVault(label: string) {
@@ -1167,7 +1176,7 @@
       >
         <p class="font-medium">{vault.t("app.security_conflict")}</p>
         <div class="mt-2 space-y-2 text-red-100">
-          {#each vault.securityConflicts as conflict (conflict.events.join(':'))}
+          {#each vault.securityConflicts as conflict (conflict.events.join(":"))}
             <p>{conflictReasons(conflict.reasons)}</p>
           {/each}
         </div>

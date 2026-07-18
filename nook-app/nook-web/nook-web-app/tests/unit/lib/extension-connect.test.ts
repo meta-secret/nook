@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
+  requestPairedExtensionUnlock,
 } from '$lib/extension-connect'
 import {
   isBeginExtensionPairingMessage,
@@ -10,6 +11,7 @@ import {
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityStatusMessage,
+  isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -22,6 +24,12 @@ import {
 function locationFromUrl(url: string): Location {
   return new URL(url) as unknown as Location
 }
+
+afterEach(() => {
+  document.documentElement.removeAttribute('data-nook-extension-runtime-id')
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 describe('extension connect route parsing', () => {
   test('accepts the canonical extension-connect path', () => {
@@ -274,6 +282,24 @@ describe('extension-owned pairing start', () => {
       }),
     ).toBe(true)
     expect(
+      isExtensionPairedVaultUnlockRequestMessage({
+        type: 'nook:extension-paired-vault-unlock-request',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-1',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionPairedVaultUnlockRequestMessage({
+        type: 'nook:extension-paired-vault-unlock-request',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: '',
+        },
+      }),
+    ).toBe(false)
+    expect(
       isExtensionPairedVaultIdentityStatusMessage({
         type: 'nook:extension-paired-vault-identity-status',
         payload: {
@@ -303,5 +329,51 @@ describe('extension-owned pairing start', () => {
         },
       }),
     ).toBe(true)
+  })
+})
+
+describe('paired extension unlock request', () => {
+  test('accepts only the response bound to its request and vault', async () => {
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-1',
+    )
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: (
+          extensionId: string,
+          message: {
+            payload: { requestId: string; vaultStoreId: string }
+          },
+          callback: (response: unknown) => void,
+        ) => {
+          expect(extensionId).toBe('extension-1')
+          callback({
+            ok: true,
+            requestId: message.payload.requestId,
+            vaultStoreId: message.payload.vaultStoreId,
+          })
+        },
+      },
+    })
+
+    await expect(requestPairedExtensionUnlock('store-1')).resolves.toBe(true)
+  })
+
+  test('stops waiting when extension messaging does not answer', async () => {
+    vi.useFakeTimers()
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-1',
+    )
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: () => undefined,
+      },
+    })
+
+    const result = requestPairedExtensionUnlock('store-1')
+    await vi.advanceTimersByTimeAsync(5_000)
+    await expect(result).resolves.toBe(false)
   })
 })
