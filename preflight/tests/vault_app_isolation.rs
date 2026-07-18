@@ -71,6 +71,19 @@ fn ci_agent_docker_builds_are_not_hidden_by_image_existence() {
     );
 }
 
+#[test]
+fn pr_audit_wrappers_accept_pat_only_authentication() {
+    let root = repository_root();
+    let tasks = read(&root, ".task/agentic-ai.yml");
+    let token_fallback = r#"export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";"#;
+
+    assert_eq!(
+        tasks.matches(token_fallback).count(),
+        3,
+        "preflight, readiness, and review wrappers must accept NOOK_GITHUB_PAT before consulting gh auth"
+    );
+}
+
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
     content
         .split_once(start)

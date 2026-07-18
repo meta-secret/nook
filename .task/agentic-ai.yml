@@ -162,7 +162,7 @@ tasks:
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
         export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
         export PR_NUMBER="{{.PR}}";
         task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
@@ -174,7 +174,7 @@ tasks:
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
         export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
         export PR_NUMBER="{{.PR}}";
         task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
@@ -186,7 +186,7 @@ tasks:
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
         export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
         export PR_NUMBER="{{.PR}}";
         task ci-agent:docker:run CI_AGENT_CMD=pr-review'
