@@ -65,7 +65,8 @@ flowchart TD
   C --> R[Run exact-head readiness audit]
   R -->|blocked| H
   R -->|ready| M[Squash merge PR]
-  M --> J[Report task duration]
+  M --> S[Publish + merge stats-only PR]
+  S --> J
   J --> K[Done]
 ```
 
@@ -312,7 +313,22 @@ gh pr merge <number> --squash
 
 After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a repair PR; any task-owning agent that continues that PR follows the same readiness-and-squash-merge contract.
 
-### 9. Task completion report
+### 9. Post-merge statistics and analysis
+
+Every normal AI-agent-owned PR continues through a separate statistics commit
+after merge. Follow [agent-statistics.md](agent-statistics.md): create
+`.stats/ai-agent/<source-pr-number>.yaml`, include all local validation and
+repository workflow executions/retriggers plus merge attempts and elapsed time,
+compare with one or two recent comparable records, and assess waste.
+
+Publish exactly that one YAML file in a stats-only PR and squash-merge it
+immediately. Product checks, review, deployments, and `task pr:ready` are skipped
+only for this verified one-file PR; the product pipelines ignore `.stats/**`.
+The stats-only PR does not generate another record. If the comparison identifies
+actionable performance regression or workflow waste, create a separate normal
+build-performance PR and take it through the full pipeline.
+
+### 10. Task completion report
 
 Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
 
@@ -339,7 +355,7 @@ Rules:
 
 ## Standard flow (summary)
 
-See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
+See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 
 1. Fetch `origin/main`; branch from it.
 2. Implement and push/open/update the PR when the iteration is ready for final validation.
@@ -350,7 +366,9 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 7. **Squash merge** into `main` immediately after the exact-head readiness audit
    succeeds; green checks alone are insufficient.
 8. Delete the branch (optional).
-9. **Report task duration** in the final message (see [§ Task completion report](#9-task-completion-report)).
+9. **Publish, analyze, and immediately merge** the one-file stats-only PR; open
+   a separate normal performance PR when the evidence requires a fix.
+10. **Report task duration** in the final message (see [§ Task completion report](#10-task-completion-report)).
 
 ## CLI reference
 
