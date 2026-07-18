@@ -823,39 +823,39 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       const restartedExtensionId = new URL(restartedWorker.url()).host
       expect(restartedExtensionId).toBe(extensionId)
 
-      const lockedPopupPage = await restartedContext.newPage()
-      await lockedPopupPage.goto(
+      const lockedVaultPage = await restartedContext.newPage()
+      await lockedVaultPage.goto(simpleVaultBaseUrl)
+      await expect(
+        lockedVaultPage.getByTestId('login-local-unlock-step'),
+      ).toBeVisible()
+
+      const extensionAuthWindowPromise = restartedContext.waitForEvent('page')
+      await lockedVaultPage.getByTestId('unlock-vault-btn').click()
+      const extensionAuthWindow = await extensionAuthWindowPromise
+      await expect(extensionAuthWindow).toHaveURL(
         `chrome-extension://${restartedExtensionId}/popup/index.html`,
       )
       await expect(
-        lockedPopupPage.getByTestId('extension-device-setup'),
+        extensionAuthWindow.getByTestId('extension-device-setup'),
       ).toBeVisible()
       await expect(
-        lockedPopupPage.getByTestId('device-protection-unlock-btn'),
-      ).toBeVisible()
+        lockedVaultPage.getByTestId('passkey-auth-overlay'),
+      ).toHaveCount(0)
 
-      await lockedPopupPage.getByTestId('device-protection-unlock-btn').click()
+      await extensionAuthWindow
+        .getByTestId('device-protection-unlock-btn')
+        .click()
       await expect(
-        lockedPopupPage.getByTestId('extension-companion-home'),
+        extensionAuthWindow.getByTestId('extension-companion-home'),
       ).toBeVisible()
       await expect(
-        lockedPopupPage.getByTestId('stay-as-companion-btn'),
+        extensionAuthWindow.getByTestId('stay-as-companion-btn'),
       ).toBeVisible()
-
-      const unlockedVaultPagePromise = restartedContext.waitForEvent('page')
-      await lockedPopupPage.getByTestId('open-simple-vault-btn').click()
-      const unlockedVaultPage = await unlockedVaultPagePromise
-      await expect(unlockedVaultPage).toHaveURL((url) => {
-        const expected = new URL(simpleVaultBaseUrl)
-        return (
-          url.origin === expected.origin && url.pathname === expected.pathname
-        )
-      })
       await expect(
-        unlockedVaultPage.getByTestId('authenticated-shell'),
+        lockedVaultPage.getByTestId('authenticated-shell'),
       ).toBeVisible({ timeout: 15_000 })
       await expect(
-        unlockedVaultPage.getByTestId('passkey-auth-overlay'),
+        lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)
     } finally {
       await restartedContext.close()

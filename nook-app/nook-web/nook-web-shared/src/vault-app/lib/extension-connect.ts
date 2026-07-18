@@ -5,6 +5,7 @@ import {
   type ExtensionIdentityHandoffRequestMessage,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
+  type ExtensionPairedVaultUnlockRequestMessage,
 } from "$web-shared/extension/runtime-messages";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
@@ -45,6 +46,7 @@ const validScopes = new Set<ExtensionConnectScope>([
   "sync-provider-credentials",
 ]);
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
+const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000;
 
 export function isExtensionConnectPath(pathname: string): boolean {
   const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
@@ -111,23 +113,18 @@ function requestId(): string {
   );
 }
 
-function discoverPairedExtensionIdentityOnce(
-  vaultStoreId: string,
-): Promise<PairedExtensionIdentityDiscovery | undefined> {
-  const extensionRuntimeId = document.documentElement
-    .getAttribute(extensionRuntimeIdAttribute)
-    ?.trim();
-  if (!extensionRuntimeId) return Promise.resolve(undefined);
+function installedExtensionRuntimeId(): string | undefined {
+  return (
+    document.documentElement
+      .getAttribute(extensionRuntimeIdAttribute)
+      ?.trim() || undefined
+  );
+}
 
-  const discoveryRequestId = requestId();
-  const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
-    type: "nook:extension-paired-vault-identity-discovery",
-    payload: {
-      requestId: discoveryRequestId,
-      vaultStoreId,
-    },
-  };
-
+function sendExtensionMessage(
+  extensionId: string,
+  message: unknown,
+): Promise<unknown | undefined> {
   return new Promise((resolve) => {
     const runtime = (
       globalThis as typeof globalThis & {
@@ -148,47 +145,72 @@ function discoverPairedExtensionIdentityOnce(
       return;
     }
 
-    runtime.sendMessage(extensionRuntimeId, message, (statusMessage) => {
+    let settled = false;
+    const finish = (response?: unknown) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(response);
+    };
+    const timer = window.setTimeout(
+      () => finish(),
+      EXTENSION_MESSAGE_TIMEOUT_MS,
+    );
+    runtime.sendMessage(extensionId, message, (response) => {
       if (runtime.lastError?.message) {
-        resolve(undefined);
+        finish();
         return;
       }
-      if (
-        !isExtensionPairedVaultIdentityStatusMessage(statusMessage) ||
-        statusMessage.payload.requestId !== discoveryRequestId ||
-        statusMessage.payload.vaultStoreId !== vaultStoreId
-      ) {
-        resolve(undefined);
-        return;
-      }
-      if (statusMessage.payload.status !== "unlocked") {
-        resolve({ status: statusMessage.payload.status });
-        return;
-      }
-      const scopes = statusMessage.payload.scopes.filter(
-        (scope): scope is ExtensionConnectScope =>
-          validScopes.has(scope as ExtensionConnectScope),
-      );
-      if (scopes.length === 0) {
-        resolve({ status: "unavailable" });
-        return;
-      }
-      resolve({
-        status: "unlocked",
-        request: {
-          source: "paired-vault",
-          vaultStoreId,
-          deviceId: statusMessage.payload.deviceId,
-          devicePublicKey: statusMessage.payload.devicePublicKey,
-          deviceSigningPublicKey: statusMessage.payload.deviceSigningPublicKey,
-          extensionRuntimeId: statusMessage.payload.extensionRuntimeId,
-          deviceLabel: statusMessage.payload.deviceLabel,
-          nonce: statusMessage.payload.nonce,
-          scopes,
-        },
-      });
+      finish(response);
     });
   });
+}
+
+async function discoverPairedExtensionIdentityOnce(
+  vaultStoreId: string,
+): Promise<PairedExtensionIdentityDiscovery | undefined> {
+  const extensionRuntimeId = installedExtensionRuntimeId();
+  if (!extensionRuntimeId) return Promise.resolve(undefined);
+
+  const discoveryRequestId = requestId();
+  const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
+    type: "nook:extension-paired-vault-identity-discovery",
+    payload: {
+      requestId: discoveryRequestId,
+      vaultStoreId,
+    },
+  };
+
+  const statusMessage = await sendExtensionMessage(extensionRuntimeId, message);
+  if (
+    !isExtensionPairedVaultIdentityStatusMessage(statusMessage) ||
+    statusMessage.payload.requestId !== discoveryRequestId ||
+    statusMessage.payload.vaultStoreId !== vaultStoreId
+  ) {
+    return undefined;
+  }
+  if (statusMessage.payload.status !== "unlocked") {
+    return { status: statusMessage.payload.status };
+  }
+  const scopes = statusMessage.payload.scopes.filter(
+    (scope): scope is ExtensionConnectScope =>
+      validScopes.has(scope as ExtensionConnectScope),
+  );
+  if (scopes.length === 0) return { status: "unavailable" };
+  return {
+    status: "unlocked",
+    request: {
+      source: "paired-vault",
+      vaultStoreId,
+      deviceId: statusMessage.payload.deviceId,
+      devicePublicKey: statusMessage.payload.devicePublicKey,
+      deviceSigningPublicKey: statusMessage.payload.deviceSigningPublicKey,
+      extensionRuntimeId: statusMessage.payload.extensionRuntimeId,
+      deviceLabel: statusMessage.payload.deviceLabel,
+      nonce: statusMessage.payload.nonce,
+      scopes,
+    },
+  };
 }
 
 export async function discoverPairedExtensionIdentity(
@@ -199,6 +221,30 @@ export async function discoverPairedExtensionIdentity(
     if (result) return result;
   }
   return { status: "unavailable" };
+}
+
+export async function requestPairedExtensionUnlock(
+  vaultStoreId: string,
+): Promise<boolean> {
+  const extensionId = installedExtensionRuntimeId();
+  if (!extensionId) return false;
+
+  const unlockRequestId = requestId();
+  const message: ExtensionPairedVaultUnlockRequestMessage = {
+    type: "nook:extension-paired-vault-unlock-request",
+    payload: { requestId: unlockRequestId, vaultStoreId },
+  };
+  const response = await sendExtensionMessage(extensionId, message);
+  return (
+    !!response &&
+    typeof response === "object" &&
+    "ok" in response &&
+    response.ok === true &&
+    "requestId" in response &&
+    response.requestId === unlockRequestId &&
+    "vaultStoreId" in response &&
+    response.vaultStoreId === vaultStoreId
+  );
 }
 
 type ExtensionIdentityHandoffResponse = {

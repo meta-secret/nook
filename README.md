@@ -139,7 +139,9 @@ item, add a corrected copy and delete the old one.
   password to open the encrypted local vault directly. A vault created with the
   extension identity automatically prefers that approved identity whenever the
   extension is unlocked, including after a page refresh or explicit vault lock;
-  the site receives a fresh encrypted, memory-only key handoff.
+  the site receives a fresh encrypted, memory-only key handoff. If the paired
+  extension is locked, choosing Unlock opens the extension-owned authorization
+  window instead of requesting the website's separate passkey.
 - A backup-password session leaves the protected device identity and saved sync
   provider credentials locked. Authorize with the passkey or PIN when you want
   remote synchronization to resume.
