@@ -354,6 +354,7 @@ impl NookVaultManager {
     }
 
     fn guard_remote_event_log_classification(
+        &mut self,
         provider_label: &str,
         classification: &RemoteEventLogClassification,
     ) -> Result<(), NookError> {
@@ -363,19 +364,28 @@ impl NookVaultManager {
             RemoteEventLogClassification::DifferentStore {
                 local_store_id,
                 remote_store_id,
-            } => Err(Self::provider_store_mismatch_error(
-                provider_label,
-                local_store_id,
-                remote_store_id,
-            )),
-            RemoteEventLogClassification::MultipleStores { store_ids } => Err(
-                Self::provider_multiple_stores_error(provider_label, store_ids),
-            ),
+            } => {
+                self.event_log_sync_issue =
+                    Some((provider_label.to_owned(), classification.clone()));
+                Err(Self::provider_store_mismatch_error(
+                    provider_label,
+                    local_store_id,
+                    remote_store_id,
+                ))
+            }
+            RemoteEventLogClassification::MultipleStores { store_ids } => {
+                self.event_log_sync_issue =
+                    Some((provider_label.to_owned(), classification.clone()));
+                Err(Self::provider_multiple_stores_error(
+                    provider_label,
+                    store_ids,
+                ))
+            }
         }
     }
 
     async fn fetch_current_provider_events(
-        &self,
+        &mut self,
         event_ids: impl IntoIterator<Item = EventId>,
     ) -> Result<Vec<(EventId, Vec<u8>)>, NookError> {
         let mut events = Vec::new();
@@ -387,7 +397,7 @@ impl NookVaultManager {
     }
 
     async fn guard_current_provider_writable_for_active_store(
-        &self,
+        &mut self,
         remote_ids: &BTreeSet<EventId>,
     ) -> Result<(), NookError> {
         if self.vault.store_id.trim().is_empty() || remote_ids.is_empty() {
@@ -398,7 +408,7 @@ impl NookVaultManager {
             .await?;
         let classification =
             classify_remote_event_log(&remote_events, Some(self.vault.store_id.as_str()))?;
-        Self::guard_remote_event_log_classification("Sync provider", &classification)
+        self.guard_remote_event_log_classification("Sync provider", &classification)
     }
 
     pub(in crate::manager) async fn flush_sync_event_outbox(&mut self) -> Result<(), NookError> {
@@ -471,9 +481,10 @@ impl NookVaultManager {
                 return Ok(());
             }
             if discovered_store_ids.len() > 1 {
-                return Err(NookError::Database(
-                    "Multiple vault event logs found at this provider. Use a dedicated repo or path for one vault.".to_owned(),
-                ));
+                let store_ids = discovered_store_ids.iter().cloned().collect::<Vec<_>>();
+                let classification = RemoteEventLogClassification::MultipleStores { store_ids };
+                return self
+                    .guard_remote_event_log_classification("Sync provider", &classification);
             }
             self.vault.store_id = discovered_store_ids.into_iter().next().ok_or_else(|| {
                 NookError::Database(
@@ -495,7 +506,7 @@ impl NookVaultManager {
             let fetched = self.fetch_current_provider_events(remote_ids).await?;
             let classification =
                 classify_remote_event_log(&fetched, Some(self.vault.store_id.as_str()))?;
-            Self::guard_remote_event_log_classification("Sync provider", &classification)?;
+            self.guard_remote_event_log_classification("Sync provider", &classification)?;
             for (event_id, bytes) in fetched {
                 if local_ids.contains(&event_id) {
                     continue;
@@ -588,10 +599,10 @@ impl NookVaultManager {
                 return self.export_event_log_records().await;
             }
             if discovered_store_ids.len() > 1 {
-                return Err(NookError::Database(
-                    "Multiple vault event logs found in this backup folder. Use a dedicated folder for one vault."
-                        .to_owned(),
-                ));
+                let store_ids = discovered_store_ids.iter().cloned().collect::<Vec<_>>();
+                let classification = RemoteEventLogClassification::MultipleStores { store_ids };
+                self.guard_remote_event_log_classification("Backup folder", &classification)?;
+                unreachable!("multiple-store classification must be rejected");
             }
             self.vault.store_id = discovered_store_ids.into_iter().next().ok_or_else(|| {
                 NookError::Database(
@@ -607,7 +618,7 @@ impl NookVaultManager {
         } else {
             let classification =
                 classify_remote_event_log(&parsed_records, Some(self.vault.store_id.as_str()))?;
-            Self::guard_remote_event_log_classification("Backup folder", &classification)?;
+            self.guard_remote_event_log_classification("Backup folder", &classification)?;
             for (event_id, bytes) in parsed_records {
                 if !nook_core::remote_event_belongs_to_store(
                     &event_id,
@@ -1152,6 +1163,32 @@ impl NookVaultManager {
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
         Ok(project_vault(&graph, &self.vault.store_id)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejected_event_log_classification_is_available_as_a_typed_issue() {
+        let mut manager = NookVaultManager::new();
+        let classification = RemoteEventLogClassification::DifferentStore {
+            local_store_id: "store_local12345".to_owned(),
+            remote_store_id: "store_remote1234".to_owned(),
+        };
+
+        assert!(
+            manager
+                .guard_remote_event_log_classification("Sync provider", &classification)
+                .is_err()
+        );
+        let issue = manager
+            .take_event_log_sync_issue()
+            .expect("typed sync issue");
+        assert!(issue.is_store_mismatch());
+        assert_eq!(issue.local_store_id().as_deref(), Some("store_local12345"));
+        assert_eq!(issue.remote_store_id().as_deref(), Some("store_remote1234"));
     }
 }
 

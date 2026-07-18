@@ -9,6 +9,453 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookVaultArchitecture(nook_core::VaultArchitecture);
+
+#[wasm_bindgen]
+impl NookVaultArchitecture {
+    #[wasm_bindgen(js_name = simple)]
+    pub fn simple(
+        device_mode: &str,
+        replication_type: &str,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let architecture = nook_core::VaultArchitecture {
+            device_mode: nook_core::DeviceMode::parse(device_mode)?,
+            vault_type: nook_core::VaultType::Simple,
+            replication_type: nook_core::ReplicationType::parse(replication_type)?,
+            sentinel: None,
+        };
+        architecture.validate()?;
+        Ok(Self(architecture))
+    }
+
+    #[wasm_bindgen(js_name = sentinel)]
+    pub fn sentinel(
+        device_mode: &str,
+        replication_type: &str,
+        threshold: u8,
+        required_participants: u8,
+        ready_participants: u8,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let architecture = nook_core::VaultArchitecture {
+            device_mode: nook_core::DeviceMode::parse(device_mode)?,
+            vault_type: nook_core::VaultType::Sentinel,
+            replication_type: nook_core::ReplicationType::parse(replication_type)?,
+            sentinel: Some(nook_core::SentinelPolicy {
+                threshold,
+                required_participants,
+                ready_participants,
+            }),
+        };
+        architecture.validate()?;
+        Ok(Self(architecture))
+    }
+
+    #[wasm_bindgen(getter, js_name = device_mode)]
+    pub fn device_mode(&self) -> String {
+        self.0.device_mode.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = vault_type)]
+    pub fn vault_type(&self) -> String {
+        self.0.vault_type.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = replication_type)]
+    pub fn replication_type(&self) -> String {
+        self.0.replication_type.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = sentinel_threshold)]
+    pub fn sentinel_threshold(&self) -> Option<u8> {
+        self.0.sentinel.map(|policy| policy.threshold)
+    }
+
+    #[wasm_bindgen(getter, js_name = sentinel_required_participants)]
+    pub fn sentinel_required_participants(&self) -> Option<u8> {
+        self.0.sentinel.map(|policy| policy.required_participants)
+    }
+
+    #[wasm_bindgen(getter, js_name = sentinel_ready_participants)]
+    pub fn sentinel_ready_participants(&self) -> Option<u8> {
+        self.0.sentinel.map(|policy| policy.ready_participants)
+    }
+}
+
+impl NookVaultArchitecture {
+    pub(crate) fn from_core(value: nook_core::VaultArchitecture) -> Self {
+        Self(value)
+    }
+
+    pub(crate) fn to_core(&self) -> nook_core::VaultArchitecture {
+        self.0.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookProviderReplicationCapability(nook_core::ProviderReplicationCapability);
+
+#[wasm_bindgen]
+impl NookProviderReplicationCapability {
+    pub(crate) fn from_core(value: nook_core::ProviderReplicationCapability) -> Self {
+        Self(value)
+    }
+
+    #[wasm_bindgen(getter, js_name = providerType)]
+    pub fn provider_type(&self) -> String {
+        self.0.provider_type.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthPreset)]
+    pub fn oauth_preset(&self) -> Option<String> {
+        self.0.oauth_preset.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsPersonal)]
+    pub fn supports_personal(&self) -> bool {
+        self.0.supports_personal
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsShared)]
+    pub fn supports_shared(&self) -> bool {
+        self.0.supports_shared
+    }
+
+    #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
+    pub fn shared_joiner_identity(&self) -> Option<String> {
+        self.0
+            .shared_joiner_identity
+            .map(|kind| kind.as_str().to_owned())
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSentinelUnlockSessionStatus {
+    active: bool,
+    collected: u8,
+    threshold: u8,
+    ready: bool,
+}
+
+#[wasm_bindgen]
+impl NookSentinelUnlockSessionStatus {
+    #[wasm_bindgen(js_name = inactive)]
+    pub fn inactive() -> Self {
+        Self {
+            active: false,
+            collected: 0,
+            threshold: 0,
+            ready: false,
+        }
+    }
+
+    pub(crate) const fn from_status(status: nook_core::SentinelUnlockStatus) -> Self {
+        Self {
+            active: true,
+            collected: status.collected,
+            threshold: status.threshold,
+            ready: status.ready,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn active(&self) -> bool {
+        self.active
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn collected(&self) -> u8 {
+        self.collected
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn threshold(&self) -> u8 {
+        self.threshold
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn ready(&self) -> bool {
+        self.ready
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSentinelStoredDeliverySummary {
+    store_id: String,
+    session_id: String,
+    participant_count: u8,
+    threshold: u8,
+}
+
+#[wasm_bindgen]
+impl NookSentinelStoredDeliverySummary {
+    pub(crate) fn from_delivery(
+        store_id: String,
+        delivery: &nook_core::SentinelGenesisShareDelivery,
+    ) -> Self {
+        Self {
+            store_id,
+            session_id: delivery.session_id.as_str().to_owned(),
+            participant_count: delivery.policy.participant_count,
+            threshold: delivery.policy.threshold,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> String {
+        self.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = sessionId)]
+    pub fn session_id(&self) -> String {
+        self.session_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = participantCount)]
+    pub fn participant_count(&self) -> u8 {
+        self.participant_count
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn threshold(&self) -> u8 {
+        self.threshold
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSentinelGenesisParticipantStatus {
+    device_id: String,
+    label: String,
+    fingerprint: String,
+}
+
+#[wasm_bindgen]
+impl NookSentinelGenesisParticipantStatus {
+    fn from_core(participant: &nook_core::SentinelGenesisParticipant) -> Self {
+        Self {
+            device_id: participant.device_id.as_str().to_owned(),
+            label: participant.label.clone(),
+            fingerprint: participant.fingerprint.clone(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = deviceId)]
+    pub fn device_id(&self) -> String {
+        self.device_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn fingerprint(&self) -> String {
+        self.fingerprint.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSentinelGenesisStatus {
+    active: bool,
+    participants: Vec<NookSentinelGenesisParticipantStatus>,
+    complete: bool,
+}
+
+#[wasm_bindgen]
+impl NookSentinelGenesisStatus {
+    pub(crate) const fn inactive() -> Self {
+        Self {
+            active: false,
+            participants: Vec::new(),
+            complete: false,
+        }
+    }
+
+    pub(crate) fn from_session(session: &nook_core::SentinelGenesisSession) -> Self {
+        Self {
+            active: true,
+            participants: session
+                .participants()
+                .iter()
+                .map(NookSentinelGenesisParticipantStatus::from_core)
+                .collect(),
+            complete: session.is_complete(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn active(&self) -> bool {
+        self.active
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn participants(&mut self) -> Vec<NookSentinelGenesisParticipantStatus> {
+        std::mem::take(&mut self.participants)
+    }
+
+    #[wasm_bindgen(getter, js_name = isComplete)]
+    pub fn is_complete(&self) -> bool {
+        self.complete
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSentinelGenesisDelivery {
+    device_id: String,
+    fingerprint: Option<String>,
+    payload: String,
+}
+
+#[wasm_bindgen]
+impl NookSentinelGenesisDelivery {
+    pub(crate) fn from_core(
+        delivery: &nook_core::SentinelGenesisShareDelivery,
+        fingerprint: Option<String>,
+    ) -> Result<Self, crate::NookError> {
+        Ok(Self {
+            device_id: delivery.device_id.as_str().to_owned(),
+            fingerprint,
+            payload: serde_json::to_string(delivery)
+                .map_err(|error| crate::NookError::Serialization(error.to_string()))?,
+        })
+    }
+
+    #[wasm_bindgen(getter, js_name = deviceId)]
+    pub fn device_id(&self) -> String {
+        self.device_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn fingerprint(&self) -> Option<String> {
+        self.fingerprint.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn payload(&self) -> String {
+        self.payload.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookSentinelGenesisFinalizeResult {
+    store_id: String,
+    architecture: nook_core::VaultArchitecture,
+    deliveries: Vec<NookSentinelGenesisDelivery>,
+}
+
+#[wasm_bindgen]
+pub struct NookEventLogSyncIssue {
+    provider_label: String,
+    classification: nook_core::RemoteEventLogClassification,
+}
+
+#[wasm_bindgen]
+impl NookEventLogSyncIssue {
+    pub(crate) fn new(
+        provider_label: String,
+        classification: nook_core::RemoteEventLogClassification,
+    ) -> Self {
+        Self {
+            provider_label,
+            classification,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = providerLabel)]
+    pub fn provider_label(&self) -> String {
+        self.provider_label.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = isStoreMismatch)]
+    pub fn is_store_mismatch(&self) -> bool {
+        matches!(
+            self.classification,
+            nook_core::RemoteEventLogClassification::DifferentStore { .. }
+        )
+    }
+
+    #[wasm_bindgen(getter, js_name = isMultipleStores)]
+    pub fn is_multiple_stores(&self) -> bool {
+        matches!(
+            self.classification,
+            nook_core::RemoteEventLogClassification::MultipleStores { .. }
+        )
+    }
+
+    #[wasm_bindgen(getter, js_name = localStoreId)]
+    pub fn local_store_id(&self) -> Option<String> {
+        match &self.classification {
+            nook_core::RemoteEventLogClassification::DifferentStore { local_store_id, .. } => {
+                Some(local_store_id.clone())
+            }
+            _ => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = remoteStoreId)]
+    pub fn remote_store_id(&self) -> Option<String> {
+        match &self.classification {
+            nook_core::RemoteEventLogClassification::DifferentStore {
+                remote_store_id, ..
+            } => Some(remote_store_id.clone()),
+            _ => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = storeIds)]
+    pub fn store_ids(&self) -> Vec<String> {
+        match &self.classification {
+            nook_core::RemoteEventLogClassification::MultipleStores { store_ids } => {
+                store_ids.clone()
+            }
+            _ => Vec::new(),
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl NookSentinelGenesisFinalizeResult {
+    pub(crate) fn from_core(
+        store_id: String,
+        architecture: nook_core::VaultArchitecture,
+        participants: &[nook_core::SentinelGenesisParticipant],
+        deliveries: &[nook_core::SentinelGenesisShareDelivery],
+    ) -> Result<Self, crate::NookError> {
+        let deliveries = deliveries
+            .iter()
+            .map(|delivery| {
+                let fingerprint = participants
+                    .iter()
+                    .find(|participant| participant.device_id == delivery.device_id)
+                    .map(|participant| participant.fingerprint.clone());
+                NookSentinelGenesisDelivery::from_core(delivery, fingerprint)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            store_id,
+            architecture,
+            deliveries,
+        })
+    }
+
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> String {
+        self.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn architecture(&self) -> NookVaultArchitecture {
+        NookVaultArchitecture::from_core(self.architecture.clone())
+    }
+
+    #[wasm_bindgen(getter, js_name = participantDeliveries)]
+    pub fn participant_deliveries(&mut self) -> Vec<NookSentinelGenesisDelivery> {
+        std::mem::take(&mut self.deliveries)
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookLoginAccount {
     secret_id: String,
     username: String,
@@ -1409,92 +1856,79 @@ impl NookImportResult {
     }
 }
 
-/// Flat form payload for `buildSecretYaml` — unused fields stay empty.
+/// Variant-specific form payload for `buildSecretYaml`.
 #[wasm_bindgen]
 pub struct NookSecretFormFields {
-    website_url: String,
-    username: String,
-    password: String,
-    notes: String,
-    key: String,
-    expires_at: String,
-    name: String,
-    seed: String,
-    title: String,
-    note: String,
-    issuer: String,
-    account: String,
-    totp_secret: String,
-    algorithm: String,
-    digits: String,
-    period: String,
-    backup_codes: String,
+    pub(crate) inner: nook_core::SecretFormFields,
 }
 
 #[wasm_bindgen]
 impl NookSecretFormFields {
-    #[wasm_bindgen(constructor)]
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        website_url: Option<String>,
-        username: Option<String>,
-        password: Option<String>,
-        notes: Option<String>,
-        key: Option<String>,
-        expires_at: Option<String>,
-        name: Option<String>,
-        seed: Option<String>,
-        title: Option<String>,
-        note: Option<String>,
-        issuer: Option<String>,
-        account: Option<String>,
-        totp_secret: Option<String>,
-        algorithm: Option<String>,
-        digits: Option<String>,
-        period: Option<String>,
-        backup_codes: Option<String>,
-    ) -> Self {
+    #[wasm_bindgen(js_name = login)]
+    pub fn login(website_url: String, username: String, password: String, notes: String) -> Self {
         Self {
-            website_url: website_url.unwrap_or_default(),
-            username: username.unwrap_or_default(),
-            password: password.unwrap_or_default(),
-            notes: notes.unwrap_or_default(),
-            key: key.unwrap_or_default(),
-            expires_at: expires_at.unwrap_or_default(),
-            name: name.unwrap_or_default(),
-            seed: seed.unwrap_or_default(),
-            title: title.unwrap_or_default(),
-            note: note.unwrap_or_default(),
-            issuer: issuer.unwrap_or_default(),
-            account: account.unwrap_or_default(),
-            totp_secret: totp_secret.unwrap_or_default(),
-            algorithm: algorithm.unwrap_or_default(),
-            digits: digits.unwrap_or_default(),
-            period: period.unwrap_or_default(),
-            backup_codes: backup_codes.unwrap_or_default(),
+            inner: nook_core::SecretFormFields::Login(nook_core::LoginSecretForm {
+                website_url,
+                username,
+                password,
+                notes,
+            }),
         }
     }
 
-    pub(crate) fn to_json_value(&self) -> serde_json::Value {
-        serde_json::json!({
-            "websiteUrl": self.website_url,
-            "username": self.username,
-            "password": self.password,
-            "notes": self.notes,
-            "key": self.key,
-            "expiresAt": self.expires_at,
-            "name": self.name,
-            "seed": self.seed,
-            "title": self.title,
-            "note": self.note,
-            "issuer": self.issuer,
-            "account": self.account,
-            "totpSecret": self.totp_secret,
-            "algorithm": self.algorithm,
-            "digits": self.digits,
-            "period": self.period,
-            "backupCodes": self.backup_codes,
-        })
+    #[wasm_bindgen(js_name = apiKey)]
+    pub fn api_key(website_url: String, key: String, expires_at: String) -> Self {
+        Self {
+            inner: nook_core::SecretFormFields::ApiKey(nook_core::ApiKeySecretForm {
+                website_url,
+                key,
+                expires_at,
+            }),
+        }
+    }
+
+    #[wasm_bindgen(js_name = seedPhrase)]
+    pub fn seed_phrase(name: String, seed: String) -> Self {
+        Self {
+            inner: nook_core::SecretFormFields::SeedPhrase(nook_core::SeedPhraseSecretForm {
+                name,
+                seed,
+            }),
+        }
+    }
+
+    #[wasm_bindgen(js_name = secureNote)]
+    pub fn secure_note(title: String, note: String) -> Self {
+        Self {
+            inner: nook_core::SecretFormFields::SecureNote(nook_core::SecureNoteSecretForm {
+                title,
+                note,
+            }),
+        }
+    }
+
+    #[wasm_bindgen(js_name = authenticator)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn authenticator(
+        issuer: String,
+        account: String,
+        totp_secret: String,
+        algorithm: String,
+        digits: String,
+        period: String,
+        backup_codes: String,
+    ) -> Self {
+        Self {
+            inner: nook_core::SecretFormFields::Authenticator(nook_core::AuthenticatorSecretForm {
+                issuer,
+                account,
+                totp_secret,
+                algorithm,
+                digits,
+                period,
+                backup_codes,
+            }),
+        }
     }
 }
 
@@ -1563,8 +1997,8 @@ pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVa
 
 /// Pending browser sync resolution state.
 ///
-/// The comparison comes from core, but this object also carries the provider
-/// handle needed to resume the paused web storage operation.
+/// Core owns the variant-specific conflict. This wrapper additionally carries
+/// the browser provider handle needed to resume the paused storage operation.
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookPendingSyncConflict {
@@ -1572,54 +2006,72 @@ pub struct NookPendingSyncConflict {
     provider_label: String,
     local_yaml: String,
     remote_yaml: String,
-    local_version: f64,
-    remote_version: f64,
     mode: String,
     pat: String,
     repo: String,
     remote_revision: Option<String>,
-    kind: String,
-    local_store_id: Option<String>,
-    remote_store_id: Option<String>,
+    conflict: nook_core::VaultSyncConflict,
 }
 
 #[wasm_bindgen]
 impl NookPendingSyncConflict {
-    #[wasm_bindgen(constructor)]
+    #[wasm_bindgen(js_name = content)]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub fn content(
         provider_id: String,
         provider_label: String,
         local_yaml: String,
         remote_yaml: String,
-        local_version: f64,
-        remote_version: f64,
+        local_version: u32,
+        remote_version: u32,
         mode: String,
         pat: String,
         repo: String,
         remote_revision: Option<String>,
-        kind: Option<String>,
-        local_store_id: Option<String>,
-        remote_store_id: Option<String>,
     ) -> Self {
         Self {
             provider_id,
             provider_label,
             local_yaml,
             remote_yaml,
-            local_version,
-            remote_version,
             mode,
             pat,
             repo,
             remote_revision,
-            kind: if kind.unwrap_or_default() == "store_id" {
-                "store_id".to_owned()
-            } else {
-                "content".to_owned()
-            },
-            local_store_id,
-            remote_store_id,
+            conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
+                local_version: u64::from(local_version),
+                remote_version: u64::from(remote_version),
+            }),
+        }
+    }
+
+    #[wasm_bindgen(js_name = storeId)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn store_id(
+        provider_id: String,
+        provider_label: String,
+        local_yaml: String,
+        remote_yaml: String,
+        mode: String,
+        pat: String,
+        repo: String,
+        remote_revision: Option<String>,
+        local_store_id: String,
+        remote_store_id: String,
+    ) -> Self {
+        Self {
+            provider_id,
+            provider_label,
+            local_yaml,
+            remote_yaml,
+            mode,
+            pat,
+            repo,
+            remote_revision,
+            conflict: nook_core::VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
+                local_store_id,
+                remote_store_id,
+            }),
         }
     }
 
@@ -1643,16 +2095,6 @@ impl NookPendingSyncConflict {
         self.remote_yaml.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = localVersion)]
-    pub fn local_version(&self) -> f64 {
-        self.local_version
-    }
-
-    #[wasm_bindgen(getter, js_name = remoteVersion)]
-    pub fn remote_version(&self) -> f64 {
-        self.remote_version
-    }
-
     #[wasm_bindgen(getter)]
     pub fn mode(&self) -> String {
         self.mode.clone()
@@ -1674,18 +2116,70 @@ impl NookPendingSyncConflict {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn kind(&self) -> String {
-        self.kind.clone()
+    pub fn kind(&self) -> nook_core::VaultSyncConflictKind {
+        self.conflict.kind()
     }
 
-    #[wasm_bindgen(getter, js_name = localStoreId)]
-    pub fn local_store_id(&self) -> Option<String> {
-        self.local_store_id.clone()
+    #[wasm_bindgen(js_name = contentLocalVersion)]
+    pub fn content_local_version(&self) -> Result<u32, wasm_bindgen::JsError> {
+        let version = self
+            .conflict
+            .content()
+            .map(|details| details.local_version)
+            .ok_or_else(|| {
+                wasm_bindgen::JsError::new("Sync conflict is not a content conflict.")
+            })?;
+        u32::try_from(version)
+            .map_err(|_| wasm_bindgen::JsError::new("Local vault version exceeds the web limit."))
     }
 
-    #[wasm_bindgen(getter, js_name = remoteStoreId)]
-    pub fn remote_store_id(&self) -> Option<String> {
-        self.remote_store_id.clone()
+    #[wasm_bindgen(js_name = contentRemoteVersion)]
+    pub fn content_remote_version(&self) -> Result<u32, wasm_bindgen::JsError> {
+        let version = self
+            .conflict
+            .content()
+            .map(|details| details.remote_version)
+            .ok_or_else(|| {
+                wasm_bindgen::JsError::new("Sync conflict is not a content conflict.")
+            })?;
+        u32::try_from(version)
+            .map_err(|_| wasm_bindgen::JsError::new("Remote vault version exceeds the web limit."))
+    }
+
+    #[wasm_bindgen(js_name = localStoreId)]
+    pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
+        self.conflict
+            .store_id()
+            .map(|details| details.local_store_id.clone())
+            .ok_or_else(|| wasm_bindgen::JsError::new("Sync conflict is not a store-id conflict."))
+    }
+
+    #[wasm_bindgen(js_name = remoteStoreId)]
+    pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
+        self.conflict
+            .store_id()
+            .map(|details| details.remote_store_id.clone())
+            .ok_or_else(|| wasm_bindgen::JsError::new("Sync conflict is not a store-id conflict."))
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookReplacementCandidate {
+    event_id: String,
+    secret_id: String,
+}
+
+#[wasm_bindgen]
+impl NookReplacementCandidate {
+    #[wasm_bindgen(getter, js_name = eventId)]
+    pub fn event_id(&self) -> String {
+        self.event_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = secretId)]
+    pub fn secret_id(&self) -> String {
+        self.secret_id.clone()
     }
 }
 
@@ -1693,7 +2187,7 @@ impl NookPendingSyncConflict {
 #[derive(Clone)]
 pub struct NookReplacementConflict {
     old_secret_id: String,
-    candidates_json: String,
+    candidates: Vec<NookReplacementCandidate>,
 }
 
 #[wasm_bindgen]
@@ -1703,9 +2197,9 @@ impl NookReplacementConflict {
         self.old_secret_id.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = candidatesJson)]
-    pub fn candidates_json(&self) -> String {
-        self.candidates_json.clone()
+    #[wasm_bindgen(getter)]
+    pub fn candidates(&self) -> Vec<NookReplacementCandidate> {
+        self.candidates.clone()
     }
 }
 
@@ -1718,19 +2212,16 @@ pub(crate) fn replacement_conflicts_to_vec(
     conflicts
         .into_values()
         .map(|conflict| {
-            let candidates_json = serde_json::to_string(
-                &conflict
-                    .candidates
-                    .iter()
-                    .map(|(event_id, secret_id)| {
-                        (event_id.as_str().to_owned(), secret_id.as_str().to_owned())
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
             Ok(NookReplacementConflict {
                 old_secret_id: conflict.old_secret_id.as_str().to_owned(),
-                candidates_json,
+                candidates: conflict
+                    .candidates
+                    .into_iter()
+                    .map(|(event_id, secret_id)| NookReplacementCandidate {
+                        event_id: event_id.as_str().to_owned(),
+                        secret_id: secret_id.as_str().to_owned(),
+                    })
+                    .collect(),
             })
         })
         .collect()
@@ -1739,20 +2230,20 @@ pub(crate) fn replacement_conflicts_to_vec(
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookSecurityConflict {
-    events_json: String,
-    reasons_json: String,
+    events: Vec<String>,
+    reasons: Vec<String>,
 }
 
 #[wasm_bindgen]
 impl NookSecurityConflict {
-    #[wasm_bindgen(getter, js_name = eventsJson)]
-    pub fn events_json(&self) -> String {
-        self.events_json.clone()
+    #[wasm_bindgen(getter)]
+    pub fn events(&self) -> Vec<String> {
+        self.events.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = reasonsJson)]
-    pub fn reasons_json(&self) -> String {
-        self.reasons_json.clone()
+    #[wasm_bindgen(getter)]
+    pub fn reasons(&self) -> Vec<String> {
+        self.reasons.clone()
     }
 }
 
@@ -1762,25 +2253,17 @@ pub(crate) fn security_conflicts_to_vec(
     conflicts
         .into_iter()
         .map(|conflict| {
-            let events_json = serde_json::to_string(
-                &conflict
-                    .events
-                    .iter()
-                    .map(|event| event.as_str().to_owned())
-                    .collect::<Vec<_>>(),
-            )
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-            let reasons_json = serde_json::to_string(
-                &conflict
-                    .reasons
-                    .iter()
-                    .map(|reason| reason.as_str())
-                    .collect::<Vec<_>>(),
-            )
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
             Ok(NookSecurityConflict {
-                events_json,
-                reasons_json,
+                events: conflict
+                    .events
+                    .into_iter()
+                    .map(|event| event.as_str().to_owned())
+                    .collect(),
+                reasons: conflict
+                    .reasons
+                    .into_iter()
+                    .map(|reason| reason.as_str().to_owned())
+                    .collect(),
             })
         })
         .collect()
@@ -1828,11 +2311,119 @@ pub struct NookVaultAccessReport {
     key_status: String,
     key_explanation: String,
     current_epoch: Option<String>,
-    auth_key_ids_json: String,
-    epoch_history_json: String,
-    secrets_json: String,
-    events_json: String,
-    warnings_json: String,
+    auth_key_ids: Vec<String>,
+    epoch_history: Vec<NookVaultEpochHistoryDiagnostic>,
+    secrets: Vec<NookVaultSecretAccessDiagnostic>,
+    events: Vec<NookVaultEventAccessDiagnostic>,
+    warnings: Vec<String>,
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookVaultEpochHistoryDiagnostic {
+    epoch_id: String,
+    started_by: String,
+    reason: String,
+}
+
+#[wasm_bindgen]
+impl NookVaultEpochHistoryDiagnostic {
+    #[wasm_bindgen(getter, js_name = epochId)]
+    pub fn epoch_id(&self) -> String {
+        self.epoch_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = startedBy)]
+    pub fn started_by(&self) -> String {
+        self.started_by.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookVaultSecretAccessDiagnostic {
+    secret_id: String,
+    secret_type: String,
+    status: String,
+    epoch_status: String,
+    epoch_id: Option<String>,
+    explanation: String,
+}
+
+#[wasm_bindgen]
+impl NookVaultSecretAccessDiagnostic {
+    #[wasm_bindgen(getter, js_name = secretId)]
+    pub fn secret_id(&self) -> String {
+        self.secret_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = secretType)]
+    pub fn secret_type(&self) -> String {
+        self.secret_type.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn status(&self) -> String {
+        self.status.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = epochStatus)]
+    pub fn epoch_status(&self) -> String {
+        self.epoch_status.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = epochId)]
+    pub fn epoch_id(&self) -> Option<String> {
+        self.epoch_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn explanation(&self) -> String {
+        self.explanation.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookVaultEventAccessDiagnostic {
+    event_id: String,
+    key_epoch: String,
+    epoch_status: String,
+    encrypted_payloads: u32,
+    explanation: String,
+}
+
+#[wasm_bindgen]
+impl NookVaultEventAccessDiagnostic {
+    #[wasm_bindgen(getter, js_name = eventId)]
+    pub fn event_id(&self) -> String {
+        self.event_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = keyEpoch)]
+    pub fn key_epoch(&self) -> String {
+        self.key_epoch.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = epochStatus)]
+    pub fn epoch_status(&self) -> String {
+        self.epoch_status.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = encryptedPayloads)]
+    pub fn encrypted_payloads(&self) -> u32 {
+        self.encrypted_payloads
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn explanation(&self) -> String {
+        self.explanation.clone()
+    }
 }
 
 #[wasm_bindgen]
@@ -1862,61 +2453,78 @@ impl NookVaultAccessReport {
         self.current_epoch.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = authKeyIdsJson)]
-    pub fn auth_key_ids_json(&self) -> String {
-        self.auth_key_ids_json.clone()
+    #[wasm_bindgen(getter, js_name = authKeyIds)]
+    pub fn auth_key_ids(&self) -> Vec<String> {
+        self.auth_key_ids.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = epochHistoryJson)]
-    pub fn epoch_history_json(&self) -> String {
-        self.epoch_history_json.clone()
+    #[wasm_bindgen(getter, js_name = epochHistory)]
+    pub fn epoch_history(&self) -> Vec<NookVaultEpochHistoryDiagnostic> {
+        self.epoch_history.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = secretsJson)]
-    pub fn secrets_json(&self) -> String {
-        self.secrets_json.clone()
+    #[wasm_bindgen(getter)]
+    pub fn secrets(&self) -> Vec<NookVaultSecretAccessDiagnostic> {
+        self.secrets.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = eventsJson)]
-    pub fn events_json(&self) -> String {
-        self.events_json.clone()
+    #[wasm_bindgen(getter)]
+    pub fn events(&self) -> Vec<NookVaultEventAccessDiagnostic> {
+        self.events.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = warningsJson)]
-    pub fn warnings_json(&self) -> String {
-        self.warnings_json.clone()
+    #[wasm_bindgen(getter)]
+    pub fn warnings(&self) -> Vec<String> {
+        self.warnings.clone()
     }
 
     pub(crate) fn from_core(
         report: nook_core::VaultAccessDiagnosticsReport,
     ) -> Result<Self, NookError> {
-        let auth_key_ids_json = serde_json::to_string(
-            &report
-                .auth_key_ids
-                .iter()
-                .map(|auth_id| auth_id.as_str().to_owned())
-                .collect::<Vec<_>>(),
-        )
-        .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let epoch_history_json = serde_json::to_string(&report.epoch_history)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let secrets_json = serde_json::to_string(&report.secrets)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let events_json = serde_json::to_string(&report.events)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let warnings_json = serde_json::to_string(&report.warnings)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
         Ok(Self {
             device_id: report.key_access.device_id.as_str().to_owned(),
             auth_id: report.key_access.auth_id.as_str().to_owned(),
             key_status: report.key_access.status.as_str().to_owned(),
             key_explanation: report.key_access.explanation,
             current_epoch: report.current_epoch,
-            auth_key_ids_json,
-            epoch_history_json,
-            secrets_json,
-            events_json,
-            warnings_json,
+            auth_key_ids: report
+                .auth_key_ids
+                .into_iter()
+                .map(|auth_id| auth_id.as_str().to_owned())
+                .collect(),
+            epoch_history: report
+                .epoch_history
+                .into_iter()
+                .map(|entry| NookVaultEpochHistoryDiagnostic {
+                    epoch_id: entry.epoch_id,
+                    started_by: entry.started_by,
+                    reason: entry.reason,
+                })
+                .collect(),
+            secrets: report
+                .secrets
+                .into_iter()
+                .map(|entry| NookVaultSecretAccessDiagnostic {
+                    secret_id: entry.secret_id.as_str().to_owned(),
+                    secret_type: entry.secret_type.as_str().to_owned(),
+                    status: entry.status.as_str().to_owned(),
+                    epoch_status: entry.epoch_status.as_str().to_owned(),
+                    epoch_id: entry.epoch_id,
+                    explanation: entry.explanation,
+                })
+                .collect(),
+            events: report
+                .events
+                .into_iter()
+                .map(|entry| NookVaultEventAccessDiagnostic {
+                    event_id: entry.event_id,
+                    key_epoch: entry.key_epoch,
+                    epoch_status: entry.epoch_status.as_str().to_owned(),
+                    encrypted_payloads: u32::try_from(entry.encrypted_payloads).unwrap_or(u32::MAX),
+                    explanation: entry.explanation,
+                })
+                .collect(),
+            warnings: report.warnings,
         })
     }
 }

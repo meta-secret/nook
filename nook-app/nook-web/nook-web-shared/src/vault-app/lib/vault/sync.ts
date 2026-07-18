@@ -4,6 +4,7 @@ import { createLogger } from "$lib/log";
 import {
   importLocalVaultBlob,
   readLocalVaultYaml,
+  VaultSyncConflictKind,
   type NookPendingSyncConflict,
 } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
@@ -35,7 +36,7 @@ export function syncConflictLabel(state: SyncConflictLabelState): string {
   const conflict = state.pendingSyncConflict;
   if (!conflict) return "";
   const key =
-    conflict.kind === "store_id"
+    conflict.kind === VaultSyncConflictKind.StoreId
       ? "auth_storage.sync_conflict_store_id_banner"
       : "auth_storage.sync_conflict_banner";
   return state.t(key, { provider: conflict.providerLabel });
@@ -48,35 +49,16 @@ function syncError(context: string, error: unknown) {
   });
 }
 
-function parseMultipleVaultStoreIds(message: string): string[] | undefined {
-  const match = message.match(
-    /contains multiple vault event logs \(store_id:\s*([^)]+)\)/i,
-  );
-  if (!match?.[1]) {
-    return undefined;
-  }
-  const storeIds = match[1]
-    .split(",")
-    .map((storeId) => storeId.trim())
-    .filter((storeId) => storeId.length > 0);
-  return storeIds.length > 1 ? storeIds : undefined;
-}
-
-function localFolderMultipleVaultsIssueFromError(
+function localFolderMultipleVaultsIssueFromTypedIssue(
   provider: StorageProvider,
-  error: unknown,
+  storeIds: string[],
+  message: string,
 ): LocalFolderMultipleVaultsIssue | undefined {
   if (provider.type !== "local-folder") return undefined;
-
-  const message = error instanceof Error ? error.message : String(error);
-  if (!/multiple vault event logs/i.test(message)) {
-    return undefined;
-  }
-
   return {
     providerId: provider.id,
     providerLabel: provider.label,
-    storeIds: parseMultipleVaultStoreIds(message) ?? [],
+    storeIds,
     message,
   };
 }
@@ -86,30 +68,11 @@ type ProviderStoreMismatch = {
   remoteStoreId: string;
 };
 
-export function providerStoreMismatchFromError(
-  error: unknown,
-): ProviderStoreMismatch | undefined {
-  const message = error instanceof Error ? error.message : String(error);
-  const match = message.match(
-    /already contains another vault\s*\(local store_id\s+([^,\s)]+),\s*provider store_id\s+([^)]+)\)/i,
-  );
-  if (!match?.[1] || !match[2]) {
-    return undefined;
-  }
-  return {
-    localStoreId: match[1].trim(),
-    remoteStoreId: match[2].trim(),
-  };
-}
-
 async function stageProviderStoreMismatchConflict(
   state: VaultState,
   provider: StorageProvider,
-  error: unknown,
+  mismatch: ProviderStoreMismatch,
 ): Promise<boolean> {
-  const mismatch = providerStoreMismatchFromError(error);
-  if (!mismatch) return false;
-
   const localYaml = await readLocalVaultBlob().catch(() => "");
   const args =
     provider.type === "local-folder"
@@ -355,14 +318,24 @@ export async function refreshReplacementConflicts(
       state.manager!.listProjectionSecurityConflicts(),
     ]);
   });
-  state.replacementConflicts = conflicts.map((conflict) => ({
-    oldSecretId: conflict.oldSecretId,
-    candidatesJson: conflict.candidatesJson,
-  }));
-  state.securityConflicts = securityConflicts.map((conflict) => ({
-    eventsJson: conflict.eventsJson,
-    reasonsJson: conflict.reasonsJson,
-  }));
+  state.replacementConflicts = conflicts.map((conflict) => {
+    const candidates = conflict.candidates.map((candidate) => {
+      const value = {
+        eventId: candidate.eventId,
+        secretId: candidate.secretId,
+      };
+      candidate.free();
+      return value;
+    });
+    const value = { oldSecretId: conflict.oldSecretId, candidates };
+    conflict.free();
+    return value;
+  });
+  state.securityConflicts = securityConflicts.map((conflict) => {
+    const value = { events: conflict.events, reasons: conflict.reasons };
+    conflict.free();
+    return value;
+  });
 }
 
 export function stageSyncConflict(
@@ -413,12 +386,13 @@ export async function resolveSyncConflictImportRemote(
   const conflict = state.pendingSyncConflict;
   if (
     !conflict ||
-    conflict.kind !== "store_id" ||
-    !conflict.remoteStoreId ||
+    conflict.kind !== VaultSyncConflictKind.StoreId ||
     state.isVerifying
   ) {
     return;
   }
+  const remoteStoreId = conflict.remoteStoreId();
+  if (!remoteStoreId) return;
 
   state.isVerifying = true;
   state.errorMsg = "";
@@ -651,15 +625,28 @@ export async function syncProviderById(
     return;
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e);
-    const stagedStoreMismatch = await stageProviderStoreMismatchConflict(
-      state,
-      provider,
-      e,
-    );
-    const localFolderIssue = localFolderMultipleVaultsIssueFromError(
-      provider,
-      e,
-    );
+    const eventLogIssue = state.manager.takeEventLogSyncIssue();
+    const message = e instanceof Error ? e.message : String(e);
+    let stagedStoreMismatch = false;
+    let localFolderIssue: LocalFolderMultipleVaultsIssue | undefined;
+    if (eventLogIssue?.isStoreMismatch) {
+      const localStoreId = eventLogIssue.localStoreId;
+      const remoteStoreId = eventLogIssue.remoteStoreId;
+      if (localStoreId && remoteStoreId) {
+        stagedStoreMismatch = await stageProviderStoreMismatchConflict(
+          state,
+          provider,
+          { localStoreId, remoteStoreId },
+        );
+      }
+    } else if (eventLogIssue?.isMultipleStores) {
+      localFolderIssue = localFolderMultipleVaultsIssueFromTypedIssue(
+        provider,
+        eventLogIssue.storeIds,
+        message,
+      );
+    }
+    eventLogIssue?.free();
     if (localFolderIssue) {
       stageLocalFolderMultipleVaultsIssue(state, localFolderIssue);
     }

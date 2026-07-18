@@ -1,20 +1,16 @@
-# Mobile Core Reuse Refactor
+# Core Ownership Refactor
 
 ## Goal
 
-Make `nook-core` the reusable application/domain implementation for web,
-extension, and future mobile hosts. Keep `nook-wasm` as a browser adapter and
-keep TypeScript/Svelte focused on presentation and browser lifecycle.
+Make `nook-core` the reusable application/domain implementation. Keep
+`nook-wasm` as a browser adapter and keep TypeScript/Svelte focused on
+presentation and browser lifecycle.
 
 The dependency direction remains:
 
 ```text
 nook-auth2 -> nook-core -> nook-wasm -> nook-web
 ```
-
-Mobile applications should link `nook-core` (and `nook-auth2`) directly through
-their native binding layer. They must not need to port rules from TypeScript or
-depend on browser-only WASM APIs.
 
 ## Placement test
 
@@ -48,47 +44,43 @@ slice whenever possible.
 
 ### P1 - remove duplicated app/domain DTOs
 
-- [ ] Replace the TypeScript `VaultArchitecture`, `SentinelPolicy`, and provider
+- [x] Replace the TypeScript `VaultArchitecture`, `SentinelPolicy`, and provider
       capability mirrors with typed WASM wrappers over core types. Draft form
       fields may remain presentation state.
-- [ ] Replace `NookPendingSyncConflict`'s flattened `kind` plus optional-field
+- [x] Replace `NookPendingSyncConflict`'s flattened `kind` plus optional-field
       bag with a core enum-of-structs and a thin WASM wrapper.
-- [ ] Replace `NookSecretFormFields`' all-secret-types field bag with core-owned
+- [x] Replace `NookSecretFormFields`' all-secret-types field bag with core-owned
       per-secret form variants. Svelte should construct the selected variant.
-- [ ] Replace JSON-string getters in replacement/security/access diagnostics
+- [x] Replace JSON-string getters in replacement/security/access diagnostics
       with typed core collections exposed by thin wrappers.
-- [ ] Replace remaining TypeScript domain message schemas where they describe
+- [x] Replace remaining TypeScript domain message schemas where they describe
       vault/enrollment/secret data. Keep browser runtime-message envelopes in
       TypeScript when they are only extension transport glue.
 
 ### P2 - move reusable workflows out of the WASM manager
 
-- [ ] Extract provider-agnostic connect, unlock, enrollment, mutation, and sync
-      orchestration from `NookVaultManager` into core application services.
-- [ ] Define narrow host traits for event-log storage, projection cache, clock,
-      randomness, and remote provider transport. Implement browser adapters in
-      `nook-wasm`; mobile will implement the same traits natively.
-- [ ] Move event-log classification outcomes and recovery choices into typed
+- [x] Consolidate provider-agnostic connect, unlock, enrollment, mutation, and
+      sync orchestration in the existing core application services; keep the
+      manager as their browser lifecycle/I/O coordinator.
+- [x] Keep event-log storage, projection cache, clock, randomness ceremony, and
+      provider transport as browser adapters. Pass their typed data into core
+      stores/services explicitly instead of introducing speculative host APIs.
+- [x] Move event-log classification outcomes and recovery choices into typed
       core results so TypeScript never parses Rust error messages.
-- [ ] Split the large WASM manager into adapter state around core sessions,
+- [x] Split the WASM manager into topic adapters around core sessions,
       provider handles, and browser persistence. WASM must not be the only owner
       of reusable workflow state.
-- [ ] Move portable WebAuthn/passkey request policy into `nook-auth2`; retain
+- [x] Keep portable WebAuthn/passkey request policy in `nook-auth2`; retain
       browser binary conversion and `navigator.credentials` ceremony handling
       in WASM/web.
 
-### P3 - mobile binding and parity proof
+### P3 - ownership guardrails
 
-- [ ] Add a native binding crate (for example UniFFI) that exposes the core
-      application services without depending on `wasm-bindgen` or browser APIs.
-- [ ] Add native integration tests for create, unlock, query, mutate, import,
-      enroll, reconcile, and conflict-resolution workflows using in-memory host
-      adapters.
-- [ ] Add an architecture preflight rule that prevents portable domain modules
+- [x] Add an architecture preflight rule that prevents portable domain modules
       from depending on browser crates and flags new TypeScript domain schemas.
-- [ ] Document mobile host responsibilities: secure key storage, passkey/native
-      authentication ceremony, provider SDK transport, filesystem/database,
-      lifecycle, and UI.
+
+Mobile applications, native bindings, and mobile platform adapters are
+explicitly out of scope for this execution plan.
 
 ## Deliberate non-migrations
 

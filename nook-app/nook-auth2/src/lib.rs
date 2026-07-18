@@ -88,7 +88,8 @@ pub use auth::sentinel_genesis::{
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
     create_sentinel_genesis_public_key_announcement, finalize_sentinel_genesis_shares,
     normalize_sentinel_genesis_participant_payload, normalize_sentinel_genesis_request,
-    respond_to_sentinel_genesis_request, sentinel_genesis_request, start_sentinel_genesis,
+    respond_to_sentinel_genesis_request, sentinel_genesis_participant_fingerprint,
+    sentinel_genesis_request, start_sentinel_genesis,
 };
 pub use auth::sentinel_unlock::{
     SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,

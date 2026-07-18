@@ -1,4 +1,5 @@
 import {
+  NookVaultArchitecture,
   defaultVaultArchitecture as wasmDefaultVaultArchitecture,
   firstCompatibleProviderId as wasmFirstCompatibleProviderId,
   prepareSharedStorageGrant as wasmPrepareSharedStorageGrant,
@@ -10,56 +11,56 @@ import {
   vaultArchitectureCanCreateSecret as wasmVaultArchitectureCanCreateSecret,
   vaultArchitectureOnboardingType as wasmVaultArchitectureOnboardingType,
 } from "$app-wasm";
+import type { NookProviderReplicationCapability } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 
 export type DeviceMode = "standard" | "anti-hacker";
 export type VaultType = "simple" | "sentinel";
 export type ReplicationType = "personal" | "shared";
 
-export type SentinelPolicy = {
-  threshold: number;
-  required_participants: number;
-  ready_participants: number;
-};
-
-export type VaultArchitecture = {
+export type VaultArchitectureDraft = {
   device_mode: DeviceMode;
   vault_type: VaultType;
   replication_type: ReplicationType;
-  sentinel?: SentinelPolicy;
+  sentinel?: {
+    threshold: number;
+    required_participants: number;
+    ready_participants: number;
+  };
 };
 
-export type ProviderReplicationCapability = {
-  providerType: string;
-  oauthPreset?: string;
-  supportsPersonal: boolean;
-  supportsShared: boolean;
-  sharedJoinerIdentity?: "email";
+export type VaultArchitecture = NookVaultArchitecture & {
+  readonly device_mode: DeviceMode;
+  readonly vault_type: VaultType;
+  readonly replication_type: ReplicationType;
 };
+export type ProviderReplicationCapability = NookProviderReplicationCapability;
 
 export function defaultVaultArchitecture(): VaultArchitecture {
-  return normalizeVaultArchitecture(
-    wasmDefaultVaultArchitecture() as Partial<VaultArchitecture>,
-  );
+  return wasmDefaultVaultArchitecture() as VaultArchitecture;
 }
 
 export function validateVaultArchitecture(
-  architecture: VaultArchitecture,
+  architecture: VaultArchitectureDraft,
 ): VaultArchitecture {
-  return normalizeVaultArchitecture(
-    wasmValidateVaultArchitecture(architecture) as Partial<VaultArchitecture>,
-  );
-}
-
-function normalizeVaultArchitecture(
-  architecture: Partial<VaultArchitecture>,
-): VaultArchitecture {
-  return {
-    device_mode: architecture.device_mode ?? "standard",
-    vault_type: architecture.vault_type ?? "simple",
-    replication_type: architecture.replication_type ?? "personal",
-    sentinel: architecture.sentinel,
-  };
+  const candidate =
+    architecture.vault_type === "sentinel"
+      ? NookVaultArchitecture.sentinel(
+          architecture.device_mode,
+          architecture.replication_type,
+          architecture.sentinel?.threshold ?? 2,
+          architecture.sentinel?.required_participants ?? 3,
+          architecture.sentinel?.ready_participants ?? 0,
+        )
+      : NookVaultArchitecture.simple(
+          architecture.device_mode,
+          architecture.replication_type,
+        );
+  try {
+    return wasmValidateVaultArchitecture(candidate) as VaultArchitecture;
+  } finally {
+    candidate.free();
+  }
 }
 
 export function onboardingType(architecture: VaultArchitecture): string {
@@ -80,19 +81,14 @@ export function canCreateSecret(architecture: VaultArchitecture): boolean {
 export function providerReplicationCapability(
   provider: StorageProvider,
 ): ProviderReplicationCapability {
-  return wasmProviderReplicationCapability(
-    provider,
-  ) as ProviderReplicationCapability;
+  return wasmProviderReplicationCapability(provider);
 }
 
 export function validateProviderReplication(
   provider: StorageProvider,
   replicationType: ReplicationType,
 ): ProviderReplicationCapability {
-  return wasmValidateProviderReplication(
-    provider,
-    replicationType,
-  ) as ProviderReplicationCapability;
+  return wasmValidateProviderReplication(provider, replicationType);
 }
 
 export type ProviderCapabilityLabelKey =
@@ -104,9 +100,13 @@ export function providerCapabilityLabelKey(
   provider: StorageProvider,
 ): ProviderCapabilityLabelKey {
   const capability = providerReplicationCapability(provider);
-  return capability.supportsShared
-    ? "provider_picker.capability_personal_shared"
-    : "provider_picker.capability_personal_only";
+  try {
+    return capability.supportsShared
+      ? "provider_picker.capability_personal_shared"
+      : "provider_picker.capability_personal_only";
+  } finally {
+    capability.free();
+  }
 }
 
 /** Fail closed by asking Rust to validate this provider/mode combination. */

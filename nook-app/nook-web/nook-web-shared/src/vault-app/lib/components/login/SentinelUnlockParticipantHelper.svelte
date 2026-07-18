@@ -163,8 +163,7 @@
                     value={delivery.storeId}
                     data-testid={`sentinel-unlock-delivery-${delivery.storeId}`}
                   >
-                    {delivery.storeId} · {delivery.policy.threshold}/{delivery
-                      .policy.participantCount}
+                    {delivery.storeId} · {delivery.threshold}/{delivery.participantCount}
                   </Select.Item>
                 {/each}
               </Select.Content>

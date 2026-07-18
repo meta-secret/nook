@@ -4,28 +4,34 @@ import {
   NookPendingSyncConflict,
   NookRuntimeConfig,
 } from '$app-wasm'
-import {
-  providerStoreMismatchFromError,
-  syncConflictLabel,
-  type PendingSyncConflict,
-} from '$lib/vault/sync'
+import { syncConflictLabel, type PendingSyncConflict } from '$lib/vault/sync'
 
 function buildConflict(kind?: string): PendingSyncConflict {
-  return new NookPendingSyncConflict(
-    'provider-1',
-    'GitHub',
-    'local',
-    'remote',
-    1,
-    1,
-    'github',
-    'token',
-    'owner/repo',
-    undefined,
-    kind,
-    undefined,
-    undefined,
-  )
+  return kind === 'store_id'
+    ? NookPendingSyncConflict.storeId(
+        'provider-1',
+        'GitHub',
+        'local',
+        'remote',
+        'github',
+        'token',
+        'owner/repo',
+        undefined,
+        'store-local',
+        'store-remote',
+      )
+    : NookPendingSyncConflict.content(
+        'provider-1',
+        'GitHub',
+        'local',
+        'remote',
+        1,
+        1,
+        'github',
+        'token',
+        'owner/repo',
+        undefined,
+      )
 }
 
 function labelFor(conflict: PendingSyncConflict | undefined): string {
@@ -75,27 +81,6 @@ describe('syncConflictLabel', () => {
   test('uses the store-id conflict banner for store mismatches', () => {
     expect(labelFor(buildConflict('store_id'))).toBe(
       'auth_storage.sync_conflict_store_id_banner:GitHub',
-    )
-  })
-})
-
-describe('providerStoreMismatchFromError', () => {
-  test('extracts local and provider store ids from event-log mismatch errors', () => {
-    expect(
-      providerStoreMismatchFromError(
-        new Error(
-          'Sync provider already contains another vault (local store_id store_local12345, provider store_id store_remote1234). Choose which vault to use before syncing.',
-        ),
-      ),
-    ).toEqual({
-      localStoreId: 'store_local12345',
-      remoteStoreId: 'store_remote1234',
-    })
-  })
-
-  test('ignores unrelated errors', () => {
-    expect(providerStoreMismatchFromError(new Error('network failed'))).toBe(
-      undefined,
     )
   })
 })

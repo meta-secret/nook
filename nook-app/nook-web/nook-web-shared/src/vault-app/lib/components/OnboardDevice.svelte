@@ -109,10 +109,10 @@
     vault.vaultArchitecture.vault_type === 'sentinel',
   )
   const sentinelReadyParticipants = $derived(
-    vault.vaultArchitecture.sentinel?.ready_participants ?? 0,
+    vault.vaultArchitecture.sentinel_ready_participants ?? 0,
   )
   const sentinelRequiredParticipants = $derived(
-    vault.vaultArchitecture.sentinel?.required_participants ?? 0,
+    vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
   let providerId = $state<string | undefined>(undefined)

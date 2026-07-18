@@ -148,27 +148,12 @@
     }
   }
 
-  function conflictCandidates(
-    candidatesJson: string,
-  ): Array<{ eventId: string; secretId: string }> {
-    try {
-      const parsed = JSON.parse(candidatesJson) as Array<[string, string]>;
-      return parsed.map(([eventId, secretId]) => ({ eventId, secretId }));
-    } catch {
-      return [];
-    }
-  }
-
   function shortId(id: string): string {
     return id.length > 18 ? `${id.slice(0, 18)}...` : id;
   }
 
-  function conflictReasons(reasonsJson: string): string {
-    try {
-      return (JSON.parse(reasonsJson) as string[]).join(", ");
-    } catch {
-      return "key epoch rotation";
-    }
+  function conflictReasons(reasons: string[]): string {
+    return reasons.length > 0 ? reasons.join(", ") : "key epoch rotation";
   }
 
   function navigateHome() {
@@ -1153,7 +1138,7 @@
                 })}
               </p>
               <div class="mt-2 flex flex-wrap gap-2">
-                {#each conflictCandidates(conflict.candidatesJson) as candidate (candidate.secretId)}
+                {#each conflict.candidates as candidate (candidate.secretId)}
                   <Button
                     size="sm"
                     variant="secondary"
@@ -1182,8 +1167,8 @@
       >
         <p class="font-medium">{vault.t("app.security_conflict")}</p>
         <div class="mt-2 space-y-2 text-red-100">
-          {#each vault.securityConflicts as conflict (conflict.eventsJson)}
-            <p>{conflictReasons(conflict.reasonsJson)}</p>
+          {#each vault.securityConflicts as conflict (conflict.events.join(':'))}
+            <p>{conflictReasons(conflict.reasons)}</p>
           {/each}
         </div>
       </div>

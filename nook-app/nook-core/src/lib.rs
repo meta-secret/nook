@@ -22,8 +22,8 @@ pub(crate) use secrets::{
     secret_fingerprint, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
-    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
-    vault_sync_store,
+    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
+    vault_sync_session, vault_sync_store,
 };
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
@@ -79,7 +79,7 @@ pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError,
     ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, SecretPayloadError,
     SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
-    VaultResult, VaultSyncError,
+    VaultRecoveryErrorKind, VaultResult, VaultSyncError, classify_vault_recovery_error,
 };
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, open_extension_identity_handoff,
@@ -123,14 +123,18 @@ pub use secret_types::{
     SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{
-    SecretListItem, SecretListItemData, build_secret_yaml, hostname_from_url,
-    login_host_matches_origin,
+    ApiKeySecretForm, AuthenticatorSecretForm, LoginSecretForm, SecretFormFields, SecretListItem,
+    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, build_secret_yaml,
+    build_secret_yaml_from_form, hostname_from_url, login_host_matches_origin,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
     create_sentinel_onboarding_package, decode_sentinel_onboarding_package,
     encode_sentinel_onboarding_package,
+};
+pub use vault_sync_conflict::{
+    ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
 };
 
 pub use nook_auth2::{
@@ -141,7 +145,8 @@ pub use nook_auth2::{
     add_sentinel_genesis_public_key_announcement, add_sentinel_genesis_response,
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
     finalize_sentinel_genesis_shares, normalize_sentinel_genesis_participant_payload,
-    normalize_sentinel_genesis_request, sentinel_genesis_request,
+    normalize_sentinel_genesis_request, sentinel_genesis_participant_fingerprint,
+    sentinel_genesis_request,
 };
 
 pub use multi_device::sentinel_member_records_from_public_roster;

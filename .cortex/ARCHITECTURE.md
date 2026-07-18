@@ -98,6 +98,17 @@ root/
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
 - **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
 - **`src/vault/`:** In-memory database, vault formats, ids/newtypes, event log, projection, import, connect, session-cache workflows, typed access states, and portable idle/sync runtime policy.
+- **Application services:** Provider-agnostic connect decisions live in
+  `vault_connect`; unlock/session hydration in `vault_session` and
+  `vault_session_cache`; enrollment in `auth/enrollment`; mutation/event
+  orchestration in `vault_event_builder` and `vault_event_session`; and sync
+  reconciliation in `vault_sync_session` and `vault_sync_store`. Hosts load or
+  persist bytes, tokens, revisions, and timestamps, then call these services;
+  they do not repeat their decisions.
+- **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable
+  in-memory service inputs. Browser event storage, projection cache, clocks,
+  secure randomness ceremonies, and provider transports remain adapters in
+  `nook-wasm`; portable functions receive their resulting typed data explicitly.
 - **Root exports:** `nook-app/nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
@@ -108,7 +119,10 @@ root/
 - **Device protection:** Persist/migrate the wrapped identity, build WebAuthn PRF option payloads with `1Password/passkey-rs` `passkey-types`, and expose typed setup/unlock values to the web layer. Delegates portable key wrapping and auth metadata behavior to `nook-auth2` through `nook-core`.
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
-- **Runtime wrappers:** `NookRuntimeConfig` and connect/sync results expose core-owned policy and `VaultAccessStatus`; WASM does not own timeout rules or string status taxonomies.
+- **Runtime wrappers:** Runtime policy, architecture, secret forms, diagnostics,
+  Sentinel session/finalization state, sync conflicts, and recovery issues are
+  core-owned values exposed through typed wrappers. WASM does not own timeout
+  rules, domain DTO mirrors, or string status taxonomies.
 
 ### D. Isolated vault applications (The Web Presentation Layer)
 

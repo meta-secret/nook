@@ -5,10 +5,7 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import {
-    providerReplicationCapability,
-    type ProviderReplicationCapability,
-  } from '$lib/vault-architecture'
+  import { providerReplicationCapability } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -53,21 +50,20 @@
     } as StorageProvider
   }
 
-  function capability(
-    type: StorageProviderType,
-    oauthPreset?: OAuthFilePreset,
-  ): ProviderReplicationCapability {
-    return providerReplicationCapability(draftProvider(type, oauthPreset))
-  }
-
   function blocked(
     type: StorageProviderType,
     oauthPreset?: OAuthFilePreset,
   ): boolean {
-    const result = capability(type, oauthPreset)
-    return vault.draftReplicationType === 'shared'
-      ? !result.supportsShared
-      : !result.supportsPersonal
+    const result = providerReplicationCapability(
+      draftProvider(type, oauthPreset),
+    )
+    try {
+      return vault.draftReplicationType === 'shared'
+        ? !result.supportsShared
+        : !result.supportsPersonal
+    } finally {
+      result.free()
+    }
   }
 
   function description(

@@ -38,7 +38,7 @@ use crate::storage::{
     indexed_db::load_from_indexed_db,
 };
 use crate::types::records_to_vec;
-use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
+use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -218,6 +218,9 @@ pub struct NookVaultManager {
     pub(in crate::manager) sentinel_unlock: Option<nook_core::SentinelUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
+    /// Typed recovery issue captured before an event-log sync aborts.
+    pub(in crate::manager) event_log_sync_issue:
+        Option<(String, nook_core::RemoteEventLogClassification)>,
 }
 
 impl Drop for NookVaultManager {
@@ -231,6 +234,7 @@ impl Drop for NookVaultManager {
         self.pending_sentinel_genesis_request = None;
         self.sentinel_unlock = None;
         self.sync_outbox.reset();
+        self.event_log_sync_issue = None;
     }
 }
 
@@ -249,7 +253,17 @@ impl NookVaultManager {
             pending_sentinel_genesis_request: None,
             sentinel_unlock: None,
             sync_outbox: SyncOutboxState::default(),
+            event_log_sync_issue: None,
         }
+    }
+
+    #[wasm_bindgen(js_name = takeEventLogSyncIssue)]
+    pub fn take_event_log_sync_issue(&mut self) -> Option<crate::NookEventLogSyncIssue> {
+        self.event_log_sync_issue
+            .take()
+            .map(|(provider_label, classification)| {
+                crate::NookEventLogSyncIssue::new(provider_label, classification)
+            })
     }
 
     #[wasm_bindgen(getter)]
@@ -272,16 +286,17 @@ impl NookVaultManager {
         self.vault.vault_version
     }
 
-    #[wasm_bindgen(getter, js_name = vaultArchitectureJson)]
-    pub fn vault_architecture_json(&self) -> Result<String, JsError> {
-        serde_json::to_string(&self.vault.architecture)
-            .map_err(|error| JsError::new(&error.to_string()))
+    #[wasm_bindgen(getter, js_name = vaultArchitecture)]
+    pub fn vault_architecture(&self) -> NookVaultArchitecture {
+        NookVaultArchitecture::from_core(self.vault.architecture.clone())
     }
 
-    #[wasm_bindgen(js_name = setVaultArchitectureJson)]
-    pub fn set_vault_architecture_json(&mut self, architecture_json: &str) -> Result<(), JsError> {
-        let architecture: nook_core::VaultArchitecture = serde_json::from_str(architecture_json)
-            .map_err(|error| JsError::new(&error.to_string()))?;
+    #[wasm_bindgen(js_name = setVaultArchitecture)]
+    pub fn set_vault_architecture(
+        &mut self,
+        architecture: &NookVaultArchitecture,
+    ) -> Result<(), JsError> {
+        let architecture = architecture.to_core();
         architecture
             .validate()
             .map_err(|error| JsError::new(&error.to_string()))?;

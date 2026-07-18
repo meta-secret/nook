@@ -20,6 +20,34 @@ pub use vault_format::{VaultFormatError, VaultFormatResult};
 pub use vault_sync::VaultSyncError;
 
 use thiserror::Error;
+use wasm_bindgen::prelude::wasm_bindgen;
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultRecoveryErrorKind {
+    Other,
+    SentinelCeremonyRequired,
+    SentinelPasswordUnlockForbidden,
+}
+
+/// Classify a boundary error into the recovery action understood by hosts.
+/// Message compatibility stays in Rust until the boundary can transport the
+/// concrete error enum directly.
+#[must_use]
+pub fn classify_vault_recovery_error(message: &str) -> VaultRecoveryErrorKind {
+    let normalized = message.to_ascii_lowercase();
+    if normalized.contains("sentinel vault unlock requires an opened-share ceremony")
+        || normalized.contains("sentinelceremonyrequired")
+    {
+        VaultRecoveryErrorKind::SentinelCeremonyRequired
+    } else if normalized.contains("password unlock is forbidden for sentinel")
+        || normalized.contains("sentinelpasswordunlockforbidden")
+    {
+        VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
+    } else {
+        VaultRecoveryErrorKind::Other
+    }
+}
 
 pub type VaultResult<T> = Result<T, VaultError>;
 
@@ -81,4 +109,29 @@ pub enum VaultError {
 
     #[error(transparent)]
     Age(#[from] AgeCryptoError),
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[test]
+    fn sentinel_recovery_errors_are_classified_in_core() {
+        assert_eq!(
+            classify_vault_recovery_error(
+                "Sentinel vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
+            ),
+            VaultRecoveryErrorKind::SentinelCeremonyRequired
+        );
+        assert_eq!(
+            classify_vault_recovery_error(
+                "Password unlock is forbidden for sentinel vaults; use the opened-share ceremony instead."
+            ),
+            VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
+        );
+        assert_eq!(
+            classify_vault_recovery_error("network failed"),
+            VaultRecoveryErrorKind::Other
+        );
+    }
 }

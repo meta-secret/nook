@@ -28,13 +28,19 @@ pub use manager::NookVaultManager;
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
     NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
-    NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookImportResult,
-    NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookPasskeyAccount,
-    NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
-    NookPasswordEntrySummary, NookPendingSyncConflict, NookReplacementConflict, NookRuntimeConfig,
-    NookSecretFormFields, NookSecretPage, NookSecurityConflict, NookStorageConnectArgs,
+    NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
+    NookImportResult, NookJoinRequest, NookLoginAccount, NookLoginFillCredential,
+    NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup,
+    NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookProviderReplicationCapability, NookReplacementCandidate, NookReplacementConflict,
+    NookRuntimeConfig, NookSecretFormFields, NookSecretPage, NookSecurityConflict,
+    NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
+    NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
+    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
     NookStorageProviderKind, NookStorageProviderTypeUtil, NookTotpCode, NookVaultAccessReport,
-    NookVaultMember, NookVaultSecurityRecommendations, NookVaultSyncResult,
+    NookVaultArchitecture, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
+    NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
+    NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -76,6 +82,12 @@ pub enum NookError {
 #[must_use]
 pub fn translate_key(locale: &str, key: &str) -> String {
     nook_core::translate(locale, key)
+}
+
+#[wasm_bindgen(js_name = classifyVaultRecoveryError)]
+#[must_use]
+pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
+    nook_core::classify_vault_recovery_error(message)
 }
 
 #[wasm_bindgen(js_name = assessVaultSecurity)]
@@ -576,24 +588,24 @@ pub fn icloud_oauth_tokens_to_config(
 }
 
 #[wasm_bindgen(js_name = defaultVaultArchitecture)]
-pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
-    Ok(to_js_value(&nook_core::VaultArchitecture::default())?)
+pub fn default_vault_architecture() -> NookVaultArchitecture {
+    NookVaultArchitecture::from_core(nook_core::VaultArchitecture::default())
 }
 
 #[wasm_bindgen(js_name = validateVaultArchitecture)]
 pub fn validate_vault_architecture(
-    architecture: JsValue,
-) -> Result<JsValue, wasm_bindgen::JsError> {
-    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture: &NookVaultArchitecture,
+) -> Result<NookVaultArchitecture, wasm_bindgen::JsError> {
+    let architecture = architecture.to_core();
     architecture.validate()?;
-    Ok(to_js_value(&architecture)?)
+    Ok(NookVaultArchitecture::from_core(architecture))
 }
 
 #[wasm_bindgen(js_name = vaultArchitectureOnboardingType)]
 pub fn vault_architecture_onboarding_type(
-    architecture: JsValue,
+    architecture: &NookVaultArchitecture,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    let architecture = architecture.to_core();
     architecture.validate()?;
     Ok(architecture.onboarding_type().as_str().to_owned())
 }
@@ -601,10 +613,10 @@ pub fn vault_architecture_onboarding_type(
 #[wasm_bindgen(js_name = providerOnboardingType)]
 pub fn provider_onboarding_type(
     provider: JsValue,
-    architecture: JsValue,
+    architecture: &NookVaultArchitecture,
 ) -> Result<String, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
-    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    let architecture = architecture.to_core();
     Ok(
         nook_core::provider_onboarding_type(&provider, &architecture)?
             .as_str()
@@ -614,9 +626,9 @@ pub fn provider_onboarding_type(
 
 #[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]
 pub fn vault_architecture_can_create_secret(
-    architecture: JsValue,
+    architecture: &NookVaultArchitecture,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    let architecture = architecture.to_core();
     architecture.validate()?;
     Ok(architecture.can_create_secret())
 }
@@ -624,24 +636,23 @@ pub fn vault_architecture_can_create_secret(
 #[wasm_bindgen(js_name = providerReplicationCapability)]
 pub fn provider_replication_capability(
     provider: JsValue,
-) -> Result<JsValue, wasm_bindgen::JsError> {
+) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
-    Ok(to_js_value(
-        &nook_core::provider_replication_capability_for_row(&provider)?,
-    )?)
+    Ok(NookProviderReplicationCapability::from_core(
+        nook_core::provider_replication_capability_for_row(&provider)?,
+    ))
 }
 
 #[wasm_bindgen(js_name = validateProviderReplication)]
 pub fn validate_provider_replication(
     provider: JsValue,
     replication_type: &str,
-) -> Result<JsValue, wasm_bindgen::JsError> {
+) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
     let replication_type = nook_core::ReplicationType::parse(replication_type)?;
-    Ok(to_js_value(&nook_core::validate_provider_row_replication(
-        &provider,
-        replication_type,
-    )?)?)
+    Ok(NookProviderReplicationCapability::from_core(
+        nook_core::validate_provider_row_replication(&provider, replication_type)?,
+    ))
 }
 
 #[wasm_bindgen(js_name = providerSupportsReplication)]
@@ -677,12 +688,12 @@ pub fn first_compatible_provider_id(
 #[allow(clippy::needless_pass_by_value)]
 pub fn enrollment_provider_for_architecture(
     provider: JsValue,
-    architecture: JsValue,
+    architecture: &NookVaultArchitecture,
     shared_joiner_identity: Option<String>,
     shared_storage_target_id: Option<String>,
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
-    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    let architecture = architecture.to_core();
     Ok(NookEnrollmentProvider::from_core(
         nook_core::enrollment_provider_for_architecture_with_storage_target(
             &provider,
@@ -980,6 +991,13 @@ pub fn normalize_sentinel_genesis_participant_payload(
     Ok(nook_core::normalize_sentinel_genesis_participant_payload(
         input,
     )?)
+}
+
+#[wasm_bindgen(js_name = sentinelGenesisParticipantFingerprint)]
+pub fn sentinel_genesis_participant_fingerprint(
+    input: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::sentinel_genesis_participant_fingerprint(input)?)
 }
 
 #[wasm_bindgen(js_name = normalizeEnrollmentCode)]
@@ -1735,24 +1753,15 @@ impl NookSecretRecord {
 }
 
 /// Serialize validated form fields into the YAML payload expected by `add_secret`.
-fn build_secret_yaml_inner(
-    secret_type: &str,
-    fields: &NookSecretFormFields,
-) -> Result<String, NookError> {
-    let parsed = nook_core::SecretType::parse(secret_type)?;
-    Ok(
-        nook_core::build_secret_yaml(parsed, &fields.to_json_value())?
-            .as_str()
-            .to_owned(),
-    )
+fn build_secret_yaml_inner(fields: &NookSecretFormFields) -> Result<String, NookError> {
+    Ok(nook_core::build_secret_yaml_from_form(&fields.inner)?
+        .as_str()
+        .to_owned())
 }
 
 #[wasm_bindgen(js_name = buildSecretYaml)]
-pub fn build_secret_yaml(
-    secret_type: &str,
-    fields: &NookSecretFormFields,
-) -> Result<String, wasm_bindgen::JsError> {
-    build_secret_yaml_inner(secret_type, fields).map_err(Into::into)
+pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
+    build_secret_yaml_inner(fields).map_err(Into::into)
 }
 
 #[wasm_bindgen(js_name = authenticatorSetupKeyChanged)]
