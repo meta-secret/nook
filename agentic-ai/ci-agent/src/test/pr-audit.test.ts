@@ -43,14 +43,30 @@ test("buildPrAudit accepts a clean Codex issue comment for the exact head", asyn
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit rejects stale and lookalike clean Codex comments", async () => {
-  for (const codexReview of ["stale-clean-comment", "impostor-clean-comment"] as const) {
-    const audit = await buildPrAudit(mockOctokit({ codexReview }), repoRef, 410);
+test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: "stale-clean-comment" }),
+    repoRef,
+    410,
+  );
 
-    assert.equal(audit.ready, false);
-    assert.equal(audit.feedback.codexReview.cleanComment, false);
-    assert.equal(audit.feedback.codexReview.settled, false);
-  }
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.codexReview.cleanComment, false);
+  assert.equal(audit.feedback.codexReview.settled, false);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
+test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: "impostor-clean-comment" }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.codexReview.cleanComment, false);
+  assert.equal(audit.feedback.codexReview.settled, false);
+  assert.equal(audit.feedback.substantiveComments, 1);
 });
 
 test("buildPrAudit checks every duplicate exact-head Codex request for approval", async () => {

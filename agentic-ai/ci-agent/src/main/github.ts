@@ -321,7 +321,7 @@ export async function inspectPrFeedback(
   const substantiveComments = issueComments.filter(
     (comment) =>
       !isRepositoryStatusComment(comment.body ?? "") &&
-      !isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user?.login),
   );
   const substantiveReviews = reviews.filter((review) => {
     if (review.commit_id !== pr.head.sha || review.state === "APPROVED") {
@@ -394,11 +394,19 @@ function isCleanCodexReviewComment(
   login: string | undefined,
   headSha: string,
 ): boolean {
-  if (!isCodexReviewer(login) || !body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX)) {
+  if (!isCodexCleanReviewStatusComment(body, login)) {
     return false;
   }
   const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
   return reviewedCommit !== undefined && headSha.startsWith(reviewedCommit);
+}
+
+function isCodexCleanReviewStatusComment(body: string, login: string | undefined): boolean {
+  return (
+    isCodexReviewer(login) &&
+    body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX) &&
+    REVIEWED_COMMIT_PATTERN.test(body)
+  );
 }
 
 function isSubmittedReviewState(state: string): boolean {
