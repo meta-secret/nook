@@ -74,10 +74,9 @@ describe('portable vault client policy', () => {
       ),
     ).toEqual(['local-a', 'github-a'])
     expect(
-      (syncProvidersForActiveVault(
-        providers,
-        'store-a',
-      ) as typeof providers).map((provider) => provider.id),
+      (
+        syncProvidersForActiveVault(providers, 'store-a') as typeof providers
+      ).map((provider) => provider.id),
     ).toEqual(['github-a'])
     expect(
       (providersVisibleWhileDeviceLocked(providers) as typeof providers).map(

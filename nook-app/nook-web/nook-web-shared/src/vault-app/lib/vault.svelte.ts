@@ -271,9 +271,7 @@ export class VaultState {
   enrollMembersKey = $state("");
   sharedJoinerIdentity = $state("");
   sharedGrantInstructions = $state("");
-  joinEnrollmentPrompt = $state<JoinEnrollmentState>(
-    JoinEnrollmentState.None,
-  );
+  joinEnrollmentPrompt = $state<JoinEnrollmentState>(JoinEnrollmentState.None);
   /**
    * True from the moment this device sends a join request until it unlocks.
    * Survives the join dialog being dismissed, so background sync can still
@@ -496,13 +494,15 @@ export class VaultState {
       type,
       this.githubPat || undefined,
       this.githubRepo || undefined,
-      this.oauthFile ? plainProvider({
-        id: "staged-oauth-file",
-        type,
-        label: "",
-        oauthFile: this.oauthFile,
-        createdAt: "",
-      }).oauthFile : undefined,
+      this.oauthFile
+        ? plainProvider({
+            id: "staged-oauth-file",
+            type,
+            label: "",
+            oauthFile: this.oauthFile,
+            createdAt: "",
+          }).oauthFile
+        : undefined,
     );
     if (!args) return undefined;
     try {
