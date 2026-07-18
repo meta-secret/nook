@@ -169,7 +169,7 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
     immediately. Open a separate normal performance PR for actionable waste or
     regression. See [agent-statistics.md](agent-statistics.md).
 12. **Finish** — report the task duration after the implementation and stats PRs
-    are merged (and after opening any required performance PR).
+    are merged and any required performance PR is also landed.
 
 ```mermaid
 flowchart TD

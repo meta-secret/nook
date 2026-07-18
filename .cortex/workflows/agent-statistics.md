@@ -74,12 +74,12 @@ source_pr:
   elapsed_seconds: 2700
   open_to_merge_seconds: 1800
 summary:
-  local_execution_count: 3
-  local_check_count: 1
-  local_test_count: 1
+  local_execution_count: 1
+  local_check_count: 0
+  local_test_count: 0
   local_combined_count: 1
-  local_execution_seconds: 840
-  github_actions_run_count: 2
+  local_execution_seconds: 600
+  github_actions_run_count: 1
   github_actions_seconds: 1200
   pr_retrigger_count: 1
   agent_requested_rerun_count: 0
@@ -175,9 +175,11 @@ For such a PR:
 - squash-merge immediately, using the repository's authorized ruleset/admin
   bypass when GitHub expects a normally required check.
 
-Any additional file, renamed record, build change, or product change makes the
-exception invalid and requires the full normal PR workflow. The squash-merge
-rule still has no exception.
+An invalid stats-only diff (for example multiple records or a filename/source PR
+mismatch) must be corrected to the exact one-file shape before merge; it is
+never eligible for a bypass merely because `.stats/**` skips product checks.
+Build, workflow, or product changes belong in a separate normal PR and cause the
+normal pipeline to run. The squash-merge rule still has no exception.
 
 The PR and main product pipelines ignore `.stats/**`, so publishing the record
 does not create an empty required validation cycle and merging it does not run
