@@ -187,13 +187,24 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
         "nook-app/nook-web/nook-web-shared/src/vault-app/lib/wasm-bootstrap.ts",
     );
     assert!(wasm_bridge.contains("configureVaultApplication(WASM_APPLICATION)"));
-    for entry in [
-        "nook-app/nook-web/nook-vault-simple/src/main.ts",
-        "nook-app/nook-web/nook-vault-sentinel/src/main.ts",
+    let shared_entry = read(
+        &root,
+        "nook-app/nook-web/nook-web-shared/src/vault-app/main.ts",
+    );
+    assert!(shared_entry.contains("await ensureAppWasm()"));
+    assert!(shared_entry.contains("await import("));
+    for (entry, expected_kind) in [
+        (
+            "nook-app/nook-web/nook-vault-simple/src/main.ts",
+            "mountVaultApp(\"simple\")",
+        ),
+        (
+            "nook-app/nook-web/nook-vault-sentinel/src/main.ts",
+            "mountVaultApp(\"sentinel\")",
+        ),
     ] {
         let source = read(&root, entry);
-        assert!(source.contains("await ensureAppWasm()"));
-        assert!(source.contains("await import("));
+        assert!(source.contains(expected_kind));
     }
 
     let dockerignore = read(&root, ".dockerignore");

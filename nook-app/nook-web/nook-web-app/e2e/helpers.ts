@@ -2679,15 +2679,7 @@ export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
     if (hook?.loadAuthProviders) {
       return hook.loadAuthProviders()
     }
-    const auth = await import('/src/lib/auth-providers.ts')
-    const manager = (
-      window as Window & {
-        __nookVault?: { manager?: unknown }
-      }
-    ).__nookVault?.manager
-    return auth.loadAuthProviders(
-      manager as Parameters<typeof auth.loadAuthProviders>[0],
-    )
+    throw new Error('E2E auth provider hooks are unavailable')
   })
 }
 
@@ -2710,16 +2702,7 @@ export async function saveAuthProvidersInBrowser(
       await hook.saveAuthProviders(value)
       return
     }
-    const auth = await import('/src/lib/auth-providers.ts')
-    const manager = (
-      window as Window & {
-        __nookVault?: { manager?: unknown }
-      }
-    ).__nookVault?.manager
-    await auth.saveAuthProviders(
-      manager as Parameters<typeof auth.saveAuthProviders>[0],
-      value,
-    )
+    throw new Error('E2E auth provider hooks are unavailable')
   }, snapshot)
 }
 

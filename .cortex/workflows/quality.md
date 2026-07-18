@@ -13,6 +13,8 @@ Use this workflow for quality, CI, and deployment changes.
    - `task rust:coverage:check` — `cd nook-app && cargo llvm-cov nextest -p nook-core -p nook-auth2 --profile ci` vs **90%** line floor (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`
+   - `jscpd` — copy/paste detection across authored `nook-app` and `preflight`
+     sources, with the checked-in threshold treated as a no-regression ceiling
    - `prettier --check`
    - `vitest run`
    - `vite build`
