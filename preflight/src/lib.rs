@@ -10,6 +10,93 @@ pub struct Violation {
     pub line: usize,
 }
 
+const BROWSER_RUST_MARKERS: &[&str] = &[
+    "web_sys::",
+    "js_sys::",
+    "wasm_bindgen_futures",
+    "gloo_",
+    "rexie::",
+    "idb::",
+];
+
+const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
+    "type VaultArchitecture = {",
+    "interface VaultArchitecture {",
+    "type SentinelPolicy = {",
+    "interface SentinelPolicy {",
+    "type ProviderReplicationCapability = {",
+    "interface ProviderReplicationCapability {",
+    "type SentinelGenesisManagerStatus = {",
+    "type SentinelGenesisFinalizeResult = {",
+    "type NookPendingSyncConflict = {",
+    "type NookSecretFormFields = {",
+];
+
+pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
+    violations_in_tree(
+        root,
+        Path::new("nook-app/nook-core/src"),
+        "rs",
+        BROWSER_RUST_MARKERS,
+    )
+}
+
+pub fn typescript_domain_schema_mirrors(root: &Path) -> io::Result<Vec<Violation>> {
+    violations_in_tree(
+        root,
+        Path::new("nook-app/nook-web/nook-web-shared/src/vault-app"),
+        "ts",
+        TYPESCRIPT_DOMAIN_MIRRORS,
+    )
+}
+
+fn violations_in_tree(
+    root: &Path,
+    relative_directory: &Path,
+    extension: &str,
+    markers: &[&str],
+) -> io::Result<Vec<Violation>> {
+    let directory = root.join(relative_directory);
+    let mut files = Vec::new();
+    collect_files_with_extension(&directory, extension, &mut files)?;
+    let mut violations = Vec::new();
+    for path in files {
+        let contents = fs::read_to_string(&path)?;
+        for (index, line) in contents.lines().enumerate() {
+            if markers.iter().any(|marker| line.contains(marker)) {
+                violations.push(Violation {
+                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                    line: index + 1,
+                });
+            }
+        }
+    }
+    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+    Ok(violations)
+}
+
+fn collect_files_with_extension(
+    directory: &Path,
+    extension: &str,
+    files: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            if !is_generated_directory(&entry.file_name()) {
+                collect_files_with_extension(&path, extension, files)?;
+            }
+        } else if file_type.is_file()
+            && path.extension().and_then(std::ffi::OsStr::to_str) == Some(extension)
+        {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
 pub fn dockerfile_cache_mounts(root: &Path) -> io::Result<Vec<Violation>> {
     let mut dockerfiles = Vec::new();
     collect_dockerfiles(root, &mut dockerfiles)?;

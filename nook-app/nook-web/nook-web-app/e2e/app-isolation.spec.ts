@@ -8,7 +8,25 @@ const SIMPLE_APP_URL = (
 
 type DebugVault = {
   manager?: {
-    setVaultArchitectureJson(value: string): void
+    vaultArchitecture: {
+      constructor: {
+        simple(
+          deviceMode: string,
+          replicationType: string,
+        ): {
+          free(): void
+        }
+        sentinel(
+          deviceMode: string,
+          replicationType: string,
+          threshold: number,
+          requiredParticipants: number,
+          readyParticipants: number,
+        ): { free(): void }
+      }
+      free(): void
+    }
+    setVaultArchitecture(value: { free(): void }): void
     device_id: string
     device_public_key: string
     deviceSigningPublicKey(): Promise<string>
@@ -69,33 +87,25 @@ test('exposes only the project capability and rejects the opposite vault type', 
     await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
   }
 
-  const oppositeArchitecture = isSimple
-    ? {
-        device_mode: 'standard',
-        vault_type: 'sentinel',
-        replication_type: 'personal',
-        sentinel: {
-          threshold: 2,
-          required_participants: 3,
-          ready_participants: 0,
-        },
-      }
-    : {
-        device_mode: 'standard',
-        vault_type: 'simple',
-        replication_type: 'personal',
-      }
-  const error = await page.evaluate((architecture) => {
+  const error = await page.evaluate((simpleApp) => {
     const manager = (window as Window & { __nookVault?: DebugVault })
       .__nookVault?.manager
     if (!manager) return 'manager unavailable'
+    const current = manager.vaultArchitecture
+    const Architecture = current.constructor
+    const oppositeArchitecture = simpleApp
+      ? Architecture.sentinel('standard', 'personal', 2, 3, 0)
+      : Architecture.simple('standard', 'personal')
     try {
-      manager.setVaultArchitectureJson(JSON.stringify(architecture))
+      manager.setVaultArchitecture(oppositeArchitecture)
       return ''
     } catch (caught) {
       return caught instanceof Error ? caught.message : String(caught)
+    } finally {
+      oppositeArchitecture.free()
+      current.free()
     }
-  }, oppositeArchitecture)
+  }, isSimple)
   expect(error).toContain('errors.validation.vault_application_type_mismatch')
 })
 

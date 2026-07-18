@@ -16,6 +16,7 @@ import {
   generateId as wasmGenerateId,
   generatePassword as wasmGeneratePassword,
   generateSecretId as wasmGenerateSecretId,
+  VaultAccessStatus,
 } from "$app-wasm";
 import { createLogger, initWasmLogging } from "$lib/log";
 import { ensureAppWasm } from "$lib/wasm-bootstrap";
@@ -34,6 +35,7 @@ export type {
   NookVaultSyncResult,
   NookSecretFormFields,
 };
+export { VaultAccessStatus };
 
 /** UI alias — same typed object exported from WASM. */
 export type JoinRequest = NookJoinRequest;
@@ -86,12 +88,7 @@ export function isoTimestamp(): string {
   return new Date().toISOString();
 }
 
-export type VaultSyncAccessStatus =
-  | "ready"
-  | "new_vault"
-  | "needs_enrollment"
-  | "join_pending"
-  | "password_required";
+export type VaultSyncAccessStatus = VaultAccessStatus;
 
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
@@ -139,33 +136,70 @@ function drainWasmStatusIntoLog(manager: NookVaultManager) {
   }, 500);
 }
 
-/** Build a validated YAML payload for `add_secret` / `replace_secret`. */
-export function buildSecretYaml(
-  secretType: VaultItemType,
-  fields: Record<string, string>,
-): string {
-  return wasmBuildSecretYaml(
-    secretType,
-    new NookSecretFormFields(
-      fields.websiteUrl ?? undefined,
-      fields.username ?? undefined,
-      fields.password ?? undefined,
-      fields.notes ?? undefined,
-      fields.key ?? undefined,
-      fields.expiresAt ?? undefined,
-      fields.name ?? undefined,
-      fields.seed ?? undefined,
-      fields.title ?? undefined,
-      fields.note ?? undefined,
-      fields.issuer ?? undefined,
-      fields.account ?? undefined,
-      fields.totpSecret ?? undefined,
-      fields.algorithm ?? undefined,
-      fields.digits ?? undefined,
-      fields.period ?? undefined,
-      fields.backupCodes ?? undefined,
-    ),
-  );
+export type SecretFormInput =
+  | {
+      type: "login";
+      websiteUrl: string;
+      username: string;
+      password: string;
+      notes: string;
+    }
+  | { type: "api-key"; websiteUrl: string; key: string; expiresAt: string }
+  | { type: "seed-phrase"; name: string; seed: string }
+  | { type: "secure-note"; title: string; note: string }
+  | {
+      type: "authenticator";
+      issuer: string;
+      account: string;
+      totpSecret: string;
+      algorithm: string;
+      digits: string;
+      period: string;
+      backupCodes: string;
+    };
+
+/** Build a validated YAML payload from one core-owned secret form variant. */
+export function buildSecretYaml(input: SecretFormInput): string {
+  let fields: NookSecretFormFields;
+  switch (input.type) {
+    case "login":
+      fields = NookSecretFormFields.login(
+        input.websiteUrl,
+        input.username,
+        input.password,
+        input.notes,
+      );
+      break;
+    case "api-key":
+      fields = NookSecretFormFields.apiKey(
+        input.websiteUrl,
+        input.key,
+        input.expiresAt,
+      );
+      break;
+    case "seed-phrase":
+      fields = NookSecretFormFields.seedPhrase(input.name, input.seed);
+      break;
+    case "secure-note":
+      fields = NookSecretFormFields.secureNote(input.title, input.note);
+      break;
+    case "authenticator":
+      fields = NookSecretFormFields.authenticator(
+        input.issuer,
+        input.account,
+        input.totpSecret,
+        input.algorithm,
+        input.digits,
+        input.period,
+        input.backupCodes,
+      );
+      break;
+  }
+  try {
+    return wasmBuildSecretYaml(fields);
+  } finally {
+    fields.free();
+  }
 }
 
 /** Compare edited authenticator setup keys through canonical Rust validation. */

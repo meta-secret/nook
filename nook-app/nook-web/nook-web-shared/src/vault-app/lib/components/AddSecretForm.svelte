@@ -19,6 +19,7 @@
     generateSecretId,
     type NookSecretRecord,
     type VaultItemType,
+    type SecretFormInput,
   } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import MarkdownEditor from './MarkdownEditor.svelte'
@@ -146,9 +147,10 @@
     }
   })
 
-  function secretFields(): Record<string, string> {
+  function secretFields(): SecretFormInput {
     if (selectedType === 'login') {
       return {
+        type: 'login',
         websiteUrl: websiteUrl.trim(),
         username: username.trim(),
         password,
@@ -157,6 +159,7 @@
     }
     if (selectedType === 'api-key') {
       return {
+        type: 'api-key',
         websiteUrl: websiteUrl.trim(),
         key: apiKey,
         expiresAt,
@@ -164,6 +167,7 @@
     }
     if (selectedType === 'seed-phrase') {
       return {
+        type: 'seed-phrase',
         name: accountName.trim(),
         seed: seedPhrase.trim(),
       }
@@ -176,6 +180,7 @@
           authenticatorSecret,
         )
       return {
+        type: 'authenticator',
         issuer: authenticatorIssuer.trim(),
         account: authenticatorAccount.trim(),
         totpSecret: authenticatorSecret.trim(),
@@ -186,6 +191,7 @@
       }
     }
     return {
+      type: 'secure-note',
       title: noteTitle.trim(),
       note: noteBody,
     }
@@ -230,7 +236,7 @@
 
     let dataYaml: string
     try {
-      dataYaml = buildSecretYaml(selectedType, secretFields())
+      dataYaml = buildSecretYaml(secretFields())
     } catch (error) {
       submitError = vault.resolveErrorMessage(
         error instanceof Error ? error.message : String(error),

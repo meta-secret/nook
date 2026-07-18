@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
@@ -118,19 +119,21 @@ test.describe('vault connect flow', () => {
     await page.goto('/app/')
     await openLoginProviderSetup(page)
 
-    const blocked = await page.evaluate(async () => {
+    const blocked = await page.evaluate(async (status: VaultAccessStatus) => {
       const vault = (
         window as Window & {
           __nookVault?: {
-            handleRemoteVaultAssessStatus: (status: string) => Promise<boolean>
+            handleRemoteVaultAssessStatus: (
+              status: VaultAccessStatus,
+            ) => Promise<boolean>
           }
         }
       ).__nookVault
       if (!vault) {
         throw new Error('E2E vault state is not exposed')
       }
-      return vault.handleRemoteVaultAssessStatus('remote_missing')
-    })
+      return vault.handleRemoteVaultAssessStatus(status)
+    }, VaultAccessStatus.RemoteMissing)
 
     expect(blocked).toBe(true)
     await expect(page.getByTestId('vault-error')).toContainText(

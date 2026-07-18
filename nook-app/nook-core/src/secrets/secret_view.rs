@@ -40,6 +40,70 @@ pub struct SecretListItem {
     pub data: SecretListItemData,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoginSecretForm {
+    pub website_url: String,
+    pub username: String,
+    pub password: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiKeySecretForm {
+    pub website_url: String,
+    pub key: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeedPhraseSecretForm {
+    pub name: String,
+    pub seed: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecureNoteSecretForm {
+    pub title: String,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthenticatorSecretForm {
+    pub issuer: String,
+    pub account: String,
+    pub totp_secret: String,
+    pub algorithm: String,
+    pub digits: String,
+    pub period: String,
+    pub backup_codes: String,
+}
+
+/// Secret creation input with variant-specific fields.
+///
+/// A host must choose exactly one secret kind instead of populating a flat bag
+/// containing fields for every supported secret type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecretFormFields {
+    Login(LoginSecretForm),
+    ApiKey(ApiKeySecretForm),
+    SeedPhrase(SeedPhraseSecretForm),
+    SecureNote(SecureNoteSecretForm),
+    Authenticator(AuthenticatorSecretForm),
+}
+
+impl SecretFormFields {
+    #[must_use]
+    pub const fn secret_type(&self) -> SecretType {
+        match self {
+            Self::Login(_) => SecretType::Login,
+            Self::ApiKey(_) => SecretType::ApiKey,
+            Self::SeedPhrase(_) => SecretType::SeedPhrase,
+            Self::SecureNote(_) => SecretType::SecureNote,
+            Self::Authenticator(_) => SecretType::Authenticator,
+        }
+    }
+}
+
 /// Normalize a website URL or origin to a comparable host (no leading `www.`).
 #[must_use]
 pub fn hostname_from_url(raw: &str) -> String {
@@ -391,65 +455,88 @@ pub fn build_secret_yaml(
     secret_type: SecretType,
     fields: &serde_json::Value,
 ) -> SecretPayloadResult<SecretPayloadYaml> {
-    let filtered = match secret_type {
-        SecretType::Login => serde_json::json!({
-            "websiteUrl": fields.get("websiteUrl").and_then(|v| v.as_str()).unwrap_or_default(),
-            "username": fields.get("username").and_then(|v| v.as_str()).unwrap_or_default(),
-            "password": fields.get("password").and_then(|v| v.as_str()).unwrap_or_default(),
-            "notes": fields.get("notes").and_then(|v| v.as_str()).unwrap_or_default(),
+    let string_field = |name| {
+        fields
+            .get(name)
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let fields = match secret_type {
+        SecretType::Login => SecretFormFields::Login(LoginSecretForm {
+            website_url: string_field("websiteUrl"),
+            username: string_field("username"),
+            password: string_field("password"),
+            notes: string_field("notes"),
         }),
-        SecretType::ApiKey => serde_json::json!({
-            "websiteUrl": fields.get("websiteUrl").and_then(|v| v.as_str()).unwrap_or_default(),
-            "key": fields.get("key").and_then(|v| v.as_str()).unwrap_or_default(),
-            "expiresAt": fields.get("expiresAt").and_then(|v| v.as_str()).unwrap_or_default(),
+        SecretType::ApiKey => SecretFormFields::ApiKey(ApiKeySecretForm {
+            website_url: string_field("websiteUrl"),
+            key: string_field("key"),
+            expires_at: string_field("expiresAt"),
         }),
-        SecretType::SeedPhrase => serde_json::json!({
-            "name": fields.get("name").and_then(|v| v.as_str()).unwrap_or_default(),
-            "seed": fields.get("seed").and_then(|v| v.as_str()).unwrap_or_default(),
+        SecretType::SeedPhrase => SecretFormFields::SeedPhrase(SeedPhraseSecretForm {
+            name: string_field("name"),
+            seed: string_field("seed"),
         }),
-        SecretType::SecureNote => serde_json::json!({
-            "title": fields.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
-            "note": fields.get("note").and_then(|v| v.as_str()).unwrap_or_default(),
+        SecretType::SecureNote => SecretFormFields::SecureNote(SecureNoteSecretForm {
+            title: string_field("title"),
+            note: string_field("note"),
         }),
         SecretType::Passkey => {
             return Err(SecretPayloadError::PasskeyCreationRequiresAuthenticator);
         }
-        SecretType::Authenticator => {
+        SecretType::Authenticator => SecretFormFields::Authenticator(AuthenticatorSecretForm {
+            issuer: string_field("issuer"),
+            account: string_field("account"),
+            totp_secret: string_field("totpSecret"),
+            algorithm: string_field("algorithm"),
+            digits: string_field("digits"),
+            period: string_field("period"),
+            backup_codes: string_field("backupCodes"),
+        }),
+    };
+    build_secret_yaml_from_form(&fields)
+}
+
+/// Build a validated YAML payload from variant-specific form input.
+pub fn build_secret_yaml_from_form(
+    fields: &SecretFormFields,
+) -> SecretPayloadResult<SecretPayloadYaml> {
+    let filtered = match fields {
+        SecretFormFields::Login(fields) => serde_json::json!({
+            "websiteUrl": fields.website_url,
+            "username": fields.username,
+            "password": fields.password,
+            "notes": fields.notes,
+        }),
+        SecretFormFields::ApiKey(fields) => serde_json::json!({
+            "websiteUrl": fields.website_url,
+            "key": fields.key,
+            "expiresAt": fields.expires_at,
+        }),
+        SecretFormFields::SeedPhrase(fields) => serde_json::json!({
+            "name": fields.name,
+            "seed": fields.seed,
+        }),
+        SecretFormFields::SecureNote(fields) => serde_json::json!({
+            "title": fields.title,
+            "note": fields.note,
+        }),
+        SecretFormFields::Authenticator(fields) => {
             let value = AuthenticatorSecret::from_form_fields(
-                fields
-                    .get("issuer")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
-                fields
-                    .get("account")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
-                fields
-                    .get("totpSecret")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
-                fields
-                    .get("algorithm")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
-                fields
-                    .get("digits")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
-                fields
-                    .get("period")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
-                fields
-                    .get("backupCodes")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default(),
+                &fields.issuer,
+                &fields.account,
+                &fields.totp_secret,
+                &fields.algorithm,
+                &fields.digits,
+                &fields.period,
+                &fields.backup_codes,
             )?;
             return SecretValue::Authenticator(value).to_yaml();
         }
     };
     let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
-    SecretPayloadYaml::parse(secret_type, &yaml)
+    SecretPayloadYaml::parse(fields.secret_type(), &yaml)
 }
 
 #[cfg(test)]

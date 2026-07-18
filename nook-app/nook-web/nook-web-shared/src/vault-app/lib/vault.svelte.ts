@@ -1,6 +1,7 @@
 import {
   getVaultManager,
   isoTimestamp,
+  VaultAccessStatus,
   type JoinRequest,
   type NookImportResult,
   type NookSecretListItem,
@@ -40,6 +41,8 @@ import {
   type NookLocalAuthProviderSnapshot,
   type NookPasswordEntrySummary,
   type NookSecretPage,
+  type NookSentinelGenesisFinalizeResult,
+  type NookSentinelGenesisStatus,
   type NookStorageConnectArgs,
   type NookVaultManager,
   type NookAppLocale,
@@ -115,7 +118,7 @@ import type {
 
 const vaultLog = createLogger("vault");
 
-type PendingSyncConflictDraft = {
+type PendingSyncConflictCommonDraft = {
   providerId: string;
   providerLabel: string;
   localYaml: string;
@@ -124,10 +127,13 @@ type PendingSyncConflictDraft = {
   pat: string;
   repo: string;
   remoteRevision?: string;
-  kind?: string;
-  localStoreId?: string;
-  remoteStoreId?: string;
 };
+
+type PendingSyncConflictDraft = PendingSyncConflictCommonDraft &
+  (
+    | { kind: "content" }
+    | { kind: "store_id"; localStoreId: string; remoteStoreId: string }
+  );
 
 type TranslationCatalog = string;
 
@@ -156,26 +162,6 @@ export type StartSentinelGenesisArgs = {
   label: string;
   participantCount: number;
   threshold: number;
-};
-
-type SentinelGenesisManagerStatus = {
-  active: boolean;
-  participants?: Array<{
-    deviceId: string;
-    label?: string;
-    fingerprint?: string;
-  }>;
-  isComplete?: boolean;
-};
-
-type SentinelGenesisFinalizeResult = {
-  storeId: string;
-  architecture: VaultArchitecture;
-  participantDeliveries: Array<{
-    deviceId: string;
-    fingerprint?: string;
-    [key: string]: unknown;
-  }>;
 };
 
 function storageArgsTuple(
@@ -301,12 +287,15 @@ export class VaultState {
   isFanOutSyncing = $state(false);
   /** Concurrent secret replacement conflicts from the event log projection. */
   replacementConflicts = $state<
-    Array<{ oldSecretId: string; candidatesJson: string }>
+    Array<{
+      oldSecretId: string;
+      candidates: Array<{ eventId: string; secretId: string }>;
+    }>
   >([]);
   /** Concurrent key-epoch rotations; local writes fail closed while present. */
-  securityConflicts = $state<
-    Array<{ eventsJson: string; reasonsJson: string }>
-  >([]);
+  securityConflicts = $state<Array<{ events: string[]; reasons: string[] }>>(
+    [],
+  );
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | undefined>(undefined);
   /** Local-folder provider points at a folder that contains several vault event logs. */
@@ -380,12 +369,9 @@ export class VaultState {
   /** Public, signed Sentinel unlock request. It contains no share material. */
   sentinelUnlockRequest = $state("");
   /** Rust-owned unlock-session progress rendered by the web layer. */
-  sentinelUnlockSession = $state<SentinelUnlockSessionStatus>({
-    active: false,
-    collected: 0,
-    threshold: 0,
-    ready: false,
-  });
+  sentinelUnlockSession = $state<SentinelUnlockSessionStatus>(
+    sentinelUnlockActions.inactiveSentinelUnlockSession(),
+  );
   /** Provider-free encrypted deliveries available to this protected device. */
   sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([]);
   /** Remote vault file missing on storage — prompt before unlock. */
@@ -1028,15 +1014,19 @@ export class VaultState {
     });
   }
 
+  private replaceVaultArchitecture(architecture: VaultArchitecture): void {
+    const previous = this.vaultArchitecture;
+    this.vaultArchitecture = architecture;
+    if (previous !== architecture) previous.free();
+  }
+
   applyDraftVaultArchitecture() {
-    this.vaultArchitecture = this.draftVaultArchitecture;
+    this.replaceVaultArchitecture(this.draftVaultArchitecture);
     this.architectureSecretCreationAllowed = architectureCanCreateSecret(
       this.vaultArchitecture,
     );
     if (this.manager) {
-      this.manager.setVaultArchitectureJson(
-        JSON.stringify(this.vaultArchitecture),
-      );
+      this.manager.setVaultArchitecture(this.vaultArchitecture);
     }
   }
 
@@ -1044,16 +1034,14 @@ export class VaultState {
     if (!this.manager) return;
     let architecture: VaultArchitecture;
     try {
-      architecture = validateVaultArchitecture(
-        JSON.parse(this.manager.vaultArchitectureJson) as VaultArchitecture,
-      );
+      architecture = this.manager.vaultArchitecture as VaultArchitecture;
     } catch (error) {
-      vaultLog.warn("vault architecture metadata could not be parsed", {
+      vaultLog.warn("vault architecture metadata could not be loaded", {
         error: error instanceof Error ? error.message : String(error),
       });
       return;
     }
-    this.vaultArchitecture = architecture;
+    this.replaceVaultArchitecture(architecture);
     this.architectureSecretCreationAllowed = architectureCanCreateSecret(
       this.vaultArchitecture,
     );
@@ -1345,36 +1333,45 @@ export class VaultState {
     return localLoginActions.createLocalVaultWithDeviceKeys(this, label);
   }
 
-  private applySentinelGenesisStatus(rawStatus: string): void {
-    const status = JSON.parse(rawStatus) as SentinelGenesisManagerStatus;
-    this.sentinelGenesisParticipantCount = status.participants?.length ?? 0;
-    this.sentinelGenesisParticipants = (status.participants ?? []).map(
-      (participant) => ({
+  private applySentinelGenesisStatus(status: NookSentinelGenesisStatus): void {
+    const participants = status.participants;
+    this.sentinelGenesisParticipantCount = participants.length;
+    this.sentinelGenesisParticipants = participants.map((participant) => {
+      const summary = {
         participantId: participant.deviceId,
-        label: participant.label ?? "",
-        fingerprint: participant.fingerprint ?? "",
-      }),
-    );
+        label: participant.label,
+        fingerprint: participant.fingerprint,
+      };
+      participant.free();
+      return summary;
+    });
     this.sentinelGenesisStatus = status.isComplete ? "ready" : "collecting";
+    status.free();
   }
 
-  private applySentinelGenesisFinalizeResult(rawResult: string): void {
-    const result = JSON.parse(rawResult) as SentinelGenesisFinalizeResult;
+  private applySentinelGenesisFinalizeResult(
+    result: NookSentinelGenesisFinalizeResult,
+  ): void {
     this.sentinelGenesisStoreId = result.storeId;
     this.activeVaultStoreId = result.storeId;
-    this.vaultArchitecture = validateVaultArchitecture(result.architecture);
+    this.replaceVaultArchitecture(result.architecture as VaultArchitecture);
     this.sentinelGenesisDeliveries = result.participantDeliveries.map(
-      (delivery) => ({
-        participantId: delivery.deviceId,
-        fingerprint:
-          delivery.fingerprint ??
-          this.sentinelGenesisParticipants.find(
-            (participant) => participant.participantId === delivery.deviceId,
-          )?.fingerprint,
-        payload: JSON.stringify(delivery),
-        sharePayload: JSON.stringify(delivery),
-      }),
+      (delivery) => {
+        const summary = {
+          participantId: delivery.deviceId,
+          fingerprint:
+            delivery.fingerprint ??
+            this.sentinelGenesisParticipants.find(
+              (participant) => participant.participantId === delivery.deviceId,
+            )?.fingerprint,
+          payload: delivery.payload,
+          sharePayload: delivery.payload,
+        };
+        delivery.free();
+        return summary;
+      },
     );
+    result.free();
     this.sentinelGenesisStatus = "delivering";
   }
 
@@ -1515,10 +1512,10 @@ export class VaultState {
     this.errorMsg = "";
     this.sentinelGenesisStatus = "finalizing";
     try {
-      const rawResult = await this.enqueueStorage(() =>
+      const result = await this.enqueueStorage(() =>
         this.manager!.finalizeSentinelGenesis(),
       );
-      this.applySentinelGenesisFinalizeResult(rawResult);
+      this.applySentinelGenesisFinalizeResult(result);
     } catch (error) {
       this.sentinelGenesisStatus = "ready";
       this.errorMsg =
@@ -1782,7 +1779,7 @@ export class VaultState {
 
   async assessVaultConnectStatus(
     argsOverride?: [string, string, string],
-  ): Promise<string> {
+  ): Promise<VaultAccessStatus> {
     const args =
       argsOverride ??
       (!this.isAuthenticated &&
@@ -1803,17 +1800,19 @@ export class VaultState {
           30_000,
         );
       });
-      return (await Promise.race([assessPromise, assessTimeout])) as string;
-    })) as string;
+      return await Promise.race([assessPromise, assessTimeout]);
+    })) as VaultAccessStatus;
   }
 
-  async handleRemoteVaultAssessStatus(accessStatus: string): Promise<boolean> {
-    if (accessStatus === "remote_missing_local_cache") {
+  async handleRemoteVaultAssessStatus(
+    accessStatus: VaultAccessStatus,
+  ): Promise<boolean> {
+    if (accessStatus === VaultAccessStatus.RemoteMissingLocalCache) {
       this.remoteVaultRecoveryPrompt = "with_cache";
       await this.refreshPasswordEntriesList();
       return true;
     }
-    if (accessStatus === "remote_missing") {
+    if (accessStatus === VaultAccessStatus.RemoteMissing) {
       const intent = this.loginRequiresExistingVault
         ? "open-existing"
         : this.isAuthenticated
@@ -1851,12 +1850,10 @@ export class VaultState {
     this.sentinelCeremonyPrompt = false;
     this.sentinelUnlockStatus = "not_sentinel";
     this.sentinelUnlockRequest = "";
-    this.sentinelUnlockSession = {
-      active: false,
-      collected: 0,
-      threshold: 0,
-      ready: false,
-    };
+    this.sentinelUnlockSession.free();
+    this.sentinelUnlockSession =
+      sentinelUnlockActions.inactiveSentinelUnlockSession();
+    for (const delivery of this.sentinelStoredDeliveries) delivery.free();
     this.sentinelStoredDeliveries = [];
     this.sharedJoinerIdentity = "";
     this.sharedGrantInstructions = "";
@@ -1966,7 +1963,7 @@ export class VaultState {
 
     if (!result.changed) return;
 
-    if (result.accessStatus) {
+    if (result.accessStatus !== undefined) {
       vaultLog.info("sync state changed (login gate)", {
         accessStatus: result.accessStatus,
         pendingJoins: result.pendingJoins.length,
@@ -1974,19 +1971,22 @@ export class VaultState {
     }
 
     if (
-      result.accessStatus === "ready" &&
+      result.accessStatus === VaultAccessStatus.Ready &&
       this.joinEnrollmentPrompt === "pending"
     ) {
       this.joinEnrollmentPrompt = "none";
       this.showSuccess(this.t("toasts.device_approved"));
       this.scheduleAutoConnectAfterApproval();
-    } else if (result.accessStatus === "ready" && this.awaitingJoinApproval) {
+    } else if (
+      result.accessStatus === VaultAccessStatus.Ready &&
+      this.awaitingJoinApproval
+    ) {
       // Joiner whose approval landed after the join dialog was dismissed:
       // sync says the remote vault is ready for this device, so unlock it
       // instead of leaving the user stranded on the login gate.
       this.scheduleAutoConnectAfterApproval();
     } else if (
-      result.accessStatus === "join_pending" &&
+      result.accessStatus === VaultAccessStatus.JoinPending &&
       this.joinEnrollmentPrompt === "none"
     ) {
       this.joinEnrollmentPrompt = "pending";
@@ -2278,23 +2278,32 @@ export class VaultState {
   async stageVaultSyncConflict(
     conflict: PendingSyncConflictDraft,
   ): Promise<void> {
-    const localVersion = Number(readVaultVersion(conflict.localYaml));
-    const remoteVersion = Number(readVaultVersion(conflict.remoteYaml));
-    this.pendingSyncConflict = new NookPendingSyncConflict(
-      conflict.providerId,
-      conflict.providerLabel,
-      conflict.localYaml,
-      conflict.remoteYaml,
-      localVersion,
-      remoteVersion,
-      conflict.mode,
-      conflict.pat,
-      conflict.repo,
-      conflict.remoteRevision,
-      conflict.kind,
-      conflict.localStoreId,
-      conflict.remoteStoreId,
-    );
+    this.pendingSyncConflict =
+      conflict.kind === "store_id"
+        ? NookPendingSyncConflict.storeId(
+            conflict.providerId,
+            conflict.providerLabel,
+            conflict.localYaml,
+            conflict.remoteYaml,
+            conflict.mode,
+            conflict.pat,
+            conflict.repo,
+            conflict.remoteRevision,
+            conflict.localStoreId,
+            conflict.remoteStoreId,
+          )
+        : NookPendingSyncConflict.content(
+            conflict.providerId,
+            conflict.providerLabel,
+            conflict.localYaml,
+            conflict.remoteYaml,
+            Number(readVaultVersion(conflict.localYaml)),
+            Number(readVaultVersion(conflict.remoteYaml)),
+            conflict.mode,
+            conflict.pat,
+            conflict.repo,
+            conflict.remoteRevision,
+          );
     this.errorMsg = "";
   }
 

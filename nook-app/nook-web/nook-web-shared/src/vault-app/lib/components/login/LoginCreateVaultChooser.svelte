@@ -24,6 +24,7 @@
     buildSentinelGenesisParticipantResponseLink,
     buildSentinelGenesisRequestLink,
   } from '$lib/sentinel-genesis-link'
+  import { sentinelGenesisParticipantFingerprint } from '$app-wasm'
 
   type SentinelGenesisStatus =
     | 'idle'
@@ -214,12 +215,9 @@
         return
       }
       joinPasskeyRequested = false
-      const response = JSON.parse(generatedParticipantResponse) as {
-        fingerprint?: string
-        participant?: { fingerprint?: string }
-      }
-      generatedParticipantFingerprint =
-        response.participant?.fingerprint ?? response.fingerprint ?? ''
+      generatedParticipantFingerprint = sentinelGenesisParticipantFingerprint(
+        generatedParticipantResponse,
+      )
     } catch (error) {
       generatedParticipantResponse = ''
       generatedParticipantFingerprint = ''
@@ -484,8 +482,7 @@
         initiatorPasskeyRequested = true
         return
       }
-      const announcement = JSON.parse(payload) as { fingerprint?: string }
-      initiatorFingerprint = announcement.fingerprint ?? ''
+      initiatorFingerprint = sentinelGenesisParticipantFingerprint(payload)
       initiatorPasskeyRequested = false
     } catch {
       initiatorFingerprint = ''

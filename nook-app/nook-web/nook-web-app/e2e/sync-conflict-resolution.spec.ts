@@ -27,8 +27,8 @@ async function setSecurityConflict(page: Page, present: boolean) {
       window as Window & {
         __nookVault?: {
           securityConflicts: Array<{
-            eventsJson: string
-            reasonsJson: string
+            events: string[]
+            reasons: string[]
           }>
         }
       }
@@ -39,10 +39,8 @@ async function setSecurityConflict(page: Page, present: boolean) {
     vault.securityConflicts = enabled
       ? [
           {
-            eventsJson: JSON.stringify([
-              'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
-            ]),
-            reasonsJson: JSON.stringify(['key epoch rotation']),
+            events: ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
+            reasons: ['key epoch rotation'],
           },
         ]
       : []

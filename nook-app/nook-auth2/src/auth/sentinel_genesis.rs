@@ -300,6 +300,22 @@ pub fn normalize_sentinel_genesis_participant_payload(input: &str) -> MultiDevic
     serde_json::to_string(&response).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
 }
 
+/// Return the validated public fingerprint rendered by participant-pairing UI
+/// without requiring the host to inspect the signed domain payload.
+pub fn sentinel_genesis_participant_fingerprint(input: &str) -> MultiDeviceResult<String> {
+    let canonical = normalize_sentinel_genesis_participant_payload(input)?;
+    let value: serde_json::Value = serde_json::from_str(&canonical)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
+            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        return Ok(announcement.fingerprint);
+    }
+    let response: SentinelGenesisParticipantResponse = serde_json::from_value(value)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    Ok(response.participant.fingerprint)
+}
+
 fn build_sentinel_link(payload: &str, base_url: &str, hash_prefix: &str) -> String {
     let base = base_url.trim().trim_end_matches('/');
     let encoded = URL_SAFE_NO_PAD.encode(payload.as_bytes());

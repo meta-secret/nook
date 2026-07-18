@@ -6,7 +6,6 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
 use crate::storage::indexed_db::{
@@ -14,6 +13,10 @@ use crate::storage::indexed_db::{
     load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
     save_sentinel_genesis_finalization_pending, save_sentinel_genesis_share_delivery,
     save_to_indexed_db,
+};
+use crate::{
+    NookSecretRecord, NookSentinelGenesisFinalizeResult, NookSentinelGenesisStatus,
+    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsError;
@@ -88,7 +91,9 @@ impl NookVaultManager {
 
     /// List provider-free Sentinel shares accepted by this protected device.
     #[wasm_bindgen(js_name = listSentinelGenesisShareDeliveries)]
-    pub async fn list_sentinel_genesis_share_deliveries(&self) -> Result<String, JsError> {
+    pub async fn list_sentinel_genesis_share_deliveries(
+        &self,
+    ) -> Result<Vec<NookSentinelStoredDeliverySummary>, JsError> {
         let identity = self.device_identity()?;
         let mut summaries = Vec::new();
         for entry in list_sentinel_genesis_share_deliveries(identity.device_id().as_str()).await? {
@@ -100,14 +105,12 @@ impl NookVaultManager {
                 &stored.request,
                 &identity,
             )?;
-            summaries.push(serde_json::json!({
-                "storeId": entry.store_id,
-                "sessionId": stored.delivery.session_id,
-                "policy": stored.delivery.policy,
-            }));
+            summaries.push(NookSentinelStoredDeliverySummary::from_delivery(
+                entry.store_id,
+                &stored.delivery,
+            ));
         }
-        Ok(serde_json::to_string(&summaries)
-            .map_err(|error| NookError::Serialization(error.to_string()))?)
+        Ok(summaries)
     }
 
     /// Select a previously accepted provider-free delivery after refresh.
@@ -142,7 +145,7 @@ impl NookVaultManager {
         participant_count: u8,
         threshold: u8,
         participant_label: String,
-    ) -> Result<String, JsError> {
+    ) -> Result<NookSentinelGenesisStatus, JsError> {
         if load_sentinel_genesis_finalization_pending()
             .await?
             .is_some()
@@ -161,7 +164,7 @@ impl NookVaultManager {
             participant_label,
         )?;
         self.sentinel_genesis = Some(session);
-        self.sentinel_genesis_status_json()
+        Ok(self.sentinel_genesis_status())
     }
 
     /// Public pairing request rendered as QR/link/paste JSON by the web layer.
@@ -237,7 +240,7 @@ impl NookVaultManager {
         &mut self,
         response_json: &str,
         participant_label: &str,
-    ) -> Result<String, JsError> {
+    ) -> Result<NookSentinelGenesisStatus, JsError> {
         let session = self
             .sentinel_genesis
             .as_mut()
@@ -249,21 +252,15 @@ impl NookVaultManager {
             &response_json,
             participant_label,
         )?;
-        self.sentinel_genesis_status_json()
+        Ok(self.sentinel_genesis_status())
     }
 
-    #[wasm_bindgen(js_name = sentinelGenesisStatusJson)]
-    pub fn sentinel_genesis_status_json(&self) -> Result<String, JsError> {
+    #[wasm_bindgen(js_name = sentinelGenesisStatus)]
+    pub fn sentinel_genesis_status(&self) -> NookSentinelGenesisStatus {
         let Some(session) = self.sentinel_genesis.as_ref() else {
-            return Ok(r#"{"active":false}"#.to_owned());
+            return NookSentinelGenesisStatus::inactive();
         };
-        Ok(serde_json::to_string(&serde_json::json!({
-            "active": true,
-            "request": session.request,
-            "participants": session.participants(),
-            "isComplete": session.is_complete(),
-        }))
-        .map_err(|error| NookError::Serialization(error.to_string()))?)
+        NookSentinelGenesisStatus::from_session(session)
     }
 
     #[wasm_bindgen(js_name = hasPendingSentinelGenesisFinalization)]
@@ -276,7 +273,7 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = resumePendingSentinelGenesisFinalization)]
     pub async fn resume_pending_sentinel_genesis_finalization(
         &mut self,
-    ) -> Result<String, JsError> {
+    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
         let pending_json = load_sentinel_genesis_finalization_pending()
             .await?
             .ok_or_else(|| JsError::new("No Sentinel finalization is pending."))?;
@@ -288,7 +285,9 @@ impl NookVaultManager {
     /// Start a signed, session-bound quorum unlock request. No opened share is
     /// returned to JavaScript.
     #[wasm_bindgen(js_name = startSentinelUnlock)]
-    pub async fn start_sentinel_unlock(&mut self) -> Result<String, JsError> {
+    pub async fn start_sentinel_unlock(
+        &mut self,
+    ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
         let policy = self
@@ -322,7 +321,7 @@ impl NookVaultManager {
             nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
         }
         self.sentinel_unlock = Some(session);
-        self.sentinel_unlock_status_json()
+        Ok(self.sentinel_unlock_session_status())
     }
 
     #[wasm_bindgen(js_name = sentinelUnlockRequestJson)]
@@ -397,7 +396,10 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(js_name = addSentinelUnlockResponse)]
-    pub fn add_sentinel_unlock_response(&mut self, response_json: &str) -> Result<String, JsError> {
+    pub fn add_sentinel_unlock_response(
+        &mut self,
+        response_json: &str,
+    ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         let response: nook_core::SentinelUnlockResponse = serde_json::from_str(response_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let session = self
@@ -405,22 +407,15 @@ impl NookVaultManager {
             .as_mut()
             .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?;
         nook_core::add_sentinel_unlock_response(session, response)?;
-        self.sentinel_unlock_status_json()
+        Ok(self.sentinel_unlock_session_status())
     }
 
-    #[wasm_bindgen(js_name = sentinelUnlockSessionStatusJson)]
-    pub fn sentinel_unlock_status_json(&self) -> Result<String, JsError> {
+    #[wasm_bindgen(js_name = sentinelUnlockSessionStatus)]
+    pub fn sentinel_unlock_session_status(&self) -> NookSentinelUnlockSessionStatus {
         let Some(session) = self.sentinel_unlock.as_ref() else {
-            return Ok(r#"{"active":false}"#.to_owned());
+            return NookSentinelUnlockSessionStatus::inactive();
         };
-        let status = nook_core::sentinel_unlock_status(session);
-        Ok(serde_json::to_string(&serde_json::json!({
-            "active": true,
-            "collected": status.collected,
-            "threshold": status.threshold,
-            "ready": status.ready,
-        }))
-        .map_err(|error| NookError::Serialization(error.to_string()))?)
+        NookSentinelUnlockSessionStatus::from_status(nook_core::sentinel_unlock_status(session))
     }
 
     #[wasm_bindgen(js_name = finalizeSentinelUnlock)]
@@ -446,7 +441,9 @@ impl NookVaultManager {
     /// Atomically create the complete encrypted Sentinel projection. No vault key
     /// is installed in the browser session; opening still requires quorum.
     #[wasm_bindgen(js_name = finalizeSentinelGenesis)]
-    pub async fn finalize_sentinel_genesis(&mut self) -> Result<String, JsError> {
+    pub async fn finalize_sentinel_genesis(
+        &mut self,
+    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
         if let Some(pending_json) = load_sentinel_genesis_finalization_pending().await? {
             let pending: PendingSentinelGenesisFinalization =
                 serde_json::from_str(&pending_json)
@@ -556,7 +553,7 @@ impl NookVaultManager {
     async fn complete_sentinel_genesis_finalization(
         &mut self,
         pending: PendingSentinelGenesisFinalization,
-    ) -> Result<String, JsError> {
+    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
         let format = nook_core::detect_stored_format(&pending.yaml)?;
         let records = nook_core::deserialize_stored(&pending.yaml, format)?;
         pending.architecture.validate_records(&records)?;
@@ -599,12 +596,12 @@ impl NookVaultManager {
         clear_sentinel_genesis_finalization_pending().await?;
         self.sentinel_genesis = None;
 
-        Ok(serde_json::to_string(&serde_json::json!({
-            "storeId": pending.store_id,
-            "architecture": pending.architecture,
-            "participantDeliveries": pending.deliveries,
-        }))
-        .map_err(|error| NookError::Serialization(error.to_string()))?)
+        Ok(NookSentinelGenesisFinalizeResult::from_core(
+            pending.store_id,
+            pending.architecture,
+            &pending.participants,
+            &pending.deliveries,
+        )?)
     }
 
     fn install_accepted_sentinel_delivery(
@@ -739,30 +736,19 @@ mod tests {
         let mut manager = NookVaultManager::new();
         manager.sentinel_genesis = Some(session);
 
-        let status: serde_json::Value = serde_json::from_str(
-            manager
-                .sentinel_genesis_status_json()
-                .expect("serialized status")
-                .as_str(),
-        )
-        .expect("status JSON");
-        assert_eq!(status["active"], true);
-        assert_eq!(status["request"]["policy"]["participantCount"], 3);
-        assert_eq!(status["request"]["policy"]["threshold"], 2);
-        assert_eq!(status["participants"].as_array().map(Vec::len), Some(1));
-        assert_eq!(status["isComplete"], false);
+        let mut status = manager.sentinel_genesis_status();
+        assert!(status.active());
+        assert_eq!(status.participants().len(), 1);
+        assert!(!status.is_complete());
         assert!(manager.vault.store_id.is_empty());
     }
 
     #[test]
     fn inactive_genesis_status_is_explicit() {
         let manager = NookVaultManager::new();
-        assert_eq!(
-            manager
-                .sentinel_genesis_status_json()
-                .expect("serialized status"),
-            r#"{"active":false}"#
-        );
+        let status = manager.sentinel_genesis_status();
+        assert!(!status.active());
+        assert!(!status.is_complete());
     }
 
     #[test]

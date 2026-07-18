@@ -6,6 +6,7 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
+import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
 import {
   default as initNookWasm,
   createICloudSharedStorageTarget,
@@ -1346,19 +1347,11 @@ export function oauthTokensToICloudConfig(
   tokens: ICloudOAuthTokens,
   existing?: OAuthFileConfig,
 ): OAuthFileConfig {
-  return {
-    preset: "icloud",
-    accessToken: tokens.accessToken,
-    fileId: existing?.fileId,
-    fileName: existing?.fileName,
-    accountEmail: tokens.accountName ?? existing?.accountEmail,
-    iCloudMode:
-      existing?.iCloudMode ??
-      (existing?.iCloudShareTarget?.trim() ? "shared" : "private"),
-    iCloudShareTarget: existing?.iCloudShareTarget,
-    refreshToken: existing?.refreshToken,
-    expiresAt: existing?.expiresAt,
-  };
+  return iCloudOAuthTokensToConfigCore(
+    tokens.accessToken,
+    tokens.accountName ?? undefined,
+    existing ?? undefined,
+  ) as OAuthFileConfig;
 }
 
 export async function ensureValidICloudOAuthFileConfig(

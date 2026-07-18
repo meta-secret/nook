@@ -14,20 +14,20 @@ pub(crate) fn content_requires_genesis(
 pub(crate) fn access_status_for_vault_content(
     content: &str,
     identity: &nook_core::DeviceIdentity,
-) -> Result<String, NookError> {
-    Ok(
-        nook_core::access_status_for_vault_content(content, identity)?
-            .as_str()
-            .to_owned(),
-    )
+) -> Result<nook_core::VaultAccessStatus, NookError> {
+    Ok(nook_core::access_status_for_vault_content(
+        content, identity,
+    )?)
 }
 
 pub(crate) fn sync_result_unchanged() -> Result<NookVaultSyncResult, JsError> {
     Ok(NookVaultSyncResult::unchanged())
 }
 
-pub(crate) fn sync_result_access_status(status: &str) -> Result<NookVaultSyncResult, JsError> {
-    Ok(NookVaultSyncResult::with_access_status(status.to_owned()))
+pub(crate) fn sync_result_access_status(
+    status: nook_core::VaultAccessStatus,
+) -> Result<NookVaultSyncResult, JsError> {
+    Ok(NookVaultSyncResult::with_access_status(status))
 }
 
 pub(crate) fn sync_result_session(

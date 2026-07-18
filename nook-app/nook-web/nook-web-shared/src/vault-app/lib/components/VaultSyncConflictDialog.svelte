@@ -10,6 +10,7 @@
   } from '$lib/components/ui/card'
   import type { PendingSyncConflict } from '$lib/vault/sync'
   import type { VaultState } from '$lib/vault.svelte'
+  import { VaultSyncConflictKind } from '$app-wasm'
 
   let {
     vault,
@@ -29,26 +30,41 @@
     onCancel?: () => void | Promise<void>
   } = $props()
 
+  const isStoreIdConflict = $derived(
+    conflict.kind === VaultSyncConflictKind.StoreId,
+  )
+  const localStoreId = $derived(
+    isStoreIdConflict ? conflict.localStoreId() : undefined,
+  )
+  const remoteStoreId = $derived(
+    isStoreIdConflict ? conflict.remoteStoreId() : undefined,
+  )
+  const localVersion = $derived(
+    isStoreIdConflict ? undefined : conflict.contentLocalVersion(),
+  )
+  const remoteVersion = $derived(
+    isStoreIdConflict ? undefined : conflict.contentRemoteVersion(),
+  )
   const isEventLogStoreMismatch = $derived(
-    conflict.kind === 'store_id' && !conflict.remoteYaml.trim(),
+    isStoreIdConflict && !conflict.remoteYaml.trim(),
   )
   const versionLabel = $derived(
-    conflict.kind === 'store_id'
-      ? `${conflict.localStoreId ?? '?'} / ${conflict.remoteStoreId ?? '?'}`
-      : conflict.localVersion === conflict.remoteVersion
-        ? String(conflict.localVersion)
-        : `${conflict.localVersion} / ${conflict.remoteVersion}`,
+    isStoreIdConflict
+      ? `${localStoreId ?? '?'} / ${remoteStoreId ?? '?'}`
+      : localVersion === remoteVersion
+        ? String(localVersion)
+        : `${localVersion} / ${remoteVersion}`,
   )
   const conflictDescription = $derived(
-    conflict.kind === 'store_id'
+    isStoreIdConflict
       ? vault.t(
           isEventLogStoreMismatch
             ? 'auth_storage.sync_conflict_store_id_event_desc'
             : 'auth_storage.sync_conflict_store_id_desc',
           {
             provider: conflict.providerLabel,
-            localStore: conflict.localStoreId ?? '?',
-            remoteStore: conflict.remoteStoreId ?? '?',
+            localStore: localStoreId ?? '?',
+            remoteStore: remoteStoreId ?? '?',
           },
         )
       : vault.t('auth_storage.sync_conflict_desc', {
@@ -57,7 +73,7 @@
         }),
   )
   const conflictTitle = $derived(
-    conflict.kind === 'store_id'
+    isStoreIdConflict
       ? vault.t('auth_storage.sync_conflict_store_id_title')
       : vault.t('auth_storage.sync_conflict_title'),
   )
@@ -107,13 +123,13 @@
               {vault.t('auth_storage.sync_conflict_local_copy')}
             </span>
             <span class="block text-xs text-muted-foreground">
-              {#if conflict.kind === 'store_id'}
+              {#if isStoreIdConflict}
                 {vault.t('auth_storage.sync_conflict_store_id_local', {
-                  store: conflict.localStoreId ?? '?',
+                  store: localStoreId ?? '?',
                 })}
               {:else}
                 {vault.t('auth_storage.sync_conflict_version', {
-                  version: String(conflict.localVersion),
+                  version: String(localVersion),
                 })}
               {/if}
             </span>
@@ -131,13 +147,13 @@
               })}
             </span>
             <span class="block text-xs text-muted-foreground">
-              {#if conflict.kind === 'store_id'}
+              {#if isStoreIdConflict}
                 {vault.t('auth_storage.sync_conflict_store_id_remote', {
-                  store: conflict.remoteStoreId ?? '?',
+                  store: remoteStoreId ?? '?',
                 })}
               {:else}
                 {vault.t('auth_storage.sync_conflict_version', {
-                  version: String(conflict.remoteVersion),
+                  version: String(remoteVersion),
                 })}
               {/if}
             </span>
@@ -146,7 +162,7 @@
       </ul>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-        {#if conflict.kind === 'store_id' && onImportAsNewVault}
+        {#if isStoreIdConflict && onImportAsNewVault}
           <Button
             type="button"
             variant="secondary"

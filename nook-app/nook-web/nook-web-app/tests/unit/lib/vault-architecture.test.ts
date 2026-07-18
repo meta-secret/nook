@@ -15,7 +15,7 @@ import {
   providerSupportsReplication,
   validateProviderReplication,
   validateVaultArchitecture,
-  type VaultArchitecture,
+  type VaultArchitectureDraft,
 } from '$lib/vault-architecture'
 
 beforeAll(async () => {
@@ -80,14 +80,17 @@ function privateICloudProvider(): StorageProvider {
 
 describe('vault architecture adapter', () => {
   test('defaults select the simple personal standard vault', () => {
-    expect(defaultVaultArchitecture()).toEqual({
+    const architecture = defaultVaultArchitecture()
+    expect({
+      device_mode: architecture.device_mode,
+      vault_type: architecture.vault_type,
+      replication_type: architecture.replication_type,
+    }).toEqual({
       device_mode: 'standard',
       vault_type: 'simple',
       replication_type: 'personal',
     })
-    expect(onboardingType(defaultVaultArchitecture())).toBe(
-      'personal-credential-transfer',
-    )
+    expect(onboardingType(architecture)).toBe('personal-credential-transfer')
   })
 
   test('private provider enrollment exposes the credential-transfer mode', () => {
@@ -105,7 +108,7 @@ describe('vault architecture adapter', () => {
   })
 
   test('sentinel vaults are gated until their policy is ready', () => {
-    const draft: VaultArchitecture = {
+    const draft: VaultArchitectureDraft = {
       device_mode: 'anti-hacker',
       vault_type: 'sentinel',
       replication_type: 'shared',
@@ -116,9 +119,13 @@ describe('vault architecture adapter', () => {
       },
     }
 
-    expect(validateVaultArchitecture(draft)).toEqual(draft)
-    expect(canCreateSecret(draft)).toBe(false)
-    expect(onboardingType(draft)).toBe('shared-provider-grant')
+    const architecture = validateVaultArchitecture(draft)
+    expect(architecture.vault_type).toBe('sentinel')
+    expect(architecture.sentinel_threshold).toBe(2)
+    expect(architecture.sentinel_required_participants).toBe(3)
+    expect(architecture.sentinel_ready_participants).toBe(1)
+    expect(canCreateSecret(architecture)).toBe(false)
+    expect(onboardingType(architecture)).toBe('shared-provider-grant')
   })
 
   test('round-trips the Sentinel wire shape', () => {
@@ -133,15 +140,20 @@ describe('vault architecture adapter', () => {
       },
     })
 
-    expect(normalized).toEqual({
+    expect({
+      device_mode: normalized.device_mode,
+      vault_type: normalized.vault_type,
+      replication_type: normalized.replication_type,
+      sentinel_threshold: normalized.sentinel_threshold,
+      sentinel_required_participants: normalized.sentinel_required_participants,
+      sentinel_ready_participants: normalized.sentinel_ready_participants,
+    }).toEqual({
       device_mode: 'standard',
       vault_type: 'sentinel',
       replication_type: 'personal',
-      sentinel: {
-        threshold: 2,
-        required_participants: 3,
-        ready_participants: 0,
-      },
+      sentinel_threshold: 2,
+      sentinel_required_participants: 3,
+      sentinel_ready_participants: 0,
     })
   })
 
@@ -156,7 +168,13 @@ describe('vault architecture adapter', () => {
     })
     expect(
       validateProviderReplication(googleDriveProvider(), 'shared'),
-    ).toEqual(driveCapability)
+    ).toMatchObject({
+      providerType: driveCapability.providerType,
+      oauthPreset: driveCapability.oauthPreset,
+      supportsPersonal: true,
+      supportsShared: true,
+      sharedJoinerIdentity: 'email',
+    })
 
     expect(() =>
       validateProviderReplication(githubProvider(), 'shared'),
@@ -204,11 +222,11 @@ describe('vault architecture adapter', () => {
   })
 
   test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
-    const architecture: VaultArchitecture = {
+    const architecture = validateVaultArchitecture({
       device_mode: 'standard',
       vault_type: 'simple',
       replication_type: 'shared',
-    }
+    })
     const provider = googleDriveProvider()
 
     expect(() =>
