@@ -28,8 +28,8 @@ This document defines the strict development standards, architectural boundaries
   - All fallible exported `#[wasm_bindgen]` functions must return `Result<T, wasm_bindgen::JsError>`.
   - Do not return string-based errors (e.g., `Result<T, JsValue>`). This allows the JS runtime to catch actual JavaScript `Error` objects with full stack traces.
 - **Minimal raw JS Type Exposure:**
-  - Avoid raw `JsValue` types unless required by external APIs (like `js_sys::Array::push`).
-  - Use strongly-typed structures or system-supported types where possible.
+  - Authored `nook-wasm` Rust must not use `JsValue`. Data crossing the JS boundary uses strongly typed `#[wasm_bindgen]` structs, and browser integrations use the narrowest typed `web-sys` / `js-sys` API type.
+  - The syntax-aware repository preflight inspects authored Rust before macro expansion and rejects every `JsValue` path under `nook-app/nook-wasm/src`. The built-in Clippy `disallowed_types` lint is not used because wasm-bindgen's procedural macros generate that ABI type internally and cause false positives on typed exports.
 - **Typed Core Models:**
   - Prefer exporting simple `nook-core` enums/DTOs through WASM over recreating their tags as strings or parallel TypeScript unions.
   - `nook-wasm` should adapt browser I/O and JS-friendly constructors/getters; it should not own duplicate domain models.

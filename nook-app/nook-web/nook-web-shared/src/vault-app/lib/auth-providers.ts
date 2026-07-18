@@ -9,7 +9,11 @@ import {
   formatDriveStorageRef as formatDriveStorageRefCore,
   loadAuthProviders as loadAuthProvidersWasm,
   maskGithubPatHint as maskGithubPatHintCore,
+  NookAuthProvidersSnapshotValue,
+  NookOAuthFileConfigValue,
+  NookStorageProviderList,
   NookStorageProviderKind,
+  NookStorageProviderValue,
   NookStorageProviderTypeUtil,
   localizeProviderLabel as localizeProviderLabelCore,
   providerDefaultLabel as providerDefaultLabelCore,
@@ -21,7 +25,6 @@ import {
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookAuthProvidersSnapshot,
   type NookLoadedAuthProviders,
-  type NookLocalAuthProviderSnapshot,
   type NookLocalFolderProviderConfig,
   type NookGoogleDriveMode,
   type NookICloudMode,
@@ -66,27 +69,51 @@ export function setGoogleDriveProviderMode(
   config: OAuthFileConfig,
   mode: GoogleDriveMode,
 ): OAuthFileConfig {
-  return setGoogleDriveProviderModeWasm(
-    toPlain(config),
-    mode,
-  ) as OAuthFileConfig;
+  const input = NookOAuthFileConfigValue.fromObject(toPlain(config));
+  try {
+    const output = setGoogleDriveProviderModeWasm(input, mode);
+    try {
+      return output.toObject() as OAuthFileConfig;
+    } finally {
+      output.free();
+    }
+  } finally {
+    input.free();
+  }
 }
 
 export function setICloudProviderMode(
   config: OAuthFileConfig,
   mode: ICloudMode,
 ): OAuthFileConfig {
-  return setICloudProviderModeWasm(toPlain(config), mode) as OAuthFileConfig;
+  const input = NookOAuthFileConfigValue.fromObject(toPlain(config));
+  try {
+    const output = setICloudProviderModeWasm(input, mode);
+    try {
+      return output.toObject() as OAuthFileConfig;
+    } finally {
+      output.free();
+    }
+  } finally {
+    input.free();
+  }
 }
 
 export function bindGoogleDriveSharedFolder(
   config: OAuthFileConfig,
   folderRef: string,
 ): OAuthFileConfig {
-  return bindGoogleDriveSharedFolderWasm(
-    toPlain(config),
-    folderRef,
-  ) as OAuthFileConfig;
+  const input = NookOAuthFileConfigValue.fromObject(toPlain(config));
+  try {
+    const output = bindGoogleDriveSharedFolderWasm(input, folderRef);
+    try {
+      return output.toObject() as OAuthFileConfig;
+    } finally {
+      output.free();
+    }
+  } finally {
+    input.free();
+  }
 }
 
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
@@ -99,11 +126,26 @@ export function findDuplicateSyncProvider(
   candidate: StorageProvider,
   options?: { excludeId?: string },
 ): StorageProvider | undefined {
-  return findDuplicateSyncProviderWasm(
-    toPlain(providers),
+  const providerList = NookStorageProviderList.fromArray(toPlain(providers));
+  const candidateValue = NookStorageProviderValue.fromObject(
     toPlain(candidate),
-    options?.excludeId ?? undefined,
-  ) as StorageProvider | undefined;
+  );
+  try {
+    const duplicate = findDuplicateSyncProviderWasm(
+      providerList,
+      candidateValue,
+      options?.excludeId ?? undefined,
+    );
+    if (!duplicate) return undefined;
+    try {
+      return duplicate.toObject() as StorageProvider;
+    } finally {
+      duplicate.free();
+    }
+  } finally {
+    candidateValue.free();
+    providerList.free();
+  }
 }
 
 export function formatDriveStorageRef(
@@ -116,19 +158,49 @@ export function formatDriveStorageRef(
 export async function loadAuthProviders(
   manager: NookVaultManager,
 ): Promise<AuthProvidersSnapshot> {
-  const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders;
-  return loaded.snapshot;
+  const loadedValue = await loadAuthProvidersWasm(manager);
+  try {
+    const loaded = loadedValue.toObject() as LoadedAuthProviders;
+    return loaded.snapshot;
+  } finally {
+    loadedValue.free();
+  }
 }
 
 /** Load providers and ensure the local provider row exists. */
 export async function loadAuthProvidersWithLocalRow(
   manager: NookVaultManager,
 ): Promise<AuthProvidersSnapshot> {
-  const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders;
-  const { snapshot: migratedSnapshot, migrated } =
-    (await ensureLocalAuthProviderSnapshotWasm(
-      toPlain(loaded.snapshot),
-    )) as NookLocalAuthProviderSnapshot;
+  const loadedValue = await loadAuthProvidersWasm(manager);
+  let loaded: LoadedAuthProviders;
+  try {
+    loaded = loadedValue.toObject() as LoadedAuthProviders;
+  } finally {
+    loadedValue.free();
+  }
+  const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
+    toPlain(loaded.snapshot),
+  );
+  let migratedSnapshot: AuthProvidersSnapshot;
+  let migrated: boolean;
+  try {
+    const migratedValue =
+      await ensureLocalAuthProviderSnapshotWasm(snapshotValue);
+    try {
+      migrated = migratedValue.migrated;
+      const migratedSnapshotValue = migratedValue.snapshot;
+      try {
+        migratedSnapshot =
+          migratedSnapshotValue.toObject() as AuthProvidersSnapshot;
+      } finally {
+        migratedSnapshotValue.free();
+      }
+    } finally {
+      migratedValue.free();
+    }
+  } finally {
+    snapshotValue.free();
+  }
   if (
     migrated ||
     migratedSnapshot.providers.length !== loaded.snapshot.providers.length
@@ -142,17 +214,36 @@ export async function saveAuthProviders(
   manager: NookVaultManager,
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
-  await saveAuthProvidersWasm(manager, toPlain(snapshot));
+  const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
+    toPlain(snapshot),
+  );
+  try {
+    await saveAuthProvidersWasm(manager, snapshotValue);
+  } finally {
+    snapshotValue.free();
+  }
 }
 
 export function sealAuthProvidersForDevicePublicKey(
   devicePublicKey: string,
   snapshot: AuthProvidersSnapshot,
 ): AuthProvidersSnapshot {
-  return sealAuthProvidersForDevicePublicKeyWasm(
-    devicePublicKey,
+  const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
     toPlain(snapshot),
-  ) as AuthProvidersSnapshot;
+  );
+  try {
+    const sealed = sealAuthProvidersForDevicePublicKeyWasm(
+      devicePublicKey,
+      snapshotValue,
+    );
+    try {
+      return sealed.toObject() as AuthProvidersSnapshot;
+    } finally {
+      sealed.free();
+    }
+  } finally {
+    snapshotValue.free();
+  }
 }
 
 export function wasmStorageModeForProvider(
@@ -207,18 +298,23 @@ export function providerStorageDetail(
   provider: StorageProvider,
   t?: (key: string) => string,
 ): string {
-  return providerStorageDetailCore(
-    toPlain(provider),
-    t
-      ? t("provider_picker.this_device_desc")
-      : "Vault in browser storage on this device",
-    t ? t("auth_storage.no_token_saved") : "No token saved",
-    t ? t("auth_storage.google_signed_in") : "Signed in with Google",
-    t ? t("auth_storage.icloud_signed_in") : "Signed in with iCloud",
-    t ? t("auth_storage.google_not_signed_in") : "Not signed in",
-    t ? t("auth_storage.icloud_not_signed_in") : "Not signed in with iCloud",
-    t ? t("auth_storage.local_folder_needs_reconnect") : "Choose folder",
-  );
+  const providerValue = NookStorageProviderValue.fromObject(toPlain(provider));
+  try {
+    return providerStorageDetailCore(
+      providerValue,
+      t
+        ? t("provider_picker.this_device_desc")
+        : "Vault in browser storage on this device",
+      t ? t("auth_storage.no_token_saved") : "No token saved",
+      t ? t("auth_storage.google_signed_in") : "Signed in with Google",
+      t ? t("auth_storage.icloud_signed_in") : "Signed in with iCloud",
+      t ? t("auth_storage.google_not_signed_in") : "Not signed in",
+      t ? t("auth_storage.icloud_not_signed_in") : "Not signed in with iCloud",
+      t ? t("auth_storage.local_folder_needs_reconnect") : "Choose folder",
+    );
+  } finally {
+    providerValue.free();
+  }
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {

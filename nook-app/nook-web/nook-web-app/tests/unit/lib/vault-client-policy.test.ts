@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
   NookVaultClientPolicy,
+  NookOAuthFileConfigValue,
+  NookStorageProviderList,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
   activeVaultProviders,
@@ -68,34 +70,43 @@ describe('portable vault client policy', () => {
   })
 
   test('scopes providers and provider roles to the active vault', () => {
-    expect(
-      (activeVaultProviders(providers, 'store-a') as typeof providers).map(
-        (provider) => provider.id,
-      ),
-    ).toEqual(['local-a', 'github-a'])
-    expect(
-      (
-        syncProvidersForActiveVault(providers, 'store-a') as typeof providers
-      ).map((provider) => provider.id),
-    ).toEqual(['github-a'])
-    expect(
-      (providersVisibleWhileDeviceLocked(providers) as typeof providers).map(
-        (provider) => provider.id,
-      ),
-    ).toEqual(['local-a'])
+    const providerValues = NookStorageProviderList.fromArray(providers)
+    try {
+      const active = activeVaultProviders(providerValues, 'store-a')
+      const sync = syncProvidersForActiveVault(providerValues, 'store-a')
+      const locked = providersVisibleWhileDeviceLocked(providerValues)
+      try {
+        expect(
+          (active.toArray() as typeof providers).map((provider) => provider.id),
+        ).toEqual(['local-a', 'github-a'])
+        expect(
+          (sync.toArray() as typeof providers).map((provider) => provider.id),
+        ).toEqual(['github-a'])
+        expect(
+          (locked.toArray() as typeof providers).map((provider) => provider.id),
+        ).toEqual(['local-a'])
+      } finally {
+        active.free()
+        sync.free()
+        locked.free()
+      }
+    } finally {
+      providerValues.free()
+    }
   })
 
   test('normalizes a legacy Google Drive draft before manager connection', () => {
+    const config = NookOAuthFileConfigValue.fromObject({
+      preset: '',
+      accessToken: 'token',
+      fileId: 'file-id',
+      fileName: 'stored-name',
+    })
     const args = stagedRemoteStorageArgs(
       'oauth-file',
       undefined,
       'nook-events',
-      {
-        preset: '',
-        accessToken: 'token',
-        fileId: 'file-id',
-        fileName: 'stored-name',
-      },
+      config,
     )
     expect(args).toBeDefined()
     try {

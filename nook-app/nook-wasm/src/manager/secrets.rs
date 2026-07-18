@@ -7,11 +7,54 @@ use crate::NookImportResult;
 use crate::{NookSecretPage, NookSecretRecord, NookTotpCode};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use wasm_bindgen::JsCast;
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::{JsError, JsValue};
 
-fn serialize_js_objects<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
-    value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
+fn serialize_js_array<T: Serialize>(value: &T) -> Result<js_sys::Array, serde_wasm_bindgen::Error> {
+    Ok(value
+        .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))?
+        .unchecked_into())
+}
+
+#[wasm_bindgen]
+pub struct NookEventLogStorageRecord(super::event_log::EventLogStorageRecord);
+
+#[wasm_bindgen]
+pub struct NookEventLogRecords(Vec<super::event_log::EventLogStorageRecord>);
+
+#[wasm_bindgen]
+impl NookEventLogRecords {
+    #[wasm_bindgen(js_name = toArray)]
+    pub fn to_array(&self) -> Result<js_sys::Array, JsError> {
+        serialize_js_array(&self.0).map_err(|error| JsError::new(&error.to_string()))
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookExternalEventLogRecords(Vec<super::event_log::ExternalEventLogRecord>);
+
+#[wasm_bindgen]
+impl NookExternalEventLogRecords {
+    #[wasm_bindgen(js_name = fromArray)]
+    pub fn from_array(records: &js_sys::Array) -> Result<Self, JsError> {
+        let records = records
+            .iter()
+            .map(serde_wasm_bindgen::from_value)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self(records))
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookExtensionEventLogImportStatus(super::event_log::ExtensionEventLogImportStatus);
+
+#[wasm_bindgen]
+impl NookExtensionEventLogImportStatus {
+    #[wasm_bindgen(js_name = toObject)]
+    pub fn to_object(&self) -> Result<js_sys::Object, JsError> {
+        Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
+    }
 }
 
 type ImportVersions = HashMap<
@@ -781,9 +824,9 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(js_name = exportEventLogRecords)]
-    pub async fn export_event_log_records_js(&self) -> Result<JsValue, JsError> {
+    pub async fn export_event_log_records_js(&self) -> Result<NookEventLogRecords, JsError> {
         let records = self.export_event_log_records().await?;
-        serialize_js_objects(&records).map_err(|e| JsError::new(&e.to_string()))
+        Ok(NookEventLogRecords(records))
     }
 
     #[wasm_bindgen(js_name = parseEventLogStorageRecord)]
@@ -792,30 +835,26 @@ impl NookVaultManager {
         event_id: &str,
         path: &str,
         content: &str,
-    ) -> Result<JsValue, JsError> {
+    ) -> Result<NookEventLogStorageRecord, JsError> {
         let record = Self::parse_event_log_storage_record(event_id, path, content)?;
-        serde_wasm_bindgen::to_value(&record).map_err(|e| JsError::new(&e.to_string()))
+        Ok(NookEventLogStorageRecord(record))
     }
 
     #[wasm_bindgen(js_name = serializeEventLogStorageRecord)]
     pub fn serialize_event_log_storage_record_js(
         &self,
-        record: JsValue,
+        record: &NookEventLogStorageRecord,
     ) -> Result<String, JsError> {
-        let record =
-            serde_wasm_bindgen::from_value(record).map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(Self::serialize_event_log_storage_record(&record)?)
+        Ok(Self::serialize_event_log_storage_record(&record.0)?)
     }
 
     #[wasm_bindgen(js_name = syncExternalEventLogRecords)]
     pub async fn sync_external_event_log_records_js(
         &mut self,
-        records: JsValue,
-    ) -> Result<JsValue, JsError> {
-        let records =
-            serde_wasm_bindgen::from_value(records).map_err(|e| JsError::new(&e.to_string()))?;
-        let merged = self.sync_external_event_log_records(records).await?;
-        serde_wasm_bindgen::to_value(&merged).map_err(|e| JsError::new(&e.to_string()))
+        records: NookExternalEventLogRecords,
+    ) -> Result<NookEventLogRecords, JsError> {
+        let merged = self.sync_external_event_log_records(records.0).await?;
+        Ok(NookEventLogRecords(merged))
     }
 
     #[wasm_bindgen(js_name = importExtensionEventLogRecords)]
@@ -825,20 +864,18 @@ impl NookVaultManager {
         expected_device_id: &str,
         expected_device_public_key: &str,
         expected_device_signing_public_key: &str,
-        records: JsValue,
-    ) -> Result<JsValue, JsError> {
-        let records =
-            serde_wasm_bindgen::from_value(records).map_err(|e| JsError::new(&e.to_string()))?;
+        records: NookExternalEventLogRecords,
+    ) -> Result<NookExtensionEventLogImportStatus, JsError> {
         let status = self
             .import_extension_event_log_records(
                 expected_store_id,
                 expected_device_id,
                 expected_device_public_key,
                 expected_device_signing_public_key,
-                records,
+                records.0,
             )
             .await?;
-        serde_wasm_bindgen::to_value(&status).map_err(|e| JsError::new(&e.to_string()))
+        Ok(NookExtensionEventLogImportStatus(status))
     }
 
     #[wasm_bindgen(js_name = syncLocalFolderProvider)]
@@ -959,8 +996,24 @@ mod wasm_tests {
         event: SignedEvent,
     }
 
-    fn get(target: &JsValue, field: &str) -> JsValue {
-        js_sys::Reflect::get(target, &JsValue::from_str(field)).expect("js field")
+    fn get(target: &js_sys::Object, field: &str) -> js_sys::Object {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .expect("js field")
+            .unchecked_into()
+    }
+
+    fn get_number(target: &js_sys::Object, field: &str) -> f64 {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .expect("js field")
+            .as_f64()
+            .expect("js number")
+    }
+
+    fn get_string(target: &js_sys::Object, field: &str) -> String {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .expect("js field")
+            .as_string()
+            .expect("js string")
     }
 
     #[wasm_bindgen_test]
@@ -1017,7 +1070,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn event_log_export_serializes_flattened_signed_events_as_plain_objects() {
-        let value = serialize_js_objects(&vec![ExportedRecord {
+        let value = serialize_js_array(&vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
                 body: SignedEventBody { schema_version: 1 },
@@ -1025,13 +1078,10 @@ mod wasm_tests {
             },
         }])
         .expect("serialize event-log records");
-        let record = js_sys::Array::from(&value).get(0);
+        let record: js_sys::Object = value.get(0).unchecked_into();
         let event = get(&record, "event");
 
-        assert_eq!(get(&event, "schema_version").as_f64(), Some(1.0));
-        assert_eq!(
-            get(&event, "signature").as_string().as_deref(),
-            Some("ed25519:test-signature"),
-        );
+        assert_eq!(get_number(&event, "schema_version"), 1.0);
+        assert_eq!(get_string(&event, "signature"), "ed25519:test-signature");
     }
 }

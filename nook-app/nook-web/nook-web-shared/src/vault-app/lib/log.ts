@@ -384,12 +384,16 @@ export async function dumpLogs(options?: {
   offset?: number;
 }): Promise<LogEntry[]> {
   if (!wasmReady) return [];
-  const entries = (await nookLogDump(
+  const entries = await nookLogDump(
     options?.minLevel ?? undefined,
     options?.limit ?? undefined,
     options?.offset ?? undefined,
-  )) as LogEntry[];
-  return entries ?? [];
+  );
+  try {
+    return entries.toArray() as LogEntry[];
+  } finally {
+    entries.free();
+  }
 }
 
 /** Total number of persisted log entries. */

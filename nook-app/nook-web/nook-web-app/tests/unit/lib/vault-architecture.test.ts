@@ -1,13 +1,11 @@
 import { beforeAll, describe, expect, test } from 'vitest'
-import initNookWasm, {
-  OnboardingType,
-  enrollmentProviderForArchitecture,
-} from '$app-wasm'
+import initNookWasm, { OnboardingType } from '$app-wasm'
 import type { StorageProvider } from '$lib/auth-providers'
 import {
   canCreateSecret,
   defaultVaultArchitecture,
   draftVaultArchitecture,
+  enrollmentProviderForArchitecture,
   firstCompatibleProvider,
   onboardingType,
   providerCapabilityLabelKey,

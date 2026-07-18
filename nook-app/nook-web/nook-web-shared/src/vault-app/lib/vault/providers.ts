@@ -16,6 +16,7 @@ import {
   type StorageProviderType,
 } from "$lib/auth-providers";
 import {
+  NookAuthProvidersSnapshotValue,
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
   removeLocalFolderHandle,
 } from "$app-wasm";
@@ -343,16 +344,28 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         : provider,
     );
   } else {
-    const snapshot = ensureLocalProviderRowWasm(
+    const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
       JSON.parse(
         JSON.stringify({
           providers: state.providers,
           activeVaultStoreId: state.activeVaultStoreId ?? undefined,
         }),
       ),
-      vaultStoreId ?? undefined,
-    ) as AuthProvidersSnapshot;
-    state.providers = snapshot.providers;
+    );
+    try {
+      const output = ensureLocalProviderRowWasm(
+        snapshotValue,
+        vaultStoreId ?? undefined,
+      );
+      try {
+        const snapshot = output.toObject() as AuthProvidersSnapshot;
+        state.providers = snapshot.providers;
+      } finally {
+        output.free();
+      }
+    } finally {
+      snapshotValue.free();
+    }
   }
 
   if (state.storageMode === "oauth-file" && state.oauthFile?.fileId) {

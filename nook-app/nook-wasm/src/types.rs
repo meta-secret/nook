@@ -1,11 +1,134 @@
-//! Typed values exported across the wasm-bindgen boundary (no raw `JsValue` bags).
+//! Typed values exported across the wasm-bindgen boundary (no untyped JavaScript bags).
 
 use crate::NookError;
 use crate::NookSecretListItem;
 use crate::NookSecretRecord;
 use crate::NookVaultManager;
 use gloo_utils::window;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+fn deserialize_object<T: DeserializeOwned>(
+    value: js_sys::Object,
+) -> Result<T, wasm_bindgen::JsError> {
+    Ok(serde_wasm_bindgen::from_value(value.into())?)
+}
+
+fn serialize_object<T: Serialize>(value: &T) -> Result<js_sys::Object, wasm_bindgen::JsError> {
+    Ok(serde_wasm_bindgen::to_value(value)?.unchecked_into())
+}
+
+macro_rules! wasm_object_value {
+    ($name:ident, $core:ty) => {
+        #[wasm_bindgen]
+        #[derive(Clone)]
+        pub struct $name($core);
+
+        #[allow(dead_code)]
+        impl $name {
+            pub(crate) fn from_core(value: $core) -> Self {
+                Self(value)
+            }
+
+            pub(crate) fn to_core(&self) -> $core {
+                self.0.clone()
+            }
+        }
+
+        #[wasm_bindgen]
+        impl $name {
+            #[wasm_bindgen(js_name = fromObject)]
+            pub fn from_object(value: js_sys::Object) -> Result<Self, wasm_bindgen::JsError> {
+                Ok(Self(deserialize_object(value)?))
+            }
+
+            #[wasm_bindgen(js_name = toObject)]
+            pub fn to_object(&self) -> Result<js_sys::Object, wasm_bindgen::JsError> {
+                serialize_object(&self.0)
+            }
+        }
+    };
+}
+
+wasm_object_value!(NookOAuthFileConfigValue, nook_core::OAuthFileConfigData);
+wasm_object_value!(NookStorageProviderValue, nook_core::StorageProviderData);
+wasm_object_value!(
+    NookAuthProvidersSnapshotValue,
+    nook_core::AuthProvidersSnapshotData
+);
+wasm_object_value!(
+    NookNormalizedAuthSnapshotValue,
+    nook_core::NormalizedAuthSnapshot
+);
+wasm_object_value!(
+    NookICloudSharedStorageTargetValue,
+    nook_core::ICloudSharedTarget
+);
+wasm_object_value!(
+    NookSharedStorageGrantRequestValue,
+    nook_core::SharedStorageGrantRequest
+);
+wasm_object_value!(
+    NookSharedStorageGrantOutcomeValue,
+    nook_core::SharedStorageGrantOutcome
+);
+
+#[wasm_bindgen]
+pub struct NookLocalAuthProviderSnapshotValue {
+    snapshot: nook_core::AuthProvidersSnapshotData,
+    migrated: bool,
+}
+
+impl NookLocalAuthProviderSnapshotValue {
+    pub(crate) fn new(snapshot: nook_core::AuthProvidersSnapshotData, migrated: bool) -> Self {
+        Self { snapshot, migrated }
+    }
+}
+
+#[wasm_bindgen]
+impl NookLocalAuthProviderSnapshotValue {
+    #[wasm_bindgen(getter)]
+    pub fn snapshot(&self) -> NookAuthProvidersSnapshotValue {
+        NookAuthProvidersSnapshotValue::from_core(self.snapshot.clone())
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn migrated(&self) -> bool {
+        self.migrated
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookStorageProviderList(Vec<nook_core::StorageProviderData>);
+
+impl NookStorageProviderList {
+    pub(crate) fn from_core(values: Vec<nook_core::StorageProviderData>) -> Self {
+        Self(values)
+    }
+
+    pub(crate) fn as_core(&self) -> &[nook_core::StorageProviderData] {
+        &self.0
+    }
+}
+
+#[wasm_bindgen]
+impl NookStorageProviderList {
+    #[wasm_bindgen(js_name = fromArray)]
+    pub fn from_array(values: &js_sys::Array) -> Result<Self, wasm_bindgen::JsError> {
+        let providers = values
+            .iter()
+            .map(serde_wasm_bindgen::from_value)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self(providers))
+    }
+
+    #[wasm_bindgen(js_name = toArray)]
+    pub fn to_array(&self) -> Result<js_sys::Array, wasm_bindgen::JsError> {
+        Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -1251,7 +1374,7 @@ impl NookPasskeySetup {
         &self,
         rp_id: &str,
         rp_name: &str,
-    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
+    ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
         crate::passkey_browser::creation_options(
             rp_id,
             rp_name,
@@ -1270,7 +1393,7 @@ impl NookPasskeySetup {
         rp_id: &str,
         rp_name: &str,
         passkey_label: &str,
-    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
+    ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
         crate::passkey_browser::creation_options(
             rp_id,
             rp_name,
@@ -1316,7 +1439,7 @@ impl NookPasskeyUnlockOptions {
     pub fn request_options(
         &self,
         rp_id: &str,
-    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
+    ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
         crate::passkey_browser::request_options(rp_id, &self.credential_id, &self.prf_input)
     }
 }

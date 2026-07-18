@@ -180,15 +180,15 @@
           },
         ).providers
       }
-      const eventLogRecords = (await vault.enqueueStorage(() =>
+      const eventLogRecordValues = await vault.enqueueStorage(() =>
         vault.manager!.exportEventLogRecords(),
-      )) as ExtensionEventLogRecord[]
+      )
       try {
         await sendGrantToExtension(
           grantedProviders,
           vaultStoreId,
           activeVaultName(),
-          eventLogRecords,
+          eventLogRecordValues.toArray() as ExtensionEventLogRecord[],
         )
       } catch (caught) {
         handoffError =
@@ -197,6 +197,8 @@
                 error: caught.message,
               })
             : vault.t('extension.consent.handoff_failed')
+      } finally {
+        eventLogRecordValues.free()
       }
       await vault.refreshDeviceState()
       vault.showSuccess(
