@@ -324,9 +324,10 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload over trusted `https://localhost:<port>` using ignored TLS material in `.nook/https/`) and `task wasm:build:fast` (mounted no-opt WASM regeneration). `task web:https:setup` builds and runs the pinned repository `mkcert` container; only the final CA trust operation runs on the host because the browser consumes the host trust store. Playwright and CI keep their isolated loopback-HTTP transport when real passkey/OAuth/provider ceremonies are not under test.
 
 PR delivery helpers live in `agentic-ai/ci-agent` and are exposed as `task
-pr:preflight`, `task pr:review`, and `task pr:ready`. The review command posts an
-idempotent SHA-bound Codex request; the audit commands emit machine-readable
-exact-head state, including review settlement, and never merge a PR. Nook has no event-driven
+pr:preflight`, `task pr:review`, and `task pr:ready`. The optional review command
+posts an idempotent SHA-bound Codex request; the audit commands emit
+machine-readable exact-head state without waiting for an external reviewer and
+never merge a PR. Nook has no event-driven
 PR auto-merger: workflows do not merge blindly from check events. Instead, the
 task-owning agent runs the readiness audit and squash-merges immediately when it
 passes. Local ci-agent Docker tags are worktree-scoped so another checkout cannot

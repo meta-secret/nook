@@ -11,7 +11,7 @@ direct invocation; the `.cortex` card remains the source of truth.
 
 | Skill card | Purpose | Cursor skill |
 |---|---|---|
-| [code-review-comments.md](code-review-comments.md) | Settle the exact-head Codex pass and handle every active comment: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.cursor/skills/code-review-comments/SKILL.md`](../../.cursor/skills/code-review-comments/SKILL.md) |
+| [code-review-comments.md](code-review-comments.md) | Handle every active comment without waiting for reviewers: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.cursor/skills/code-review-comments/SKILL.md`](../../.cursor/skills/code-review-comments/SKILL.md) |
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional Cursor project skills | [`.cursor/skills/dynamic-skill/SKILL.md`](../../.cursor/skills/dynamic-skill/SKILL.md) |
 | [efficient-pr-delivery.md](efficient-pr-delivery.md) | Ship PRs with machine-readable preflight/readiness, parallel final gates, and repository-only event watching | [`.cursor/skills/efficient-pr-delivery/SKILL.md`](../../.cursor/skills/efficient-pr-delivery/SKILL.md) |
 | [browser-extension-release-security.md](browser-extension-release-security.md) | Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts | [`.cursor/skills/browser-extension-release-security/SKILL.md`](../../.cursor/skills/browser-extension-release-security/SKILL.md) |
