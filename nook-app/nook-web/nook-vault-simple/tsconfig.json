@@ -7,6 +7,8 @@
     "noEmit": true,
     "allowJs": true,
     "moduleDetection": "force",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "resolveJsonModule": true,
     "paths": {
       "$lib": ["../nook-web-shared/src/vault-app/lib"],

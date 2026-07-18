@@ -377,39 +377,3 @@ export async function connectSyncJoinerDevice(
     `connectSyncJoinerDevice: icloud not wired in e2e yet (provider=${target.providerId})`,
   )
 }
-
-/** Default seeded sync provider row for fan-out / onboarding specs. */
-export function defaultOnboardSyncProvider(
-  providerId: E2eSyncProviderId = resolveE2eSyncProvider(),
-) {
-  const backend = stubBackendId(providerId)
-  if (backend === 'file') {
-    return {
-      id: 'e2e-onboard-file',
-      label: 'File (e2e onboard)',
-      fileName: 'nook-e2e-onboard',
-      accessToken: E2E_SYNC_PROVIDERS.file.stubCredential,
-      type: 'oauth-file' as const,
-      oauthPreset: 'google-drive' as const,
-    }
-  }
-  if (backend === 'github') {
-    return {
-      id: 'e2e-onboard-github',
-      label: 'GitHub (e2e onboard)',
-      fileName: 'nook-e2e-onboard',
-      accessToken: E2E_SYNC_PROVIDERS.github.stubCredential,
-      type: 'github' as const,
-      githubRepo: 'nook-e2e-onboard',
-      githubPat: E2E_SYNC_PROVIDERS.github.stubCredential,
-    }
-  }
-  return {
-    id: 'e2e-onboard-oauth',
-    label: 'Google Drive (e2e onboard)',
-    fileName: 'nook-events',
-    accessToken: E2E_SYNC_PROVIDERS.local.stubCredential,
-    type: 'oauth-file' as const,
-    oauthPreset: 'google-drive' as const,
-  }
-}
