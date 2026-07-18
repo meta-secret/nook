@@ -45,22 +45,22 @@ carry this lifecycle through merge. Full policy:
 
 Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
-## ⛔ Non-negotiable: never wait for external reviews or checks
+## ⛔ Non-negotiable: settle the exact-head Codex review before merge
 
-Applicable repository-owned PR test checks are the only remote checks agents
-wait for: normally `PR / Verify and preview`, plus `Web research / Build and
-deploy research catalog` when web-research paths change. **Codex reviews are not required.** Never request,
-poll, monitor, or delay merge/handoff for Codex, Claude, Cursor, CodeRabbit, or
-any other external review, check, deployment, or service. Do not add a grace
-period for external feedback after Nook's applicable PR test checks pass.
+After the final push, run `task pr:review PR=<number>` and wait for the exact-head
+Codex result: either a submitted review or Codex's thumbs-up reaction. Address,
+reply to, and resolve every actionable review thread before merge; any push made
+for review feedback invalidates the prior result and requires another exact-head
+review. `task pr:ready` enforces this handshake in addition to the applicable
+repository-owned PR checks. Do not replace it with a blind grace period.
 
 External feedback is still useful when it already exists: before merge or
 handoff, inspect the comments and review findings currently present and address
 every active actionable item from humans or external services. Reply with the
-fix, validation, or no-change rationale as documented below. Then proceed based
-on Nook's own applicable PR test checks; never wait for another external response or review
-cycle. Every external-service review comment already present must be inspected;
-the service being optional is never a reason to skip its feedback. Full policy:
+fix, validation, or no-change rationale as documented below. Request a fresh
+Codex pass when the fix changes the head. Claude, Cursor, CodeRabbit, and other
+external services remain optional: inspect feedback already present, but do not
+wait for those services. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
 
 ## ⛔ Non-negotiable: push before final checks; run them in parallel
@@ -149,9 +149,9 @@ starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.
   both inline review threads and top-level review bodies for actionable findings. Replies must target the
   specific comment/item; a broad PR audit comment is not a substitute. Resolve a conversation only after
   the targeted reply is visible and the finding is fixed or explicitly invalidated, then re-query the PR.
-  Inspect what is present before merge or handoff, but never wait for a reviewer or external service to
-  comment, re-review, resolve, or finish a check. Nook's applicable repository-owned PR test checks are the
-  only remote checks agents wait for.
+  Inspect again before merge or handoff. The exact-head Codex review must settle,
+  and every active actionable item must be handled; do not wait for other external
+  reviewers or services.
   See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality

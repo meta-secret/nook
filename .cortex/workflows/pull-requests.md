@@ -21,13 +21,12 @@ handoff:
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for
    web/e2e failures, fix locally, and push the completed fix; the synchronize
    event re-evaluates the repository-owned check.
-6. **Address comments already present** — reply to actionable human, Codex, and
-   automated comments with the fix, validation, or no-change rationale, then
-   push any needed changes and let Nook's PR workflows re-evaluate. Do not wait for
-   new comments or another review cycle.
+6. **Settle review feedback** — run `task pr:review PR=<number>` for the exact
+   head, reply to every actionable human, Codex, and automated comment, and
+   resolve each thread. If a fix changes the head, request another Codex pass.
 7. **Merge automatically when ready** — after the branch is current with
    `origin/main`, Nook's applicable repository-owned PR test checks are green,
-   actionable comments currently present are handled, and `task pr:ready`
+   the exact-head Codex pass is settled, all actionable comments are resolved, and `task pr:ready`
    succeeds, squash-merge immediately without requesting separate permission.
 
 ## ⛔ SQUASH MERGE ONLY
@@ -104,13 +103,11 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-Never request or wait for Codex or another external reviewer. Automatic reviews
-may produce useful comments, but they are optional and non-blocking. See
-[code-review.md](code-review.md).
+After the final push, run `task pr:review PR=<number>` and wait for its
+exact-head Codex result. Handle and resolve every finding. Other external
+reviewers remain optional and non-blocking. See [code-review.md](code-review.md).
 
-There is no review-batching grace period: snapshot whatever feedback already
-exists at this boundary, handle it, and continue. In particular, do not wait for
-Codex Cloud review to begin or finish.
+The explicit review handshake replaces a blind review-batching grace period.
 
 ### 5. Local checks
 
@@ -215,13 +212,14 @@ applies to the changed paths, there is no remote check to wait for.
 task pr:preflight PR=<number>
 ```
 
-Use `task pr:ready PR=<number>` for a read-only exact-head readiness assertion.
+Run `task pr:review PR=<number>` to request the SHA-bound Codex result, then use
+`task pr:ready PR=<number>` for a read-only exact-head readiness assertion.
 The command never merges by itself. Its success is the final signal for the
 task-owning agent to squash-merge immediately.
 
-Do not request, poll, or wait for Codex, Claude, Cursor, CodeRabbit, or any other
-external review/check/deployment. Do not add a grace period after the Nook PR
-workflow succeeds. External failure or pending state is not a merge blocker.
+Do not wait for Claude, Cursor, CodeRabbit, or any other optional external
+review/check/deployment. The exact-head Codex result is the required exception;
+do not replace it with a fixed grace period.
 
 Before treating a PR as mergeable, **always verify the branch against the latest
 `origin/main`**. Do this every time, even when all visible checks are green. If a
@@ -277,9 +275,9 @@ Use the GitHub review-thread GraphQL query from the
 inspect unresolved inline conversations. Reply only on actual review
 threads/comments that support targeted replies. Track actionable submitted
 review-body items without a threaded reply target in the checklist/final handoff
-rather than creating comment spam. Inspect current feedback once before merge
-or handoff, then proceed when Nook's applicable PR test checks are green. Never request or
-wait for an external review, reply, re-review, resolution, or status change. See
+rather than creating comment spam. Settle the exact-head Codex pass, resolve all
+actionable threads, and re-query immediately before merge. Do not wait for
+other optional external reviews or status changes. See
 [code-review.md](code-review.md).
 
 ### 7. Fix loop on failure
@@ -295,8 +293,8 @@ important after the first two). See
 3. Fix the root cause.
 4. Push the completed fix so Nook's PR workflow restarts.
 5. **Run full local PR CI while Nook's PR workflow runs:** `task ci:pr` (not just `task check` — a broad remote failure may be in the production web build or another gate `check` skips). For a browser failure from main/nightly or a high-risk web change, also run the matching e2e spec/project.
-6. Return to step 5 and wait for both local validation and Nook's applicable PR
-   test checks to be green. Never wait for an external service.
+6. Return to step 5 and wait for local validation, Nook's applicable PR checks,
+   and the exact-head Codex pass. Never wait for other external services.
 
 If the failure was obviously fmt/lint-only, `task format:check` + the relevant
 lint/test subset can prove the fix. For broader failures, use `task ci:pr` as
@@ -305,8 +303,8 @@ the local gate on the latest pushed head before merge or handoff.
 ### 8. Merge and finish
 
 When **Nook's applicable repository-owned PR test checks pass**, the branch is
-current with `origin/main`, actionable comments currently present are handled,
-and `task pr:ready` succeeds:
+current with `origin/main`, the exact-head Codex pass settled, all actionable
+comments are resolved, and `task pr:ready` succeeds:
 
 ```bash
 gh pr merge <number> --squash
@@ -346,8 +344,8 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 1. Fetch `origin/main`; branch from it.
 2. Implement and push/open/update the PR when the iteration is ready for final validation.
 3. Run `task check` (or scoped subset) while Nook's applicable repository-owned PR workflows run.
-4. Monitor only `PR / Verify and preview`, plus `Web research / Build and deploy research catalog` for web-research paths; never request or wait for an external review/check.
-5. Inspect and address every actionable comment currently present, then proceed without waiting for another review cycle.
+4. Monitor the applicable repository checks and run `task pr:review` for the exact head; never wait for other optional external reviews/checks.
+5. Address and resolve every actionable comment; request another Codex pass if a fix changes the head.
 6. On failure: fix → push completed fix → run the required local gate while CI refreshes.
 7. **Squash merge** into `main` immediately after the exact-head readiness audit
    succeeds; green checks alone are insufficient.

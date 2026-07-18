@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "include": ["files", "exports", "types", "enumMembers"],
+  "includeEntryExports": true,
+  "ignoreExportsUsedInFile": true,
+  "paths": {
+    "$lib": ["src/lib"],
+    "$lib/*": ["src/lib/*"]
+  },
+  "entry": ["src/main.ts", "vite.config.ts"],
+  "project": ["src/**/*.{ts,svelte}", "vite.config.ts"]
+}
