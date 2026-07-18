@@ -12,17 +12,17 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
 
   assert.equal(audit.ready, true);
   assert.deepEqual(audit.reasons, []);
-  assert.equal(audit.externalReviewPolicy, "require-current-head-codex-review-settled");
+  assert.equal(audit.externalReviewPolicy, "inspect-existing-feedback-without-waiting");
   assert.deepEqual(audit.requiredWorkflows.map((workflow) => workflow.workflowName), ["PR"]);
   assert.equal(audit.exactHeadDeployment?.state, "success");
 });
 
-test("buildPrAudit blocks until the current-head Codex review settles", async () => {
+test("buildPrAudit does not wait for a current-head Codex review", async () => {
   const audit = await buildPrAudit(mockOctokit({ codexReview: "missing" }), repoRef, 410);
 
-  assert.equal(audit.ready, false);
+  assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.settled, false);
-  assert.ok(audit.reasons.some((reason) => reason.includes("Codex review has not settled")));
+  assert.deepEqual(audit.reasons, []);
 });
 
 test("buildPrAudit accepts a Codex approval reaction on the exact-head request", async () => {
@@ -50,7 +50,7 @@ test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", 
     410,
   );
 
-  assert.equal(audit.ready, false);
+  assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.cleanComment, false);
   assert.equal(audit.feedback.codexReview.settled, false);
   assert.equal(audit.feedback.substantiveComments, 0);
@@ -81,20 +81,20 @@ test("buildPrAudit checks every duplicate exact-head Codex request for approval"
   assert.equal(audit.feedback.codexReview.settled, true);
 });
 
-test("buildPrAudit rejects a dismissed exact-head Codex review", async () => {
+test("buildPrAudit reports a dismissed exact-head Codex review without waiting", async () => {
   const audit = await buildPrAudit(mockOctokit({ codexReview: "dismissed" }), repoRef, 410);
 
-  assert.equal(audit.ready, false);
+  assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
-  assert.ok(audit.reasons.some((reason) => reason.includes("Codex review has not settled")));
+  assert.deepEqual(audit.reasons, []);
 });
 
-test("buildPrAudit rejects a lookalike Codex reviewer login", async () => {
+test("buildPrAudit ignores a lookalike Codex status review", async () => {
   const audit = await buildPrAudit(mockOctokit({ codexReview: "impostor" }), repoRef, 410);
 
-  assert.equal(audit.ready, false);
+  assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
-  assert.ok(audit.reasons.some((reason) => reason.includes("Codex review has not settled")));
+  assert.deepEqual(audit.reasons, []);
 });
 
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {

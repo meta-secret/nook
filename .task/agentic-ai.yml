@@ -168,7 +168,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
 
   pr:ready:
-    desc: Read-only assertion that the exact PR head is current, deployed, repository-green, Codex-reviewed, and has no pending feedback (PR=<number>); never merges.
+    desc: Read-only assertion that the exact PR head is current, deployed, repository-green, and has no pending feedback (PR=<number>); never merges or waits for reviewers.
     requires:
       vars: [PR]
     cmds:
@@ -180,7 +180,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
 
   pr:review:
-    desc: Request the required Codex review for the exact PR head, idempotently (PR=<number>).
+    desc: Optionally request a Codex review for the exact PR head, idempotently (PR=<number>); never required for readiness.
     requires:
       vars: [PR]
     cmds:

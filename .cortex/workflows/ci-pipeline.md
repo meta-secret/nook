@@ -317,11 +317,11 @@ comparison. Use
 remote CI as the **PR validation gate** — not as the primary
 place to discover fmt/clippy/unit/e2e failures.
 
-Agents wait for the applicable repository-owned PR checks (`PR / Verify and
+Agents wait only for the applicable repository-owned PR checks (`PR / Verify and
 preview`, plus `Web research / Build and deploy research catalog` when its paths
-change) and the exact-head Codex result requested by `task pr:review`. Every
-actionable comment must be addressed and resolved. Claude, Cursor, CodeRabbit,
-and other optional external services are never awaited when no feedback is present.
+change). Every actionable comment already present must be addressed and
+resolved. Codex, Claude, Cursor, CodeRabbit, and other optional external
+services are never requested or awaited when no feedback is present.
 The local ci-agent image tag is derived from the worktree path, preventing
 parallel worktrees from replacing each other's review/readiness binaries.
 

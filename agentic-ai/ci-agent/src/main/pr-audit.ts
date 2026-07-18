@@ -28,7 +28,7 @@ export type PrAudit = {
   branchProtection: BranchProtectionAudit;
   changedFiles: string[];
   exactHeadDeployment?: { environment: string; state: string; url?: string };
-  externalReviewPolicy: "require-current-head-codex-review-settled";
+  externalReviewPolicy: "inspect-existing-feedback-without-waiting";
   feedback: Awaited<ReturnType<typeof inspectPrFeedback>>;
   head: { branch: string; sha: string };
   mergeState: {
@@ -139,16 +139,12 @@ export async function buildPrAudit(
   if (feedback.substantiveReviews > 0) {
     reasons.push(`${feedback.substantiveReviews} substantive current-head review(s) already present`);
   }
-  if (!feedback.codexReview.settled) {
-    reasons.push("current-head Codex review has not settled");
-  }
-
   return {
     base: { branch: pr.base.ref, sha: pr.base.sha },
     branchProtection,
     changedFiles,
     exactHeadDeployment,
-    externalReviewPolicy: "require-current-head-codex-review-settled",
+    externalReviewPolicy: "inspect-existing-feedback-without-waiting",
     feedback,
     head: { branch: pr.head.ref, sha: pr.head.sha },
     mergeState: {
