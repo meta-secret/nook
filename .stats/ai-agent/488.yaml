@@ -16,8 +16,8 @@ summary:
   local_test_count: 0
   local_combined_count: 3
   local_execution_seconds: 629
-  github_actions_run_count: 5
-  github_actions_seconds: 1541
+  github_actions_run_count: 6
+  github_actions_seconds: 1661
   pr_retrigger_count: 4
   agent_requested_rerun_count: 1
   merge_attempt_count: 1
@@ -159,6 +159,15 @@ github_actions_runs:
     finished_at: 2026-07-18T09:18:57Z
     duration_seconds: 362
     conclusion: success
+  - workflow: Main
+    run_id: 29638966773
+    run_attempt: 1
+    head_sha: 0c615303c005d7820158682deda375fcbc01f75d
+    trigger: push
+    started_at: 2026-07-18T09:19:25Z
+    finished_at: 2026-07-18T09:21:25Z
+    duration_seconds: 120
+    conclusion: cancelled
 pr_retriggers:
   - kind: base_update
     at: 2026-07-18T08:53:45Z
@@ -199,4 +208,5 @@ waste_assessment:
     - Repeated full validation followed changed heads; no unchanged-head suite was rerun without a documented external failure
     - Formatting and setup consumed 220 seconds across three changed heads and should be compared with future docs_ci records
     - The first merge command merged remotely; only local branch cleanup failed because another worktree owned main
+    - The implementation merge Main run was cancelled by a subsequent concurrent main merge after 120 seconds
   required_actions: []
