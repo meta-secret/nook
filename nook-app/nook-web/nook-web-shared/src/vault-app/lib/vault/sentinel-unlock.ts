@@ -3,6 +3,7 @@ import type { NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
   classifyVaultRecoveryError,
+  JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
   VaultRecoveryErrorKind,
   type NookSentinelStoredDeliverySummary,
@@ -243,7 +244,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
       mode: state.storageMode,
       secrets: rawRecords.length,
     });
-    state.joinEnrollmentPrompt = "none";
+    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
     state.showSuccess(state.t("toasts.vault_unlocked"));
     state.startIdleSessionTracking();
