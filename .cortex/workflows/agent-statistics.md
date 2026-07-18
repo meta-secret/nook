@@ -81,7 +81,7 @@ summary:
   local_execution_seconds: 600
   github_actions_run_count: 1
   github_actions_seconds: 1200
-  pr_retrigger_count: 1
+  pr_retrigger_count: 0
   agent_requested_rerun_count: 0
   merge_attempt_count: 1
 local_executions:
@@ -102,11 +102,7 @@ github_actions_runs:
     finished_at: 2026-07-18T18:45:30Z
     duration_seconds: 1200
     conclusion: success
-pr_retriggers:
-  - kind: head_push
-    at: 2026-07-18T18:24:00Z
-    reason: review_fix
-    initiated_by_agent: true
+pr_retriggers: []
 merge_attempts:
   - at: 2026-07-18T18:55:00Z
     method: squash

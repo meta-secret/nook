@@ -209,7 +209,8 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Record PR statistics after merge.** Follow
   [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
   completed YAML in a separate stats-only PR, compare against recent comparable
-  PRs, and open a normal performance-fix PR for actionable regression or waste.
+  PRs, and own and land a normal performance-fix PR for actionable regression
+  or waste before completing the task.
   A verified one-file `.stats/ai-agent/<source-pr>.yaml` PR is the only exception
   to local checks, repository checks, exact-head review, and `task pr:ready`; it
   must still use squash merge and must be merged immediately without generating
