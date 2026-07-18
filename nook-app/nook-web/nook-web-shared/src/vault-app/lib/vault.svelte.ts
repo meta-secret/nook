@@ -61,6 +61,7 @@ import {
   OAUTH_FILE_PROVIDER_TYPE,
   providerDefaultLabel,
   wasmStorageModeForProvider,
+  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type GoogleDriveMode,
   type ICloudMode,
