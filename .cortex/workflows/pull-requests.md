@@ -107,7 +107,8 @@ After the final push, inspect feedback already present and handle every
 actionable finding. Do not request or wait for external reviewers. See
 [code-review.md](code-review.md).
 
-The explicit review handshake replaces a blind review-batching grace period.
+The feedback inspection and readiness audit replace any blind review-batching
+grace period.
 
 ### 5. Local checks
 
