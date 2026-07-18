@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from "@lucide/svelte";
   import { VaultState, type StartSentinelGenesisArgs } from "$lib/vault.svelte";
+  import { JoinEnrollmentState } from "$app-wasm";
   import { loadAuthProviders, saveAuthProviders } from "$lib/auth-providers";
   import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
   import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
@@ -1095,8 +1096,8 @@
 
     <JoinEnrollmentDialog
       {vault}
-      open={vault.joinEnrollmentPrompt !== "none"}
-      variant={vault.joinEnrollmentPrompt === "pending"
+      open={vault.joinEnrollmentPrompt !== JoinEnrollmentState.None}
+      variant={vault.joinEnrollmentPrompt === JoinEnrollmentState.Pending
         ? "pending"
         : "needs_request"}
       deviceId={vault.deviceId}

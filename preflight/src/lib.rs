@@ -29,6 +29,9 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
     "type SentinelGenesisManagerStatus = {",
     "type SentinelGenesisFinalizeResult = {",
     "type NookPendingSyncConflict = {",
+    "type PendingSyncConflictCommonDraft = {",
+    "type PendingSyncConflictDraft =",
+    "type ProviderStoreMismatch = {",
     "type NookSecretFormFields = {",
 ];
 

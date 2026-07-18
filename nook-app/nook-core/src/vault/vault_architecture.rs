@@ -371,6 +371,25 @@ impl Default for VaultArchitecture {
 }
 
 impl VaultArchitecture {
+    pub fn draft(
+        device_mode: DeviceMode,
+        vault_type: VaultType,
+        replication_type: ReplicationType,
+    ) -> ValidationResult<Self> {
+        let architecture = Self {
+            device_mode,
+            vault_type,
+            replication_type,
+            sentinel: (vault_type == VaultType::Sentinel).then_some(SentinelPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 0,
+            }),
+        };
+        architecture.validate()?;
+        Ok(architecture)
+    }
+
     #[must_use]
     pub fn simple_personal(device_mode: DeviceMode) -> Self {
         Self {
@@ -727,6 +746,34 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(decoded, architecture);
+    }
+
+    #[test]
+    fn draft_builds_the_vault_type_specific_policy() {
+        let simple = VaultArchitecture::draft(
+            DeviceMode::AntiHacker,
+            VaultType::Simple,
+            ReplicationType::Shared,
+        )
+        .unwrap();
+        assert_eq!(simple.device_mode, DeviceMode::AntiHacker);
+        assert_eq!(simple.replication_type, ReplicationType::Shared);
+        assert!(simple.sentinel.is_none());
+
+        let sentinel = VaultArchitecture::draft(
+            DeviceMode::Standard,
+            VaultType::Sentinel,
+            ReplicationType::Personal,
+        )
+        .unwrap();
+        assert_eq!(
+            sentinel.sentinel,
+            Some(SentinelPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 0,
+            })
+        );
     }
 
     #[test]

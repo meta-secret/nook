@@ -10,6 +10,7 @@ import {
   VaultAccessStatus,
 } from "$lib/nook";
 import { createLogger } from "$lib/log";
+import { JoinEnrollmentState } from "$app-wasm";
 import { syncLocalFolderProvider } from "$lib/vault/sync";
 import {
   isSentinelCeremonyRequiredError,
@@ -109,10 +110,10 @@ export async function loadDb(state: VaultState) {
       const hasPasswordFallback = await state.refreshPasswordEntriesList();
       if (hasPasswordFallback && state.passwordEntries.length > 0) {
         state.loginPasswordPrompt = true;
-        state.joinEnrollmentPrompt = "none";
+        state.joinEnrollmentPrompt = JoinEnrollmentState.None;
         return;
       }
-      state.joinEnrollmentPrompt = "needs_request";
+      state.joinEnrollmentPrompt = JoinEnrollmentState.NeedsRequest;
       state.startVaultSync();
       return;
     }
@@ -121,10 +122,10 @@ export async function loadDb(state: VaultState) {
       const hasPasswordFallback = await state.refreshPasswordEntriesList();
       if (hasPasswordFallback && state.passwordEntries.length > 0) {
         state.loginPasswordPrompt = true;
-        state.joinEnrollmentPrompt = "none";
+        state.joinEnrollmentPrompt = JoinEnrollmentState.None;
         return;
       }
-      state.joinEnrollmentPrompt = "pending";
+      state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
       state.awaitingJoinApproval = true;
       state.startVaultSync();
       return;

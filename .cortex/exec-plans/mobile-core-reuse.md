@@ -41,6 +41,9 @@ slice whenever possible.
       `vault-architecture.ts` into core.
 - [x] Move Google Drive and iCloud provider-config merge rules from their
       TypeScript SDK adapters into core.
+- [x] Move the remaining `VaultState` login/join/recovery/pagination predicates,
+      provider scoping and locked-device visibility, staged storage arguments,
+      remote-reference normalization, and sync metadata updates into core.
 
 ### P1 - remove duplicated app/domain DTOs
 
@@ -56,6 +59,8 @@ slice whenever possible.
 - [x] Replace remaining TypeScript domain message schemas where they describe
       vault/enrollment/secret data. Keep browser runtime-message envelopes in
       TypeScript when they are only extension transport glue.
+- [x] Remove the TypeScript sync-conflict draft union and construct typed
+      conflicts through the Rust/WASM boundary, including version parsing.
 
 ### P2 - move reusable workflows out of the WASM manager
 

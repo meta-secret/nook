@@ -13,6 +13,19 @@ pub struct NookVaultArchitecture(nook_core::VaultArchitecture);
 
 #[wasm_bindgen]
 impl NookVaultArchitecture {
+    #[wasm_bindgen(js_name = draft)]
+    pub fn draft(
+        device_mode: &str,
+        vault_type: &str,
+        replication_type: &str,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        Ok(Self(nook_core::VaultArchitecture::draft(
+            nook_core::DeviceMode::parse(device_mode)?,
+            nook_core::VaultType::parse(vault_type)?,
+            nook_core::ReplicationType::parse(replication_type)?,
+        )?))
+    }
+
     #[wasm_bindgen(js_name = simple)]
     pub fn simple(
         device_mode: &str,
@@ -934,6 +947,194 @@ impl NookGoogleDriveFolder {
 #[derive(Clone)]
 pub struct NookRuntimeConfig {
     policy: nook_core::VaultRuntimePolicy,
+}
+
+/// Thin wasm adapter over portable vault client/session policy. Svelte keeps
+/// reactive values; this object owns no browser state and only evaluates core
+/// transitions and predicates.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NookVaultClientPolicy;
+
+#[wasm_bindgen]
+impl NookVaultClientPolicy {
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
+    #[wasm_bindgen(js_name = editBlockReason)]
+    #[must_use]
+    pub fn edit_block_reason(
+        &self,
+        security_conflict_count: u32,
+        has_sync_conflict: bool,
+        architecture_allows_secret_creation: bool,
+    ) -> Option<nook_core::VaultEditBlockReason> {
+        nook_core::VaultClientPolicy::edit_block_reason(
+            security_conflict_count as usize,
+            has_sync_conflict,
+            architecture_allows_secret_creation,
+        )
+    }
+
+    #[wasm_bindgen(js_name = isSyncActivityVisible)]
+    #[must_use]
+    pub fn is_sync_activity_visible(
+        &self,
+        fan_out_syncing: bool,
+        provider_syncing: bool,
+        syncing: bool,
+        saving: bool,
+    ) -> bool {
+        nook_core::VaultClientPolicy::sync_activity_visible(
+            fan_out_syncing,
+            provider_syncing,
+            syncing,
+            saving,
+        )
+    }
+
+    #[wasm_bindgen(js_name = hasPasswordEnvelope)]
+    #[must_use]
+    pub fn has_password_envelope(
+        &self,
+        password_entry_count: u32,
+        password_unlock_mode: bool,
+    ) -> bool {
+        nook_core::VaultClientPolicy::has_password_envelope(
+            password_entry_count as usize,
+            password_unlock_mode,
+        )
+    }
+
+    #[wasm_bindgen(js_name = shouldAutoUnlock)]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn should_auto_unlock(
+        &self,
+        session_explicitly_locked: bool,
+        local_vault_present: bool,
+        password_entry_count: u32,
+        sync_provider_count: u32,
+        provider_setup_active: bool,
+        add_provider_open: bool,
+    ) -> bool {
+        nook_core::VaultClientPolicy::should_auto_unlock(
+            session_explicitly_locked,
+            local_vault_present,
+            password_entry_count as usize,
+            sync_provider_count as usize,
+            provider_setup_active,
+            add_provider_open,
+        )
+    }
+
+    #[wasm_bindgen(js_name = shouldShowLoginVaultPicker)]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn should_show_login_vault_picker(
+        &self,
+        authenticated: bool,
+        local_vault_count: u32,
+        vault_selected: bool,
+        provider_setup_active: bool,
+        add_provider_open: bool,
+        session_explicitly_locked: bool,
+    ) -> bool {
+        nook_core::VaultClientPolicy::should_show_login_vault_picker(
+            authenticated,
+            local_vault_count as usize,
+            vault_selected,
+            provider_setup_active,
+            add_provider_open,
+            session_explicitly_locked,
+        )
+    }
+
+    #[wasm_bindgen(js_name = remoteVaultAssessDecision)]
+    #[must_use]
+    pub fn remote_vault_assess_decision(
+        &self,
+        access_status: nook_core::VaultAccessStatus,
+        existing_vault_required: bool,
+        provider_setup_active: bool,
+    ) -> nook_core::RemoteVaultAssessDecision {
+        nook_core::VaultClientPolicy::remote_vault_assess_decision(
+            access_status,
+            existing_vault_required,
+            provider_setup_active,
+        )
+    }
+
+    #[wasm_bindgen(js_name = unauthenticatedSyncDecision)]
+    #[must_use]
+    pub fn unauthenticated_sync_decision(
+        &self,
+        changed: bool,
+        access_status: Option<nook_core::VaultAccessStatus>,
+        join_state: nook_core::JoinEnrollmentState,
+        awaiting_join_approval: bool,
+    ) -> nook_core::UnauthenticatedSyncDecision {
+        nook_core::VaultClientPolicy::unauthenticated_sync_decision(
+            changed,
+            access_status,
+            join_state,
+            awaiting_join_approval,
+        )
+    }
+
+    #[wasm_bindgen(js_name = shouldAutoConnectAfterApproval)]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn should_auto_connect_after_approval(
+        &self,
+        authenticated: bool,
+        verifying: bool,
+        password_prompt_open: bool,
+        session_expired_by_idle: bool,
+        session_explicitly_locked: bool,
+    ) -> bool {
+        nook_core::VaultClientPolicy::should_auto_connect_after_approval(
+            authenticated,
+            verifying,
+            password_prompt_open,
+            session_expired_by_idle,
+            session_explicitly_locked,
+        )
+    }
+
+    #[wasm_bindgen(js_name = normalizedSecretPageOffset)]
+    #[must_use]
+    pub fn normalized_secret_page_offset(
+        &self,
+        total: u32,
+        requested_offset: u32,
+        page_size: u32,
+    ) -> u32 {
+        nook_core::VaultClientPolicy::normalized_secret_page_offset(
+            total,
+            requested_offset,
+            page_size,
+        )
+    }
+
+    #[wasm_bindgen(js_name = vaultSwitchTarget)]
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn vault_switch_target(
+        &self,
+        requested_store_id: &str,
+        active_store_id: Option<String>,
+        verifying: bool,
+    ) -> Option<String> {
+        nook_core::VaultClientPolicy::vault_switch_target(
+            requested_store_id,
+            active_store_id.as_deref(),
+            verifying,
+        )
+    }
 }
 
 #[wasm_bindgen]
@@ -2013,6 +2214,8 @@ pub struct NookPendingSyncConflict {
     conflict: nook_core::VaultSyncConflict,
 }
 
+const PENDING_SYNC_PROVIDER_ID: &str = "__pending_provider__";
+
 #[wasm_bindgen]
 impl NookPendingSyncConflict {
     #[wasm_bindgen(js_name = content)]
@@ -2041,6 +2244,36 @@ impl NookPendingSyncConflict {
             conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version: u64::from(local_version),
                 remote_version: u64::from(remote_version),
+            }),
+        }
+    }
+
+    #[wasm_bindgen(js_name = contentFromVaults)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn content_from_vaults(
+        provider_id: String,
+        provider_label: String,
+        local_yaml: String,
+        remote_yaml: String,
+        mode: String,
+        pat: String,
+        repo: String,
+        remote_revision: Option<String>,
+    ) -> Self {
+        let local_version = nook_core::read_vault_version(&local_yaml).unwrap_or(0);
+        let remote_version = nook_core::read_vault_version(&remote_yaml).unwrap_or(0);
+        Self {
+            provider_id,
+            provider_label,
+            local_yaml,
+            remote_yaml,
+            mode,
+            pat,
+            repo,
+            remote_revision,
+            conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
+                local_version,
+                remote_version,
             }),
         }
     }
@@ -2078,6 +2311,12 @@ impl NookPendingSyncConflict {
     #[wasm_bindgen(getter, js_name = providerId)]
     pub fn provider_id(&self) -> String {
         self.provider_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = isPendingProvider)]
+    #[must_use]
+    pub fn is_pending_provider(&self) -> bool {
+        self.provider_id == PENDING_SYNC_PROVIDER_ID
     }
 
     #[wasm_bindgen(getter, js_name = providerLabel)]

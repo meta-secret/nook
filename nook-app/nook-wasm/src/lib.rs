@@ -38,9 +38,9 @@ pub use types::{
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
     NookStorageProviderKind, NookStorageProviderTypeUtil, NookTotpCode, NookVaultAccessReport,
-    NookVaultArchitecture, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
-    NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult,
+    NookVaultArchitecture, NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic,
+    NookVaultEventAccessDiagnostic, NookVaultMember, NookVaultSecretAccessDiagnostic,
+    NookVaultSecurityRecommendations, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -475,6 +475,134 @@ pub fn provider_wasm_args(
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
     Ok(nook_core::storage_args_for_provider(&provider)?.into())
+}
+
+fn storage_provider_rows(
+    providers: JsValue,
+) -> Result<Vec<nook_core::StorageProviderData>, wasm_bindgen::JsError> {
+    Ok(serde_wasm_bindgen::from_value(providers)?)
+}
+
+#[wasm_bindgen(js_name = activeVaultProviders)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_vault_providers(
+    providers: JsValue,
+    active_store_id: Option<String>,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let providers = storage_provider_rows(providers)?;
+    Ok(to_js_value(&nook_core::active_vault_providers(
+        &providers,
+        active_store_id.as_deref(),
+    ))?)
+}
+
+#[wasm_bindgen(js_name = syncProvidersForActiveVault)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn sync_providers_for_active_vault(
+    providers: JsValue,
+    active_store_id: Option<String>,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let providers = storage_provider_rows(providers)?;
+    Ok(to_js_value(&nook_core::sync_providers_for_active_vault(
+        &providers,
+        active_store_id.as_deref(),
+    )?)?)
+}
+
+#[wasm_bindgen(js_name = localProviderIdForActiveVault)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn local_provider_id_for_active_vault(
+    providers: JsValue,
+    active_store_id: Option<String>,
+) -> Result<Option<String>, wasm_bindgen::JsError> {
+    let providers = storage_provider_rows(providers)?;
+    Ok(
+        nook_core::local_provider_for_active_vault(&providers, active_store_id.as_deref())?
+            .map(|provider| provider.id),
+    )
+}
+
+#[wasm_bindgen(js_name = providerLabelById)]
+pub fn provider_label_by_id(
+    providers: JsValue,
+    provider_id: &str,
+) -> Result<Option<String>, wasm_bindgen::JsError> {
+    let providers = storage_provider_rows(providers)?;
+    Ok(nook_core::provider_label_by_id(&providers, provider_id))
+}
+
+#[wasm_bindgen(js_name = providersVisibleWhileDeviceLocked)]
+pub fn providers_visible_while_device_locked(
+    providers: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let providers = storage_provider_rows(providers)?;
+    Ok(to_js_value(
+        &nook_core::providers_visible_while_device_locked(&providers),
+    )?)
+}
+
+#[wasm_bindgen(js_name = oauthRemoteStorageRef)]
+pub fn oauth_remote_storage_ref(config: JsValue) -> Result<Option<String>, wasm_bindgen::JsError> {
+    let config: nook_core::OAuthFileConfigData = serde_wasm_bindgen::from_value(config)?;
+    Ok(nook_core::oauth_remote_storage_ref(&config))
+}
+
+#[wasm_bindgen(js_name = updateOauthRemoteRef)]
+pub fn update_oauth_remote_ref(
+    config: JsValue,
+    remote_ref: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let config: nook_core::OAuthFileConfigData = serde_wasm_bindgen::from_value(config)?;
+    match nook_core::update_oauth_remote_ref(&config, remote_ref) {
+        Some(updated) => Ok(to_js_value(&updated)?),
+        None => Ok(JsValue::UNDEFINED),
+    }
+}
+
+#[wasm_bindgen(js_name = stagedRemoteStorageArgs)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn staged_remote_storage_args(
+    provider_type: &str,
+    github_pat: Option<String>,
+    github_repo: Option<String>,
+    oauth_file: JsValue,
+) -> Result<Option<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_file = if oauth_file.is_undefined() || oauth_file.is_null() {
+        None
+    } else {
+        Some(serde_wasm_bindgen::from_value::<
+            nook_core::OAuthFileConfigData,
+        >(oauth_file)?)
+    };
+    Ok(nook_core::staged_remote_storage_args(
+        provider_type,
+        github_pat.as_deref(),
+        github_repo.as_deref(),
+        oauth_file.as_ref(),
+    )?
+    .map(Into::into))
+}
+
+#[wasm_bindgen(js_name = updateProviderSyncMetadata)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn update_provider_sync_metadata(
+    providers: JsValue,
+    provider_id: &str,
+    vault_yaml: &str,
+    revision: Option<String>,
+    manager_store_id: Option<String>,
+    synced_at: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let providers = storage_provider_rows(providers)?;
+    Ok(to_js_value(&nook_core::update_provider_sync_metadata(
+        &providers,
+        provider_id,
+        vault_yaml,
+        revision.as_deref(),
+        manager_store_id.as_deref(),
+        synced_at,
+    ))?)
 }
 
 #[wasm_bindgen(js_name = setGoogleDriveProviderMode)]

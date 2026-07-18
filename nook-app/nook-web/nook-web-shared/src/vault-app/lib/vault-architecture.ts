@@ -40,6 +40,18 @@ export function defaultVaultArchitecture(): VaultArchitecture {
   return wasmDefaultVaultArchitecture() as VaultArchitecture;
 }
 
+export function draftVaultArchitecture(
+  deviceMode: DeviceMode,
+  vaultType: VaultType,
+  replicationType: ReplicationType,
+): VaultArchitecture {
+  return NookVaultArchitecture.draft(
+    deviceMode,
+    vaultType,
+    replicationType,
+  ) as VaultArchitecture;
+}
+
 export function validateVaultArchitecture(
   architecture: VaultArchitectureDraft,
 ): VaultArchitecture {

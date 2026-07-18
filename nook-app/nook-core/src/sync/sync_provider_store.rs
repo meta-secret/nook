@@ -293,6 +293,120 @@ pub struct ProviderLabelLabels {
     pub icloud: String,
 }
 
+/// Provider rows visible for the active vault. Legacy unscoped rows remain
+/// visible until migration assigns their `store_id`.
+#[must_use]
+pub fn active_vault_providers(
+    providers: &[StorageProviderData],
+    active_store_id: Option<&str>,
+) -> Vec<StorageProviderData> {
+    let active_store_id = active_store_id.map(str::trim).filter(|id| !id.is_empty());
+    match active_store_id {
+        None => providers.to_vec(),
+        Some(active_store_id) => providers
+            .iter()
+            .filter(|provider| {
+                provider
+                    .store_id
+                    .as_deref()
+                    .map(str::trim)
+                    .is_none_or(|store_id| store_id.is_empty() || store_id == active_store_id)
+            })
+            .cloned()
+            .collect(),
+    }
+}
+
+pub fn sync_providers_for_active_vault(
+    providers: &[StorageProviderData],
+    active_store_id: Option<&str>,
+) -> ValidationResult<Vec<StorageProviderData>> {
+    active_vault_providers(providers, active_store_id)
+        .into_iter()
+        .filter_map(|provider| {
+            StorageProviderType::parse(&provider.provider_type)
+                .map(|provider_type| {
+                    (provider_type != StorageProviderType::Local).then_some(provider)
+                })
+                .transpose()
+        })
+        .collect()
+}
+
+pub fn local_provider_for_active_vault(
+    providers: &[StorageProviderData],
+    active_store_id: Option<&str>,
+) -> ValidationResult<Option<StorageProviderData>> {
+    for provider in active_vault_providers(providers, active_store_id) {
+        if StorageProviderType::parse(&provider.provider_type)? == StorageProviderType::Local {
+            return Ok(Some(provider));
+        }
+    }
+    Ok(None)
+}
+
+#[must_use]
+pub fn provider_label_by_id(
+    providers: &[StorageProviderData],
+    provider_id: &str,
+) -> Option<String> {
+    providers
+        .iter()
+        .find(|provider| provider.id == provider_id)
+        .map(|provider| provider.label.clone())
+}
+
+/// Keep only non-secret local rows while the device identity is locked.
+/// Unknown or malformed provider types fail closed and are discarded.
+#[must_use]
+pub fn providers_visible_while_device_locked(
+    providers: &[StorageProviderData],
+) -> Vec<StorageProviderData> {
+    providers
+        .iter()
+        .filter(|provider| provider.provider_type == StorageProviderType::Local.as_str())
+        .cloned()
+        .collect()
+}
+
+/// Resolve the remote reference passed to the legacy manager connect tuple.
+/// Provider-specific target selection remains portable even while the browser
+/// owns the OAuth ceremony and transport.
+#[must_use]
+pub fn oauth_remote_storage_ref(config: &OAuthFileConfigData) -> Option<String> {
+    let preset = if config.preset.trim().is_empty() {
+        OauthFilePreset::GoogleDrive
+    } else {
+        OauthFilePreset::parse(&config.preset).ok()?
+    };
+    if preset == OauthFilePreset::ICloud
+        && let Some(target) = non_empty(config.icloud_share_target.as_deref())
+    {
+        return Some(target);
+    }
+    if let Some(folder_id) = non_empty(config.folder_id.as_deref()) {
+        return Some(format!("shared:{folder_id}"));
+    }
+    non_empty(config.file_id.as_deref())
+}
+
+/// Merge the manager-reported remote reference back into OAuth config. An
+/// absent result means the host has nothing to update.
+#[must_use]
+pub fn update_oauth_remote_ref(
+    config: &OAuthFileConfigData,
+    remote_ref: &str,
+) -> Option<OAuthFileConfigData> {
+    let remote_ref = remote_ref.trim();
+    if remote_ref.is_empty() || config.file_id.as_deref() == Some(remote_ref) {
+        return None;
+    }
+    Some(OAuthFileConfigData {
+        file_id: Some(remote_ref.to_owned()),
+        ..config.clone()
+    })
+}
+
 fn non_empty(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
@@ -646,6 +760,72 @@ pub fn draft_storage_args(
     }
 }
 
+/// Resolve a usable staged remote-provider draft. Empty/incomplete drafts do
+/// not cross the manager boundary; configured drafts reuse the same typed
+/// provider conversion as persisted rows.
+pub fn staged_remote_storage_args(
+    provider_type: StorageProviderType,
+    github_pat: Option<&str>,
+    github_repo: Option<&str>,
+    oauth_file: Option<&OAuthFileConfigData>,
+) -> ValidationResult<Option<StorageConnectArgs>> {
+    match provider_type {
+        StorageProviderType::Local | StorageProviderType::LocalFolder => Ok(None),
+        StorageProviderType::Github => {
+            let Some(pat) = non_empty(github_pat) else {
+                return Ok(None);
+            };
+            Ok(Some(StorageConnectArgs {
+                mode: StorageMode::Github.as_str().to_owned(),
+                pat,
+                repo: non_empty(github_repo).unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
+            }))
+        }
+        StorageProviderType::OauthFile => {
+            let Some(oauth_file) = oauth_file else {
+                return Ok(None);
+            };
+            let Some(access_token) = non_empty(Some(oauth_file.access_token.as_str())) else {
+                return Ok(None);
+            };
+            let preset = if oauth_file.preset.trim().is_empty() {
+                OauthFilePreset::GoogleDrive
+            } else {
+                OauthFilePreset::parse(&oauth_file.preset)?
+            };
+            let shared_google_drive = preset == OauthFilePreset::GoogleDrive
+                && (oauth_file.resolved_google_drive_mode() == GoogleDriveMode::Shared
+                    || non_empty(oauth_file.folder_id.as_deref()).is_some());
+            let mut oauth_file = oauth_file.clone();
+            oauth_file.access_token = access_token;
+            oauth_file.file_name = Some(
+                if shared_google_drive {
+                    non_empty(oauth_file.file_name.as_deref())
+                } else {
+                    non_empty(github_repo).or_else(|| non_empty(oauth_file.file_name.as_deref()))
+                }
+                .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned()),
+            );
+            let provider = StorageProviderData {
+                id: "staged-oauth-file".to_owned(),
+                provider_type: StorageProviderType::OauthFile.as_str().to_owned(),
+                label: String::new(),
+                github_pat: None,
+                github_repo: None,
+                oauth_file: Some(oauth_file),
+                local_folder: None,
+                store_id: None,
+                last_synced_version: None,
+                last_synced_at: None,
+                last_sync_revision: None,
+                last_common_content_hash: None,
+                created_at: String::new(),
+            };
+            storage_args_for_provider(&provider).map(Some)
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn vault_storage_args(
     local_vault_present: bool,
@@ -674,6 +854,46 @@ pub fn vault_storage_args(
         oauth_file_id,
         oauth_file_name,
     ))
+}
+
+/// Apply successful provider-sync metadata without duplicating vault parsing,
+/// hashing, or legacy-field preservation in host code.
+#[must_use]
+pub fn update_provider_sync_metadata(
+    providers: &[StorageProviderData],
+    provider_id: &str,
+    vault_yaml: &str,
+    revision: Option<&str>,
+    manager_store_id: Option<&str>,
+    synced_at: &str,
+) -> Vec<StorageProviderData> {
+    let version = crate::read_vault_version(vault_yaml)
+        .ok()
+        .and_then(|version| i64::try_from(version).ok())
+        .filter(|version| *version > 0);
+    let content_hash = crate::vault_content_hash(vault_yaml);
+    let revision = non_empty(revision);
+    let manager_store_id = non_empty(manager_store_id);
+    providers
+        .iter()
+        .cloned()
+        .map(|mut provider| {
+            if provider.id == provider_id {
+                provider.last_synced_at = Some(synced_at.to_owned());
+                if let Some(version) = version {
+                    provider.last_synced_version = Some(version);
+                }
+                if let Some(revision) = &revision {
+                    provider.last_sync_revision = Some(revision.clone());
+                }
+                provider.last_common_content_hash = Some(content_hash.clone());
+                if let Some(store_id) = &manager_store_id {
+                    provider.store_id = Some(store_id.clone());
+                }
+            }
+            provider
+        })
+        .collect()
 }
 
 pub fn provider_storage_detail(
@@ -868,70 +1088,77 @@ pub fn migrate_provider_fields(
     let providers = snapshot
         .providers
         .iter()
-        .map(|provider| match provider.provider_type.as_str() {
-            "github" => {
-                if non_empty(provider.github_repo.as_deref()).is_some() {
-                    return provider.clone();
-                }
+        .map(|provider| {
+            let mut provider = provider.clone();
+            if provider.label == "GitHub sync" {
+                "GitHub".clone_into(&mut provider.label);
                 changed = true;
-                StorageProviderData {
-                    github_repo: Some(DEFAULT_GITHUB_REPO_NAME.to_owned()),
-                    ..provider.clone()
-                }
             }
-            "oauth-file" => {
-                let has_file_name = provider
-                    .oauth_file
-                    .as_ref()
-                    .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
-                    .is_some();
-                let existing = provider.oauth_file.as_ref();
-                let is_google = existing.is_none_or(|oauth| {
-                    oauth.preset.trim().is_empty() || oauth.preset == "google-drive"
-                });
-                let needs_drive_mode =
-                    is_google && existing.and_then(|oauth| oauth.drive_mode).is_none();
-                if has_file_name && !needs_drive_mode {
-                    return provider.clone();
+            match provider.provider_type.as_str() {
+                "github" => {
+                    if non_empty(provider.github_repo.as_deref()).is_some() {
+                        return provider;
+                    }
+                    changed = true;
+                    StorageProviderData {
+                        github_repo: Some(DEFAULT_GITHUB_REPO_NAME.to_owned()),
+                        ..provider
+                    }
                 }
-                changed = true;
-                StorageProviderData {
-                    oauth_file: Some(OAuthFileConfigData {
-                        preset: existing.map_or_else(
-                            || OauthFilePreset::GoogleDrive.as_str().to_owned(),
-                            |oauth| {
-                                non_empty(Some(oauth.preset.as_str())).unwrap_or_else(|| {
-                                    OauthFilePreset::GoogleDrive.as_str().to_owned()
-                                })
+                "oauth-file" => {
+                    let has_file_name = provider
+                        .oauth_file
+                        .as_ref()
+                        .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
+                        .is_some();
+                    let existing = provider.oauth_file.as_ref();
+                    let is_google = existing.is_none_or(|oauth| {
+                        oauth.preset.trim().is_empty() || oauth.preset == "google-drive"
+                    });
+                    let needs_drive_mode =
+                        is_google && existing.and_then(|oauth| oauth.drive_mode).is_none();
+                    if has_file_name && !needs_drive_mode {
+                        return provider;
+                    }
+                    changed = true;
+                    StorageProviderData {
+                        oauth_file: Some(OAuthFileConfigData {
+                            preset: existing.map_or_else(
+                                || OauthFilePreset::GoogleDrive.as_str().to_owned(),
+                                |oauth| {
+                                    non_empty(Some(oauth.preset.as_str())).unwrap_or_else(|| {
+                                        OauthFilePreset::GoogleDrive.as_str().to_owned()
+                                    })
+                                },
+                            ),
+                            access_token: existing
+                                .map(|oauth| oauth.access_token.clone())
+                                .unwrap_or_default(),
+                            refresh_token: existing.and_then(|oauth| oauth.refresh_token.clone()),
+                            expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
+                            file_id: existing.and_then(|oauth| oauth.file_id.clone()),
+                            folder_id: existing.and_then(|oauth| oauth.folder_id.clone()),
+                            icloud_mode: existing.and_then(|oauth| oauth.icloud_mode),
+                            icloud_share_target: existing
+                                .and_then(|oauth| oauth.icloud_share_target.clone()),
+                            account_email: existing.and_then(|oauth| oauth.account_email.clone()),
+                            drive_mode: if is_google {
+                                Some(existing.map_or(GoogleDriveMode::Private, |oauth| {
+                                    oauth.resolved_google_drive_mode()
+                                }))
+                            } else {
+                                existing.and_then(|oauth| oauth.drive_mode)
                             },
-                        ),
-                        access_token: existing
-                            .map(|oauth| oauth.access_token.clone())
-                            .unwrap_or_default(),
-                        refresh_token: existing.and_then(|oauth| oauth.refresh_token.clone()),
-                        expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
-                        file_id: existing.and_then(|oauth| oauth.file_id.clone()),
-                        folder_id: existing.and_then(|oauth| oauth.folder_id.clone()),
-                        icloud_mode: existing.and_then(|oauth| oauth.icloud_mode),
-                        icloud_share_target: existing
-                            .and_then(|oauth| oauth.icloud_share_target.clone()),
-                        account_email: existing.and_then(|oauth| oauth.account_email.clone()),
-                        drive_mode: if is_google {
-                            Some(existing.map_or(GoogleDriveMode::Private, |oauth| {
-                                oauth.resolved_google_drive_mode()
-                            }))
-                        } else {
-                            existing.and_then(|oauth| oauth.drive_mode)
-                        },
-                        file_name: existing
-                            .and_then(|oauth| oauth.file_name.clone())
-                            .or_else(|| Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned())),
-                    }),
-                    local_folder: None,
-                    ..provider.clone()
+                            file_name: existing
+                                .and_then(|oauth| oauth.file_name.clone())
+                                .or_else(|| Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned())),
+                        }),
+                        local_folder: None,
+                        ..provider
+                    }
                 }
+                _ => provider,
             }
-            _ => provider.clone(),
         })
         .collect();
     if !changed {
@@ -1634,6 +1861,23 @@ mod tests {
     }
 
     #[test]
+    fn migrate_normalizes_the_legacy_github_label() {
+        let provider = StorageProviderData {
+            label: "GitHub sync".to_owned(),
+            ..github_provider("gh", "owner/repo", "github_pat_11AAAA")
+        };
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![provider],
+            active_vault_store_id: None,
+        };
+
+        let (migrated, changed) = migrate_provider_fields(&snapshot);
+
+        assert!(changed);
+        assert_eq!(migrated.providers[0].label, "GitHub");
+    }
+
+    #[test]
     fn migrate_backfills_oauth_file_name_preserving_fields() {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
@@ -2023,5 +2267,178 @@ mod tests {
         assert_eq!(args.mode, "icloud");
         assert_eq!(args.pat, "token");
         assert_eq!(args.repo, format!("{target}\tnook-events"));
+    }
+
+    #[test]
+    fn active_vault_provider_scope_and_roles_are_core_owned() {
+        let mut local_a = github_provider("local-a", "ignored", "ignored");
+        local_a.provider_type = StorageProviderType::Local.as_str().to_owned();
+        local_a.store_id = Some("store-a".to_owned());
+        let mut github_a = github_provider("github-a", "owner/a", "pat-a");
+        github_a.store_id = Some("store-a".to_owned());
+        let mut github_b = github_provider("github-b", "owner/b", "pat-b");
+        github_b.store_id = Some("store-b".to_owned());
+        let legacy = github_provider("legacy", "owner/legacy", "pat-legacy");
+        let providers = vec![local_a.clone(), github_a.clone(), github_b, legacy.clone()];
+
+        assert_eq!(
+            active_vault_providers(&providers, Some(" store-a ")),
+            vec![local_a.clone(), github_a.clone(), legacy.clone()]
+        );
+        assert_eq!(
+            sync_providers_for_active_vault(&providers, Some("store-a")).unwrap(),
+            vec![github_a, legacy]
+        );
+        assert_eq!(
+            local_provider_for_active_vault(&providers, Some("store-a")).unwrap(),
+            Some(local_a.clone())
+        );
+        assert_eq!(
+            provider_label_by_id(&providers, "github-b"),
+            Some("GitHub".to_owned())
+        );
+        assert_eq!(
+            providers_visible_while_device_locked(&providers),
+            vec![local_a]
+        );
+    }
+
+    #[test]
+    fn oauth_remote_reference_policy_is_core_owned() {
+        let mut google = OAuthFileConfigData {
+            preset: "google-drive".to_owned(),
+            file_id: Some("file-id".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        assert_eq!(
+            oauth_remote_storage_ref(&google).as_deref(),
+            Some("file-id")
+        );
+
+        google.folder_id = Some(" shared-folder ".to_owned());
+        assert_eq!(
+            oauth_remote_storage_ref(&google).as_deref(),
+            Some("shared:shared-folder")
+        );
+
+        let updated = update_oauth_remote_ref(&google, " manager-ref ").unwrap();
+        assert_eq!(updated.file_id.as_deref(), Some("manager-ref"));
+        assert!(update_oauth_remote_ref(&updated, "manager-ref").is_none());
+        assert!(update_oauth_remote_ref(&updated, " ").is_none());
+
+        let icloud = OAuthFileConfigData {
+            preset: "icloud".to_owned(),
+            icloud_share_target: Some("icloud-share-v1:{}".to_owned()),
+            folder_id: Some("not-selected".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        assert_eq!(
+            oauth_remote_storage_ref(&icloud).as_deref(),
+            Some("icloud-share-v1:{}")
+        );
+    }
+
+    #[test]
+    fn staged_remote_args_reject_incomplete_drafts_and_normalize_targets() {
+        assert_eq!(
+            staged_remote_storage_args(StorageProviderType::Local, None, None, None).unwrap(),
+            None
+        );
+        assert_eq!(
+            staged_remote_storage_args(StorageProviderType::Github, Some("  "), None, None)
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            staged_remote_storage_args(
+                StorageProviderType::Github,
+                Some(" pat "),
+                Some(" owner/repo "),
+                None
+            )
+            .unwrap(),
+            Some(StorageConnectArgs {
+                mode: "github".to_owned(),
+                pat: "pat".to_owned(),
+                repo: "owner/repo".to_owned(),
+            })
+        );
+
+        let mut oauth = OAuthFileConfigData {
+            preset: OauthFilePreset::GoogleDrive.as_str().to_owned(),
+            access_token: " token ".to_owned(),
+            file_id: Some("file-id".to_owned()),
+            file_name: Some("stored-name".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let args = staged_remote_storage_args(
+            StorageProviderType::OauthFile,
+            None,
+            Some("draft-name"),
+            Some(&oauth),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(args.mode, "google-drive");
+        assert_eq!(args.pat, "token");
+        assert_eq!(args.repo, "file-id\tdraft-name");
+
+        oauth.preset.clear();
+        let legacy = staged_remote_storage_args(
+            StorageProviderType::OauthFile,
+            None,
+            Some("draft-name"),
+            Some(&oauth),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(legacy.mode, "google-drive");
+        assert_eq!(legacy.repo, "file-id\tdraft-name");
+
+        oauth.preset = OauthFilePreset::GoogleDrive.as_str().to_owned();
+        oauth.drive_mode = Some(GoogleDriveMode::Shared);
+        oauth.folder_id = Some("shared-folder".to_owned());
+        let args = staged_remote_storage_args(
+            StorageProviderType::OauthFile,
+            None,
+            Some("ignored-draft-name"),
+            Some(&oauth),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(args.repo, "shared:shared-folder\tstored-name");
+    }
+
+    #[test]
+    fn provider_sync_metadata_update_preserves_unreported_fields() {
+        let mut provider = github_provider("github", "owner/repo", "pat");
+        provider.last_synced_version = Some(9);
+        provider.last_sync_revision = Some("old-revision".to_owned());
+        let untouched = github_provider("other", "owner/other", "other-pat");
+
+        let updated = update_provider_sync_metadata(
+            &[provider, untouched.clone()],
+            "github",
+            "",
+            None,
+            Some(" store-1 "),
+            "2026-07-17T12:00:00Z",
+        );
+        assert_eq!(updated[0].last_synced_version, Some(9));
+        assert_eq!(
+            updated[0].last_sync_revision.as_deref(),
+            Some("old-revision")
+        );
+        assert_eq!(updated[0].store_id.as_deref(), Some("store-1"));
+        assert_eq!(
+            updated[0].last_synced_at.as_deref(),
+            Some("2026-07-17T12:00:00Z")
+        );
+        let expected_hash = crate::vault_content_hash("");
+        assert_eq!(
+            updated[0].last_common_content_hash.as_deref(),
+            Some(expected_hash.as_str())
+        );
+        assert_eq!(updated[1], untouched);
     }
 }
