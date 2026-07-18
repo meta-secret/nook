@@ -321,7 +321,8 @@ idempotent SHA-bound Codex request; the audit commands emit machine-readable
 exact-head state, including review settlement, and never merge a PR. Nook has no event-driven
 PR auto-merger: workflows do not merge blindly from check events. Instead, the
 task-owning agent runs the readiness audit and squash-merges immediately when it
-passes. Extension
+passes. Local ci-agent Docker tags are worktree-scoped so another checkout cannot
+replace the audit binary between build and readiness execution. Extension
 iteration has a host-cached `task extension:check:fast` gate, while required
 full local validation still begins after the coherent iteration is pushed and
 runs in parallel with repository CI.

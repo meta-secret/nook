@@ -322,6 +322,8 @@ preview`, plus `Web research / Build and deploy research catalog` when its paths
 change) and the exact-head Codex result requested by `task pr:review`. Every
 actionable comment must be addressed and resolved. Claude, Cursor, CodeRabbit,
 and other optional external services are never awaited when no feedback is present.
+The local ci-agent image tag is derived from the worktree path, preventing
+parallel worktrees from replacing each other's review/readiness binaries.
 
 **Delivery jobs are ephemeral but cache-aware.** PR verification, main, and
 release use GitHub-hosted runners. Main exports the default-branch cache that

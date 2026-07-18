@@ -2,7 +2,15 @@ version: '3'
 
 vars:
   CI_AGENT_DIR: agentic-ai/ci-agent
-  CI_AGENT_IMAGE: '{{default "nook-ci-agent:local" .CI_AGENT_IMAGE}}'
+  CI_AGENT_IMAGE:
+    sh: >-
+      if [ -n "${CI_AGENT_IMAGE:-}" ]; then
+        printf '%s\n' "$CI_AGENT_IMAGE";
+      else
+        repo_root="$(git rev-parse --show-toplevel)";
+        worktree_id="$(printf '%s' "$repo_root" | cksum | awk '{print $1}')";
+        printf 'nook-ci-agent:local-%s\n' "$worktree_id";
+      fi
   # Host Docker socket (sibling containers via sock — not DinD). Override on unusual setups.
   DOCKER_SOCK: '{{default "/var/run/docker.sock" .DOCKER_SOCK}}'
   DOCKER: '{{default "docker" .DOCKER}}'
@@ -39,7 +47,7 @@ tasks:
       - task: ci-agent:build
 
   ci-agent:docker:build:
-    desc: Build the nook-ci-agent image (Node + Docker CLI + task; no daemon).
+    desc: Build the worktree-scoped nook-ci-agent image (Node + Docker CLI + task; no daemon).
     sources:
       - agentic-ai/ci-agent/Dockerfile
       - agentic-ai/ci-agent/.dockerignore
