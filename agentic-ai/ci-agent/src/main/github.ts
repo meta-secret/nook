@@ -119,7 +119,7 @@ export async function commentOnIssue(
   });
 }
 
-const CODEX_REVIEWER_PREFIX = "chatgpt-codex-connector";
+const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
 
 export function codexReviewRequestMarker(headSha: string): string {
   return `<!-- nook-codex-review:${headSha} -->`;
@@ -153,7 +153,7 @@ export async function requestCodexReview(
   const settled = reviews.some(
     (review) =>
       review.commit_id === pr.head.sha &&
-      review.state !== "PENDING" &&
+      isSubmittedReviewState(review.state) &&
       isCodexReviewer(review.user?.login),
   );
   if (settled || comments.some((comment) => comment.body?.includes(marker))) {
@@ -285,21 +285,25 @@ export async function inspectPrFeedback(
   ]);
 
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const reviewRequest = issueComments.find((comment) => comment.body?.includes(marker));
+  const reviewRequests = issueComments.filter((comment) => comment.body?.includes(marker));
   const currentHeadReview = reviews.some(
     (review) =>
       review.commit_id === pr.head.sha &&
-      review.state !== "PENDING" &&
+      isSubmittedReviewState(review.state) &&
       isCodexReviewer(review.user?.login),
   );
-  const requestReactions = reviewRequest
-    ? await octokit.paginate(octokit.rest.reactions.listForIssueComment, {
-        owner,
-        repo,
-        comment_id: reviewRequest.id,
-        per_page: 100,
-      })
-    : [];
+  const requestReactions = (
+    await Promise.all(
+      reviewRequests.map((request) =>
+        octokit.paginate(octokit.rest.reactions.listForIssueComment, {
+          owner,
+          repo,
+          comment_id: request.id,
+          per_page: 100,
+        }),
+      ),
+    )
+  ).flat();
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
   );
@@ -322,7 +326,7 @@ export async function inspectPrFeedback(
     codexReview: {
       approvalReaction,
       currentHeadReview,
-      requested: reviewRequest !== undefined,
+      requested: reviewRequests.length > 0,
       settled: currentHeadReview || approvalReaction,
     },
     substantiveComments: substantiveComments.length,
@@ -362,12 +366,16 @@ function isRepositoryStatusComment(body: string): boolean {
     trimmed.startsWith("### Preview deployed") ||
     trimmed.startsWith("### Web research preview") ||
     trimmed.startsWith("<!-- nook-core-coverage -->") ||
-    (trimmed.startsWith("@codex review") && trimmed.includes("<!-- nook-codex-review:")) ||
+    trimmed.includes("<!-- nook-codex-review:") ||
     // Codex posts this when it cannot review; it is status, not a finding.
     trimmed.includes("Codex usage limits for code reviews")
   );
 }
 
 function isCodexReviewer(login: string | undefined): boolean {
-  return login?.startsWith(CODEX_REVIEWER_PREFIX) ?? false;
+  return login === CODEX_REVIEWER_LOGIN;
+}
+
+function isSubmittedReviewState(state: string): boolean {
+  return state === "APPROVED" || state === "CHANGES_REQUESTED" || state === "COMMENTED";
 }
