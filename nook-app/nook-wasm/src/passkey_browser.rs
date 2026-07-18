@@ -119,10 +119,13 @@ pub(crate) fn passkey_label_with_device_id(passkey_label: &str, device_id: &str)
 }
 
 pub(crate) fn assertion_user_handle(credential: &PublicKeyCredential) -> Result<Vec<u8>, JsError> {
-    let response = credential
-        .response()
-        .dyn_into::<web_sys::AuthenticatorAssertionResponse>()
-        .map_err(|_| JsError::new("Passkey response is not an assertion"))?;
+    // WebAuthn responses are structurally typed browser objects. Some valid
+    // implementations (including browser-compatible test doubles) do not
+    // inherit from the exposed `AuthenticatorAssertionResponse` constructor,
+    // so an `instanceof`-based `dyn_into` rejects them. The recovery ceremony
+    // guarantees an assertion response; keep the boundary typed while using
+    // the generated structural getter for `userHandle`.
+    let response: web_sys::AuthenticatorAssertionResponse = credential.response().unchecked_into();
     let user_handle = response
         .user_handle()
         .ok_or_else(|| JsError::new("Missing passkey userHandle"))?;
