@@ -1,24 +1,28 @@
 # External Review Feedback Workflow
 
-External AI review is optional, non-blocking feedback for Nook pull requests.
-Codex, Claude, Cursor, CodeRabbit, and other services are never required gates.
+The exact-head Codex review is a required settlement gate for Nook pull requests.
+Claude, Cursor, CodeRabbit, and other external services remain optional.
 
-## Non-blocking rule
+## Exact-head settlement rule
 
-Applicable repository-owned PR test checks are the only remote checks agents
-wait for: normally `PR / Verify and preview`, plus `Web research / Build and
-deploy research catalog` when web-research paths change. Agents must never:
+After each final push, run:
 
-- request `@codex review` or request a review from another external service;
-- poll or monitor an external review or check;
-- wait for a review to start, finish, or run again after a push;
-- delay merge or handoff for an external status, deployment, or service; or
-- add a grace period in case external feedback might arrive.
+```bash
+task pr:review PR=<number>
+```
 
-Automatic external reviews may remain enabled as a source of useful comments,
-but their absence, pending state, failure, or lack of a second pass has no effect
-on readiness. Nook's own local validation and applicable repository-owned PR test checks
-remain authoritative.
+The idempotent request is tied to the PR head SHA. Wait until Codex submits a
+review for that SHA or reacts with thumbs up to the request. Agents must:
+
+- address every active actionable finding;
+- reply on the targeted thread before resolving it;
+- re-query until unresolved review threads are zero; and
+- request another exact-head Codex review after any feedback fix changes the SHA.
+
+`task pr:ready` enforces the settled Codex result and unresolved-thread count
+alongside Nook's local validation and applicable repository-owned PR checks. Do
+not use a fixed delay as a proxy for review completion. Other external services
+are never waited on when they have not already supplied feedback.
 
 ## Handling feedback that already exists
 
@@ -43,14 +47,14 @@ review service never makes its delivered feedback optional; classify
 non-actionable status/praise as no action and fully handle every substantive
 finding.
 
-After those existing items are handled, proceed based on Nook's own PR test
-checks. Do not wait for an external reply, resolution, re-review, or new comment.
-If another actionable comment arrives while the agent is still working, address
-it; comments that have not arrived cannot block the workflow.
+After those items are handled, obtain the exact-head Codex result and rerun the
+feedback query immediately before merge. If another actionable comment arrives
+while the agent is working, address it. Do not wait for optional external
+services other than the required Codex pass.
 
 An external service may be asked to implement a finding only when the user
 explicitly requests that separate service to own the fix. The active agent
-otherwise handles findings directly and never waits for the service.
+otherwise handles findings directly.
 
 ## Handoff
 
@@ -61,5 +65,5 @@ Report:
 - local validation results; and
 - the state of Nook's applicable repository-owned PR test checks.
 
-Do not report external review completion as a requirement and do not delay the
-handoff to obtain it.
+Report whether the exact-head Codex request settled and confirm that unresolved
+review-thread count was zero at the final readiness audit.

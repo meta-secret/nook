@@ -119,6 +119,56 @@ export async function commentOnIssue(
   });
 }
 
+const CODEX_REVIEWER_PREFIX = "chatgpt-codex-connector";
+
+export function codexReviewRequestMarker(headSha: string): string {
+  return `<!-- nook-codex-review:${headSha} -->`;
+}
+
+export async function requestCodexReview(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  prNumber: number,
+): Promise<{ headSha: string; requested: boolean; settled: boolean }> {
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+  const [comments, reviews] = await Promise.all([
+    octokit.paginate(octokit.rest.issues.listComments, {
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    }),
+    octokit.paginate(octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+  ]);
+  const marker = codexReviewRequestMarker(pr.head.sha);
+  const settled = reviews.some(
+    (review) =>
+      review.commit_id === pr.head.sha &&
+      review.state !== "PENDING" &&
+      isCodexReviewer(review.user?.login),
+  );
+  if (settled || comments.some((comment) => comment.body?.includes(marker))) {
+    return { headSha: pr.head.sha, requested: false, settled };
+  }
+
+  await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: prNumber,
+    body: `@codex review\n\n${marker}`,
+  });
+  return { headSha: pr.head.sha, requested: true, settled: false };
+}
+
 const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
 
@@ -182,6 +232,12 @@ const REVIEW_THREADS_QUERY = `
 `;
 
 export type PrFeedbackSummary = {
+  codexReview: {
+    approvalReaction: boolean;
+    currentHeadReview: boolean;
+    requested: boolean;
+    settled: boolean;
+  };
   substantiveComments: number;
   substantiveReviews: number;
   unresolvedThreads: number;
@@ -228,6 +284,26 @@ export async function inspectPrFeedback(
     }),
   ]);
 
+  const marker = codexReviewRequestMarker(pr.head.sha);
+  const reviewRequest = issueComments.find((comment) => comment.body?.includes(marker));
+  const currentHeadReview = reviews.some(
+    (review) =>
+      review.commit_id === pr.head.sha &&
+      review.state !== "PENDING" &&
+      isCodexReviewer(review.user?.login),
+  );
+  const requestReactions = reviewRequest
+    ? await octokit.paginate(octokit.rest.reactions.listForIssueComment, {
+        owner,
+        repo,
+        comment_id: reviewRequest.id,
+        per_page: 100,
+      })
+    : [];
+  const approvalReaction = requestReactions.some(
+    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+  );
+
   const substantiveComments = issueComments.filter(
     (comment) => !isRepositoryStatusComment(comment.body ?? ""),
   );
@@ -243,6 +319,12 @@ export async function inspectPrFeedback(
   });
 
   return {
+    codexReview: {
+      approvalReaction,
+      currentHeadReview,
+      requested: reviewRequest !== undefined,
+      settled: currentHeadReview || approvalReaction,
+    },
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
@@ -280,7 +362,12 @@ function isRepositoryStatusComment(body: string): boolean {
     trimmed.startsWith("### Preview deployed") ||
     trimmed.startsWith("### Web research preview") ||
     trimmed.startsWith("<!-- nook-core-coverage -->") ||
+    (trimmed.startsWith("@codex review") && trimmed.includes("<!-- nook-codex-review:")) ||
     // Codex posts this when it cannot review; it is status, not a finding.
     trimmed.includes("Codex usage limits for code reviews")
   );
+}
+
+function isCodexReviewer(login: string | undefined): boolean {
+  return login?.startsWith(CODEX_REVIEWER_PREFIX) ?? false;
 }

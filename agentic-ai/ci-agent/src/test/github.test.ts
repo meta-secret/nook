@@ -5,6 +5,7 @@ import type { Octokit } from "@octokit/rest";
 
 import {
   createFixPr,
+  requestCodexReview,
   requiredPrCheckNames,
   requiredPrWorkflows,
 } from "../main/github.js";
@@ -64,4 +65,38 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
       process.env.AGENT_PR_BODY = priorBody;
     }
   }
+});
+
+test("requestCodexReview posts one exact-head idempotency marker", async () => {
+  const createdBodies: string[] = [];
+  const comments: Array<{ body: string; id: number }> = [];
+  const octokit = {
+    rest: {
+      issues: {
+        createComment: async ({ body }: { body: string }) => {
+          createdBodies.push(body);
+          comments.push({ body, id: 1 });
+          return { data: { id: 1 } };
+        },
+        listComments: async () => ({ data: comments }),
+      },
+      pulls: {
+        get: async () => ({ data: { head: { sha: "head-sha" } } }),
+        listReviews: async () => ({ data: [] }),
+      },
+    },
+    paginate: async (
+      route: (args: unknown) => Promise<{ data: unknown[] }>,
+      args: unknown,
+    ) => (await route(args)).data,
+  } as unknown as Octokit;
+
+  const first = await requestCodexReview(octokit, repoRef, 410);
+  const second = await requestCodexReview(octokit, repoRef, 410);
+
+  assert.deepEqual(first, { headSha: "head-sha", requested: true, settled: false });
+  assert.deepEqual(second, { headSha: "head-sha", requested: false, settled: false });
+  assert.deepEqual(createdBodies, [
+    "@codex review\n\n<!-- nook-codex-review:head-sha -->",
+  ]);
 });

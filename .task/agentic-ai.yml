@@ -160,7 +160,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
 
   pr:ready:
-    desc: Read-only assertion that the exact PR head is current, deployed, repository-green, and has no pending feedback (PR=<number>); never merges.
+    desc: Read-only assertion that the exact PR head is current, deployed, repository-green, Codex-reviewed, and has no pending feedback (PR=<number>); never merges.
     requires:
       vars: [PR]
     cmds:
@@ -170,3 +170,15 @@ tasks:
         export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
         export PR_NUMBER="{{.PR}}";
         task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
+
+  pr:review:
+    desc: Request the required Codex review for the exact PR head, idempotently (PR=<number>).
+    requires:
+      vars: [PR]
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}";
+        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
+        export PR_NUMBER="{{.PR}}";
+        task ci-agent:docker:run CI_AGENT_CMD=pr-review'

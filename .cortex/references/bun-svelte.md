@@ -38,14 +38,15 @@ not recover on its own.
 
 ## 3. E2e tests
 
-Unused TypeScript and Svelte code is enforced by `bun run unused` in
-`nook-web-app`, and the normal `bun run lint` / `task check` path runs it. Knip
-follows every web application entry point, shared Svelte component,
-browser-extension entry point, test, and script to reject unreachable files and
-exports. Knip stays pinned to 5.88 until the sibling web packages become a real
-root workspace; Knip 6 isolates those package boundaries and does not traverse
-this app-root integrated graph. TypeScript and ESLint reject unused locals and
-parameters inside `.ts`, `.svelte.ts`, and `.svelte` files. Public class methods
+Unused TypeScript and Svelte code is enforced by `bun run unused` in both
+`nook-web-app` and `nook-web-research`. The normal app `bun run lint` / `task
+check` path covers the vault/shared/extension graph; the research package's
+`bun run check` and research-only workflow run its workspace-scoped Knip graph
+with the correct local `$lib` mapping. Knip rejects unreachable files and exports
+and stays pinned to 5.88 until the sibling vault/extension packages become a real
+root workspace. TypeScript and ESLint reject unused locals and parameters inside
+`.ts`, `.svelte.ts`, and `.svelte` files; the extension `check` script explicitly
+lints its build scripts, Playwright config, and E2E spec. Public class methods
 are not covered by those tools because they may be called through an exported
 object; verify suspected state-controller methods at their component call sites
 rather than treating a missing import as proof that they are dead.

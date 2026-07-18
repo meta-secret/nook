@@ -12,9 +12,25 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
 
   assert.equal(audit.ready, true);
   assert.deepEqual(audit.reasons, []);
-  assert.equal(audit.externalReviewPolicy, "inspect-present-feedback-only-never-wait");
+  assert.equal(audit.externalReviewPolicy, "require-current-head-codex-review-settled");
   assert.deepEqual(audit.requiredWorkflows.map((workflow) => workflow.workflowName), ["PR"]);
   assert.equal(audit.exactHeadDeployment?.state, "success");
+});
+
+test("buildPrAudit blocks until the current-head Codex review settles", async () => {
+  const audit = await buildPrAudit(mockOctokit({ codexReview: "missing" }), repoRef, 410);
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.codexReview.settled, false);
+  assert.ok(audit.reasons.some((reason) => reason.includes("Codex review has not settled")));
+});
+
+test("buildPrAudit accepts a Codex approval reaction on the exact-head request", async () => {
+  const audit = await buildPrAudit(mockOctokit({ codexReview: "reaction" }), repoRef, 410);
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.codexReview.approvalReaction, true);
+  assert.equal(audit.feedback.codexReview.settled, true);
 });
 
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
@@ -32,6 +48,7 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
 
 type MockOptions = {
   behindBy?: number;
+  codexReview?: "missing" | "reaction" | "review";
   runStatus?: "completed" | "in_progress";
   unresolvedThreads?: number;
 };
@@ -51,19 +68,31 @@ function mockOctokit(options: MockOptions = {}): Octokit {
     }),
     listFiles: async () => ({ data: [{ filename: "nook-app/nook-core/src/lib.rs" }] }),
     listReviews: async () => ({
-      data: [
-        {
-          body: "### 💡 Codex Review\n\nStatus summary",
-          commit_id: "head-sha",
-          state: "COMMENTED",
-        },
-      ],
+      data:
+        options.codexReview === "missing" || options.codexReview === "reaction"
+          ? []
+          : [
+              {
+                body: "### 💡 Codex Review\n\nStatus summary",
+                commit_id: "head-sha",
+                state: "COMMENTED",
+                user: { login: "chatgpt-codex-connector[bot]" },
+              },
+            ],
     }),
   };
   const issues = {
     listComments: async () => ({
       data: [
         { body: "### Preview deployed\n\nhttps://preview.test" },
+        ...(options.codexReview === "reaction"
+          ? [
+              {
+                body: "@codex review\n\n<!-- nook-codex-review:head-sha -->",
+                id: 77,
+              },
+            ]
+          : []),
         {
           body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
         },
@@ -109,6 +138,19 @@ function mockOctokit(options: MockOptions = {}): Octokit {
       },
       issues,
       pulls,
+      reactions: {
+        listForIssueComment: async () => ({
+          data:
+            options.codexReview === "reaction"
+              ? [
+                  {
+                    content: "+1",
+                    user: { login: "chatgpt-codex-connector[bot]" },
+                  },
+                ]
+              : [],
+        }),
+      },
       repos,
     },
     paginate: async (

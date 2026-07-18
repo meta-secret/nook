@@ -32,9 +32,7 @@
     "../nook-web-extension/src/background/service-worker.ts",
     "../nook-web-extension/src/content/{autofill,simple-vault-bridge,webauthn-content,webauthn-page}.ts",
     "../nook-web-extension/src/offscreen/session.ts",
-    "../nook-web-extension/src/popup/main.ts",
-    "../nook-web-research/src/main.ts",
-    "../nook-web-research/vite.config.ts"
+    "../nook-web-extension/src/popup/main.ts"
   ],
   "project": [
     "src/main.ts",
@@ -50,8 +48,6 @@
     "../nook-web-extension/scripts/**/*.ts",
     "../nook-web-extension/e2e/**/*.ts",
     "../nook-web-extension/src/**/*.{ts,svelte}",
-    "!../nook-web-extension/src/**/*.d.ts",
-    "../nook-web-research/src/**/*.{ts,svelte}",
-    "../nook-web-research/vite.config.ts"
+    "!../nook-web-extension/src/**/*.d.ts"
   ]
 }
