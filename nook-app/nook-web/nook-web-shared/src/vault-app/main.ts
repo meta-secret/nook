@@ -9,7 +9,7 @@ export async function mountVaultApp(expectedKind: AppKind): Promise<void> {
       `Expected ${expectedKind} vault build, received ${APP_KIND}.`,
     );
   }
-  const target = document.getElementById("app");
+  const target = document.getElementById("app") ?? undefined;
   if (!target) throw new Error("Vault application root is missing.");
   await ensureAppWasm();
   const { default: App } = await import("./App.svelte");
