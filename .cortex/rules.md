@@ -212,3 +212,11 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
 - **Verify and request the exact-head Codex pass.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head, then `task pr:review PR=<number>` before readiness. Do not request other external reviews.
+- **Record PR statistics after merge.** Follow
+  [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
+  completed YAML in a separate stats-only PR, compare against recent comparable
+  PRs, and open a normal performance-fix PR for actionable regression or waste.
+  A verified one-file `.stats/ai-agent/<source-pr>.yaml` PR is the only exception
+  to local checks, repository checks, exact-head review, and `task pr:ready`; it
+  must still use squash merge and must be merged immediately without generating
+  another statistics record.

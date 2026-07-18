@@ -2,6 +2,11 @@
 
 System of record for how Nook validates changes in GitHub Actions. Agents must understand this split before changing workflows or e2e.
 
+The PR and main product pipelines ignore `.stats/**`. A verified one-file
+`.stats/ai-agent/<source-pr-number>.yaml` PR follows the immediate squash-merge
+exception in [agent-statistics.md](agent-statistics.md); it must not consume the
+product validation pipeline or trigger the main pipeline after merge.
+
 ## Workflow map
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
