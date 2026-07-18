@@ -51,8 +51,8 @@ Does not apply to:
   PR still shows them as unresolved; in that case, reply with the addressing
   commit/context before resolving.
 - Non-actionable summaries, praise, or status-only bot messages.
-- Reviews or comments from optional services that have not arrived. Codex is the
-  required exception and is requested for the exact head.
+- Reviews or comments from optional services that have not arrived. No external
+  reviewer is a required exception.
 
 ## Examples
 
