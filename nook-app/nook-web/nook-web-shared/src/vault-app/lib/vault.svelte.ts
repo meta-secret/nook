@@ -1326,15 +1326,13 @@ export class VaultState {
     return (await this.enqueueStorage(async () => {
       const assessPromise = this.manager!.assess_vault_connect(...args);
       const assessTimeout = new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                "Connection timed out. Check your PAT, network, and try again.",
-              ),
-            ),
-          30_000,
-        );
+        setTimeout(() => {
+          const timeoutError = new Error(
+            "Connection timed out. Check your PAT, network, and try again.",
+          );
+          timeoutError.name = providersActions.VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+          reject(timeoutError);
+        }, 30_000);
       });
       return await Promise.race([assessPromise, assessTimeout]);
     })) as VaultAccessStatus;
@@ -1837,8 +1835,10 @@ export class VaultState {
     return syncActions.stageSyncConflict(this, conflict);
   }
 
-  async stageStagedProviderSyncIssue(): Promise<boolean> {
-    return syncActions.stageStagedProviderSyncIssue(this);
+  async stageStagedProviderSyncIssue(
+    args: [string, string, string],
+  ): Promise<boolean> {
+    return syncActions.stageStagedProviderSyncIssue(this, args);
   }
 
   async resolveSyncConflictImportRemote(): Promise<void> {

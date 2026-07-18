@@ -192,8 +192,26 @@ test.describe('sync conflict resolution', () => {
     ).toBeVisible()
     await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { manager?: { storage_mode: string } }
+              }
+            ).__nookVault?.manager?.storage_mode,
+        ),
+      )
+      .toBe('local')
     expect(parseStoreId(stub.getVaultYaml())).toEqual(storeA)
     expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
     expect(parseStoreId(await readLocalVaultYamlFromIdb(page))).toEqual(storeB)
+
+    await page.getByTestId('sync-conflict-cancel-btn').click()
+    await expect(
+      page.getByTestId('vault-sync-conflict-dialog'),
+    ).not.toBeVisible()
+    expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
   })
 })

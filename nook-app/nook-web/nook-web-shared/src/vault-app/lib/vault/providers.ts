@@ -21,6 +21,8 @@ import {
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
 
+export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
+
 const log = createLogger("vault-providers");
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
@@ -448,8 +450,8 @@ export async function connectAndSyncStagedProvider(
   if (!state.manager) return;
   if (state.isVerifying) return;
   state.isVerifying = true;
+  const stagedRemoteArgs = state.stagedRemoteStorageArgs();
   try {
-    const stagedRemoteArgs = state.stagedRemoteStorageArgs();
     if (stagedRemoteArgs) {
       const reconcileOutcome = await state.reconcileStagedRemoteWithLocal();
       if (reconcileOutcome === "skip") return;
@@ -480,7 +482,12 @@ export async function connectAndSyncStagedProvider(
     state.loginSetupType = undefined;
     state.addProviderOpen = false;
   } catch (e: unknown) {
-    const stagedConflict = await state.stageStagedProviderSyncIssue();
+    const assessTimedOut =
+      e instanceof Error && e.name === VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+    const stagedConflict =
+      !assessTimedOut && stagedRemoteArgs
+        ? await state.stageStagedProviderSyncIssue(stagedRemoteArgs)
+        : false;
     if (!stagedConflict) {
       state.errorMsg = state.localFolderMultipleVaultsIssue
         ? state.t("auth_storage.local_folder_multiple_vaults_short")

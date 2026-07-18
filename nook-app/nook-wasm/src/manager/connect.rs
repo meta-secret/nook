@@ -25,6 +25,40 @@ fn is_sentinel_ceremony_required(err: &NookError) -> bool {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    async fn rejected_provider_assessment_restores_local_storage_and_clears_outbox() {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = nook_core::StorageMode::GoogleDrive;
+        manager.storage.access_token = "rejected-token".to_owned();
+        manager.sync_outbox.provider_id = "rejected-provider".to_owned();
+        manager.sync_outbox.storage_mode = nook_core::StorageMode::GoogleDrive;
+        manager.sync_outbox.access_token = "rejected-token".to_owned();
+        manager.sync_outbox.repo_arg = "rejected-file".to_owned();
+        manager.vault.vault_name = Some("Local vault".to_owned());
+
+        manager
+            .restore_local_after_provider_assessment()
+            .await
+            .expect("restore local storage");
+
+        assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
+        assert!(manager.storage.access_token.is_empty());
+        assert!(manager.sync_outbox.provider_id.is_empty());
+        assert_eq!(
+            manager.sync_outbox.storage_mode,
+            nook_core::StorageMode::Local
+        );
+        assert!(manager.sync_outbox.access_token.is_empty());
+        assert!(manager.sync_outbox.repo_arg.is_empty());
+        assert_eq!(manager.vault.vault_name.as_deref(), Some("Local vault"));
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Return the typed, core-owned connect status for the selected provider.
@@ -107,6 +141,17 @@ impl NookVaultManager {
             "assess_vault_connect"
         );
         Ok(status)
+    }
+
+    /// Return an authenticated local session to local storage after a staged
+    /// provider assessment is rejected. The rejected provider must not remain
+    /// the destination for later local event-log outbox entries.
+    #[wasm_bindgen(js_name = restoreLocalAfterProviderAssessment)]
+    pub async fn restore_local_after_provider_assessment(&mut self) -> Result<(), JsError> {
+        self.prepare_storage_preserving_vault_metadata("local", "", "")
+            .await?;
+        self.sync_outbox.reset();
+        Ok(())
     }
 
     // Connects to storage (loads, decrypts, and updates session state)
