@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test'
 import {
   createLocalE2eGithubVaultStub,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -8,9 +7,6 @@ import {
   parseVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
-
-/** Fake PAT accepted by Playwright route stubs — never hits api.github.com. */
-export const E2E_STUB_PAT = 'ghp_test_token'
 
 export type StubSyncTarget = GithubE2eTarget & {
   stub: ReturnType<typeof createLocalE2eGithubVaultStub>
@@ -24,42 +20,6 @@ async function sleep(ms: number) {
 export function createE2eRemoteName(prefix = 'nook-e2e'): string {
   const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   return `${prefix}-${suffix}`
-}
-
-/** @deprecated Use {@link createSyncTarget} from `./sync-provider`. */
-export function createStubSyncTarget(
-  initialYaml = '',
-  prefix?: string,
-): StubSyncTarget {
-  const repoName = createE2eRemoteName(prefix)
-  const stub = createLocalE2eGithubVaultStub(initialYaml)
-  return { pat: E2E_STUB_PAT, repoName, stub }
-}
-
-export function resetStubVault(target: StubSyncTarget) {
-  target.stub.setVaultYaml('')
-  target.stub.clearEventFiles()
-}
-
-export async function installStubOnPage(
-  page: Page,
-  target: StubSyncTarget,
-  vaultYaml?: string,
-) {
-  await target.stub.install(page, {
-    repoName: target.repoName,
-    vaultYaml,
-  })
-}
-
-export async function installStubOnPages(
-  pages: Page[],
-  target: StubSyncTarget,
-  vaultYaml?: string,
-) {
-  for (const page of pages) {
-    await installStubOnPage(page, target, vaultYaml)
-  }
 }
 
 /** Poll in-memory provider events (mirrors waitForGithubVaultState without API calls). */

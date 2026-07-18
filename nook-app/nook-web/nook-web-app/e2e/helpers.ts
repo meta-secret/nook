@@ -113,37 +113,6 @@ export const UI_TIMEOUT_MS = 5_000
 /** Password unlock / enrollment runs scrypt in wasm — allow more time on CI. */
 export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
-/** Default password used by e2e create-vault and local-unlock helpers. */
-export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
-
-export async function advanceCreateVaultWizardToFinalStep(page: Page) {
-  const chooser = page.getByTestId('login-create-vault-chooser')
-  await expect(chooser).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-
-  const finalStep = page.getByTestId('create-vault-wizard-create')
-  if (await finalStep.isVisible()) {
-    return
-  }
-
-  const simplePath = page.getByTestId('get-started-path-simple')
-  await expect(simplePath).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await simplePath.click()
-
-  await expect(finalStep).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  const nameInput = page.getByTestId('login-vault-name-input')
-  if (!(await nameInput.inputValue()).trim()) {
-    await nameInput.fill('Test vault', {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-  }
-}
-
 export async function openLoginProviderSetup(page: Page) {
   if (await page.getByTestId('provider-picker-list').isVisible()) {
     return
@@ -186,9 +155,6 @@ export async function openLoginProviderSetup(page: Page) {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
-
-/** @deprecated Use {@link openLoginProviderSetup}. */
-export const openLegacyProviderSetup = openLoginProviderSetup
 
 export async function createLocalVaultOnLogin(
   page: Page,
@@ -1126,28 +1092,6 @@ export async function connectGoogleDriveGenesisDevice(
   await connectGoogleDriveVault(page, accessToken, fileName, stub)
 }
 
-export async function connectGoogleDriveJoinerDevice(
-  page: Page,
-  accessToken: string,
-  fileName: string,
-  stub?: E2eOauthFileStub,
-) {
-  await assertGenesisVaultOnSyncRemote(
-    stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
-  )
-  await installGoogleOAuthMock(page, accessToken)
-  if (stub) {
-    await stub.install(page, { fileName })
-  }
-  await page.goto('/app/')
-  await clearBrowserVault(page)
-  await page.reload()
-  await setupGoogleDriveProvider(page, fileName)
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await waitForJoinEnrollmentDialog(page)
-}
-
 /** Genesis device: fresh browser + GitHub repo → connected vault. */
 export async function connectGithubGenesisDevice(
   page: Page,
@@ -1844,21 +1788,6 @@ export async function expectLogsPageHasEntries(page: Page): Promise<void> {
   })
 }
 
-export async function expectLogsPageEmpty(page: Page): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        const emptyVisible = await page.getByTestId('logs-empty').isVisible()
-        const count = parseLogsPageStoredCount(
-          (await page.getByTestId('logs-count').textContent()) ?? undefined,
-        )
-        return emptyVisible && count === 0 ? count : undefined
-      },
-      { timeout: UI_TIMEOUT_MS * 2 },
-    )
-    .not.toBeUndefined()
-}
-
 /**
  * Print the app's persisted IndexedDB debug log (`window.__nookLog`) to the
  * test output. The WASM logger persists everything at or above the active
@@ -1918,71 +1847,6 @@ export async function attachNookLogsForTest(
   } catch {
     // Post-mortem logging must never fail the run.
   }
-}
-
-/**
- * Compatibility wrapper for callers that explicitly want failure-style output.
- */
-export async function captureNookLogsOnFailure(
-  page: Page,
-  testInfo: import('@playwright/test').TestInfo,
-) {
-  await attachNookLogsForTest(page, testInfo, { print: true })
-}
-
-export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
-  if (target?.stub) {
-    await target.stub.install(page, { repoName: target.repoName })
-  }
-  await page.goto('/app/')
-  await dismissSyncConflictIfVisible(page)
-  await dismissJoinEnrollmentDialog(page)
-
-  const vaultReady = async () =>
-    (await page.getByTestId('vault-panel').isVisible()) ||
-    (await page.getByTestId('secret-row').count()) > 0
-
-  await expect(
-    page.getByTestId('login-gate').or(page.getByTestId('vault-panel')),
-  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-
-  if (await vaultReady()) {
-    await disableVaultIdleLock(page)
-    return
-  }
-
-  if (await page.getByTestId('login-local-unlock-step').isVisible()) {
-    await unlockVaultOnLogin(page)
-  } else if (target) {
-    await tryGithubVaultConnect(page, target)
-    await assertNoVaultErrors(page, { allowTransient: true })
-    await dismissSyncConflictIfVisible(page)
-    await dismissJoinEnrollmentDialog(page)
-  } else if (await page.getByTestId('login-gate').isVisible()) {
-    await connectLoginProvider(page)
-    if (
-      !(await vaultReady()) &&
-      (await page.getByTestId('login-local-unlock-step').isVisible())
-    ) {
-      await unlockVaultOnLogin(page)
-    }
-  }
-
-  await expect
-    .poll(
-      async () => {
-        if (await vaultReady()) return true
-        await dismissSyncConflictIfVisible(page)
-        await dismissJoinEnrollmentDialog(page)
-        if (target) {
-          await tryGithubVaultConnect(page, target)
-        }
-        return vaultReady()
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(true)
-  await disableVaultIdleLock(page)
 }
 
 /** Expand the login enrollment accordion on the login gate. */
@@ -2297,9 +2161,6 @@ export async function reconnectSyncVault(page: Page) {
   await disableVaultIdleLock(page)
 }
 
-/** @deprecated Use {@link reconnectSyncVault}. */
-export const reconnectGithubVault = reconnectSyncVault
-
 /** Add and connect a local sync provider from vault settings (vault must be unlocked). */
 export async function connectGoogleDriveSyncProviderFromSettings(
   page: Page,
@@ -2331,99 +2192,6 @@ export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('authenticated-shell')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-}
-
-/** Start a GitHub connect from the login gate (saved provider or fresh setup). */
-export async function clickLoginConnectProvider(page: Page) {
-  await openLoginProviderSetup(page)
-  const savedGithub = page.getByTestId('saved-provider-github').first()
-  if (await savedGithub.isVisible()) {
-    await savedGithub.click()
-  }
-  await page.getByTestId('provider-option-github').click()
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-}
-
-/** Connect a saved provider on the login gate and reach unlock or vault. */
-export async function connectLoginProvider(page: Page) {
-  await clickLoginConnectProvider(page)
-  await expect(
-    page
-      .getByTestId('login-local-unlock-step')
-      .or(page.getByTestId('vault-panel')),
-  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-}
-
-export async function assertRemoteVaultRecoveryPanel(
-  page: Page,
-  options: { withLocalCache: boolean },
-) {
-  await expect(page.getByTestId('remote-vault-recovery-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  if (options.withLocalCache) {
-    await expect(page.getByTestId('remote-vault-recover-btn')).toBeVisible()
-  } else {
-    await expect(page.getByTestId('remote-vault-recover-btn')).not.toBeVisible()
-  }
-}
-
-/** Choose recover-from-browser on the remote-missing prompt, then reach unlock. */
-export async function recoverRemoteVaultOnLogin(page: Page) {
-  await page.getByTestId('remote-vault-recover-btn').click()
-  await expect(
-    page
-      .getByTestId('login-local-unlock-step')
-      .or(page.getByTestId('vault-panel')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-}
-
-/** Choose create-fresh on the remote-missing prompt, then reach unlock. */
-export async function createFreshRemoteVaultOnLogin(page: Page) {
-  await page.getByTestId('remote-vault-create-fresh-btn').click()
-  await expect(
-    page
-      .getByTestId('login-local-unlock-step')
-      .or(page.getByTestId('vault-panel')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-}
-
-/** Remove browser-local vault mirrors (`vault_cache:*`) while keeping device identity. */
-export async function deleteAllVaultLocalCaches(page: Page) {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db')
-        request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
-        request.onsuccess = () => {
-          const db = request.result
-          if (!db.objectStoreNames.contains('vault')) {
-            db.close()
-            resolve()
-            return
-          }
-          const tx = db.transaction('vault', 'readwrite')
-          const store = tx.objectStore('vault')
-          const keysReq = store.getAllKeys()
-          keysReq.onerror = () =>
-            reject(keysReq.error ?? new Error('idb keys failed'))
-          keysReq.onsuccess = () => {
-            for (const key of keysReq.result) {
-              if (typeof key === 'string' && key.startsWith('vault_cache:')) {
-                store.delete(key)
-              }
-            }
-          }
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-        }
-      }),
-  )
 }
 
 export async function revealSecretInRow(
@@ -2617,7 +2385,7 @@ export async function unlockVaultOnLogin(
   }
 
   throw new Error(
-    'Login gate has no local unlock step — use createLocalVaultOnLogin or clickLoginConnectProvider.',
+    'Login gate has no local unlock step — use createLocalVaultOnLogin or openLoginProviderSetup.',
   )
 }
 
@@ -3465,10 +3233,6 @@ export async function reloadUnlockLocalVaultWithSync(
   }
 }
 
-/** @deprecated Use {@link reloadUnlockLocalVaultWithSync}. */
-export const reloadUnlockLocalVaultWithGithubSync =
-  reloadUnlockLocalVaultWithSync
-
 /** Connect a joiner browser to a stubbed local sync remote (keys-mode join dialog). */
 export async function connectLocalE2eJoinerDevice(
   page: Page,
@@ -3691,9 +3455,6 @@ export async function reloadUnlockWithSyncProvider(
     )
   }
 }
-
-/** @deprecated Use {@link reloadUnlockWithSyncProvider}. */
-export const reloadUnlockWithGithubSync = reloadUnlockWithSyncProvider
 
 /** Wait until the status bar reflects loaded sync providers. */
 export async function waitForLoadedSyncProviders(
@@ -4002,9 +3763,6 @@ export async function assertEnrolledVaultOnGithub(
   assertEnrolledVaultYaml(snapshot, members)
   return snapshot
 }
-
-/** @deprecated Use {@link seedExtraOauthFileProviders}. */
-export const seedExtraSyncProviders = seedExtraOauthFileProviders
 
 /** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */
 export const seedSyncProvidersWhileUnlocked =
