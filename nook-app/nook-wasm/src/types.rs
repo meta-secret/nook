@@ -2205,6 +2205,38 @@ impl NookPendingSyncConflict {
         }
     }
 
+    /// Store-id conflict discovered while a provider is still being configured.
+    ///
+    /// Keep the pending-provider sentinel inside Rust so the web layer does not
+    /// duplicate a value that controls whether provider setup resumes after the
+    /// user chooses a recovery action.
+    #[wasm_bindgen(js_name = pendingStoreId)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn pending_store_id(
+        provider_label: String,
+        local_yaml: String,
+        remote_yaml: String,
+        mode: String,
+        pat: String,
+        repo: String,
+        remote_revision: Option<String>,
+        local_store_id: String,
+        remote_store_id: String,
+    ) -> Self {
+        Self::store_id(
+            PENDING_SYNC_PROVIDER_ID.to_owned(),
+            provider_label,
+            local_yaml,
+            remote_yaml,
+            mode,
+            pat,
+            repo,
+            remote_revision,
+            local_store_id,
+            remote_store_id,
+        )
+    }
+
     #[wasm_bindgen(getter, js_name = providerId)]
     pub fn provider_id(&self) -> String {
         self.provider_id.clone()
@@ -2296,6 +2328,37 @@ impl NookPendingSyncConflict {
             .store_id()
             .map(|details| details.remote_store_id.clone())
             .ok_or_else(|| wasm_bindgen::JsError::new("Sync conflict is not a store-id conflict."))
+    }
+}
+
+#[cfg(test)]
+mod pending_sync_conflict_tests {
+    use super::*;
+
+    #[test]
+    fn pending_store_id_factory_marks_unsaved_provider() {
+        let conflict = NookPendingSyncConflict::pending_store_id(
+            "GitHub".to_owned(),
+            "local".to_owned(),
+            String::new(),
+            "github".to_owned(),
+            "token".to_owned(),
+            "owner/repo".to_owned(),
+            None,
+            "store_local12345".to_owned(),
+            "store_remote1234".to_owned(),
+        );
+
+        assert!(conflict.is_pending_provider());
+        assert_eq!(conflict.provider_label(), "GitHub");
+        assert_eq!(
+            conflict.local_store_id().expect("local store id"),
+            "store_local12345"
+        );
+        assert_eq!(
+            conflict.remote_store_id().expect("remote store id"),
+            "store_remote1234"
+        );
     }
 }
 

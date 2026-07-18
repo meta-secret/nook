@@ -94,6 +94,48 @@ async function stageProviderStoreMismatchConflict(
   return true;
 }
 
+/** Map a typed mismatch found during provider assessment into the global dialog. */
+export async function stageStagedProviderSyncIssue(
+  state: VaultState,
+  args: [string, string, string],
+): Promise<boolean> {
+  const manager = state.manager;
+  const issue = manager?.takeEventLogSyncIssue();
+  if (!issue) return false;
+  try {
+    if (!issue.isStoreMismatch) return false;
+    const localStoreId = issue.localStoreId;
+    const remoteStoreId = issue.remoteStoreId;
+    if (!localStoreId || !remoteStoreId || !manager) return false;
+
+    const localYaml = await readLocalVaultBlob().catch(() => "");
+    await state.enqueueStorage(() =>
+      manager.restoreLocalAfterProviderAssessment(),
+    );
+    state.stageSyncConflict(
+      NookPendingSyncConflict.pendingStoreId(
+        state.stagedProviderLabel(),
+        localYaml,
+        "",
+        args[0],
+        args[1],
+        args[2],
+        undefined,
+        localStoreId,
+        remoteStoreId,
+      ),
+    );
+    log.warn("staged provider store mismatch staged", {
+      provider: state.stagedProviderLabel(),
+      localStoreId,
+      remoteStoreId,
+    });
+    return true;
+  } finally {
+    issue.free();
+  }
+}
+
 export async function syncLocalFolderProvider(
   state: VaultState,
   provider: StorageProvider,

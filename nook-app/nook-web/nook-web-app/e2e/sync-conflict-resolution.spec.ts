@@ -1,15 +1,19 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  addVaultPassword,
   authorizeDeviceProtection,
-  connectGoogleDriveSyncProviderFromSettings,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  installGoogleOAuthMock,
+  openOnboardDevicePanel,
   readLocalVaultYamlFromIdb,
   seedOauthFileSyncProvidersWhileUnlocked,
   triggerVaultSyncRefresh,
   UI_TIMEOUT_MS,
+  waitForVaultOperationsIdle,
   waitForLoadedSyncProviders,
+  waitForSyncRemoteVaultState,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
@@ -74,7 +78,7 @@ test.describe('sync conflict resolution', () => {
     })
   })
 
-  test('ignores an unrelated vault blob when connecting an event-log provider to a second vault', async ({
+  test('opens the vault-choice dialog when onboarding connects a provider for another vault', async ({
     page,
   }) => {
     const fileName = 'nook-e2e-shared-vault-file.yaml'
@@ -105,11 +109,27 @@ test.describe('sync conflict resolution', () => {
     )
     await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
+    await page.evaluate(async () => {
+      const vault = (
+        window as Window & {
+          __nookVault?: {
+            runFanOutSyncAfterLocalSave?: () => Promise<void>
+          }
+        }
+      ).__nookVault
+      await vault?.runFanOutSyncAfterLocalSave?.()
+    })
+    await waitForSyncRemoteVaultState(
+      stub,
+      (snapshot) =>
+        snapshot.authPkIds.length >= 1 && snapshot.memberPkIds.length >= 1,
+    )
     await expect
       .poll(() => parseStoreId(stub.getVaultYaml()), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toEqual(storeA)
+    const remoteEventsBeforeConflict = stub.getEventFileContents()
 
     await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible()
@@ -140,22 +160,58 @@ test.describe('sync conflict resolution', () => {
     expect(storeB).not.toEqual(storeA)
 
     stub.setVaultYaml(vaultAYaml)
-    await connectGoogleDriveSyncProviderFromSettings(
-      page,
-      fileName,
-      'ya29.e2e_file_sync_token',
-      {
-        expectConflict: true,
-      },
-    )
+    await addVaultPassword(page, 'onboard', 'onboard-pass-1')
+    await openOnboardDevicePanel(page)
+    await page
+      .getByTestId('onboard-password-entry-list')
+      .getByRole('radio')
+      .first()
+      .click()
 
+    await installGoogleOAuthMock(page, 'ya29.e2e_file_sync_token')
+    await page.getByTestId('add-provider-btn').click()
+    await page.getByTestId('provider-option-oauth-file').click()
+    await page.getByTestId('drive-file-input').fill(fileName)
+    await page.getByTestId('google-sign-in-btn').click()
     await expect(
-      page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible({
+      page
+        .getByTestId('google-account-status')
+        .or(page.getByTestId('connect-provider-btn')),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('connect-provider-btn').click()
+    await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toContainText(
+      'Different vault on sync provider',
+    )
+    await expect(
+      page.getByTestId('sync-conflict-import-new-vault-btn'),
+    ).toBeVisible()
+    await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
+    await expect(page.getByTestId('vault-error')).toHaveCount(0)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { manager?: { storage_mode: string } }
+              }
+            ).__nookVault?.manager?.storage_mode,
+        ),
+      )
+      .toBe('local')
     expect(parseStoreId(stub.getVaultYaml())).toEqual(storeA)
+    expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
     expect(parseStoreId(await readLocalVaultYamlFromIdb(page))).toEqual(storeB)
+
+    await page.getByTestId('sync-conflict-cancel-btn').click()
+    await expect(
+      page.getByTestId('vault-sync-conflict-dialog'),
+    ).not.toBeVisible()
+    expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
   })
 })
