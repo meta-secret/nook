@@ -8,8 +8,8 @@ validation, and carrying ready PRs directly through squash merge.
 ## Problem Pattern
 
 Agents repeatedly query PR/check state, serialize local and remote validation,
-run full gates before inspecting feedback already present, or wait for Codex and
-other external reviewers. Moving `main`, unresolved-conversation policy, and
+run full gates before inspecting feedback already present, or wait for optional
+external reviewers. Moving `main`, unresolved-conversation policy, and
 exact-head deployment requirements are then discovered only at merge time.
 
 ## Preferred Pattern
@@ -20,9 +20,10 @@ long local gate. Inspect repository-owned checks directly while local validation
 runs. The read-only `task pr:ready PR=<number>` audit may summarize exact-head
 state, but it never performs a merge by itself.
 
-Inspect feedback at the readiness boundary. A green audit is the task-owning
-agent's signal to squash-merge immediately. A later push invalidates the prior
-readiness result and requires a fresh audit before merge.
+Inspect feedback at the readiness boundary and run `task pr:review PR=<number>`
+for the exact head. A green audit is the task-owning agent's signal to
+squash-merge immediately. A later push invalidates both the prior review result
+and readiness audit.
 
 ## Scope
 
@@ -34,15 +35,17 @@ Applies to:
 
 Does not apply to:
 
-- Waiting for external AI review/check state.
+- Waiting for optional external AI review/check state other than the required
+  exact-head Codex result.
 - Replacing focused development tests with remote CI.
 - Automatically classifying substantive review feedback as resolved.
 
 ## Examples
 
-- Before: query `gh pr view` every 30 seconds and keep checking Codex status.
-- After: local validation runs alongside the repository-owned PR workflows;
-  `task pr:ready PR=410` provides a read-only exact-head snapshot.
+- Before: add a blind delay hoping an automatic review arrives.
+- After: local validation runs alongside repository-owned workflows, then
+  `task pr:review PR=410` requests an exact-head result and `task pr:ready`
+  verifies it.
 - Before: discover conversation-resolution and stale-base requirements after a
   failed merge command.
 - After: `task pr:preflight PR=410` reports policy, base divergence, runs,
@@ -53,7 +56,7 @@ Does not apply to:
 - [ ] Establish the branch and PR path from current `origin/main`.
 - [ ] Run focused checks while iterating.
 - [ ] Commit and push before required full local validation.
-- [ ] Inspect only feedback already present; never wait for new external review.
+- [ ] Request and settle the exact-head Codex review; inspect all feedback present.
 - [ ] Run `task pr:ready` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
 
@@ -61,5 +64,5 @@ Does not apply to:
 
 Run `cd agentic-ai/ci-agent && npm test` and verify the read-only Task commands.
 The readiness audit must reject stale heads, missing/failed Nook runs, missing
-exact-head deployment, and feedback already requiring handling. The audit stays
+exact-head deployment, an unsettled Codex result, and feedback requiring handling. The audit stays
 read-only; the task-owning agent performs the squash merge after it succeeds.

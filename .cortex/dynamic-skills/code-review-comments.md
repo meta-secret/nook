@@ -6,8 +6,8 @@ Make PR review-comment handling auditable: every active actionable item from a
 human reviewer, Codex, or another automated reviewer must be verified, fixed or
 explicitly invalidated, and replied to on GitHub. Agents must leave their own
 targeted reply before resolving any PR comment or review conversation. This
-skill applies only to feedback that already exists; it never authorizes waiting
-for, polling, or requesting an external review.
+skill also governs the required exact-head Codex pass requested with
+`task pr:review PR=<number>`.
 
 ## Problem Pattern
 
@@ -31,11 +31,11 @@ If an actionable item appears only in a submitted review body without a threaded
 reply target, include it in the local checklist and final handoff instead of
 posting a broad or duplicative PR comment.
 
-Inspect the currently available feedback once before merge or handoff. After
-all actionable items currently present are handled, proceed as soon as Nook's
-applicable repository-owned PR test checks pass. Do not wait for reviewers or services to
-reply, re-review, resolve, or finish; do not add a grace period for comments
-that might arrive later.
+Inspect the currently available feedback before merge or handoff. After all
+actionable items are handled, request an exact-head Codex review. If its findings
+change the head, request another pass after the fix. Proceed only when that pass,
+Nook's applicable repository-owned checks, and the unresolved-thread query are
+all green. Do not wait for optional external reviewers or use a blind grace period.
 
 ## Scope
 
@@ -53,8 +53,8 @@ Does not apply to:
   PR still shows them as unresolved; in that case, reply with the addressing
   commit/context before resolving.
 - Non-actionable summaries, praise, or status-only bot messages.
-- Reviews or comments that have not arrived. Agents never request or wait for
-  external feedback.
+- Reviews or comments from optional services that have not arrived. Codex is the
+  required exception and is requested for the exact head.
 
 ## Examples
 
@@ -89,8 +89,9 @@ Does not apply to:
       resolution is the correct next action.
 - [ ] Track actionable submitted-review items without threaded reply targets in
       the local checklist and final handoff rather than creating comment spam.
+- [ ] Run `task pr:review PR=<number>` for the exact head.
 - [ ] Re-query submitted reviews and unresolved review threads before handoff.
-- [ ] Proceed without waiting for another review cycle or external response.
+- [ ] If review fixes changed the head, request and settle the next Codex pass.
 
 ## GitHub Queries
 
@@ -152,5 +153,5 @@ Use GraphQL or `gh pr view`/`gh api` to confirm there are no unresolved review
 threads, and inspect submitted reviews and PR comments for remaining actionable
 items currently present. Report Nook's applicable repository-owned PR test-check state,
 the unresolved-thread query result, and whether any unthreaded actionable
-review-body item remains in the handoff. Never wait for an external reviewer or
-check to change state.
+review-body item remains in the handoff. Confirm the exact-head Codex result is
+settled; never wait for other external reviewers or checks to change state.

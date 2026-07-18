@@ -53,6 +53,38 @@ fn agent_prs_cannot_be_merged_automatically() {
     }
 }
 
+#[test]
+fn ci_agent_docker_builds_are_not_hidden_by_image_existence() {
+    let root = repository_root();
+    let tasks = read(&root, ".task/agentic-ai.yml");
+    let docker_build = section(
+        &tasks,
+        "  ci-agent:docker:build:\n",
+        "  ci-agent:docker:run:\n",
+    );
+
+    assert!(docker_build.contains("agentic-ai/ci-agent/src/**/*"));
+    assert!(docker_build.contains("{{.DOCKER}} build"));
+    assert!(
+        !docker_build.contains("status:"),
+        "an existing image must not suppress rebuilds after ci-agent source changes"
+    );
+}
+
+#[test]
+fn pr_audit_wrappers_accept_pat_only_authentication() {
+    let root = repository_root();
+    let tasks = read(&root, ".task/agentic-ai.yml");
+    let token_fallback =
+        r#"export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";"#;
+
+    assert_eq!(
+        tasks.matches(token_fallback).count(),
+        3,
+        "preflight, readiness, and review wrappers must accept NOOK_GITHUB_PAT before consulting gh auth"
+    );
+}
+
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
     content
         .split_once(start)

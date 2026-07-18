@@ -7,9 +7,10 @@
   "scripts": {
     "build": "bun scripts/build.ts",
     "package:deployment": "bun scripts/deployment-package.ts",
-    "check": "test -e node_modules || ln -s ../nook-web-app/node_modules node_modules; bun test scripts src/lib && node_modules/.bin/svelte-check --tsconfig tsconfig.json && node_modules/.bin/tsc -p tsconfig.json --noEmit",
+    "check": "test -e node_modules || ln -s ../nook-web-app/node_modules node_modules; bun run lint && bun test scripts src/lib && node_modules/.bin/svelte-check --tsconfig tsconfig.json && node_modules/.bin/tsc -p tsconfig.json --noEmit",
     "format": "../nook-web-app/node_modules/.bin/prettier --write .",
     "format:check": "../nook-web-app/node_modules/.bin/prettier --check .",
+    "lint": "node_modules/.bin/eslint --config ../eslint.config.js scripts e2e playwright.config.ts",
     "test:e2e": "bash scripts/test-e2e.sh"
   }
 }
