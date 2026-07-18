@@ -11,7 +11,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
 import {
-  advanceCreateVaultWizardToFinalStep,
   attachNookLogsForTest,
   readPersistedAppLogs,
 } from '../../nook-web-app/e2e/helpers'
@@ -28,6 +27,30 @@ import {
 type TestServer = {
   origin: string
   close: () => Promise<void>
+}
+
+const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
+
+async function advanceCreateVaultWizardToFinalStep(page: Page) {
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  await expect(chooser).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+
+  const finalStep = page.getByTestId('create-vault-wizard-create')
+  if (await finalStep.isVisible()) return
+
+  const simplePath = page.getByTestId('get-started-path-simple')
+  await expect(simplePath).toBeVisible({
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
+  await simplePath.click()
+
+  await expect(finalStep).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+  const nameInput = page.getByTestId('login-vault-name-input')
+  if (!(await nameInput.inputValue()).trim()) {
+    await nameInput.fill('Test vault', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+  }
 }
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')

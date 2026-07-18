@@ -38,6 +38,18 @@ not recover on its own.
 
 ## 3. E2e tests
 
+Unused TypeScript and Svelte code is enforced by `bun run unused` in
+`nook-web-app`, and the normal `bun run lint` / `task check` path runs it. Knip
+follows every web application entry point, shared Svelte component,
+browser-extension entry point, test, and script to reject unreachable files and
+exports. Knip stays pinned to 5.88 until the sibling web packages become a real
+root workspace; Knip 6 isolates those package boundaries and does not traverse
+this app-root integrated graph. TypeScript and ESLint reject unused locals and
+parameters inside `.ts`, `.svelte.ts`, and `.svelte` files. Public class methods
+are not covered by those tools because they may be called through an exported
+object; verify suspected state-controller methods at their component call sites
+rather than treating a missing import as proof that they are dead.
+
 - **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
 - Full stub Playwright: `task web:test:e2e` — runs the `stable` IndexedDB group at 6 workers, then the provider/sync `unstable` group at 4; runs on main CI and explicitly for PR validation.
 - Stable subset Playwright (`stable` project): `task web:test:e2e:pr` — 6-worker manual/debug subset for vault CRUD, login, and legal pages (no sync HTTP).
