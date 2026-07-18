@@ -55,6 +55,8 @@ tasks:
       - agentic-ai/ci-agent/package-lock.json
       - agentic-ai/ci-agent/tsconfig.json
       - agentic-ai/ci-agent/src/**/*
+    status:
+      - '{{.DOCKER}} image inspect {{.CI_AGENT_IMAGE}} >/dev/null 2>&1'
     cmds:
       - >-
         {{.DOCKER}} build
