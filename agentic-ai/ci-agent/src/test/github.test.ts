@@ -4,6 +4,7 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import {
+  codexReviewRequestMarker,
   createFixPr,
   requestCodexReview,
   requiredPrCheckNames,
@@ -84,6 +85,9 @@ test("requestCodexReview posts one exact-head idempotency marker", async () => {
         get: async () => ({ data: { head: { sha: "head-sha" } } }),
         listReviews: async () => ({ data: [] }),
       },
+      reactions: {
+        listForIssueComment: async () => ({ data: [] }),
+      },
     },
     paginate: async (
       route: (args: unknown) => Promise<{ data: unknown[] }>,
@@ -99,6 +103,85 @@ test("requestCodexReview posts one exact-head idempotency marker", async () => {
   assert.deepEqual(createdBodies, [
     "@codex review\n\n<!-- nook-codex-review:head-sha -->",
   ]);
+});
+
+test("requestCodexReview reports an exact-head Codex approval reaction as settled", async () => {
+  const headSha = "0123456789abcdef0123456789abcdef01234567";
+  let createCalls = 0;
+  const octokit = {
+    rest: {
+      issues: {
+        createComment: async () => {
+          createCalls += 1;
+          return { data: { id: 2 } };
+        },
+        listComments: async () => ({
+          data: [{ body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`, id: 1 }],
+        }),
+      },
+      pulls: {
+        get: async () => ({ data: { head: { sha: headSha } } }),
+        listReviews: async () => ({ data: [] }),
+      },
+      reactions: {
+        listForIssueComment: async () => ({
+          data: [{ content: "+1", user: { login: "chatgpt-codex-connector[bot]" } }],
+        }),
+      },
+    },
+    paginate: async (
+      route: (args: unknown) => Promise<{ data: unknown[] }>,
+      args: unknown,
+    ) => (await route(args)).data,
+  } as unknown as Octokit;
+
+  const result = await requestCodexReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, { headSha, requested: false, settled: true });
+  assert.equal(createCalls, 0);
+});
+
+test("requestCodexReview retries once after an exact-bot usage-limit response", async () => {
+  const headSha = "0123456789abcdef0123456789abcdef01234567";
+  const comments: Array<{ body: string; id: number; user?: { login: string } }> = [
+    { body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`, id: 1 },
+    {
+      body: "You have reached your Codex usage limits for code reviews.",
+      id: 2,
+      user: { login: "chatgpt-codex-connector[bot]" },
+    },
+  ];
+  const createdBodies: string[] = [];
+  const octokit = {
+    rest: {
+      issues: {
+        createComment: async ({ body }: { body: string }) => {
+          createdBodies.push(body);
+          comments.push({ body, id: 3 });
+          return { data: { id: 3 } };
+        },
+        listComments: async () => ({ data: comments }),
+      },
+      pulls: {
+        get: async () => ({ data: { head: { sha: headSha } } }),
+        listReviews: async () => ({ data: [] }),
+      },
+      reactions: {
+        listForIssueComment: async () => ({ data: [] }),
+      },
+    },
+    paginate: async (
+      route: (args: unknown) => Promise<{ data: unknown[] }>,
+      args: unknown,
+    ) => (await route(args)).data,
+  } as unknown as Octokit;
+
+  const retry = await requestCodexReview(octokit, repoRef, 410);
+  const idempotent = await requestCodexReview(octokit, repoRef, 410);
+
+  assert.deepEqual(retry, { headSha, requested: true, settled: false });
+  assert.deepEqual(idempotent, { headSha, requested: false, settled: false });
+  assert.deepEqual(createdBodies, [`@codex review\n\n${codexReviewRequestMarker(headSha)}`]);
 });
 
 test("requestCodexReview recognizes a clean Codex comment for the exact head", async () => {

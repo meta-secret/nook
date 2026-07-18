@@ -152,7 +152,8 @@ export async function requestCodexReview(
     }),
   ]);
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const settled =
+  const reviewRequests = comments.filter((comment) => comment.body?.includes(marker));
+  const reviewSettled =
     reviews.some(
       (review) =>
         review.commit_id === pr.head.sha &&
@@ -162,7 +163,36 @@ export async function requestCodexReview(
     comments.some((comment) =>
       isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
     );
-  if (settled || comments.some((comment) => comment.body?.includes(marker))) {
+  const requestReactions = reviewSettled
+    ? []
+    : (
+        await Promise.all(
+          reviewRequests.map((request) =>
+            octokit.paginate(octokit.rest.reactions.listForIssueComment, {
+              owner,
+              repo,
+              comment_id: request.id,
+              per_page: 100,
+            }),
+          ),
+        )
+      ).flat();
+  const approvalReaction = requestReactions.some(
+    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+  );
+  const settled = reviewSettled || approvalReaction;
+  const lastRequestIndex = comments.reduce(
+    (lastIndex, comment, index) => (comment.body?.includes(marker) ? index : lastIndex),
+    -1,
+  );
+  const retryAfterUsageLimit =
+    lastRequestIndex >= 0 &&
+    comments
+      .slice(lastRequestIndex + 1)
+      .some((comment) =>
+        isCodexUsageLimitComment(comment.body ?? "", comment.user?.login),
+      );
+  if (settled || (reviewRequests.length > 0 && !retryAfterUsageLimit)) {
     return { headSha: pr.head.sha, requested: false, settled };
   }
 
@@ -387,6 +417,10 @@ function isRepositoryStatusComment(body: string): boolean {
 
 function isCodexReviewer(login: string | undefined): boolean {
   return login === CODEX_REVIEWER_LOGIN;
+}
+
+function isCodexUsageLimitComment(body: string, login: string | undefined): boolean {
+  return isCodexReviewer(login) && body.includes("Codex usage limits for code reviews");
 }
 
 function isCleanCodexReviewComment(

@@ -53,6 +53,24 @@ fn agent_prs_cannot_be_merged_automatically() {
     }
 }
 
+#[test]
+fn ci_agent_docker_builds_are_not_hidden_by_image_existence() {
+    let root = repository_root();
+    let tasks = read(&root, ".task/agentic-ai.yml");
+    let docker_build = section(
+        &tasks,
+        "  ci-agent:docker:build:\n",
+        "  ci-agent:docker:run:\n",
+    );
+
+    assert!(docker_build.contains("agentic-ai/ci-agent/src/**/*"));
+    assert!(docker_build.contains("{{.DOCKER}} build"));
+    assert!(
+        !docker_build.contains("status:"),
+        "an existing image must not suppress rebuilds after ci-agent source changes"
+    );
+}
+
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
     content
         .split_once(start)
