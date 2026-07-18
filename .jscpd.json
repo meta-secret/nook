@@ -8,7 +8,7 @@
     "**/dist/**",
     "**/target/**",
     "**/coverage/**",
-    "**/nook-wasm/**",
-    "**/nook_wasm/**"
+    "**/nook-web-shared/src/vault-app/lib/nook-wasm/**",
+    "**/nook-web-shared/src/vault-app/lib/nook_wasm/**"
   ]
 }

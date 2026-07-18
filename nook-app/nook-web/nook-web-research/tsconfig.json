@@ -10,8 +10,7 @@
     "noUnusedParameters": true,
     "paths": {
       "$lib": ["./src/lib"],
-      "$lib/*": ["./src/lib/*"],
-      "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"]
+      "$lib/*": ["./src/lib/*"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,
