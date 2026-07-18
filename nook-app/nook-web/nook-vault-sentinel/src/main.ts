@@ -1,10 +1,5 @@
-import { mount } from "svelte";
-import "$vault-shared/app.css";
-import { ensureAppWasm } from "$lib/wasm-bootstrap";
+import { mountVaultApp } from "$vault-shared/main";
 
-await ensureAppWasm();
-const { default: App } = await import("$vault-shared/App.svelte");
-
-mount(App, { target: document.getElementById("app")! });
+await mountVaultApp("sentinel");
 
 export default undefined;
