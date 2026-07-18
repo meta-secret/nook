@@ -120,8 +120,13 @@ export async function commentOnIssue(
 }
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
+const CODEX_REVIEW_HEADING = "### 💡 Codex Review";
+const CODEX_REVIEW_INTRO = "Here are some automated review suggestions for this pull request.";
+const CODEX_ABOUT_SUMMARY = "<summary>ℹ️ About Codex in GitHub</summary>";
 const CLEAN_CODEX_REVIEW_PREFIX = "Codex Review: Didn't find any major issues.";
 const REVIEWED_COMMIT_PATTERN = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
+const CODEX_REVIEWED_COMMIT_ONLY_PATTERN =
+  /^\*\*Reviewed commit:\*\*\s*`[0-9a-f]{10,40}`$/;
 
 export function codexReviewRequestMarker(headSha: string): string {
   return `<!-- nook-codex-review:${headSha} -->`;
@@ -361,10 +366,7 @@ export async function inspectPrFeedback(
       return true;
     }
     const body = review.body?.trim() ?? "";
-    return (
-      body.length > 0 &&
-      !(isCodexReviewer(review.user?.login) && body.startsWith("### 💡 Codex Review"))
-    );
+    return body.length > 0 && !isCodexReviewStatusBody(body, review.user?.login);
   });
 
   return {
@@ -420,6 +422,28 @@ function isRepositoryStatusComment(body: string): boolean {
 
 function isCodexReviewer(login: string | undefined): boolean {
   return login === CODEX_REVIEWER_LOGIN;
+}
+
+function isCodexReviewStatusBody(body: string, login: string | undefined): boolean {
+  if (!isCodexReviewer(login)) {
+    return false;
+  }
+  const trimmed = body.trim();
+  const detailsIndex = trimmed.indexOf("<details>");
+  const summary = (detailsIndex === -1 ? trimmed : trimmed.slice(0, detailsIndex))
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+  if (detailsIndex !== -1) {
+    const details = trimmed.slice(detailsIndex).trim();
+    if (!details.includes(CODEX_ABOUT_SUMMARY) || !details.endsWith("</details>")) {
+      return false;
+    }
+  }
+  const expectedPrefix = `${CODEX_REVIEW_HEADING}\n\n${CODEX_REVIEW_INTRO}\n\n`;
+  return (
+    summary.startsWith(expectedPrefix) &&
+    CODEX_REVIEWED_COMMIT_ONLY_PATTERN.test(summary.slice(expectedPrefix.length))
+  );
 }
 
 function isCodexUsageLimitComment(body: string, login: string | undefined): boolean {
