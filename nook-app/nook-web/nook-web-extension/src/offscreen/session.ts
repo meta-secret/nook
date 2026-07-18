@@ -1,17 +1,12 @@
 import initNookWasm, {
   configureVaultApplication,
-  loadAuthProviders,
-  NookAuthProvidersSnapshotValue,
   NookExternalEventLogRecords,
-  NookStorageProviderValue,
   NookVaultManager,
   providerWasmArgs,
-  saveAuthProviders,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
-
-type DeviceMode = 'standard' | 'anti-hacker'
 
 type DeviceResult = {
   deviceId: string
@@ -34,19 +29,6 @@ type ExtensionVaultGrant = {
   deviceId: string
   devicePublicKey: string
   deviceSigningPublicKey: string
-}
-
-type StoredProvider = {
-  id: string
-  type: string
-  storeId?: string
-}
-
-type LoadedProviders = {
-  snapshot: {
-    providers: StoredProvider[]
-    activeVaultStoreId?: string
-  }
 }
 
 let initPromise: Promise<unknown> | undefined
@@ -163,10 +145,8 @@ async function flushPasskeyEventToProviders(
   activeManager: NookVaultManager,
   vaultStoreId: string,
 ): Promise<void> {
-  const loadedValue = await loadAuthProviders(activeManager)
-  const loaded = loadedValue.toObject() as LoadedProviders
-  loadedValue.free()
-  const providers = loaded.snapshot.providers.filter(
+  const snapshot = await activeManager.loadAuthProviders()
+  const providers = snapshot.providers.filter(
     (provider) =>
       provider.storeId === vaultStoreId &&
       provider.type !== 'local' &&
@@ -174,9 +154,7 @@ async function flushPasskeyEventToProviders(
   )
   await Promise.allSettled(
     providers.map(async (provider) => {
-      const providerValue = NookStorageProviderValue.fromObject(provider)
-      const args = providerWasmArgs(providerValue)
-      providerValue.free()
+      const args = providerWasmArgs(provider)
       try {
         await activeManager.flushEventOutboxForProvider(
           args.mode,
@@ -234,7 +212,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           userHandle,
           prfInput,
           prfOutput,
-          deviceMode as DeviceMode,
+          deviceMode,
         )
       } finally {
         credentialId.fill(0)
@@ -341,34 +319,37 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       const activeManager = await getManager()
       const recordValues = NookExternalEventLogRecords.fromArray(records)
-      const statusValue = await activeManager.importExtensionEventLogRecords(
-        grant.vaultStoreId,
-        grant.deviceId,
-        grant.devicePublicKey,
-        grant.deviceSigningPublicKey,
-        recordValues,
-      )
+      const statusValue = await activeManager
+        .importExtensionEventLogRecords(
+          grant.vaultStoreId,
+          grant.deviceId,
+          grant.devicePublicKey,
+          grant.deviceSigningPublicKey,
+          recordValues,
+        )
+        .finally(() => recordValues.free())
       const status = statusValue.toObject()
       statusValue.free()
-      const existingValue = await loadAuthProviders(activeManager)
-      const existing = existingValue.toObject() as LoadedProviders
-      existingValue.free()
-      const merged = new Map(
-        existing.snapshot.providers.map((provider) => [provider.id, provider]),
+      const existing = await activeManager.loadAuthProviders()
+      const merged = new Map<string, StorageProvider>(
+        existing.providers.map((provider) => [provider.id, provider]),
       )
-      for (const provider of providers as StoredProvider[]) {
-        if (provider && typeof provider.id === 'string')
-          merged.set(provider.id, provider)
+      for (const provider of providers) {
+        if (
+          provider &&
+          typeof provider === 'object' &&
+          'id' in provider &&
+          typeof provider.id === 'string'
+        ) {
+          // The Rust/Tsify ABI performs the complete shape validation when the
+          // snapshot is saved; this guard only narrows the merge key here.
+          merged.set(provider.id, provider as StorageProvider)
+        }
       }
-      const snapshotValue = NookAuthProvidersSnapshotValue.fromObject({
+      await activeManager.saveAuthProviders({
         providers: Array.from(merged.values()),
         activeVaultStoreId: grant.vaultStoreId,
       })
-      try {
-        await saveAuthProviders(activeManager, snapshotValue)
-      } finally {
-        snapshotValue.free()
-      }
       return { ok: true, status }
     }
     case 'nook:extension-session-update-vault': {
@@ -384,13 +365,15 @@ async function handleMessage(message: unknown): Promise<unknown> {
       )
       const statusValue = await (
         await getManager()
-      ).importExtensionEventLogRecords(
-        grant.vaultStoreId,
-        grant.deviceId,
-        grant.devicePublicKey,
-        grant.deviceSigningPublicKey,
-        recordValues,
       )
+        .importExtensionEventLogRecords(
+          grant.vaultStoreId,
+          grant.deviceId,
+          grant.devicePublicKey,
+          grant.deviceSigningPublicKey,
+          recordValues,
+        )
+        .finally(() => recordValues.free())
       const status = statusValue.toObject()
       statusValue.free()
       return { ok: true, status }

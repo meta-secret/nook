@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1.4
 
+# Mounted development builds must keep Cargo artifacts outside `/meta-secret/nook`: the source
+# bind mount replaces that whole tree. This image is keyed only by Cargo manifests/lockfile, so
+# ordinary Rust source edits reuse the compiled dependency graph instead of rebuilding it.
+FROM builder-wasm-deps AS nook-rust-fast
+
+RUN mkdir -p /opt/nook \
+    && mv /meta-secret/nook/nook-app/target /opt/nook/cargo-target
+
+ENV CARGO_TARGET_DIR=/opt/nook/cargo-target
+WORKDIR /meta-secret/nook
+
 # nook-wasm build stage: wasm32 clippy + release build + wasm-pack bundle. It is a sibling of
 # builder-debug from the shared manifest-keyed dependency image, so hosted BuildKit can run WASM
 # and native coverage concurrently instead of serializing both source-sensitive branches.

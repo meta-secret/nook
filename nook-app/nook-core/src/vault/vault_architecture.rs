@@ -11,11 +11,12 @@ use crate::{
 };
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
 use std::collections::BTreeSet;
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
 #[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum DeviceMode {
     /// Passkey PRF deterministically derives the local age/device identity.
     #[default]
@@ -54,9 +55,9 @@ impl<'de> Deserialize<'de> for DeviceMode {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
 #[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum VaultType {
     /// Existing per-device full vault-key envelope model.
     #[default]
@@ -199,9 +200,9 @@ impl<'de> Deserialize<'de> for VaultType {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
 #[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ReplicationType {
     /// Same owner / highly trusted devices may reuse sync-provider credentials.
     #[default]
@@ -260,8 +261,9 @@ impl OnboardingType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "snake_case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum SharedJoinerIdentityKind {
     Email,
 }
@@ -605,11 +607,14 @@ pub fn validate_architecture_for_provider(
 /// `access_token` is optional at the Rust validation boundary. The WASM layer
 /// uses it to call Drive `files.create` + `permissions.create` and may upgrade
 /// a validated request into [`SharedStorageGrantOutcome::Granted`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SharedStorageGrantRequest {
+    #[tsify(type = "StorageProviderType")]
     pub provider_type: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(type = "OAuthFilePreset | undefined")]
     pub oauth_preset: Option<String>,
     pub joiner_identity_kind: SharedJoinerIdentityKind,
     pub joiner_identity: String,
@@ -633,8 +638,9 @@ pub struct SharedStorageGrantRequest {
 /// [`SharedStorageGrantOutcome::Granted`] with `storage_target_id` on success.
 /// `ManualGrantRequired` remains the fallback when the Drive API fails or the
 /// token lacks `drive.file`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum SharedStorageGrantOutcome {
     #[serde(rename = "granted")]
     Granted {

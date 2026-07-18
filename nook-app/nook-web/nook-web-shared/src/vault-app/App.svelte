@@ -3,7 +3,10 @@
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from "@lucide/svelte";
   import { VaultState, type StartSentinelGenesisArgs } from "$lib/vault.svelte";
   import { JoinEnrollmentState } from "$app-wasm";
-  import { loadAuthProviders, saveAuthProviders } from "$lib/auth-providers";
+  import {
+    saveAuthProviders,
+    type AuthProvidersSnapshot,
+  } from "$lib/auth-providers";
   import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
   import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
   import HelpPage from "$lib/components/HelpPage.svelte";
@@ -218,7 +221,7 @@
       (
         window as Window & {
           __nookAuthProviders?: {
-            loadAuthProviders: () => ReturnType<typeof loadAuthProviders>;
+            loadAuthProviders: () => Promise<AuthProvidersSnapshot>;
             saveAuthProviders: (
               snapshot: Parameters<typeof saveAuthProviders>[1],
             ) => ReturnType<typeof saveAuthProviders>;
@@ -226,7 +229,7 @@
         }
       ).__nookAuthProviders = {
         loadAuthProviders: () =>
-          vault.enqueueStorage(() => loadAuthProviders(vault.manager!)),
+          vault.enqueueStorage(() => vault.manager!.loadAuthProviders()),
         saveAuthProviders: (snapshot) =>
           vault.enqueueStorage(() =>
             saveAuthProviders(vault.manager!, snapshot),

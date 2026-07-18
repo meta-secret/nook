@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import { default as initNookWasm, NookVaultManager } from '$app-wasm'
-import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
@@ -59,7 +58,7 @@ describe.sequential(
 
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'
-      await saveAuthProviders(manager, {
+      await manager.saveAuthProviders({
         providers: [
           {
             id: 'gh-unit',
@@ -81,7 +80,7 @@ describe.sequential(
 
     test('loadAuthProviders decrypts sealed GitHub PAT', async () => {
       const pat = 'github_pat_22LOADdecryptTOKEN'
-      await saveAuthProviders(manager, {
+      await manager.saveAuthProviders({
         providers: [
           {
             id: 'gh-load',
@@ -94,7 +93,7 @@ describe.sequential(
         ],
       })
 
-      const loaded = await loadAuthProviders(manager)
+      const loaded = await manager.loadAuthProviders()
       expect(loaded.providers[0]?.githubPat).toBe(pat)
     })
 
@@ -138,7 +137,7 @@ describe.sequential(
         }
       })
 
-      const loaded = await loadAuthProviders(manager)
+      const loaded = await manager.loadAuthProviders()
       expect(loaded.providers[0]?.githubPat).toBe(pat)
 
       const raw = await readRawAuthProvidersFromIdb()
@@ -150,7 +149,7 @@ describe.sequential(
     test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
       const access = 'ya29.unit-oauth-access-token'
       const refresh = '1//unit-refresh-token-secret'
-      await saveAuthProviders(manager, {
+      await manager.saveAuthProviders({
         providers: [
           {
             id: 'gd-unit',
@@ -175,7 +174,7 @@ describe.sequential(
       expect(oauth?.accessToken).not.toContain(access)
       expect(oauth?.refreshToken).not.toContain(refresh)
 
-      const loaded = await loadAuthProviders(manager)
+      const loaded = await manager.loadAuthProviders()
       const loadedOauth = loaded.providers[0]?.oauthFile
       expect(loadedOauth?.accessToken).toBe(access)
       expect(loadedOauth?.refreshToken).toBe(refresh)

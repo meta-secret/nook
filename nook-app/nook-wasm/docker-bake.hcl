@@ -17,6 +17,17 @@ target "builder-wasm" {
   cache-from = rust_source_cache_from
 }
 
+target "_nook-rust-fast-common" {
+  context    = "."
+  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  target     = "nook-rust-fast"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    builder-wasm-deps = "target:builder-wasm-deps"
+  }
+  cache-from = rust_wasm_deps_cache_from
+}
+
 target "rust-format-check" {
   context    = "."
   dockerfile = "nook-app/nook-wasm/Dockerfile"

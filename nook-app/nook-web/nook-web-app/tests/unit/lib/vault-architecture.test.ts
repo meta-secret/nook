@@ -1,11 +1,13 @@
 import { beforeAll, describe, expect, test } from 'vitest'
-import initNookWasm, { OnboardingType } from '$app-wasm'
+import initNookWasm, {
+  NookVaultArchitecture,
+  OnboardingType,
+  enrollmentProviderForArchitecture,
+} from '$app-wasm'
 import type { StorageProvider } from '$lib/auth-providers'
 import {
   canCreateSecret,
   defaultVaultArchitecture,
-  draftVaultArchitecture,
-  enrollmentProviderForArchitecture,
   firstCompatibleProvider,
   onboardingType,
   providerCapabilityLabelKey,
@@ -93,8 +95,16 @@ describe('vault architecture adapter', () => {
   })
 
   test('draft construction delegates vault-specific defaults to Rust', () => {
-    const simple = draftVaultArchitecture('anti-hacker', 'simple', 'shared')
-    const sentinel = draftVaultArchitecture('standard', 'sentinel', 'personal')
+    const simple = NookVaultArchitecture.draft(
+      'anti-hacker',
+      'simple',
+      'shared',
+    )
+    const sentinel = NookVaultArchitecture.draft(
+      'standard',
+      'sentinel',
+      'personal',
+    )
     try {
       expect(simple.sentinel_threshold).toBeUndefined()
       expect(simple.replication_type).toBe('shared')

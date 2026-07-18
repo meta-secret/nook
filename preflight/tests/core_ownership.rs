@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use nook_preflight::{portable_core_browser_dependencies, typescript_domain_schema_mirrors};
+use nook_preflight::{
+    portable_core_browser_dependencies, rust_wasm_domain_boundary_escape_hatches,
+    typescript_domain_boundary_boilerplate,
+};
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT")
@@ -19,11 +22,21 @@ fn portable_core_does_not_import_browser_runtime_crates() {
 }
 
 #[test]
-fn removed_typescript_domain_mirrors_do_not_return() {
-    let violations =
-        typescript_domain_schema_mirrors(&repository_root()).expect("scan TypeScript schemas");
+fn typescript_domain_boundary_stays_generated_and_direct() {
+    let violations = typescript_domain_boundary_boilerplate(&repository_root())
+        .expect("scan TypeScript domain boundary");
     assert!(
         violations.is_empty(),
-        "vault domain schemas belong in Rust and typed WASM wrappers: {violations:#?}"
+        "vault domain schemas belong in Rust; use generated WASM types and direct exports instead of TypeScript mirrors or forwarding wrappers: {violations:#?}"
+    );
+}
+
+#[test]
+fn rust_wasm_domain_boundary_stays_real_and_typed() {
+    let violations = rust_wasm_domain_boundary_escape_hatches(&repository_root())
+        .expect("scan Rust WASM domain boundary");
+    assert!(
+        violations.is_empty(),
+        "WASM domain DTOs must use real Rust ABI types; unchecked TypeScript hints and raw provider/auth JsValue signatures are forbidden: {violations:#?}"
     );
 }

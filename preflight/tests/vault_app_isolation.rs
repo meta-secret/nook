@@ -18,6 +18,46 @@ fn read(root: &Path, path: &str) -> String {
 }
 
 #[test]
+fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount() {
+    let root = repository_root();
+    let wasm_tasks = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    assert!(
+        wasm_tasks.contains("wasm:build:fast:")
+            && wasm_tasks.contains("- setup:rust:fast")
+            && !wasm_tasks
+                .split("wasm:build:fast:")
+                .nth(1)
+                .unwrap_or_default()
+                .split("wasm:build:prod:")
+                .next()
+                .unwrap_or_default()
+                .contains("- setup:rust\n"),
+        "the mounted fast path must not build the source-sealed Rust image"
+    );
+
+    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    assert!(
+        app_tasks.contains("setup:rust:fast:") && app_tasks.contains("nook-rust-fast"),
+        "the fast setup must load the manifest-keyed development image"
+    );
+
+    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    assert!(
+        docker_tasks.contains("CARGO_TARGET_DIR=/opt/nook/cargo-target")
+            && docker_tasks.contains("{{.DOCKER_RUST_FAST_IMAGE}}"),
+        "the mounted build must use the dependency image target directory outside the bind mount"
+    );
+
+    let dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    assert!(
+        dockerfile.contains("FROM builder-wasm-deps AS nook-rust-fast")
+            && dockerfile.contains("mv /meta-secret/nook/nook-app/target /opt/nook/cargo-target",)
+            && dockerfile.contains("ENV CARGO_TARGET_DIR=/opt/nook/cargo-target"),
+        "the fast image must preserve its compiled dependency graph outside /meta-secret/nook"
+    );
+}
+
+#[test]
 fn agent_prs_cannot_be_merged_automatically() {
     let root = repository_root();
     assert!(

@@ -4,9 +4,7 @@ import { createLogger } from "$lib/log";
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
-  NookStorageProviderValue,
   OnboardingType,
-  StorageProviderType,
   decryptEnrollmentPayload,
   enrollmentProviderForArchitecture,
   encryptEnrollmentPayload,
@@ -16,6 +14,8 @@ import {
 } from "$app-wasm";
 import {
   bindGoogleDriveSharedFolder,
+  GITHUB_PROVIDER_TYPE,
+  OAUTH_FILE_PROVIDER_TYPE,
   type OAuthFilePreset,
   type StorageProvider,
 } from "$lib/auth-providers";
@@ -355,7 +355,7 @@ export async function connectWithEnrollmentCode(
     }
 
     let enrollmentStorageArgs: [string, string, string];
-    if (payload.provider.type === StorageProviderType.Github) {
+    if (payload.provider.type === GITHUB_PROVIDER_TYPE) {
       const githubPat = payload.provider.githubPat ?? "";
       const githubRepo = payload.provider.githubRepo ?? "";
       state.storageMode = "github";
@@ -448,7 +448,7 @@ export async function connectWithEnrollmentCode(
         state.loginSetupType = "oauth-file";
       }
       enrollmentStorageArgs = state.providerWasmArgs(provider);
-    } else if (payload.provider.type === StorageProviderType.OauthFile) {
+    } else if (payload.provider.type === OAUTH_FILE_PROVIDER_TYPE) {
       const oauthProvider: StorageProvider = {
         id: "enrollment-oauth",
         type: "oauth-file",
@@ -713,22 +713,15 @@ export async function issueEnrollmentCode(
         );
       }
     }
-    const providerValue = NookStorageProviderValue.fromObject(
-      JSON.parse(JSON.stringify(enrollmentProviderRow)) as object,
-    );
-    let provider: NookEnrollmentProvider;
-    try {
-      provider = enrollmentProviderForArchitecture(
-        providerValue,
+    const provider: NookEnrollmentProvider =
+      enrollmentProviderForArchitecture(
+        JSON.parse(JSON.stringify(enrollmentProviderRow)) as StorageProvider,
         state.vaultArchitecture,
         usesSharedProviderGrant && !usesSharedICloud
           ? sharedJoinerIdentity
           : undefined,
         sharedStorageTargetId,
       );
-    } finally {
-      providerValue.free();
-    }
     const vaultName = await state.enqueueStorage(
       () => state.manager!.vaultName ?? "",
     );

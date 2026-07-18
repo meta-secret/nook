@@ -42,6 +42,21 @@ Put app/domain types in Rust first:
   wasm APIs. The closer behavior is to browser lifecycle glue (`document`
   listeners, `setTimeout`, viewport/URL state), the more strongly it belongs in
   TypeScript/Svelte rather than Rust/WASM.
+- Consume generated WASM types and functions directly. Preserve a friendly web
+  module API with direct import/export aliases when useful, but do not add local
+  `type Foo = NookFoo` declarations or exported functions whose only statement
+  forwards the same parameters to a WASM import. Keep a wrapper only when it
+  performs a real boundary task such as constructing/freeing WASM values,
+  removing Svelte proxies, applying UI defaults, or translating browser state.
+
+```ts
+// Preferred: ownership stays visible and no runtime wrapper is emitted.
+export type { NookStorageProvider as StorageProvider } from "$app-wasm";
+export {
+  providerReplicationCapability,
+  providerSupportsReplication,
+} from "$app-wasm";
+```
 
 ## Scope
 
@@ -333,6 +348,13 @@ When `Option<T>` is still acceptable (do not force an enum):
       portable and testable.
 - [ ] Route JS access through typed `nook-wasm` exports instead of plain TS
       schema mirrors.
+- [ ] Use an actual Rust/WASM ABI type for domain DTOs. Do not return or accept
+      raw `JsValue` and paint a TypeScript type over it with
+      `unchecked_return_type` / `unchecked_param_type`; derive the declaration
+      and conversion from the Rust type (for example with `Tsify`).
+- [ ] Re-export generated WASM bindings directly; remove local aliases and
+      same-argument forwarding functions that add no lifecycle or translation
+      behavior.
 - [ ] Treat long wasm functions with many optional parameters (or a flattened
       stringly-typed struct) as a design smell. Model the state as a `nook-core`
       enum-of-structs and expose a thin `#[wasm_bindgen]` newtype wrapper with
@@ -348,4 +370,7 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 Run the smallest relevant Rust and web checks for the touched boundary first. For
 implementation tasks, push or update the PR when the iteration is ready for
-final validation, then finish with `task check` while remote CI runs.
+final validation, then finish with `task check` while remote CI runs. `task
+preflight` rejects known TypeScript domain mirrors, local aliases of generated
+`Nook*` types, same-argument forwarding functions around generated WASM imports,
+unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures.

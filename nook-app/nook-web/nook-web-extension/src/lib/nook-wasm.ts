@@ -16,11 +16,15 @@ import {
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
   translateFromCatalog as wasmTranslateFromCatalog,
   type NookAppLocale,
+  type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 let initPromise: Promise<unknown> | undefined
 
-export type { NookAppLocale }
+export type {
+  NookAppLocale,
+  DeviceMode as ExtensionDeviceMode,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export function ensureNookWasm() {
   initPromise ??= initNookWasm().then((value) => {
@@ -42,8 +46,6 @@ export type ExtensionDeviceProtectionStatus =
   | 'passkey'
   | 'pin'
   | 'unlocked'
-
-export type ExtensionDeviceMode = 'standard' | 'anti-hacker'
 
 type SessionResponse<T> = { ok: true } & T
 

@@ -6,7 +6,7 @@ import {
   JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
   VaultRecoveryErrorKind,
-  type NookSentinelStoredDeliverySummary,
+  type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
 } from "$app-wasm";
 
 const log = createLogger("vault-sentinel");
@@ -17,16 +17,18 @@ export type SentinelUnlockStatus =
   | "awaiting_shares"
   | "ceremony_required";
 
-export type SentinelUnlockSessionStatus = NookSentinelUnlockSessionStatus;
-export type SentinelStoredDeliverySummary = NookSentinelStoredDeliverySummary;
+export type {
+  NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
+  NookSentinelUnlockSessionStatus as SentinelUnlockSessionStatus,
+} from "$app-wasm";
 
-export function inactiveSentinelUnlockSession(): SentinelUnlockSessionStatus {
+export function inactiveSentinelUnlockSession(): NookSentinelUnlockSessionStatus {
   return NookSentinelUnlockSessionStatus.inactive();
 }
 
 function replaceUnlockSession(
   state: VaultState,
-  status: SentinelUnlockSessionStatus,
+  status: NookSentinelUnlockSessionStatus,
 ): void {
   const previous = state.sentinelUnlockSession;
   state.sentinelUnlockSession = status;
