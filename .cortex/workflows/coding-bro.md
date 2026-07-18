@@ -164,7 +164,14 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and
     every actionable comment is resolved.
 10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
-    readiness audit succeeds. Report task duration after the merge.
+    readiness audit succeeds.
+11. **Publish and analyze statistics** — write
+    `.stats/ai-agent/<n>.yaml`, compare it with one or two recent comparable PRs,
+    publish it in a separate check-free stats-only PR, and squash-merge that PR
+    immediately. Open a separate normal performance PR for actionable waste or
+    regression. See [agent-statistics.md](agent-statistics.md).
+12. **Finish** — report the task duration after the implementation and stats PRs
+    are merged and any required performance PR is also landed.
 
 ```mermaid
 flowchart TD
@@ -182,7 +189,11 @@ flowchart TD
   FIX --> PUSH[Push completed fix]
   PUSH --> L
   PUSH --> PR
-  M --> D[Duration report]
+  M --> S[11 Publish + merge stats-only PR]
+  S --> W{Actionable regression or waste?}
+  W -->|yes| BP[Open normal build-performance PR]
+  W -->|no| D[12 Duration report]
+  BP --> D
 ```
 
 ## Commands
@@ -329,6 +340,15 @@ gh pr merge <number> --squash
 
 Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
 
+### 12 — Publish statistics
+
+After the implementation PR merges, follow
+[agent-statistics.md](agent-statistics.md). Create the YAML from current `main`,
+compare it with one or two comparable prior records, publish it as the only file
+in a stats-only PR, and squash-merge it immediately without local/product
+checks, review, or `task pr:ready`. Stats-only PRs never generate another stats
+record. Any performance fix belongs in a separate normal PR.
+
 ## CI fix PRs (nightly failures only)
 
 When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent and opens a fix PR for normal review. It never merges the PR automatically. Main-branch failures remain visible for manual handling. The nightly path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you and `pr.yml` triggers. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
@@ -353,11 +373,15 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - **Never hide deferred scope** — if requested functionality is not fully
   implemented because it is large, risky, blocked, or out of scope, manage it in
   GitHub issues first. See [issues.md](issues.md).
-- **Duration report** on every completed implementation task. See [pull-requests.md §9](pull-requests.md#9-task-completion-report).
+- **Per-PR statistics after merge** — measure throughout the normal PR, then
+  publish and analyze `.stats/ai-agent/<pr-number>.yaml` through a separate
+  check-free stats-only PR. See [agent-statistics.md](agent-statistics.md).
+- **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
 
 ## Related docs
 
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [issues.md](issues.md) — aggregate issue and sub-issue management for deferred scope
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
+- [agent-statistics.md](agent-statistics.md) — measurement schema, comparison rules, waste analysis, and stats-only PR exception
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)

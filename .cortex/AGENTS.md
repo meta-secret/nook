@@ -77,6 +77,18 @@ the push. The minimum local gate, full suites, builds, e2e, and any repeated
 post-fix validation must run after the completed change is pushed so remote work
 starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--parallel-final-validation).
 
+## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
+
+Task-owning AI agents must measure every normal PR's local check/test runs,
+GitHub Actions runs and retriggers, merge attempts, and elapsed time. After the
+implementation PR merges, write `.stats/ai-agent/<pr-number>.yaml`, compare it
+with one or two recent comparable PR records, and assess build/workflow waste.
+Publish the record in a separate stats-only PR that triggers no product checks
+and is squash-merged immediately; stats-only PRs do not recursively generate
+statistics. Any actionable regression or waste must be fixed in a separate
+normal build-performance PR. Full policy:
+[workflows/agent-statistics.md](workflows/agent-statistics.md).
+
 ## 1. Rules & Architectural Layout
 * [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
 * [rules.md](rules.md) — Golden Principles and hard coding/tooling constraints (**§6: squash merge every PR**).
@@ -113,6 +125,7 @@ starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates, **testing pyramid** (Rust ~99% domain coverage), and release.
+* [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, historical comparison, waste analysis, and the check-free stats-only PR exception.
 
 ## 7. Agent duties beyond code
 
