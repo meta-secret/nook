@@ -14,7 +14,6 @@ import {
   parseAppLocale as wasmParseAppLocale,
   resolveAppLocaleFromTags as wasmResolveAppLocaleFromTags,
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
-  translateFromCatalog as wasmTranslateFromCatalog,
   type NookAppLocale,
   type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -350,12 +349,4 @@ export async function getResolvedTranslationCatalog(
     wasmCatalog = undefined
   }
   return wasmResolveTranslationCatalog(locale, wasmCatalog)
-}
-
-export function translateFromExtensionCatalog(
-  catalog: string,
-  locale: NookAppLocale,
-  key: string,
-): string {
-  return wasmTranslateFromCatalog(catalog, locale, key)
 }

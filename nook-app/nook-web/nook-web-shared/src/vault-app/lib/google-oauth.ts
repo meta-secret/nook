@@ -12,9 +12,7 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
-import {
-  googleOAuthTokensToConfig as googleOAuthTokensToConfigCore,
-} from "$app-wasm";
+import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";

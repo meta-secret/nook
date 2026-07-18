@@ -363,9 +363,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const recordValues = NookExternalEventLogRecords.fromArray(
         payload.eventLogRecords,
       )
-      const statusValue = await (
-        await getManager()
-      )
+      const statusValue = await (await getManager())
         .importExtensionEventLogRecords(
           grant.vaultStoreId,
           grant.deviceId,

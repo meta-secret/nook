@@ -6,9 +6,7 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
-import {
-  iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore,
-} from "$app-wasm";
+import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
 import {
   default as initNookWasm,
   createICloudSharedStorageTarget,

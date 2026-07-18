@@ -2,9 +2,9 @@ import {
   getResolvedTranslationCatalog,
   parseStoredAppLocale,
   resolveAppLocaleFromTags,
-  translateFromExtensionCatalog,
   type NookAppLocale,
 } from './nook-wasm'
+import { translateFromCatalog } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export const NOOK_LOCALE_STORAGE_KEY = 'nook_locale'
 
@@ -65,7 +65,7 @@ export async function initializeExtensionI18n(): Promise<ExtensionI18n> {
   return {
     locale,
     t(key, replacements) {
-      let text = translateFromExtensionCatalog(catalog, locale, key)
+      let text = translateFromCatalog(catalog, locale, key)
       if (replacements) {
         for (const [name, value] of Object.entries(replacements)) {
           text = text.replaceAll(`{${name}}`, value)

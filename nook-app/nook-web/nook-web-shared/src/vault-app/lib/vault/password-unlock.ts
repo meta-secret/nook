@@ -713,15 +713,14 @@ export async function issueEnrollmentCode(
         );
       }
     }
-    const provider: NookEnrollmentProvider =
-      enrollmentProviderForArchitecture(
-        JSON.parse(JSON.stringify(enrollmentProviderRow)) as StorageProvider,
-        state.vaultArchitecture,
-        usesSharedProviderGrant && !usesSharedICloud
-          ? sharedJoinerIdentity
-          : undefined,
-        sharedStorageTargetId,
-      );
+    const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(
+      JSON.parse(JSON.stringify(enrollmentProviderRow)) as StorageProvider,
+      state.vaultArchitecture,
+      usesSharedProviderGrant && !usesSharedICloud
+        ? sharedJoinerIdentity
+        : undefined,
+      sharedStorageTargetId,
+    );
     const vaultName = await state.enqueueStorage(
       () => state.manager!.vaultName ?? "",
     );

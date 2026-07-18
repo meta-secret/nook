@@ -233,12 +233,22 @@ fn is_wasm_type_alias(line: &str, wasm_bindings: &HashSet<String>) -> bool {
 
 fn wasm_import_bindings(contents: &str) -> HashSet<String> {
     let mut bindings = HashSet::new();
-    for statement in contents.split(';') {
-        let Some(import_start) = statement.rfind("import ") else {
+    let lines = contents.lines().collect::<Vec<_>>();
+    let mut index = 0;
+    while index < lines.len() {
+        if !lines[index].trim_start().starts_with("import ") {
+            index += 1;
             continue;
-        };
-        let statement = &statement[import_start..];
-        if !statement.starts_with("import ") || !is_wasm_import(statement) {
+        }
+
+        let start = index;
+        while index + 1 < lines.len() && !is_import_statement_complete(&lines, start, index) {
+            index += 1;
+        }
+        let statement = lines[start..=index].join("\n");
+        index += 1;
+
+        if !is_wasm_import(&statement) {
             continue;
         }
         let Some(start) = statement.find('{') else {
@@ -263,6 +273,26 @@ fn wasm_import_bindings(contents: &str) -> HashSet<String> {
         }
     }
     bindings
+}
+
+fn is_import_statement_complete(lines: &[&str], start: usize, end: usize) -> bool {
+    let statement = lines[start..=end].join("\n");
+    if statement.trim_end().ends_with(';') {
+        return true;
+    }
+
+    let braces = statement
+        .chars()
+        .fold(0_i32, |depth, character| match character {
+            '{' => depth + 1,
+            '}' => depth - 1,
+            _ => depth,
+        });
+    braces == 0
+        && (statement.contains(" from \"")
+            || statement.contains(" from '")
+            || statement.trim_start().starts_with("import \"")
+            || statement.trim_start().starts_with("import '"))
 }
 
 fn is_wasm_import(statement: &str) -> bool {
@@ -304,9 +334,8 @@ fn is_trivial_wasm_forwarder(
         .or_else(|| statement.strip_prefix("return "))
         .or_else(|| statement.strip_prefix("await "))
         .unwrap_or_default()
-        .strip_suffix(';')
-        .unwrap_or_default()
         .trim();
+    let expression = expression.strip_suffix(';').unwrap_or(expression).trim();
     let Some(open) = expression.find('(') else {
         return false;
     };
@@ -458,7 +487,7 @@ fn collect_files_with_extension(
         let path = entry.path();
         let file_type = entry.file_type()?;
         if file_type.is_dir() {
-            if !is_generated_directory(&entry.file_name()) {
+            if !is_generated_directory(&path) {
                 collect_files_with_extension(&path, extension, files)?;
             }
         } else if file_type.is_file()
@@ -524,7 +553,7 @@ fn collect_dockerfiles(directory: &Path, dockerfiles: &mut Vec<PathBuf>) -> io::
         let file_type = entry.file_type()?;
 
         if file_type.is_dir() {
-            if !is_generated_directory(&entry.file_name()) {
+            if !is_generated_directory(&path) {
                 collect_dockerfiles(&path, dockerfiles)?;
             }
         } else if file_type.is_file() && is_dockerfile(&entry.file_name()) {
@@ -535,11 +564,10 @@ fn collect_dockerfiles(directory: &Path, dockerfiles: &mut Vec<PathBuf>) -> io::
     Ok(())
 }
 
-fn is_generated_directory(name: &std::ffi::OsStr) -> bool {
-    matches!(
-        name.to_str(),
-        Some(".git" | "node_modules" | "target" | "dist" | "nook-wasm")
-    )
+fn is_generated_directory(path: &Path) -> bool {
+    let name = path.file_name().and_then(|name| name.to_str());
+    matches!(name, Some(".git" | "node_modules" | "target" | "dist"))
+        || path.ends_with(Path::new("nook-web-shared/src/vault-app/lib/nook-wasm"))
 }
 
 fn is_dockerfile(name: &std::ffi::OsStr) -> bool {
@@ -556,9 +584,24 @@ mod tests {
     fn reports_only_cache_mounts_in_dockerfiles() {
         let root = temporary_directory();
         fs::create_dir_all(root.join("nested")).unwrap();
+        fs::create_dir_all(root.join("nook-app/nook-wasm")).unwrap();
+        fs::create_dir_all(
+            root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm"),
+        )
+        .unwrap();
         fs::write(
             root.join("nested/build.Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("nook-app/nook-wasm/Dockerfile"),
+            "FROM scratch\nRUN --mount=type=cache,target=/wasm-cache true\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/Dockerfile"),
+            "FROM scratch\nRUN --mount=type=cache,target=/generated-cache true\n",
         )
         .unwrap();
         fs::write(root.join("notes.txt"), "--mount=type=cache").unwrap();
@@ -575,6 +618,10 @@ mod tests {
                 Violation {
                     path: PathBuf::from("nested/build.Dockerfile"),
                     line: 3,
+                },
+                Violation {
+                    path: PathBuf::from("nook-app/nook-wasm/Dockerfile"),
+                    line: 2,
                 },
             ]
         );
@@ -623,6 +670,32 @@ export function adaptedProviderCapability(
             typescript_boundary_violation_lines(source),
             vec![7, 8, 9, 12, 18]
         );
+    }
+
+    #[test]
+    fn reports_semicolonless_wasm_imports_and_forwarders() {
+        let source = r#"import {
+  providerReplicationCapability as wasmProviderReplicationCapability,
+  type StorageProvider,
+} from "$app-wasm"
+import { toPlain } from "./plain"
+
+export type Provider = StorageProvider
+
+export function providerReplicationCapability(
+  provider: StorageProvider,
+): ProviderReplicationCapability {
+  return wasmProviderReplicationCapability(provider)
+}
+
+export function adaptedProviderCapability(
+  provider: StorageProvider,
+): ProviderReplicationCapability {
+  return wasmProviderReplicationCapability(toPlain(provider))
+}
+"#;
+
+        assert_eq!(typescript_boundary_violation_lines(source), vec![7, 9]);
     }
 
     #[test]
