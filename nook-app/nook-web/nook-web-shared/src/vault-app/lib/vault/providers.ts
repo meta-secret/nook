@@ -480,11 +480,14 @@ export async function connectAndSyncStagedProvider(
     state.loginSetupType = undefined;
     state.addProviderOpen = false;
   } catch (e: unknown) {
-    state.errorMsg = state.localFolderMultipleVaultsIssue
-      ? state.t("auth_storage.local_folder_multiple_vaults_short")
-      : e instanceof Error
-        ? e.message
-        : state.t("auth_storage.sync_failed");
+    const stagedConflict = await state.stageStagedProviderSyncIssue();
+    if (!stagedConflict) {
+      state.errorMsg = state.localFolderMultipleVaultsIssue
+        ? state.t("auth_storage.local_folder_multiple_vaults_short")
+        : e instanceof Error
+          ? e.message
+          : state.t("auth_storage.sync_failed");
+    }
   } finally {
     state.isVerifying = false;
   }

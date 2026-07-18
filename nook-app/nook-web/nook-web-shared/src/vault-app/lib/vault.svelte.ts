@@ -1837,6 +1837,10 @@ export class VaultState {
     return syncActions.stageSyncConflict(this, conflict);
   }
 
+  async stageStagedProviderSyncIssue(): Promise<boolean> {
+    return syncActions.stageStagedProviderSyncIssue(this);
+  }
+
   async resolveSyncConflictImportRemote(): Promise<void> {
     return syncActions.resolveSyncConflictImportRemote(this);
   }
