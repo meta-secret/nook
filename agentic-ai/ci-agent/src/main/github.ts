@@ -361,7 +361,10 @@ export async function inspectPrFeedback(
       return true;
     }
     const body = review.body?.trim() ?? "";
-    return body.length > 0 && !body.startsWith("### 💡 Codex Review");
+    return (
+      body.length > 0 &&
+      !(isCodexReviewer(review.user?.login) && body.startsWith("### 💡 Codex Review"))
+    );
   });
 
   return {

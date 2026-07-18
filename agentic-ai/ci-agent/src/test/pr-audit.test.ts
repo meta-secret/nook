@@ -89,12 +89,13 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
   assert.deepEqual(audit.reasons, []);
 });
 
-test("buildPrAudit ignores a lookalike Codex status review", async () => {
+test("buildPrAudit blocks a lookalike Codex status review", async () => {
   const audit = await buildPrAudit(mockOctokit({ codexReview: "impostor" }), repoRef, 410);
 
-  assert.equal(audit.ready, true);
+  assert.equal(audit.ready, false);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
-  assert.deepEqual(audit.reasons, []);
+  assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.ok(audit.reasons.some((reason) => reason.includes("substantive current-head review")));
 });
 
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
