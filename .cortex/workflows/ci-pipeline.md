@@ -370,7 +370,13 @@ exact-commit query to every mutable artifact URL and retries convergence on PR,
 main, and release. This prevents a fresh metadata response from being paired
 with an older edge-cached archive that reused the same channel filename.
 
-**Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
+**The GitHub Actions PR workflow is the primary validation pipeline.** Its
+checks validate the exact pushed PR head, so a coherent ready change must be
+committed and pushed immediately to trigger or refresh `pr.yml`. Do not delay
+that push for a full local gate, benchmark, PR metadata update, or other
+follow-up work.
+
+**Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to debug failures and iterate, but treat them as complementary to the primary PR pipeline. After pushing, run local validation while remote CI runs. Never serialize a full local gate before the push.
 
 **E2e debug — one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
 

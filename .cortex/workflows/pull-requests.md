@@ -112,15 +112,17 @@ grace period.
 
 ### 5. Local checks
 
-**Remote PR CI is elastic and remains a full validation gate.** `pr.yml` uses
-GitHub-hosted `ubuntu-latest` and restores main-seeded, lineage-specific
+**Remote PR CI is the primary validation pipeline.** `pr.yml` uses GitHub-hosted
+`ubuntu-latest`, validates the exact pushed head, and restores main-seeded, lineage-specific
 BuildKit caches through GitHub's cache service. Follow-up pushes may also reuse
-the PR branch cache. **Focused local Docker commands can use
+the PR branch cache. Push each coherent ready change immediately so the
+repository checks start or refresh before benchmarks, PR metadata work, or full
+local validation. **Focused local Docker commands can use
 cached images** and are strongly preferred for checking tests, fixing issues,
 and iterating. Once the iteration is ready for final validation, push first and run
 the local gate immediately while remote CI runs. Remote CI validates the PR in
-the repository runner environment; local Docker remains the primary diagnostic
-loop. Concurrent PR and AI jobs scale across GitHub-hosted runners.
+the repository runner environment; local Docker remains the complementary
+diagnostic loop. Concurrent PR and AI jobs scale across GitHub-hosted runners.
 
 ```text
 implement/fix → commit → push/update PR → local required gate ‖ applicable PR workflows
