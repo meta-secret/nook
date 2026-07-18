@@ -5,8 +5,8 @@ description: >-
   Inspect submitted reviews, inline review threads, and PR comments; build a
   checklist from actionable items; verify each finding; fix or explain it;
   validate, push, reply on GitHub, and resolve conversations only after the
-  agent's targeted reply is visible. Request and settle the required exact-head
-  Codex pass; never wait for other optional external reviews or checks.
+  agent's targeted reply is visible. Never request or wait for external reviews
+  or checks.
 ---
 
 # Code Review Comments
@@ -25,13 +25,12 @@ actionable submitted-review items without threaded reply targets in the local
 checklist and final handoff rather than creating broad or duplicative PR
 comments. Re-query reviews and unresolved threads before handoff.
 
-Inspect the feedback, address every actionable item, and run `task pr:review
-PR=<number>` for the exact head. Proceed only after that pass, unresolved-thread
-count, and Nook's applicable repository-owned PR test checks are green.
+Inspect the feedback and address every actionable item already present. Proceed
+when the unresolved-thread count is zero and Nook's applicable repository-owned
+PR test checks are green.
 These are normally `PR / Verify and preview`, plus `Web research / Build and
-deploy research catalog` when web-research paths change. Request another Codex
-pass if a feedback fix changes the head. Never wait for other optional services
-or use a blind grace period.
+deploy research catalog` when web-research paths change. Never request or wait
+for external review services.
 
 Use the concrete, paginated review-thread GraphQL query and the current-head
 `commit_id` comparison in the system-of-record skill; do not infer current

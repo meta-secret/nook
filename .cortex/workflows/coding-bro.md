@@ -32,13 +32,13 @@ Default PR-first loop:
 5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
    logs for web/e2e failures, fix locally, and push the completed fix; the
    synchronize event re-evaluates the refreshed repository-owned check.
-6. **Settle review feedback** — run `task pr:review PR=<number>` for the exact
-   head, reply to every actionable human, Codex, and automated review comment,
-   and resolve each thread. If a fix changes the head, request another Codex pass.
+6. **Settle existing review feedback** — inspect the current comments and
+   reviews, reply to every actionable human or automated finding, and resolve
+   each thread. Do not request or wait for optional reviewers.
 7. **Merge automatically when ready** — require `task pr:ready PR=<number>`, then
    squash-merge as soon as the branch is current, Nook's applicable
-   repository-owned PR test checks are green, the exact-head Codex pass settled,
-   and all actionable comments are resolved. Do not pause for a ready-PR handoff or separate merge
+   repository-owned PR test checks are green and all actionable comments are
+   resolved. Do not pause for a ready-PR handoff or separate merge
    permission.
 
 ## Testing strategy — parallel final validation
@@ -142,11 +142,11 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    Docker (cached images) for diagnosis and iteration; use remote CI as the
    clean-run gate. During debug, run specs one at a time with
    `E2E_SPEC=… task web:test:e2e:file`.
-6. **Continue on Nook's PR events and exact-head Codex review** — Evaluate `PR / Verify and
+6. **Continue on Nook's PR events** — Evaluate `PR / Verify and
    preview`, plus `Web research / Build and deploy research catalog` when its
-   paths change. Run `task pr:review PR=<number>` after the final push and wait
-   for that Codex result. Never wait for Claude, Cursor, CodeRabbit, or another
-   optional external review/check/service, and do not substitute a blind grace period.
+   paths change. Inspect any feedback already present, but never request or wait
+   for Codex, Claude, Cursor, CodeRabbit, or another optional external
+   review/check/service.
    Before merging, fetch `origin/main` and verify
    GitHub does not mark the PR branch stale/out-of-date; if it is stale, merge
    `origin/main` into the PR branch and push; the synchronize event re-evaluates
@@ -157,10 +157,9 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    completed fix → run the required local gate while monitoring refreshed CI.
 8. **Address and resolve PR comments** — Inspect human, Codex, and automated
    feedback; reply with the fix, validation, or no-change rationale, resolve the
-   targeted thread, and push changes when needed. A changed head requires another
-   `task pr:review` pass.
-9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green, the
-    exact-head Codex pass settled, and every actionable comment is resolved.
+   targeted thread, and push changes when needed.
+9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and
+    every actionable comment is resolved.
 10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
     readiness audit succeeds.
 11. **Publish and analyze statistics** — write
@@ -219,9 +218,9 @@ local Task commands for implementation/debug loops. Once the current iteration i
 functionally complete, commit and push/open/update the PR, then run the local
 final gate immediately while remote CI runs.
 
-Run `task pr:review PR=<number>` after the final push and settle its exact-head
-Codex result. Other external reviewers remain optional. Follow
-[code-review.md](code-review.md) for handling every finding.
+Inspect feedback already present after the final push. Do not request or wait
+for external reviewers. Follow [code-review.md](code-review.md) for handling
+every finding that already exists.
 
 **Minimum local final gate** (must finish before merge or handoff):
 
@@ -273,7 +272,6 @@ gh run view <run-id> --log-failed   # CI job output
 # For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
 task ci:pr                          # full PR mirror (no browser e2e)
-task pr:review PR=<number>          # idempotent exact-head Codex review request
 task pr:ready PR=<number>           # read-only exact-head readiness assertion
 ```
 
@@ -325,14 +323,13 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 # If the branch is behind origin/main:
 git merge origin/main --no-edit
 git push origin HEAD
-task pr:review PR=<number>
 task pr:ready PR=<number>
 ```
 
 ### 11 — Merge
 
-When Nook's applicable repository-owned PR test checks and exact-head Codex pass
-are complete, every actionable thread is resolved, and `task pr:ready` succeeds:
+When Nook's applicable repository-owned PR test checks are complete, every
+actionable thread is resolved, and `task pr:ready` succeeds:
 
 ```bash
 gh pr merge <number> --squash
@@ -366,9 +363,9 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit;
   once it succeeds, the task-owning agent must squash-merge without asking
   again. Workflows do not blindly merge based on a check event.
-- **Settle the exact-head Codex review before merge.** Run `task pr:review`,
-  address and resolve all actionable comments, then require `task pr:ready`.
-  Never wait for other optional external reviewers or checks.
+- **Settle feedback already present before merge.** Address and resolve all
+  actionable comments, then require `task pr:ready`. Never request or wait for
+  optional external reviewers or checks.
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Never hide deferred scope** — if requested functionality is not fully
   implemented because it is large, risky, blocked, or out of scope, manage it in

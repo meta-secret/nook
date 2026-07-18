@@ -45,22 +45,16 @@ carry this lifecycle through merge. Full policy:
 
 Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
-## ⛔ Non-negotiable: settle the exact-head Codex review before merge
+## ⛔ Non-negotiable: inspect existing feedback without waiting for reviewers
 
-After the final push, run `task pr:review PR=<number>` and wait for the exact-head
-Codex result: either a submitted review or Codex's thumbs-up reaction. Address,
-reply to, and resolve every actionable review thread before merge; any push made
-for review feedback invalidates the prior result and requires another exact-head
-review. `task pr:ready` enforces this handshake in addition to the applicable
-repository-owned PR checks. Do not replace it with a blind grace period.
-
-External feedback is still useful when it already exists: before merge or
-handoff, inspect the comments and review findings currently present and address
-every active actionable item from humans or external services. Reply with the
-fix, validation, or no-change rationale as documented below. Request a fresh
-Codex pass when the fix changes the head. Claude, Cursor, CodeRabbit, and other
-external services remain optional: inspect feedback already present, but do not
-wait for those services. Full policy:
+Before merge or handoff, inspect the comments and review findings currently
+present and address every active actionable item from humans or external
+services. Reply with the fix, validation, or no-change rationale and resolve
+each actionable thread. Do not request or wait for Codex, Claude, Cursor,
+CodeRabbit, or any other optional reviewer when no feedback is present. A PR is
+ready when the applicable repository-owned checks are green, the branch is
+current and mergeable, and all feedback already present is addressed.
+`task pr:ready` enforces the machine-checkable parts. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
 
 ## ⛔ Non-negotiable: push before final checks; run them in parallel
@@ -162,9 +156,8 @@ normal build-performance PR. Full policy:
   both inline review threads and top-level review bodies for actionable findings. Replies must target the
   specific comment/item; a broad PR audit comment is not a substitute. Resolve a conversation only after
   the targeted reply is visible and the finding is fixed or explicitly invalidated, then re-query the PR.
-  Inspect again before merge or handoff. The exact-head Codex review must settle,
-  and every active actionable item must be handled; do not wait for other external
-  reviewers or services.
+  Inspect again before merge or handoff. Every active actionable item must be
+  handled; do not request or wait for external reviewers or services.
   See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality

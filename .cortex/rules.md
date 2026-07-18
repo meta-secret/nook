@@ -172,22 +172,16 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Linear `main` history is a project requirement, not a preference.
 
-> ## ⛔ REQUIRE AN EXACT-HEAD CODEX REVIEW BEFORE MERGE
->
-> After the final push, agents must run `task pr:review PR=<number>` and wait for
-> the exact-head Codex result. A submitted Codex review or its thumbs-up reaction
-> settles the request. Any feedback fix that changes the head requires a fresh
-> request. `task pr:ready` must reject an unsettled exact-head review and every
-> unresolved conversation. A blind grace period is not an acceptable substitute.
+> ## ⛔ INSPECT EXISTING FEEDBACK; DO NOT WAIT FOR REVIEWERS
 >
 > Before merge or handoff, inspect comments and findings that already exist and
 > address every active actionable item, regardless of whether it came from a
 > human or an external service. Reply with the fix, validation, or no-change
-> rationale, then request a new Codex pass when the head changed. Every
-> external-service review comment already present must be inspected. Claude,
-> Cursor, CodeRabbit, and services other than Codex remain optional and must not
-> delay merge when they have no feedback present; optional review never means
-> optional handling of feedback that arrived.
+> rationale and resolve each actionable thread. Every external-service review
+> comment already present must be inspected. Codex, Claude, Cursor, CodeRabbit,
+> and all other external reviewers are optional: do not request or wait for them
+> when no feedback is present. Optional review never means optional handling of
+> feedback that already arrived.
 
 > ## ⛔ PUSH BEFORE FINAL CHECKS — RUN LOCAL AND PR CHECKS IN PARALLEL
 >
@@ -211,7 +205,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Verify and request the exact-head Codex pass.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head, then `task pr:review PR=<number>` before readiness. Do not request other external reviews.
+- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head and inspect feedback already present. Do not request or wait for external reviews.
 - **Record PR statistics after merge.** Follow
   [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
   completed YAML in a separate stats-only PR, compare against recent comparable
