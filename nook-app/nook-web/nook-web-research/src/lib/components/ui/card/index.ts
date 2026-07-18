@@ -1,5 +1,5 @@
 import Description from './card-description.svelte'
-import Footer from './card-footer.svelte'
+import Footer from '$vault-shared/lib/components/ui/card/card-footer.svelte'
 import Header from './card-header.svelte'
 import Root from './card.svelte'
 import Title from './card-title.svelte'

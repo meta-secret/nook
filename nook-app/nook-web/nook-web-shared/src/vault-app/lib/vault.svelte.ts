@@ -12,20 +12,16 @@ import {
   type VaultMember,
 } from "$lib/nook";
 import { consumeEnrollmentFromLocation } from "$lib/enrollment-code";
-import { buildSentinelOnboardingLink } from "$lib/sentinel-onboarding-link";
 import { SvelteDate } from "svelte/reactivity";
 import {
   chooseLocalFolderBackupDirectory,
-  ensureLocalAuthProviderSnapshot,
   hasActiveLocalVault,
-  hasLocalVault,
   hasRemoteCredentials as wasmHasRemoteCredentials,
   isLocalFolderBackupSupported,
   isVaultSessionLocked,
   JoinEnrollmentState,
   NookBrowserLocale,
   NookClientRunModeUtil,
-  NookAuthProvidersSnapshotValue,
   NookOAuthFileConfigValue,
   NookRuntimeConfig,
   NookStorageProviderList,
@@ -54,8 +50,6 @@ import {
   type NookLocalVaultEntry,
   type NookPasswordEntrySummary,
   type NookSecretPage,
-  type NookSentinelGenesisFinalizeResult,
-  type NookSentinelGenesisStatus,
   type NookStorageConnectArgs,
   type NookVaultManager,
   type NookAppLocale,
@@ -68,10 +62,8 @@ import {
   LOCAL_PROVIDER_TYPE,
   NookStorageProviderKind,
   providerDefaultLabel,
-  saveAuthProviders,
   storageProviderKind,
   wasmStorageModeForProvider,
-  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type GoogleDriveMode,
   type ICloudMode,
@@ -88,10 +80,6 @@ import {
   type VaultIdleSessionTracker,
 } from "$lib/vault-idle-session";
 import {
-  isPasskeyCeremonyNotAllowedError,
-  isPasskeyPrfUnavailableError,
-  isPasskeyUnavailableError,
-  recoverDeviceProtectionWithPasskey as recoverExistingPasskeyProtection,
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from "$lib/passkey-device-protection";
@@ -117,6 +105,8 @@ import * as passwordUnlockActions from "$lib/vault/password-unlock";
 import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
 import * as idleSessionActions from "$lib/vault/idle-session";
 import * as lifecycleActions from "$lib/vault/lifecycle";
+import * as deviceProtectionActions from "$lib/vault/device-protection";
+import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import {
   clearTabScopedBrowserData,
   deleteLocalBrowserData as deleteBrowserData,
@@ -463,7 +453,8 @@ export class VaultState {
   initPromise: Promise<void> | undefined = undefined;
   storageChain: Promise<unknown> = Promise.resolve();
   private localDataDeletionStarted = false;
-  private deviceAuthorizationInProgress = false;
+  /** Internal browser-orchestration flag shared with the device-protection actions. */
+  deviceAuthorizationInProgress = false;
   pendingEnrollmentFromUrl: string | undefined =
     typeof window !== "undefined" ? consumeEnrollmentFromLocation() : undefined;
 
@@ -924,7 +915,7 @@ export class VaultState {
     }
   }
 
-  private async continueInitializationAfterDeviceUnlock() {
+  async continueInitializationAfterDeviceUnlock() {
     if (!this.manager) return;
     await this.initDeviceIdentity({ allowPendingAuthorization: true });
     if (
@@ -935,7 +926,7 @@ export class VaultState {
       const rawResult = await this.enqueueStorage(() =>
         this.manager!.resumePendingSentinelGenesisFinalization(),
       );
-      this.applySentinelGenesisFinalizeResult(rawResult);
+      sentinelGenesisActions.applyFinalizeResult(this, rawResult);
     }
     await this.loadProviders({ ensureLocalRow: true });
     await localLoginActions.refreshLocalVaultCatalog(this);
@@ -1056,7 +1047,7 @@ export class VaultState {
     );
   }
 
-  private replaceVaultArchitecture(architecture: VaultArchitecture): void {
+  replaceVaultArchitecture(architecture: VaultArchitecture): void {
     const previous = this.vaultArchitecture;
     this.vaultArchitecture = architecture;
     if (previous !== architecture) previous.free();
@@ -1111,241 +1102,39 @@ export class VaultState {
   async setupDeviceProtection(
     passkeyLabel = "",
     deviceMode = this.draftDeviceMode,
-  ) {
-    if (!this.manager || this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    let deviceIdentityUnlocked = false;
-    try {
-      await this.enqueueStorage(() =>
-        createPasskeyProtection(this.manager!, passkeyLabel, deviceMode),
-      );
-      deviceIdentityUnlocked = true;
-      this.deviceAuthorizationInProgress = true;
-      this.deviceProtectionLockedMode = "passkey";
-      await this.continueInitializationAfterDeviceUnlock();
-      this.deviceProtectionStatus = "unlocked";
-    } catch (error) {
-      if (isPasskeyCeremonyNotAllowedError(error)) {
-        vaultLog.warn("passkey creation did not finish");
-        this.errorMsg = this.t("device_protection.passkey_create_not_allowed");
-        return;
-      }
-      if (isPasskeyUnavailableError(error)) {
-        vaultLog.warn(
-          "passkey unavailable; offering PIN device protection fallback",
-        );
-        this.deviceProtectionStatus = "pin-setup";
-        this.errorMsg = this.t(
-          "device_protection.passkey_unavailable_pin_fallback_ready",
-        );
-        return;
-      }
-      if (isPasskeyPrfUnavailableError(error)) {
-        vaultLog.warn(
-          "passkey PRF unavailable; offering PIN device protection fallback",
-        );
-        this.deviceProtectionStatus = "pin-setup";
-        this.errorMsg = this.t("device_protection.pin_fallback_ready");
-        return;
-      }
-      vaultLog.warn("passkey device protection setup failed");
-      if (
-        this.deviceProtectionStatus === "unlocked" ||
-        deviceIdentityUnlocked
-      ) {
-        void this.lockDeviceProtection();
-      }
-      this.errorMsg =
-        error instanceof Error ? error.message : "Failed to create passkey.";
-    } finally {
-      this.deviceAuthorizationInProgress = false;
-      this.isVerifying = false;
-      this.isInitializing = false;
-    }
+  ): Promise<void> {
+    return deviceProtectionActions.setupDeviceProtection(
+      this,
+      passkeyLabel,
+      deviceMode,
+    );
   }
 
-  async recoverDeviceProtectionWithPasskey() {
-    if (!this.manager || this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    let deviceIdentityUnlocked = false;
-    try {
-      await this.enqueueStorage(() =>
-        recoverExistingPasskeyProtection(this.manager!),
-      );
-      deviceIdentityUnlocked = true;
-      this.deviceAuthorizationInProgress = true;
-      this.deviceProtectionLockedMode = "passkey";
-      await this.continueInitializationAfterDeviceUnlock();
-      this.deviceProtectionStatus = "unlocked";
-    } catch (error) {
-      if (isPasskeyCeremonyNotAllowedError(error)) {
-        vaultLog.warn("passkey recovery did not finish");
-        this.errorMsg = this.t(
-          "device_protection.passkey_recovery_not_allowed",
-        );
-        return;
-      }
-      if (isPasskeyUnavailableError(error)) {
-        vaultLog.warn(
-          "passkey recovery unavailable; offering PIN device protection fallback",
-        );
-        this.deviceProtectionStatus = "pin-setup";
-        this.errorMsg = this.t(
-          "device_protection.recovery_passkey_unavailable_pin_fallback_ready",
-        );
-        return;
-      }
-      if (isPasskeyPrfUnavailableError(error)) {
-        vaultLog.warn(
-          "passkey recovery PRF unavailable; offering PIN device protection fallback",
-        );
-        this.deviceProtectionStatus = "pin-setup";
-        this.errorMsg = this.t("device_protection.recovery_pin_fallback_ready");
-        return;
-      }
-      vaultLog.warn("passkey device protection recovery failed");
-      if (
-        this.deviceProtectionStatus === "unlocked" ||
-        deviceIdentityUnlocked
-      ) {
-        void this.lockDeviceProtection();
-      }
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to use existing passkey.";
-    } finally {
-      this.deviceAuthorizationInProgress = false;
-      this.isVerifying = false;
-      this.isInitializing = false;
-    }
+  async recoverDeviceProtectionWithPasskey(): Promise<void> {
+    return deviceProtectionActions.recoverDeviceProtectionWithPasskey(this);
   }
 
-  async setupPinDeviceProtection(pin: string, confirmPin: string) {
-    if (!this.manager || this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    let deviceIdentityUnlocked = false;
-    try {
-      if (pin !== confirmPin) {
-        throw new Error(this.t("device_protection.pin_mismatch"));
-      }
-      await this.enqueueStorage(() =>
-        this.manager!.finishPinDeviceProtection(pin),
-      );
-      deviceIdentityUnlocked = true;
-      this.deviceAuthorizationInProgress = true;
-      this.deviceProtectionLockedMode = "pin";
-      await this.continueInitializationAfterDeviceUnlock();
-      this.deviceProtectionStatus = "unlocked";
-    } catch (error) {
-      if (
-        this.deviceProtectionStatus === "unlocked" ||
-        deviceIdentityUnlocked
-      ) {
-        void this.lockDeviceProtection();
-      }
-      this.errorMsg =
-        error instanceof Error ? error.message : "Failed to create PIN.";
-    } finally {
-      this.deviceAuthorizationInProgress = false;
-      this.isVerifying = false;
-      this.isInitializing = false;
-    }
+  async setupPinDeviceProtection(
+    pin: string,
+    confirmPin: string,
+  ): Promise<void> {
+    return deviceProtectionActions.setupPinDeviceProtection(
+      this,
+      pin,
+      confirmPin,
+    );
   }
 
-  async unlockDeviceProtection() {
-    if (!this.manager || this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    let deviceIdentityUnlocked = false;
-    try {
-      await this.enqueueStorage(() =>
-        authorizePasskeyProtection(this.manager!),
-      );
-      deviceIdentityUnlocked = true;
-      this.deviceAuthorizationInProgress = true;
-      this.deviceProtectionLockedMode = "passkey";
-      await this.continueInitializationAfterDeviceUnlock();
-      this.deviceProtectionStatus = "unlocked";
-    } catch (error) {
-      if (isPasskeyCeremonyNotAllowedError(error)) {
-        vaultLog.warn("passkey authorization did not finish");
-        this.errorMsg = this.t("device_protection.passkey_unlock_not_allowed");
-        return;
-      }
-      if (
-        this.deviceProtectionStatus === "unlocked" ||
-        deviceIdentityUnlocked
-      ) {
-        void this.lockDeviceProtection();
-      }
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Passkey authorization failed.";
-    } finally {
-      this.deviceAuthorizationInProgress = false;
-      this.isVerifying = false;
-      this.isInitializing = false;
-    }
+  async unlockDeviceProtection(): Promise<void> {
+    return deviceProtectionActions.unlockDeviceProtection(this);
   }
 
-  async unlockPinDeviceProtection(pin: string) {
-    if (!this.manager || this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    let deviceIdentityUnlocked = false;
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.unlockPinDeviceIdentity(pin),
-      );
-      deviceIdentityUnlocked = true;
-      this.deviceAuthorizationInProgress = true;
-      this.deviceProtectionLockedMode = "pin";
-      await this.continueInitializationAfterDeviceUnlock();
-      this.deviceProtectionStatus = "unlocked";
-    } catch (error) {
-      if (
-        this.deviceProtectionStatus === "unlocked" ||
-        deviceIdentityUnlocked
-      ) {
-        void this.lockDeviceProtection();
-      }
-      this.errorMsg =
-        error instanceof Error ? error.message : "PIN authorization failed.";
-    } finally {
-      this.deviceAuthorizationInProgress = false;
-      this.isVerifying = false;
-      this.isInitializing = false;
-    }
+  async unlockPinDeviceProtection(pin: string): Promise<void> {
+    return deviceProtectionActions.unlockPinDeviceProtection(this, pin);
   }
 
-  async resetDeviceProtectionForRecovery() {
-    if (!this.manager || this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    try {
-      await this.manager.resetDeviceProtectionForRecovery();
-      this.deviceProtectionStatus = "missing";
-      this.deviceProtectionLockedMode = "passkey";
-      this.deviceId = "";
-      this.devicePublicKey = "";
-      this.providers = [];
-      this.providersLoaded = false;
-      this.githubPat = "";
-      this.oauthFile = undefined;
-      this.localFolder = undefined;
-      this.storageMode = LOCAL_PROVIDER_TYPE;
-      this.showSuccess(this.t("device_protection.recovery_complete"));
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error ? error.message : "Recovery reset failed.";
-    } finally {
-      this.isVerifying = false;
-    }
+  async resetDeviceProtectionForRecovery(): Promise<void> {
+    return deviceProtectionActions.resetDeviceProtectionForRecovery(this);
   }
 
   shouldAutoUnlock(): boolean {
@@ -1371,285 +1160,56 @@ export class VaultState {
     return localLoginActions.createLocalVaultWithDeviceKeys(this, label);
   }
 
-  private applySentinelGenesisStatus(status: NookSentinelGenesisStatus): void {
-    const participants = status.participants;
-    this.sentinelGenesisParticipantCount = participants.length;
-    this.sentinelGenesisParticipants = participants.map((participant) => {
-      const summary = {
-        participantId: participant.deviceId,
-        label: participant.label,
-        fingerprint: participant.fingerprint,
-      };
-      participant.free();
-      return summary;
-    });
-    this.sentinelGenesisStatus = status.isComplete ? "ready" : "collecting";
-    status.free();
-  }
-
-  private applySentinelGenesisFinalizeResult(
-    result: NookSentinelGenesisFinalizeResult,
-  ): void {
-    this.sentinelGenesisStoreId = result.storeId;
-    this.activeVaultStoreId = result.storeId;
-    this.replaceVaultArchitecture(result.architecture as VaultArchitecture);
-    this.sentinelGenesisDeliveries = result.participantDeliveries.map(
-      (delivery) => {
-        const summary = {
-          participantId: delivery.deviceId,
-          fingerprint:
-            delivery.fingerprint ??
-            this.sentinelGenesisParticipants.find(
-              (participant) => participant.participantId === delivery.deviceId,
-            )?.fingerprint,
-          payload: delivery.payload,
-          sharePayload: delivery.payload,
-        };
-        delivery.free();
-        return summary;
-      },
-    );
-    result.free();
-    this.sentinelGenesisStatus = "delivering";
-  }
-
   async startSentinelGenesis(args: StartSentinelGenesisArgs): Promise<void> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    this.dismissSuccess();
-    this.sentinelGenesisDeliveries = [];
-    this.sentinelGenesisParticipants = [];
-    this.sentinelGenesisParticipantCount = 0;
-    this.sentinelGenesisStoreId = undefined;
-    try {
-      await this.initDeviceIdentity();
-      this.manager.setVaultName(args.label.trim());
-      const status = await this.enqueueStorage(() =>
-        this.manager!.startSentinelGenesis(
-          args.participantCount,
-          args.threshold,
-          args.label.trim(),
-        ),
-      );
-      this.sentinelGenesisRequest = this.manager.sentinelGenesisRequestJson();
-      this.applySentinelGenesisStatus(status);
-    } catch (error) {
-      this.sentinelGenesisStatus = "idle";
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to start Sentinel setup.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.start(this, args);
   }
 
   async addSentinelGenesisParticipantResponse(
     payload: string,
     participantLabel = "",
   ): Promise<void> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    try {
-      const status = await this.enqueueStorage(() =>
-        this.manager!.addSentinelGenesisParticipantResponse(
-          payload.trim(),
-          participantLabel.trim(),
-        ),
-      );
-      this.applySentinelGenesisStatus(status);
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to add Sentinel participant.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.addParticipantResponse(
+      this,
+      payload,
+      participantLabel,
+    );
   }
 
   async createSentinelGenesisPublicKeyAnnouncement(): Promise<string> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return "";
-    this.isVerifying = true;
-    this.errorMsg = "";
-    try {
-      await this.initDeviceIdentity();
-      return await this.enqueueStorage(() =>
-        this.manager!.createSentinelGenesisPublicKeyAnnouncement(
-          this.t("device_protection.passkey_label_placeholder"),
-        ),
-      );
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to create Sentinel public key announcement.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.createPublicKeyAnnouncement(this);
   }
 
   async rememberSentinelGenesisRequest(requestPayload: string): Promise<void> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.rememberSentinelGenesisRequest(requestPayload.trim()),
-      );
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to remember the Sentinel initiator request.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.rememberRequest(this, requestPayload);
   }
 
   async createSentinelGenesisParticipantResponse(
     requestPayload: string,
   ): Promise<string> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return "";
-    this.isVerifying = true;
-    this.errorMsg = "";
-    try {
-      await this.initDeviceIdentity();
-      return await this.enqueueStorage(() =>
-        this.manager!.respondToSentinelGenesisRequest(
-          requestPayload.trim(),
-          this.t("device_protection.passkey_label_placeholder"),
-        ),
-      );
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to create Sentinel participant response.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.createParticipantResponse(
+      this,
+      requestPayload,
+    );
   }
 
   async finalizeSentinelGenesis(): Promise<void> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    this.sentinelGenesisStatus = "finalizing";
-    try {
-      const result = await this.enqueueStorage(() =>
-        this.manager!.finalizeSentinelGenesis(),
-      );
-      this.applySentinelGenesisFinalizeResult(result);
-    } catch (error) {
-      this.sentinelGenesisStatus = "ready";
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to finalize Sentinel setup.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.finalize(this);
   }
 
   async acceptSentinelGenesisShareDelivery(payload: string): Promise<void> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    if (this.isVerifying) return;
-    this.isVerifying = true;
-    this.errorMsg = "";
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.acceptSentinelGenesisShareDelivery(payload.trim()),
-      );
-      this.showSuccess(this.t("login.sentinel_genesis_receive_share_success"));
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Failed to receive Sentinel share.";
-      throw error;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.acceptShareDelivery(this, payload);
   }
 
   async completeSentinelGenesisDelivery(): Promise<void> {
-    if (!this.sentinelGenesisStoreId || this.isVerifying) return;
-    this.isVerifying = true;
-    try {
-      this.sentinelGenesisStatus = "complete";
-      await setActiveVault(this.sentinelGenesisStoreId);
-      await this.refreshLocalVaultCatalog();
-      this.selectedLoginVaultStoreId = this.sentinelGenesisStoreId;
-      this.localLoginPrepared = false;
-      this.sentinelCeremonyPrompt = true;
-    } finally {
-      this.isVerifying = false;
-    }
+    return sentinelGenesisActions.completeDelivery(this);
   }
 
   async prepareSentinelOnboardingLinks(): Promise<void> {
-    if (!this.manager || !this.sentinelGenesisStoreId) return;
-    const provider = this.syncProviders[0];
-    if (!provider || provider.type === "local-folder") return;
-    const providerSnapshot = NookAuthProvidersSnapshotValue.fromObject(
-      JSON.parse(
-        JSON.stringify({
-          providers: [provider],
-          activeVaultStoreId: this.sentinelGenesisStoreId,
-        }),
-      ) as object,
-    );
-    try {
-      this.sentinelGenesisDeliveries = this.sentinelGenesisDeliveries.map(
-        (delivery) => {
-          const sharePayload = delivery.sharePayload ?? delivery.payload;
-          if (delivery.participantId === this.deviceId) {
-            return { ...delivery, sharePayload };
-          }
-          const packageJson = this.manager!.createSentinelOnboardingPackage(
-            this.sentinelGenesisRequest,
-            sharePayload,
-            providerSnapshot,
-          );
-          return {
-            ...delivery,
-            sharePayload,
-            payload: buildSentinelOnboardingLink(packageJson),
-          };
-        },
-      );
-    } finally {
-      providerSnapshot.free();
-    }
+    return sentinelGenesisActions.prepareOnboardingLinks(this);
   }
 
   async acceptSentinelOnboardingPackage(packageJson: string): Promise<void> {
-    if (!this.manager) throw new Error("Vault engine is not available.");
-    this.errorMsg = "";
-    const storeId = await this.enqueueStorage(() =>
-      this.manager!.acceptSentinelOnboardingPackage(packageJson),
-    );
-    this.activeVaultStoreId = storeId;
-    await setActiveVault(storeId);
-    await this.loadProviders();
-    this.applyActiveProviderCredentials();
-    this.sentinelGenesisStatus = "complete";
-    await this.loadDb();
+    return sentinelGenesisActions.acceptOnboardingPackage(this, packageJson);
   }
 
   async renameLocalVault(storeId: string, label: string): Promise<void> {
@@ -2681,37 +2241,7 @@ export class VaultState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
-    const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
-      JSON.parse(
-        JSON.stringify({
-          providers: this.providers,
-        }),
-      ),
-    );
-    const result = await ensureLocalAuthProviderSnapshot(snapshotValue);
-    snapshotValue.free();
-    const migrated = result.migrated;
-    const migratedSnapshotValue = result.snapshot;
-    result.free();
-    let snapshot: AuthProvidersSnapshot;
-    try {
-      snapshot = migratedSnapshotValue.toObject() as AuthProvidersSnapshot;
-    } finally {
-      migratedSnapshotValue.free();
-    }
-    if (migrated || snapshot.providers.length !== this.providers.length) {
-      this.providers = snapshot.providers;
-      await this.enqueueStorage(() =>
-        saveAuthProviders(this.manager!, snapshot),
-      );
-    }
-    this.localVaultPresent = await hasLocalVault();
-    if (this.localVaultPresent) {
-      this.storageMode = LOCAL_PROVIDER_TYPE;
-      this.githubPat = "";
-      this.oauthFile = undefined;
-      this.localFolder = undefined;
-    }
+    return providersActions.promoteSessionVaultToLocalIfNeeded(this);
   }
 
   async addVaultPassword(label: string, password: string): Promise<void> {

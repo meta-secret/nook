@@ -1,0 +1,14 @@
+{
+  "threshold": 1.7,
+  "minLines": 12,
+  "minTokens": 80,
+  "reporters": ["console"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/target/**",
+    "**/coverage/**",
+    "**/nook-wasm/**",
+    "**/nook_wasm/**"
+  ]
+}

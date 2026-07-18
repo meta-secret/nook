@@ -4,6 +4,7 @@ import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
   findDuplicateSyncProvider,
+  LOCAL_PROVIDER_TYPE,
   loadAuthProviders,
   loadAuthProvidersWithLocalRow,
   providerDefaultLabel,
@@ -17,7 +18,9 @@ import {
 } from "$lib/auth-providers";
 import {
   NookAuthProvidersSnapshotValue,
+  ensureLocalAuthProviderSnapshot,
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
+  hasLocalVault,
   removeLocalFolderHandle,
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
@@ -67,6 +70,38 @@ export async function loadProviders(
     count: state.providers.length,
     localVaultPresent: state.localVaultPresent,
   });
+}
+
+export async function promoteSessionVaultToLocalIfNeeded(
+  state: VaultState,
+): Promise<void> {
+  const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
+    JSON.parse(JSON.stringify({ providers: state.providers })),
+  );
+  const result = await ensureLocalAuthProviderSnapshot(snapshotValue);
+  snapshotValue.free();
+  const migrated = result.migrated;
+  const migratedSnapshotValue = result.snapshot;
+  result.free();
+  let snapshot: AuthProvidersSnapshot;
+  try {
+    snapshot = migratedSnapshotValue.toObject() as AuthProvidersSnapshot;
+  } finally {
+    migratedSnapshotValue.free();
+  }
+  if (migrated || snapshot.providers.length !== state.providers.length) {
+    state.providers = snapshot.providers;
+    await state.enqueueStorage(() =>
+      saveAuthProviders(state.manager!, snapshot),
+    );
+  }
+  state.localVaultPresent = await hasLocalVault();
+  if (state.localVaultPresent) {
+    state.storageMode = LOCAL_PROVIDER_TYPE;
+    state.githubPat = "";
+    state.oauthFile = undefined;
+    state.localFolder = undefined;
+  }
 }
 
 export function applyActiveProviderCredentials(state: VaultState) {
