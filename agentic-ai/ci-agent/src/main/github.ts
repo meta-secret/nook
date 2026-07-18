@@ -122,7 +122,17 @@ export async function commentOnIssue(
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
 const CODEX_REVIEW_HEADING = "### 💡 Codex Review";
 const CODEX_REVIEW_INTRO = "Here are some automated review suggestions for this pull request.";
-const CODEX_ABOUT_SUMMARY = "<summary>ℹ️ About Codex in GitHub</summary>";
+const CODEX_ABOUT_DETAILS = [
+  "<details> <summary>ℹ️ About Codex in GitHub</summary>",
+  "<br/>",
+  "[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you",
+  "- Open a pull request for review",
+  "- Mark a draft as ready",
+  '- Comment "@codex review".',
+  "If Codex has suggestions, it will comment; otherwise it will react with 👍.",
+  'Codex can also answer questions or update the PR. Try commenting "@codex address that feedback".',
+  "</details>",
+].join(" ");
 const CLEAN_CODEX_REVIEW_PREFIX = "Codex Review: Didn't find any major issues.";
 const REVIEWED_COMMIT_PATTERN = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
 const CODEX_REVIEWED_COMMIT_ONLY_PATTERN =
@@ -435,7 +445,7 @@ function isCodexReviewStatusBody(body: string, login: string | undefined): boole
     .trim();
   if (detailsIndex !== -1) {
     const details = trimmed.slice(detailsIndex).trim();
-    if (!details.includes(CODEX_ABOUT_SUMMARY) || !details.endsWith("</details>")) {
+    if (details.replace(/\s+/g, " ") !== CODEX_ABOUT_DETAILS) {
       return false;
     }
   }

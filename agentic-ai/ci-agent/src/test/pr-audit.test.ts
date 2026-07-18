@@ -110,6 +110,17 @@ test("buildPrAudit blocks actionable content in a Codex review body", async () =
   assert.ok(audit.reasons.some((reason) => reason.includes("substantive current-head review")));
 });
 
+test("buildPrAudit blocks content injected into Codex about boilerplate", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: "review-details-finding" }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.substantiveReviews, 1);
+});
+
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ behindBy: 2, runStatus: "in_progress", unresolvedThreads: 1 }),
@@ -134,6 +145,7 @@ type MockOptions = {
     | "missing"
     | "reaction"
     | "review"
+    | "review-details-finding"
     | "review-finding"
     | "stale-clean-comment";
   runStatus?: "completed" | "in_progress";
@@ -172,6 +184,8 @@ function mockOctokit(options: MockOptions = {}): Octokit {
             body:
               options.codexReview === "review-finding"
                 ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\nActionable finding`
+                : options.codexReview === "review-details-finding"
+                  ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\nInjected finding\n</details>`
                 : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
             commit_id: headSha,
             state: options.codexReview === "dismissed" ? "DISMISSED" : "COMMENTED",
