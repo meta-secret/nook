@@ -1,0 +1,202 @@
+schema_version: 1
+source_pr:
+  number: 488
+  url: https://github.com/meta-secret/nook/pull/488
+  title: Require per-PR AI agent statistics
+  change_surface: docs_ci
+  head_sha: 229a2f536bf38277f29f18d7762ac5374115449a
+  started_at: 2026-07-18T08:20:16Z
+  opened_at: 2026-07-18T08:52:59Z
+  merged_at: 2026-07-18T09:19:22Z
+  elapsed_seconds: 3546
+  open_to_merge_seconds: 1583
+summary:
+  local_execution_count: 13
+  local_check_count: 10
+  local_test_count: 0
+  local_combined_count: 3
+  local_execution_seconds: 629
+  github_actions_run_count: 5
+  github_actions_seconds: 1541
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+local_executions:
+  - command: ruby workflow-and-sample-yaml-validation && git diff --check
+    category: check
+    started_at: 2026-07-18T08:53:14Z
+    finished_at: 2026-07-18T08:53:14Z
+    duration_seconds: 0
+    outcome: passed
+    reason: focused_validation
+  - command: task pr:preflight PR=488
+    category: check
+    started_at: 2026-07-18T08:53:14Z
+    finished_at: 2026-07-18T08:53:22Z
+    duration_seconds: 8
+    outcome: failed
+    reason: branch_behind_main
+  - command: task check
+    category: combined
+    started_at: 2026-07-18T08:53:14Z
+    finished_at: 2026-07-18T08:53:33Z
+    duration_seconds: 19
+    outcome: cancelled
+    reason: stale_base_detected
+  - command: task check
+    category: combined
+    started_at: 2026-07-18T08:53:48Z
+    finished_at: 2026-07-18T08:57:10Z
+    duration_seconds: 202
+    outcome: passed
+    reason: exact_head_validation
+  - command: task pr:review PR=488
+    category: check
+    started_at: 2026-07-18T08:53:48Z
+    finished_at: 2026-07-18T08:53:53Z
+    duration_seconds: 5
+    outcome: passed
+    reason: policy_required_at_execution_time
+  - command: task format:check
+    category: check
+    started_at: 2026-07-18T09:02:38Z
+    finished_at: 2026-07-18T09:03:52Z
+    duration_seconds: 74
+    outcome: passed
+    reason: review_fix_validation
+  - command: task pr:review PR=488
+    category: check
+    started_at: 2026-07-18T09:02:38Z
+    finished_at: 2026-07-18T09:02:44Z
+    duration_seconds: 6
+    outcome: passed
+    reason: policy_required_at_execution_time
+  - command: task format:check
+    category: check
+    started_at: 2026-07-18T09:04:48Z
+    finished_at: 2026-07-18T09:05:50Z
+    duration_seconds: 62
+    outcome: passed
+    reason: base_update_conflict_resolution
+  - command: ruby workflow-and-sample-yaml-validation && git diff --check
+    category: check
+    started_at: 2026-07-18T09:12:20Z
+    finished_at: 2026-07-18T09:12:20Z
+    duration_seconds: 0
+    outcome: failed
+    reason: unsupported_yaml_helper
+  - command: ruby workflow-and-sample-yaml-validation && git diff --check
+    category: check
+    started_at: 2026-07-18T09:12:21Z
+    finished_at: 2026-07-18T09:12:21Z
+    duration_seconds: 0
+    outcome: passed
+    reason: final_review_fix_validation
+  - command: task format
+    category: check
+    started_at: 2026-07-18T09:13:10Z
+    finished_at: 2026-07-18T09:14:34Z
+    duration_seconds: 84
+    outcome: passed
+    reason: final_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-18T09:14:37Z
+    finished_at: 2026-07-18T09:17:16Z
+    duration_seconds: 159
+    outcome: passed
+    reason: final_validation
+  - command: task pr:ready PR=488
+    category: check
+    started_at: 2026-07-18T09:19:00Z
+    finished_at: 2026-07-18T09:19:10Z
+    duration_seconds: 10
+    outcome: passed
+    reason: merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29638213025
+    run_attempt: 1
+    head_sha: 9a7271132679ae8d2a31eca32ed30d24034a68c1
+    trigger: pull_request
+    started_at: 2026-07-18T08:53:01Z
+    finished_at: 2026-07-18T08:54:21Z
+    duration_seconds: 80
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29638235223
+    run_attempt: 1
+    head_sha: 50c300b9f0405ef2e1761230f5d707e67c416919
+    trigger: pull_request
+    started_at: 2026-07-18T08:53:48Z
+    finished_at: 2026-07-18T09:01:01Z
+    duration_seconds: 433
+    conclusion: failure
+  - workflow: PR
+    run_id: 29638235223
+    run_attempt: 2
+    head_sha: 50c300b9f0405ef2e1761230f5d707e67c416919
+    trigger: manual_rerun
+    started_at: 2026-07-18T09:01:29Z
+    finished_at: 2026-07-18T09:05:17Z
+    duration_seconds: 228
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29638554405
+    run_attempt: 1
+    head_sha: a7b34a26853cfee9d2a1c4f4a5aa7fc84636303a
+    trigger: pull_request
+    started_at: 2026-07-18T09:04:48Z
+    finished_at: 2026-07-18T09:12:06Z
+    duration_seconds: 438
+    conclusion: success
+  - workflow: PR
+    run_id: 29638785316
+    run_attempt: 1
+    head_sha: 229a2f536bf38277f29f18d7762ac5374115449a
+    trigger: pull_request
+    started_at: 2026-07-18T09:12:55Z
+    finished_at: 2026-07-18T09:18:57Z
+    duration_seconds: 362
+    conclusion: success
+pr_retriggers:
+  - kind: base_update
+    at: 2026-07-18T08:53:45Z
+    reason: main_advanced_before_final_validation
+    initiated_by_agent: true
+  - kind: manual_rerun
+    at: 2026-07-18T09:01:29Z
+    reason: transient_cloudflare_pages_internal_error
+    initiated_by_agent: true
+  - kind: base_update
+    at: 2026-07-18T09:04:45Z
+    reason: main_advanced_with_pr_workflow_policy_change
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-18T09:12:52Z
+    reason: final_review_fixes
+    initiated_by_agent: true
+merge_attempts:
+  - at: 2026-07-18T09:19:19Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: []
+  baseline_quality: weak
+  baseline_note: First AI-agent statistics record; no prior comparable PR records exist
+  elapsed_seconds_change_percent: null
+  local_execution_seconds_change_percent: null
+  github_actions_seconds_change_percent: null
+  regression: false
+  regression_reasons:
+    - No baseline exists from which to establish a performance regression
+waste_assessment:
+  wasteful: false
+  findings:
+    - Two base updates and one review-fix push caused necessary exact-head validation cycles
+    - One manual rerun followed a documented transient Cloudflare Pages internal error
+    - Repeated full validation followed changed heads; no unchanged-head suite was rerun without a documented external failure
+    - Formatting and setup consumed 220 seconds across three changed heads and should be compared with future docs_ci records
+    - The first merge command merged remotely; only local branch cleanup failed because another worktree owned main
+  required_actions: []
