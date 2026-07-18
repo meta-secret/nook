@@ -3,9 +3,10 @@ import { SvelteDate } from "svelte/reactivity";
 import { createLogger } from "$lib/log";
 import {
   importLocalVaultBlob,
+  JoinEnrollmentState,
+  NookPendingSyncConflict,
   readLocalVaultYaml,
   VaultSyncConflictKind,
-  type NookPendingSyncConflict,
 } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 import * as localLoginActions from "$lib/vault/local-login";
@@ -63,37 +64,35 @@ function localFolderMultipleVaultsIssueFromTypedIssue(
   };
 }
 
-type ProviderStoreMismatch = {
-  localStoreId: string;
-  remoteStoreId: string;
-};
-
 async function stageProviderStoreMismatchConflict(
   state: VaultState,
   provider: StorageProvider,
-  mismatch: ProviderStoreMismatch,
+  localStoreId: string,
+  remoteStoreId: string,
 ): Promise<boolean> {
   const localYaml = await readLocalVaultBlob().catch(() => "");
   const args =
     provider.type === "local-folder"
       ? (["local-folder", "", ""] as const)
       : state.providerWasmArgs(provider);
-  await state.stageVaultSyncConflict({
-    providerId: provider.id,
-    providerLabel: provider.label,
-    localYaml,
-    remoteYaml: "",
-    mode: args[0],
-    pat: args[1],
-    repo: args[2],
-    kind: "store_id",
-    localStoreId: mismatch.localStoreId,
-    remoteStoreId: mismatch.remoteStoreId,
-  });
+  state.stageSyncConflict(
+    NookPendingSyncConflict.storeId(
+      provider.id,
+      provider.label,
+      localYaml,
+      "",
+      args[0],
+      args[1],
+      args[2],
+      undefined,
+      localStoreId,
+      remoteStoreId,
+    ),
+  );
   log.warn("provider store mismatch staged", {
     provider: provider.label,
-    localStoreId: mismatch.localStoreId,
-    remoteStoreId: mismatch.remoteStoreId,
+    localStoreId,
+    remoteStoreId,
   });
   return true;
 }
@@ -129,7 +128,7 @@ export function startVaultSync(state: VaultState) {
   );
   const needsRemoteUpdates =
     state.isAuthenticated ||
-    state.joinEnrollmentPrompt !== "none" ||
+    state.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
     state.awaitingJoinApproval;
   if (!needsRemoteUpdates) {
     log.debug("vault sync timer skipped (no remote updates needed)");
@@ -154,7 +153,7 @@ export function startVaultSync(state: VaultState) {
     }
     if (
       !state.isAuthenticated &&
-      state.joinEnrollmentPrompt === "none" &&
+      state.joinEnrollmentPrompt === JoinEnrollmentState.None &&
       !state.awaitingJoinApproval
     ) {
       return;
@@ -165,7 +164,7 @@ export function startVaultSync(state: VaultState) {
     if (
       state.isAuthenticated &&
       state.syncProviders.length === 0 &&
-      state.joinEnrollmentPrompt === "none"
+      state.joinEnrollmentPrompt === JoinEnrollmentState.None
     ) {
       return;
     }
@@ -365,9 +364,10 @@ function stageLocalFolderMultipleVaultsIssue(
 async function resumeConnectAfterSyncConflict(
   state: VaultState,
   providerId: string,
+  pendingProvider: boolean,
 ): Promise<void> {
   if (state.isAuthenticated) {
-    if (providerId !== "__pending_provider__") {
+    if (!pendingProvider) {
       await state.syncProviderById(providerId, { quiet: true });
     }
     await state.hydrateMultiDeviceState();
@@ -474,7 +474,11 @@ export async function resolveSyncConflictImportRemote(
     state.isVerifying = false;
   }
   if (providerId && !importedAsSeparateVault) {
-    await resumeConnectAfterSyncConflict(state, providerId);
+    await resumeConnectAfterSyncConflict(
+      state,
+      providerId,
+      conflict.isPendingProvider,
+    );
   }
 }
 
@@ -636,7 +640,8 @@ export async function syncProviderById(
         stagedStoreMismatch = await stageProviderStoreMismatchConflict(
           state,
           provider,
-          { localStoreId, remoteStoreId },
+          localStoreId,
+          remoteStoreId,
         );
       }
     } else if (eventLogIssue?.isMultipleStores) {

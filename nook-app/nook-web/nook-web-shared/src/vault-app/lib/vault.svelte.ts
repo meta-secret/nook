@@ -22,20 +22,30 @@ import {
   hasRemoteCredentials as wasmHasRemoteCredentials,
   isLocalFolderBackupSupported,
   isVaultSessionLocked,
+  JoinEnrollmentState,
   NookBrowserLocale,
   NookClientRunModeUtil,
-  NookPendingSyncConflict,
   NookRuntimeConfig,
+  NookVaultClientPolicy,
+  RemoteVaultAssessDecision,
+  UnauthenticatedSyncDecision,
+  VaultEditBlockReason,
+  activeVaultProviders as wasmActiveVaultProviders,
   get_translation_catalog as getTranslationCatalog,
+  localProviderIdForActiveVault,
+  oauthRemoteStorageRef,
   parseAppLocale,
+  providerLabelById,
+  providersVisibleWhileDeviceLocked,
   providerWasmArgs as wasmProviderWasmArgs,
-  readVaultVersion,
   setActiveVault,
   setVaultSessionLocked,
+  stagedRemoteStorageArgs as wasmStagedRemoteStorageArgs,
   stagedProviderLabel as wasmStagedProviderLabel,
+  syncProvidersForActiveVault as wasmSyncProvidersForActiveVault,
   translateFromCatalog,
-  vaultConnectIntentPermitsEmptyRemoteGenesis,
-  vaultContentHash,
+  updateOauthRemoteRef,
+  updateProviderSyncMetadata as wasmUpdateProviderSyncMetadata,
   wasmStorageArgs as wasmStorageArgsCore,
   type NookLocalVaultEntry,
   type NookLocalAuthProviderSnapshot,
@@ -49,14 +59,11 @@ import {
 } from "$app-wasm";
 import { APP_KIND } from "$lib/app-kind";
 import {
-  DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
-  GITHUB_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   loadAuthProviders,
   LOCAL_PROVIDER_TYPE,
   NookStorageProviderKind,
-  OAUTH_FILE_PROVIDER_TYPE,
   providerDefaultLabel,
   saveAuthProviders,
   storageProviderKind,
@@ -87,7 +94,7 @@ import {
 import {
   canCreateSecret as architectureCanCreateSecret,
   defaultVaultArchitecture,
-  validateVaultArchitecture,
+  draftVaultArchitecture,
   type DeviceMode,
   type ReplicationType,
   type VaultArchitecture,
@@ -117,23 +124,6 @@ import type {
 } from "$lib/vault/sentinel-unlock";
 
 const vaultLog = createLogger("vault");
-
-type PendingSyncConflictCommonDraft = {
-  providerId: string;
-  providerLabel: string;
-  localYaml: string;
-  remoteYaml: string;
-  mode: string;
-  pat: string;
-  repo: string;
-  remoteRevision?: string;
-};
-
-type PendingSyncConflictDraft = PendingSyncConflictCommonDraft &
-  (
-    | { kind: "content" }
-    | { kind: "store_id"; localStoreId: string; remoteStoreId: string }
-  );
 
 type TranslationCatalog = string;
 
@@ -174,8 +164,17 @@ function plainProvider(provider: StorageProvider): StorageProvider {
   return JSON.parse(JSON.stringify(provider)) as StorageProvider;
 }
 
+function plainProviders(providers: StorageProvider[]): StorageProvider[] {
+  return JSON.parse(JSON.stringify(providers)) as StorageProvider[];
+}
+
+function plainOAuthFile(config: OAuthFileConfig): OAuthFileConfig {
+  return JSON.parse(JSON.stringify(config)) as OAuthFileConfig;
+}
+
 export class VaultState {
   browserLocale = new NookBrowserLocale();
+  clientPolicy = new NookVaultClientPolicy();
   runtimeConfig = new NookRuntimeConfig(
     NookClientRunModeUtil.parse(
       import.meta.env.VITE_NOOK_CLIENT_RUN_MODE ?? import.meta.env.MODE,
@@ -272,7 +271,9 @@ export class VaultState {
   enrollMembersKey = $state("");
   sharedJoinerIdentity = $state("");
   sharedGrantInstructions = $state("");
-  joinEnrollmentPrompt = $state<"none" | "needs_request" | "pending">("none");
+  joinEnrollmentPrompt = $state<JoinEnrollmentState>(
+    JoinEnrollmentState.None,
+  );
   /**
    * True from the moment this device sends a join request until it unlocks.
    * Survives the join dialog being dismissed, so background sync can still
@@ -321,16 +322,21 @@ export class VaultState {
   }
 
   get editBlockReason(): string | undefined {
-    if (this.securityConflicts.length > 0) {
-      return this.t("auth_storage.security_conflict_edits");
+    const reason = this.clientPolicy.editBlockReason(
+      this.securityConflicts.length,
+      this.syncBlocked,
+      this.architectureCanCreateSecret,
+    );
+    switch (reason) {
+      case VaultEditBlockReason.SecurityConflict:
+        return this.t("auth_storage.security_conflict_edits");
+      case VaultEditBlockReason.SyncConflict:
+        return this.t("auth_storage.sync_blocked_edits");
+      case VaultEditBlockReason.Architecture:
+        return this.t("architecture_modes.sentinel_secret_creation_blocked");
+      default:
+        return undefined;
     }
-    if (this.syncBlocked) {
-      return this.t("auth_storage.sync_blocked_edits");
-    }
-    if (!this.architectureCanCreateSecret) {
-      return this.t("architecture_modes.sentinel_secret_creation_blocked");
-    }
-    return undefined;
   }
 
   get deviceProtectionReady(): boolean {
@@ -343,18 +349,18 @@ export class VaultState {
 
   get syncingProviderLabel(): string | undefined {
     if (!this.syncingProviderId) return undefined;
-    return (
-      this.providers.find((p) => p.id === this.syncingProviderId)?.label ??
-      undefined
+    return providerLabelById(
+      plainProviders(this.providers),
+      this.syncingProviderId,
     );
   }
 
   get isSyncActivityVisible(): boolean {
-    return (
-      this.isFanOutSyncing ||
-      this.syncingProviderId !== undefined ||
-      this.isSyncing ||
-      this.isSaving
+    return this.clientPolicy.isSyncActivityVisible(
+      this.isFanOutSyncing,
+      this.syncingProviderId !== undefined,
+      this.isSyncing,
+      this.isSaving,
     );
   }
 
@@ -391,7 +397,10 @@ export class VaultState {
   activeEnrollmentEntryId = $state<string | undefined>(undefined);
 
   get hasPasswordEnvelope(): boolean {
-    return this.passwordEntries.length > 0 || this.unlockMode === "password";
+    return this.clientPolicy.hasPasswordEnvelope(
+      this.passwordEntries.length,
+      this.unlockMode === "password",
+    );
   }
 
   /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
@@ -461,12 +470,9 @@ export class VaultState {
         this.githubRepo,
         this.oauthFile?.preset ?? undefined,
         this.oauthFile?.accessToken ?? undefined,
-        this.oauthFile?.preset === "icloud" &&
-          this.oauthFile.iCloudShareTarget?.trim()
-          ? this.oauthFile.iCloudShareTarget.trim()
-          : this.oauthFile?.folderId?.trim()
-            ? `shared:${this.oauthFile.folderId.trim()}`
-            : (this.oauthFile?.fileId ?? undefined),
+        this.oauthFile
+          ? oauthRemoteStorageRef(plainOAuthFile(this.oauthFile))
+          : undefined,
         this.oauthFile?.fileName ?? undefined,
       ),
     );
@@ -477,7 +483,7 @@ export class VaultState {
     if (
       !this.isAuthenticated &&
       this.syncProviders.length > 0 &&
-      this.joinEnrollmentPrompt !== "none"
+      this.joinEnrollmentPrompt !== JoinEnrollmentState.None
     ) {
       return this.providerWasmArgs(this.syncProviders[0]!);
     }
@@ -486,45 +492,24 @@ export class VaultState {
 
   stagedRemoteStorageArgs(): [string, string, string] | undefined {
     const type = this.loginSetupType ?? this.storageMode;
-    const kind = storageProviderKind(type);
-    if (kind === NookStorageProviderKind.Local) {
-      return undefined;
-    }
-    if (kind === NookStorageProviderKind.Github) {
-      const pat = this.githubPat.trim();
-      const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO;
-      if (!pat) {
-        return undefined;
-      }
-      return [wasmStorageModeForProvider(GITHUB_PROVIDER_TYPE), pat, repo];
-    }
-    if (kind === NookStorageProviderKind.OauthFile) {
-      const oauthFile = this.oauthFile;
-      const token = oauthFile?.accessToken?.trim();
-      if (!oauthFile || !token) {
-        return undefined;
-      }
-      const sharedGoogleDrive =
-        oauthFile.preset === "google-drive" &&
-        (oauthFile.driveMode === "shared" ||
-          Boolean(oauthFile.folderId?.trim()));
-      // The visible shared-folder display name is not the legacy Drive backup
-      // file name. Keep the validated internal name independent so ordinary
-      // folder names such as "Team Vault" cannot break the connect boundary.
-      const fileName = sharedGoogleDrive
-        ? oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
-        : this.githubRepo.trim() ||
-          oauthFile.fileName?.trim() ||
-          DEFAULT_DRIVE_BACKUP_NAME;
-      return this.providerWasmArgs({
+    const args = wasmStagedRemoteStorageArgs(
+      type,
+      this.githubPat || undefined,
+      this.githubRepo || undefined,
+      this.oauthFile ? plainProvider({
         id: "staged-oauth-file",
-        type: OAUTH_FILE_PROVIDER_TYPE,
+        type,
         label: "",
-        oauthFile: { ...oauthFile, accessToken: token, fileName },
-        createdAt: isoTimestamp(),
-      });
+        oauthFile: this.oauthFile,
+        createdAt: "",
+      }).oauthFile : undefined,
+    );
+    if (!args) return undefined;
+    try {
+      return storageArgsTuple(args);
+    } finally {
+      args.free();
     }
-    return undefined;
   }
 
   stagedProviderLabel(): string {
@@ -566,11 +551,11 @@ export class VaultState {
     ) {
       return;
     }
-    const remoteRef = this.manager.storage_remote_ref ?? "";
-    if (!remoteRef.trim() || remoteRef === this.oauthFile.fileId) {
-      return;
-    }
-    this.oauthFile = { ...this.oauthFile, fileId: remoteRef };
+    const updated = updateOauthRemoteRef(
+      plainOAuthFile(this.oauthFile),
+      this.manager.storage_remote_ref ?? "",
+    ) as OAuthFileConfig | undefined;
+    if (updated) this.oauthFile = updated;
   }
 
   async ensureOAuthTokensFresh(): Promise<void> {
@@ -667,11 +652,13 @@ export class VaultState {
   }
 
   get localProvider(): StorageProvider | undefined {
-    return (
-      this.activeVaultProviders.find(
-        (p) => storageProviderKind(p.type) === NookStorageProviderKind.Local,
-      ) ?? undefined
+    const id = localProviderIdForActiveVault(
+      plainProviders(this.providers),
+      this.activeVaultStoreId ?? undefined,
     );
+    return id
+      ? this.providers.find((provider) => provider.id === id)
+      : undefined;
   }
 
   /** Canonical on-device vault row — alias kept while settings code migrates. */
@@ -681,20 +668,18 @@ export class VaultState {
 
   /** Providers belonging to the active vault only. */
   get activeVaultProviders(): StorageProvider[] {
-    const sid = this.activeVaultStoreId?.trim();
-    if (!sid) {
-      return this.providers;
-    }
-    return this.providers.filter(
-      (provider) => !provider.storeId || provider.storeId === sid,
-    );
+    return wasmActiveVaultProviders(
+      plainProviders(this.providers),
+      this.activeVaultStoreId ?? undefined,
+    ) as StorageProvider[];
   }
 
   /** Cloud sync destinations for the active vault — local row omitted. */
   get syncProviders(): StorageProvider[] {
-    return this.activeVaultProviders.filter(
-      (p) => storageProviderKind(p.type) !== NookStorageProviderKind.Local,
-    );
+    return wasmSyncProvidersForActiveVault(
+      plainProviders(this.providers),
+      this.activeVaultStoreId ?? undefined,
+    ) as StorageProvider[];
   }
 
   get hasMultipleLocalVaults(): boolean {
@@ -702,13 +687,13 @@ export class VaultState {
   }
 
   get showLoginVaultPicker(): boolean {
-    return (
-      !this.isAuthenticated &&
-      this.localVaults.length > 1 &&
-      this.selectedLoginVaultStoreId === undefined &&
-      this.loginSetupType === undefined &&
-      !this.addProviderOpen &&
-      isVaultSessionLocked()
+    return this.clientPolicy.shouldShowLoginVaultPicker(
+      this.isAuthenticated,
+      this.localVaults.length,
+      this.selectedLoginVaultStoreId !== undefined,
+      this.loginSetupType !== undefined,
+      this.addProviderOpen,
+      isVaultSessionLocked(),
     );
   }
 
@@ -999,19 +984,11 @@ export class VaultState {
   }
 
   get draftVaultArchitecture(): VaultArchitecture {
-    return validateVaultArchitecture({
-      device_mode: this.draftDeviceMode,
-      vault_type: this.draftVaultType,
-      replication_type: this.draftReplicationType,
-      sentinel:
-        this.draftVaultType === "sentinel"
-          ? {
-              threshold: 2,
-              required_participants: 2,
-              ready_participants: 0,
-            }
-          : undefined,
-    });
+    return draftVaultArchitecture(
+      this.draftDeviceMode,
+      this.draftVaultType,
+      this.draftReplicationType,
+    );
   }
 
   private replaceVaultArchitecture(architecture: VaultArchitecture): void {
@@ -1307,17 +1284,13 @@ export class VaultState {
   }
 
   shouldAutoUnlock(): boolean {
-    if (isVaultSessionLocked()) {
-      return false;
-    }
-    if (this.localVaultPresent && this.passwordEntries.length > 0) {
-      return false;
-    }
-    return (
-      this.localVaultPresent &&
-      this.syncProviders.length === 0 &&
-      this.loginSetupType === undefined &&
-      !this.addProviderOpen
+    return this.clientPolicy.shouldAutoUnlock(
+      isVaultSessionLocked(),
+      this.localVaultPresent,
+      this.passwordEntries.length,
+      this.syncProviders.length,
+      this.loginSetupType !== undefined,
+      this.addProviderOpen,
     );
   }
 
@@ -1620,9 +1593,7 @@ export class VaultState {
     const snapshot = await this.enqueueStorage(() =>
       loadAuthProviders(this.manager!),
     );
-    this.providers = snapshot.providers.map((p) =>
-      p.label === "GitHub sync" ? { ...p, label: "GitHub" } : p,
-    );
+    this.providers = snapshot.providers;
     if (snapshot.activeVaultStoreId) {
       this.activeVaultStoreId = snapshot.activeVaultStoreId;
     }
@@ -1650,14 +1621,12 @@ export class VaultState {
 
   /** Lock and open the login unlock step for another vault on this device. */
   async switchToVault(storeId: string): Promise<void> {
-    const trimmed = storeId.trim();
-    if (
-      !trimmed ||
-      trimmed === this.activeVaultStoreId?.trim() ||
-      this.isVerifying
-    ) {
-      return;
-    }
+    const target = this.clientPolicy.vaultSwitchTarget(
+      storeId,
+      this.activeVaultStoreId ?? undefined,
+      this.isVerifying,
+    );
+    if (!target) return;
     this.helpOpen = false;
     this.cancelProviderSetup();
     this.cancelAddProvider();
@@ -1667,10 +1636,10 @@ export class VaultState {
       setVaultSessionLocked(true);
       this.clearUnlockedSession();
       await this.waitForStorageChain();
-      await this.chooseLoginVault(trimmed);
+      await this.chooseLoginVault(target);
       this.isVerifying = true;
       await this.lockDeviceProtection();
-      vaultLog.info("vault switch completed", { storeId: trimmed });
+      vaultLog.info("vault switch completed", { storeId: target });
     } catch (error) {
       this.errorMsg =
         error instanceof Error ? error.message : "Failed to switch vaults.";
@@ -1687,9 +1656,9 @@ export class VaultState {
     // Sync-provider credentials are sealed to the protected device identity.
     // Keep only the non-secret local row in memory while that identity is
     // locked; passkey/PIN authorization reloads the sealed providers.
-    this.providers = this.providers.filter(
-      (provider) => provider.type === "local",
-    );
+    this.providers = providersVisibleWhileDeviceLocked(
+      plainProviders(this.providers),
+    ) as StorageProvider[];
     this.providersLoaded = this.providers.length > 0;
     this.githubPat = "";
     this.oauthFile = undefined;
@@ -1784,7 +1753,7 @@ export class VaultState {
       argsOverride ??
       (!this.isAuthenticated &&
       this.syncProviders.length > 0 &&
-      this.joinEnrollmentPrompt !== "none"
+      this.joinEnrollmentPrompt !== JoinEnrollmentState.None
         ? this.providerWasmArgs(this.syncProviders[0]!)
         : this.wasmStorageArgs());
     return (await this.enqueueStorage(async () => {
@@ -1807,31 +1776,27 @@ export class VaultState {
   async handleRemoteVaultAssessStatus(
     accessStatus: VaultAccessStatus,
   ): Promise<boolean> {
-    if (accessStatus === VaultAccessStatus.RemoteMissingLocalCache) {
-      this.remoteVaultRecoveryPrompt = "with_cache";
-      await this.refreshPasswordEntriesList();
-      return true;
-    }
-    if (accessStatus === VaultAccessStatus.RemoteMissing) {
-      const intent = this.loginRequiresExistingVault
-        ? "open-existing"
-        : this.isAuthenticated
-          ? "add-sync-provider"
-          : "create-new";
-      if (!vaultConnectIntentPermitsEmptyRemoteGenesis(intent)) {
+    const decision = this.clientPolicy.remoteVaultAssessDecision(
+      accessStatus,
+      this.loginRequiresExistingVault,
+      this.loginSetupType !== undefined,
+    );
+    switch (decision) {
+      case RemoteVaultAssessDecision.PromptRecoveryFromCache:
+        this.remoteVaultRecoveryPrompt = "with_cache";
+        await this.refreshPasswordEntriesList();
+        return true;
+      case RemoteVaultAssessDecision.RejectMissingExistingVault:
         this.remoteVaultRecoveryPrompt = "none";
         this.pendingConnectRecovery = "none";
         this.errorMsg = this.t("auth_storage.existing_vault_not_found");
         return true;
-      }
-      // Empty remote on first provider setup is normal — genesis runs on connect.
-      if (this.loginSetupType !== undefined) {
+      case RemoteVaultAssessDecision.PromptMissingRemote:
+        this.remoteVaultRecoveryPrompt = "missing_only";
+        return true;
+      default:
         return false;
-      }
-      this.remoteVaultRecoveryPrompt = "missing_only";
-      return true;
     }
-    return false;
   }
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
@@ -1915,7 +1880,7 @@ export class VaultState {
     this.secretTypeFilter = undefined;
     this.pendingJoins = [];
     this.vaultMembers = [];
-    this.joinEnrollmentPrompt = "none";
+    this.joinEnrollmentPrompt = JoinEnrollmentState.None;
     this.enrollSecretsKey = "";
     this.enrollMembersKey = "";
     this.sharedJoinerIdentity = "";
@@ -1961,8 +1926,6 @@ export class VaultState {
       joinEnrollmentPrompt: this.joinEnrollmentPrompt,
     });
 
-    if (!result.changed) return;
-
     if (result.accessStatus !== undefined) {
       vaultLog.info("sync state changed (login gate)", {
         accessStatus: result.accessStatus,
@@ -1970,37 +1933,39 @@ export class VaultState {
       });
     }
 
-    if (
-      result.accessStatus === VaultAccessStatus.Ready &&
-      this.joinEnrollmentPrompt === "pending"
-    ) {
-      this.joinEnrollmentPrompt = "none";
-      this.showSuccess(this.t("toasts.device_approved"));
-      this.scheduleAutoConnectAfterApproval();
-    } else if (
-      result.accessStatus === VaultAccessStatus.Ready &&
-      this.awaitingJoinApproval
-    ) {
-      // Joiner whose approval landed after the join dialog was dismissed:
-      // sync says the remote vault is ready for this device, so unlock it
-      // instead of leaving the user stranded on the login gate.
-      this.scheduleAutoConnectAfterApproval();
-    } else if (
-      result.accessStatus === VaultAccessStatus.JoinPending &&
-      this.joinEnrollmentPrompt === "none"
-    ) {
-      this.joinEnrollmentPrompt = "pending";
-      this.awaitingJoinApproval = true;
+    const decision = this.clientPolicy.unauthenticatedSyncDecision(
+      result.changed,
+      result.accessStatus ?? undefined,
+      this.joinEnrollmentPrompt,
+      this.awaitingJoinApproval,
+    );
+    switch (decision) {
+      case UnauthenticatedSyncDecision.Approved:
+        this.joinEnrollmentPrompt = JoinEnrollmentState.None;
+        this.showSuccess(this.t("toasts.device_approved"));
+        this.scheduleAutoConnectAfterApproval();
+        break;
+      case UnauthenticatedSyncDecision.AutoConnect:
+        this.scheduleAutoConnectAfterApproval();
+        break;
+      case UnauthenticatedSyncDecision.MarkJoinPending:
+        this.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
+        this.awaitingJoinApproval = true;
+        break;
     }
   }
 
   /** Connect once the remote reports this device enrolled (post-approval). */
   private scheduleAutoConnectAfterApproval() {
-    if (this.isAuthenticated || this.isVerifying || this.loginPasswordPrompt) {
-      return;
-    }
-    // Never auto-unlock a session the user (or idle timer) explicitly locked.
-    if (this.sessionExpiredByIdle || isVaultSessionLocked()) {
+    if (
+      !this.clientPolicy.shouldAutoConnectAfterApproval(
+        this.isAuthenticated,
+        this.isVerifying,
+        this.loginPasswordPrompt,
+        this.sessionExpiredByIdle,
+        isVaultSessionLocked(),
+      )
+    ) {
       return;
     }
     vaultLog.info("scheduling auto-connect after join approval");
@@ -2223,24 +2188,19 @@ export class VaultState {
     yaml: string,
     revision: string | undefined,
   ): Promise<void> {
-    const version = Number(readVaultVersion(yaml));
     // `vaultStoreId` borrows the wasm manager; read it through the storage chain
     // so it can't alias an in-flight `&mut self` op (recursive-borrow hang).
     const managerStoreId = this.manager
       ? await this.enqueueStorage(() => this.manager!.vaultStoreId)
       : "";
-    this.providers = this.providers.map((p) =>
-      p.id === providerId
-        ? {
-            ...p,
-            lastSyncedAt: isoTimestamp(),
-            lastSyncedVersion: version || p.lastSyncedVersion,
-            lastSyncRevision: revision ?? p.lastSyncRevision,
-            lastCommonContentHash: vaultContentHash(yaml),
-            storeId: managerStoreId || p.storeId,
-          }
-        : p,
-    );
+    this.providers = wasmUpdateProviderSyncMetadata(
+      plainProviders(this.providers),
+      providerId,
+      yaml,
+      revision ?? undefined,
+      managerStoreId || undefined,
+      isoTimestamp(),
+    ) as StorageProvider[];
     await this.persistProviders();
     this.lastSyncedAt = new SvelteDate();
   }
@@ -2273,38 +2233,6 @@ export class VaultState {
     } finally {
       this.isSaving = false;
     }
-  }
-
-  async stageVaultSyncConflict(
-    conflict: PendingSyncConflictDraft,
-  ): Promise<void> {
-    this.pendingSyncConflict =
-      conflict.kind === "store_id"
-        ? NookPendingSyncConflict.storeId(
-            conflict.providerId,
-            conflict.providerLabel,
-            conflict.localYaml,
-            conflict.remoteYaml,
-            conflict.mode,
-            conflict.pat,
-            conflict.repo,
-            conflict.remoteRevision,
-            conflict.localStoreId,
-            conflict.remoteStoreId,
-          )
-        : NookPendingSyncConflict.content(
-            conflict.providerId,
-            conflict.providerLabel,
-            conflict.localYaml,
-            conflict.remoteYaml,
-            Number(readVaultVersion(conflict.localYaml)),
-            Number(readVaultVersion(conflict.remoteYaml)),
-            conflict.mode,
-            conflict.pat,
-            conflict.repo,
-            conflict.remoteRevision,
-          );
-    this.errorMsg = "";
   }
 
   clearPendingSyncConflict() {
@@ -2357,7 +2285,7 @@ export class VaultState {
   finishStagedProviderConnectAfterConflict(
     conflict: PendingSyncConflict,
   ): void {
-    if (conflict.providerId !== "__pending_provider__") {
+    if (!conflict.isPendingProvider) {
       return;
     }
     this.loginSetupType = undefined;
@@ -2368,7 +2296,7 @@ export class VaultState {
     conflict: PendingSyncConflict,
   ): Promise<string> {
     if (
-      conflict.providerId !== "__pending_provider__" &&
+      !conflict.isPendingProvider &&
       this.providers.some((p) => p.id === conflict.providerId)
     ) {
       return conflict.providerId;
@@ -2539,8 +2467,11 @@ export class VaultState {
     }
 
     if (records.length === 0 && total > 0 && offset >= total) {
-      const lastOffset =
-        Math.floor((total - 1) / this.secretPageSize) * this.secretPageSize;
+      const lastOffset = this.clientPolicy.normalizedSecretPageOffset(
+        total,
+        offset,
+        this.secretPageSize,
+      );
       const lastPage = await this.enqueueStorage(() =>
         this.manager!.querySecretPage(
           query,

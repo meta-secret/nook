@@ -1,6 +1,7 @@
 import type { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/log";
+import { JoinEnrollmentState } from "$app-wasm";
 
 const log = createLogger("vault-devices");
 
@@ -165,7 +166,7 @@ export async function confirmJoinRequest(state: VaultState) {
       state.manager!.request_vault_access(...storageArgs, isoTimestamp()),
     );
     await state.ensureProviderSaved();
-    state.joinEnrollmentPrompt = "pending";
+    state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
     state.awaitingJoinApproval = true;
   } catch (e: unknown) {
     state.errorMsg =
@@ -176,7 +177,7 @@ export async function confirmJoinRequest(state: VaultState) {
 }
 
 export function dismissJoinEnrollment(state: VaultState) {
-  state.joinEnrollmentPrompt = "none";
+  state.joinEnrollmentPrompt = JoinEnrollmentState.None;
 }
 
 export async function enrollAndConnect(state: VaultState) {
@@ -209,7 +210,7 @@ export async function enrollAndConnect(state: VaultState) {
       secrets: rawRecords.length,
       mode: state.storageMode,
     });
-    state.joinEnrollmentPrompt = "none";
+    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.closeSettings();
     state.startIdleSessionTracking();
   } catch (e: unknown) {

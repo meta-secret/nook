@@ -7,6 +7,7 @@ import type { StorageProvider } from '$lib/auth-providers'
 import {
   canCreateSecret,
   defaultVaultArchitecture,
+  draftVaultArchitecture,
   firstCompatibleProvider,
   onboardingType,
   providerCapabilityLabelKey,
@@ -91,6 +92,21 @@ describe('vault architecture adapter', () => {
       replication_type: 'personal',
     })
     expect(onboardingType(architecture)).toBe('personal-credential-transfer')
+  })
+
+  test('draft construction delegates vault-specific defaults to Rust', () => {
+    const simple = draftVaultArchitecture('anti-hacker', 'simple', 'shared')
+    const sentinel = draftVaultArchitecture('standard', 'sentinel', 'personal')
+    try {
+      expect(simple.sentinel_threshold).toBeUndefined()
+      expect(simple.replication_type).toBe('shared')
+      expect(sentinel.sentinel_threshold).toBe(2)
+      expect(sentinel.sentinel_required_participants).toBe(2)
+      expect(sentinel.sentinel_ready_participants).toBe(0)
+    } finally {
+      simple.free()
+      sentinel.free()
+    }
   })
 
   test('private provider enrollment exposes the credential-transfer mode', () => {

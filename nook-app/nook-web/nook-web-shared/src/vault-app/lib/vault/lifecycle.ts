@@ -1,7 +1,7 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/log";
-import { prepareNewLocalVaultSlot } from "$app-wasm";
+import { JoinEnrollmentState, prepareNewLocalVaultSlot } from "$app-wasm";
 import * as localLoginActions from "$lib/vault/local-login";
 
 const log = createLogger("vault-lifecycle");
@@ -67,7 +67,7 @@ export async function createFreshVault(state: VaultState) {
     await state.ensureProviderSaved();
     await state.syncActiveVaultStoreIdToAuth();
     await state.hydrateMultiDeviceState();
-    state.joinEnrollmentPrompt = "none";
+    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     log.info("fresh remote vault created", {
       mode: state.storageMode,
       secrets: rawRecords.length,

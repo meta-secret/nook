@@ -2,6 +2,7 @@ import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
+  JoinEnrollmentState,
   NookEnrollmentIssueInput,
   OnboardingType,
   StorageProviderType,
@@ -222,7 +223,7 @@ export async function unlockWithPassword(
       secrets: state.secretTotal,
       entryId,
     });
-    state.joinEnrollmentPrompt = "none";
+    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
     state.showSuccess(state.t("toasts.vault_unlocked"));
     state.startIdleSessionTracking();
@@ -514,7 +515,7 @@ export async function connectWithEnrollmentCode(
     await state.refreshPasswordEntriesList();
     void state.hydrateMultiDeviceState();
     state.markVaultUnlocked();
-    state.joinEnrollmentPrompt = "none";
+    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginEnrollmentCode = "";
     state.prefillEnrollmentCode = "";
     state.enrollmentFromUrlPending = false;

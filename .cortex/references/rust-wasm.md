@@ -54,10 +54,16 @@
 | `NookVaultMember` | Enrolled devices (`authId`, `deviceId`, …) |
 | `NookPasswordEntrySummary` | Backup-password list entries |
 | `NookVaultSyncResult` | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
+| `NookVaultClientPolicy` | Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions |
 | `NookRemoteVaultFetch` | `fetchRemoteVaultYaml` |
 | `NookReconcileVaultBlobsResult` | `reconcileVaultBlobs` |
 | `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution |
 | `NookSecretFormFields` | `buildSecretYaml` input (flat constructor; unused fields empty) |
+
+Provider list scoping, locked-device visibility, staged connect arguments,
+remote-reference normalization, and sync metadata updates cross the boundary as
+Rust-owned functions over typed provider rows. Svelte may clone reactive values
+into plain boundary inputs, but must not reproduce those decisions.
 
 **Web layer:** import these types from `./nook-wasm/nook_wasm` (or re-export via `nook.ts`). Do **not** add TS mappers that rebuild plain objects from wasm output.
 
