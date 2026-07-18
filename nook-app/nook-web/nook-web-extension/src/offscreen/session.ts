@@ -1,6 +1,9 @@
 import initNookWasm, {
   configureVaultApplication,
   loadAuthProviders,
+  NookAuthProvidersSnapshotValue,
+  NookExternalEventLogRecords,
+  NookStorageProviderValue,
   NookVaultManager,
   providerWasmArgs,
   saveAuthProviders,
@@ -160,7 +163,9 @@ async function flushPasskeyEventToProviders(
   activeManager: NookVaultManager,
   vaultStoreId: string,
 ): Promise<void> {
-  const loaded = (await loadAuthProviders(activeManager)) as LoadedProviders
+  const loadedValue = await loadAuthProviders(activeManager)
+  const loaded = loadedValue.toObject() as LoadedProviders
+  loadedValue.free()
   const providers = loaded.snapshot.providers.filter(
     (provider) =>
       provider.storeId === vaultStoreId &&
@@ -169,7 +174,9 @@ async function flushPasskeyEventToProviders(
   )
   await Promise.allSettled(
     providers.map(async (provider) => {
-      const args = providerWasmArgs(provider)
+      const providerValue = NookStorageProviderValue.fromObject(provider)
+      const args = providerWasmArgs(providerValue)
+      providerValue.free()
       try {
         await activeManager.flushEventOutboxForProvider(
           args.mode,
@@ -333,16 +340,19 @@ async function handleMessage(message: unknown): Promise<unknown> {
         throw new Error('Extension session received an invalid vault import.')
       }
       const activeManager = await getManager()
-      const status = await activeManager.importExtensionEventLogRecords(
+      const recordValues = NookExternalEventLogRecords.fromArray(records)
+      const statusValue = await activeManager.importExtensionEventLogRecords(
         grant.vaultStoreId,
         grant.deviceId,
         grant.devicePublicKey,
         grant.deviceSigningPublicKey,
-        records,
+        recordValues,
       )
-      const existing = (await loadAuthProviders(
-        activeManager,
-      )) as LoadedProviders
+      const status = statusValue.toObject()
+      statusValue.free()
+      const existingValue = await loadAuthProviders(activeManager)
+      const existing = existingValue.toObject() as LoadedProviders
+      existingValue.free()
       const merged = new Map(
         existing.snapshot.providers.map((provider) => [provider.id, provider]),
       )
@@ -350,10 +360,15 @@ async function handleMessage(message: unknown): Promise<unknown> {
         if (provider && typeof provider.id === 'string')
           merged.set(provider.id, provider)
       }
-      await saveAuthProviders(activeManager, {
+      const snapshotValue = NookAuthProvidersSnapshotValue.fromObject({
         providers: Array.from(merged.values()),
         activeVaultStoreId: grant.vaultStoreId,
       })
+      try {
+        await saveAuthProviders(activeManager, snapshotValue)
+      } finally {
+        snapshotValue.free()
+      }
       return { ok: true, status }
     }
     case 'nook:extension-session-update-vault': {
@@ -364,15 +379,20 @@ async function handleMessage(message: unknown): Promise<unknown> {
           'Extension session received an invalid event-log update.',
         )
       }
-      const status = await (
+      const recordValues = NookExternalEventLogRecords.fromArray(
+        payload.eventLogRecords,
+      )
+      const statusValue = await (
         await getManager()
       ).importExtensionEventLogRecords(
         grant.vaultStoreId,
         grant.deviceId,
         grant.devicePublicKey,
         grant.deviceSigningPublicKey,
-        payload.eventLogRecords,
+        recordValues,
       )
+      const status = statusValue.toObject()
+      statusValue.free()
       return { ok: true, status }
     }
     case 'nook:extension-session-list-passkeys': {

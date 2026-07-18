@@ -30,6 +30,11 @@ mod secrets;
 mod sentinel;
 mod sync;
 
+pub use secrets::{
+    NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
+    NookExternalEventLogRecords,
+};
+
 use crate::NookError;
 use crate::conversion::{pending_joins_to_vec, vault_members_to_vec};
 use crate::storage::{

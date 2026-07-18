@@ -25,7 +25,11 @@ import {
   JoinEnrollmentState,
   NookBrowserLocale,
   NookClientRunModeUtil,
+  NookAuthProvidersSnapshotValue,
+  NookOAuthFileConfigValue,
   NookRuntimeConfig,
+  NookStorageProviderList,
+  NookStorageProviderValue,
   NookVaultClientPolicy,
   RemoteVaultAssessDecision,
   UnauthenticatedSyncDecision,
@@ -48,7 +52,6 @@ import {
   updateProviderSyncMetadata as wasmUpdateProviderSyncMetadata,
   wasmStorageArgs as wasmStorageArgsCore,
   type NookLocalVaultEntry,
-  type NookLocalAuthProviderSnapshot,
   type NookPasswordEntrySummary,
   type NookSecretPage,
   type NookSentinelGenesisFinalizeResult,
@@ -68,6 +71,7 @@ import {
   saveAuthProviders,
   storageProviderKind,
   wasmStorageModeForProvider,
+  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type GoogleDriveMode,
   type ICloudMode,
@@ -170,6 +174,52 @@ function plainProviders(providers: StorageProvider[]): StorageProvider[] {
 
 function plainOAuthFile(config: OAuthFileConfig): OAuthFileConfig {
   return JSON.parse(JSON.stringify(config)) as OAuthFileConfig;
+}
+
+function withProviderValue<T>(
+  provider: StorageProvider,
+  operation: (value: NookStorageProviderValue) => T,
+): T {
+  const value = NookStorageProviderValue.fromObject(plainProvider(provider));
+  try {
+    return operation(value);
+  } finally {
+    value.free();
+  }
+}
+
+function withProviderList<T>(
+  providers: StorageProvider[],
+  operation: (value: NookStorageProviderList) => T,
+): T {
+  const value = NookStorageProviderList.fromArray(plainProviders(providers));
+  try {
+    return operation(value);
+  } finally {
+    value.free();
+  }
+}
+
+function providerListToPlain(
+  value: NookStorageProviderList,
+): StorageProvider[] {
+  try {
+    return value.toArray() as StorageProvider[];
+  } finally {
+    value.free();
+  }
+}
+
+function withOAuthFileValue<T>(
+  config: OAuthFileConfig,
+  operation: (value: NookOAuthFileConfigValue) => T,
+): T {
+  const value = NookOAuthFileConfigValue.fromObject(plainOAuthFile(config));
+  try {
+    return operation(value);
+  } finally {
+    value.free();
+  }
 }
 
 export class VaultState {
@@ -347,9 +397,8 @@ export class VaultState {
 
   get syncingProviderLabel(): string | undefined {
     if (!this.syncingProviderId) return undefined;
-    return providerLabelById(
-      plainProviders(this.providers),
-      this.syncingProviderId,
+    return withProviderList(this.providers, (providers) =>
+      providerLabelById(providers, this.syncingProviderId!),
     );
   }
 
@@ -456,20 +505,23 @@ export class VaultState {
   }
 
   wasmStorageArgs(): [string, string, string] {
+    const syncProvider = this.syncProviders[0];
+    const provider = syncProvider
+      ? NookStorageProviderValue.fromObject(plainProvider(syncProvider))
+      : undefined;
+    // This argument crosses by value; wasm-bindgen transfers ownership.
     return storageArgsTuple(
       wasmStorageArgsCore(
         this.localVaultPresent,
         this.isAuthenticated,
-        this.syncProviders[0]
-          ? plainProvider(this.syncProviders[0])
-          : undefined,
+        provider,
         this.storageMode,
         this.githubPat,
         this.githubRepo,
         this.oauthFile?.preset ?? undefined,
         this.oauthFile?.accessToken ?? undefined,
         this.oauthFile
-          ? oauthRemoteStorageRef(plainOAuthFile(this.oauthFile))
+          ? withOAuthFileValue(this.oauthFile, oauthRemoteStorageRef)
           : undefined,
         this.oauthFile?.fileName ?? undefined,
       ),
@@ -490,19 +542,15 @@ export class VaultState {
 
   stagedRemoteStorageArgs(): [string, string, string] | undefined {
     const type = this.loginSetupType ?? this.storageMode;
+    const oauthFile = this.oauthFile
+      ? NookOAuthFileConfigValue.fromObject(plainOAuthFile(this.oauthFile))
+      : undefined;
+    // This argument crosses by value; wasm-bindgen transfers ownership.
     const args = wasmStagedRemoteStorageArgs(
       type,
       this.githubPat || undefined,
       this.githubRepo || undefined,
-      this.oauthFile
-        ? plainProvider({
-            id: "staged-oauth-file",
-            type,
-            label: "",
-            oauthFile: this.oauthFile,
-            createdAt: "",
-          }).oauthFile
-        : undefined,
+      oauthFile,
     );
     if (!args) return undefined;
     try {
@@ -551,11 +599,16 @@ export class VaultState {
     ) {
       return;
     }
-    const updated = updateOauthRemoteRef(
-      plainOAuthFile(this.oauthFile),
-      this.manager.storage_remote_ref ?? "",
-    ) as OAuthFileConfig | undefined;
-    if (updated) this.oauthFile = updated;
+    const updated = withOAuthFileValue(this.oauthFile, (config) =>
+      updateOauthRemoteRef(config, this.manager!.storage_remote_ref ?? ""),
+    );
+    if (updated) {
+      try {
+        this.oauthFile = updated.toObject() as OAuthFileConfig;
+      } finally {
+        updated.free();
+      }
+    }
   }
 
   async ensureOAuthTokensFresh(): Promise<void> {
@@ -652,9 +705,11 @@ export class VaultState {
   }
 
   get localProvider(): StorageProvider | undefined {
-    const id = localProviderIdForActiveVault(
-      plainProviders(this.providers),
-      this.activeVaultStoreId ?? undefined,
+    const id = withProviderList(this.providers, (providers) =>
+      localProviderIdForActiveVault(
+        providers,
+        this.activeVaultStoreId ?? undefined,
+      ),
     );
     return id
       ? this.providers.find((provider) => provider.id === id)
@@ -668,18 +723,26 @@ export class VaultState {
 
   /** Providers belonging to the active vault only. */
   get activeVaultProviders(): StorageProvider[] {
-    return wasmActiveVaultProviders(
-      plainProviders(this.providers),
-      this.activeVaultStoreId ?? undefined,
-    ) as StorageProvider[];
+    return withProviderList(this.providers, (providers) =>
+      providerListToPlain(
+        wasmActiveVaultProviders(
+          providers,
+          this.activeVaultStoreId ?? undefined,
+        ),
+      ),
+    );
   }
 
   /** Cloud sync destinations for the active vault — local row omitted. */
   get syncProviders(): StorageProvider[] {
-    return wasmSyncProvidersForActiveVault(
-      plainProviders(this.providers),
-      this.activeVaultStoreId ?? undefined,
-    ) as StorageProvider[];
+    return withProviderList(this.providers, (providers) =>
+      providerListToPlain(
+        wasmSyncProvidersForActiveVault(
+          providers,
+          this.activeVaultStoreId ?? undefined,
+        ),
+      ),
+    );
   }
 
   get hasMultipleLocalVaults(): boolean {
@@ -698,7 +761,9 @@ export class VaultState {
   }
 
   providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    return storageArgsTuple(wasmProviderWasmArgs(plainProvider(provider)));
+    return withProviderValue(provider, (value) =>
+      storageArgsTuple(wasmProviderWasmArgs(value)),
+    );
   }
 
   get hasProviders(): boolean {
@@ -1541,30 +1606,36 @@ export class VaultState {
     if (!this.manager || !this.sentinelGenesisStoreId) return;
     const provider = this.syncProviders[0];
     if (!provider || provider.type === "local-folder") return;
-    const providerSnapshot = JSON.parse(
-      JSON.stringify({
-        providers: [provider],
-        activeVaultStoreId: this.sentinelGenesisStoreId,
-      }),
+    const providerSnapshot = NookAuthProvidersSnapshotValue.fromObject(
+      JSON.parse(
+        JSON.stringify({
+          providers: [provider],
+          activeVaultStoreId: this.sentinelGenesisStoreId,
+        }),
+      ) as object,
     );
-    this.sentinelGenesisDeliveries = this.sentinelGenesisDeliveries.map(
-      (delivery) => {
-        const sharePayload = delivery.sharePayload ?? delivery.payload;
-        if (delivery.participantId === this.deviceId) {
-          return { ...delivery, sharePayload };
-        }
-        const packageJson = this.manager!.createSentinelOnboardingPackage(
-          this.sentinelGenesisRequest,
-          sharePayload,
-          providerSnapshot,
-        );
-        return {
-          ...delivery,
-          sharePayload,
-          payload: buildSentinelOnboardingLink(packageJson),
-        };
-      },
-    );
+    try {
+      this.sentinelGenesisDeliveries = this.sentinelGenesisDeliveries.map(
+        (delivery) => {
+          const sharePayload = delivery.sharePayload ?? delivery.payload;
+          if (delivery.participantId === this.deviceId) {
+            return { ...delivery, sharePayload };
+          }
+          const packageJson = this.manager!.createSentinelOnboardingPackage(
+            this.sentinelGenesisRequest,
+            sharePayload,
+            providerSnapshot,
+          );
+          return {
+            ...delivery,
+            sharePayload,
+            payload: buildSentinelOnboardingLink(packageJson),
+          };
+        },
+      );
+    } finally {
+      providerSnapshot.free();
+    }
   }
 
   async acceptSentinelOnboardingPackage(packageJson: string): Promise<void> {
@@ -1656,9 +1727,9 @@ export class VaultState {
     // Sync-provider credentials are sealed to the protected device identity.
     // Keep only the non-secret local row in memory while that identity is
     // locked; passkey/PIN authorization reloads the sealed providers.
-    this.providers = providersVisibleWhileDeviceLocked(
-      plainProviders(this.providers),
-    ) as StorageProvider[];
+    this.providers = withProviderList(this.providers, (providers) =>
+      providerListToPlain(providersVisibleWhileDeviceLocked(providers)),
+    );
     this.providersLoaded = this.providers.length > 0;
     this.githubPat = "";
     this.oauthFile = undefined;
@@ -2141,10 +2212,17 @@ export class VaultState {
       const vaultStoreId =
         this.activeVaultStoreId ??
         (await this.enqueueStorage(() => this.manager!.vaultStoreId));
-      const eventLogRecords = (await this.enqueueStorage(() =>
+      const eventLogRecords = await this.enqueueStorage(() =>
         this.manager!.exportEventLogRecords(),
-      )) as ExtensionEventLogRecord[];
-      publishExtensionEventLogUpdate(vaultStoreId, eventLogRecords);
+      );
+      try {
+        publishExtensionEventLogUpdate(
+          vaultStoreId,
+          eventLogRecords.toArray() as ExtensionEventLogRecord[],
+        );
+      } finally {
+        eventLogRecords.free();
+      }
     } catch {
       // The extension bridge is optional and must never make a vault save fail.
       vaultLog.warn("extension event-log notification failed");
@@ -2193,14 +2271,18 @@ export class VaultState {
     const managerStoreId = this.manager
       ? await this.enqueueStorage(() => this.manager!.vaultStoreId)
       : "";
-    this.providers = wasmUpdateProviderSyncMetadata(
-      plainProviders(this.providers),
-      providerId,
-      yaml,
-      revision ?? undefined,
-      managerStoreId || undefined,
-      isoTimestamp(),
-    ) as StorageProvider[];
+    this.providers = withProviderList(this.providers, (providers) =>
+      providerListToPlain(
+        wasmUpdateProviderSyncMetadata(
+          providers,
+          providerId,
+          yaml,
+          revision ?? undefined,
+          managerStoreId || undefined,
+          isoTimestamp(),
+        ),
+      ),
+    );
     await this.persistProviders();
     this.lastSyncedAt = new SvelteDate();
   }
@@ -2599,13 +2681,24 @@ export class VaultState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
-    const { snapshot, migrated } = (await ensureLocalAuthProviderSnapshot(
+    const snapshotValue = NookAuthProvidersSnapshotValue.fromObject(
       JSON.parse(
         JSON.stringify({
           providers: this.providers,
         }),
       ),
-    )) as NookLocalAuthProviderSnapshot;
+    );
+    const result = await ensureLocalAuthProviderSnapshot(snapshotValue);
+    snapshotValue.free();
+    const migrated = result.migrated;
+    const migratedSnapshotValue = result.snapshot;
+    result.free();
+    let snapshot: AuthProvidersSnapshot;
+    try {
+      snapshot = migratedSnapshotValue.toObject() as AuthProvidersSnapshot;
+    } finally {
+      migratedSnapshotValue.free();
+    }
     if (migrated || snapshot.providers.length !== this.providers.length) {
       this.providers = snapshot.providers;
       await this.enqueueStorage(() =>

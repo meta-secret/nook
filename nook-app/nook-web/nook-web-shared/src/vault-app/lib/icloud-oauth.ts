@@ -6,7 +6,10 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
-import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
+import {
+  NookOAuthFileConfigValue,
+  iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore,
+} from "$app-wasm";
 import {
   default as initNookWasm,
   createICloudSharedStorageTarget,
@@ -913,10 +916,13 @@ function normalizedICloudShortGuid(value: string): string {
     throw new Error("provider_setup.icloud_shared_link_required");
   }
   if (trimmed.startsWith("icloud-share-v1:")) {
-    const target = parseICloudSharedStorageTarget(trimmed) as {
-      shortGuid?: string;
-    };
-    if (target.shortGuid?.trim()) return target.shortGuid.trim();
+    const targetValue = parseICloudSharedStorageTarget(trimmed);
+    try {
+      const target = targetValue.toObject() as { shortGuid?: string };
+      if (target.shortGuid?.trim()) return target.shortGuid.trim();
+    } finally {
+      targetValue.free();
+    }
   }
   try {
     const url = new URL(trimmed);
@@ -1015,15 +1021,23 @@ export async function acceptICloudSharedVault(
   await initICloudAuth();
   await initNookWasm();
   const container = window.CloudKit!.getDefaultContainer();
-  const encodedTarget = shareReference.trim().startsWith("icloud-share-v1:")
-    ? (parseICloudSharedStorageTarget(shareReference.trim()) as {
+  let encodedTarget:
+    | {
         role: "owner" | "participant";
         zoneName: string;
         ownerRecordName: string;
         rootRecordName: string;
         shortGuid: string;
-      })
-    : undefined;
+      }
+    | undefined;
+  if (shareReference.trim().startsWith("icloud-share-v1:")) {
+    const targetValue = parseICloudSharedStorageTarget(shareReference.trim());
+    try {
+      encodedTarget = targetValue.toObject() as typeof encodedTarget;
+    } finally {
+      targetValue.free();
+    }
+  }
   const shortGuid = normalizedICloudShortGuid(shareReference);
   const identity =
     authSetupUserIdentity ?? (await container.fetchCurrentUserIdentity?.());
@@ -1347,11 +1361,21 @@ export function oauthTokensToICloudConfig(
   tokens: ICloudOAuthTokens,
   existing?: OAuthFileConfig,
 ): OAuthFileConfig {
-  return iCloudOAuthTokensToConfigCore(
+  const existingValue = existing
+    ? NookOAuthFileConfigValue.fromObject(
+        JSON.parse(JSON.stringify(existing)) as object,
+      )
+    : undefined;
+  const config = iCloudOAuthTokensToConfigCore(
     tokens.accessToken,
     tokens.accountName ?? undefined,
-    existing ?? undefined,
-  ) as OAuthFileConfig;
+    existingValue,
+  );
+  try {
+    return config.toObject() as OAuthFileConfig;
+  } finally {
+    config.free();
+  }
 }
 
 export async function ensureValidICloudOAuthFileConfig(

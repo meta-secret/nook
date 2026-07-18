@@ -1,10 +1,6 @@
 import { beforeAll, describe, expect, test } from 'vitest'
-import {
-  default as initNookWasm,
-  loadAuthProviders,
-  NookVaultManager,
-  saveAuthProviders,
-} from '$app-wasm'
+import { default as initNookWasm, NookVaultManager } from '$app-wasm'
+import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
@@ -99,7 +95,7 @@ describe.sequential(
       })
 
       const loaded = await loadAuthProviders(manager)
-      expect(loaded.snapshot.providers[0]?.githubPat).toBe(pat)
+      expect(loaded.providers[0]?.githubPat).toBe(pat)
     })
 
     test('loadAuthProviders upgrades legacy plaintext rows to sealed storage', async () => {
@@ -143,7 +139,7 @@ describe.sequential(
       })
 
       const loaded = await loadAuthProviders(manager)
-      expect(loaded.snapshot.providers[0]?.githubPat).toBe(pat)
+      expect(loaded.providers[0]?.githubPat).toBe(pat)
 
       const raw = await readRawAuthProvidersFromIdb()
       const storedPat = raw.providers[0]?.githubPat
@@ -180,7 +176,7 @@ describe.sequential(
       expect(oauth?.refreshToken).not.toContain(refresh)
 
       const loaded = await loadAuthProviders(manager)
-      const loadedOauth = loaded.snapshot.providers[0]?.oauthFile
+      const loadedOauth = loaded.providers[0]?.oauthFile
       expect(loadedOauth?.accessToken).toBe(access)
       expect(loadedOauth?.refreshToken).toBe(refresh)
     })

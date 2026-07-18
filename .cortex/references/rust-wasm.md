@@ -43,7 +43,7 @@
 
 ## 4. Typed WASM boundary (`nook-app/nook-wasm/src/types.rs`)
 
-**Prefer typed `#[wasm_bindgen]` structs over raw `JsValue`, `js_sys::Array`, and `Reflect`.** Errors may still surface as `JsError`; data crossing the boundary should not.
+**Use typed `#[wasm_bindgen]` structs instead of raw JavaScript values for every application data shape.** Errors surface as `JsError`. Browser adapters use the narrowest typed `web-sys` / `js-sys` object supported by the external API. Syntax-aware repository preflight rejects authored `JsValue` paths before wasm-bindgen macro expansion; Clippy's built-in `disallowed_types` cannot distinguish wasm-bindgen's generated ABI code from authored code.
 
 | Export | Use |
 |--------|-----|

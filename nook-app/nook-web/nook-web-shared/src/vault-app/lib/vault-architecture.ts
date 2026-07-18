@@ -1,6 +1,10 @@
 import {
   NookVaultArchitecture,
+  NookSharedStorageGrantRequestValue,
+  NookStorageProviderList,
+  NookStorageProviderValue,
   defaultVaultArchitecture as wasmDefaultVaultArchitecture,
+  enrollmentProviderForArchitecture as wasmEnrollmentProviderForArchitecture,
   firstCompatibleProviderId as wasmFirstCompatibleProviderId,
   prepareSharedStorageGrant as wasmPrepareSharedStorageGrant,
   providerOnboardingType as wasmProviderOnboardingType,
@@ -11,7 +15,10 @@ import {
   vaultArchitectureCanCreateSecret as wasmVaultArchitectureCanCreateSecret,
   vaultArchitectureOnboardingType as wasmVaultArchitectureOnboardingType,
 } from "$app-wasm";
-import type { NookProviderReplicationCapability } from "$app-wasm";
+import type {
+  NookEnrollmentProvider,
+  NookProviderReplicationCapability,
+} from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 
 export type DeviceMode = "standard" | "anti-hacker";
@@ -35,6 +42,20 @@ export type VaultArchitecture = NookVaultArchitecture & {
   readonly replication_type: ReplicationType;
 };
 export type ProviderReplicationCapability = NookProviderReplicationCapability;
+
+function withProvider<T>(
+  provider: StorageProvider,
+  operation: (value: NookStorageProviderValue) => T,
+): T {
+  const value = NookStorageProviderValue.fromObject(
+    JSON.parse(JSON.stringify(provider)) as object,
+  );
+  try {
+    return operation(value);
+  } finally {
+    value.free();
+  }
+}
 
 export function defaultVaultArchitecture(): VaultArchitecture {
   return wasmDefaultVaultArchitecture() as VaultArchitecture;
@@ -83,7 +104,25 @@ export function providerOnboardingType(
   provider: StorageProvider,
   architecture: VaultArchitecture,
 ): string {
-  return wasmProviderOnboardingType(provider, architecture);
+  return withProvider(provider, (value) =>
+    wasmProviderOnboardingType(value, architecture),
+  );
+}
+
+export function enrollmentProviderForArchitecture(
+  provider: StorageProvider,
+  architecture: VaultArchitecture,
+  sharedJoinerIdentity?: string,
+  sharedStorageTargetId?: string,
+): NookEnrollmentProvider {
+  return withProvider(provider, (value) =>
+    wasmEnrollmentProviderForArchitecture(
+      value,
+      architecture,
+      sharedJoinerIdentity,
+      sharedStorageTargetId,
+    ),
+  );
 }
 
 export function canCreateSecret(architecture: VaultArchitecture): boolean {
@@ -93,14 +132,16 @@ export function canCreateSecret(architecture: VaultArchitecture): boolean {
 export function providerReplicationCapability(
   provider: StorageProvider,
 ): ProviderReplicationCapability {
-  return wasmProviderReplicationCapability(provider);
+  return withProvider(provider, wasmProviderReplicationCapability);
 }
 
 export function validateProviderReplication(
   provider: StorageProvider,
   replicationType: ReplicationType,
 ): ProviderReplicationCapability {
-  return wasmValidateProviderReplication(provider, replicationType);
+  return withProvider(provider, (value) =>
+    wasmValidateProviderReplication(value, replicationType),
+  );
 }
 
 export type ProviderCapabilityLabelKey =
@@ -126,7 +167,9 @@ export function providerSupportsReplication(
   provider: StorageProvider,
   replicationType: ReplicationType,
 ): boolean {
-  return wasmProviderSupportsReplication(provider, replicationType);
+  return withProvider(provider, (value) =>
+    wasmProviderSupportsReplication(value, replicationType),
+  );
 }
 
 /**
@@ -138,11 +181,19 @@ export function firstCompatibleProvider(
   replicationType: ReplicationType,
   preferredId?: string,
 ): StorageProvider | undefined {
-  const selectedId = wasmFirstCompatibleProviderId(
-    providers,
-    replicationType,
-    preferredId ?? undefined,
+  const providerList = NookStorageProviderList.fromArray(
+    JSON.parse(JSON.stringify(providers)) as object[],
   );
+  let selectedId: string | undefined;
+  try {
+    selectedId = wasmFirstCompatibleProviderId(
+      providerList,
+      replicationType,
+      preferredId ?? undefined,
+    );
+  } finally {
+    providerList.free();
+  }
   return providers.find((provider) => provider.id === selectedId);
 }
 
@@ -175,7 +226,17 @@ export type SharedStorageGrantOutcome =
 export async function prepareSharedStorageGrant(
   request: SharedStorageGrantRequest,
 ): Promise<SharedStorageGrantOutcome> {
-  return (await wasmPrepareSharedStorageGrant(
-    request,
-  )) as SharedStorageGrantOutcome;
+  const requestValue = NookSharedStorageGrantRequestValue.fromObject(
+    JSON.parse(JSON.stringify(request)) as object,
+  );
+  try {
+    const outcome = await wasmPrepareSharedStorageGrant(requestValue);
+    try {
+      return outcome.toObject() as SharedStorageGrantOutcome;
+    } finally {
+      outcome.free();
+    }
+  } finally {
+    requestValue.free();
+  }
 }

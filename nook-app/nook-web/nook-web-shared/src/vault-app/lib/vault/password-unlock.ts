@@ -4,6 +4,7 @@ import { createLogger } from "$lib/log";
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
+  NookStorageProviderValue,
   OnboardingType,
   StorageProviderType,
   decryptEnrollmentPayload,
@@ -11,6 +12,7 @@ import {
   encryptEnrollmentPayload,
   hasActiveLocalVault,
   setLocalVaultLabel,
+  type NookEnrollmentProvider,
 } from "$app-wasm";
 import {
   bindGoogleDriveSharedFolder,
@@ -711,14 +713,22 @@ export async function issueEnrollmentCode(
         );
       }
     }
-    const provider = enrollmentProviderForArchitecture(
-      enrollmentProviderRow,
-      state.vaultArchitecture,
-      usesSharedProviderGrant && !usesSharedICloud
-        ? sharedJoinerIdentity
-        : undefined,
-      sharedStorageTargetId,
+    const providerValue = NookStorageProviderValue.fromObject(
+      JSON.parse(JSON.stringify(enrollmentProviderRow)) as object,
     );
+    let provider: NookEnrollmentProvider;
+    try {
+      provider = enrollmentProviderForArchitecture(
+        providerValue,
+        state.vaultArchitecture,
+        usesSharedProviderGrant && !usesSharedICloud
+          ? sharedJoinerIdentity
+          : undefined,
+        sharedStorageTargetId,
+      );
+    } finally {
+      providerValue.free();
+    }
     const vaultName = await state.enqueueStorage(
       () => state.manager!.vaultName ?? "",
     );

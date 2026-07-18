@@ -29,7 +29,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::reload;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const LOG_DB_NAME: &str = "nook_logs";
@@ -45,7 +45,7 @@ extern "C" {
     /// `console.*` methods captured by the web layer. Guarded with `catch` so
     /// calls before the bridge is installed are silently ignored.
     #[wasm_bindgen(catch, js_namespace = ["window", "__nookConsole"], js_name = echo)]
-    fn console_echo_js(level: &str, text: &str) -> Result<(), JsValue>;
+    fn console_echo_js(level: &str, text: &str) -> Result<(), js_sys::Error>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -119,6 +119,17 @@ struct LogEntry {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     data: Option<String>,
+}
+
+#[wasm_bindgen]
+pub struct NookLogEntries(Vec<LogEntry>);
+
+#[wasm_bindgen]
+impl NookLogEntries {
+    #[wasm_bindgen(js_name = toArray)]
+    pub fn to_array(&self) -> Result<js_sys::Array, wasm_bindgen::JsError> {
+        Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
+    }
 }
 
 struct LoggerState {
@@ -423,9 +434,9 @@ pub async fn log_dump(
     min_level: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
-) -> Result<JsValue, wasm_bindgen::JsError> {
+) -> Result<NookLogEntries, wasm_bindgen::JsError> {
     let entries = dump_entries(min_level, limit, offset).await?;
-    Ok(serde_wasm_bindgen::to_value(&entries)?)
+    Ok(NookLogEntries(entries))
 }
 
 /// Total number of persisted log entries (after flushing the queue).

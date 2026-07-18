@@ -1,6 +1,8 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use syn::spanned::Spanned;
+use syn::visit::Visit;
 
 const MOUNT_PREFIX: &str = "--mount=";
 
@@ -51,6 +53,64 @@ pub fn typescript_domain_schema_mirrors(root: &Path) -> io::Result<Vec<Violation
         "ts",
         TYPESCRIPT_DOMAIN_MIRRORS,
     )
+}
+
+pub fn wasm_js_values(root: &Path) -> io::Result<Vec<Violation>> {
+    let directory = root.join("nook-app/nook-wasm/src");
+    let mut files = Vec::new();
+    collect_files_with_extension(&directory, "rs", &mut files)?;
+    let mut violations = Vec::new();
+
+    for path in files {
+        let contents = fs::read_to_string(&path)?;
+        let syntax = syn::parse_file(&contents).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("failed to parse {}: {error}", path.display()),
+            )
+        })?;
+        let mut visitor = JsValueVisitor::default();
+        visitor.visit_file(&syntax);
+        visitor.lines.sort_unstable();
+        visitor.lines.dedup();
+        violations.extend(visitor.lines.into_iter().map(|line| Violation {
+            path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+            line,
+        }));
+    }
+
+    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+    Ok(violations)
+}
+
+#[derive(Default)]
+struct JsValueVisitor {
+    lines: Vec<usize>,
+}
+
+impl<'ast> Visit<'ast> for JsValueVisitor {
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        if path
+            .segments
+            .iter()
+            .any(|segment| segment.ident == "JsValue")
+        {
+            self.lines.push(path.span().start().line);
+        }
+        syn::visit::visit_path(self, path);
+    }
+
+    fn visit_use_tree(&mut self, tree: &'ast syn::UseTree) {
+        match tree {
+            syn::UseTree::Name(name) if name.ident == "JsValue" => {
+                self.lines.push(name.span().start().line);
+            }
+            syn::UseTree::Rename(rename) if rename.ident == "JsValue" => {
+                self.lines.push(rename.span().start().line);
+            }
+            _ => syn::visit::visit_use_tree(self, tree),
+        }
+    }
 }
 
 fn violations_in_tree(
@@ -216,6 +276,42 @@ mod tests {
         let root = temporary_directory();
         let error = dockerfile_cache_mounts(&root).unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn reports_authored_js_value_paths_without_linting_comments() {
+        let root = temporary_directory();
+        let wasm_source = root.join("nook-app/nook-wasm/src");
+        fs::create_dir_all(&wasm_source).unwrap();
+        fs::write(
+            wasm_source.join("lib.rs"),
+            r#"
+// JsValue in documentation is not authored type usage.
+use wasm_bindgen::JsValue;
+
+pub fn raw(input: wasm_bindgen::JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+    input
+}
+"#,
+        )
+        .unwrap();
+
+        let violations = wasm_js_values(&root).unwrap();
+
+        assert_eq!(
+            violations,
+            vec![
+                Violation {
+                    path: PathBuf::from("nook-app/nook-wasm/src/lib.rs"),
+                    line: 3,
+                },
+                Violation {
+                    path: PathBuf::from("nook-app/nook-wasm/src/lib.rs"),
+                    line: 5,
+                },
+            ]
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

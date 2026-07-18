@@ -12,7 +12,10 @@
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
-import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
+import {
+  NookOAuthFileConfigValue,
+  googleOAuthTokensToConfig as googleOAuthTokensToConfigCore,
+} from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
@@ -208,11 +211,21 @@ export function oauthTokensToConfig(
   tokens: GoogleOAuthTokens,
   existing?: OAuthFileConfig,
 ): OAuthFileConfig {
-  return googleOAuthTokensToConfigCore(
+  const existingValue = existing
+    ? NookOAuthFileConfigValue.fromObject(
+        JSON.parse(JSON.stringify(existing)) as object,
+      )
+    : undefined;
+  const config = googleOAuthTokensToConfigCore(
     tokens.accessToken,
     tokens.expiresAt,
-    existing ?? undefined,
-  ) as OAuthFileConfig;
+    existingValue,
+  );
+  try {
+    return config.toObject() as OAuthFileConfig;
+  } finally {
+    config.free();
+  }
 }
 
 export function isOAuthAccessTokenExpired(

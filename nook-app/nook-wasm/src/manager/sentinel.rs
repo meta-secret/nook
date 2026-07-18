@@ -5,7 +5,6 @@
 //! session-bound and encrypted to the requester.
 
 use super::NookVaultManager;
-use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
 use crate::storage::indexed_db::{
@@ -14,6 +13,7 @@ use crate::storage::indexed_db::{
     save_sentinel_genesis_finalization_pending, save_sentinel_genesis_share_delivery,
     save_to_indexed_db,
 };
+use crate::{NookAuthProvidersSnapshotValue, NookError};
 use crate::{
     NookSecretRecord, NookSentinelGenesisFinalizeResult, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
@@ -50,14 +50,13 @@ impl NookVaultManager {
         &self,
         request_json: &str,
         delivery_json: &str,
-        provider_snapshot: wasm_bindgen::JsValue,
+        provider_snapshot: &NookAuthProvidersSnapshotValue,
     ) -> Result<String, JsError> {
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let delivery: nook_core::SentinelGenesisShareDelivery = serde_json::from_str(delivery_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let snapshot: nook_core::AuthProvidersSnapshotData =
-            serde_wasm_bindgen::from_value(provider_snapshot)?;
+        let snapshot = provider_snapshot.to_core();
         let package = nook_core::create_sentinel_onboarding_package(request, delivery, &snapshot)?;
         Ok(nook_core::encode_sentinel_onboarding_package(&package)?)
     }

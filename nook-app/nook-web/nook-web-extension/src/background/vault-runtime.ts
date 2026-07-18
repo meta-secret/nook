@@ -1,6 +1,7 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import initNookWasm, {
   configureVaultApplication,
+  NookExternalEventLogRecords,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { ImportedEventLogState } from './pairing-grants'
@@ -46,13 +47,16 @@ export async function importExtensionEventLog(
   await ensureExtensionWasm()
   const manager = new NookVaultManager()
   try {
-    const status = await manager.importExtensionEventLogRecords(
+    const recordValues = NookExternalEventLogRecords.fromArray(records)
+    const statusValue = await manager.importExtensionEventLogRecords(
       grant.vaultStoreId,
       grant.deviceId,
       grant.devicePublicKey,
       grant.deviceSigningPublicKey,
-      records,
+      recordValues,
     )
+    const status = statusValue.toObject()
+    statusValue.free()
     if (!isImportedEventLogState(status)) {
       throw new Error('Rust returned an invalid extension event-log status.')
     }
