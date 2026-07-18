@@ -100,3 +100,40 @@ test("requestCodexReview posts one exact-head idempotency marker", async () => {
     "@codex review\n\n<!-- nook-codex-review:head-sha -->",
   ]);
 });
+
+test("requestCodexReview recognizes a clean Codex comment for the exact head", async () => {
+  const headSha = "0123456789abcdef0123456789abcdef01234567";
+  let createCalls = 0;
+  const octokit = {
+    rest: {
+      issues: {
+        createComment: async () => {
+          createCalls += 1;
+          return { data: { id: 1 } };
+        },
+        listComments: async () => ({
+          data: [
+            {
+              body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+              id: 1,
+              user: { login: "chatgpt-codex-connector[bot]" },
+            },
+          ],
+        }),
+      },
+      pulls: {
+        get: async () => ({ data: { head: { sha: headSha } } }),
+        listReviews: async () => ({ data: [] }),
+      },
+    },
+    paginate: async (
+      route: (args: unknown) => Promise<{ data: unknown[] }>,
+      args: unknown,
+    ) => (await route(args)).data,
+  } as unknown as Octokit;
+
+  const result = await requestCodexReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, { headSha, requested: false, settled: true });
+  assert.equal(createCalls, 0);
+});

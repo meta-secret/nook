@@ -120,6 +120,8 @@ export async function commentOnIssue(
 }
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
+const CLEAN_CODEX_REVIEW_PREFIX = "Codex Review: Didn't find any major issues.";
+const REVIEWED_COMMIT_PATTERN = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
 
 export function codexReviewRequestMarker(headSha: string): string {
   return `<!-- nook-codex-review:${headSha} -->`;
@@ -150,12 +152,16 @@ export async function requestCodexReview(
     }),
   ]);
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const settled = reviews.some(
-    (review) =>
-      review.commit_id === pr.head.sha &&
-      isSubmittedReviewState(review.state) &&
-      isCodexReviewer(review.user?.login),
-  );
+  const settled =
+    reviews.some(
+      (review) =>
+        review.commit_id === pr.head.sha &&
+        isSubmittedReviewState(review.state) &&
+        isCodexReviewer(review.user?.login),
+    ) ||
+    comments.some((comment) =>
+      isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+    );
   if (settled || comments.some((comment) => comment.body?.includes(marker))) {
     return { headSha: pr.head.sha, requested: false, settled };
   }
@@ -234,6 +240,7 @@ const REVIEW_THREADS_QUERY = `
 export type PrFeedbackSummary = {
   codexReview: {
     approvalReaction: boolean;
+    cleanComment: boolean;
     currentHeadReview: boolean;
     requested: boolean;
     settled: boolean;
@@ -307,9 +314,14 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
   );
+  const cleanComment = issueComments.some((comment) =>
+    isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+  );
 
   const substantiveComments = issueComments.filter(
-    (comment) => !isRepositoryStatusComment(comment.body ?? ""),
+    (comment) =>
+      !isRepositoryStatusComment(comment.body ?? "") &&
+      !isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
   );
   const substantiveReviews = reviews.filter((review) => {
     if (review.commit_id !== pr.head.sha || review.state === "APPROVED") {
@@ -325,9 +337,10 @@ export async function inspectPrFeedback(
   return {
     codexReview: {
       approvalReaction,
+      cleanComment,
       currentHeadReview,
       requested: reviewRequests.length > 0,
-      settled: currentHeadReview || approvalReaction,
+      settled: currentHeadReview || approvalReaction || cleanComment,
     },
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
@@ -374,6 +387,18 @@ function isRepositoryStatusComment(body: string): boolean {
 
 function isCodexReviewer(login: string | undefined): boolean {
   return login === CODEX_REVIEWER_LOGIN;
+}
+
+function isCleanCodexReviewComment(
+  body: string,
+  login: string | undefined,
+  headSha: string,
+): boolean {
+  if (!isCodexReviewer(login) || !body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX)) {
+    return false;
+  }
+  const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
+  return reviewedCommit !== undefined && headSha.startsWith(reviewedCommit);
 }
 
 function isSubmittedReviewState(state: string): boolean {
