@@ -1,0 +1,130 @@
+schema_version: 1
+source_pr:
+  number: 501
+  url: https://github.com/meta-secret/nook/pull/501
+  title: Fix extension pairing grant import on main
+  change_surface: wasm_extension_browser_flow
+  head_sha: 1486b8825f69b84cceee2ef1c67bbd7972a8f0ae
+  started_at: 2026-07-19T22:07:00Z
+  opened_at: 2026-07-19T22:27:40Z
+  merged_at: 2026-07-19T22:35:11Z
+  elapsed_seconds: 1691
+  open_to_merge_seconds: 451
+summary:
+  local_execution_count: 9
+  local_check_count: 4
+  local_test_count: 4
+  local_combined_count: 1
+  local_execution_seconds: 868
+  github_actions_run_count: 2
+  github_actions_seconds: 1232
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-19T22:16:30Z
+    finished_at: 2026-07-19T22:20:30Z
+    duration_seconds: 240
+    outcome: failed
+    reason: reproduce_main_extension_pairing_failure
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-19T22:21:10Z
+    finished_at: 2026-07-19T22:24:20Z
+    duration_seconds: 190
+    outcome: failed
+    reason: diagnostic_instrumentation_exposed_double_free
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-19T22:24:40Z
+    finished_at: 2026-07-19T22:27:15Z
+    duration_seconds: 155
+    outcome: passed
+    reason: focused_fix_validation
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-19T22:27:16Z
+    finished_at: 2026-07-19T22:27:16Z
+    duration_seconds: 0
+    outcome: passed
+    reason: final_diff_validation
+  - command: task pr:preflight PR=501
+    category: check
+    started_at: 2026-07-19T22:27:45Z
+    finished_at: 2026-07-19T22:27:53Z
+    duration_seconds: 8
+    outcome: failed
+    reason: required_pr_checks_and_deployment_in_progress
+  - command: task check
+    category: combined
+    started_at: 2026-07-19T22:27:55Z
+    finished_at: 2026-07-19T22:30:36Z
+    duration_seconds: 161
+    outcome: passed
+    reason: exact_head_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-19T22:30:38Z
+    finished_at: 2026-07-19T22:32:26Z
+    duration_seconds: 108
+    outcome: passed
+    reason: final_exact_head_browser_regression
+  - command: task pr:ready PR=501
+    category: check
+    started_at: 2026-07-19T22:34:55Z
+    finished_at: 2026-07-19T22:35:00Z
+    duration_seconds: 5
+    outcome: passed
+    reason: merge_readiness
+  - command: curl live development domains and inspect application identities
+    category: check
+    started_at: 2026-07-19T22:49:18Z
+    finished_at: 2026-07-19T22:49:19Z
+    duration_seconds: 1
+    outcome: passed
+    reason: post_merge_live_verification
+github_actions_runs:
+  - workflow: PR
+    run_id: 29706185069
+    run_attempt: 1
+    head_sha: 1486b8825f69b84cceee2ef1c67bbd7972a8f0ae
+    trigger: pull_request
+    started_at: 2026-07-19T22:27:44Z
+    finished_at: 2026-07-19T22:34:42Z
+    duration_seconds: 418
+    conclusion: success
+  - workflow: Main
+    run_id: 29706415822
+    run_attempt: 1
+    head_sha: fda50fa0c7c5b4b5cce6dab6406c27408f684c99
+    trigger: push
+    started_at: 2026-07-19T22:35:14Z
+    finished_at: 2026-07-19T22:48:48Z
+    duration_seconds: 814
+    conclusion: success
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-19T22:35:11Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [491]
+  baseline_quality: comparable
+  baseline_note: The newest browser-flow record covers the same Rust WASM web gate set and the same extension pairing failure on Main
+  elapsed_seconds_change_percent: -49.6
+  local_execution_seconds_change_percent: -52.0
+  github_actions_seconds_change_percent: -22.5
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first focused run reproduced the failure and the second used temporary diagnostics to reveal the swallowed null-pointer error
+    - The final focused rerun followed the documentation and cleanup edit, so every browser rerun validated a changed worktree
+    - Full local validation and the repository-owned PR workflow ran in parallel on the exact head
+    - One merge attempt followed exact-head readiness and succeeded
+    - The Main workflow passed the formerly failing extension flow and verified all isolated development deployments
+  required_actions: []
