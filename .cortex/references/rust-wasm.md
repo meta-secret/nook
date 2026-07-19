@@ -67,6 +67,13 @@ into plain boundary inputs, but must not reproduce those decisions.
 
 **Web layer:** import these types from `./nook-wasm/nook_wasm` (or re-export via `nook.ts`). Do **not** add TS mappers that rebuild plain objects from wasm output.
 
+**Generated wrapper ownership:** a generated wasm-bindgen class passed by value
+is consumed by the call (`__destroy_into_raw()` clears its JavaScript pointer).
+Do not call `.free()` on that wrapper afterward, including from a promise
+`finally`; doing so throws `null pointer passed to rust` and can turn a
+successful async Rust operation into a rejected JavaScript promise. Continue to
+free wrappers returned to JavaScript after their data has been copied out.
+
 ## 5. Vault secrets at the JS boundary
 
 **Canonical schema:** `nook-app/nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).

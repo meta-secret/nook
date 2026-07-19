@@ -319,15 +319,13 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       const activeManager = await getManager()
       const recordValues = NookExternalEventLogRecords.fromArray(records)
-      const statusValue = await activeManager
-        .importExtensionEventLogRecords(
-          grant.vaultStoreId,
-          grant.deviceId,
-          grant.devicePublicKey,
-          grant.deviceSigningPublicKey,
-          recordValues,
-        )
-        .finally(() => recordValues.free())
+      const statusValue = await activeManager.importExtensionEventLogRecords(
+        grant.vaultStoreId,
+        grant.deviceId,
+        grant.devicePublicKey,
+        grant.deviceSigningPublicKey,
+        recordValues,
+      )
       const status = statusValue.toObject()
       statusValue.free()
       const existing = await activeManager.loadAuthProviders()
@@ -363,15 +361,14 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const recordValues = NookExternalEventLogRecords.fromArray(
         payload.eventLogRecords,
       )
-      const statusValue = await (await getManager())
-        .importExtensionEventLogRecords(
-          grant.vaultStoreId,
-          grant.deviceId,
-          grant.devicePublicKey,
-          grant.deviceSigningPublicKey,
-          recordValues,
-        )
-        .finally(() => recordValues.free())
+      const activeManager = await getManager()
+      const statusValue = await activeManager.importExtensionEventLogRecords(
+        grant.vaultStoreId,
+        grant.deviceId,
+        grant.devicePublicKey,
+        grant.deviceSigningPublicKey,
+        recordValues,
+      )
       const status = statusValue.toObject()
       statusValue.free()
       return { ok: true, status }
