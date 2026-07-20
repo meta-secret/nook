@@ -54,7 +54,8 @@ async function advanceCreateVaultWizardToFinalStep(page: Page) {
 }
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const extensionDir = path.join(rootDir, 'dist')
+const extensionDir =
+  process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const setupStorageKey = 'nook:extension-setup'
@@ -79,6 +80,10 @@ const connectedSetupState = {
 const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
   process.env.NOOK_SIMPLE_VAULT_URL || DEFAULT_SIMPLE_VAULT_URL,
 )
+const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
+const extensionApprovalVaultName = isHostedSmoke
+  ? 'test-vault'
+  : 'Extension approval vault'
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
@@ -571,10 +576,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ],
   })
   const loginServer = await startLoginServer()
-  const website = await context.newPage()
-  await website.goto(`${loginServer.origin}/login`)
-  const websiteAfterUnlock = await context.newPage()
-  await websiteAfterUnlock.goto(`${loginServer.origin}/login`)
+  const website = isHostedSmoke ? undefined : await context.newPage()
+  await website?.goto(`${loginServer.origin}/login`)
+  const websiteAfterUnlock = isHostedSmoke ? undefined : await context.newPage()
+  await websiteAfterUnlock?.goto(`${loginServer.origin}/login`)
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
@@ -609,10 +614,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await simplePage
       .getByTestId('login-vault-name-input')
-      .fill('Extension approval vault')
+      .fill(extensionApprovalVaultName)
     await expect(
       simplePage.getByText(
-        "Create “Extension approval vault” locally using the extension's protected device key.",
+        `Create “${extensionApprovalVaultName}” locally using the extension's protected device key.`,
       ),
     ).toBeVisible()
     await expect(simplePage.getByText(/passkey is required/i)).toHaveCount(0)
@@ -658,16 +663,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       ok: false,
       reason: 'extension-identity-handoff-not-issued',
     })
-    expect(
-      await simplePage.evaluate(
-        () =>
-          (
-            window as Window & {
-              __nookVault?: { deviceId?: string }
-            }
-          ).__nookVault?.deviceId,
-      ),
-    ).toBe(extensionDeviceId)
+    if (!isHostedSmoke) {
+      expect(
+        await simplePage.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { deviceId?: string }
+              }
+            ).__nookVault?.deviceId,
+        ),
+      ).toBe(extensionDeviceId)
+    }
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
     await expect
@@ -694,7 +701,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       })
       .toMatchObject({
         status: 'ready',
-        selectedVaultName: 'Extension approval vault',
+        selectedVaultName: extensionApprovalVaultName,
         eventCount: expect.any(Number),
       })
     const pairedStorage = await readExtensionStorage(context)
@@ -710,10 +717,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }),
     )
 
-    const websiteCredentialId = await registerWebsitePasskey(website)
-    expect(websiteCredentialId).toBeTruthy()
-    await assertWebsitePasskey(website, websiteCredentialId)
-    await website.close()
+    let websiteCredentialId: string | undefined
+    if (website) {
+      websiteCredentialId = await registerWebsitePasskey(website)
+      expect(websiteCredentialId).toBeTruthy()
+      await assertWebsitePasskey(website, websiteCredentialId)
+      await website.close()
+    }
 
     await simplePage.getByRole('button', { name: 'Done' }).click()
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
@@ -750,16 +760,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage.getByTestId('passkey-auth-overlay'),
     ).toHaveCount(0)
-    expect(
-      await reopenedVaultPage.evaluate(
-        () =>
-          (
-            window as Window & {
-              __nookVault?: { deviceId?: string }
-            }
-          ).__nookVault?.deviceId,
-      ),
-    ).toBe(extensionDeviceId)
+    if (!isHostedSmoke) {
+      expect(
+        await reopenedVaultPage.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { deviceId?: string }
+              }
+            ).__nookVault?.deviceId,
+        ),
+      ).toBe(extensionDeviceId)
+    }
 
     const emptyOtpPage = await context.newPage()
     await emptyOtpPage.goto(`${loginServer.origin}/otp`)
@@ -860,16 +872,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage.getByTestId('authenticated-shell'),
     ).toBeVisible()
-    expect(
-      await reopenedVaultPage.evaluate(
-        () =>
-          (
-            window as Window & {
-              __nookVault?: { deviceId?: string }
-            }
-          ).__nookVault?.deviceId,
-      ),
-    ).toBe(extensionDeviceId)
+    if (!isHostedSmoke) {
+      expect(
+        await reopenedVaultPage.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { deviceId?: string }
+              }
+            ).__nookVault?.deviceId,
+        ),
+      ).toBe(extensionDeviceId)
+    }
     await expect
       .poll(async () => {
         const entries = await readPersistedAppLogs(reopenedVaultPage)
@@ -881,8 +895,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    await assertWebsitePasskey(websiteAfterUnlock, websiteCredentialId)
-    await websiteAfterUnlock.close()
+    if (websiteAfterUnlock && websiteCredentialId) {
+      await assertWebsitePasskey(websiteAfterUnlock, websiteCredentialId)
+      await websiteAfterUnlock.close()
+    }
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
 
     await context.close()
