@@ -133,6 +133,8 @@ tasks:
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
       E2E_SPEC: '{{.E2E_SPEC}}'
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
       - >-
@@ -162,6 +164,8 @@ tasks:
         -e NOOK_E2E_SYNC_PROVIDER
         -e NOOK_GOOGLE_E2E_ACCESS_TOKEN
         -e E2E_SPEC
+        -e CHANNEL
+        -e PR
         -w /meta-secret/nook
         {{.DOCKER_E2E_IMAGE}}
         task {{.TASK}}

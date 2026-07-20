@@ -18,6 +18,7 @@
   import OnePasswordImportPanel from "$lib/components/OnePasswordImportPanel.svelte";
   import ApplePasswordsImportPanel from "$lib/components/ApplePasswordsImportPanel.svelte";
   import ChromePasswordsImportPanel from "$lib/components/ChromePasswordsImportPanel.svelte";
+  import GoogleAuthenticatorImportPanel from "$lib/components/GoogleAuthenticatorImportPanel.svelte";
   import ProtonPassImportPanel from "$lib/components/ProtonPassImportPanel.svelte";
   import { Button } from "$lib/components/ui/button";
   import type {
@@ -65,6 +66,7 @@
     onImportOnePassword,
     onImportApplePasswords,
     onImportChromePasswords,
+    onImportGoogleAuthenticator,
     onImportProtonPass,
     activeSection = $bindable(
       undefined as
@@ -116,6 +118,9 @@
     onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>;
     onImportApplePasswords: (csv: string) => Promise<NookImportResult>;
     onImportChromePasswords: (csv: string) => Promise<NookImportResult>;
+    onImportGoogleAuthenticator: (
+      migrationUris: string[],
+    ) => Promise<NookImportResult>;
     onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>;
     activeSection?:
       | "vaults"
@@ -548,6 +553,21 @@
           {isSaving}
           embedded
           onImport={onImportChromePasswords}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
+        title={vault.t("google_authenticator_import.title")}
+        subtitle={vault.t("google_authenticator_import.description")}
+        section="google-authenticator"
+        bind:activeSection={activeImportProvider}
+        testId="google-authenticator-import-section"
+      >
+        <GoogleAuthenticatorImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportGoogleAuthenticator}
         />
       </SettingsAccordionSection>
 
