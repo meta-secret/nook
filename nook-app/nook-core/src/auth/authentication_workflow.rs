@@ -108,6 +108,7 @@ pub struct AuthenticationWorkflowSnapshot {
     pub current_step: u8,
     pub total_steps: u8,
     pub requires_human_approval: bool,
+    pub observation_index: u32,
 }
 
 impl AuthenticationWorkflowSnapshot {
@@ -125,8 +126,39 @@ impl AuthenticationWorkflowSnapshot {
             current_step,
             total_steps,
             requires_human_approval: true,
+            observation_index: 0,
         }
     }
+}
+
+const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
+    match (snapshot.kind, snapshot.action) {
+        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
+        (AuthenticationWorkflowKind::PasswordChange, _) => 5,
+        (AuthenticationWorkflowKind::Signup, _) => 4,
+        (AuthenticationWorkflowKind::TotpChallenge, _) => 3,
+        (AuthenticationWorkflowKind::Login, _) => 2,
+        (AuthenticationWorkflowKind::Manual, _) => 1,
+    }
+}
+
+#[must_use]
+pub fn classify_authentication_workflow_candidates(
+    observations: &[AuthenticationPageObservation],
+) -> Option<AuthenticationWorkflowSnapshot> {
+    let mut selected: Option<AuthenticationWorkflowSnapshot> = None;
+    for (index, observation) in observations.iter().copied().enumerate() {
+        let Some(mut candidate) = classify_authentication_workflow(observation) else {
+            continue;
+        };
+        candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
+        if selected.is_none_or(|current| {
+            workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
+        }) {
+            selected = Some(candidate);
+        }
+    }
+    selected
 }
 
 #[must_use]
@@ -292,5 +324,27 @@ mod tests {
             classify_authentication_workflow(combined).unwrap().kind,
             AuthenticationWorkflowKind::Login
         );
+    }
+
+    #[test]
+    fn separate_login_form_takes_precedence_over_signup_or_password_reset() {
+        let signup = AuthenticationPageObservation {
+            username_field_count: 1,
+            new_password_field_count: 1,
+            ..observation()
+        };
+        let login = AuthenticationPageObservation {
+            username_field_count: 1,
+            current_password_field_count: 1,
+            ..observation()
+        };
+
+        let snapshot = classify_authentication_workflow_candidates(&[signup, login]).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(
+            snapshot.action,
+            AuthenticationWorkflowAction::ContinueWithNook
+        );
+        assert_eq!(snapshot.observation_index, 1);
     }
 }

@@ -82,7 +82,11 @@ const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
-    if (!['/login', '/signup', '/otp'].includes(request.url ?? '')) {
+    if (
+      !['/login', '/signup', '/otp', '/combined', '/spa'].includes(
+        request.url ?? '',
+      )
+    ) {
       response.writeHead(404)
       response.end('Not found')
       return
@@ -108,6 +112,40 @@ async function startLoginServer(): Promise<TestServer> {
             <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
             <button type="submit">Verify</button>
           </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/combined') {
+      response.end(`<!doctype html>
+        <html><body><main>
+          <form id="signup-form">
+            <input autocomplete="section-signup username" name="signup-email" type="email" />
+            <input autocomplete="section-signup new-password" name="signup-password" type="password" />
+            <button type="submit">Create account</button>
+          </form>
+          <form id="login-form">
+            <input autocomplete="section-login username" name="email" type="email" />
+            <input autocomplete="section-login current-password webauthn" name="password" type="password" />
+            <button type="submit">Sign in</button>
+          </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/spa') {
+      response.end(`<!doctype html>
+        <html><body><main>
+          <form id="login-form">
+            <input autocomplete="username" name="email" type="email" />
+            <button id="next" type="button">Next</button>
+          </form>
+          <script>
+            document.getElementById('next').addEventListener('click', (event) => {
+              const form = document.getElementById('login-form')
+              event.currentTarget.remove()
+              form.insertAdjacentHTML('beforeend',
+                '<input autocomplete="current-password" name="password" type="password" /><button type="submit">Sign in</button>')
+            })
+          </script>
         </main></body></html>`)
       return
     }
@@ -454,6 +492,25 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
     await expect(
       otpWidget.getByText('Verification code requested'),
+    ).toBeVisible()
+
+    const combinedPage = await context.newPage()
+    await combinedPage.goto(`${loginServer.origin}/combined`)
+    const combinedWidget = combinedPage.locator('#nook-auth-widget')
+    await expect(combinedWidget.getByText('Ready to sign in')).toBeVisible()
+    await expect(
+      combinedWidget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
+
+    const spaPage = await context.newPage()
+    await spaPage.goto(`${loginServer.origin}/spa`)
+    const spaWidget = spaPage.locator('#nook-auth-widget')
+    await expect(
+      spaWidget.getByRole('button', { name: 'Take over' }),
+    ).toBeVisible()
+    await spaPage.getByRole('button', { name: 'Next' }).click()
+    await expect(
+      spaWidget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
 
     const sentinelPage = await context.newPage()
@@ -812,11 +869,26 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         .getByTestId('secret-row'),
     ).toBeVisible({ timeout: 15_000 })
 
+    await reopenedVaultPage.getByTestId('add-secret-btn').click()
+    await reopenedVaultPage.getByTestId('item-type-login').click()
+    await reopenedVaultPage.getByTestId('secret-label').fill(loginServer.origin)
+    await reopenedVaultPage.getByTestId('login-username').fill('bob@nook.test')
+    await reopenedVaultPage
+      .getByTestId('secret-value')
+      .fill('second-extension-password')
+    await reopenedVaultPage.getByTestId('save-secret-btn').click()
+    await expect(
+      reopenedVaultPage
+        .getByTestId('vault-group-login')
+        .getByTestId('secret-row'),
+    ).toHaveCount(2)
+
     const fillLoginPage = await context.newPage()
     await fillLoginPage.goto(`${loginServer.origin}/login`)
     const fillWidget = fillLoginPage.locator('#nook-auth-widget')
     await expect(fillWidget).toBeVisible()
     await fillWidget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await fillWidget.getByRole('button', { name: 'alice@nook.test' }).click()
     await expect
       .poll(
         async () =>
@@ -839,6 +911,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       })
     await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
     await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
+    await expect(
+      fillWidget.getByRole('button', { name: 'bob@nook.test' }),
+    ).toHaveCount(0)
     await expect(
       fillWidget.getByText(
         'Credentials were submitted. Nook is waiting for the site response.',

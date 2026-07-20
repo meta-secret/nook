@@ -14,6 +14,11 @@ export type LoginCredentials = {
   password: string
 }
 
+export type PasswordFormObservation = {
+  root: ParentNode
+  summary: PasswordFormSummary
+}
+
 export const usernameFieldSelectors = [
   'input[type="email"]',
   'input[type="text"][autocomplete~="username" i]',
@@ -66,17 +71,26 @@ export function findOneTimeCodeFields(
   ).filter((field) => !field.disabled)
 }
 
-export function summarizePasswordForms(
-  root: ParentNode = document,
-): PasswordFormSummary {
+function hasAutocompleteToken(
+  field: HTMLInputElement,
+  expected: string,
+): boolean {
+  return field.autocomplete
+    .toLowerCase()
+    .split(/\s+/u)
+    .filter(Boolean)
+    .includes(expected)
+}
+
+function summarizeRoot(root: ParentNode): PasswordFormSummary {
   const passwordFields = findPasswordFields(root)
   const usernameFields = findUsernameFields(root)
   const oneTimeCodeFields = findOneTimeCodeFields(root)
-  const currentPasswordFieldCount = passwordFields.filter(
-    (field) => field.autocomplete.toLowerCase() === 'current-password',
+  const currentPasswordFieldCount = passwordFields.filter((field) =>
+    hasAutocompleteToken(field, 'current-password'),
   ).length
-  const newPasswordFieldCount = passwordFields.filter(
-    (field) => field.autocomplete.toLowerCase() === 'new-password',
+  const newPasswordFieldCount = passwordFields.filter((field) =>
+    hasAutocompleteToken(field, 'new-password'),
   ).length
   const forms = new Set<HTMLFormElement>()
 
@@ -95,14 +109,42 @@ export function summarizePasswordForms(
     currentPasswordFieldCount,
     newPasswordFieldCount,
     genericPasswordFieldCount:
-      passwordFields.length -
-      currentPasswordFieldCount -
-      newPasswordFieldCount,
+      passwordFields.length - currentPasswordFieldCount - newPasswordFieldCount,
     usernameFieldCount: usernameFields.length,
     oneTimeCodeFieldCount: oneTimeCodeFields.length,
     formCount: forms.size,
     observedAt: Date.now(),
   }
+}
+
+export function summarizePasswordForms(
+  root: ParentNode = document,
+): PasswordFormSummary {
+  return summarizeRoot(root)
+}
+
+export function summarizeAuthenticationWorkflowForms(
+  root: ParentNode = document,
+): PasswordFormObservation[] {
+  const forms = Array.from(
+    root.querySelectorAll<HTMLFormElement>('form'),
+  ).filter(
+    (form) =>
+      findPasswordFields(form).length > 0 ||
+      findUsernameFields(form).length > 0 ||
+      findOneTimeCodeFields(form).length > 0,
+  )
+  const hasUnownedFields = [
+    ...findPasswordFields(root),
+    ...findUsernameFields(root),
+    ...findOneTimeCodeFields(root),
+  ].some((field) => !field.form)
+  const roots: ParentNode[] = forms
+  if (hasUnownedFields || roots.length === 0) roots.push(root)
+  return roots.map((workflowRoot) => ({
+    root: workflowRoot,
+    summary: summarizeRoot(workflowRoot),
+  }))
 }
 
 export function fillLoginCredentials(

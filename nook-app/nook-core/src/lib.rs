@@ -40,6 +40,7 @@ pub use apple_passwords_import::{
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
+    classify_authentication_workflow_candidates,
 };
 pub use authenticator::{
     AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,

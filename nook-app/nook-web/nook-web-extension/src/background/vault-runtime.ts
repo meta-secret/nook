@@ -3,10 +3,14 @@ import initNookWasm, {
   authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
   configureVaultApplication,
   NookAuthenticationPageObservation,
+  NookAuthenticationPageObservations,
   NookExternalEventLogRecords,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
+import type {
+  AuthenticationPageObservationView,
+  AuthenticationWorkflowSnapshotView,
+} from '../lib/auth-workflow-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
 let initPromise: Promise<unknown> | undefined
@@ -21,23 +25,27 @@ function ensureExtensionWasm(): Promise<unknown> {
   return initPromise
 }
 
-export async function authenticationWorkflowSnapshot(observation: {
-  usernameFieldCount: number
-  currentPasswordFieldCount: number
-  newPasswordFieldCount: number
-  genericPasswordFieldCount: number
-  oneTimeCodeFieldCount: number
-}): Promise<AuthenticationWorkflowSnapshotView | undefined> {
+export async function authenticationWorkflowSnapshot(
+  observations: AuthenticationPageObservationView[],
+): Promise<AuthenticationWorkflowSnapshotView | undefined> {
   await ensureExtensionWasm()
-  const input = new NookAuthenticationPageObservation(
-    observation.usernameFieldCount,
-    observation.currentPasswordFieldCount,
-    observation.newPasswordFieldCount,
-    observation.genericPasswordFieldCount,
-    observation.oneTimeCodeFieldCount,
-  )
+  const inputs = new NookAuthenticationPageObservations()
   try {
-    const snapshot = wasmAuthenticationWorkflowSnapshot(input) ?? undefined
+    for (const observation of observations) {
+      const input = new NookAuthenticationPageObservation(
+        observation.usernameFieldCount,
+        observation.currentPasswordFieldCount,
+        observation.newPasswordFieldCount,
+        observation.genericPasswordFieldCount,
+        observation.oneTimeCodeFieldCount,
+      )
+      try {
+        inputs.add(input)
+      } finally {
+        input.free()
+      }
+    }
+    const snapshot = wasmAuthenticationWorkflowSnapshot(inputs) ?? undefined
     if (!snapshot) return undefined
     try {
       return {
@@ -47,12 +55,13 @@ export async function authenticationWorkflowSnapshot(observation: {
         currentStep: snapshot.currentStep,
         totalSteps: snapshot.totalSteps,
         requiresHumanApproval: snapshot.requiresHumanApproval,
+        observationIndex: snapshot.observationIndex,
       }
     } finally {
       snapshot.free()
     }
   } finally {
-    input.free()
+    inputs.free()
   }
 }
 

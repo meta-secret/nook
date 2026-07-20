@@ -900,7 +900,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })
       return false
     }
-    void authenticationWorkflowSnapshot(message.payload.observation)
+    void authenticationWorkflowSnapshot(message.payload.observations)
       .then((snapshot) => sendResponse({ ok: true, snapshot }))
       .catch(() =>
         sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),

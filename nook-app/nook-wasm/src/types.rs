@@ -501,6 +501,28 @@ impl NookAuthenticationPageObservation {
     }
 }
 
+#[wasm_bindgen]
+pub struct NookAuthenticationPageObservations(Vec<nook_core::AuthenticationPageObservation>);
+
+#[wasm_bindgen]
+impl NookAuthenticationPageObservations {
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn add(&mut self, observation: &NookAuthenticationPageObservation) {
+        self.0.push(observation.to_core());
+    }
+}
+
+impl NookAuthenticationPageObservations {
+    pub(crate) fn as_core(&self) -> &[nook_core::AuthenticationPageObservation] {
+        &self.0
+    }
+}
+
 impl NookAuthenticationPageObservation {
     pub(crate) const fn to_core(&self) -> nook_core::AuthenticationPageObservation {
         self.0
@@ -559,6 +581,11 @@ impl NookAuthenticationWorkflowSnapshot {
     #[wasm_bindgen(getter, js_name = requiresHumanApproval)]
     pub fn requires_human_approval(&self) -> bool {
         self.0.requires_human_approval
+    }
+
+    #[wasm_bindgen(getter, js_name = observationIndex)]
+    pub fn observation_index(&self) -> u32 {
+        self.0.observation_index
     }
 }
 

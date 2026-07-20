@@ -31,20 +31,21 @@ pub use manager::{
 };
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
-    NookAuthenticationPageObservation, NookAuthenticationWorkflowSnapshot, NookBrowserLocale,
-    NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
-    NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
-    NookImportResult, NookJoinRequest, NookLoginAccount, NookLoginFillCredential,
-    NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup,
-    NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
-    NookProviderReplicationCapability, NookReplacementCandidate, NookReplacementConflict,
-    NookRuntimeConfig, NookSecretFormFields, NookSecretPage, NookSecurityConflict,
-    NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
-    NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
-    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
-    NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
-    NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultMember,
-    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
+    NookAuthenticationPageObservation, NookAuthenticationPageObservations,
+    NookAuthenticationWorkflowSnapshot, NookBrowserLocale, NookClientRunMode,
+    NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
+    NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder, NookImportResult,
+    NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookPasskeyAccount,
+    NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
+    NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
+    NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
+    NookSecretPage, NookSecurityConflict, NookSentinelGenesisDelivery,
+    NookSentinelGenesisFinalizeResult, NookSentinelGenesisParticipantStatus,
+    NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
+    NookStorageConnectArgs, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
+    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
+    NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
+    NookVaultSyncResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -108,9 +109,9 @@ pub fn assess_vault_security(
 #[wasm_bindgen(js_name = authenticationWorkflowSnapshot)]
 #[must_use]
 pub fn authentication_workflow_snapshot(
-    observation: &NookAuthenticationPageObservation,
+    observations: &NookAuthenticationPageObservations,
 ) -> Option<NookAuthenticationWorkflowSnapshot> {
-    nook_core::classify_authentication_workflow(observation.to_core())
+    nook_core::classify_authentication_workflow_candidates(observations.as_core())
         .map(NookAuthenticationWorkflowSnapshot::from_core)
 }
 
@@ -1866,7 +1867,9 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_preserves_core_policy() {
         let observation = NookAuthenticationPageObservation::new(1, 1, 0, 0, 0);
-        let snapshot = authentication_workflow_snapshot(&observation).expect("login workflow");
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&observation);
+        let snapshot = authentication_workflow_snapshot(&observations).expect("login workflow");
 
         assert_eq!(snapshot.kind_name(), "login");
         assert_eq!(snapshot.stage_name(), "credentials");
@@ -1874,6 +1877,7 @@ mod wasm_tests {
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert!(snapshot.requires_human_approval());
+        assert_eq!(snapshot.observation_index(), 0);
     }
 
     #[wasm_bindgen_test]

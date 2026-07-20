@@ -3,7 +3,7 @@ export {}
 import {
   fillLoginCredentials,
   submitLoginForm,
-  summarizePasswordForms,
+  summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
@@ -11,6 +11,7 @@ import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
 const DRAG_THRESHOLD_PX = 4
+const MAX_WORKFLOW_OBSERVATIONS = 20
 
 type WidgetPosition = {
   left: number
@@ -20,6 +21,7 @@ type WidgetPosition = {
 let pendingScan: number | undefined
 let scanSequence = 0
 let widgetHost: HTMLElement | undefined
+let renderedWorkflowKey: string | undefined
 let dismissed = false
 let busy = false
 let widgetCollapsed = false
@@ -102,6 +104,7 @@ function translatedMessage(key: string): string {
 function removeWidget(): void {
   widgetHost?.remove()
   widgetHost = undefined
+  renderedWorkflowKey = undefined
 }
 
 function clampWidgetPosition(
@@ -214,11 +217,12 @@ function setStatus(
 
 async function fillAndSubmitAccount(
   account: WebsiteLoginAccountOption,
+  workflowRoot: ParentNode,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
-): Promise<void> {
+): Promise<boolean> {
   const response = await sendRuntimeMessage<LoginFillResponse>({
     type: 'nook:website-login-fill',
     payload: {
@@ -235,7 +239,7 @@ async function fillAndSubmitAccount(
       translatedMessage('widgetFillFailed'),
       true,
     )
-    return
+    return false
   }
 
   const credentials = {
@@ -243,7 +247,7 @@ async function fillAndSubmitAccount(
     password: response.password,
   }
   response.password = ''
-  const filled = fillLoginCredentials(credentials)
+  const filled = fillLoginCredentials(credentials, workflowRoot)
   credentials.password = ''
   credentials.username = ''
   if (!filled) {
@@ -254,9 +258,9 @@ async function fillAndSubmitAccount(
       translatedMessage('widgetFillFailed'),
       true,
     )
-    return
+    return false
   }
-  if (!submitLoginForm()) {
+  if (!submitLoginForm(workflowRoot)) {
     setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,
@@ -264,16 +268,18 @@ async function fillAndSubmitAccount(
       translatedMessage('widgetFillFailed'),
       true,
     )
-    return
+    return false
   }
   setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
   description.textContent = translatedMessage('widgetSubmitted')
   continueButton.hidden = true
+  return true
 }
 
 function renderAccountChooser(
   panel: HTMLElement,
   accounts: WebsiteLoginAccountOption[],
+  workflowRoot: ParentNode,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
@@ -297,13 +303,22 @@ function renderAccountChooser(
       button.disabled = true
       void fillAndSubmitAccount(
         account,
+        workflowRoot,
         step,
         title,
         description,
         continueButton,
-      ).finally(() => {
-        busy = false
-      })
+      )
+        .then((submitted) => {
+          if (submitted) {
+            list.remove()
+          } else {
+            button.disabled = false
+          }
+        })
+        .finally(() => {
+          busy = false
+        })
     })
     list.append(button)
   }
@@ -317,6 +332,7 @@ async function continueWithNook(
   continueButton: HTMLButtonElement,
   openVaultButton: HTMLButtonElement,
   panel: HTMLElement,
+  workflowRoot: ParentNode,
 ): Promise<void> {
   if (busy) return
   busy = true
@@ -372,6 +388,7 @@ async function continueWithNook(
     if (accounts.length === 1) {
       await fillAndSubmitAccount(
         accounts[0],
+        workflowRoot,
         step,
         title,
         description,
@@ -383,6 +400,7 @@ async function continueWithNook(
     renderAccountChooser(
       panel,
       accounts,
+      workflowRoot,
       step,
       title,
       description,
@@ -397,12 +415,24 @@ async function continueWithNook(
   }
 }
 
-function renderWidget(snapshot: AuthenticationWorkflowSnapshotView): void {
+function renderWidget(
+  snapshot: AuthenticationWorkflowSnapshotView,
+  workflowRoot: ParentNode,
+): void {
   if (dismissed) {
     removeWidget()
     return
   }
-  if (widgetHost) return
+  const workflowKey = [
+    snapshot.kind,
+    snapshot.stage,
+    snapshot.action,
+    snapshot.currentStep,
+    snapshot.totalSteps,
+    snapshot.observationIndex,
+  ].join(':')
+  if (widgetHost && renderedWorkflowKey === workflowKey) return
+  if (widgetHost) removeWidget()
 
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
@@ -501,6 +531,7 @@ function renderWidget(snapshot: AuthenticationWorkflowSnapshotView): void {
       continueButton,
       openVaultButton,
       body,
+      workflowRoot,
     )
   })
 
@@ -776,6 +807,7 @@ function renderWidget(snapshot: AuthenticationWorkflowSnapshotView): void {
   shadow.append(style, panel)
   document.documentElement.append(host)
   widgetHost = host
+  renderedWorkflowKey = workflowKey
 
   attachPointerDrag(host, toolbar)
   attachPointerDrag(host, collapsedLaunch, {
@@ -792,12 +824,11 @@ function renderWidget(snapshot: AuthenticationWorkflowSnapshotView): void {
 
 async function scanAndRender(): Promise<void> {
   const sequence = ++scanSequence
-  const summary = summarizePasswordForms()
-  if (
-    summary.usernameFieldCount === 0 &&
-    summary.passwordFieldCount === 0 &&
-    summary.oneTimeCodeFieldCount === 0
-  ) {
+  const workflowForms = summarizeAuthenticationWorkflowForms().slice(
+    0,
+    MAX_WORKFLOW_OBSERVATIONS,
+  )
+  if (workflowForms.length === 0) {
     removeWidget()
     return
   }
@@ -807,7 +838,7 @@ async function scanAndRender(): Promise<void> {
     type: 'nook:authentication-workflow-snapshot',
     payload: {
       origin: location.origin,
-      observation: {
+      observations: workflowForms.map(({ summary }) => ({
         usernameFieldCount: boundedCount(summary.usernameFieldCount),
         currentPasswordFieldCount: boundedCount(
           summary.currentPasswordFieldCount,
@@ -817,7 +848,7 @@ async function scanAndRender(): Promise<void> {
           summary.genericPasswordFieldCount,
         ),
         oneTimeCodeFieldCount: boundedCount(summary.oneTimeCodeFieldCount),
-      },
+      })),
     },
   })
   if (sequence !== scanSequence) return
@@ -825,7 +856,12 @@ async function scanAndRender(): Promise<void> {
     removeWidget()
     return
   }
-  renderWidget(response.snapshot)
+  const selected = workflowForms[response.snapshot.observationIndex]
+  if (!selected) {
+    removeWidget()
+    return
+  }
+  renderWidget(response.snapshot, selected.root)
 }
 
 function scheduleScan() {
