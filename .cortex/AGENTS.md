@@ -35,6 +35,12 @@ after opening the PR, so a continuing agent must take ownership of that PR and
 carry this lifecycle through merge. Full policy:
 [workflows/coding-bro.md](workflows/coding-bro.md).
 
+The successful squash merge is the implementation task's delivery boundary.
+Do not wait for, monitor, or verify the post-merge `main.yml` run or development
+deployment unless the user explicitly requested deployment/live verification
+or assigned a Main failure. Publish the required stats-only record immediately
+after merge without making Main completion a prerequisite.
+
 ## ⛔ Non-negotiable: never kill the Docker daemon
 
 **Killing the Docker daemon is strictly prohibited.** Only individual **Docker containers** may be stopped — never Docker Desktop, `dockerd`, or the Docker VM.
