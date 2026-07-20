@@ -3,7 +3,8 @@
 ## Purpose
 
 Minimize agent wall time by batching feedback, parallelizing local and remote
-validation, and carrying ready PRs directly through squash merge.
+validation, carrying ready PRs directly through squash merge, and stopping
+implementation monitoring at that merge boundary.
 
 ## Problem Pattern
 
@@ -22,6 +23,9 @@ state, but it never performs a merge by itself.
 
 Inspect feedback at the readiness boundary. A green audit is the task-owning
 agent's signal to squash-merge immediately. A later push invalidates the audit.
+The successful squash merge completes implementation delivery. Do not monitor
+the resulting Main workflow or development deployment unless the user
+explicitly requested deployment/live verification or assigned a Main failure.
 
 ## Scope
 
@@ -55,6 +59,7 @@ Does not apply to:
 - [ ] Inspect and address all feedback already present without waiting for reviewers.
 - [ ] Run `task pr:ready` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
+- [ ] Publish required stats-only bookkeeping without waiting for post-merge Main.
 
 ## Validation
 
