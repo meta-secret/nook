@@ -35,9 +35,10 @@ tasks:
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
       - cd "{{.EXTENSION_ROOT}}" && bun test scripts src/lib
-      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
-      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
+      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
+      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
       - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
+      - bash "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh"
 
   extension:test:e2e:
     desc: Run browser extension Playwright e2e in Docker.
@@ -47,6 +48,18 @@ tasks:
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _extension:test:e2e }
+
+  extension:smoke:hosted:
+    desc: Download and verify a dev or PR extension, then run its disposable hosted Simple Vault smoke in Docker.
+    deps:
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
+    env:
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _extension:smoke:hosted }
 
   extension:format:
     desc: Format the browser extension in Docker.
@@ -168,6 +181,11 @@ tasks:
     desc: Run browser extension Playwright e2e.
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
+
+  _extension:smoke:hosted:
+    desc: Run the disposable hosted extension smoke inside the e2e image.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bash scripts/test-hosted-smoke.sh
 
   _extension:format:
     desc: Format the browser extension.
