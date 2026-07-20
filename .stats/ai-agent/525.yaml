@@ -1,0 +1,176 @@
+schema_version: 1
+source_pr:
+  number: 525
+  url: https://github.com/meta-secret/nook/pull/525
+  title: Add Brave PIN vault setup bootstrap task
+  change_surface: extension_browser_flow_ci_tooling
+  head_sha: 27a0cc2728a838b2a16abc5f70730bac1e1cdeec
+  started_at: 2026-07-20T23:01:00Z
+  opened_at: 2026-07-20T23:09:20Z
+  merged_at: 2026-07-20T23:21:23Z
+  elapsed_seconds: 1223
+  open_to_merge_seconds: 723
+summary:
+  local_execution_count: 12
+  local_check_count: 7
+  local_test_count: 3
+  local_combined_count: 2
+  local_execution_seconds: 486
+  github_actions_run_count: 4
+  github_actions_seconds: 413
+  pr_retrigger_count: 3
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+local_executions:
+  - command: bash nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh
+    category: test
+    started_at: 2026-07-20T23:03:00Z
+    finished_at: 2026-07-20T23:03:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: hosted_launcher_unit_coverage_for_cdp_args
+  - command: bash nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.test.sh
+    category: test
+    started_at: 2026-07-20T23:03:02Z
+    finished_at: 2026-07-20T23:03:03Z
+    duration_seconds: 1
+    outcome: passed
+    reason: setup_selection_and_marker_path_coverage
+  - command: task extension:setup:brave CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T23:03:49Z
+    finished_at: 2026-07-20T23:07:50Z
+    duration_seconds: 241
+    outcome: failed
+    reason: driver_hung_after_success_cdp_websocket_kept_event_loop_alive
+  - command: task extension:setup:brave CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T23:08:20Z
+    finished_at: 2026-07-20T23:08:39Z
+    duration_seconds: 19
+    outcome: failed
+    reason: second_launch_cdp_blocked_by_existing_brave_profile_lock
+  - command: task extension:setup:brave CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T23:08:50Z
+    finished_at: 2026-07-20T23:09:00Z
+    duration_seconds: 10
+    outcome: passed
+    reason: full_pin_setup_then_idempotent_marker_rerun
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T23:09:22Z
+    finished_at: 2026-07-20T23:09:24Z
+    duration_seconds: 2
+    outcome: failed
+    reason: prettier_unformatted_setup_driver
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T23:09:40Z
+    finished_at: 2026-07-20T23:09:45Z
+    duration_seconds: 5
+    outcome: passed
+    reason: post_prettier_focused_extension_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T23:09:50Z
+    finished_at: 2026-07-20T23:12:50Z
+    duration_seconds: 180
+    outcome: failed
+    reason: eslint_no_undef_on_setup_brave_vault_mjs
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T23:14:40Z
+    finished_at: 2026-07-20T23:18:19Z
+    duration_seconds: 219
+    outcome: passed
+    reason: post_eslint_globals_repository_validation
+  - command: task pr:preflight PR=525
+    category: check
+    started_at: 2026-07-20T23:09:40Z
+    finished_at: 2026-07-20T23:09:49Z
+    duration_seconds: 9
+    outcome: failed
+    reason: pr_run_still_queued
+  - command: task pr:ready PR=525
+    category: check
+    started_at: 2026-07-20T23:21:10Z
+    finished_at: 2026-07-20T23:21:16Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_merge_readiness
+  - command: gh pr checks 525 --watch
+    category: check
+    started_at: 2026-07-20T23:09:35Z
+    finished_at: 2026-07-20T23:13:58Z
+    duration_seconds: 263
+    outcome: failed
+    reason: first_verify_preview_buildx_flake_before_eslint_fix_push
+github_actions_runs:
+  - workflow: PR
+    run_id: 29786307166
+    run_attempt: 1
+    head_sha: ed333036056a9c11ac707dd0aaf0675d3840937d
+    trigger: pull_request
+    started_at: 2026-07-20T23:09:24Z
+    finished_at: 2026-07-20T23:09:37Z
+    duration_seconds: 13
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29786315768
+    run_attempt: 1
+    head_sha: ecd00aab0c9abc72a8140600a5477e66b18a789d
+    trigger: pull_request
+    started_at: 2026-07-20T23:09:34Z
+    finished_at: 2026-07-20T23:09:55Z
+    duration_seconds: 21
+    conclusion: failure
+  - workflow: PR
+    run_id: 29786315768
+    run_attempt: 2
+    head_sha: ecd00aab0c9abc72a8140600a5477e66b18a789d
+    trigger: manual_rerun
+    started_at: 2026-07-20T23:14:27Z
+    finished_at: 2026-07-20T23:14:32Z
+    duration_seconds: 5
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29786583770
+    run_attempt: 1
+    head_sha: 27a0cc2728a838b2a16abc5f70730bac1e1cdeec
+    trigger: pull_request
+    started_at: 2026-07-20T23:14:30Z
+    finished_at: 2026-07-20T23:20:54Z
+    duration_seconds: 384
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-20T23:09:34Z
+    cause: head_push
+    run_id: 29786315768
+  - at: 2026-07-20T23:14:27Z
+    cause: manual_rerun
+    run_id: 29786315768
+  - at: 2026-07-20T23:14:30Z
+    cause: head_push
+    run_id: 29786583770
+merge_attempts:
+  - at: 2026-07-20T23:21:23Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [522, 513]
+  baseline_quality: comparable
+  baseline_note: Both baselines are recent extension browser-flow/tooling PRs with the same repository gate family
+  elapsed_seconds_change_percent: -59.5
+  local_execution_seconds_change_percent: -78.2
+  github_actions_seconds_change_percent: -71.2
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - The first Brave setup validation hung because Playwright CDP kept Node alive; process.exit(0) was required and should have been anticipated for attach-and-handoff drivers
+    - Prettier and ESLint failures each forced an extra head_push validation cycle; formatting/lint should run before the first push for new script files
+    - One Verify-and-preview failure was a Docker buildx flake unrelated to the change; the agent-requested failed-job rerun was immediately superseded by the eslint fix push
+  required_actions: []
