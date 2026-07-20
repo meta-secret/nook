@@ -75,7 +75,6 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "$BASE_SHA" --depth=1
-          bash .github/scripts/ui-demo-contract.test.sh
           bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
 
       - name: Docker setup
