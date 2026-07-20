@@ -585,6 +585,9 @@ test.describe('local vault', () => {
     const chromePasswordsSection = page.getByTestId(
       'chrome-passwords-import-section',
     )
+    const googleAuthenticatorSection = page.getByTestId(
+      'google-authenticator-import-section',
+    )
     const bitwardenToggle = bitwardenSection.getByRole('button').first()
     const lastPassToggle = lastPassSection.getByRole('button').first()
     const onePasswordToggle = onePasswordSection.getByRole('button').first()
@@ -594,14 +597,22 @@ test.describe('local vault', () => {
     const chromePasswordsToggle = chromePasswordsSection
       .getByRole('button')
       .first()
+    const googleAuthenticatorToggle = googleAuthenticatorSection
+      .getByRole('button')
+      .first()
 
     await expect(applePasswordsSection).toBeVisible()
     await expect(chromePasswordsSection).toBeVisible()
+    await expect(googleAuthenticatorSection).toBeVisible()
     await expect(bitwardenSection).toBeVisible()
     await expect(lastPassSection).toBeVisible()
     await expect(onePasswordSection).toBeVisible()
     await expect(applePasswordsToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(chromePasswordsToggle).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    await expect(googleAuthenticatorToggle).toHaveAttribute(
       'aria-expanded',
       'false',
     )
@@ -613,6 +624,9 @@ test.describe('local vault', () => {
     ).not.toBeVisible()
     await expect(
       page.getByTestId('chrome-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(
+      page.getByTestId('google-authenticator-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
@@ -662,6 +676,17 @@ test.describe('local vault', () => {
     await expect(
       page.getByTestId('chrome-passwords-import-panel'),
     ).toBeVisible()
+
+    await googleAuthenticatorToggle.click()
+    await expect(
+      page.getByTestId('chrome-passwords-import-panel'),
+    ).not.toBeVisible()
+    await expect(
+      page.getByTestId('google-authenticator-import-panel'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('google-authenticator-import-submit'),
+    ).toBeDisabled()
   })
 
   test('imports Chrome-family browser logins from CSV', async ({ page }) => {

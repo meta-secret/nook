@@ -224,6 +224,7 @@ enum SecretImportSource {
     ApplePasswords,
     Bitwarden,
     ChromePasswords,
+    GoogleAuthenticator,
     LastPass,
     OnePassword,
     ProtonPass,
@@ -235,6 +236,7 @@ impl SecretImportSource {
             Self::ApplePasswords => "IMPORT_APPLE_PASSWORDS_START",
             Self::Bitwarden => "IMPORT_BITWARDEN_START",
             Self::ChromePasswords => "IMPORT_CHROME_PASSWORDS_START",
+            Self::GoogleAuthenticator => "IMPORT_GOOGLE_AUTHENTICATOR_START",
             Self::LastPass => "IMPORT_LASTPASS_START",
             Self::OnePassword => "IMPORT_ONEPASSWORD_START",
             Self::ProtonPass => "IMPORT_PROTON_PASS_START",
@@ -246,6 +248,7 @@ impl SecretImportSource {
             Self::ApplePasswords => "import-apple-passwords",
             Self::Bitwarden => "import-bitwarden",
             Self::ChromePasswords => "import-chrome-passwords",
+            Self::GoogleAuthenticator => "import-google-authenticator",
             Self::LastPass => "import-lastpass",
             Self::OnePassword => "import-onepassword",
             Self::ProtonPass => "import-proton-pass",
@@ -257,6 +260,7 @@ impl SecretImportSource {
             Self::ApplePasswords => "Apple Passwords",
             Self::Bitwarden => "Bitwarden",
             Self::ChromePasswords => "Chrome passwords",
+            Self::GoogleAuthenticator => "Google Authenticator",
             Self::LastPass => "LastPass",
             Self::OnePassword => "1Password",
             Self::ProtonPass => "Proton Pass",
@@ -341,7 +345,7 @@ impl NookVaultManager {
             imported,
             skipped_unsupported,
             skipped_duplicates,
-            "Password-manager import completed"
+            "Secret import completed"
         );
         Ok(NookImportResult::new(
             imported,
@@ -683,6 +687,25 @@ impl NookVaultManager {
             plan.items,
             plan.skipped_unsupported,
             SecretImportSource::ChromePasswords,
+        )
+        .await
+    }
+
+    /// Import TOTP accounts from one complete Google Authenticator migration
+    /// QR batch in one signed event. QR contents are decoded only in memory.
+    #[wasm_bindgen(js_name = importGoogleAuthenticatorMigration)]
+    pub async fn import_google_authenticator_migration(
+        &mut self,
+        migration_uris: Vec<String>,
+    ) -> Result<NookImportResult, JsError> {
+        let migration_uris = zeroize::Zeroizing::new(migration_uris);
+        let plan = nook_core::plan_google_authenticator_import(migration_uris.as_slice())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(migration_uris);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::GoogleAuthenticator,
         )
         .await
     }
