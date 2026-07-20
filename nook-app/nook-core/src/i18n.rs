@@ -241,6 +241,25 @@ mod tests {
     }
 
     #[test]
+    fn test_import_source_labels_do_not_repeat_the_import_action() {
+        let sources = [
+            ("apple_passwords_import.source", "Apple Passwords"),
+            ("chrome_passwords_import.source", "Chrome or another browser"),
+            ("google_authenticator_import.source", "Google Authenticator"),
+            ("bitwarden_import.source", "Bitwarden"),
+            ("lastpass_import.source", "LastPass"),
+            ("onepassword_import.source", "1Password"),
+            ("proton_pass_import.source", "Proton Pass"),
+        ];
+
+        for (key, expected) in sources {
+            assert_eq!(translate("en", key), expected);
+            assert!(!translate("en", key).starts_with("Import from "));
+            assert!(!translate("ru", key).starts_with("Импорт из "));
+        }
+    }
+
+    #[test]
     fn test_parse_app_locale_accepts_exact_supported_values() {
         assert_eq!(parse_app_locale("en"), Some("en"));
         assert_eq!(parse_app_locale("ru"), Some("ru"));
