@@ -28,6 +28,7 @@ while IFS= read -r -d '' file; do
 
   case "$file" in
     nook-app/nook-web/nook-web-app/index.html|\
+    nook-app/nook-web/nook-web-app/app/index.html|\
     nook-app/nook-web/nook-web-app/src/*|\
     nook-app/nook-web/nook-web-app/public/*|\
     nook-app/nook-web/nook-web-app/static/*|\

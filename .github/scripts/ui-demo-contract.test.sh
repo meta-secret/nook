@@ -20,6 +20,15 @@ git -C "$fixture" commit -qm docs
 output="$(cd "$fixture" && "$contract" "$base_sha")"
 grep -Fq 'required=false' <<< "$output"
 
+mkdir -p "$fixture/nook-app/nook-web/nook-web-app/app"
+printf '<main>app shell</main>\n' > "$fixture/nook-app/nook-web/nook-web-app/app/index.html"
+git -C "$fixture" add .
+git -C "$fixture" commit -qm routed-app-shell-without-demo
+if (cd "$fixture" && "$contract" "$base_sha" >/dev/null 2>&1); then
+  echo 'ui-demo-contract test: routed app shell change without a demo unexpectedly passed' >&2
+  exit 1
+fi
+
 mkdir -p "$fixture/nook-app/nook-web/nook-web-app/public"
 printf '<svg />\n' > "$fixture/nook-app/nook-web/nook-web-app/public/logo.svg"
 git -C "$fixture" add .
