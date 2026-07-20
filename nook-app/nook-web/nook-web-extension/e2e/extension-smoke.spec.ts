@@ -87,27 +87,95 @@ const extensionApprovalVaultName = isHostedSmoke
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
-    if (request.url === '/otp') {
-      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-      response.end(`<!doctype html>
-        <html>
-          <head><title>Nook extension e2e OTP</title></head>
-          <body>
-            <main>
-              <h1>Verify sign in</h1>
-              <label>Authentication code <input autocomplete="one-time-code" name="otp" type="tel" /></label>
-            </main>
-          </body>
-        </html>`)
-      return
-    }
-    if (request.url !== '/login') {
+    if (
+      ![
+        '/login',
+        '/signup',
+        '/otp',
+        '/otp-hidden',
+        '/combined',
+        '/spa',
+      ].includes(request.url ?? '')
+    ) {
       response.writeHead(404)
       response.end('Not found')
       return
     }
 
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    if (request.url === '/signup') {
+      response.end(`<!doctype html>
+        <html><body><main><h1>Create account</h1>
+          <form>
+            <input autocomplete="username" name="email" type="email" />
+            <input autocomplete="new-password" name="password" type="password" />
+            <input autocomplete="new-password" name="password-confirm" type="password" />
+            <button type="submit">Create account</button>
+          </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/otp') {
+      response.end(`<!doctype html>
+        <html><body><main><h1>Verify account</h1>
+          <form>
+            <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
+            <button type="submit">Verify</button>
+          </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/otp-hidden') {
+      response.end(`<!doctype html>
+        <html><body><main><h1>Verify account</h1>
+          <form id="otp-form" hidden>
+            <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
+            <button type="submit">Verify</button>
+          </form>
+          <button id="reveal-otp" type="button">Continue to verification</button>
+          <script>
+            document.getElementById('reveal-otp').addEventListener('click', (event) => {
+              document.getElementById('otp-form').hidden = false
+              event.currentTarget.remove()
+            })
+          </script>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/combined') {
+      response.end(`<!doctype html>
+        <html><body><main>
+          <form id="signup-form">
+            <input autocomplete="section-signup username" name="signup-email" type="email" />
+            <input autocomplete="section-signup new-password" name="signup-password" type="password" />
+            <button type="submit">Create account</button>
+          </form>
+          <form id="login-form">
+            <input autocomplete="section-login username" name="email" type="email" />
+            <input autocomplete="section-login current-password webauthn" name="password" type="password" />
+            <button type="submit">Sign in</button>
+          </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/spa') {
+      response.end(`<!doctype html>
+        <html><body><main>
+          <form id="login-form">
+            <input autocomplete="username" name="email" type="email" />
+            <button id="next" type="button">Next</button>
+          </form>
+          <script>
+            document.getElementById('next').addEventListener('click', (event) => {
+              const form = document.getElementById('login-form')
+              event.currentTarget.remove()
+              form.insertAdjacentHTML('beforeend',
+                '<input autocomplete="current-password" name="password" type="password" /><button type="submit">Sign in</button>')
+            })
+          </script>
+        </main></body></html>`)
+      return
+    }
     response.end(`<!doctype html>
       <html>
         <head><title>Nook extension e2e login</title></head>
@@ -405,7 +473,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await loginPage.goto(`${loginServer.origin}/login`)
     const widget = loginPage.locator('#nook-auth-widget')
     await expect(widget).toBeVisible()
-    await expect(widget.getByText('Continue through Nook')).toBeVisible()
+    await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
+    await expect(widget.getByText('Ready to sign in')).toBeVisible()
+    await expect(widget.getByText('localhost')).toBeVisible()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
@@ -413,10 +483,25 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       widget.getByRole('button', { name: 'Open vault' }),
     ).toBeVisible()
 
+    await widget.evaluate((host) => {
+      host.shadowRoot
+        ?.querySelector<HTMLButtonElement>('button.primary-button')
+        ?.click()
+    })
+    await expect(widget.getByText('Ready to sign in')).toBeVisible()
+
     await widget.getByRole('button', { name: 'Collapse Nook' }).click()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeHidden()
+    await expect(
+      widget
+        .getByTestId('nook-auth-gate-expand')
+        .getByText('1/3', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      widget.getByRole('button', { name: /Expand Nook: Nook Pilot · 1\/3/ }),
+    ).toBeVisible()
     await widget.getByTestId('nook-auth-gate-expand').click()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
@@ -425,6 +510,55 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const openedVault = context.waitForEvent('page')
     await widget.getByRole('button', { name: 'Open vault' }).click()
     await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
+
+    const signupPage = await context.newPage()
+    await signupPage.goto(`${loginServer.origin}/signup`)
+    const signupWidget = signupPage.locator('#nook-auth-widget')
+    await expect(signupWidget.getByText('Nook Pilot · 2/5')).toBeVisible()
+    await expect(signupWidget.getByText('Signup detected')).toBeVisible()
+    await expect(
+      signupWidget.getByRole('button', { name: 'Take over' }),
+    ).toBeVisible()
+    await signupWidget.evaluate((host) => {
+      host.shadowRoot
+        ?.querySelector<HTMLButtonElement>('button.text-button')
+        ?.click()
+    })
+    await expect(signupWidget).toBeVisible()
+
+    const otpPage = await context.newPage()
+    await otpPage.goto(`${loginServer.origin}/otp`)
+    const otpWidget = otpPage.locator('#nook-auth-widget')
+    await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
+    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
+
+    const hiddenOtpPage = await context.newPage()
+    await hiddenOtpPage.goto(`${loginServer.origin}/otp-hidden`)
+    const hiddenOtpWidget = hiddenOtpPage.locator('#nook-auth-widget')
+    await expect(hiddenOtpWidget).toHaveCount(0)
+    await hiddenOtpPage
+      .getByRole('button', { name: 'Continue to verification' })
+      .click()
+    await expect(hiddenOtpWidget.getByText('Fill your 2FA code')).toBeVisible()
+
+    const combinedPage = await context.newPage()
+    await combinedPage.goto(`${loginServer.origin}/combined`)
+    const combinedWidget = combinedPage.locator('#nook-auth-widget')
+    await expect(combinedWidget.getByText('Ready to sign in')).toBeVisible()
+    await expect(
+      combinedWidget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
+
+    const spaPage = await context.newPage()
+    await spaPage.goto(`${loginServer.origin}/spa`)
+    const spaWidget = spaPage.locator('#nook-auth-widget')
+    await expect(
+      spaWidget.getByRole('button', { name: 'Take over' }),
+    ).toBeVisible()
+    await spaPage.getByRole('button', { name: 'Next' }).click()
+    await expect(
+      spaWidget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
 
     const sentinelPage = await context.newPage()
     const sentinelUrl =
@@ -804,6 +938,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBeVisible({ timeout: 15_000 })
 
     await reopenedVaultPage.getByTestId('add-secret-btn').click()
+    await reopenedVaultPage.getByTestId('item-type-login').click()
+    await reopenedVaultPage.getByTestId('secret-label').fill(loginServer.origin)
+    await reopenedVaultPage.getByTestId('login-username').fill('bob@nook.test')
+    await reopenedVaultPage
+      .getByTestId('secret-value')
+      .fill('second-extension-password')
+    await reopenedVaultPage.getByTestId('save-secret-btn').click()
+    await expect(
+      reopenedVaultPage
+        .getByTestId('vault-group-login')
+        .getByTestId('secret-row'),
+    ).toHaveCount(2)
+
+    await reopenedVaultPage.getByTestId('add-secret-btn').click()
     await reopenedVaultPage.getByTestId('item-type-authenticator').click()
     await reopenedVaultPage
       .getByTestId('authenticator-issuer')
@@ -826,6 +974,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const fillWidget = fillLoginPage.locator('#nook-auth-widget')
     await expect(fillWidget).toBeVisible()
     await fillWidget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
+    await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)
+    await fillWidget.getByRole('button', { name: 'Saved login 1' }).click()
     await expect
       .poll(
         async () =>
@@ -842,10 +993,38 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
           ),
         { timeout: 20_000 },
       )
-      .toEqual({
+      .not.toBeNull()
+    const submittedLogin = await fillLoginPage.evaluate(
+      () =>
+        (
+          window as Window & {
+            __nookLoginSubmitted?: {
+              email: string
+              password: string
+            } | null
+          }
+        ).__nookLoginSubmitted,
+    )
+    expect([
+      {
         email: 'alice@nook.test',
         password: 'extension-fill-password',
-      })
+      },
+      {
+        email: 'bob@nook.test',
+        password: 'second-extension-password',
+      },
+    ]).toContainEqual(submittedLogin)
+    await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
+    await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
+    await expect(
+      fillWidget.getByRole('button', { name: 'Saved login 2' }),
+    ).toHaveCount(0)
+    await expect(
+      fillWidget.getByText(
+        'Credentials were submitted. Nook is waiting for the site response.',
+      ),
+    ).toBeVisible()
     await fillLoginPage.close()
 
     const otpPage = await context.newPage()
@@ -853,12 +1032,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const otpWidget = otpPage.locator('#nook-auth-widget')
     await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
     await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-    await otpWidget
-      .getByRole('button', { name: 'Nook extension e2e — alice@nook.test' })
-      .click()
+    await expect(otpWidget.getByText('Nook extension e2e')).toHaveCount(0)
+    await expect(otpWidget.getByText('alice@nook.test')).toHaveCount(0)
+    await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
     await expect(otpPage.locator('[autocomplete="one-time-code"]')).toHaveValue(
       /^\d{6}$/,
     )
+    await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
+    await expect(
+      otpWidget.getByText(
+        'The code is filled. Review the site and submit it manually.',
+      ),
+    ).toBeVisible()
     await otpPage.close()
 
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()

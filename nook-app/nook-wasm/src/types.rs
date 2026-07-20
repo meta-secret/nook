@@ -479,6 +479,117 @@ pub struct NookLoginAccount {
 }
 
 #[wasm_bindgen]
+pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObservation);
+
+#[wasm_bindgen]
+impl NookAuthenticationPageObservation {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        username_field_count: u32,
+        current_password_field_count: u32,
+        new_password_field_count: u32,
+        generic_password_field_count: u32,
+        one_time_code_field_count: u32,
+    ) -> Self {
+        Self(nook_core::AuthenticationPageObservation {
+            username_field_count,
+            current_password_field_count,
+            new_password_field_count,
+            generic_password_field_count,
+            one_time_code_field_count,
+        })
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookAuthenticationPageObservations(Vec<nook_core::AuthenticationPageObservation>);
+
+#[wasm_bindgen]
+impl NookAuthenticationPageObservations {
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn add(&mut self, observation: &NookAuthenticationPageObservation) {
+        self.0.push(observation.to_core());
+    }
+}
+
+impl NookAuthenticationPageObservations {
+    pub(crate) fn as_core(&self) -> &[nook_core::AuthenticationPageObservation] {
+        &self.0
+    }
+}
+
+impl NookAuthenticationPageObservation {
+    pub(crate) const fn to_core(&self) -> nook_core::AuthenticationPageObservation {
+        self.0
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookAuthenticationWorkflowSnapshot(nook_core::AuthenticationWorkflowSnapshot);
+
+#[wasm_bindgen]
+impl NookAuthenticationWorkflowSnapshot {
+    pub(crate) const fn from_core(value: nook_core::AuthenticationWorkflowSnapshot) -> Self {
+        Self(value)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> nook_core::AuthenticationWorkflowKind {
+        self.0.kind
+    }
+
+    #[wasm_bindgen(getter, js_name = kindName)]
+    pub fn kind_name(&self) -> String {
+        self.0.kind.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn stage(&self) -> nook_core::AuthenticationWorkflowStage {
+        self.0.stage
+    }
+
+    #[wasm_bindgen(getter, js_name = stageName)]
+    pub fn stage_name(&self) -> String {
+        self.0.stage.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn action(&self) -> nook_core::AuthenticationWorkflowAction {
+        self.0.action
+    }
+
+    #[wasm_bindgen(getter, js_name = actionName)]
+    pub fn action_name(&self) -> String {
+        self.0.action.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = currentStep)]
+    pub fn current_step(&self) -> u8 {
+        self.0.current_step
+    }
+
+    #[wasm_bindgen(getter, js_name = totalSteps)]
+    pub fn total_steps(&self) -> u8 {
+        self.0.total_steps
+    }
+
+    #[wasm_bindgen(getter, js_name = requiresHumanApproval)]
+    pub fn requires_human_approval(&self) -> bool {
+        self.0.requires_human_approval
+    }
+
+    #[wasm_bindgen(getter, js_name = observationIndex)]
+    pub fn observation_index(&self) -> u32 {
+        self.0.observation_index
+    }
+}
+
+#[wasm_bindgen]
 impl NookLoginAccount {
     pub(crate) fn from_login(id: &nook_core::SecretId, login: &nook_core::LoginSecret) -> Self {
         Self {

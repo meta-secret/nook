@@ -28,7 +28,10 @@ import {
   setupStorageKey,
 } from './pairing-grants'
 import type { StoredExtensionPairingGrant } from './pairing-grants'
-import { importExtensionEventLog } from './vault-runtime'
+import {
+  authenticationWorkflowSnapshot,
+  importExtensionEventLog,
+} from './vault-runtime'
 import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
@@ -47,6 +50,7 @@ import {
   parsedWebsitePasskeyRequest,
   type WebsitePasskeyCeremony,
 } from '../lib/webauthn-messages'
+import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
 
 const extensionSessionDocument = 'offscreen/session.html'
 let extensionSessionDocumentCreation: Promise<void> | undefined
@@ -992,6 +996,19 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isAuthenticationWorkflowSnapshotMessage(message)) {
+    if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+      sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })
+      return false
+    }
+    void authenticationWorkflowSnapshot(message.payload.observations)
+      .then((snapshot) => sendResponse({ ok: true, snapshot }))
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),
+      )
+    return true
+  }
+
   if (isWebsitePasskeyOptionsMessage(message)) {
     void websitePasskeyOptions(message, sender)
       .then(sendResponse)

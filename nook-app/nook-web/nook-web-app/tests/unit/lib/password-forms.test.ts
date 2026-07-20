@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
+  submitLoginForm,
+  summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -27,6 +30,170 @@ describe('website one-time-code fields', () => {
       oneTimeCodeFieldCount: 2,
       formCount: 1,
     })
+  })
+
+  test('returns no workflow for ordinary pages and email-only newsletters', () => {
+    document.body.innerHTML = `
+      <main><p>Documentation</p></main>
+      <form><input type="email" name="newsletter-email" /></form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+  })
+
+  test('groups externally associated controls with their form owner', () => {
+    document.body.innerHTML = `
+      <form id="login"><input autocomplete="username" /></form>
+      <input form="login" type="password" autocomplete="current-password" />
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.formScope.kind).toBe('owned')
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      currentPasswordFieldCount: 1,
+    })
+  })
+
+  test('keeps unowned login controls isolated from owned signup fields', () => {
+    document.body.innerHTML = `
+      <form id="signup">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="new-password" />
+      </form>
+      <section>
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </section>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(2)
+    expect(observations.map(({ summary }) => summary)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          currentPasswordFieldCount: 0,
+          newPasswordFieldCount: 1,
+        }),
+        expect.objectContaining({
+          currentPasswordFieldCount: 1,
+          newPasswordFieldCount: 0,
+        }),
+      ]),
+    )
+  })
+
+  test('keeps separate unowned auth containers isolated', () => {
+    document.body.innerHTML = `
+      <div class="signup-panel">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="new-password" />
+        <button type="submit">Create account</button>
+      </div>
+      <div class="login-panel">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(2)
+    expect(observations.map(({ summary }) => summary)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          currentPasswordFieldCount: 0,
+          newPasswordFieldCount: 1,
+        }),
+        expect.objectContaining({
+          currentPasswordFieldCount: 1,
+          newPasswordFieldCount: 0,
+        }),
+      ]),
+    )
+  })
+
+  test('prioritizes active OTP and login forms before low-confidence candidates', () => {
+    document.body.innerHTML = Array.from(
+      { length: 20 },
+      (_, index) => `
+        <form id="signup-${index}">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="new-password" />
+        </form>`,
+    ).join('')
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `<form id="login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>`,
+    )
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    const firstScope = observations[0]?.formScope
+    expect(firstScope?.kind).toBe('owned')
+    expect(firstScope?.kind === 'owned' ? firstScope.owner.id : '').toBe(
+      'login',
+    )
+  })
+
+  test('fills a visible username instead of a hidden autocomplete token', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="hidden" autocomplete="username" value="token" />
+        <input id="visible-email" type="email" />
+        <input id="password" type="password" autocomplete="current-password" />
+      </form>
+    `
+
+    expect(
+      fillLoginCredentials({ username: 'pilot', password: 'secret' }),
+    ).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('[type="hidden"]')?.value,
+    ).toBe('token')
+    expect(
+      document.querySelector<HTMLInputElement>('#visible-email')?.value,
+    ).toBe('pilot')
+  })
+
+  test('does not claim a div-based login was submitted', () => {
+    document.body.innerHTML = `
+      <section>
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Sign in</button>
+      </section>
+    `
+
+    expect(submitLoginForm(document, { kind: 'unowned' })).toBe(false)
+  })
+
+  test('does not claim a disabled submit control was activated', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="password" autocomplete="current-password" />
+        <button type="submit" disabled>Sign in</button>
+      </form>
+    `
+
+    expect(submitLoginForm()).toBe(false)
+  })
+
+  test('reports submission only when the form emits a submit event', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm()).toBe(true)
   })
 
   test('fills the first enabled OTP field through the native value setter', () => {

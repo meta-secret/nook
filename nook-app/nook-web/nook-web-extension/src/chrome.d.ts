@@ -59,7 +59,10 @@ declare namespace chrome {
 
   namespace i18n {
     function getUILanguage(): string
-    function getMessage(messageName: string): string
+    function getMessage(
+      messageName: string,
+      substitutions?: string | string[],
+    ): string
   }
 
   namespace action {
