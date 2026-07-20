@@ -166,6 +166,35 @@ tasks:
         {{.DOCKER_E2E_IMAGE}}
         task {{.TASK}}
 
+  docker:ui-demo:run:
+    desc: Record Playwright demo videos into a host-mounted artifact directory.
+    internal: true
+    vars:
+      UI_DEMO_OUTPUT_DIR: '{{default (printf "%s/ui-demo-results" .REPO_ROOT) .UI_DEMO_OUTPUT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.UI_DEMO_OUTPUT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        test "$out_dir" != "/";
+        mkdir -p "$out_dir";
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
+        --ipc=host
+        -e CI=1
+        -e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+        -e NOOK_UI_DEMO_OUTPUT_DIR=/ui-demo-results
+        -e UI_DEMO_SPECS="{{.UI_DEMO_SPECS}}"
+        -v "$out_dir:/ui-demo-results"
+        -w /meta-secret/nook
+        {{.DOCKER_E2E_IMAGE}}
+        task _web:test:ui-demo;
+        find "$out_dir" -type f -name "*.webm" -print -quit | grep -q . || {
+          echo "task ui:demo: no Playwright video was produced" >&2;
+          exit 1;
+        }'
+
   docker:extract:dist:
     desc: Copy the landing, Simple Vault, and Sentinel Vault web artifacts to the host.
     cmds:
@@ -267,6 +296,27 @@ tasks:
           fi;
           if [ "$attempt" -eq 2 ]; then exit 1; fi;
           echo "task docker:ci:web:build: transient Bake failure; retrying in 2s..." >&2;
+          sleep 2;
+        done'
+
+  docker:ci:web:e2e:build:
+    desc: Build the Chromium web image from the same-runner CI WASM artifact.
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        artifacts="{{.CI_ARTIFACT_DIR}}";
+        case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
+        test -s "$artifacts/nook-wasm/nook_wasm.js";
+        mkdir -p "$artifacts/coverage/nook-core";
+        : > "$artifacts/coverage/nook-core/.web-only";
+        for attempt in 1 2; do
+          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 2 ]; then exit 1; fi;
+          echo "task docker:ci:web:e2e:build: transient Bake failure; retrying in 2s..." >&2;
           sleep 2;
         done'
 

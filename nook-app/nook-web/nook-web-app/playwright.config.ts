@@ -15,6 +15,7 @@ process.env.VITE_VAULT_IDLE_WARNING_MS ??= '0'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
+const isUiDemo = process.env.NOOK_UI_DEMO === '1'
 const configuredWorkers = Number.parseInt(
   process.env.PLAYWRIGHT_WORKERS ?? '',
   10,
@@ -28,6 +29,9 @@ const workers =
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const distDir = path.join(rootDir, 'dist')
+const uiDemoOutputDir =
+  process.env.NOOK_UI_DEMO_OUTPUT_DIR ?? path.join(rootDir, 'ui-demo-results')
+const webPort = isUiDemo ? 5183 : 5173
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; provider routes are per-page. */
 
 /** IndexedDB-only specs — fast manual/debug subset of the full e2e suite. */
@@ -81,8 +85,8 @@ const usePreviewServer = isCi && fs.existsSync(distDir)
 // at /, so keep the spec runnable in both environments.
 process.env.NOOK_E2E_PUBLIC_SITE_PATH = usePreviewServer ? '/site' : ''
 const webServerCommand = usePreviewServer
-  ? 'bun run preview -- --host 127.0.0.1 --port 5173'
-  : 'bun run dev -- --host 127.0.0.1 --port 5173'
+  ? `bun run preview -- --host 127.0.0.1 --port ${webPort}`
+  : `bun run dev -- --host 127.0.0.1 --port ${webPort}`
 
 export default defineConfig({
   testDir: 'e2e',
@@ -101,7 +105,7 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: `http://127.0.0.1:${webPort}`,
     trace: 'on-first-retry',
     actionTimeout: 5_000,
     launchOptions: {
@@ -110,8 +114,8 @@ export default defineConfig({
   },
   webServer: {
     command: webServerCommand,
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: !isCi,
+    url: `http://127.0.0.1:${webPort}`,
+    reuseExistingServer: !isCi && !isUiDemo,
     timeout: isCi ? 120_000 : 30_000,
     env: usePreviewServer
       ? {
@@ -148,6 +152,22 @@ export default defineConfig({
       testMatch: specPaths(SYNC_LIVE_SPECS),
       // Real GitHub: CI sets one NOOK_GITHUB_E2E_REPO per container — keep files serial.
       fullyParallel: false,
+    },
+    {
+      name: 'ui-demo',
+      testMatch: '**/demos/**/*.demo.spec.ts',
+      fullyParallel: false,
+      retries: 0,
+      outputDir: uiDemoOutputDir,
+      use: {
+        headless: true,
+        trace: 'retain-on-failure',
+        viewport: { width: 1280, height: 720 },
+        video: {
+          mode: 'on',
+          size: { width: 1280, height: 720 },
+        },
+      },
     },
   ],
 })

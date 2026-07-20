@@ -40,6 +40,17 @@ tasks:
       - task: docker:task
         vars: { TASK: _ci:pr }
 
+  ci:pr:ui-demo:
+    desc: Build the PR Chromium image and record selected UI demo videos.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:ui-demo:host }
+
+  _ci:pr:ui-demo:host:
+    cmds:
+      - task: docker:ci:web:e2e:build
+      - task: ui:demo:ci
+
   _ci:pr:host:
     cmds:
       - task: preflight
@@ -64,6 +75,8 @@ tasks:
       NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
       NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
       NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
+      UI_DEMO_OUTPUT_DIR: '{{.UI_DEMO_OUTPUT_DIR}}'
+      UI_DEMO_SPECS: '{{.UI_DEMO_SPECS}}'
       PREPARE_GROUP: '{{.PREPARE_GROUP}}'
       SCCACHE_REDIS_CONTAINER: '{{.SCCACHE_REDIS_CONTAINER}}'
       SCCACHE_REDIS_IMAGE: '{{.SCCACHE_REDIS_IMAGE}}'

@@ -9,16 +9,16 @@ product validation pipeline or trigger the main pipeline after merge.
 
 ## Workflow map
 
-| Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
-| ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, internal harness plus isolated native Pages aliases, `github-pages` deployment status | No |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No |
-| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release | No |
-| [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR opened and handed to the standard readiness-and-squash-merge lifecycle → workflow job exits | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
-| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only) | No                                        |
+| Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
+| ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync                                | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + video artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins      | No                                        |
+| [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
+| [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml)                 | Issue labeled `ai-agent`, or manual prompt  | Cursor SDK implement → PR opened and handed to the standard readiness-and-squash-merge lifecycle → workflow job exits                                                                                                                            | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)                                   | Manual                                      | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                                                                                                                                                                                        | Only for `sync-live`                      |
+| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml)                   | Cron 13:00 UTC + manual                     | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only)                                                                                                                                            | No                                        |
 
 ```mermaid
 flowchart LR
@@ -51,17 +51,17 @@ for that PR, while separate PRs continue to receive independent required checks.
 Do not replace this with one global PR group; that would leave older PRs with a
 cancelled required check whenever another contributor pushes.
 
-| Workflow | Concurrency scope | Cancel active run? | Reason |
-| --- | --- | --- | --- |
-| PR | PR number | Yes | Only the newest commit on the same PR needs validation |
-| Main | `main` | Yes | A newer main deployment supersedes the older development deployment |
-| Manual PR e2e | PR number + suite | Yes | A repeated run of the same suite supersedes its older debug build |
-| Web research | PR number or ref | Yes | Keep only the newest build for the same preview or branch |
-| Nightly live sync | Provider job | Yes | Replace a superseded live-sync build without interrupting an active `ci-fix` job |
-| CI agent smoke | Global smoke group | Yes | Only the newest smoke result matters |
-| Agent implement | Issue number; manual runs are unique | No | It may already have pushed a branch or opened a PR |
-| Production release | Global production release group | No | Serialize stateful publication without interrupting a deploy |
-| Runner cleanup | Global cleanup group | No | Let an active Docker prune finish safely |
+| Workflow           | Concurrency scope                    | Cancel active run? | Reason                                                                           |
+| ------------------ | ------------------------------------ | ------------------ | -------------------------------------------------------------------------------- |
+| PR                 | PR number                            | Yes                | Only the newest commit on the same PR needs validation                           |
+| Main               | `main`                               | Yes                | A newer main deployment supersedes the older development deployment              |
+| Manual PR e2e      | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                |
+| Web research       | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                        |
+| Nightly live sync  | Provider job                         | Yes                | Replace a superseded live-sync build without interrupting an active `ci-fix` job |
+| CI agent smoke     | Global smoke group                   | Yes                | Only the newest smoke result matters                                             |
+| Agent implement    | Issue number; manual runs are unique | No                 | It may already have pushed a branch or opened a PR                               |
+| Production release | Global production release group      | No                 | Serialize stateful publication without interrupting a deploy                     |
+| Runner cleanup     | Global cleanup group                 | No                 | Let an active Docker prune finish safely                                         |
 
 ## Production release strategy
 
@@ -97,9 +97,9 @@ make the deployed artifact differ from its tagged commit.
 
 The **same sync spec files** run against different backends. CI swaps providers by setting one env var per job:
 
-| Env                      | Values                   | Default  |
-| ------------------------ | ------------------------ | -------- |
-| `NOOK_E2E_SYNC_PROVIDER` | `file`, `local`, `google-drive`, `github` | `file` |
+| Env                      | Values                                    | Default |
+| ------------------------ | ----------------------------------------- | ------- |
+| `NOOK_E2E_SYNC_PROVIDER` | `file`, `local`, `google-drive`, `github` | `file`  |
 
 Registry and factories live in `nook-app/nook-web/e2e/sync-provider.ts`:
 
@@ -148,20 +148,20 @@ The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
-PR web solves use browser-free `web-base`. Main, nightly, and explicitly
-requested browser e2e use a separate `web-e2e-base` with Debian's single
+PR web solves normally use browser-free `web-base`. UI-changing PRs, main,
+nightly, and explicitly requested browser e2e also build `web-e2e-base` with Debian's single
 `chromium` package. Playwright is pointed at `/usr/bin/chromium`; do not install
 its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
 image layer (about 432 MB compressed) on cold runners.
 The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
 a whole-build retry loop.
 
-| Workflow | `runs-on` | Why |
-| --- | --- | --- |
-| `pr.yml`, `main.yml`, `release.yml` | `ubuntu-latest` | Elastic delivery capacity with main-seeded GHA BuildKit caches |
-| `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Long-running background AI work scales independently |
-| `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | Scheduled, manual, and research work scales independently |
-| `runner-cleanup.yml` | `nook` | Maintain the registered self-hosted Docker host and disk |
+| Workflow                                                                | `runs-on`       | Why                                                            |
+| ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
+| `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with main-seeded GHA BuildKit caches |
+| `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Long-running background AI work scales independently           |
+| `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml`         | `ubuntu-latest` | Scheduled, manual, and research work scales independently      |
+| `runner-cleanup.yml`                                                    | `nook`          | Maintain the registered self-hosted Docker host and disk       |
 
 The runner-cleanup workflow runs its age-filtered system prune separately from
 its unused-volume prune: Docker does not support its `until` filter together
@@ -174,7 +174,7 @@ Real provider API calls are slow and brittle at CI scale. Nook therefore:
 1. **`e2e` project** — IndexedDB flows plus sync-provider specs through isolated e2e remotes. One Playwright process, fully parallel, one preview server.
 2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. It starts at 6 workers.
 3. **`unstable` project** — local provider/sync specs. It runs separately at 4 workers so their shared preview-server and WASM pressure stays bounded.
-3. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; nightly + manual only.
+4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; nightly + manual only.
 
 When adding Google Drive or other sync providers, add local e2e remote specs to
 the `e2e` list and thin live smoke specs to `e2e/live/`.
@@ -220,15 +220,37 @@ standard readiness audit and squash-merge when it succeeds.
 
 Do **not** spin up multiple Nook servers for parallel e2e unless debugging port conflicts locally with `reuseExistingServer`.
 
+## PR UI demo videos
+
+UI-facing changes under the web apps, shared vault UI, or extension content and
+popup surfaces must add or update a focused spec under
+`nook-web-app/e2e/demos/*.demo.spec.ts`. The PR contract script rejects a UI
+change without a changed demo. Only those changed demo specs run, serially with
+one worker, so PR CI does not inherit the cost of the full browser suite.
+
+The `ui-demo` Playwright project runs Chromium headlessly at 1280x720 and always
+records WebM video. Demo-only waits are allowed to hold meaningful before/after
+states long enough for a reviewer to understand them; ordinary regression specs
+must remain full-speed. CI uploads the result for 90 days and maintains a PR
+comment linking to the artifact. Use `task ui:demo` from the repository root or
+`cargo ui-demo` from `nook-app/` to reproduce it locally.
+
+Playwright DOM/state assertions decide pass or failure. Humans and multimodal AI
+agents may review the video as supporting evidence, but visual AI review is
+advisory: timing, animation, font rendering, and compression can make frame-only
+judgments flaky. A future AI reviewer should consume the video plus assertion
+results and traces, and must not receive real vault secrets.
+
 ## Playwright projects
 
 Defined in `nook-app/nook-web/playwright.config.ts`:
 
-| Project     | Specs                                          | CI                            |
-| ----------- | ---------------------------------------------- | ----------------------------- |
-| `stable`    | IndexedDB-only specs (6 workers)               | main, e2e-pr (manual/debug)   |
-| `unstable`  | Local-provider and sync specs (4 workers)      | main, e2e-pr (manual)         |
-| `sync-live` | `e2e/live/**/*.spec.ts`                        | e2e-nightly, e2e-pr (manual)  |
+| Project     | Specs                                     | CI                           |
+| ----------- | ----------------------------------------- | ---------------------------- |
+| `stable`    | IndexedDB-only specs (6 workers)          | main, e2e-pr (manual/debug)  |
+| `unstable`  | Local-provider and sync specs (4 workers) | main, e2e-pr (manual)        |
+| `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-nightly, e2e-pr (manual) |
+| `ui-demo`   | `e2e/demos/**/*.demo.spec.ts`             | UI-changing PRs (1 worker)   |
 
 The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
 
@@ -437,13 +459,13 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 ## Secrets and env
 
-| Secret / env                                        | Used by                                                                                                                                                             |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NOOK_GITHUB_PAT`                                   | sync-live e2e, nightly ci-fix PR/push, and agent-implement PR/push (repo scope; PR creation must act as a user so normal workflows fire) |
-| `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
+| Secret / env                                        | Used by                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOOK_GITHUB_PAT`                                   | sync-live e2e, nightly ci-fix PR/push, and agent-implement PR/push (repo scope; PR creation must act as a user so normal workflows fire)                                                                                                                                                                                                              |
+| `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                                                                                                                                                                                                              |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy and main development deploy/domain verification. The token requires account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`; main purges stale development routes before live verification. PR CI records its preview as a successful `github-pages` deployment for ruleset enforcement. |
-| `GITHUB_TOKEN`                                      | PR comments, deployment records, nook-core + nook-auth2 coverage comment                                                                                             |
-| `CURSOR_API_KEY`                                    | nightly ci-fix agent (`e2e-nightly.yml`) and `agent-implement.yml`                                                                                                 |
+| `GITHUB_TOKEN`                                      | PR comments, deployment records, nook-core + nook-auth2 coverage comment                                                                                                                                                                                                                                                                              |
+| `CURSOR_API_KEY`                                    | nightly ci-fix agent (`e2e-nightly.yml`) and `agent-implement.yml`                                                                                                                                                                                                                                                                                    |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
@@ -510,10 +532,10 @@ Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows
 
 [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
 
-| Trigger | When it runs |
-| ------- | ------------ |
+| Trigger             | When it runs                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `issues: [labeled]` | Only when the label being assigned is exactly **`ai-agent`** (not on issue open, not when other labels are added) |
-| `workflow_dispatch` | Always, using the required `prompt` input |
+| `workflow_dispatch` | Always, using the required `prompt` input                                                                         |
 
 Opt-in only: create milestones/epics/sub-issues first, then assign `ai-agent` to the focused issue you want executed. Opening an issue (even with labels pre-selected) does not start the job unless GitHub emits a `labeled` event for `ai-agent`. The workflow does **not** auto-create the label — maintainers create it once (`gh label create ai-agent` or the GitHub UI).
 
@@ -525,8 +547,9 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds; it omits **only browser e2e**. Main runs full local-provider and extension **e2e** and leaves failures for manual handling; nightly runs **sync-live** and invokes `ci-fix` on failure.
+5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs; the full browser regression suites remain on main. Main runs full local-provider and extension **e2e** and leaves failures for manual handling; nightly runs **sync-live** and invokes `ci-fix` on failure.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
+
 <!-- agent-implement docker smoke -->
