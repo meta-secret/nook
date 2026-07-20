@@ -1,0 +1,191 @@
+schema_version: 1
+source_pr:
+  number: 503
+  url: https://github.com/meta-secret/nook/pull/503
+  title: Fill saved 2FA codes from the browser extension
+  change_surface: rust_wasm_extension_browser_flow
+  head_sha: 33cfa50230f9c5cbd4f5f9e23b61993281fd5522
+  started_at: 2026-07-20T00:58:43Z
+  opened_at: 2026-07-20T01:22:18Z
+  merged_at: 2026-07-20T02:04:10Z
+  elapsed_seconds: 3927
+  open_to_merge_seconds: 2512
+summary:
+  local_execution_count: 17
+  local_check_count: 11
+  local_test_count: 3
+  local_combined_count: 3
+  local_execution_seconds: 3286
+  github_actions_run_count: 2
+  github_actions_seconds: 1382
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 2
+local_executions:
+  - command: cargo check -p nook-wasm --target wasm32-unknown-unknown
+    category: check
+    started_at: 2026-07-20T01:07:00Z
+    finished_at: 2026-07-20T01:07:34Z
+    duration_seconds: 34
+    outcome: passed
+    reason: focused_wasm_validation
+  - command: cargo clippy -q -p nook-wasm --all-targets -- -D warnings
+    category: check
+    started_at: 2026-07-20T01:07:40Z
+    finished_at: 2026-07-20T01:08:09Z
+    duration_seconds: 29
+    outcome: failed
+    reason: pre_existing_test_module_order_lints_outside_changed_code
+  - command: cargo clippy -q -p nook-wasm --lib -- -D warnings
+    category: check
+    started_at: 2026-07-20T01:08:15Z
+    finished_at: 2026-07-20T01:08:39Z
+    duration_seconds: 24
+    outcome: passed
+    reason: focused_changed_library_validation
+  - command: bun test tests/unit/lib/password-forms.test.ts
+    category: test
+    started_at: 2026-07-20T01:09:00Z
+    finished_at: 2026-07-20T01:09:08Z
+    duration_seconds: 8
+    outcome: passed
+    reason: focused_otp_field_detection_and_fill
+  - command: bun run check
+    category: check
+    started_at: 2026-07-20T01:09:15Z
+    finished_at: 2026-07-20T01:09:28Z
+    duration_seconds: 13
+    outcome: passed
+    reason: extension_type_lint_and_unit_validation
+  - command: bun run check
+    category: check
+    started_at: 2026-07-20T01:09:35Z
+    finished_at: 2026-07-20T01:09:51Z
+    duration_seconds: 16
+    outcome: passed
+    reason: web_type_validation
+  - command: task wasm:build:fast
+    category: check
+    started_at: 2026-07-20T01:10:00Z
+    finished_at: 2026-07-20T01:11:06Z
+    duration_seconds: 66
+    outcome: passed
+    reason: generated_wasm_boundary_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T01:11:10Z
+    finished_at: 2026-07-20T01:20:10Z
+    duration_seconds: 540
+    outcome: passed
+    reason: focused_extension_otp_flow_before_final_empty_state_assertions
+  - command: task pr:preflight PR=503
+    category: check
+    started_at: 2026-07-20T01:21:00Z
+    finished_at: 2026-07-20T01:21:08Z
+    duration_seconds: 8
+    outcome: failed
+    reason: github_compare_api_returned_503
+  - command: task pr:preflight PR=503
+    category: check
+    started_at: 2026-07-20T01:21:15Z
+    finished_at: 2026-07-20T01:21:23Z
+    duration_seconds: 8
+    outcome: failed
+    reason: github_actions_api_returned_503
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T01:23:00Z
+    finished_at: 2026-07-20T01:25:00Z
+    duration_seconds: 120
+    outcome: failed
+    reason: simultaneous_local_buildkit_gate_exited_during_parallel_validation
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-20T01:23:00Z
+    finished_at: 2026-07-20T01:32:00Z
+    duration_seconds: 540
+    outcome: passed
+    reason: pr_equivalent_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T01:32:10Z
+    finished_at: 2026-07-20T01:52:50Z
+    duration_seconds: 1240
+    outcome: passed
+    reason: serial_exact_head_validation_after_local_builder_contention
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T01:52:55Z
+    finished_at: 2026-07-20T02:03:20Z
+    duration_seconds: 625
+    outcome: passed_with_flaky_retry
+    reason: final_exact_head_empty_vault_and_totp_fill_browser_regression
+  - command: task pr:preflight PR=503
+    category: check
+    started_at: 2026-07-20T02:03:25Z
+    finished_at: 2026-07-20T02:03:33Z
+    duration_seconds: 8
+    outcome: passed
+    reason: exact_head_preflight
+  - command: task pr:ready PR=503
+    category: check
+    started_at: 2026-07-20T02:03:38Z
+    finished_at: 2026-07-20T02:03:43Z
+    duration_seconds: 5
+    outcome: passed
+    reason: merge_readiness
+  - command: curl development domains and inspect extension manifest
+    category: check
+    started_at: 2026-07-20T02:18:20Z
+    finished_at: 2026-07-20T02:18:22Z
+    duration_seconds: 2
+    outcome: passed
+    reason: post_merge_live_verification
+github_actions_runs:
+  - workflow: PR
+    run_id: 29710825725
+    run_attempt: 1
+    head_sha: 33cfa50230f9c5cbd4f5f9e23b61993281fd5522
+    trigger: pull_request
+    started_at: 2026-07-20T01:22:22Z
+    finished_at: 2026-07-20T01:31:26Z
+    duration_seconds: 544
+    conclusion: success
+  - workflow: Main
+    run_id: 29711882526
+    run_attempt: 1
+    head_sha: 35b28c05c7a6193afef61c13af8950c7b99721c1
+    trigger: push
+    started_at: 2026-07-20T02:04:13Z
+    finished_at: 2026-07-20T02:18:11Z
+    duration_seconds: 838
+    conclusion: success
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-20T02:04:10Z
+    method: squash
+    outcome: success
+    reason: readiness_passed_remote_merge_succeeded_local_cleanup_blocked_by_main_worktree
+  - at: 2026-07-20T02:04:20Z
+    method: squash
+    outcome: no_op
+    reason: confirmed_pull_request_was_already_merged
+comparison:
+  baseline_prs: [491, 501]
+  baseline_quality: comparable
+  baseline_note: Both records exercise Rust WASM browser gates; PR 501 is extension-specific, while this feature spans more files and user states than either focused bug fix
+  elapsed_seconds_change_percent: 55.6
+  local_execution_seconds_change_percent: 145.7
+  github_actions_seconds_change_percent: -2.1
+  regression: true
+  regression_reasons:
+    - End-to-end elapsed time was 1404 seconds above the comparable baseline median
+    - Local execution time was 1948.5 seconds above the comparable baseline median
+waste_assessment:
+  wasteful: false
+  findings:
+    - The measured regression is attributable to an 18-file Rust WASM extension feature with empty-vault and saved-code browser states, while both baselines are focused bug fixes
+    - The first task check collided with the parallel PR-equivalent Docker build; the required serial rerun incurred a cold coverage and build cache but passed without a code change
+    - The final browser run followed new empty-vault assertions, and its retries were Playwright-managed responses to the known later passkey page-context closure rather than agent-requested unchanged-head reruns
+    - GitHub PR and Main durations remained 2.1 percent below the comparable baseline median, and Main deployed and verified all isolated development applications
+  required_actions: []
