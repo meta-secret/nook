@@ -31,7 +31,8 @@ pub use manager::{
 };
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
-    NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
+    NookAuthenticationPageObservation, NookAuthenticationWorkflowSnapshot, NookBrowserLocale,
+    NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
     NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
     NookImportResult, NookJoinRequest, NookLoginAccount, NookLoginFillCredential,
     NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup,
@@ -102,6 +103,15 @@ pub fn assess_vault_security(
         sync_provider_count as usize,
         enrolled_device_count as usize,
     ))
+}
+
+#[wasm_bindgen(js_name = authenticationWorkflowSnapshot)]
+#[must_use]
+pub fn authentication_workflow_snapshot(
+    observation: &NookAuthenticationPageObservation,
+) -> Option<NookAuthenticationWorkflowSnapshot> {
+    nook_core::classify_authentication_workflow(observation.to_core())
+        .map(NookAuthenticationWorkflowSnapshot::from_core)
 }
 
 #[wasm_bindgen(js_name = parseAppLocale)]
@@ -1851,6 +1861,19 @@ mod wasm_tests {
             .expect("icloud storage mode"),
             "icloud"
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn authentication_workflow_snapshot_preserves_core_policy() {
+        let observation = NookAuthenticationPageObservation::new(1, 1, 0, 0, 0);
+        let snapshot = authentication_workflow_snapshot(&observation).expect("login workflow");
+
+        assert_eq!(snapshot.kind_name(), "login");
+        assert_eq!(snapshot.stage_name(), "credentials");
+        assert_eq!(snapshot.action_name(), "continue-with-nook");
+        assert_eq!(snapshot.current_step(), 1);
+        assert_eq!(snapshot.total_steps(), 3);
+        assert!(snapshot.requires_human_approval());
     }
 
     #[wasm_bindgen_test]

@@ -135,6 +135,21 @@ type NookLocaleCatalog = {
       dismiss: string
       collapse: string
       expand: string
+      pilot_label: string
+      login_title: string
+      login_description: string
+      signup_title: string
+      signup_description: string
+      password_change_title: string
+      password_change_description: string
+      totp_title: string
+      totp_description: string
+      manual_title: string
+      manual_description: string
+      take_over: string
+      filling_title: string
+      verifying_title: string
+      submitted: string
       gate_step: string
       gate_title: string
       gate_description: string
@@ -164,6 +179,35 @@ async function buildChromeLocales() {
         widgetDismiss: { message: catalog.extension.widget.dismiss },
         widgetCollapse: { message: catalog.extension.widget.collapse },
         widgetExpand: { message: catalog.extension.widget.expand },
+        widgetPilotLabel: { message: catalog.extension.widget.pilot_label },
+        widgetLoginTitle: { message: catalog.extension.widget.login_title },
+        widgetLoginDescription: {
+          message: catalog.extension.widget.login_description,
+        },
+        widgetSignupTitle: { message: catalog.extension.widget.signup_title },
+        widgetSignupDescription: {
+          message: catalog.extension.widget.signup_description,
+        },
+        widgetPasswordChangeTitle: {
+          message: catalog.extension.widget.password_change_title,
+        },
+        widgetPasswordChangeDescription: {
+          message: catalog.extension.widget.password_change_description,
+        },
+        widgetTotpTitle: { message: catalog.extension.widget.totp_title },
+        widgetTotpDescription: {
+          message: catalog.extension.widget.totp_description,
+        },
+        widgetManualTitle: { message: catalog.extension.widget.manual_title },
+        widgetManualDescription: {
+          message: catalog.extension.widget.manual_description,
+        },
+        widgetTakeOver: { message: catalog.extension.widget.take_over },
+        widgetFillingTitle: { message: catalog.extension.widget.filling_title },
+        widgetVerifyingTitle: {
+          message: catalog.extension.widget.verifying_title,
+        },
+        widgetSubmitted: { message: catalog.extension.widget.submitted },
         widgetGateStep: { message: catalog.extension.widget.gate_step },
         widgetGateTitle: { message: catalog.extension.widget.gate_title },
         widgetGateDescription: {

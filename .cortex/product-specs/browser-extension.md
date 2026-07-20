@@ -164,10 +164,40 @@ build's configured Simple origin, so a mismatched channel never shows the
 in-page auth gate on vault apps. The Simple Vault bridge content script remains
 bound to the configured Simple origin only.
 
-## In-Page Auth Gate
+## Nook Pilot Authentication Control Plane
+
+The in-page auth gate is the visible HUD for **Nook Pilot**, an
+extension-owned authentication control plane. Nook Pilot follows the reusable
+workflow shape `Observe -> Understand -> Propose -> Approve -> Act -> Verify ->
+Save`. It reports where the user is in a login, signup, password-change,
+passkey, or second-factor ceremony and offers one safe next action plus manual
+takeover.
+
+The layers have intentionally different responsibilities:
+
+- content scripts are sensors and actuators: they report bounded, non-secret
+  structural observations and perform only the selected DOM action;
+- `nook-core` is the flight computer: it classifies the workflow, stage,
+  progress, allowed next action, and approval requirement;
+- the extension background/offscreen runtime is the control plane: it binds
+  requests to the sender tab/origin and holds the unlocked encrypted session;
+- the widget is the cockpit HUD: it renders safe state and consent, never vault
+  contents or secret material;
+- Simple Vault remains the complete management and recovery surface.
+
+The initial production slice classifies login, signup, password-change, and
+standalone one-time-code structures through Rust/WASM. It performs the existing
+explicit login selection/fill/submit path and shows a verification-wait state
+after submission. Signup generation/commit, password replacement, TOTP fill,
+2FA enrollment, recovery-code capture, and cross-site success-evidence policy
+remain separately tracked flight plans; until each is implemented, Nook Pilot
+identifies the checkpoint and yields to manual control instead of implying
+automation.
+
+### In-Page HUD
 
 When a likely login flow is present, the content script may show a Nook-owned
-auth gate near the top-right of the viewport. The gate follows the same
+auth HUD near the top-right of the viewport. The HUD follows the same
 icon → title → description → primary action pattern as the extension device
 form so every site gets a universal authentication surface instead of forcing
 users through site-specific login chrome.
@@ -177,7 +207,11 @@ The gate must:
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
 - support collapsing to a compact Nook mark and expanding again;
+- preserve current/total progress in the compact state and accessible label;
 - support dismissal without blocking the host page;
+- show the requesting hostname, Rust-classified workflow, current step, and
+  manual takeover without exposing a username, password, TOTP code, setup key,
+  recovery code, or provider credential;
 - offer a primary Continue with Nook action that lists matching logins for the
   page origin, reveals one credential after explicit choice, fills the form,
   and submits; when locked, open the companion launcher and ask the user to

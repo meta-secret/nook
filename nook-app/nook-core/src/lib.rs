@@ -13,7 +13,8 @@ mod sync;
 mod vault;
 
 pub(crate) use auth::{
-    device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
+    authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
+    multi_device, password_envelope,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
@@ -35,6 +36,10 @@ pub(crate) use vault::{
 
 pub use apple_passwords_import::{
     ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_import,
+};
+pub use authentication_workflow::{
+    AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
 };
 pub use authenticator::{
     AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,

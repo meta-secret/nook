@@ -82,13 +82,35 @@ const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
-    if (request.url !== '/login') {
+    if (!['/login', '/signup', '/otp'].includes(request.url ?? '')) {
       response.writeHead(404)
       response.end('Not found')
       return
     }
 
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    if (request.url === '/signup') {
+      response.end(`<!doctype html>
+        <html><body><main><h1>Create account</h1>
+          <form>
+            <input autocomplete="username" name="email" type="email" />
+            <input autocomplete="new-password" name="password" type="password" />
+            <input autocomplete="new-password" name="password-confirm" type="password" />
+            <button type="submit">Create account</button>
+          </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/otp') {
+      response.end(`<!doctype html>
+        <html><body><main><h1>Verify account</h1>
+          <form>
+            <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
+            <button type="submit">Verify</button>
+          </form>
+        </main></body></html>`)
+      return
+    }
     response.end(`<!doctype html>
       <html>
         <head><title>Nook extension e2e login</title></head>
@@ -386,7 +408,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await loginPage.goto(`${loginServer.origin}/login`)
     const widget = loginPage.locator('#nook-auth-widget')
     await expect(widget).toBeVisible()
-    await expect(widget.getByText('Continue through Nook')).toBeVisible()
+    await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
+    await expect(widget.getByText('Ready to sign in')).toBeVisible()
+    await expect(widget.getByText('localhost')).toBeVisible()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
@@ -398,6 +422,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeHidden()
+    await expect(widget.getByText('1/3')).toBeVisible()
+    await expect(
+      widget.getByRole('button', { name: /Expand Nook: Nook Pilot · 1\/3/ }),
+    ).toBeVisible()
     await widget.getByTestId('nook-auth-gate-expand').click()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
@@ -406,6 +434,23 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const openedVault = context.waitForEvent('page')
     await widget.getByRole('button', { name: 'Open vault' }).click()
     await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
+
+    const signupPage = await context.newPage()
+    await signupPage.goto(`${loginServer.origin}/signup`)
+    const signupWidget = signupPage.locator('#nook-auth-widget')
+    await expect(signupWidget.getByText('Nook Pilot · 2/5')).toBeVisible()
+    await expect(signupWidget.getByText('Signup detected')).toBeVisible()
+    await expect(
+      signupWidget.getByRole('button', { name: 'Take over' }),
+    ).toBeVisible()
+
+    const otpPage = await context.newPage()
+    await otpPage.goto(`${loginServer.origin}/otp`)
+    const otpWidget = otpPage.locator('#nook-auth-widget')
+    await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
+    await expect(
+      otpWidget.getByText('Verification code requested'),
+    ).toBeVisible()
 
     const sentinelPage = await context.newPage()
     const sentinelUrl =
@@ -788,6 +833,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         email: 'alice@nook.test',
         password: 'extension-fill-password',
       })
+    await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
+    await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
+    await expect(
+      fillWidget.getByText(
+        'Credentials were submitted. Nook is waiting for the site response.',
+      ),
+    ).toBeVisible()
     await fillLoginPage.close()
 
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()

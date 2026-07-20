@@ -6,6 +6,7 @@ import {
   summarizePasswordForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
+import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
@@ -17,6 +18,7 @@ type WidgetPosition = {
 }
 
 let pendingScan: number | undefined
+let scanSequence = 0
 let widgetHost: HTMLElement | undefined
 let dismissed = false
 let busy = false
@@ -35,6 +37,62 @@ type LoginFillResponse = {
   username?: string
   password?: string
   reason?: string
+}
+
+type WorkflowSnapshotResponse = {
+  ok?: boolean
+  snapshot?: AuthenticationWorkflowSnapshotView
+  reason?: string
+}
+
+type WorkflowCopy = {
+  titleKey: string
+  descriptionKey: string
+}
+
+function workflowCopy(kind: string): WorkflowCopy {
+  switch (kind) {
+    case 'login':
+      return {
+        titleKey: 'widgetLoginTitle',
+        descriptionKey: 'widgetLoginDescription',
+      }
+    case 'signup':
+      return {
+        titleKey: 'widgetSignupTitle',
+        descriptionKey: 'widgetSignupDescription',
+      }
+    case 'password-change':
+      return {
+        titleKey: 'widgetPasswordChangeTitle',
+        descriptionKey: 'widgetPasswordChangeDescription',
+      }
+    case 'totp-challenge':
+      return {
+        titleKey: 'widgetTotpTitle',
+        descriptionKey: 'widgetTotpDescription',
+      }
+    default:
+      return {
+        titleKey: 'widgetManualTitle',
+        descriptionKey: 'widgetManualDescription',
+      }
+  }
+}
+
+function progressLabel(currentStep: number, totalSteps: number): string {
+  return `${translatedMessage('widgetPilotLabel')} · ${currentStep}/${totalSteps}`
+}
+
+function setFlightProgress(
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  currentStep: number,
+  totalSteps: number,
+  titleKey: string,
+): void {
+  step.textContent = progressLabel(currentStep, totalSteps)
+  title.textContent = translatedMessage(titleKey)
 }
 
 function translatedMessage(key: string): string {
@@ -156,6 +214,8 @@ function setStatus(
 
 async function fillAndSubmitAccount(
   account: WebsiteLoginAccountOption,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
 ): Promise<void> {
@@ -168,6 +228,7 @@ async function fillAndSubmitAccount(
     },
   })
   if (!response?.ok || !response.username || response.password === undefined) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,
       continueButton,
@@ -186,6 +247,7 @@ async function fillAndSubmitAccount(
   credentials.password = ''
   credentials.username = ''
   if (!filled) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,
       continueButton,
@@ -194,14 +256,26 @@ async function fillAndSubmitAccount(
     )
     return
   }
-  submitLoginForm()
-  dismissed = true
-  removeWidget()
+  if (!submitLoginForm()) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
+  description.textContent = translatedMessage('widgetSubmitted')
+  continueButton.hidden = true
 }
 
 function renderAccountChooser(
   panel: HTMLElement,
   accounts: WebsiteLoginAccountOption[],
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
   openVaultButton: HTMLButtonElement,
@@ -221,11 +295,15 @@ function renderAccountChooser(
       if (busy) return
       busy = true
       button.disabled = true
-      void fillAndSubmitAccount(account, description, continueButton).finally(
-        () => {
-          busy = false
-        },
-      )
+      void fillAndSubmitAccount(
+        account,
+        step,
+        title,
+        description,
+        continueButton,
+      ).finally(() => {
+        busy = false
+      })
     })
     list.append(button)
   }
@@ -233,6 +311,8 @@ function renderAccountChooser(
 }
 
 async function continueWithNook(
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
   openVaultButton: HTMLButtonElement,
@@ -241,6 +321,7 @@ async function continueWithNook(
   if (busy) return
   busy = true
   continueButton.disabled = true
+  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
   setStatus(
     description,
     continueButton,
@@ -255,6 +336,7 @@ async function continueWithNook(
     })
 
     if (!response?.ok) {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
       setStatus(
         description,
         continueButton,
@@ -265,6 +347,7 @@ async function continueWithNook(
     }
 
     if (response.status === 'locked') {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
       setStatus(
         description,
         continueButton,
@@ -276,6 +359,7 @@ async function continueWithNook(
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
       setStatus(
         description,
         continueButton,
@@ -286,13 +370,21 @@ async function continueWithNook(
     }
 
     if (accounts.length === 1) {
-      await fillAndSubmitAccount(accounts[0], description, continueButton)
+      await fillAndSubmitAccount(
+        accounts[0],
+        step,
+        title,
+        description,
+        continueButton,
+      )
       return
     }
 
     renderAccountChooser(
       panel,
       accounts,
+      step,
+      title,
       description,
       continueButton,
       openVaultButton,
@@ -305,9 +397,8 @@ async function continueWithNook(
   }
 }
 
-function renderWidget(): void {
-  const summary = summarizePasswordForms()
-  if (summary.passwordFieldCount === 0 || dismissed) {
+function renderWidget(snapshot: AuthenticationWorkflowSnapshotView): void {
+  if (dismissed) {
     removeWidget()
     return
   }
@@ -315,7 +406,7 @@ function renderWidget(): void {
 
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
-  host.setAttribute('aria-label', 'Nook')
+  host.setAttribute('aria-label', translatedMessage('widgetPilotLabel'))
   const shadow = host.attachShadow({ mode: 'open' })
 
   const panel = document.createElement('div')
@@ -328,7 +419,7 @@ function renderWidget(): void {
 
   const step = document.createElement('p')
   step.className = 'step-label'
-  step.textContent = translatedMessage('widgetGateStep')
+  step.textContent = progressLabel(snapshot.currentStep, snapshot.totalSteps)
 
   const collapseButton = document.createElement('button')
   collapseButton.type = 'button'
@@ -360,17 +451,30 @@ function renderWidget(): void {
   mark.height = 52
 
   const title = document.createElement('h1')
-  title.textContent = translatedMessage('widgetGateTitle')
+  const copy = workflowCopy(snapshot.kind)
+  title.textContent = translatedMessage(copy.titleKey)
+
+  const site = document.createElement('p')
+  site.className = 'site-context'
+  site.textContent = location.hostname
 
   const description = document.createElement('p')
   description.className = 'description'
-  description.textContent = translatedMessage('widgetGateDescription')
+  description.textContent = translatedMessage(copy.descriptionKey)
 
   const continueButton = document.createElement('button')
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
-  continueButton.setAttribute('aria-label', translatedMessage('widgetContinue'))
-  continueButton.textContent = translatedMessage('widgetContinue')
+  const canContinueWithNook = snapshot.action === 'continue-with-nook'
+  continueButton.setAttribute(
+    'aria-label',
+    translatedMessage(
+      canContinueWithNook ? 'widgetContinue' : 'widgetTakeOver',
+    ),
+  )
+  continueButton.textContent = translatedMessage(
+    canContinueWithNook ? 'widgetContinue' : 'widgetTakeOver',
+  )
 
   const openVaultButton = document.createElement('button')
   openVaultButton.type = 'button'
@@ -385,16 +489,50 @@ function renderWidget(): void {
   })
 
   continueButton.addEventListener('click', () => {
-    void continueWithNook(description, continueButton, openVaultButton, body)
+    if (!canContinueWithNook) {
+      dismissed = true
+      removeWidget()
+      return
+    }
+    void continueWithNook(
+      step,
+      title,
+      description,
+      continueButton,
+      openVaultButton,
+      body,
+    )
   })
 
-  body.append(mark, title, description, continueButton, openVaultButton)
+  const takeOverButton = document.createElement('button')
+  takeOverButton.type = 'button'
+  takeOverButton.className = 'text-button'
+  takeOverButton.textContent = translatedMessage('widgetTakeOver')
+  takeOverButton.hidden = !canContinueWithNook
+  takeOverButton.addEventListener('click', () => {
+    dismissed = true
+    removeWidget()
+  })
+
+  body.append(
+    mark,
+    site,
+    title,
+    description,
+    continueButton,
+    openVaultButton,
+    takeOverButton,
+  )
 
   const collapsedLaunch = document.createElement('button')
   collapsedLaunch.type = 'button'
   collapsedLaunch.className = 'collapsed-launch'
   collapsedLaunch.setAttribute('aria-label', translatedMessage('widgetExpand'))
   collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
+  collapsedLaunch.setAttribute(
+    'aria-label',
+    `${translatedMessage('widgetExpand')}: ${progressLabel(snapshot.currentStep, snapshot.totalSteps)}`,
+  )
 
   const collapsedMark = document.createElement('img')
   collapsedMark.className = 'collapsed-mark'
@@ -402,7 +540,10 @@ function renderWidget(): void {
   collapsedMark.alt = ''
   collapsedMark.width = 40
   collapsedMark.height = 40
-  collapsedLaunch.append(collapsedMark)
+  const collapsedProgress = document.createElement('span')
+  collapsedProgress.className = 'collapsed-progress'
+  collapsedProgress.textContent = `${snapshot.currentStep}/${snapshot.totalSteps}`
+  collapsedLaunch.append(collapsedMark, collapsedProgress)
 
   const applyCollapsedState = (): void => {
     panel.classList.toggle('is-collapsed', widgetCollapsed)
@@ -506,6 +647,18 @@ function renderWidget(): void {
       display: grid;
       gap: 12px;
     }
+    .site-context {
+      width: fit-content;
+      max-width: 100%;
+      margin: -4px auto 0;
+      overflow: hidden;
+      color: oklch(0.82 0.01 286);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .mark {
       display: block;
       width: 52px;
@@ -516,6 +669,7 @@ function renderWidget(): void {
     }
     .collapsed-launch {
       appearance: none;
+      position: relative;
       display: grid;
       place-items: center;
       width: 56px;
@@ -537,6 +691,19 @@ function renderWidget(): void {
       height: 40px;
       border-radius: 10px;
       object-fit: contain;
+      pointer-events: none;
+    }
+    .collapsed-progress {
+      position: absolute;
+      right: -4px;
+      bottom: -4px;
+      min-width: 24px;
+      padding: 3px 5px;
+      border: 1px solid rgb(255 255 255 / 18%);
+      border-radius: 999px;
+      background: oklch(0.274 0.006 286.033);
+      color: oklch(0.985 0 0);
+      font: 700 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
       pointer-events: none;
     }
     h1 {
@@ -587,6 +754,18 @@ function renderWidget(): void {
     .secondary-button:hover:not(:disabled) {
       background: oklch(0.274 0.006 286.033);
     }
+    .text-button {
+      appearance: none;
+      width: fit-content;
+      margin: -4px auto 0;
+      padding: 4px 8px;
+      border: 0;
+      background: transparent;
+      color: oklch(0.705 0.015 286.067);
+      cursor: pointer;
+      font: 650 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    .text-button:hover { color: oklch(0.985 0 0); }
     button:focus-visible {
       outline: 2px solid rgb(180 186 198 / 45%);
       outline-offset: 2px;
@@ -611,6 +790,44 @@ function renderWidget(): void {
   }
 }
 
+async function scanAndRender(): Promise<void> {
+  const sequence = ++scanSequence
+  const summary = summarizePasswordForms()
+  if (
+    summary.usernameFieldCount === 0 &&
+    summary.passwordFieldCount === 0 &&
+    summary.oneTimeCodeFieldCount === 0
+  ) {
+    removeWidget()
+    return
+  }
+
+  const boundedCount = (count: number) => Math.min(count, 100)
+  const response = await sendRuntimeMessage<WorkflowSnapshotResponse>({
+    type: 'nook:authentication-workflow-snapshot',
+    payload: {
+      origin: location.origin,
+      observation: {
+        usernameFieldCount: boundedCount(summary.usernameFieldCount),
+        currentPasswordFieldCount: boundedCount(
+          summary.currentPasswordFieldCount,
+        ),
+        newPasswordFieldCount: boundedCount(summary.newPasswordFieldCount),
+        genericPasswordFieldCount: boundedCount(
+          summary.genericPasswordFieldCount,
+        ),
+        oneTimeCodeFieldCount: boundedCount(summary.oneTimeCodeFieldCount),
+      },
+    },
+  })
+  if (sequence !== scanSequence) return
+  if (!response?.ok || !response.snapshot) {
+    removeWidget()
+    return
+  }
+  renderWidget(response.snapshot)
+}
+
 function scheduleScan() {
   if (pendingScan !== undefined) {
     window.clearTimeout(pendingScan)
@@ -618,15 +835,17 @@ function scheduleScan() {
 
   pendingScan = window.setTimeout(() => {
     pendingScan = undefined
-    renderWidget()
+    void scanAndRender()
   }, 150)
 }
 
 if (!isRuntimeNookVaultAppUrl(location.href)) {
-  renderWidget()
+  void scanAndRender()
 
   const observer = new MutationObserver(scheduleScan)
   observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['autocomplete', 'disabled', 'id', 'name', 'type'],
     childList: true,
     subtree: true,
   })

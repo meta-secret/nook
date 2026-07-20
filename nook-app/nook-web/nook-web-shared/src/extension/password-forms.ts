@@ -1,6 +1,10 @@
 export type PasswordFormSummary = {
   passwordFieldCount: number
+  currentPasswordFieldCount: number
+  newPasswordFieldCount: number
+  genericPasswordFieldCount: number
   usernameFieldCount: number
+  oneTimeCodeFieldCount: number
   formCount: number
   observedAt: number
 }
@@ -47,14 +51,40 @@ export function findUsernameFields(
   ).filter((field) => !field.disabled)
 }
 
+export function findOneTimeCodeFields(
+  root: ParentNode = document,
+): HTMLInputElement[] {
+  const selectors = [
+    'input[autocomplete~="one-time-code" i]',
+    'input[name*="otp" i]',
+    'input[id*="otp" i]',
+    'input[name*="verification-code" i]',
+    'input[id*="verification-code" i]',
+  ]
+  return Array.from(
+    root.querySelectorAll<HTMLInputElement>(selectors.join(',')),
+  ).filter((field) => !field.disabled)
+}
+
 export function summarizePasswordForms(
   root: ParentNode = document,
 ): PasswordFormSummary {
   const passwordFields = findPasswordFields(root)
   const usernameFields = findUsernameFields(root)
+  const oneTimeCodeFields = findOneTimeCodeFields(root)
+  const currentPasswordFieldCount = passwordFields.filter(
+    (field) => field.autocomplete.toLowerCase() === 'current-password',
+  ).length
+  const newPasswordFieldCount = passwordFields.filter(
+    (field) => field.autocomplete.toLowerCase() === 'new-password',
+  ).length
   const forms = new Set<HTMLFormElement>()
 
-  for (const field of [...passwordFields, ...usernameFields]) {
+  for (const field of [
+    ...passwordFields,
+    ...usernameFields,
+    ...oneTimeCodeFields,
+  ]) {
     if (field.form) {
       forms.add(field.form)
     }
@@ -62,7 +92,14 @@ export function summarizePasswordForms(
 
   return {
     passwordFieldCount: passwordFields.length,
+    currentPasswordFieldCount,
+    newPasswordFieldCount,
+    genericPasswordFieldCount:
+      passwordFields.length -
+      currentPasswordFieldCount -
+      newPasswordFieldCount,
     usernameFieldCount: usernameFields.length,
+    oneTimeCodeFieldCount: oneTimeCodeFields.length,
     formCount: forms.size,
     observedAt: Date.now(),
   }

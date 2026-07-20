@@ -202,7 +202,7 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
 | `nook-vault-simple` | Independent Svelte 5 Simple Vault application and artifact |
 | `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application and artifact |
 | `nook-web-app` | Public site and unified local e2e harness |
-| `nook-web-extension` | Simple-only Manifest V3 companion: optional vault open, website consent, and universal in-page auth gate |
+| `nook-web-extension` | Simple-only Manifest V3 companion with Nook Pilot: a minimal, Rust-policy-backed authentication HUD for website login progress, explicit credential fill, and manual takeover |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
 
 Deeper documentation lives in [`.cortex/`](.cortex/):

@@ -1,9 +1,12 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import initNookWasm, {
+  authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
   configureVaultApplication,
+  NookAuthenticationPageObservation,
   NookExternalEventLogRecords,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
 let initPromise: Promise<unknown> | undefined
@@ -16,6 +19,41 @@ function ensureExtensionWasm(): Promise<unknown> {
     return value
   })
   return initPromise
+}
+
+export async function authenticationWorkflowSnapshot(observation: {
+  usernameFieldCount: number
+  currentPasswordFieldCount: number
+  newPasswordFieldCount: number
+  genericPasswordFieldCount: number
+  oneTimeCodeFieldCount: number
+}): Promise<AuthenticationWorkflowSnapshotView | undefined> {
+  await ensureExtensionWasm()
+  const input = new NookAuthenticationPageObservation(
+    observation.usernameFieldCount,
+    observation.currentPasswordFieldCount,
+    observation.newPasswordFieldCount,
+    observation.genericPasswordFieldCount,
+    observation.oneTimeCodeFieldCount,
+  )
+  try {
+    const snapshot = wasmAuthenticationWorkflowSnapshot(input) ?? undefined
+    if (!snapshot) return undefined
+    try {
+      return {
+        kind: snapshot.kindName,
+        stage: snapshot.stageName,
+        action: snapshot.actionName,
+        currentStep: snapshot.currentStep,
+        totalSteps: snapshot.totalSteps,
+        requiresHumanApproval: snapshot.requiresHumanApproval,
+      }
+    } finally {
+      snapshot.free()
+    }
+  } finally {
+    input.free()
+  }
 }
 
 function isImportedEventLogState(

@@ -5,8 +5,10 @@ toolbar popup shows the standard device-protection widget and creates or
 unlocks the extension's separately revocable identity. It then sends the public
 device request directly to the configured Simple Vault deployment, which owns
 the complete vault interface. The extension contains browser-only behavior:
-device protection, the in-page Nook widget, autofill DOM integration, and
-background coordination.
+device protection, the in-page **Nook Pilot** authentication HUD, minimal DOM
+observation/fill integration, and background coordination. The HUD reports the
+current Rust-classified authentication workflow, progress, site context, next
+approved action, and manual takeover without becoming a second vault interface.
 
 For ordinary websites, the extension also provides explicit passkey save and
 use prompts. It intercepts non-conditional WebAuthn create/get calls, asks the
