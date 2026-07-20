@@ -201,6 +201,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, commit and push/open/update the PR before required final checks, run local validation while Nook's applicable PR test checks run, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically when ready. Do not stop at a ready-PR handoff or ask for separate merge permission.
+- **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery. Do not wait for or monitor the post-merge Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure. Main remains an independently observable repository signal, not a task completion gate.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open and land a pull request.** After pushing a branch, create a PR with a summary and test plan, own it through validation and conflict/comment resolution, then squash-merge it after the readiness audit succeeds. Never push directly to `main`.
 - **Squash merge when closing a PR.** When merging (yourself or via `gh`), use **Squash and merge** only:
@@ -213,7 +214,8 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
   completed YAML in a separate stats-only PR, compare against recent comparable
   PRs, and own and land a normal performance-fix PR for actionable regression
-  or waste before completing the task.
+  or waste. Publish the stats record immediately after merge without waiting
+  for post-merge Main workflows or deployments.
   A verified one-file `.stats/ai-agent/<source-pr>.yaml` PR is the only exception
   to local checks, repository checks, exact-head review, and `task pr:ready`; it
   must still use squash merge and must be merged immediately without generating

@@ -102,6 +102,20 @@ Run the basic Chromium extension smoke with:
 task extension:test:e2e
 ```
 
+To test the exact extension ZIP deployed by development or a PR, run the
+disposable hosted smoke. It verifies the hosted metadata, checksum, archive,
+manifest identity, and channel origins before launching Chromium. The smoke
+uses a fresh browser profile to create and pair a local `test-vault`, adds a
+login, fills a controlled login page, and verifies unlock after a browser
+restart. The profile and vault state are removed when the command exits:
+
+```bash
+task extension:smoke:hosted CHANNEL=dev
+task extension:smoke:hosted PR=410
+```
+
+Production is intentionally rejected because the smoke creates vault data.
+
 Chrome and Brave do not support silently installing an unsigned extension into
 a normal browser profile. The launch tasks therefore use stable, isolated Nook
 profiles. Brave and Chrome for Testing receive the verified directory through

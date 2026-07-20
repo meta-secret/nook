@@ -313,7 +313,15 @@ pr:ready` succeeds:
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full local-provider and extension **e2e**. Main failures remain visible for manual handling and never start an AI agent automatically. Nightly covers sync-live and retains its `ci-fix` worker, which opens a repair PR; any task-owning agent that continues that PR follows the same readiness-and-squash-merge contract.
+The successful squash merge completes implementation delivery. Do not wait for,
+monitor, or live-verify the resulting Main run unless the user explicitly
+requested deployment/live verification or assigned a Main failure.
+
+After merge, `main.yml` independently runs full local-provider and extension
+**e2e**. Main failures remain visible for manual handling and never start an AI
+agent automatically. Nightly covers sync-live and retains its `ci-fix` worker,
+which opens a repair PR; any task-owning agent that continues that PR follows
+the same readiness-and-squash-merge contract.
 
 ### 9. Post-merge statistics and analysis
 
@@ -326,7 +334,9 @@ compare with one or two recent comparable records, and assess waste.
 Publish exactly that one YAML file in a stats-only PR and squash-merge it
 immediately. Product checks, review, deployments, and `task pr:ready` are skipped
 only for this verified one-file PR; the product pipelines ignore `.stats/**`.
-The stats-only PR does not generate another record. If the comparison identifies
+Do not wait for post-merge Main before creating it, and do not include a Main
+run merely because the implementation PR triggered one. The stats-only PR does
+not generate another record. If the comparison identifies
 actionable performance regression or workflow waste, create a separate normal
 build-performance PR and take it through the full pipeline.
 
@@ -334,7 +344,7 @@ build-performance PR and take it through the full pipeline.
 
 Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
 
-**When to report:** After the task is done — merged PR, delivered answer, or explicit handoff. Do not omit this on multi-step work that spans monitor/fix/merge cycles; report once at the very end.
+**When to report:** After the task is done — merged implementation PR, delivered answer, or explicit handoff. Do not wait for a post-merge Main run unless deployment/live verification was explicitly requested. Do not omit this on multi-step work that spans monitor/fix/merge cycles; report once at the very end.
 
 **What to measure:** Wall-clock time from when you **started working on the user's request** (first implementation step or investigation for that assignment) until you send the final message. Include CI wait time if you monitored checks as part of the task.
 

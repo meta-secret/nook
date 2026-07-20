@@ -14,7 +14,8 @@ free-form task diary.
    not only successful work.
 3. Squash-merge the implementation PR through the normal readiness workflow.
 4. Create `.stats/ai-agent/<pr-number>.yaml` from current `main` after the
-   implementation PR is merged.
+   implementation PR is merged. Do this immediately; do not wait for the
+   post-merge Main workflow or deployment.
 5. Compare the completed record with the one or two most recent comparable
    non-stats PR records. Record the comparison and a waste assessment in the
    YAML. When fewer records exist, compare all available records and state that
@@ -40,7 +41,8 @@ including time spent waiting for CI or review when the agent owns that wait.
   double-count it.
 - **GitHub Actions:** every repository-owned workflow run applicable to the PR,
   including run id, run attempt, head SHA, trigger, timestamps, duration, and
-  conclusion.
+  conclusion. The post-merge Main run is outside the implementation PR lifecycle
+  and must not be awaited or included merely because the merge triggered it.
 - **PR retriggers:** count every new repository-owned validation cycle after
   the first. Distinguish `head_push`, `manual_rerun`, `base_update`, and
   `reopen`. A GitHub `run_attempt` greater than one is a manual rerun; a new run
@@ -50,6 +52,10 @@ including time spent waiting for CI or review when the agent owns that wait.
 - **PR elapsed time:** from the first agent investigation/implementation action
   for the assignment through the implementation PR's `mergedAt`. Also record
   PR-open-to-merge time separately.
+
+The implementation PR's `mergedAt` is the terminal measurement boundary. Only
+record later deployment or live-verification work when the user explicitly made
+that work part of the assignment; do not extend ordinary task ownership to Main.
 
 Never record secrets, credentials, environment values, vault data, raw logs, or
 prompt/chat contents. Commands must be redacted if an argument contains secret
