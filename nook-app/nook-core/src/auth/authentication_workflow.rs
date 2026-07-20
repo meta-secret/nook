@@ -246,7 +246,10 @@ mod tests {
         };
         let signup = classify_authentication_workflow(signup).unwrap();
         assert_eq!(signup.kind, AuthenticationWorkflowKind::Signup);
-        assert_eq!(signup.action, AuthenticationWorkflowAction::GeneratePassword);
+        assert_eq!(
+            signup.action,
+            AuthenticationWorkflowAction::GeneratePassword
+        );
         assert_eq!((signup.current_step, signup.total_steps), (2, 5));
 
         let password_change = AuthenticationPageObservation {
@@ -259,7 +262,10 @@ mod tests {
             password_change.kind,
             AuthenticationWorkflowKind::PasswordChange
         );
-        assert_eq!((password_change.current_step, password_change.total_steps), (2, 4));
+        assert_eq!(
+            (password_change.current_step, password_change.total_steps),
+            (2, 4)
+        );
     }
 
     #[test]
