@@ -4,7 +4,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
-const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const extensionRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+)
 const appModules = path.join(extensionRoot, 'node_modules')
 const playwrightPath = [
   path.join(appModules, 'playwright'),
@@ -31,7 +34,8 @@ const cdpUrl = process.env.NOOK_EXTENSION_SETUP_CDP_URL
 const extensionId = process.env.NOOK_EXTENSION_SETUP_EXTENSION_ID
 const simpleVaultUrl = process.env.NOOK_SIMPLE_VAULT_URL
 const pin = process.env.NOOK_EXTENSION_SETUP_PIN || '123456'
-const vaultName = process.env.NOOK_EXTENSION_SETUP_VAULT_NAME || 'dev-setup-vault'
+const vaultName =
+  process.env.NOOK_EXTENSION_SETUP_VAULT_NAME || 'dev-setup-vault'
 
 if (!cdpUrl || !extensionId || !simpleVaultUrl) {
   throw new Error(
@@ -113,7 +117,9 @@ async function ensurePinProtectedPopup(popupPage) {
 }
 
 async function createAndApproveVault(context, popupPage) {
-  const openedConnectPage = context.waitForEvent('page', { timeout: TIMEOUT_MS })
+  const openedConnectPage = context.waitForEvent('page', {
+    timeout: TIMEOUT_MS,
+  })
   await popupPage.getByTestId('connect-simple-vault-btn').click()
   const simplePage = await openedConnectPage
   if (!belongsToSimpleVault(simpleVaultUrl, simplePage.url())) {
