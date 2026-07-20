@@ -32,6 +32,7 @@
     "test:e2e:sync-live": "playwright test --project=sync-live",
     "test:e2e:github": "playwright test --project=sync-live",
     "test:e2e:multi-device": "PLAYWRIGHT_WORKERS=4 playwright test --project=unstable e2e/multi-device-sync.spec.ts",
+    "test:ui-demo": "NOOK_UI_DEMO=1 PLAYWRIGHT_WORKERS=1 playwright test --project=ui-demo",
     "test:e2e:cleanup": "bun e2e/cleanup-github-repos.ts",
     "test:all": "vitest run && playwright test"
   },
