@@ -204,6 +204,10 @@ function mockOctokit(options: MockOptions = {}): Octokit {
     listComments: async () => ({
       data: [
         { body: "### Preview deployed\n\nhttps://preview.test" },
+        {
+          body: "<!-- nook-ui-demo -->\n### UI demo\n\n- Result: **success**",
+          user: { login: "github-actions[bot]" },
+        },
         ...(options.codexReview === "clean-comment" ||
         options.codexReview === "impostor-clean-comment" ||
         options.codexReview === "stale-clean-comment"

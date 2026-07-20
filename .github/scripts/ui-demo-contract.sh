@@ -30,8 +30,7 @@ while IFS= read -r -d '' file; do
     nook-app/nook-web/nook-web-app/src/*|\
     nook-app/nook-web/nook-web-app/public/*|\
     nook-app/nook-web/nook-web-app/static/*|\
-    nook-app/nook-web/nook-web-shared/src/components/*|\
-    nook-app/nook-web/nook-web-shared/src/vault-app/*|\
+    nook-app/nook-web/nook-web-shared/src/*|\
     nook-app/nook-web/nook-vault-simple/src/*|\
     nook-app/nook-web/nook-vault-sentinel/src/*|\
     nook-app/nook-web/nook-web-extension/src/content/*|\
