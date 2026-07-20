@@ -10,6 +10,12 @@ observation/fill integration, and background coordination. The HUD reports the
 current Rust-classified authentication workflow, progress, site context, next
 approved action, and manual takeover without becoming a second vault interface.
 
+On OTP challenges, the same widget detects standard one-time-code fields. It
+asks the unlocked Rust/WASM session for safe authenticator labels, requires the
+user to choose one, and fills the freshly derived code without persisting or
+logging it. If the vault has none, the widget says so and offers to open Simple
+Vault to add 2FA.
+
 For ordinary websites, the extension also provides explicit passkey save and
 use prompts. It intercepts non-conditional WebAuthn create/get calls, asks the
 user to choose a granted Simple Vault/account, and delegates validation,

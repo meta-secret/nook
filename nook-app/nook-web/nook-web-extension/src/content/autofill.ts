@@ -2,11 +2,15 @@ export {}
 
 import {
   fillLoginCredentials,
+  fillOneTimeCode,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
-import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
+import type {
+  WebsiteAuthenticatorOption,
+  WebsiteLoginAccountOption,
+} from '../lib/login-fill-messages'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
@@ -95,6 +99,17 @@ function setFlightProgress(
 ): void {
   step.textContent = progressLabel(currentStep, totalSteps)
   title.textContent = translatedMessage(titleKey)
+}
+
+type AuthenticatorOptionsResponse = {
+  ok?: boolean
+  status?: 'ready' | 'locked' | 'unavailable'
+  accounts?: WebsiteAuthenticatorOption[]
+}
+
+type AuthenticatorFillResponse = {
+  ok?: boolean
+  code?: string
 }
 
 function translatedMessage(key: string): string {
@@ -415,6 +430,184 @@ async function continueWithNook(
   }
 }
 
+async function fillAuthenticatorCode(
+  account: WebsiteAuthenticatorOption,
+  workflowRoot: ParentNode,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<boolean> {
+  const response = await sendRuntimeMessage<AuthenticatorFillResponse>({
+    type: 'nook:website-authenticator-fill',
+    payload: {
+      origin: location.origin,
+      vaultStoreId: account.vaultStoreId,
+      secretId: account.secretId,
+    },
+  })
+  if (!response?.ok || !response.code) {
+    setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorFillFailed'),
+      true,
+    )
+    return false
+  }
+  let code = response.code
+  response.code = ''
+  const filled = fillOneTimeCode(code, workflowRoot)
+  code = ''
+  if (!filled) {
+    setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorFillFailed'),
+      true,
+    )
+    return false
+  }
+  setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
+  description.textContent = translatedMessage('widgetSubmitted')
+  continueButton.hidden = true
+  return true
+}
+
+function renderAuthenticatorChooser(
+  panel: HTMLElement,
+  accounts: WebsiteAuthenticatorOption[],
+  workflowRoot: ParentNode,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+): void {
+  continueButton.hidden = true
+  openVaultButton.hidden = true
+  description.textContent = translatedMessage('widgetChooseAuthenticator')
+
+  const list = document.createElement('div')
+  list.className = 'account-list'
+  for (const account of accounts) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'secondary-button account-button'
+    button.textContent = account.account
+      ? `${account.issuer} — ${account.account}`
+      : account.issuer
+    button.addEventListener('click', () => {
+      if (busy) return
+      busy = true
+      button.disabled = true
+      void fillAuthenticatorCode(
+        account,
+        workflowRoot,
+        step,
+        title,
+        description,
+        continueButton,
+      )
+        .then((filled) => {
+          if (filled) {
+            list.remove()
+          } else {
+            button.disabled = false
+          }
+        })
+        .finally(() => {
+          busy = false
+        })
+    })
+    list.append(button)
+  }
+  panel.append(list)
+}
+
+async function continueWithAuthenticator(
+  workflowRoot: ParentNode,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+  panel: HTMLElement,
+): Promise<void> {
+  if (busy) return
+  busy = true
+  continueButton.disabled = true
+  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetAuthenticatorWorking'),
+    false,
+  )
+
+  try {
+    const response = await sendRuntimeMessage<AuthenticatorOptionsResponse>({
+      type: 'nook:website-authenticator-options',
+      payload: { origin: location.origin },
+    })
+    if (!response?.ok) {
+      setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetAuthenticatorFillFailed'),
+        true,
+      )
+      return
+    }
+    if (response.status === 'locked') {
+      setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetAuthenticatorUnlock'),
+        true,
+      )
+      return
+    }
+
+    const accounts = response.accounts ?? []
+    if (accounts.length === 0) {
+      setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetNoAuthenticator'),
+        false,
+      )
+      continueButton.hidden = true
+      openVaultButton.textContent = translatedMessage('widgetAddAuthenticator')
+      openVaultButton.setAttribute(
+        'aria-label',
+        translatedMessage('widgetAddAuthenticator'),
+      )
+      return
+    }
+    renderAuthenticatorChooser(
+      panel,
+      accounts,
+      workflowRoot,
+      step,
+      title,
+      description,
+      continueButton,
+      openVaultButton,
+    )
+  } finally {
+    busy = false
+    if (continueButton.isConnected && !continueButton.hidden) {
+      continueButton.disabled = false
+    }
+  }
+}
+
 function renderWidget(
   snapshot: AuthenticationWorkflowSnapshotView,
   workflowRoot: ParentNode,
@@ -495,16 +688,19 @@ function renderWidget(
   const continueButton = document.createElement('button')
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
-  const canContinueWithNook = snapshot.action === 'continue-with-nook'
+  const canContinueWithNook =
+    snapshot.action === 'continue-with-nook' || snapshot.action === 'fill-totp'
+  const continueMessageKey =
+    snapshot.action === 'fill-totp'
+      ? 'widgetFillAuthenticator'
+      : canContinueWithNook
+        ? 'widgetContinue'
+        : 'widgetTakeOver'
   continueButton.setAttribute(
     'aria-label',
-    translatedMessage(
-      canContinueWithNook ? 'widgetContinue' : 'widgetTakeOver',
-    ),
+    translatedMessage(continueMessageKey),
   )
-  continueButton.textContent = translatedMessage(
-    canContinueWithNook ? 'widgetContinue' : 'widgetTakeOver',
-  )
+  continueButton.textContent = translatedMessage(continueMessageKey)
 
   const openVaultButton = document.createElement('button')
   openVaultButton.type = 'button'
@@ -524,15 +720,27 @@ function renderWidget(
       removeWidget()
       return
     }
-    void continueWithNook(
-      step,
-      title,
-      description,
-      continueButton,
-      openVaultButton,
-      body,
-      workflowRoot,
-    )
+    if (snapshot.action === 'fill-totp') {
+      void continueWithAuthenticator(
+        workflowRoot,
+        step,
+        title,
+        description,
+        continueButton,
+        openVaultButton,
+        body,
+      )
+    } else {
+      void continueWithNook(
+        step,
+        title,
+        description,
+        continueButton,
+        openVaultButton,
+        body,
+        workflowRoot,
+      )
+    }
   })
 
   const takeOverButton = document.createElement('button')

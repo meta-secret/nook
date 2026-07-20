@@ -36,8 +36,20 @@ Add RFC 6238 TOTP authenticators as a first-class secure-item type.
 - No authenticator shared secret, recovery code, or generated TOTP value may be
   logged.
 
-## Future
+## Browser extension use
 
-Browser-extension matching and login-time OTP autofill remain tracked in
-GitHub issue #239. Origin matching must not make standalone authenticators
-website-only.
+- The content script recognizes standard `autocomplete="one-time-code"` fields
+  and conservative OTP/TOTP/2FA/MFA name/id conventions.
+- A user action asks the unlocked extension session for safe authenticator
+  metadata. Because standalone authenticator records do not carry a trusted
+  website association, Nook always requires the user to choose the displayed
+  service/account before deriving and releasing a code.
+- Rust/WASM decrypts the selected item and derives the current code only after
+  that choice. The short-lived value crosses only the local extension fill
+  path, is cleared from the response object, and is never persisted or logged.
+- When the vault has no authenticator items, the widget says that no 2FA code is
+  saved and offers to open Simple Vault to add one.
+
+QR enrollment and service-provided backup-code capture require a separate,
+explicit settings-page consent and confirmation flow. They must never run as
+silent page scraping.

@@ -654,6 +654,43 @@ impl Drop for NookLoginFillCredential {
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookAuthenticatorAccount {
+    secret_id: String,
+    issuer: String,
+    account: String,
+}
+
+#[wasm_bindgen]
+impl NookAuthenticatorAccount {
+    pub(crate) fn from_authenticator(
+        id: &nook_core::SecretId,
+        authenticator: &nook_core::AuthenticatorSecret,
+    ) -> Self {
+        Self {
+            secret_id: id.to_string(),
+            issuer: authenticator.issuer.clone(),
+            account: authenticator.account.clone(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = secretId)]
+    pub fn secret_id(&self) -> String {
+        self.secret_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn issuer(&self) -> String {
+        self.issuer.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn account(&self) -> String {
+        self.account.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookPasskeyAccount {
     credential_id: String,
     user_name: String,
@@ -2174,6 +2211,13 @@ impl NookTotpCode {
             seconds_remaining: u32::try_from(value.seconds_remaining).unwrap_or(u32::MAX),
             period: u32::try_from(value.period).unwrap_or(u32::MAX),
         }
+    }
+}
+
+impl Drop for NookTotpCode {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.code.zeroize();
     }
 }
 

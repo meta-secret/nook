@@ -159,6 +159,16 @@ type NookLocaleCatalog = {
       no_match: string
       choose_account: string
       fill_failed: string
+      authenticator_step: string
+      authenticator_title: string
+      authenticator_description: string
+      fill_authenticator: string
+      authenticator_working: string
+      authenticator_unlock: string
+      no_authenticator: string
+      add_authenticator: string
+      choose_authenticator: string
+      authenticator_fill_failed: string
     }
     passkey: {
       save_title: string
@@ -223,6 +233,36 @@ async function buildChromeLocales() {
           message: catalog.extension.widget.choose_account,
         },
         widgetFillFailed: { message: catalog.extension.widget.fill_failed },
+        widgetAuthenticatorStep: {
+          message: catalog.extension.widget.authenticator_step,
+        },
+        widgetAuthenticatorTitle: {
+          message: catalog.extension.widget.authenticator_title,
+        },
+        widgetAuthenticatorDescription: {
+          message: catalog.extension.widget.authenticator_description,
+        },
+        widgetFillAuthenticator: {
+          message: catalog.extension.widget.fill_authenticator,
+        },
+        widgetAuthenticatorWorking: {
+          message: catalog.extension.widget.authenticator_working,
+        },
+        widgetAuthenticatorUnlock: {
+          message: catalog.extension.widget.authenticator_unlock,
+        },
+        widgetNoAuthenticator: {
+          message: catalog.extension.widget.no_authenticator,
+        },
+        widgetAddAuthenticator: {
+          message: catalog.extension.widget.add_authenticator,
+        },
+        widgetChooseAuthenticator: {
+          message: catalog.extension.widget.choose_authenticator,
+        },
+        widgetAuthenticatorFillFailed: {
+          message: catalog.extension.widget.authenticator_fill_failed,
+        },
         passkeySaveTitle: { message: catalog.extension.passkey.save_title },
         passkeyUseTitle: { message: catalog.extension.passkey.use_title },
         passkeyUseBrowser: { message: catalog.extension.passkey.use_browser },

@@ -19,8 +19,8 @@ pub(crate) use auth::{
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, bip39, bitwarden_import, chrome_passwords_import,
-    lastpass_import, onepassword_import, passkey_authenticator, password, proton_pass_import,
-    secret_fingerprint, secret_types, secret_view, session,
+    google_authenticator_import, lastpass_import, onepassword_import, passkey_authenticator,
+    password, proton_pass_import, secret_fingerprint, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -90,6 +90,9 @@ pub use errors::{
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, open_extension_identity_handoff,
     seal_extension_identity_handoff,
+};
+pub use google_authenticator_import::{
+    GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan, plan_google_authenticator_import,
 };
 pub use i18n::{
     get_translation_catalog, lookup_translation, merge_translation_catalogs, parse_app_locale,
