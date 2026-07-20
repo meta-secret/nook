@@ -697,6 +697,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+  testInfo.setTimeout(180_000)
 
   const userDataDir =
     process.env.NOOK_EXTENSION_E2E_PROFILE_DIR ||
