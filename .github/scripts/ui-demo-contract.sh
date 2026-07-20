@@ -17,6 +17,7 @@ git diff --name-only -z "$base_sha" HEAD > "$changed_list"
 while IFS= read -r -d '' file; do
   case "$file" in
     nook-app/nook-web/nook-web-app/e2e/demos/*.demo.spec.ts)
+      [[ -f "$file" ]] || continue
       [[ "$file" =~ ^[A-Za-z0-9_./-]+$ ]] || {
         echo "ui-demo-contract: unsupported demo filename: $file" >&2
         exit 2
@@ -27,7 +28,9 @@ while IFS= read -r -d '' file; do
 
   case "$file" in
     nook-app/nook-web/nook-web-app/src/*|\
+    nook-app/nook-web/nook-web-app/public/*|\
     nook-app/nook-web/nook-web-app/static/*|\
+    nook-app/nook-web/nook-web-shared/src/components/*|\
     nook-app/nook-web/nook-web-shared/src/vault-app/*|\
     nook-app/nook-web/nook-vault-simple/src/*|\
     nook-app/nook-web/nook-vault-sentinel/src/*|\

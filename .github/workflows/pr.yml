@@ -113,9 +113,19 @@ jobs:
           task ci:pr:ui-demo \
             CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined \
             UI_DEMO_OUTPUT_DIR=${{ runner.temp }}/nook-ui-demo \
-            UI_DEMO_SPECS="${{ steps.ui-demo-contract.outputs.specs }}"
+            UI_DEMO_SPECS="${{ steps.ui-demo-contract.outputs.specs }}" \
+            VITE_BASE=/ \
+            VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
+            VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
+            VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
+            VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
+            WASM_BUILD_MODE=dev
         env:
           CI: true
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
       - name: Upload UI demo video
         if: always() && steps.ui-demo-contract.outputs.required == 'true'

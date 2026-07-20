@@ -20,12 +20,12 @@ git -C "$fixture" commit -qm docs
 output="$(cd "$fixture" && "$contract" "$base_sha")"
 grep -Fq 'required=false' <<< "$output"
 
-mkdir -p "$fixture/nook-app/nook-web/nook-web-app/src"
-printf '<main />\n' > "$fixture/nook-app/nook-web/nook-web-app/src/App.svelte"
+mkdir -p "$fixture/nook-app/nook-web/nook-web-app/public"
+printf '<svg />\n' > "$fixture/nook-app/nook-web/nook-web-app/public/logo.svg"
 git -C "$fixture" add .
-git -C "$fixture" commit -qm ui-without-demo
+git -C "$fixture" commit -qm public-ui-without-demo
 if (cd "$fixture" && "$contract" "$base_sha" >/dev/null 2>&1); then
-  echo 'ui-demo-contract test: UI change without a demo unexpectedly passed' >&2
+  echo 'ui-demo-contract test: public UI change without a demo unexpectedly passed' >&2
   exit 1
 fi
 
@@ -37,5 +37,15 @@ git -C "$fixture" commit -qm ui-with-demo
 output="$(cd "$fixture" && "$contract" "$base_sha")"
 grep -Fq 'required=true' <<< "$output"
 grep -Fq "specs=$demo" <<< "$output"
+
+git -C "$fixture" rm -q "$demo"
+mkdir -p "$fixture/nook-app/nook-web/nook-web-shared/src/components"
+printf '<svg />\n' > "$fixture/nook-app/nook-web/nook-web-shared/src/components/Logo.svelte"
+git -C "$fixture" add .
+git -C "$fixture" commit -qm shared-ui-with-deleted-demo
+if (cd "$fixture" && "$contract" "$base_sha" >/dev/null 2>&1); then
+  echo 'ui-demo-contract test: shared UI change with only a deleted demo unexpectedly passed' >&2
+  exit 1
+fi
 
 echo 'ui-demo-contract test: ok'
