@@ -9,3 +9,4 @@ src/lib/nook-wasm
 ../nook-web-shared/src/vault-app/lib/nook-wasm-simple
 test-results
 playwright-report
+ui-demo-results
