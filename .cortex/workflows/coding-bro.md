@@ -339,6 +339,10 @@ gh pr merge <number> --squash
 ```
 
 Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
+The successful merge is the implementation delivery boundary. Do not wait for
+or monitor the resulting Main workflow, development deployment, or live origins
+unless the user explicitly requested deployment/live verification or assigned
+a Main failure.
 
 ### 12 — Publish statistics
 
@@ -347,7 +351,8 @@ After the implementation PR merges, follow
 compare it with one or two comparable prior records, publish it as the only file
 in a stats-only PR, and squash-merge it immediately without local/product
 checks, review, or `task pr:ready`. Stats-only PRs never generate another stats
-record. Any performance fix belongs in a separate normal PR.
+record. Do not wait for post-merge Main before publishing the record. Any
+performance fix belongs in a separate normal PR.
 
 ## CI fix PRs (nightly failures only)
 
