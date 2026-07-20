@@ -285,6 +285,30 @@ launch_binary_detached() {
   nohup "$binary" "$@" >/dev/null 2>&1 </dev/null &
 }
 
+validate_remote_debugging_port() {
+  local port="${NOOK_EXTENSION_REMOTE_DEBUGGING_PORT:-}"
+  case "$port" in
+    '') return 0 ;;
+    *[!0-9]*) fail 'NOOK_EXTENSION_REMOTE_DEBUGGING_PORT must be a positive integer'; return 1 ;;
+  esac
+  [ "$port" -gt 0 ] || {
+    fail 'NOOK_EXTENSION_REMOTE_DEBUGGING_PORT must be a positive integer'
+    return 1
+  }
+}
+
+print_launch_metadata() {
+  local app_name="$1"
+  local extension_dir="$2"
+  local profile_dir="$3"
+  local port="${NOOK_EXTENSION_REMOTE_DEBUGGING_PORT:-}"
+  printf 'Launched %s with %s using isolated profile %s\n' "$app_name" "$extension_dir" "$profile_dir"
+  printf 'profile_dir=%s\n' "$profile_dir"
+  if [ -n "$port" ]; then
+    printf 'cdp_url=http://127.0.0.1:%s\n' "$port"
+  fi
+}
+
 launch_browser() {
   local browser="$1"
   local extension_dir="$2"
@@ -293,6 +317,13 @@ launch_browser() {
   local binary=''
   local app_name=''
   local env_name=''
+  local debug_address=''
+  local debug_port_arg=''
+  validate_remote_debugging_port
+  if [ -n "${NOOK_EXTENSION_REMOTE_DEBUGGING_PORT:-}" ]; then
+    debug_address='--remote-debugging-address=127.0.0.1'
+    debug_port_arg="--remote-debugging-port=$NOOK_EXTENSION_REMOTE_DEBUGGING_PORT"
+  fi
   if [ -n "$requested_profile_dir" ]; then
     profile_dir="$requested_profile_dir"
   else
@@ -324,14 +355,23 @@ launch_browser() {
         'Google Chrome for Testing '*) app_name='Google Chrome for Testing' ;;
         'Chromium '*) app_name='Chromium' ;;
         'Google Chrome '*)
-          launch_binary_detached "$binary" --user-data-dir="$profile_dir" chrome://extensions
+          if [ -n "$debug_port_arg" ]; then
+            launch_binary_detached "$binary" --user-data-dir="$profile_dir" "$debug_address" "$debug_port_arg" chrome://extensions
+          else
+            launch_binary_detached "$binary" --user-data-dir="$profile_dir" chrome://extensions
+          fi
           printf 'Opened Google Chrome extension manager using isolated profile %s\n' "$profile_dir"
           printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
+          print_launch_metadata "$app_name" "$extension_dir" "$profile_dir"
           return 0
           ;;
       esac
     fi
-    launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+    if [ -n "$debug_port_arg" ]; then
+      launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" "$debug_address" "$debug_port_arg" about:blank
+    else
+      launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+    fi
   else
     [ "$(uname -s)" = 'Darwin' ] || {
       fail "automatic $app_name discovery is supported only on macOS; set $env_name to its executable"
@@ -339,21 +379,34 @@ launch_browser() {
     }
     if [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome for Testing.app' ]; then
       app_name='Google Chrome for Testing'
-      open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+      if [ -n "$debug_port_arg" ]; then
+        open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" "$debug_address" "$debug_port_arg" about:blank
+      else
+        open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+      fi
     elif [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome.app' ]; then
-      open -na 'Google Chrome' --args --user-data-dir="$profile_dir" chrome://extensions
+      if [ -n "$debug_port_arg" ]; then
+        open -na 'Google Chrome' --args --user-data-dir="$profile_dir" "$debug_address" "$debug_port_arg" chrome://extensions
+      else
+        open -na 'Google Chrome' --args --user-data-dir="$profile_dir" chrome://extensions
+      fi
       printf 'Opened Google Chrome extension manager using isolated profile %s\n' "$profile_dir"
       printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
+      print_launch_metadata 'Google Chrome' "$extension_dir" "$profile_dir"
       return 0
     else
       [ -d "/Applications/$app_name.app" ] || {
         fail "$app_name is not installed in /Applications; set $env_name to its executable"
         return 1
       }
-      open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+      if [ -n "$debug_port_arg" ]; then
+        open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" "$debug_address" "$debug_port_arg" about:blank
+      else
+        open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+      fi
     fi
   fi
-  printf 'Launched %s with %s using isolated profile %s\n' "$app_name" "$extension_dir" "$profile_dir"
+  print_launch_metadata "$app_name" "$extension_dir" "$profile_dir"
 }
 
 main() {

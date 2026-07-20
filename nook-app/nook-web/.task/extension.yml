@@ -35,10 +35,11 @@ tasks:
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
       - cd "{{.EXTENSION_ROOT}}" && bun test scripts src/lib
-      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
-      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
+      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
+      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
       - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
       - bash "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh"
+      - bash "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh"
 
   extension:test:e2e:
     desc: Run browser extension Playwright e2e in Docker.
@@ -165,6 +166,16 @@ tasks:
         extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
         profile_dir="${NOOK_BRAVE_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/brave-extension-dev}";
         exec bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" launch-local brave "$extension_dir" "$profile_dir";'
+
+  extension:setup:brave:
+    desc: Install a hosted extension in Brave, PIN-protect the device, create a Simple Vault, approve pairing, and leave Brave open (CHANNEL=dev or PR=<number>).
+    env:
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
+      NOOK_EXTENSION_SETUP_PIN: '{{default "" .NOOK_EXTENSION_SETUP_PIN}}'
+      NOOK_EXTENSION_SETUP_VAULT_NAME: '{{default "" .NOOK_EXTENSION_SETUP_VAULT_NAME}}'
+    cmds:
+      - bash "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh"
 
   _extension:build:
     desc: Build the browser extension.
