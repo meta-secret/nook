@@ -2324,6 +2324,12 @@ export class VaultState {
     return secretsActions.handleChromePasswordsImport(this, csv);
   }
 
+  async handleGoogleAuthenticatorImport(
+    migrationUris: string[],
+  ): Promise<NookImportResult> {
+    return secretsActions.handleGoogleAuthenticatorImport(this, migrationUris);
+  }
+
   async handleProtonPassImport(
     exportBytes: Uint8Array,
   ): Promise<NookImportResult> {
