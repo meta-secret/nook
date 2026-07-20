@@ -223,8 +223,8 @@ Do **not** spin up multiple Nook servers for parallel e2e unless debugging port 
 
 ## PR UI demo videos
 
-UI-facing changes under the web apps, shared vault UI, or extension content and
-popup surfaces must add or update a focused spec under
+UI-facing changes under the web apps, shared vault UI, or extension browser
+surfaces must add or update a focused spec under
 `nook-web-app/e2e/demos/*.demo.spec.ts`. The PR contract script rejects a UI
 change without a changed demo. Only those changed demo specs run, serially with
 one worker, so PR CI does not inherit the cost of the full browser suite.

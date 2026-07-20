@@ -27,14 +27,16 @@ while IFS= read -r -d '' file; do
   esac
 
   case "$file" in
+    nook-app/nook-web/nook-web-app/index.html|\
     nook-app/nook-web/nook-web-app/src/*|\
     nook-app/nook-web/nook-web-app/public/*|\
     nook-app/nook-web/nook-web-app/static/*|\
     nook-app/nook-web/nook-web-shared/src/*|\
+    nook-app/nook-web/nook-vault-simple/index.html|\
     nook-app/nook-web/nook-vault-simple/src/*|\
+    nook-app/nook-web/nook-vault-sentinel/index.html|\
     nook-app/nook-web/nook-vault-sentinel/src/*|\
-    nook-app/nook-web/nook-web-extension/src/content/*|\
-    nook-app/nook-web/nook-web-extension/src/popup/*|\
+    nook-app/nook-web/nook-web-extension/src/*|\
     nook-app/nook-web/nook-web-app/e2e/demos/*.demo.spec.ts)
       ui_changed=true
       ;;
