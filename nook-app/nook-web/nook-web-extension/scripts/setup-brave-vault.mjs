@@ -67,7 +67,7 @@ async function readExtensionStorage(context) {
   return worker.evaluate(
     () =>
       new Promise((resolve) => {
-        chrome.storage.local.get(undefined, resolve)
+        globalThis.chrome.storage.local.get(undefined, resolve)
       }),
   )
 }

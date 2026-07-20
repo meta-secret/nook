@@ -21,6 +21,12 @@ export default [
     },
   },
   {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     files: ['**/*.ts', '**/*.svelte.ts'],
     languageOptions: {
       parser: ts.parser,
