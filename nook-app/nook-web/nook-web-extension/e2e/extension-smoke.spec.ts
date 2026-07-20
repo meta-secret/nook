@@ -422,7 +422,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeHidden()
-    await expect(widget.getByText('1/3')).toBeVisible()
+    await expect(
+      widget
+        .getByTestId('nook-auth-gate-expand')
+        .getByText('1/3', { exact: true }),
+    ).toBeVisible()
     await expect(
       widget.getByRole('button', { name: /Expand Nook: Nook Pilot · 1\/3/ }),
     ).toBeVisible()
