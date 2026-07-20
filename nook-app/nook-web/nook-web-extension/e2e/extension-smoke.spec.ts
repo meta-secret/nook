@@ -495,9 +495,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await otpPage.goto(`${loginServer.origin}/otp`)
     const otpWidget = otpPage.locator('#nook-auth-widget')
     await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
-    await expect(
-      otpWidget.getByText('Verification code requested'),
-    ).toBeVisible()
+    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
 
     const combinedPage = await context.newPage()
     await combinedPage.goto(`${loginServer.origin}/combined`)
@@ -968,9 +966,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const otpPage = await context.newPage()
     await otpPage.goto(`${loginServer.origin}/otp`)
     const otpWidget = otpPage.locator('#nook-auth-widget')
-    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
+    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
     await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
     await otpWidget
       .getByRole('button', { name: 'Nook extension e2e — alice@nook.test' })

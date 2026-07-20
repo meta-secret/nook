@@ -75,8 +75,8 @@ function workflowCopy(kind: string): WorkflowCopy {
       }
     case 'totp-challenge':
       return {
-        titleKey: 'widgetTotpTitle',
-        descriptionKey: 'widgetTotpDescription',
+        titleKey: 'widgetAuthenticatorTitle',
+        descriptionKey: 'widgetAuthenticatorDescription',
       }
     default:
       return {
@@ -447,7 +447,7 @@ async function fillAuthenticatorCode(
     },
   })
   if (!response?.ok || !response.code) {
-    setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+    setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
       continueButton,
@@ -461,7 +461,7 @@ async function fillAuthenticatorCode(
   const filled = fillOneTimeCode(code, workflowRoot)
   code = ''
   if (!filled) {
-    setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+    setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
       continueButton,
@@ -553,7 +553,7 @@ async function continueWithAuthenticator(
       payload: { origin: location.origin },
     })
     if (!response?.ok) {
-      setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+      setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
@@ -563,7 +563,7 @@ async function continueWithAuthenticator(
       return
     }
     if (response.status === 'locked') {
-      setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+      setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
@@ -575,7 +575,7 @@ async function continueWithAuthenticator(
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
-      setFlightProgress(step, title, 1, 3, 'widgetTotpTitle')
+      setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
