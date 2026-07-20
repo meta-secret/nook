@@ -205,6 +205,18 @@ FAKE_BROWSER_LOG="$fake_browser_log" CHROME_BIN="$fake_browser" launch_browser c
 for _ in $(seq 1 20); do [ -f "$fake_browser_log" ] && break; sleep 0.05; done
 grep -Fq -- "--load-extension=$installed" "$fake_browser_log"
 
+rm -f "$fake_browser_log"
+FAKE_BROWSER_LOG="$fake_browser_log" CHROME_BIN="$fake_browser" \
+  NOOK_EXTENSION_REMOTE_DEBUGGING_PORT=9333 \
+  launch_browser chrome "$installed" >"$TEST_ROOT/launch-cdp.out"
+for _ in $(seq 1 20); do [ -f "$fake_browser_log" ] && break; sleep 0.05; done
+grep -Fq -- '--remote-debugging-port=9333' "$fake_browser_log"
+grep -Fq -- '--remote-debugging-address=127.0.0.1' "$fake_browser_log"
+grep -Fq 'cdp_url=http://127.0.0.1:9333' "$TEST_ROOT/launch-cdp.out"
+grep -Fq "profile_dir=$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" "$TEST_ROOT/launch-cdp.out"
+expect_failure env NOOK_EXTENSION_REMOTE_DEBUGGING_PORT=abc \
+  bash -c "source '$SCRIPT_DIR/hosted-extension.sh'; validate_remote_debugging_port"
+
 fake_stable_chrome="$fixture/google-chrome"
 fake_stable_log="$fixture/google-chrome.log"
 cat > "$fake_stable_chrome" <<'EOF'

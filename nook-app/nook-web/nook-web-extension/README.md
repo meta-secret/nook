@@ -116,6 +116,23 @@ task extension:smoke:hosted PR=410
 
 Production is intentionally rejected because the smoke creates vault data.
 
+For a persistent Brave developer bootstrap that does the full pairing flow
+(install → PIN device protection → create Simple Vault → approve extension) and
+leaves Brave open on the channel profile, use:
+
+```bash
+task extension:setup:brave CHANNEL=dev
+task extension:setup:brave PR=410
+# Optional:
+# NOOK_EXTENSION_SETUP_PIN=123456
+# NOOK_EXTENSION_SETUP_VAULT_NAME=dev-setup-vault
+```
+
+This uses PIN instead of an OS passkey so the ceremony is scriptable. Re-running
+skips automation when the profile is already paired; later launches can use
+`task extension:run:brave CHANNEL=dev` on the same profile. Production is
+rejected because the task creates vault data.
+
 Chrome and Brave do not support silently installing an unsigned extension into
 a normal browser profile. The launch tasks therefore use stable, isolated Nook
 profiles. Brave and Chrome for Testing receive the verified directory through
@@ -129,6 +146,10 @@ trusted HTTPS localhost as before:
 task extension:run:chrome
 task extension:run:brave
 ```
+
+`extension:run:*` only installs and launches the browser; it does not create a
+vault or approve pairing. Use `extension:setup:brave` for that bootstrap, or
+`extension:smoke:hosted` for a disposable Chromium CI-style smoke.
 
 Run `task web:dev` first for that local flow. To download and launch an exact
 hosted deployment instead, select development, production, or a PR preview:
