@@ -456,6 +456,45 @@ export async function handleChromePasswordsImport(
   }
 }
 
+export async function handleGoogleAuthenticatorImport(
+  state: VaultState,
+  migrationUris: string[],
+): Promise<NookImportResult> {
+  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  try {
+    const result = await state.enqueueStorage(() =>
+      state.manager!.importGoogleAuthenticatorMigration(migrationUris),
+    );
+    await state.runFanOutSyncAfterLocalSave();
+    await state.refreshSecretsFromSession();
+    log.info("Google Authenticator import completed", {
+      imported: result.imported,
+      skippedUnsupported: result.skippedUnsupported,
+      skippedDuplicates: result.skippedDuplicates,
+    });
+    state.showSuccess(
+      state.t("toasts.google_authenticator_imported", {
+        count: String(result.imported),
+      }),
+    );
+    return result;
+  } catch (error: unknown) {
+    state.errorMsg = state.t("google_authenticator_import.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    state.isSaving = false;
+  }
+}
+
 export async function handleProtonPassImport(
   state: VaultState,
   exportBytes: Uint8Array,

@@ -958,6 +958,8 @@
                     vault.handleApplePasswordsImport(csv)}
                   onImportChromePasswords={(csv) =>
                     vault.handleChromePasswordsImport(csv)}
+                  onImportGoogleAuthenticator={(migrationUris) =>
+                    vault.handleGoogleAuthenticatorImport(migrationUris)}
                   onImportProtonPass={(exportBytes) =>
                     vault.handleProtonPassImport(exportBytes)}
                 />

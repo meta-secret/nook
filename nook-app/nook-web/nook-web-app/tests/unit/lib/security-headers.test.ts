@@ -30,6 +30,7 @@ describe('vault app security headers', () => {
     expect(headers).toContain(
       'Cross-Origin-Opener-Policy: same-origin-allow-popups',
     )
+    expect(headers).toContain('Permissions-Policy: camera=(self)')
     expect(headers).toContain('X-Content-Type-Options: nosniff')
   })
 })

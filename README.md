@@ -33,8 +33,10 @@ logins and TOTP verification codes can be imported from its unencrypted CSV
 export. Website logins from Chrome, Chromium, Brave, and Edge can be imported
 from their unencrypted password CSV exports. Proton Pass logins and secure notes
 can be imported from an unencrypted ZIP export or a decrypted `data.json`;
-PGP-encrypted exports must be decrypted first. Unsupported item types and
-attachments are skipped. Overlapping records are reconciled with vault-keyed
+PGP-encrypted exports must be decrypted first. Google Authenticator TOTP
+accounts can also be imported by scanning every migration QR code in an account
+export with the camera or by selecting QR-code images. Unsupported item types
+and attachments are skipped. Overlapping records are reconciled with vault-keyed
 item-identity and secret-version HMAC fingerprints. Matching secret versions
 enrich the existing item with additional provider fields; differing passwords
 remain as separate items instead of being overwritten.
