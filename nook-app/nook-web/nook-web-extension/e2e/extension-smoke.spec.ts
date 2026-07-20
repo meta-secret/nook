@@ -862,7 +862,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()
     await expect(
       reopenedVaultPage.getByTestId('login-local-unlock-step'),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
     await reopenedVaultPage.getByTestId('unlock-vault-btn').click()
 
@@ -923,7 +923,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await lockedVaultPage.goto(simpleVaultBaseUrl)
       await expect(
         lockedVaultPage.getByTestId('login-local-unlock-step'),
-      ).toBeVisible()
+      ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
       const extensionAuthWindowPromise = restartedContext.waitForEvent('page')
       await lockedVaultPage.getByTestId('unlock-vault-btn').click()
