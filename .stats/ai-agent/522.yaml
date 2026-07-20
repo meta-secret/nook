@@ -1,0 +1,211 @@
+schema_version: 1
+source_pr:
+  number: 522
+  url: https://github.com/meta-secret/nook/pull/522
+  title: Stabilize extension pairing smoke setup
+  change_surface: extension_browser_flow_ci_tooling
+  head_sha: af0b1395365b980de487d94f459378cb440fff94
+  started_at: 2026-07-20T07:42:00Z
+  opened_at: 2026-07-20T08:03:44Z
+  merged_at: 2026-07-20T08:32:17Z
+  elapsed_seconds: 3017
+  open_to_merge_seconds: 1713
+summary:
+  local_execution_count: 17
+  local_check_count: 8
+  local_test_count: 6
+  local_combined_count: 3
+  local_execution_seconds: 2225
+  github_actions_run_count: 4
+  github_actions_seconds: 1435
+  pr_retrigger_count: 3
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+local_executions:
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T07:43:00Z
+    finished_at: 2026-07-20T07:48:06Z
+    duration_seconds: 306
+    outcome: failed
+    reason: baseline_long_pairing_scenario_exceeded_shared_timeout
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T07:49:00Z
+    finished_at: 2026-07-20T07:50:30Z
+    duration_seconds: 90
+    outcome: passed
+    reason: hosted_pairing_approval_lock_restart_and_unlock_validation
+  - command: task extension:install:localhost
+    category: check
+    started_at: 2026-07-20T07:51:00Z
+    finished_at: 2026-07-20T07:51:20Z
+    duration_seconds: 20
+    outcome: passed
+    reason: refresh_stable_local_unpacked_extension_artifact
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-20T08:03:35Z
+    finished_at: 2026-07-20T08:03:35Z
+    duration_seconds: 0
+    outcome: passed
+    reason: initial_pre_push_diff_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T08:03:55Z
+    finished_at: 2026-07-20T08:08:00Z
+    duration_seconds: 245
+    outcome: failed
+    reason: initial_fix_installed_prf_mock_on_website_pages
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T08:04:00Z
+    finished_at: 2026-07-20T08:04:01Z
+    duration_seconds: 1
+    outcome: failed
+    reason: fresh_worktree_dependencies_missing
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T08:05:00Z
+    finished_at: 2026-07-20T08:05:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: initial_focused_extension_validation_after_dependency_setup
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T08:03:55Z
+    finished_at: 2026-07-20T08:09:02Z
+    duration_seconds: 307
+    outcome: passed
+    reason: initial_repository_validation
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T08:09:05Z
+    finished_at: 2026-07-20T08:09:07Z
+    duration_seconds: 2
+    outcome: passed
+    reason: corrected_timeout_fix_focused_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T08:09:50Z
+    finished_at: 2026-07-20T08:12:30Z
+    duration_seconds: 160
+    outcome: passed
+    reason: corrected_full_extension_pairing_regression
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T08:09:50Z
+    finished_at: 2026-07-20T08:15:10Z
+    duration_seconds: 320
+    outcome: passed
+    reason: corrected_pr_head_repository_validation
+  - command: task pr:preflight PR=522
+    category: check
+    started_at: 2026-07-20T08:15:59Z
+    finished_at: 2026-07-20T08:16:08Z
+    duration_seconds: 9
+    outcome: failed
+    reason: main_advanced_by_two_commits
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T08:16:40Z
+    finished_at: 2026-07-20T08:16:42Z
+    duration_seconds: 2
+    outcome: passed
+    reason: post_base_update_focused_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T08:16:40Z
+    finished_at: 2026-07-20T08:21:55Z
+    duration_seconds: 315
+    outcome: failed
+    reason: concurrent_docker_build_contention_closed_chromium_context
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T08:16:40Z
+    finished_at: 2026-07-20T08:22:10Z
+    duration_seconds: 330
+    outcome: passed
+    reason: post_base_update_exact_head_repository_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T08:22:20Z
+    finished_at: 2026-07-20T08:24:10Z
+    duration_seconds: 110
+    outcome: passed
+    reason: serial_exact_head_extension_browser_validation
+  - command: task pr:ready PR=522
+    category: check
+    started_at: 2026-07-20T08:32:00Z
+    finished_at: 2026-07-20T08:32:06Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29726592112
+    run_attempt: 1
+    head_sha: 864393bb89e00661558be9404b6ff8d94d7ac15c
+    trigger: pull_request
+    started_at: 2026-07-20T08:03:47Z
+    finished_at: 2026-07-20T08:09:59Z
+    duration_seconds: 372
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29726930918
+    run_attempt: 1
+    head_sha: 230aef1d15ccd69e7249baeb1f61b365e45fd9a3
+    trigger: pull_request
+    started_at: 2026-07-20T08:09:47Z
+    finished_at: 2026-07-20T08:15:58Z
+    duration_seconds: 371
+    conclusion: success
+  - workflow: PR
+    run_id: 29727330940
+    run_attempt: 1
+    head_sha: af0b1395365b980de487d94f459378cb440fff94
+    trigger: pull_request
+    started_at: 2026-07-20T08:16:33Z
+    finished_at: 2026-07-20T08:21:41Z
+    duration_seconds: 308
+    conclusion: failure
+  - workflow: PR
+    run_id: 29727330940
+    run_attempt: 2
+    head_sha: af0b1395365b980de487d94f459378cb440fff94
+    trigger: pull_request
+    started_at: 2026-07-20T08:25:32Z
+    finished_at: 2026-07-20T08:31:56Z
+    duration_seconds: 384
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-20T08:09:47Z
+    cause: head_push
+    run_id: 29726930918
+  - at: 2026-07-20T08:16:33Z
+    cause: base_update
+    run_id: 29727330940
+  - at: 2026-07-20T08:25:32Z
+    cause: manual_rerun
+    run_id: 29727330940
+merge_attempts:
+  - at: 2026-07-20T08:32:17Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [503, 513]
+  baseline_quality: comparable
+  baseline_note: Both baselines exercised extension browser flows with the same Rust WASM and web gate family
+  elapsed_seconds_change_percent: -30.1
+  local_execution_seconds_change_percent: -16.3
+  github_actions_seconds_change_percent: -31.2
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The initial lifecycle hypothesis installed the PRF mock on website pages and was reverted before the final head after focused failure evidence and review feedback
+    - One concurrent local browser run lost its Chromium context while the serial exact-head rerun passed; this matches the existing guidance to avoid competing Docker-heavy browser validation
+    - The first exact-head Actions attempt was interrupted with exit code 130 after passing checks; the failed-job rerun completed successfully without a code change
+  required_actions: []
