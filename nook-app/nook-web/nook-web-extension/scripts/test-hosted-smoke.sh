@@ -73,10 +73,14 @@ main() {
 
   export NOOK_EXTENSION_E2E_DIR="$extension_dir"
   export NOOK_EXTENSION_E2E_HOSTED=true
+  export NOOK_EXTENSION_E2E_PROFILE_DIR="$SMOKE_ROOT/browser-profile"
   export NOOK_SIMPLE_VAULT_URL="$simple_vault_url"
 
   printf 'Testing verified extension at %s against %s\n' "$extension_dir" "$simple_vault_url"
   cd "$EXTENSION_ROOT"
+  if [ ! -e node_modules ]; then
+    ln -s ../nook-web-app/node_modules node_modules
+  fi
   run_playwright
   printf 'Hosted extension smoke passed; disposable browser and vault state removed.\n'
 }

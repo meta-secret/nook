@@ -321,6 +321,7 @@ task extension:build       # browser extension package
 task extension:check:fast  # host-cached extension format/unit/manifest/security gate
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
 task extension:install:hosted PR=410 # verify and install an isolated hosted PR build
+task extension:smoke:hosted CHANNEL=dev # disposable hosted extension + Simple Vault smoke
 task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded Chrome opens one-time setup
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile
 task ci:pr                 # health-checked BuildKit mirror of the PR CI gate (no browser e2e)
