@@ -1,0 +1,280 @@
+schema_version: 1
+source_pr:
+  number: 513
+  url: https://github.com/meta-secret/nook/pull/513
+  title: Add disposable hosted extension smoke
+  change_surface: extension_browser_flow_ci_tooling
+  head_sha: 2ba0d101b01addcddb2e39e331ebddaa51337657
+  started_at: 2026-07-20T02:07:00Z
+  opened_at: 2026-07-20T02:31:58Z
+  merged_at: 2026-07-20T03:25:31Z
+  elapsed_seconds: 4711
+  open_to_merge_seconds: 3213
+summary:
+  local_execution_count: 23
+  local_check_count: 10
+  local_test_count: 9
+  local_combined_count: 4
+  local_execution_seconds: 2029
+  github_actions_run_count: 6
+  github_actions_seconds: 2788
+  pr_retrigger_count: 5
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T02:12:00Z
+    finished_at: 2026-07-20T02:12:05Z
+    duration_seconds: 5
+    outcome: passed
+    reason: focused_extension_validation
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T02:13:00Z
+    finished_at: 2026-07-20T02:14:00Z
+    duration_seconds: 60
+    outcome: failed
+    reason: deployed_simple_vault_does_not_expose_test_only_window_hook
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T02:16:00Z
+    finished_at: 2026-07-20T02:17:00Z
+    duration_seconds: 60
+    outcome: failed
+    reason: hosted_scope_included_unrelated_website_passkey_subflow
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T02:19:00Z
+    finished_at: 2026-07-20T02:19:38Z
+    duration_seconds: 38
+    outcome: passed
+    reason: focused_hosted_pairing_vault_login_lock_restart_validation
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-20T02:30:00Z
+    finished_at: 2026-07-20T02:30:00Z
+    duration_seconds: 0
+    outcome: passed
+    reason: pre_push_diff_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:32:10Z
+    finished_at: 2026-07-20T02:34:40Z
+    duration_seconds: 150
+    outcome: passed
+    reason: initial_pr_head_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T02:32:10Z
+    finished_at: 2026-07-20T02:33:28Z
+    duration_seconds: 78
+    outcome: passed
+    reason: initial_extension_browser_regression
+  - command: task pr:preflight PR=513
+    category: check
+    started_at: 2026-07-20T02:34:45Z
+    finished_at: 2026-07-20T02:34:53Z
+    duration_seconds: 8
+    outcome: failed
+    reason: base_advanced_after_pr_open
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:36:35Z
+    finished_at: 2026-07-20T02:39:35Z
+    duration_seconds: 180
+    outcome: passed
+    reason: post_base_update_exact_head_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T02:36:35Z
+    finished_at: 2026-07-20T02:38:41Z
+    duration_seconds: 126
+    outcome: passed
+    reason: post_base_update_extension_regression
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T02:36:35Z
+    finished_at: 2026-07-20T02:37:15Z
+    duration_seconds: 40
+    outcome: failed
+    reason: deployed_restart_state_exceeded_default_locator_timeout
+  - command: bunx prettier --check e2e/extension-smoke.spec.ts && git diff --check
+    category: check
+    started_at: 2026-07-20T02:39:40Z
+    finished_at: 2026-07-20T02:39:41Z
+    duration_seconds: 1
+    outcome: passed
+    reason: timing_fix_format_validation
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T02:41:20Z
+    finished_at: 2026-07-20T02:41:25Z
+    duration_seconds: 5
+    outcome: passed
+    reason: timing_fix_focused_validation
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T02:41:20Z
+    finished_at: 2026-07-20T02:42:06Z
+    duration_seconds: 46
+    outcome: passed
+    reason: timing_fix_hosted_browser_validation
+  - command: task pr:ready PR=513
+    category: check
+    started_at: 2026-07-20T02:47:55Z
+    finished_at: 2026-07-20T02:48:05Z
+    duration_seconds: 10
+    outcome: failed
+    reason: base_advanced_and_review_threads_arrived
+  - command: task extension:check:fast
+    category: check
+    started_at: 2026-07-20T02:49:35Z
+    finished_at: 2026-07-20T02:49:40Z
+    duration_seconds: 5
+    outcome: passed
+    reason: review_fixes_focused_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:50:00Z
+    finished_at: 2026-07-20T02:56:00Z
+    duration_seconds: 360
+    outcome: failed
+    reason: concurrent_local_builds_triggered_docker_image_content_race
+  - command: task extension:smoke:hosted CHANNEL=dev
+    category: test
+    started_at: 2026-07-20T02:50:00Z
+    finished_at: 2026-07-20T02:51:30Z
+    duration_seconds: 90
+    outcome: passed
+    reason: final_reviewed_disposable_hosted_flow
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T02:50:00Z
+    finished_at: 2026-07-20T02:54:00Z
+    duration_seconds: 240
+    outcome: passed_with_flaky_retry
+    reason: final_reviewed_extension_browser_regression
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T03:02:00Z
+    finished_at: 2026-07-20T03:10:20Z
+    duration_seconds: 500
+    outcome: passed
+    reason: serial_exact_head_validation_after_docker_contention
+  - command: task pr:ready PR=513
+    category: check
+    started_at: 2026-07-20T03:06:45Z
+    finished_at: 2026-07-20T03:06:54Z
+    duration_seconds: 9
+    outcome: failed
+    reason: stats_only_base_commit_landed_during_validation
+  - command: task pr:ready PR=513
+    category: check
+    started_at: 2026-07-20T03:18:05Z
+    finished_at: 2026-07-20T03:18:14Z
+    duration_seconds: 9
+    outcome: failed
+    reason: workflow_and_stats_base_commits_landed_during_validation
+  - command: task pr:ready PR=513
+    category: check
+    started_at: 2026-07-20T03:25:10Z
+    finished_at: 2026-07-20T03:25:19Z
+    duration_seconds: 9
+    outcome: passed
+    reason: exact_head_merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29712761127
+    run_attempt: 1
+    head_sha: 20d8f3399261d372c4b9e000eb9d674c5e2fb74f
+    trigger: pull_request
+    started_at: 2026-07-20T02:32:01Z
+    finished_at: 2026-07-20T02:36:58Z
+    duration_seconds: 297
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29712906461
+    run_attempt: 1
+    head_sha: 34e2613dc2c8e73590d68b24a3baf6b3bd304afb
+    trigger: pull_request
+    started_at: 2026-07-20T02:36:33Z
+    finished_at: 2026-07-20T02:41:37Z
+    duration_seconds: 304
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29713045784
+    run_attempt: 1
+    head_sha: a44ad22cc5b9abea71937e2171d9bd5d70ded746
+    trigger: pull_request
+    started_at: 2026-07-20T02:41:13Z
+    finished_at: 2026-07-20T02:47:49Z
+    duration_seconds: 396
+    conclusion: success
+  - workflow: PR
+    run_id: 29713313338
+    run_attempt: 1
+    head_sha: 5124b999f631fcbd7a48f26f6c0adca111036124
+    trigger: pull_request
+    started_at: 2026-07-20T02:49:53Z
+    finished_at: 2026-07-20T03:06:39Z
+    duration_seconds: 1006
+    conclusion: success
+  - workflow: PR
+    run_id: 29714087150
+    run_attempt: 1
+    head_sha: aab389fdb435f397af1357d592dc2de14f6dd0e9
+    trigger: pull_request
+    started_at: 2026-07-20T03:10:58Z
+    finished_at: 2026-07-20T03:17:56Z
+    duration_seconds: 418
+    conclusion: success
+  - workflow: PR
+    run_id: 29714389950
+    run_attempt: 1
+    head_sha: 2ba0d101b01addcddb2e39e331ebddaa51337657
+    trigger: pull_request
+    started_at: 2026-07-20T03:18:50Z
+    finished_at: 2026-07-20T03:24:57Z
+    duration_seconds: 367
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-20T02:36:33Z
+    cause: base_update
+    run_id: 29712906461
+  - at: 2026-07-20T02:41:13Z
+    cause: head_push
+    run_id: 29713045784
+  - at: 2026-07-20T02:49:53Z
+    cause: base_update
+    run_id: 29713313338
+  - at: 2026-07-20T03:10:58Z
+    cause: base_update
+    run_id: 29714087150
+  - at: 2026-07-20T03:18:50Z
+    cause: base_update
+    run_id: 29714389950
+merge_attempts:
+  - at: 2026-07-20T03:25:31Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [501, 503]
+  baseline_quality: comparable
+  baseline_note: Both baselines exercise extension browser flows with the same Rust WASM and web gate family
+  elapsed_seconds_change_percent: 67.7
+  local_execution_seconds_change_percent: -2.3
+  github_actions_seconds_change_percent: 113.3
+  regression: true
+  regression_reasons:
+    - End-to-end elapsed time was 1902 seconds above the comparable baseline median
+    - Repository-owned PR workflow time was 1481 seconds above the comparable baseline median
+waste_assessment:
+  wasteful: false
+  findings:
+    - Five exact-head retriggers followed coherent fixes or mandatory base updates while other implementation and stats PRs advanced main
+    - Three review findings prevented fresh-checkout dependency failure, residual browser profile state, and missing public tooling documentation before merge
+    - Concurrent local Docker validation caused one image-content race; the required serial rerun passed and future runs should avoid sharing mutable local image tags across three simultaneous gates
+    - The measured remote regression came from repeated exact-head workflow cycles rather than slower individual final-head CI, which completed in 367 seconds
+  required_actions: []
