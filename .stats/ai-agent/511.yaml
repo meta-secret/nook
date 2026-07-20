@@ -1,0 +1,290 @@
+schema_version: 1
+source_pr:
+  number: 511
+  url: https://github.com/meta-secret/nook/pull/511
+  title: Add Nook Pilot authentication workflow HUD
+  change_surface: rust_wasm_extension_browser_flow
+  head_sha: 178202c571fcf48e31def51aa0291e190c564ad7
+  started_at: 2026-07-20T01:19:47Z
+  opened_at: 2026-07-20T01:50:49Z
+  merged_at: 2026-07-20T06:39:24Z
+  elapsed_seconds: 19177
+  open_to_merge_seconds: 17315
+summary:
+  local_execution_count: 18
+  local_check_count: 4
+  local_test_count: 7
+  local_combined_count: 7
+  local_execution_seconds: 5364
+  github_actions_run_count: 9
+  github_actions_seconds: 4252
+  pr_retrigger_count: 8
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: cargo test -p nook-core authentication_workflow
+    category: test
+    started_at: 2026-07-20T01:41:00Z
+    finished_at: 2026-07-20T01:41:35Z
+    duration_seconds: 35
+    outcome: passed
+    reason: focused_domain_workflow_validation
+  - command: bun run test -- tests/unit/lib/password-forms.test.ts
+    category: test
+    started_at: 2026-07-20T01:42:00Z
+    finished_at: 2026-07-20T01:42:08Z
+    duration_seconds: 8
+    outcome: passed
+    reason: focused_shared_form_detection_validation
+  - command: bun run check
+    category: check
+    started_at: 2026-07-20T01:42:15Z
+    finished_at: 2026-07-20T01:42:29Z
+    duration_seconds: 14
+    outcome: passed
+    reason: focused_extension_type_lint_and_unit_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T01:53:00Z
+    finished_at: 2026-07-20T02:05:00Z
+    duration_seconds: 720
+    outcome: passed
+    reason: formatted_initial_head_full_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T02:21:00Z
+    finished_at: 2026-07-20T02:22:35Z
+    duration_seconds: 95
+    outcome: passed
+    reason: workflow_progress_browser_regression
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:45:00Z
+    finished_at: 2026-07-20T02:57:00Z
+    duration_seconds: 720
+    outcome: passed
+    reason: workflow_transition_hardening_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T03:56:00Z
+    finished_at: 2026-07-20T03:57:35Z
+    duration_seconds: 95
+    outcome: passed
+    reason: extension_runtime_wake_regression
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T04:09:00Z
+    finished_at: 2026-07-20T04:19:50Z
+    duration_seconds: 650
+    outcome: passed
+    reason: active_totp_guidance_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T05:00:00Z
+    finished_at: 2026-07-20T05:01:35Z
+    duration_seconds: 95
+    outcome: passed
+    reason: consent_and_secret_boundary_regression
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T05:02:00Z
+    finished_at: 2026-07-20T05:12:50Z
+    duration_seconds: 650
+    outcome: passed
+    reason: review_hardened_head_validation
+  - command: task ci:pr:e2e
+    category: combined
+    started_at: 2026-07-20T05:31:00Z
+    finished_at: 2026-07-20T05:43:00Z
+    duration_seconds: 720
+    outcome: passed
+    reason: merged_main_product_browser_matrix
+  - command: task ui:demo UI_DEMO_SPECS=nook-app/nook-web/nook-web-app/e2e/demos/nook-pilot.demo.spec.ts
+    category: test
+    started_at: 2026-07-20T06:05:30Z
+    finished_at: 2026-07-20T06:05:48Z
+    duration_seconds: 18
+    outcome: passed
+    reason: required_headless_ui_demo_validation
+  - command: .github/scripts/ui-demo-contract.sh
+    category: check
+    started_at: 2026-07-20T06:05:50Z
+    finished_at: 2026-07-20T06:05:51Z
+    duration_seconds: 1
+    outcome: passed
+    reason: current_main_ui_demo_policy_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T06:07:00Z
+    finished_at: 2026-07-20T06:17:50Z
+    duration_seconds: 650
+    outcome: passed
+    reason: exact_review_hardened_head_validation
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-20T06:18:00Z
+    finished_at: 2026-07-20T06:19:20Z
+    duration_seconds: 80
+    outcome: passed
+    reason: exact_head_extension_browser_validation
+  - command: task ci:pr:e2e
+    category: combined
+    started_at: 2026-07-20T06:24:00Z
+    finished_at: 2026-07-20T06:37:20Z
+    duration_seconds: 800
+    outcome: passed
+    reason: final_exact_head_full_browser_matrix_with_two_recovered_stable_retries
+  - command: task pr:preflight PR=511
+    category: check
+    started_at: 2026-07-20T06:38:10Z
+    finished_at: 2026-07-20T06:38:17Z
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_checks_deployment_and_review_audit
+  - command: task pr:ready PR=511
+    category: check
+    started_at: 2026-07-20T06:38:45Z
+    finished_at: 2026-07-20T06:38:51Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29711518878
+    run_attempt: 1
+    head_sha: eefbcc0490a1dcfc21fbdeeea601e209d4c11d3c
+    trigger: pull_request
+    started_at: 2026-07-20T01:50:52Z
+    finished_at: 2026-07-20T01:52:39Z
+    duration_seconds: 107
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29711558069
+    run_attempt: 1
+    head_sha: 9d06bbf5207bb572be22070ba8e68345ffe4e981
+    trigger: pull_request
+    started_at: 2026-07-20T01:52:10Z
+    finished_at: 2026-07-20T02:00:38Z
+    duration_seconds: 508
+    conclusion: success
+  - workflow: PR
+    run_id: 29714748000
+    run_attempt: 1
+    head_sha: 835c0306b626e05b7e84fa605b2d96eaa6623f14
+    trigger: pull_request
+    started_at: 2026-07-20T03:28:59Z
+    finished_at: 2026-07-20T03:38:45Z
+    duration_seconds: 586
+    conclusion: success
+  - workflow: PR
+    run_id: 29715710355
+    run_attempt: 1
+    head_sha: 28f048caf16a6e7f19baa61310403fe127a18b28
+    trigger: pull_request
+    started_at: 2026-07-20T03:55:46Z
+    finished_at: 2026-07-20T04:02:17Z
+    duration_seconds: 391
+    conclusion: success
+  - workflow: PR
+    run_id: 29716666277
+    run_attempt: 1
+    head_sha: 93f94d602db3f0e2f42287dca2119c4e2178bd77
+    trigger: pull_request
+    started_at: 2026-07-20T04:21:00Z
+    finished_at: 2026-07-20T04:29:34Z
+    duration_seconds: 514
+    conclusion: success
+  - workflow: PR
+    run_id: 29718118326
+    run_attempt: 1
+    head_sha: 3b4409be50369822c7fef5c38f458d89e3b604f6
+    trigger: pull_request
+    started_at: 2026-07-20T04:59:50Z
+    finished_at: 2026-07-20T05:09:26Z
+    duration_seconds: 576
+    conclusion: success
+  - workflow: PR
+    run_id: 29719146391
+    run_attempt: 1
+    head_sha: b665b1ef20e579a119c30628e6ebfbe564759062
+    trigger: pull_request
+    started_at: 2026-07-20T05:26:17Z
+    finished_at: 2026-07-20T05:30:27Z
+    duration_seconds: 250
+    conclusion: failure
+  - workflow: PR
+    run_id: 29720659923
+    run_attempt: 1
+    head_sha: 2db5532702916ebbcbaf4b34a6a4f42f28b18b40
+    trigger: pull_request
+    started_at: 2026-07-20T06:05:03Z
+    finished_at: 2026-07-20T06:16:05Z
+    duration_seconds: 662
+    conclusion: success
+  - workflow: PR
+    run_id: 29721502527
+    run_attempt: 1
+    head_sha: 178202c571fcf48e31def51aa0291e190c564ad7
+    trigger: pull_request
+    started_at: 2026-07-20T06:22:35Z
+    finished_at: 2026-07-20T06:33:33Z
+    duration_seconds: 658
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-20T01:52:10Z
+    reason: formatting_correction
+    initiated_by_agent: true
+  - kind: base_update
+    at: 2026-07-20T03:28:59Z
+    reason: merge_current_main_after_workflow_transition_review
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T03:55:46Z
+    reason: extension_runtime_wake_fix
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T04:21:00Z
+    reason: active_totp_guidance_review_fix
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T04:59:50Z
+    reason: consent_workflow_and_secret_boundary_review_fixes
+    initiated_by_agent: true
+  - kind: base_update
+    at: 2026-07-20T05:26:17Z
+    reason: merge_latest_main_before_delivery
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T06:05:03Z
+    reason: satisfy_new_main_ui_demo_contract
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T06:22:35Z
+    reason: final_form_isolation_and_trusted_gesture_review_fixes
+    initiated_by_agent: true
+merge_attempts:
+  - at: 2026-07-20T06:39:24Z
+    method: squash
+    outcome: success
+    reason: exact_head_readiness_passed
+comparison:
+  baseline_prs: [501, 510]
+  baseline_quality: comparable
+  baseline_note: Both records exercise extension or browser flows through the Rust WASM web gate set; PR 510 is the closest broad cross-layer comparison
+  elapsed_seconds_change_percent: 387.6
+  local_execution_seconds_change_percent: 164.8
+  github_actions_seconds_change_percent: 53.8
+  regression: true
+  regression_reasons:
+    - Three upstream main integrations and eight review-driven head cycles extended the exact-head validation lifecycle
+    - The final upstream integration introduced a new UI-demo contract, requiring a demo implementation after the prior product head had already completed full validation
+    - Security and form-isolation review required trusted-gesture, privacy, submit-observation, and multi-form scoping changes followed by complete browser regression coverage
+waste_assessment:
+  wasteful: false
+  findings:
+    - Full browser matrices were repeated only after product behavior or the base changed; the final run recovered two known timing-sensitive stable tests on their configured retries
+    - The failed remote run exposed a UI-demo policy added by the advancing base, and the next head added and validated the required demo
+    - Review corrections were grouped at each feedback boundary; no workflow was manually rerun without a code or base change
+    - The long lifecycle reflects required security review and exact-head main integration rather than an isolated build or workflow defect
+  required_actions: []
