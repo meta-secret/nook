@@ -82,6 +82,20 @@ const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
+    if (request.url === '/otp') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+      response.end(`<!doctype html>
+        <html>
+          <head><title>Nook extension e2e OTP</title></head>
+          <body>
+            <main>
+              <h1>Verify sign in</h1>
+              <label>Authentication code <input autocomplete="one-time-code" name="otp" type="tel" /></label>
+            </main>
+          </body>
+        </html>`)
+      return
+    }
     if (request.url !== '/login') {
       response.writeHead(404)
       response.end('Not found')
@@ -747,6 +761,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       ),
     ).toBe(extensionDeviceId)
 
+    const emptyOtpPage = await context.newPage()
+    await emptyOtpPage.goto(`${loginServer.origin}/otp`)
+    const emptyOtpWidget = emptyOtpPage.locator('#nook-auth-widget')
+    await emptyOtpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
+    await expect(
+      emptyOtpWidget.getByText('There is no 2FA code saved in your vault yet.'),
+    ).toBeVisible()
+    await expect(
+      emptyOtpWidget.getByRole('button', { name: 'Add 2FA in vault' }),
+    ).toBeVisible()
+    await emptyOtpPage.close()
+
     await reopenedVaultPage.getByTestId('add-secret-btn').click()
     await reopenedVaultPage.getByTestId('item-type-login').click()
     await reopenedVaultPage.getByTestId('secret-label').fill(loginServer.origin)
@@ -760,6 +786,24 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage
         .getByTestId('vault-group-login')
+        .getByTestId('secret-row'),
+    ).toBeVisible({ timeout: 15_000 })
+
+    await reopenedVaultPage.getByTestId('add-secret-btn').click()
+    await reopenedVaultPage.getByTestId('item-type-authenticator').click()
+    await reopenedVaultPage
+      .getByTestId('authenticator-issuer')
+      .fill('Nook extension e2e')
+    await reopenedVaultPage
+      .getByTestId('authenticator-account')
+      .fill('alice@nook.test')
+    await reopenedVaultPage
+      .getByTestId('authenticator-secret')
+      .fill('JBSWY3DPEHPK3PXP')
+    await reopenedVaultPage.getByTestId('save-secret-btn').click()
+    await expect(
+      reopenedVaultPage
+        .getByTestId('vault-group-authenticator')
         .getByTestId('secret-row'),
     ).toBeVisible({ timeout: 15_000 })
 
@@ -789,6 +833,19 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         password: 'extension-fill-password',
       })
     await fillLoginPage.close()
+
+    const otpPage = await context.newPage()
+    await otpPage.goto(`${loginServer.origin}/otp`)
+    const otpWidget = otpPage.locator('#nook-auth-widget')
+    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
+    await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
+    await otpWidget
+      .getByRole('button', { name: 'Nook extension e2e — alice@nook.test' })
+      .click()
+    await expect(otpPage.locator('[autocomplete="one-time-code"]')).toHaveValue(
+      /^\d{6}$/,
+    )
+    await otpPage.close()
 
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()
     await expect(

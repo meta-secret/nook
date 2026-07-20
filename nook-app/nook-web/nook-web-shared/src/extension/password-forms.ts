@@ -1,6 +1,7 @@
 export type PasswordFormSummary = {
   passwordFieldCount: number
   usernameFieldCount: number
+  oneTimeCodeFieldCount: number
   formCount: number
   observedAt: number
 }
@@ -19,6 +20,22 @@ export const usernameFieldSelectors = [
   'input[type="text"][id*="email" i]',
 ] as const
 
+export const oneTimeCodeFieldSelectors = [
+  'input[autocomplete~="one-time-code" i]',
+  'input[name*="totp" i]',
+  'input[id*="totp" i]',
+  'input[name*="otp" i]',
+  'input[id*="otp" i]',
+  'input[name*="2fa" i]',
+  'input[id*="2fa" i]',
+  'input[name*="mfa" i]',
+  'input[id*="mfa" i]',
+  'input[name*="auth-code" i]',
+  'input[id*="auth-code" i]',
+  'input[name*="verification-code" i]',
+  'input[id*="verification-code" i]',
+] as const
+
 function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const prototype = Object.getPrototypeOf(input) as HTMLInputElement
   const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
@@ -29,6 +46,21 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
   }
   input.dispatchEvent(new Event('input', { bubbles: true }))
   input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function isRenderedInput(field: HTMLInputElement): boolean {
+  let element: HTMLElement | undefined = field
+  while (element) {
+    if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
+      return false
+    }
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element)
+    if (style?.display === 'none' || style?.visibility === 'hidden') {
+      return false
+    }
+    element = element.parentElement ?? undefined
+  }
+  return true
 }
 
 export function findPasswordFields(
@@ -47,14 +79,35 @@ export function findUsernameFields(
   ).filter((field) => !field.disabled)
 }
 
+export function findOneTimeCodeFields(
+  root: ParentNode = document,
+): HTMLInputElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLInputElement>(
+      oneTimeCodeFieldSelectors.join(','),
+    ),
+  ).filter(
+    (field) =>
+      !field.disabled &&
+      !field.readOnly &&
+      isRenderedInput(field) &&
+      ['text', 'tel', 'number', 'password'].includes(field.type),
+  )
+}
+
 export function summarizePasswordForms(
   root: ParentNode = document,
 ): PasswordFormSummary {
   const passwordFields = findPasswordFields(root)
   const usernameFields = findUsernameFields(root)
+  const oneTimeCodeFields = findOneTimeCodeFields(root)
   const forms = new Set<HTMLFormElement>()
 
-  for (const field of [...passwordFields, ...usernameFields]) {
+  for (const field of [
+    ...passwordFields,
+    ...usernameFields,
+    ...oneTimeCodeFields,
+  ]) {
     if (field.form) {
       forms.add(field.form)
     }
@@ -63,9 +116,21 @@ export function summarizePasswordForms(
   return {
     passwordFieldCount: passwordFields.length,
     usernameFieldCount: usernameFields.length,
+    oneTimeCodeFieldCount: oneTimeCodeFields.length,
     formCount: forms.size,
     observedAt: Date.now(),
   }
+}
+
+export function fillOneTimeCode(
+  code: string,
+  root: ParentNode = document,
+): boolean {
+  const field = findOneTimeCodeFields(root)[0]
+  if (!field) return false
+  setNativeInputValue(field, code)
+  field.focus()
+  return true
 }
 
 export function fillLoginCredentials(

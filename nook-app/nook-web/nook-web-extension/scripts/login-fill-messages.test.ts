@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  isWebsiteAuthenticatorFillMessage,
+  isWebsiteAuthenticatorOptionsMessage,
   isWebsiteLoginOptionsMessage,
   isWebsiteLoginRevealMessage,
 } from '../src/lib/login-fill-messages'
@@ -10,6 +12,22 @@ describe('website login fill runtime messages', () => {
       isWebsiteLoginOptionsMessage({
         type: 'nook:website-login-options',
         payload: { origin: 'https://login.example.com' },
+      }),
+    ).toBe(true)
+    expect(
+      isWebsiteAuthenticatorOptionsMessage({
+        type: 'nook:website-authenticator-options',
+        payload: { origin: 'https://login.example.com' },
+      }),
+    ).toBe(true)
+    expect(
+      isWebsiteAuthenticatorFillMessage({
+        type: 'nook:website-authenticator-fill',
+        payload: {
+          origin: 'https://login.example.com',
+          vaultStoreId: 'store_test',
+          secretId: 'secret_totp',
+        },
       }),
     ).toBe(true)
     expect(
@@ -34,6 +52,15 @@ describe('website login fill runtime messages', () => {
     expect(
       isWebsiteLoginRevealMessage({
         type: 'nook:website-login-fill',
+        payload: {
+          origin: 'https://login.example.com',
+          vaultStoreId: 'store_test',
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWebsiteAuthenticatorFillMessage({
+        type: 'nook:website-authenticator-fill',
         payload: {
           origin: 'https://login.example.com',
           vaultStoreId: 'store_test',

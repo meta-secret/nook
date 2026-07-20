@@ -7,6 +7,14 @@ export type WebsiteLoginAccountOption = {
   websiteHost: string
 }
 
+export type WebsiteAuthenticatorOption = {
+  vaultStoreId: string
+  vaultName: string
+  secretId: string
+  issuer: string
+  account: string
+}
+
 export type WebsiteLoginOptionsMessage = {
   type: 'nook:website-login-options'
   payload: {
@@ -21,6 +29,45 @@ export type WebsiteLoginRevealMessage = {
     vaultStoreId: string
     secretId: string
   }
+}
+
+export type WebsiteAuthenticatorOptionsMessage = {
+  type: 'nook:website-authenticator-options'
+  payload: {
+    origin: string
+  }
+}
+
+export type WebsiteAuthenticatorFillMessage = {
+  type: 'nook:website-authenticator-fill'
+  payload: {
+    origin: string
+    vaultStoreId: string
+    secretId: string
+  }
+}
+
+type OriginRuntimeMessage = {
+  type: string
+  payload: Record<string, unknown> & { origin: string }
+}
+
+function hasOriginPayload(
+  message: unknown,
+  type: string,
+): message is OriginRuntimeMessage {
+  return Boolean(
+    message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === type &&
+    'payload' in message &&
+    typeof message.payload === 'object' &&
+    message.payload &&
+    'origin' in message.payload &&
+    typeof message.payload.origin === 'string' &&
+    message.payload.origin.length > 0,
+  )
 }
 
 export function isWebsiteLoginOptionsMessage(
@@ -39,6 +86,27 @@ export function isWebsiteLoginOptionsMessage(
   }
   const payload = message.payload as Record<string, unknown>
   return typeof payload.origin === 'string' && payload.origin.length > 0
+}
+
+export function isWebsiteAuthenticatorOptionsMessage(
+  message: unknown,
+): message is WebsiteAuthenticatorOptionsMessage {
+  return hasOriginPayload(message, 'nook:website-authenticator-options')
+}
+
+export function isWebsiteAuthenticatorFillMessage(
+  message: unknown,
+): message is WebsiteAuthenticatorFillMessage {
+  if (!hasOriginPayload(message, 'nook:website-authenticator-fill')) {
+    return false
+  }
+  const payload = message.payload as Record<string, unknown>
+  return (
+    typeof payload.vaultStoreId === 'string' &&
+    payload.vaultStoreId.length > 0 &&
+    typeof payload.secretId === 'string' &&
+    payload.secretId.length > 0
+  )
 }
 
 export function isWebsiteLoginRevealMessage(
