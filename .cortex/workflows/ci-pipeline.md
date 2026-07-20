@@ -149,8 +149,9 @@ Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
 PR web solves normally use browser-free `web-base`. UI-changing PRs, main,
-nightly, and explicitly requested browser e2e also build `web-e2e-base` with Debian's single
-`chromium` package. Playwright is pointed at `/usr/bin/chromium`; do not install
+nightly, and explicitly requested browser e2e also build `web-e2e-base` with Debian's
+`chromium` and `ffmpeg` packages. Playwright is pointed at `/usr/bin/chromium`,
+and its revisioned recording path links to `/usr/bin/ffmpeg`; do not install
 its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
 image layer (about 432 MB compressed) on cold runners.
 The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
