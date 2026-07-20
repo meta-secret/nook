@@ -34,8 +34,11 @@ import {
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
 import {
+  isWebsiteAuthenticatorFillMessage,
+  isWebsiteAuthenticatorOptionsMessage,
   isWebsiteLoginOptionsMessage,
   isWebsiteLoginRevealMessage,
+  type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../lib/login-fill-messages'
 import {
@@ -667,6 +670,104 @@ async function websiteLoginFill(
   })
 }
 
+async function websiteAuthenticatorOptions(
+  message: { payload: { origin: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { ok: true, status: 'unavailable', accounts: [] }
+  }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: true, status: 'locked', accounts: [] }
+  }
+
+  const accounts: WebsiteAuthenticatorOption[] = []
+  for (const grant of grants) {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-list-authenticators',
+      payload: grant,
+    })
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true ||
+      !('accounts' in response) ||
+      !Array.isArray(response.accounts)
+    ) {
+      continue
+    }
+    for (const account of response.accounts) {
+      if (
+        !account ||
+        typeof account !== 'object' ||
+        !('secretId' in account) ||
+        typeof account.secretId !== 'string' ||
+        !('issuer' in account) ||
+        typeof account.issuer !== 'string' ||
+        !('account' in account) ||
+        typeof account.account !== 'string'
+      ) {
+        continue
+      }
+      accounts.push({
+        vaultStoreId: grant.vaultStoreId,
+        vaultName: grant.vaultName,
+        secretId: account.secretId,
+        issuer: account.issuer,
+        account: account.account,
+      })
+    }
+  }
+  return { ok: true, status: 'ready', accounts }
+}
+
+async function websiteAuthenticatorFill(
+  message: {
+    payload: { origin: string; vaultStoreId: string; secretId: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const grant = (await passwordPairingGrants()).find(
+    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  )
+  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: false, reason: 'authenticator-locked' }
+  }
+  return sendSessionMessage({
+    type: 'nook:extension-session-authenticator-code',
+    payload: { ...grant, secretId: message.payload.secretId },
+  })
+}
+
 function passkeyRequestKey(
   sender: chrome.runtime.MessageSender,
   requestId: string,
@@ -920,6 +1021,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     void websiteLoginFill(message, sender)
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'login-fill-failed' }))
+    return true
+  }
+
+  if (isWebsiteAuthenticatorOptionsMessage(message)) {
+    void websiteAuthenticatorOptions(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-options-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorFillMessage(message)) {
+    void websiteAuthenticatorFill(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-fill-failed' }),
+      )
     return true
   }
 

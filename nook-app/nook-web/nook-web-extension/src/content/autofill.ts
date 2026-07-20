@@ -2,10 +2,14 @@ export {}
 
 import {
   fillLoginCredentials,
+  fillOneTimeCode,
   submitLoginForm,
   summarizePasswordForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
-import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
+import type {
+  WebsiteAuthenticatorOption,
+  WebsiteLoginAccountOption,
+} from '../lib/login-fill-messages'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
@@ -18,7 +22,9 @@ type WidgetPosition = {
 
 let pendingScan: number | undefined
 let widgetHost: HTMLElement | undefined
+let widgetMode: 'login' | 'authenticator' | undefined
 let dismissed = false
+let completedMode: 'login' | 'authenticator' | undefined
 let busy = false
 let widgetCollapsed = false
 let widgetPosition: WidgetPosition | undefined
@@ -37,6 +43,17 @@ type LoginFillResponse = {
   reason?: string
 }
 
+type AuthenticatorOptionsResponse = {
+  ok?: boolean
+  status?: 'ready' | 'locked' | 'unavailable'
+  accounts?: WebsiteAuthenticatorOption[]
+}
+
+type AuthenticatorFillResponse = {
+  ok?: boolean
+  code?: string
+}
+
 function translatedMessage(key: string): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }
@@ -44,6 +61,7 @@ function translatedMessage(key: string): string {
 function removeWidget(): void {
   widgetHost?.remove()
   widgetHost = undefined
+  widgetMode = undefined
 }
 
 function clampWidgetPosition(
@@ -195,7 +213,7 @@ async function fillAndSubmitAccount(
     return
   }
   submitLoginForm()
-  dismissed = true
+  completedMode = 'login'
   removeWidget()
 }
 
@@ -305,13 +323,166 @@ async function continueWithNook(
   }
 }
 
+async function fillAuthenticatorCode(
+  account: WebsiteAuthenticatorOption,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<void> {
+  const response = await sendRuntimeMessage<AuthenticatorFillResponse>({
+    type: 'nook:website-authenticator-fill',
+    payload: {
+      origin: location.origin,
+      vaultStoreId: account.vaultStoreId,
+      secretId: account.secretId,
+    },
+  })
+  if (!response?.ok || !response.code) {
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorFillFailed'),
+      true,
+    )
+    return
+  }
+  let code = response.code
+  response.code = ''
+  const filled = fillOneTimeCode(code)
+  code = ''
+  if (!filled) {
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorFillFailed'),
+      true,
+    )
+    return
+  }
+  completedMode = 'authenticator'
+  removeWidget()
+}
+
+function renderAuthenticatorChooser(
+  panel: HTMLElement,
+  accounts: WebsiteAuthenticatorOption[],
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+): void {
+  continueButton.hidden = true
+  openVaultButton.hidden = true
+  description.textContent = translatedMessage('widgetChooseAuthenticator')
+
+  const list = document.createElement('div')
+  list.className = 'account-list'
+  for (const account of accounts) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'secondary-button account-button'
+    button.textContent = account.account
+      ? `${account.issuer} — ${account.account}`
+      : account.issuer
+    button.addEventListener('click', () => {
+      if (busy) return
+      busy = true
+      button.disabled = true
+      void fillAuthenticatorCode(account, description, continueButton).finally(
+        () => {
+          busy = false
+        },
+      )
+    })
+    list.append(button)
+  }
+  panel.append(list)
+}
+
+async function continueWithAuthenticator(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  openVaultButton: HTMLButtonElement,
+  panel: HTMLElement,
+): Promise<void> {
+  if (busy) return
+  busy = true
+  continueButton.disabled = true
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetAuthenticatorWorking'),
+    false,
+  )
+
+  try {
+    const response = await sendRuntimeMessage<AuthenticatorOptionsResponse>({
+      type: 'nook:website-authenticator-options',
+      payload: { origin: location.origin },
+    })
+    if (!response?.ok) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetAuthenticatorFillFailed'),
+        true,
+      )
+      return
+    }
+    if (response.status === 'locked') {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetAuthenticatorUnlock'),
+        true,
+      )
+      return
+    }
+
+    const accounts = response.accounts ?? []
+    if (accounts.length === 0) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetNoAuthenticator'),
+        false,
+      )
+      continueButton.hidden = true
+      openVaultButton.textContent = translatedMessage('widgetAddAuthenticator')
+      openVaultButton.setAttribute(
+        'aria-label',
+        translatedMessage('widgetAddAuthenticator'),
+      )
+      return
+    }
+    renderAuthenticatorChooser(
+      panel,
+      accounts,
+      description,
+      continueButton,
+      openVaultButton,
+    )
+  } finally {
+    busy = false
+    if (continueButton.isConnected && !continueButton.hidden) {
+      continueButton.disabled = false
+    }
+  }
+}
+
 function renderWidget(): void {
   const summary = summarizePasswordForms()
-  if (summary.passwordFieldCount === 0 || dismissed) {
+  const mode =
+    summary.oneTimeCodeFieldCount > 0
+      ? 'authenticator'
+      : summary.passwordFieldCount > 0
+        ? 'login'
+        : undefined
+  if (mode !== completedMode) completedMode = undefined
+  if (!mode || dismissed || completedMode === mode) {
     removeWidget()
     return
   }
-  if (widgetHost) return
+  if (widgetHost && widgetMode === mode) return
+  if (widgetHost) removeWidget()
 
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
@@ -328,7 +499,9 @@ function renderWidget(): void {
 
   const step = document.createElement('p')
   step.className = 'step-label'
-  step.textContent = translatedMessage('widgetGateStep')
+  step.textContent = translatedMessage(
+    mode === 'authenticator' ? 'widgetAuthenticatorStep' : 'widgetGateStep',
+  )
 
   const collapseButton = document.createElement('button')
   collapseButton.type = 'button'
@@ -360,17 +533,26 @@ function renderWidget(): void {
   mark.height = 52
 
   const title = document.createElement('h1')
-  title.textContent = translatedMessage('widgetGateTitle')
+  title.textContent = translatedMessage(
+    mode === 'authenticator' ? 'widgetAuthenticatorTitle' : 'widgetGateTitle',
+  )
 
   const description = document.createElement('p')
   description.className = 'description'
-  description.textContent = translatedMessage('widgetGateDescription')
+  description.textContent = translatedMessage(
+    mode === 'authenticator'
+      ? 'widgetAuthenticatorDescription'
+      : 'widgetGateDescription',
+  )
 
   const continueButton = document.createElement('button')
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
-  continueButton.setAttribute('aria-label', translatedMessage('widgetContinue'))
-  continueButton.textContent = translatedMessage('widgetContinue')
+  const continueLabel = translatedMessage(
+    mode === 'authenticator' ? 'widgetFillAuthenticator' : 'widgetContinue',
+  )
+  continueButton.setAttribute('aria-label', continueLabel)
+  continueButton.textContent = continueLabel
 
   const openVaultButton = document.createElement('button')
   openVaultButton.type = 'button'
@@ -385,7 +567,16 @@ function renderWidget(): void {
   })
 
   continueButton.addEventListener('click', () => {
-    void continueWithNook(description, continueButton, openVaultButton, body)
+    if (mode === 'authenticator') {
+      void continueWithAuthenticator(
+        description,
+        continueButton,
+        openVaultButton,
+        body,
+      )
+    } else {
+      void continueWithNook(description, continueButton, openVaultButton, body)
+    }
   })
 
   body.append(mark, title, description, continueButton, openVaultButton)
@@ -597,6 +788,7 @@ function renderWidget(): void {
   shadow.append(style, panel)
   document.documentElement.append(host)
   widgetHost = host
+  widgetMode = mode
 
   attachPointerDrag(host, toolbar)
   attachPointerDrag(host, collapsedLaunch, {

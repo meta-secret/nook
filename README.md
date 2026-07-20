@@ -17,7 +17,10 @@ the vault.
 
 Store website logins, API keys, BIP39 seed phrases, Markdown secure notes,
 Google Authenticator-compatible TOTP items with simple setup-key or URI entry,
-and website passkeys. The Chromium extension can save and use passkeys from an
+and website passkeys. On recognized one-time-code fields, the Chromium
+extension lets the user choose a saved authenticator and fills a freshly
+derived TOTP code; when none is saved, it says so and opens the vault to add
+one. The extension can also save and use passkeys from an
 approved, unlocked Simple Vault while preserving an explicit browser/security
 key fallback. Passkeys cannot be created from the generic item form; key
 generation, RP validation, signing, and counter updates stay in Rust/WASM.
@@ -105,8 +108,10 @@ path you configured), you lose the vault. Approve at least two devices.
 
 Items are searchable. Secret values stay masked until revealed. Secure notes use
 an Edit / Preview Markdown editor. Authenticator items derive the current
-one-time code locally in Rust/WASM and never persist generated codes. Nook also
-includes a secure password generator.
+one-time code locally in Rust/WASM and never persist generated codes. The
+browser extension detects common OTP fields and releases a current code only
+after the user explicitly chooses the authenticator. Nook also includes a
+secure password generator.
 
 Vault items are append-only in the UI: add, reveal, copy, delete. To change an
 item, add a corrected copy and delete the old one.

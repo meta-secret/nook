@@ -451,6 +451,45 @@ async function handleMessage(message: unknown): Promise<unknown> {
         credential.free()
       }
     }
+    case 'nook:extension-session-list-authenticators': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const accounts = await activeManager.listAuthenticatorAccounts()
+      try {
+        return {
+          ok: true,
+          accounts: accounts.map((account) => ({
+            secretId: account.secretId,
+            issuer: account.issuer,
+            account: account.account,
+          })),
+        }
+      } finally {
+        accounts.forEach((account) => account.free())
+      }
+    }
+    case 'nook:extension-session-authenticator-code': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (typeof payload.secretId !== 'string') {
+        throw new Error(
+          'Extension session received an invalid authenticator selection.',
+        )
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const code = await activeManager.currentAuthenticatorCodeForFill(
+        payload.secretId,
+        Math.floor(Date.now() / 1000),
+      )
+      try {
+        return { ok: true, code: code.code }
+      } finally {
+        code.free()
+      }
+    }
     case 'nook:extension-session-register-passkey': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)

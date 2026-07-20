@@ -1420,7 +1420,17 @@
       "unlock_then_continue": "Unlock Nook in the companion window, then click Continue with Nook again.",
       "no_match": "No saved login matches this site yet. Open the vault to add one.",
       "choose_account": "Choose which login to use.",
-      "fill_failed": "Nook could not fill this login. Try Open vault or unlock and continue again."
+      "fill_failed": "Nook could not fill this login. Try Open vault or unlock and continue again.",
+      "authenticator_step": "2FA with Nook",
+      "authenticator_title": "Fill your 2FA code",
+      "authenticator_description": "Nook can generate a current code from an authenticator saved in your vault.",
+      "fill_authenticator": "Fill 2FA code",
+      "authenticator_working": "Looking for saved 2FA codes…",
+      "authenticator_unlock": "Unlock Nook in the companion window, then click Fill 2FA code again.",
+      "no_authenticator": "There is no 2FA code saved in your vault yet.",
+      "add_authenticator": "Add 2FA in vault",
+      "choose_authenticator": "Choose which authenticator to use.",
+      "authenticator_fill_failed": "Nook could not fill this 2FA code. Unlock Nook and try again."
     },
     "passkey": {
       "save_title": "Save a passkey with Nook?",
