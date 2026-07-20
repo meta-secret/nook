@@ -420,6 +420,7 @@
   },
   "bitwarden_import": {
     "button": "Import Bitwarden",
+    "source": "Bitwarden",
     "title": "Import from Bitwarden",
     "description": "Move supported items from a plaintext or password-protected encrypted Bitwarden JSON export into this vault.",
     "export_hint_title": "Export a JSON file from Bitwarden",
@@ -436,6 +437,7 @@
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
   "lastpass_import": {
+    "source": "LastPass",
     "title": "Import from LastPass",
     "description": "Move logins and secure notes from a LastPass generic CSV export into this vault.",
     "export_hint_title": "Export a CSV file from LastPass",
@@ -449,6 +451,7 @@
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
   "onepassword_import": {
+    "source": "1Password",
     "title": "Import from 1Password",
     "description": "Move supported items from a 1Password Unencrypted Export (.1pux) archive into this vault.",
     "export_hint_title": "Export a 1PUX file from 1Password",
@@ -462,6 +465,7 @@
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
   "apple_passwords_import": {
+    "source": "Apple Passwords",
     "title": "Import from Apple Passwords",
     "description": "Move passwords and verification codes from an Apple Passwords CSV export into this vault.",
     "export_hint_title": "Export a CSV file from Apple Passwords",
@@ -475,6 +479,7 @@
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
   "chrome_passwords_import": {
+    "source": "Chrome or another browser",
     "title": "Import from Chrome or another browser",
     "description": "Move website logins from a Chrome-family password CSV export into this vault.",
     "export_hint_title": "Export passwords from your browser",
@@ -488,6 +493,7 @@
     "result_skipped": "Skipped {unsupported} unsupported or empty rows and {duplicates} duplicates."
   },
   "google_authenticator_import": {
+    "source": "Google Authenticator",
     "title": "Import from Google Authenticator",
     "description": "Move TOTP verification codes from Google Authenticator migration QR codes into this vault.",
     "export_hint_title": "Show your account export QR codes",
@@ -509,6 +515,7 @@
     "result_skipped": "Skipped {unsupported} unsupported accounts and {duplicates} duplicates."
   },
   "proton_pass_import": {
+    "source": "Proton Pass",
     "title": "Import from Proton Pass",
     "description": "Move logins and secure notes from a Proton Pass export into this vault.",
     "export_hint_title": "Export an unencrypted ZIP from Proton Pass",

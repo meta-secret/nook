@@ -527,7 +527,7 @@
   >
     <div class="space-y-2">
       <SettingsAccordionSection
-        title={vault.t("apple_passwords_import.title")}
+        title={vault.t("apple_passwords_import.source")}
         subtitle={vault.t("apple_passwords_import.description")}
         section="apple-passwords"
         bind:activeSection={activeImportProvider}
@@ -542,7 +542,7 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("chrome_passwords_import.title")}
+        title={vault.t("chrome_passwords_import.source")}
         subtitle={vault.t("chrome_passwords_import.description")}
         section="chrome-passwords"
         bind:activeSection={activeImportProvider}
@@ -557,7 +557,7 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("google_authenticator_import.title")}
+        title={vault.t("google_authenticator_import.source")}
         subtitle={vault.t("google_authenticator_import.description")}
         section="google-authenticator"
         bind:activeSection={activeImportProvider}
@@ -572,7 +572,7 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("bitwarden_import.title")}
+        title={vault.t("bitwarden_import.source")}
         subtitle={vault.t("bitwarden_import.description")}
         section="bitwarden"
         bind:activeSection={activeImportProvider}
@@ -587,7 +587,7 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("lastpass_import.title")}
+        title={vault.t("lastpass_import.source")}
         subtitle={vault.t("lastpass_import.description")}
         section="lastpass"
         bind:activeSection={activeImportProvider}
@@ -602,7 +602,7 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("onepassword_import.title")}
+        title={vault.t("onepassword_import.source")}
         subtitle={vault.t("onepassword_import.description")}
         section="onepassword"
         bind:activeSection={activeImportProvider}
@@ -617,7 +617,7 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("proton_pass_import.title")}
+        title={vault.t("proton_pass_import.source")}
         subtitle={vault.t("proton_pass_import.description")}
         section="proton-pass"
         bind:activeSection={activeImportProvider}
