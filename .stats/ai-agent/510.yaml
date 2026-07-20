@@ -1,0 +1,247 @@
+schema_version: 1
+source_pr:
+  number: 510
+  url: https://github.com/meta-secret/nook/pull/510
+  title: Import Google Authenticator account-export QR codes
+  change_surface: rust_wasm_web_browser_flow
+  head_sha: 3d13a5baaaa6dd668cb073b8c4d7772e02036448
+  started_at: 2026-07-20T01:04:20Z
+  opened_at: 2026-07-20T01:36:19Z
+  merged_at: 2026-07-20T02:47:15Z
+  elapsed_seconds: 6175
+  open_to_merge_seconds: 4256
+summary:
+  local_execution_count: 21
+  local_check_count: 9
+  local_test_count: 4
+  local_combined_count: 8
+  local_execution_seconds: 3183
+  github_actions_run_count: 4
+  github_actions_seconds: 4296
+  pr_retrigger_count: 3
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: cargo test -p nook-core google_authenticator_import
+    category: test
+    started_at: 2026-07-20T01:24:00Z
+    finished_at: 2026-07-20T01:24:36Z
+    duration_seconds: 36
+    outcome: passed
+    reason: focused_domain_validation
+  - command: cargo clippy -p nook-core --all-targets -- -D warnings
+    category: check
+    started_at: 2026-07-20T01:24:40Z
+    finished_at: 2026-07-20T01:25:04Z
+    duration_seconds: 24
+    outcome: passed
+    reason: focused_domain_lint
+  - command: cargo clippy -p nook-wasm --target wasm32-unknown-unknown -- -D warnings
+    category: check
+    started_at: 2026-07-20T01:25:05Z
+    finished_at: 2026-07-20T01:25:48Z
+    duration_seconds: 43
+    outcome: passed
+    reason: focused_wasm_lint
+  - command: bun run test -- tests/unit/components/password-import-panels.test.ts
+    category: test
+    started_at: 2026-07-20T01:25:50Z
+    finished_at: 2026-07-20T01:25:55Z
+    duration_seconds: 5
+    outcome: passed
+    reason: focused_import_ui_validation
+  - command: bun run check
+    category: check
+    started_at: 2026-07-20T01:26:00Z
+    finished_at: 2026-07-20T01:26:34Z
+    duration_seconds: 34
+    outcome: passed
+    reason: focused_web_type_validation
+  - command: bun run lint
+    category: check
+    started_at: 2026-07-20T01:26:36Z
+    finished_at: 2026-07-20T01:26:58Z
+    duration_seconds: 22
+    outcome: passed
+    reason: focused_web_lint
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-20T01:27:00Z
+    finished_at: 2026-07-20T01:27:00Z
+    duration_seconds: 0
+    outcome: passed
+    reason: implementation_diff_validation
+  - command: task wasm:build:fast
+    category: check
+    started_at: 2026-07-20T01:27:05Z
+    finished_at: 2026-07-20T01:28:31Z
+    duration_seconds: 86
+    outcome: passed
+    reason: focused_wasm_build
+  - command: NOOK_WEB_E2E_PORT=5173 E2E_SPEC=e2e/local-vault.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-20T01:29:00Z
+    finished_at: 2026-07-20T01:29:45Z
+    duration_seconds: 45
+    outcome: failed
+    reason: occupied_port_served_unrelated_application
+  - command: NOOK_WEB_E2E_PORT=5187 E2E_SPEC=e2e/local-vault.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-20T01:30:00Z
+    finished_at: 2026-07-20T01:30:41Z
+    duration_seconds: 41
+    outcome: passed
+    reason: focused_settings_import_browser_validation
+  - command: task pr:preflight PR=510
+    category: check
+    started_at: 2026-07-20T01:36:25Z
+    finished_at: 2026-07-20T01:36:33Z
+    duration_seconds: 8
+    outcome: failed
+    reason: required_pr_checks_and_deployment_in_progress
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T01:36:40Z
+    finished_at: 2026-07-20T01:52:28Z
+    duration_seconds: 948
+    outcome: failed
+    reason: rustfmt_detected_unformatted_match_arm
+  - command: cargo fmt --all && cargo fmt --all -- --check && git diff --check
+    category: check
+    started_at: 2026-07-20T01:52:30Z
+    finished_at: 2026-07-20T01:52:35Z
+    duration_seconds: 5
+    outcome: passed
+    reason: formatting_correction
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T01:53:20Z
+    finished_at: 2026-07-20T02:05:52Z
+    duration_seconds: 752
+    outcome: passed
+    reason: formatted_head_validation
+  - command: cargo fmt --all -- --check && cargo test -p nook-core google_authenticator_import && cargo clippy -p nook-core -p nook-wasm --all-targets -- -D warnings
+    category: combined
+    started_at: 2026-07-20T02:06:00Z
+    finished_at: 2026-07-20T02:06:08Z
+    duration_seconds: 8
+    outcome: failed
+    reason: review_fix_required_drop_safe_test_struct_construction
+  - command: cargo fmt --all -- --check && cargo test -p nook-core google_authenticator_import && cargo clippy -p nook-core -p nook-wasm --all-targets -- -D warnings
+    category: combined
+    started_at: 2026-07-20T02:06:15Z
+    finished_at: 2026-07-20T02:07:00Z
+    duration_seconds: 45
+    outcome: passed
+    reason: review_fix_secret_zeroization_validation
+  - command: bun run test -- tests/unit/lib/security-headers.test.ts && bun run format:check && git diff --check
+    category: combined
+    started_at: 2026-07-20T02:07:02Z
+    finished_at: 2026-07-20T02:07:17Z
+    duration_seconds: 15
+    outcome: passed
+    reason: review_fix_camera_policy_validation
+  - command: cargo fmt --all -- --check && cargo test -p nook-core parsed_parameters_zeroize_all_sensitive_fields
+    category: combined
+    started_at: 2026-07-20T02:07:20Z
+    finished_at: 2026-07-20T02:07:32Z
+    duration_seconds: 12
+    outcome: passed
+    reason: explicit_sensitive_field_zeroization_regression
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:10:00Z
+    finished_at: 2026-07-20T02:19:41Z
+    duration_seconds: 581
+    outcome: passed
+    reason: review_fixed_head_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:22:26Z
+    finished_at: 2026-07-20T02:29:58Z
+    duration_seconds: 452
+    outcome: passed
+    reason: rebased_exact_head_validation
+  - command: task pr:ready PR=510
+    category: check
+    started_at: 2026-07-20T02:46:39Z
+    finished_at: 2026-07-20T02:47:00Z
+    duration_seconds: 21
+    outcome: passed
+    reason: exact_head_merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29711169988
+    run_attempt: 1
+    head_sha: 7c6755187e4dfced9e7cdac578e0adf759eeda27
+    trigger: pull_request
+    started_at: 2026-07-20T01:36:22Z
+    finished_at: 2026-07-20T01:53:44Z
+    duration_seconds: 1042
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29711586157
+    run_attempt: 1
+    head_sha: 1f13d271f7daa8a15d8963ddf5a1cfca53a228d7
+    trigger: pull_request
+    started_at: 2026-07-20T01:53:15Z
+    finished_at: 2026-07-20T02:09:12Z
+    duration_seconds: 957
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29712012395
+    run_attempt: 1
+    head_sha: 2c1f6f80a046263d5be81df3d564fc2d5fc29ecc
+    trigger: pull_request
+    started_at: 2026-07-20T02:08:42Z
+    finished_at: 2026-07-20T02:22:58Z
+    duration_seconds: 856
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29712464489
+    run_attempt: 1
+    head_sha: 3d13a5baaaa6dd668cb073b8c4d7772e02036448
+    trigger: pull_request
+    started_at: 2026-07-20T02:22:29Z
+    finished_at: 2026-07-20T02:46:30Z
+    duration_seconds: 1441
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-20T01:53:15Z
+    reason: rustfmt_correction
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T02:08:42Z
+    reason: review_fixes_for_camera_policy_and_secret_zeroization
+    initiated_by_agent: true
+  - kind: base_update
+    at: 2026-07-20T02:22:29Z
+    reason: rebase_onto_current_main_before_merge
+    initiated_by_agent: true
+merge_attempts:
+  - at: 2026-07-20T02:47:15Z
+    method: squash
+    outcome: success
+    reason: readiness_passed_remote_merge_succeeded_local_cleanup_blocked_by_main_worktree
+comparison:
+  baseline_prs: [491, 501]
+  baseline_quality: comparable
+  baseline_note: Both records cover browser flows through the Rust WASM web gate set, with PR 501 also exercising extension isolation
+  elapsed_seconds_change_percent: 144.7
+  local_execution_seconds_change_percent: 138.1
+  github_actions_seconds_change_percent: 204.5
+  regression: true
+  regression_reasons:
+    - Three changed-head PR cycles were cancelled after formatting, security review, and base-update corrections before the final exact-head run passed
+    - Security review required both a deployed camera-policy fix and drop-safe zeroization on importer error paths
+    - Main advanced after review fixes, requiring a final rebase plus complete local and remote exact-head validation
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first full local gate found a rustfmt issue that an earlier format check would have caught; this is an agent sequencing correction rather than a repository build change
+    - The occupied-port browser failure was environmental and the immediate isolated-port run passed without a product change
+    - Every subsequent full suite and PR run followed a formatting, security, or base-head change; no unchanged-head workflow was rerun
+    - The duration regression is non-actionable at the repository level because the extra cycles validated required security fixes and current-main integration, while caches remained effective
+    - Work stopped at implementation PR merge; the post-merge Main workflow was not awaited or included
+  required_actions: []
