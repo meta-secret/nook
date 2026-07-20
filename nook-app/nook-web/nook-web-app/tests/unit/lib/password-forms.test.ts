@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
   submitLoginForm,
@@ -48,6 +49,7 @@ describe('website one-time-code fields', () => {
 
     const observations = summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
+    expect(observations[0]?.formScope.kind).toBe('owned')
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
       currentPasswordFieldCount: 1,
@@ -64,6 +66,36 @@ describe('website one-time-code fields', () => {
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
       </section>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(2)
+    expect(observations.map(({ summary }) => summary)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          currentPasswordFieldCount: 0,
+          newPasswordFieldCount: 1,
+        }),
+        expect.objectContaining({
+          currentPasswordFieldCount: 1,
+          newPasswordFieldCount: 0,
+        }),
+      ]),
+    )
+  })
+
+  test('keeps separate unowned auth containers isolated', () => {
+    document.body.innerHTML = `
+      <div class="signup-panel">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="new-password" />
+        <button type="submit">Create account</button>
+      </div>
+      <div class="login-panel">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </div>
     `
 
     const observations = summarizeAuthenticationWorkflowForms()
@@ -100,7 +132,31 @@ describe('website one-time-code fields', () => {
     )
 
     const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations[0]?.formOwner?.id).toBe('login')
+    const firstScope = observations[0]?.formScope
+    expect(firstScope?.kind).toBe('owned')
+    expect(firstScope?.kind === 'owned' ? firstScope.owner.id : '').toBe(
+      'login',
+    )
+  })
+
+  test('fills a visible username instead of a hidden autocomplete token', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="hidden" autocomplete="username" value="token" />
+        <input id="visible-email" type="email" />
+        <input id="password" type="password" autocomplete="current-password" />
+      </form>
+    `
+
+    expect(
+      fillLoginCredentials({ username: 'pilot', password: 'secret' }),
+    ).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('[type="hidden"]')?.value,
+    ).toBe('token')
+    expect(
+      document.querySelector<HTMLInputElement>('#visible-email')?.value,
+    ).toBe('pilot')
   })
 
   test('does not claim a div-based login was submitted', () => {
@@ -112,7 +168,32 @@ describe('website one-time-code fields', () => {
       </section>
     `
 
-    expect(submitLoginForm(document, null)).toBe(false)
+    expect(submitLoginForm(document, { kind: 'unowned' })).toBe(false)
+  })
+
+  test('does not claim a disabled submit control was activated', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="password" autocomplete="current-password" />
+        <button type="submit" disabled>Sign in</button>
+      </form>
+    `
+
+    expect(submitLoginForm()).toBe(false)
+  })
+
+  test('reports submission only when the form emits a submit event', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm()).toBe(true)
   })
 
   test('fills the first enabled OTP field through the native value setter', () => {

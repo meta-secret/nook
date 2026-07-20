@@ -88,9 +88,14 @@ const extensionApprovalVaultName = isHostedSmoke
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
     if (
-      !['/login', '/signup', '/otp', '/combined', '/spa'].includes(
-        request.url ?? '',
-      )
+      ![
+        '/login',
+        '/signup',
+        '/otp',
+        '/otp-hidden',
+        '/combined',
+        '/spa',
+      ].includes(request.url ?? '')
     ) {
       response.writeHead(404)
       response.end('Not found')
@@ -117,6 +122,23 @@ async function startLoginServer(): Promise<TestServer> {
             <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
             <button type="submit">Verify</button>
           </form>
+        </main></body></html>`)
+      return
+    }
+    if (request.url === '/otp-hidden') {
+      response.end(`<!doctype html>
+        <html><body><main><h1>Verify account</h1>
+          <form id="otp-form" hidden>
+            <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
+            <button type="submit">Verify</button>
+          </form>
+          <button id="reveal-otp" type="button">Continue to verification</button>
+          <script>
+            document.getElementById('reveal-otp').addEventListener('click', (event) => {
+              document.getElementById('otp-form').hidden = false
+              event.currentTarget.remove()
+            })
+          </script>
         </main></body></html>`)
       return
     }
@@ -497,12 +519,27 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       signupWidget.getByRole('button', { name: 'Take over' }),
     ).toBeVisible()
+    await signupWidget.evaluate((host) => {
+      host.shadowRoot
+        ?.querySelector<HTMLButtonElement>('button.text-button')
+        ?.click()
+    })
+    await expect(signupWidget).toBeVisible()
 
     const otpPage = await context.newPage()
     await otpPage.goto(`${loginServer.origin}/otp`)
     const otpWidget = otpPage.locator('#nook-auth-widget')
     await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
     await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
+
+    const hiddenOtpPage = await context.newPage()
+    await hiddenOtpPage.goto(`${loginServer.origin}/otp-hidden`)
+    const hiddenOtpWidget = hiddenOtpPage.locator('#nook-auth-widget')
+    await expect(hiddenOtpWidget).toHaveCount(0)
+    await hiddenOtpPage
+      .getByRole('button', { name: 'Continue to verification' })
+      .click()
+    await expect(hiddenOtpWidget.getByText('Fill your 2FA code')).toBeVisible()
 
     const combinedPage = await context.newPage()
     await combinedPage.goto(`${loginServer.origin}/combined`)

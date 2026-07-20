@@ -300,7 +300,7 @@ async function fillAndSubmitAccount(
   const filled = fillLoginCredentials(
     credentials,
     workflow.root,
-    workflow.formOwner,
+    workflow.formScope,
   )
   credentials.password = ''
   credentials.username = ''
@@ -314,7 +314,7 @@ async function fillAndSubmitAccount(
     )
     return false
   }
-  if (!submitLoginForm(workflow.root, workflow.formOwner)) {
+  if (!submitLoginForm(workflow.root, workflow.formScope)) {
     setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
     description.textContent = translatedMessage('widgetFilledManual')
     continueButton.hidden = true
@@ -496,7 +496,7 @@ async function fillAuthenticatorCode(
   }
   let code = response.code
   response.code = ''
-  const filled = fillOneTimeCode(code, workflow.root, workflow.formOwner)
+  const filled = fillOneTimeCode(code, workflow.root, workflow.formScope)
   code = ''
   if (!filled) {
     setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
@@ -667,7 +667,10 @@ function renderWidget(
     widgetHost &&
     renderedWorkflowKey === workflowKey &&
     renderedWorkflowRoot?.root === workflow.root &&
-    renderedWorkflowRoot.formOwner === workflow.formOwner
+    renderedWorkflowRoot.formScope.kind === workflow.formScope.kind &&
+    (renderedWorkflowRoot.formScope.kind !== 'owned' ||
+      (workflow.formScope.kind === 'owned' &&
+        renderedWorkflowRoot.formScope.owner === workflow.formScope.owner))
   ) {
     return
   }
@@ -795,7 +798,8 @@ function renderWidget(
   takeOverButton.className = 'text-button'
   takeOverButton.textContent = translatedMessage('widgetTakeOver')
   takeOverButton.hidden = !canContinueWithNook
-  takeOverButton.addEventListener('click', () => {
+  takeOverButton.addEventListener('click', (event) => {
+    if (!isTrustedAuthAction(event.isTrusted)) return
     dismissed = true
     removeWidget()
   })
@@ -1138,7 +1142,17 @@ if (!isRuntimeNookVaultAppUrl(location.href)) {
   const observer = new MutationObserver(scheduleScan)
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ['autocomplete', 'disabled', 'id', 'name', 'type'],
+    attributeFilter: [
+      'aria-hidden',
+      'autocomplete',
+      'class',
+      'disabled',
+      'hidden',
+      'id',
+      'name',
+      'style',
+      'type',
+    ],
     childList: true,
     subtree: true,
   })

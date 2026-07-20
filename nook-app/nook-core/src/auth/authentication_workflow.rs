@@ -204,7 +204,10 @@ pub const fn classify_authentication_workflow(
         ));
     }
 
-    if observation.generic_password_field_count > 1 {
+    if (observation.current_password_field_count > 0
+        && observation.generic_password_field_count > 0)
+        || observation.generic_password_field_count > 1
+    {
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Manual,
             AuthenticationWorkflowStage::Manual,
@@ -349,6 +352,18 @@ mod tests {
             ..observation()
         };
         let snapshot = classify_authentication_workflow(ambiguous).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+    }
+
+    #[test]
+    fn current_plus_generic_password_forms_never_offer_login_fill() {
+        let ambiguous_change = AuthenticationPageObservation {
+            current_password_field_count: 1,
+            generic_password_field_count: 1,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(ambiguous_change).unwrap();
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
     }

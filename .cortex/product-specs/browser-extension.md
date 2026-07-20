@@ -39,10 +39,12 @@ application capability checks enforce the vault-type boundary.
 
 Authenticator items remain standalone and are not guessed from an issuer name
 or silently associated with the current origin. Until a typed website
-association exists, the in-page gate lists safe service/account labels and
-requires an explicit selection for every OTP fill. An empty vault state says
-that no 2FA code is saved and offers to open Simple Vault. Page QR and backup
-code enrollment is a separate consented capture flow, not background scanning.
+association exists, the in-page gate uses non-secret ordinal choices and
+requires an explicit selection for every OTP fill. Disambiguating metadata
+belongs in a future extension-controlled picker, not the host page DOM. An
+empty vault state says that no 2FA code is saved and offers to open Simple
+Vault. Page QR and backup code enrollment is a separate consented capture flow,
+not background scanning.
 
 "No vault UI in the extension" means no second vault-management UI. The toolbar
 popup may contain the standard one-time device-protection widget because

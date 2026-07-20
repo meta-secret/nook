@@ -14,9 +14,13 @@ export type LoginCredentials = {
   password: string;
 };
 
+export type PasswordFormScope =
+  | { kind: "owned"; owner: HTMLFormElement }
+  | { kind: "unowned" };
+
 export type PasswordFormObservation = {
   root: ParentNode;
-  formOwner: HTMLFormElement | null;
+  formScope: PasswordFormScope;
   summary: PasswordFormSummary;
 };
 
@@ -59,6 +63,7 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 }
 
 function isRenderedInput(field: HTMLInputElement): boolean {
+  if (field.type === "hidden") return false;
   let element: HTMLElement | undefined = field;
   while (element) {
     if (element.hidden || element.getAttribute("aria-hidden") === "true") {
@@ -76,47 +81,47 @@ function isRenderedInput(field: HTMLInputElement): boolean {
 function findFields(
   root: ParentNode,
   selector: string,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
   const queryRoot =
-    formOwner instanceof HTMLFormElement ? formOwner.ownerDocument : root;
+    formScope?.kind === "owned" ? formScope.owner.ownerDocument : root;
   return Array.from(
     queryRoot.querySelectorAll<HTMLInputElement>(selector),
   ).filter((field) =>
-    formOwner === undefined
+    formScope === undefined
       ? true
-      : formOwner === null
-        ? field.form === null
-        : field.form === formOwner,
+      : formScope.kind === "unowned"
+        ? !field.form
+        : field.form === formScope.owner,
   );
 }
 
 export function findPasswordFields(
   root: ParentNode = document,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
-  return findFields(root, 'input[type="password"]', formOwner).filter(
+  return findFields(root, 'input[type="password"]', formScope).filter(
     (field) => !field.disabled && field.type === "password",
   );
 }
 
 export function findUsernameFields(
   root: ParentNode = document,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
-  return findFields(root, usernameFieldSelectors.join(","), formOwner).filter(
-    (field) => !field.disabled,
+  return findFields(root, usernameFieldSelectors.join(","), formScope).filter(
+    (field) => !field.disabled && !field.readOnly && isRenderedInput(field),
   );
 }
 
 export function findOneTimeCodeFields(
   root: ParentNode = document,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
   return findFields(
     root,
     oneTimeCodeFieldSelectors.join(","),
-    formOwner,
+    formScope,
   ).filter(
     (field) =>
       !field.disabled &&
@@ -139,11 +144,11 @@ function hasAutocompleteToken(
 
 function summarizeRoot(
   root: ParentNode,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): PasswordFormSummary {
-  const passwordFields = findPasswordFields(root, formOwner);
-  const usernameFields = findUsernameFields(root, formOwner);
-  const oneTimeCodeFields = findOneTimeCodeFields(root, formOwner);
+  const passwordFields = findPasswordFields(root, formScope);
+  const usernameFields = findUsernameFields(root, formScope);
+  const oneTimeCodeFields = findOneTimeCodeFields(root, formScope);
   const currentPasswordFieldCount = passwordFields.filter((field) =>
     hasAutocompleteToken(field, "current-password"),
   ).length;
@@ -181,6 +186,26 @@ export function summarizePasswordForms(
   return summarizeRoot(root);
 }
 
+function nearestUnownedAuthContainer(
+  field: HTMLInputElement,
+  root: ParentNode,
+): ParentNode {
+  let container = field.parentElement;
+  while (container && container !== root) {
+    const explicitAuthContainer = container.matches(
+      'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
+    );
+    const hasSubmitControl = Boolean(
+      container.querySelector(
+        'button[type="submit"], input[type="submit"], button:not([type])',
+      ),
+    );
+    if (explicitAuthContainer || hasSubmitControl) return container;
+    container = container.parentElement;
+  }
+  return root;
+}
+
 export function summarizeAuthenticationWorkflowForms(
   root: ParentNode = document,
 ): PasswordFormObservation[] {
@@ -197,30 +222,35 @@ export function summarizeAuthenticationWorkflowForms(
   const forms = Array.from(
     root.querySelectorAll<HTMLFormElement>("form"),
   ).filter((form) => {
-    const summary = summarizeRoot(root, form);
+    const formScope: PasswordFormScope = { kind: "owned", owner: form };
+    const summary = summarizeRoot(root, formScope);
     return (
       summary.passwordFieldCount > 0 ||
       summary.oneTimeCodeFieldCount > 0 ||
-      findUsernameFields(root, form).some((field) =>
+      findUsernameFields(root, formScope).some((field) =>
         hasAutocompleteToken(field, "username"),
       )
     );
   });
   const observations: PasswordFormObservation[] = forms.map((form) => ({
     root,
-    formOwner: form,
-    summary: summarizeRoot(root, form),
+    formScope: { kind: "owned", owner: form },
+    summary: summarizeRoot(root, { kind: "owned", owner: form }),
   }));
-  const hasUnownedFields = [
+  const unownedFields = [
     ...allPasswordFields,
     ...allUsernameFields,
     ...allOneTimeCodeFields,
-  ].some((field) => field.form === null);
-  if (hasUnownedFields) {
+  ].filter((field) => !field.form);
+  const unownedContainers = new Set(
+    unownedFields.map((field) => nearestUnownedAuthContainer(field, root)),
+  );
+  for (const container of unownedContainers) {
+    const formScope: PasswordFormScope = { kind: "unowned" };
     observations.push({
-      root,
-      formOwner: null,
-      summary: summarizeRoot(root, null),
+      root: container,
+      formScope,
+      summary: summarizeRoot(container, formScope),
     });
   }
   return observations.sort((left, right) => {
@@ -241,9 +271,9 @@ export function summarizeAuthenticationWorkflowForms(
 export function fillOneTimeCode(
   code: string,
   root: ParentNode = document,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): boolean {
-  const field = findOneTimeCodeFields(root, formOwner)[0];
+  const field = findOneTimeCodeFields(root, formScope)[0];
   if (!field) return false;
   setNativeInputValue(field, code);
   field.focus();
@@ -253,13 +283,13 @@ export function fillOneTimeCode(
 export function fillLoginCredentials(
   credentials: LoginCredentials,
   root: ParentNode = document,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): boolean {
-  const passwordFields = findPasswordFields(root, formOwner);
+  const passwordFields = findPasswordFields(root, formScope);
   if (passwordFields.length === 0) return false;
 
   const passwordField = passwordFields[0];
-  const usernameCandidates = findUsernameFields(root, formOwner);
+  const usernameCandidates = findUsernameFields(root, formScope);
   const usernameField = usernameCandidates[0];
 
   if (usernameField) {
@@ -271,24 +301,41 @@ export function fillLoginCredentials(
 
 export function submitLoginForm(
   root: ParentNode = document,
-  formOwner?: HTMLFormElement | null,
+  formScope?: PasswordFormScope,
 ): boolean {
-  const passwordField = findPasswordFields(root, formOwner)[0];
+  const passwordField = findPasswordFields(root, formScope)[0];
   if (!passwordField) return false;
   const form = passwordField.form;
   if (!form) return false;
 
-  const submitControl = form.querySelector<HTMLElement>(
-    'button[type="submit"], input[type="submit"], button:not([type])',
-  );
+  const submitControl = form.querySelector<
+    HTMLButtonElement | HTMLInputElement
+  >('button[type="submit"], input[type="submit"], button:not([type])');
   if (submitControl) {
-    submitControl.click();
-    return true;
+    if (
+      submitControl.disabled ||
+      submitControl.getAttribute("aria-disabled") === "true"
+    ) {
+      return false;
+    }
+    return observeSubmit(form, () => submitControl.click());
   }
   if (typeof form.requestSubmit === "function") {
-    form.requestSubmit();
-    return true;
+    return observeSubmit(form, () => form.requestSubmit());
   }
-  form.submit();
-  return true;
+  return false;
+}
+
+function observeSubmit(form: HTMLFormElement, action: () => void): boolean {
+  let submitted = false;
+  const markSubmitted = () => {
+    submitted = true;
+  };
+  form.addEventListener("submit", markSubmitted, {
+    capture: true,
+    once: true,
+  });
+  action();
+  form.removeEventListener("submit", markSubmitted, true);
+  return submitted;
 }
