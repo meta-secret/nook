@@ -117,12 +117,12 @@ RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/
 WORKDIR /meta-secret/nook
 
 # Browser binaries are deliberately outside web-base. PR checks use web-base for unit tests and
-# preview builds. Main/nightly e2e uses Debian's single Chromium package instead of Playwright's
+# preview builds. Main/nightly e2e uses Debian's Chromium and ffmpeg packages instead of Playwright's
 # bundled Chromium + headless-shell download, which otherwise produces a ~1.3 GB image layer.
 FROM web-base AS web-e2e-base
 
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium xvfb \
+    && apt-get install -y --no-install-recommends chromium ffmpeg xvfb \
     && rm -rf /var/lib/apt/lists/*

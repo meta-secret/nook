@@ -76,6 +76,19 @@ tasks:
           TASK: _web:test:e2e:file
           E2E_SPEC: "{{.E2E_SPEC}}"
 
+  ui:demo:
+    desc: Record the dedicated Playwright UI demos headlessly into ui-demo-results/.
+    deps:
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
+    cmds:
+      - task: docker:ui-demo:run
+
+  ui:demo:ci:
+    desc: Record selected UI demo specs from the already-built CI e2e image.
+    cmds:
+      - task: docker:ui-demo:run
+
   web:test:e2e:pr:
     desc: Stable Playwright subset in Docker (IndexedDB specs, 6 workers).
     deps:
@@ -350,6 +363,18 @@ tasks:
       - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun x playwright test ${E2E_SPEC}
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
+
+  _web:test:ui-demo:
+    desc: Record selected headless Playwright demo specs at a human-readable pace.
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
+    cmds:
+      - echo "==> Playwright UI demo (headless, workers=1, specs=${UI_DEMO_SPECS:-all})"
+      - cd "{{.WEB_ROOT}}" && bun run test:ui-demo -- ${UI_DEMO_SPECS:-}
 
   _web:test:e2e:pr:parallel:
     desc: Stable Playwright subset at 6 workers when wasm/dist is built.

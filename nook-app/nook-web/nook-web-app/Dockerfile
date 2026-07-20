@@ -27,6 +27,14 @@ WORKDIR /meta-secret/nook
 # compiler toolchain remain exclusively in the builder's local BuildKit content store.
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
 RUN ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules
+# Playwright uses its own revisioned ffmpeg path for video recording. Browser images provide
+# Debian's ffmpeg package; link that binary into the revision declared by the installed Playwright
+# package. Browser-free web images have no ffmpeg and intentionally skip this step.
+RUN if command -v ffmpeg >/dev/null 2>&1; then \
+      revision="$(node -p "require('./nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json').browsers.find((browser) => browser.name === 'ffmpeg').revision")"; \
+      install -d "/opt/nook/ms-playwright/ffmpeg-${revision}"; \
+      ln -s /usr/bin/ffmpeg "/opt/nook/ms-playwright/ffmpeg-${revision}/ffmpeg-linux"; \
+    fi
 COPY --from=web-artifacts /nook-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
 COPY --from=web-artifacts /coverage /opt/nook/coverage
 

@@ -99,14 +99,14 @@ path you configured), you lose the vault. Approve at least two devices.
 
 ## What you can store
 
-| Type | Fields |
-|---|---|
-| Login | Website URL, username, password, optional notes |
-| API key | Website URL, key, optional expiration date |
-| BIP39 seed phrase | Account name, seed phrase |
-| Secure note | Title, note (Markdown) |
-| Passkey | Website/RP and account metadata; encrypted ES256 credential |
-| Authenticator | Service, account, and TOTP setup key or `otpauth://` URI |
+| Type              | Fields                                                      |
+| ----------------- | ----------------------------------------------------------- |
+| Login             | Website URL, username, password, optional notes             |
+| API key           | Website URL, key, optional expiration date                  |
+| BIP39 seed phrase | Account name, seed phrase                                   |
+| Secure note       | Title, note (Markdown)                                      |
+| Passkey           | Website/RP and account metadata; encrypted ES256 credential |
+| Authenticator     | Service, account, and TOTP setup key or `otpauth://` URI    |
 
 Items are searchable. Secret values stay masked until revealed. Secure notes use
 an Edit / Preview Markdown editor. Authenticator items derive the current
@@ -167,12 +167,12 @@ item, add a corrected copy and delete the old one.
 
 ### Four architecture layers
 
-| Layer | What it does |
-|---|---|
+| Layer           | What it does                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Device identity | Each authorized device holds a protected X25519 identity. Plaintext identity material exists only in an unlocked session. |
-| Key envelopes | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority. |
-| Sync transport | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets. |
-| Event log | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer. |
+| Key envelopes   | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority.                    |
+| Sync transport  | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets.                         |
+| Event log       | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer.                      |
 
 ```text
 local command
@@ -201,16 +201,16 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
    nook-auth2         device identity, envelopes, vault key access
 ```
 
-| Package | Role |
-|---|---|
-| `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
-| `nook-core` | Domain: event log, causal merge, projection, typed secrets, sync policy |
-| `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
-| `nook-vault-simple` | Independent Svelte 5 Simple Vault application and artifact |
-| `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application and artifact |
-| `nook-web-app` | Public site and unified local e2e harness |
-| `nook-web-extension` | Simple-only Manifest V3 companion with Nook Pilot: a minimal, Rust-policy-backed authentication HUD for website login progress, explicit credential fill, and manual takeover |
-| `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
+| Package               | Role                                                                                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nook-auth2`          | Portable key access: device identities, age envelopes, recovery helpers                                                                                               |
+| `nook-core`           | Domain: event log, causal merge, projection, typed secrets, sync policy                                                                                               |
+| `nook-wasm`           | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager                                                                                                        |
+| `nook-vault-simple`   | Independent Svelte 5 Simple Vault application and artifact                                                                                                            |
+| `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application and artifact                                                                                                          |
+| `nook-web-app`        | Public site and unified local e2e harness                                                                                                                             |
+| `nook-web-extension`  | Simple-only Manifest V3 companion with Nook Pilot: a minimal, Rust-policy-backed authentication HUD for website login progress, explicit credential fill, and takeover |
+| `nook-web-shared`     | Presentation/browser glue safe to share between vault apps                                                                                                            |
 
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
@@ -317,6 +317,7 @@ task web:test:e2e:pr       # fast Playwright subset (IndexedDB / local provider)
 task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
+task ui:demo               # record dedicated headless Playwright demos to ui-demo-results/
 task extension:build       # browser extension package
 task extension:check:fast  # host-cached extension format/unit/manifest/security gate
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
@@ -324,7 +325,7 @@ task extension:install:hosted PR=410 # verify and install an isolated hosted PR 
 task extension:smoke:hosted CHANNEL=dev # disposable hosted extension + Simple Vault smoke
 task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded Chrome opens one-time setup
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile
-task ci:pr                 # health-checked BuildKit mirror of the PR CI gate (no browser e2e)
+task ci:pr                 # health-checked BuildKit mirror of the non-browser PR gate
 task ci:pr:e2e             # explicit full web + extension e2e validation
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
 task pr:review PR=410      # optional idempotent exact-head Codex review request
@@ -332,6 +333,12 @@ task pr:ready PR=410       # read-only exact-head readiness assertion; never mer
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
 ```
+
+UI-facing pull requests must add or update a focused
+`e2e/demos/*.demo.spec.ts`. PR CI records those specs in headless Chromium and
+keeps the videos as a 90-day workflow artifact linked from the PR. Demo specs
+may pause briefly at meaningful UI states; regression e2e remains full-speed.
+From `nook-app/`, `cargo ui-demo` is an alias for `task ui:demo`.
 
 Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 `nook-app/nook-web/nook-web-app/.env.test.local`; see

@@ -423,6 +423,7 @@ function isRepositoryStatusComment(body: string): boolean {
   return (
     trimmed.startsWith("### Preview deployed") ||
     trimmed.startsWith("### Web research preview") ||
+    trimmed.startsWith("<!-- nook-ui-demo -->") ||
     trimmed.startsWith("<!-- nook-core-coverage -->") ||
     trimmed.includes("<!-- nook-codex-review:") ||
     // Codex posts this when it cannot review; it is status, not a finding.

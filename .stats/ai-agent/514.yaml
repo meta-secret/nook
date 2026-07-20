@@ -1,0 +1,317 @@
+schema_version: 1
+source_pr:
+  number: 514
+  url: https://github.com/meta-secret/nook/pull/514
+  title: Record headless UI demo videos on UI pull requests
+  change_surface: web_browser_flow_ci_tooling
+  head_sha: faaad09ff2b68a5a6c0f5e99a99e9aa9da43d3ec
+  started_at: 2026-07-20T02:05:00Z
+  opened_at: 2026-07-20T02:45:07Z
+  merged_at: 2026-07-20T05:06:47Z
+  elapsed_seconds: 10907
+  open_to_merge_seconds: 8500
+summary:
+  local_execution_count: 20
+  local_check_count: 9
+  local_test_count: 4
+  local_combined_count: 7
+  local_execution_seconds: 3190
+  github_actions_run_count: 10
+  github_actions_seconds: 7902
+  pr_retrigger_count: 9
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: .github/scripts/ui-demo-contract.test.sh && git diff --check
+    category: combined
+    started_at: 2026-07-20T02:22:00Z
+    finished_at: 2026-07-20T02:22:05Z
+    duration_seconds: 5
+    outcome: passed
+    reason: focused_contract_validation
+  - command: npm test && npm run check
+    category: combined
+    started_at: 2026-07-20T02:30:00Z
+    finished_at: 2026-07-20T02:30:08Z
+    duration_seconds: 8
+    outcome: passed
+    reason: focused_ci_agent_validation
+  - command: bunx playwright test --project=ui-demo
+    category: test
+    started_at: 2026-07-20T02:35:00Z
+    finished_at: 2026-07-20T02:35:12Z
+    duration_seconds: 12
+    outcome: passed
+    reason: initial_headless_demo_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T02:47:30Z
+    finished_at: 2026-07-20T02:59:30Z
+    duration_seconds: 720
+    outcome: failed
+    reason: generated_playwright_artifacts_required_format_ignore_rules
+  - command: bunx prettier --check .github README.md && git diff --check
+    category: check
+    started_at: 2026-07-20T03:00:00Z
+    finished_at: 2026-07-20T03:00:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: artifact_ignore_format_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T03:01:00Z
+    finished_at: 2026-07-20T03:16:00Z
+    duration_seconds: 900
+    outcome: passed
+    reason: full_repository_validation
+  - command: task ui:demo
+    category: test
+    started_at: 2026-07-20T03:16:30Z
+    finished_at: 2026-07-20T03:24:30Z
+    duration_seconds: 480
+    outcome: interrupted
+    reason: cold_local_docker_setup_rebuilt_unrelated_rust_dependencies
+  - command: bunx playwright test --project=ui-demo
+    category: test
+    started_at: 2026-07-20T03:24:35Z
+    finished_at: 2026-07-20T03:24:46Z
+    duration_seconds: 11
+    outcome: passed
+    reason: host_headless_demo_validation
+  - command: ffprobe UI_DEMO.webm && inspect_contact_sheet
+    category: check
+    started_at: 2026-07-20T03:24:47Z
+    finished_at: 2026-07-20T03:24:52Z
+    duration_seconds: 5
+    outcome: passed
+    reason: video_duration_size_and_visual_validation
+  - command: npm test && npm run check
+    category: combined
+    started_at: 2026-07-20T03:25:00Z
+    finished_at: 2026-07-20T03:25:07Z
+    duration_seconds: 7
+    outcome: passed
+    reason: ci_agent_status_comment_regression_validation
+  - command: .github/scripts/ui-demo-contract.test.sh
+    category: check
+    started_at: 2026-07-20T03:25:08Z
+    finished_at: 2026-07-20T03:25:09Z
+    duration_seconds: 1
+    outcome: passed
+    reason: expanded_ui_path_contract_validation
+  - command: task preflight
+    category: check
+    started_at: 2026-07-20T03:25:10Z
+    finished_at: 2026-07-20T03:25:23Z
+    duration_seconds: 13
+    outcome: passed
+    reason: workflow_architecture_validation
+  - command: task check
+    category: combined
+    started_at: 2026-07-20T03:31:45Z
+    finished_at: 2026-07-20T03:47:45Z
+    duration_seconds: 960
+    outcome: passed
+    reason: merged_base_full_repository_validation
+  - command: bunx playwright test --project=ui-demo
+    category: test
+    started_at: 2026-07-20T03:48:00Z
+    finished_at: 2026-07-20T03:48:11Z
+    duration_seconds: 11
+    outcome: passed
+    reason: merged_base_demo_regression
+  - command: npm test && npm run check
+    category: combined
+    started_at: 2026-07-20T03:48:15Z
+    finished_at: 2026-07-20T03:48:22Z
+    duration_seconds: 7
+    outcome: passed
+    reason: merged_base_ci_agent_validation
+  - command: task preflight
+    category: check
+    started_at: 2026-07-20T04:14:20Z
+    finished_at: 2026-07-20T04:14:33Z
+    duration_seconds: 13
+    outcome: passed
+    reason: browser_shell_review_fix_validation
+  - command: .github/scripts/ui-demo-contract.test.sh && bash -n .github/scripts/ui-demo-contract.sh
+    category: check
+    started_at: 2026-07-20T04:41:55Z
+    finished_at: 2026-07-20T04:41:56Z
+    duration_seconds: 1
+    outcome: passed
+    reason: routed_app_shell_review_fix_validation
+  - command: task preflight
+    category: check
+    started_at: 2026-07-20T04:42:10Z
+    finished_at: 2026-07-20T04:42:23Z
+    duration_seconds: 13
+    outcome: passed
+    reason: exact_head_workflow_architecture_validation
+  - command: task pr:review PR=514
+    category: check
+    started_at: 2026-07-20T04:42:30Z
+    finished_at: 2026-07-20T04:42:43Z
+    duration_seconds: 13
+    outcome: passed
+    reason: existing_feedback_audit
+  - command: task pr:ready PR=514
+    category: check
+    started_at: 2026-07-20T05:06:25Z
+    finished_at: 2026-07-20T05:06:33Z
+    duration_seconds: 8
+    outcome: passed
+    reason: exact_head_merge_readiness
+github_actions_runs:
+  - workflow: PR
+    run_id: 29713176176
+    run_attempt: 1
+    head_sha: da4c9187d9504302f07b395f9fcb2eeeacb7c03f
+    trigger: pull_request
+    started_at: 2026-07-20T02:45:10Z
+    finished_at: 2026-07-20T02:47:21Z
+    duration_seconds: 131
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29713227988
+    run_attempt: 1
+    head_sha: 7b4596ed9bace0686b88b448e1bd8b91e677f0d6
+    trigger: pull_request
+    started_at: 2026-07-20T02:46:52Z
+    finished_at: 2026-07-20T03:00:43Z
+    duration_seconds: 831
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29713668922
+    run_attempt: 1
+    head_sha: d51ec4e9b6db7c98cf22f74b73ed2e299a177ac5
+    trigger: pull_request
+    started_at: 2026-07-20T03:00:13Z
+    finished_at: 2026-07-20T03:06:48Z
+    duration_seconds: 395
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29713900458
+    run_attempt: 1
+    head_sha: 1ad663bae60d2f1da3ab866204b0569400577866
+    trigger: pull_request
+    started_at: 2026-07-20T03:06:17Z
+    finished_at: 2026-07-20T03:25:22Z
+    duration_seconds: 1145
+    conclusion: failure
+  - workflow: PR
+    run_id: 29714634151
+    run_attempt: 1
+    head_sha: f8a49966e7794295cbd3ada00772b92deadb4cfb
+    trigger: pull_request
+    started_at: 2026-07-20T03:25:38Z
+    finished_at: 2026-07-20T03:30:09Z
+    duration_seconds: 271
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29714775183
+    run_attempt: 1
+    head_sha: 5ea73f6f8f3482c2d4ce3abe1ce8d3f1384286ae
+    trigger: pull_request
+    started_at: 2026-07-20T03:29:47Z
+    finished_at: 2026-07-20T03:32:12Z
+    duration_seconds: 145
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29714842013
+    run_attempt: 1
+    head_sha: 446378529bbd3d03d4023baa70a18459b58048e3
+    trigger: pull_request
+    started_at: 2026-07-20T03:31:40Z
+    finished_at: 2026-07-20T03:44:10Z
+    duration_seconds: 750
+    conclusion: success
+  - workflow: PR
+    run_id: 29715551932
+    run_attempt: 1
+    head_sha: c5b05abbbc2c19b6a6cbf2bd749e0a22b11ff2ab
+    trigger: pull_request
+    started_at: 2026-07-20T03:51:24Z
+    finished_at: 2026-07-20T04:14:15Z
+    duration_seconds: 1371
+    conclusion: success
+  - workflow: PR
+    run_id: 29716435435
+    run_attempt: 1
+    head_sha: f5007934abbf863247b4367e08d5813a92506bb1
+    trigger: pull_request
+    started_at: 2026-07-20T04:15:34Z
+    finished_at: 2026-07-20T04:38:51Z
+    duration_seconds: 1397
+    conclusion: success
+  - workflow: PR
+    run_id: 29717486605
+    run_attempt: 1
+    head_sha: faaad09ff2b68a5a6c0f5e99a99e9aa9da43d3ec
+    trigger: pull_request
+    started_at: 2026-07-20T04:41:52Z
+    finished_at: 2026-07-20T05:06:18Z
+    duration_seconds: 1466
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-20T02:46:52Z
+    reason: keep_contract_fixture_out_of_synthetic_merge_checkout
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T03:00:13Z
+    reason: pass_docker_host_address_to_demo_container
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T03:06:17Z
+    reason: exclude_generated_demo_artifacts
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T03:25:38Z
+    reason: provide_playwright_ffmpeg_binary_path
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T03:29:47Z
+    reason: preserve_pr_preview_configuration_and_address_review
+    initiated_by_agent: true
+  - kind: base_update
+    at: 2026-07-20T03:31:40Z
+    reason: merge_current_origin_main_before_readiness
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T03:51:24Z
+    reason: cover_shared_ui_paths_and_ignore_demo_status_comment
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T04:15:34Z
+    reason: cover_browser_ui_shells_after_review
+    initiated_by_agent: true
+  - kind: head_push
+    at: 2026-07-20T04:41:52Z
+    reason: cover_routed_app_shell_after_review
+    initiated_by_agent: true
+merge_attempts:
+  - at: 2026-07-20T05:06:47Z
+    method: squash
+    outcome: success
+    reason: readiness_passed_remote_merge_succeeded_local_cleanup_blocked_by_main_worktree
+comparison:
+  baseline_prs: [510, 513]
+  baseline_quality: comparable
+  baseline_note: Both recent records exercised browser flows plus the Rust WASM web and PR workflow gates
+  elapsed_seconds_change_percent: 100.4
+  local_execution_seconds_change_percent: 22.4
+  github_actions_seconds_change_percent: 123.1
+  regression: true
+  regression_reasons:
+    - The new CI integration required ten changed-head cycles while container recording, FFmpeg, preview metadata, and UI path coverage were hardened
+    - Three exact-head successes were followed by newly submitted path-coverage review findings, so each required a complete repository-owned validation cycle
+    - The final exact-head run spent 20 minutes in the existing native Rust gate and then exported base coverage because no successful Main artifact existed for the current base
+waste_assessment:
+  wasteful: false
+  findings:
+    - The final demo itself was an 8 to 11 second WebM; its CI step took 126 seconds including the isolated container setup, so recording did not dominate the 1466 second exact-head run
+    - Cancelled runs were superseded by code or configuration changes; there were no manual reruns and local full validation ran in parallel with repository checks
+    - Repeated exact-head runs followed concrete review fixes or the required base update rather than flaky retries
+    - The missing base coverage artifact and native gate duration predated this feature and were not changed in PR 514, so this task found no separate persistent build regression to fix
+  required_actions: []

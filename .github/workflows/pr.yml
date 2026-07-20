@@ -1,7 +1,8 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
-# build and deploy the preview. Only browser e2e is excluded.
-# Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
-# and nightly runs sync-live. Only nightly failures invoke the ci-fix AI worker.
+# build and deploy the preview. Full browser regression e2e is excluded; UI-changing PRs run only
+# their dedicated headless demo specs and retain the resulting videos on the PR workflow run.
+# Main runs the full local-provider and extension suites, and nightly runs sync-live.
+# Only nightly failures invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only and agent-statistics-only changes do not need the product pipeline.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
@@ -67,6 +68,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Enforce the UI demo contract
+        id: ui-demo-contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_SHA" --depth=1
+          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
@@ -94,6 +104,83 @@ jobs:
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Record headless UI demo
+        id: record-ui-demo
+        if: steps.ui-demo-contract.outputs.required == 'true'
+        run: |
+          set -euo pipefail
+          task ci:pr:ui-demo \
+            CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined \
+            UI_DEMO_OUTPUT_DIR=${{ runner.temp }}/nook-ui-demo \
+            UI_DEMO_SPECS="${{ steps.ui-demo-contract.outputs.specs }}" \
+            VITE_BASE=/ \
+            VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
+            VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
+            VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
+            VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
+            WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Upload UI demo video
+        if: always() && steps.ui-demo-contract.outputs.required == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-demo-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/nook-ui-demo
+          retention-days: 90
+          if-no-files-found: warn
+          overwrite: true
+
+      - name: Link UI demo from the pull request
+        if: always() && steps.ui-demo-contract.outputs.required == 'true'
+        uses: actions/github-script@v9
+        env:
+          DEMO_OUTCOME: ${{ steps.record-ui-demo.outcome }}
+          DEMO_SPECS: ${{ steps.ui-demo-contract.outputs.specs }}
+        with:
+          retries: 3
+          script: |
+            const marker = '<!-- nook-ui-demo -->'
+            const artifactName = `ui-demo-pr-${context.issue.number}-${context.payload.pull_request.head.sha}`
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const body = [
+              marker,
+              '### UI demo',
+              '',
+              `- Result: **${process.env.DEMO_OUTCOME}**`,
+              `- Video artifact: [${artifactName}](${runUrl}#artifacts)`,
+              `- Demo spec: \`${process.env.DEMO_SPECS}\``,
+              '',
+              'The demo runs in headless Chromium. Playwright assertions are authoritative; the video is a review aid for humans and AI.',
+            ].join('\n')
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            })
+            const existing = comments.find((comment) => comment.body?.startsWith(marker))
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              })
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              })
+            }
 
       - name: Download Rust coverage handoff
         env:
