@@ -16,10 +16,12 @@ export type LoginCredentials = {
 
 export type PasswordFormObservation = {
   root: ParentNode;
+  formOwner: HTMLFormElement | null;
   summary: PasswordFormSummary;
 };
 
 export const usernameFieldSelectors = [
+  'input[autocomplete~="username" i]',
   'input[type="email"]',
   'input[type="text"][autocomplete~="username" i]',
   'input[type="text"][name*="user" i]',
@@ -71,29 +73,50 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   return true;
 }
 
+function findFields(
+  root: ParentNode,
+  selector: string,
+  formOwner?: HTMLFormElement | null,
+): HTMLInputElement[] {
+  const queryRoot =
+    formOwner instanceof HTMLFormElement ? formOwner.ownerDocument : root;
+  return Array.from(
+    queryRoot.querySelectorAll<HTMLInputElement>(selector),
+  ).filter((field) =>
+    formOwner === undefined
+      ? true
+      : formOwner === null
+        ? field.form === null
+        : field.form === formOwner,
+  );
+}
+
 export function findPasswordFields(
   root: ParentNode = document,
+  formOwner?: HTMLFormElement | null,
 ): HTMLInputElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLInputElement>('input[type="password"]'),
-  ).filter((field) => !field.disabled && field.type === "password");
+  return findFields(root, 'input[type="password"]', formOwner).filter(
+    (field) => !field.disabled && field.type === "password",
+  );
 }
 
 export function findUsernameFields(
   root: ParentNode = document,
+  formOwner?: HTMLFormElement | null,
 ): HTMLInputElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLInputElement>(usernameFieldSelectors.join(",")),
-  ).filter((field) => !field.disabled);
+  return findFields(root, usernameFieldSelectors.join(","), formOwner).filter(
+    (field) => !field.disabled,
+  );
 }
 
 export function findOneTimeCodeFields(
   root: ParentNode = document,
+  formOwner?: HTMLFormElement | null,
 ): HTMLInputElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLInputElement>(
-      oneTimeCodeFieldSelectors.join(","),
-    ),
+  return findFields(
+    root,
+    oneTimeCodeFieldSelectors.join(","),
+    formOwner,
   ).filter(
     (field) =>
       !field.disabled &&
@@ -114,10 +137,13 @@ function hasAutocompleteToken(
     .includes(expected);
 }
 
-function summarizeRoot(root: ParentNode): PasswordFormSummary {
-  const passwordFields = findPasswordFields(root);
-  const usernameFields = findUsernameFields(root);
-  const oneTimeCodeFields = findOneTimeCodeFields(root);
+function summarizeRoot(
+  root: ParentNode,
+  formOwner?: HTMLFormElement | null,
+): PasswordFormSummary {
+  const passwordFields = findPasswordFields(root, formOwner);
+  const usernameFields = findUsernameFields(root, formOwner);
+  const oneTimeCodeFields = findOneTimeCodeFields(root, formOwner);
   const currentPasswordFieldCount = passwordFields.filter((field) =>
     hasAutocompleteToken(field, "current-password"),
   ).length;
@@ -158,32 +184,66 @@ export function summarizePasswordForms(
 export function summarizeAuthenticationWorkflowForms(
   root: ParentNode = document,
 ): PasswordFormObservation[] {
+  const allPasswordFields = findPasswordFields(root);
+  const allUsernameFields = findUsernameFields(root);
+  const allOneTimeCodeFields = findOneTimeCodeFields(root);
+  const authFieldCount =
+    allPasswordFields.length +
+    allUsernameFields.filter((field) => hasAutocompleteToken(field, "username"))
+      .length +
+    allOneTimeCodeFields.length;
+  if (authFieldCount === 0) return [];
+
   const forms = Array.from(
     root.querySelectorAll<HTMLFormElement>("form"),
-  ).filter(
-    (form) =>
-      findPasswordFields(form).length > 0 ||
-      findUsernameFields(form).length > 0 ||
-      findOneTimeCodeFields(form).length > 0,
-  );
-  const hasUnownedFields = [
-    ...findPasswordFields(root),
-    ...findUsernameFields(root),
-    ...findOneTimeCodeFields(root),
-  ].some((field) => !field.form);
-  const roots: ParentNode[] = forms;
-  if (hasUnownedFields || roots.length === 0) roots.push(root);
-  return roots.map((workflowRoot) => ({
-    root: workflowRoot,
-    summary: summarizeRoot(workflowRoot),
+  ).filter((form) => {
+    const summary = summarizeRoot(root, form);
+    return (
+      summary.passwordFieldCount > 0 ||
+      summary.oneTimeCodeFieldCount > 0 ||
+      findUsernameFields(root, form).some((field) =>
+        hasAutocompleteToken(field, "username"),
+      )
+    );
+  });
+  const observations: PasswordFormObservation[] = forms.map((form) => ({
+    root,
+    formOwner: form,
+    summary: summarizeRoot(root, form),
   }));
+  const hasUnownedFields = [
+    ...allPasswordFields,
+    ...allUsernameFields,
+    ...allOneTimeCodeFields,
+  ].some((field) => field.form === null);
+  if (hasUnownedFields) {
+    observations.push({
+      root,
+      formOwner: null,
+      summary: summarizeRoot(root, null),
+    });
+  }
+  return observations.sort((left, right) => {
+    const signal = ({ summary }: PasswordFormObservation) =>
+      summary.oneTimeCodeFieldCount > 0
+        ? 5
+        : summary.currentPasswordFieldCount > 0
+          ? 4
+          : summary.genericPasswordFieldCount === 1
+            ? 3
+            : summary.passwordFieldCount > 0
+              ? 2
+              : 1;
+    return signal(right) - signal(left);
+  });
 }
 
 export function fillOneTimeCode(
   code: string,
   root: ParentNode = document,
+  formOwner?: HTMLFormElement | null,
 ): boolean {
-  const field = findOneTimeCodeFields(root)[0];
+  const field = findOneTimeCodeFields(root, formOwner)[0];
   if (!field) return false;
   setNativeInputValue(field, code);
   field.focus();
@@ -193,15 +253,13 @@ export function fillOneTimeCode(
 export function fillLoginCredentials(
   credentials: LoginCredentials,
   root: ParentNode = document,
+  formOwner?: HTMLFormElement | null,
 ): boolean {
-  const passwordFields = findPasswordFields(root);
+  const passwordFields = findPasswordFields(root, formOwner);
   if (passwordFields.length === 0) return false;
 
   const passwordField = passwordFields[0];
-  const form = passwordField.form;
-  const usernameCandidates = form
-    ? findUsernameFields(form)
-    : findUsernameFields(root);
+  const usernameCandidates = findUsernameFields(root, formOwner);
   const usernameField = usernameCandidates[0];
 
   if (usernameField) {
@@ -211,20 +269,14 @@ export function fillLoginCredentials(
   return true;
 }
 
-export function submitLoginForm(root: ParentNode = document): boolean {
-  const passwordField = findPasswordFields(root)[0];
+export function submitLoginForm(
+  root: ParentNode = document,
+  formOwner?: HTMLFormElement | null,
+): boolean {
+  const passwordField = findPasswordFields(root, formOwner)[0];
   if (!passwordField) return false;
   const form = passwordField.form;
-  if (!form) {
-    passwordField.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-      }),
-    );
-    return true;
-  }
+  if (!form) return false;
 
   const submitControl = form.querySelector<HTMLElement>(
     'button[type="submit"], input[type="submit"], button:not([type])',

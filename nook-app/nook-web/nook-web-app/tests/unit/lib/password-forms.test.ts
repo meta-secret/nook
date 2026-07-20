@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   fillOneTimeCode,
   findOneTimeCodeFields,
+  submitLoginForm,
+  summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -27,6 +29,90 @@ describe('website one-time-code fields', () => {
       oneTimeCodeFieldCount: 2,
       formCount: 1,
     })
+  })
+
+  test('returns no workflow for ordinary pages and email-only newsletters', () => {
+    document.body.innerHTML = `
+      <main><p>Documentation</p></main>
+      <form><input type="email" name="newsletter-email" /></form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+  })
+
+  test('groups externally associated controls with their form owner', () => {
+    document.body.innerHTML = `
+      <form id="login"><input autocomplete="username" /></form>
+      <input form="login" type="password" autocomplete="current-password" />
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      currentPasswordFieldCount: 1,
+    })
+  })
+
+  test('keeps unowned login controls isolated from owned signup fields', () => {
+    document.body.innerHTML = `
+      <form id="signup">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="new-password" />
+      </form>
+      <section>
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </section>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(2)
+    expect(observations.map(({ summary }) => summary)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          currentPasswordFieldCount: 0,
+          newPasswordFieldCount: 1,
+        }),
+        expect.objectContaining({
+          currentPasswordFieldCount: 1,
+          newPasswordFieldCount: 0,
+        }),
+      ]),
+    )
+  })
+
+  test('prioritizes active OTP and login forms before low-confidence candidates', () => {
+    document.body.innerHTML = Array.from(
+      { length: 20 },
+      (_, index) => `
+        <form id="signup-${index}">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="new-password" />
+        </form>`,
+    ).join('')
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `<form id="login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>`,
+    )
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations[0]?.formOwner?.id).toBe('login')
+  })
+
+  test('does not claim a div-based login was submitted', () => {
+    document.body.innerHTML = `
+      <section>
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Sign in</button>
+      </section>
+    `
+
+    expect(submitLoginForm(document, null)).toBe(false)
   })
 
   test('fills the first enabled OTP field through the native value setter', () => {

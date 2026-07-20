@@ -6,7 +6,13 @@ import {
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
+import type { PasswordFormObservation } from '../../../nook-web-shared/src/extension/password-forms'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
+import {
+  compactProgressState,
+  isTrustedAuthAction,
+  safeSavedOptionNumber,
+} from '../lib/auth-widget-policy'
 import type {
   WebsiteAuthenticatorOption,
   WebsiteLoginAccountOption,
@@ -26,6 +32,7 @@ let pendingScan: number | undefined
 let scanSequence = 0
 let widgetHost: HTMLElement | undefined
 let renderedWorkflowKey: string | undefined
+let renderedWorkflowRoot: PasswordFormObservation | undefined
 let dismissed = false
 let busy = false
 let widgetCollapsed = false
@@ -99,6 +106,26 @@ function setFlightProgress(
 ): void {
   step.textContent = progressLabel(currentStep, totalSteps)
   title.textContent = translatedMessage(titleKey)
+  const root = step.getRootNode()
+  if (root instanceof ShadowRoot) {
+    const compact = compactProgressState(
+      translatedMessage('widgetPilotLabel'),
+      currentStep,
+      totalSteps,
+    )
+    const collapsedProgress = root.querySelector<HTMLElement>(
+      '.collapsed-progress',
+    )
+    const collapsedLaunch =
+      root.querySelector<HTMLButtonElement>('.collapsed-launch')
+    if (collapsedProgress) collapsedProgress.textContent = compact.badge
+    if (collapsedLaunch) {
+      collapsedLaunch.setAttribute(
+        'aria-label',
+        `${translatedMessage('widgetExpand')}: ${compact.accessibleLabel}`,
+      )
+    }
+  }
 }
 
 type AuthenticatorOptionsResponse = {
@@ -116,10 +143,18 @@ function translatedMessage(key: string): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }
 
+function translatedMessageWithSubstitution(
+  key: string,
+  substitution: string,
+): string {
+  return chrome.i18n.getMessage(key, substitution) || 'Nook'
+}
+
 function removeWidget(): void {
   widgetHost?.remove()
   widgetHost = undefined
   renderedWorkflowKey = undefined
+  renderedWorkflowRoot = undefined
 }
 
 function clampWidgetPosition(
@@ -232,7 +267,7 @@ function setStatus(
 
 async function fillAndSubmitAccount(
   account: WebsiteLoginAccountOption,
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
@@ -262,7 +297,11 @@ async function fillAndSubmitAccount(
     password: response.password,
   }
   response.password = ''
-  const filled = fillLoginCredentials(credentials, workflowRoot)
+  const filled = fillLoginCredentials(
+    credentials,
+    workflow.root,
+    workflow.formOwner,
+  )
   credentials.password = ''
   credentials.username = ''
   if (!filled) {
@@ -275,15 +314,11 @@ async function fillAndSubmitAccount(
     )
     return false
   }
-  if (!submitLoginForm(workflowRoot)) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
-    setStatus(
-      description,
-      continueButton,
-      translatedMessage('widgetFillFailed'),
-      true,
-    )
-    return false
+  if (!submitLoginForm(workflow.root, workflow.formOwner)) {
+    setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+    description.textContent = translatedMessage('widgetFilledManual')
+    continueButton.hidden = true
+    return true
   }
   setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
   description.textContent = translatedMessage('widgetSubmitted')
@@ -294,7 +329,7 @@ async function fillAndSubmitAccount(
 function renderAccountChooser(
   panel: HTMLElement,
   accounts: WebsiteLoginAccountOption[],
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
@@ -307,18 +342,21 @@ function renderAccountChooser(
 
   const list = document.createElement('div')
   list.className = 'account-list'
-  for (const account of accounts) {
+  accounts.forEach((account, index) => {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'secondary-button account-button'
-    button.textContent = account.username || account.websiteHost
-    button.addEventListener('click', () => {
-      if (busy) return
+    button.textContent = translatedMessageWithSubstitution(
+      'widgetSavedLogin',
+      safeSavedOptionNumber(index),
+    )
+    button.addEventListener('click', (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || busy) return
       busy = true
       button.disabled = true
       void fillAndSubmitAccount(
         account,
-        workflowRoot,
+        workflow,
         step,
         title,
         description,
@@ -336,7 +374,7 @@ function renderAccountChooser(
         })
     })
     list.append(button)
-  }
+  })
   panel.append(list)
 }
 
@@ -347,7 +385,7 @@ async function continueWithNook(
   continueButton: HTMLButtonElement,
   openVaultButton: HTMLButtonElement,
   panel: HTMLElement,
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
 ): Promise<void> {
   if (busy) return
   busy = true
@@ -403,7 +441,7 @@ async function continueWithNook(
     if (accounts.length === 1) {
       await fillAndSubmitAccount(
         accounts[0],
-        workflowRoot,
+        workflow,
         step,
         title,
         description,
@@ -415,7 +453,7 @@ async function continueWithNook(
     renderAccountChooser(
       panel,
       accounts,
-      workflowRoot,
+      workflow,
       step,
       title,
       description,
@@ -432,7 +470,7 @@ async function continueWithNook(
 
 async function fillAuthenticatorCode(
   account: WebsiteAuthenticatorOption,
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
@@ -447,7 +485,7 @@ async function fillAuthenticatorCode(
     },
   })
   if (!response?.ok || !response.code) {
-    setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
       continueButton,
@@ -458,10 +496,10 @@ async function fillAuthenticatorCode(
   }
   let code = response.code
   response.code = ''
-  const filled = fillOneTimeCode(code, workflowRoot)
+  const filled = fillOneTimeCode(code, workflow.root, workflow.formOwner)
   code = ''
   if (!filled) {
-    setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
       continueButton,
@@ -470,8 +508,8 @@ async function fillAuthenticatorCode(
     )
     return false
   }
-  setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
-  description.textContent = translatedMessage('widgetSubmitted')
+  setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+  description.textContent = translatedMessage('widgetAuthenticatorFilled')
   continueButton.hidden = true
   return true
 }
@@ -479,7 +517,7 @@ async function fillAuthenticatorCode(
 function renderAuthenticatorChooser(
   panel: HTMLElement,
   accounts: WebsiteAuthenticatorOption[],
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
@@ -492,20 +530,21 @@ function renderAuthenticatorChooser(
 
   const list = document.createElement('div')
   list.className = 'account-list'
-  for (const account of accounts) {
+  accounts.forEach((account, index) => {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'secondary-button account-button'
-    button.textContent = account.account
-      ? `${account.issuer} — ${account.account}`
-      : account.issuer
-    button.addEventListener('click', () => {
-      if (busy) return
+    button.textContent = translatedMessageWithSubstitution(
+      'widgetSavedAuthenticator',
+      safeSavedOptionNumber(index),
+    )
+    button.addEventListener('click', (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || busy) return
       busy = true
       button.disabled = true
       void fillAuthenticatorCode(
         account,
-        workflowRoot,
+        workflow,
         step,
         title,
         description,
@@ -523,12 +562,12 @@ function renderAuthenticatorChooser(
         })
     })
     list.append(button)
-  }
+  })
   panel.append(list)
 }
 
 async function continueWithAuthenticator(
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
@@ -553,7 +592,7 @@ async function continueWithAuthenticator(
       payload: { origin: location.origin },
     })
     if (!response?.ok) {
-      setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
@@ -563,7 +602,7 @@ async function continueWithAuthenticator(
       return
     }
     if (response.status === 'locked') {
-      setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
@@ -575,7 +614,7 @@ async function continueWithAuthenticator(
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
-      setFlightProgress(step, title, 1, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
@@ -593,7 +632,7 @@ async function continueWithAuthenticator(
     renderAuthenticatorChooser(
       panel,
       accounts,
-      workflowRoot,
+      workflow,
       step,
       title,
       description,
@@ -610,7 +649,7 @@ async function continueWithAuthenticator(
 
 function renderWidget(
   snapshot: AuthenticationWorkflowSnapshotView,
-  workflowRoot: ParentNode,
+  workflow: PasswordFormObservation,
 ): void {
   if (dismissed) {
     removeWidget()
@@ -624,7 +663,14 @@ function renderWidget(
     snapshot.totalSteps,
     snapshot.observationIndex,
   ].join(':')
-  if (widgetHost && renderedWorkflowKey === workflowKey) return
+  if (
+    widgetHost &&
+    renderedWorkflowKey === workflowKey &&
+    renderedWorkflowRoot?.root === workflow.root &&
+    renderedWorkflowRoot.formOwner === workflow.formOwner
+  ) {
+    return
+  }
   if (widgetHost) removeWidget()
 
   const host = document.createElement('aside')
@@ -714,7 +760,8 @@ function renderWidget(
     chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
   })
 
-  continueButton.addEventListener('click', () => {
+  continueButton.addEventListener('click', (event) => {
+    if (!isTrustedAuthAction(event.isTrusted)) return
     if (!canContinueWithNook) {
       dismissed = true
       removeWidget()
@@ -722,7 +769,7 @@ function renderWidget(
     }
     if (snapshot.action === 'fill-totp') {
       void continueWithAuthenticator(
-        workflowRoot,
+        workflow,
         step,
         title,
         description,
@@ -738,7 +785,7 @@ function renderWidget(
         continueButton,
         openVaultButton,
         body,
-        workflowRoot,
+        workflow,
       )
     }
   })
@@ -1016,6 +1063,7 @@ function renderWidget(
   document.documentElement.append(host)
   widgetHost = host
   renderedWorkflowKey = workflowKey
+  renderedWorkflowRoot = workflow
 
   attachPointerDrag(host, toolbar)
   attachPointerDrag(host, collapsedLaunch, {
@@ -1031,6 +1079,7 @@ function renderWidget(
 }
 
 async function scanAndRender(): Promise<void> {
+  if (dismissed) return
   const sequence = ++scanSequence
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
@@ -1069,7 +1118,7 @@ async function scanAndRender(): Promise<void> {
     removeWidget()
     return
   }
-  renderWidget(response.snapshot, selected.root)
+  renderWidget(response.snapshot, selected)
 }
 
 function scheduleScan() {

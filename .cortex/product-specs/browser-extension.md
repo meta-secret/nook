@@ -29,13 +29,13 @@ application capability checks enforce the vault-type boundary.
 
 ## Product Boundary
 
-| Surface                           | Responsibility                                                                                           |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                            |
+| Surface                           | Responsibility                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                                 |
 | Extension toolbar action          | Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault |
-| Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization                          |
-| In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                     |
-| Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials |
+| Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization                               |
+| In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                          |
+| Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
 
 Authenticator items remain standalone and are not guessed from an issuer name
 or silently associated with the current origin. Until a typed website
@@ -195,13 +195,14 @@ The layers have intentionally different responsibilities:
 - Simple Vault remains the complete management and recovery surface.
 
 The initial production slice classifies login, signup, password-change, and
-standalone one-time-code structures through Rust/WASM. It performs the existing
-explicit login selection/fill/submit path and shows a verification-wait state
-after submission. Signup generation/commit, password replacement, TOTP fill,
-2FA enrollment, recovery-code capture, and cross-site success-evidence policy
-remain separately tracked flight plans; until each is implemented, Nook Pilot
-identifies the checkpoint and yields to manual control instead of implying
-automation.
+standalone one-time-code structures through Rust/WASM. It performs explicit
+login selection/fill/submit and TOTP selection/fill. It shows a
+verification-wait state only after a site form was actually submitted; a
+filled-only login or TOTP remains at the current checkpoint for manual review
+and submission. Signup generation/commit, password replacement, 2FA enrollment,
+recovery-code capture, and cross-site success-evidence policy remain separately
+tracked flight plans; until each is implemented, Nook Pilot identifies the
+checkpoint and yields to manual control instead of implying automation.
 
 ### In-Page HUD
 
@@ -229,7 +230,8 @@ The gate must:
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - show only contextual accounts returned by the background/WASM boundary when
-  matched-account fill is available;
+  matched-account fill is available, using non-secret ordinal choices in the
+  page DOM rather than usernames, issuer names, or account labels;
 - open a browser-native or extension-controlled authorization surface when the
   extension is locked;
 - open Simple Vault for full search, creation, editing, and settings.

@@ -461,6 +461,13 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       widget.getByRole('button', { name: 'Open vault' }),
     ).toBeVisible()
 
+    await widget.evaluate((host) => {
+      host.shadowRoot
+        ?.querySelector<HTMLButtonElement>('button.primary-button')
+        ?.click()
+    })
+    await expect(widget.getByText('Ready to sign in')).toBeVisible()
+
     await widget.getByRole('button', { name: 'Collapse Nook' }).click()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
@@ -930,7 +937,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const fillWidget = fillLoginPage.locator('#nook-auth-widget')
     await expect(fillWidget).toBeVisible()
     await fillWidget.getByRole('button', { name: 'Continue with Nook' }).click()
-    await fillWidget.getByRole('button', { name: 'alice@nook.test' }).click()
+    await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
+    await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)
+    await fillWidget.getByRole('button', { name: 'Saved login 1' }).click()
     await expect
       .poll(
         async () =>
@@ -947,14 +956,32 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
           ),
         { timeout: 20_000 },
       )
-      .toEqual({
+      .not.toBeNull()
+    const submittedLogin = await fillLoginPage.evaluate(
+      () =>
+        (
+          window as Window & {
+            __nookLoginSubmitted?: {
+              email: string
+              password: string
+            } | null
+          }
+        ).__nookLoginSubmitted,
+    )
+    expect([
+      {
         email: 'alice@nook.test',
         password: 'extension-fill-password',
-      })
+      },
+      {
+        email: 'bob@nook.test',
+        password: 'second-extension-password',
+      },
+    ]).toContainEqual(submittedLogin)
     await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
     await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
     await expect(
-      fillWidget.getByRole('button', { name: 'bob@nook.test' }),
+      fillWidget.getByRole('button', { name: 'Saved login 2' }),
     ).toHaveCount(0)
     await expect(
       fillWidget.getByText(
@@ -968,12 +995,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const otpWidget = otpPage.locator('#nook-auth-widget')
     await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
     await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-    await otpWidget
-      .getByRole('button', { name: 'Nook extension e2e — alice@nook.test' })
-      .click()
+    await expect(otpWidget.getByText('Nook extension e2e')).toHaveCount(0)
+    await expect(otpWidget.getByText('alice@nook.test')).toHaveCount(0)
+    await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
     await expect(otpPage.locator('[autocomplete="one-time-code"]')).toHaveValue(
       /^\d{6}$/,
     )
+    await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
+    await expect(
+      otpWidget.getByText(
+        'The code is filled. Review the site and submit it manually.',
+      ),
+    ).toBeVisible()
     await otpPage.close()
 
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()

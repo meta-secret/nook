@@ -133,10 +133,10 @@ impl AuthenticationWorkflowSnapshot {
 
 const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
     match (snapshot.kind, snapshot.action) {
+        (AuthenticationWorkflowKind::TotpChallenge, _) => 7,
         (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
         (AuthenticationWorkflowKind::PasswordChange, _) => 5,
         (AuthenticationWorkflowKind::Signup, _) => 4,
-        (AuthenticationWorkflowKind::TotpChallenge, _) => 3,
         (AuthenticationWorkflowKind::Login, _) => 2,
         (AuthenticationWorkflowKind::Manual, _) => 1,
     }
@@ -189,13 +189,28 @@ pub const fn classify_authentication_workflow(
         ));
     }
 
-    if observation.one_time_code_field_count > 0 && observation.password_field_count() == 0 {
+    if observation.one_time_code_field_count > 0 {
+        let action = if observation.password_field_count() == 0 {
+            AuthenticationWorkflowAction::FillTotp
+        } else {
+            AuthenticationWorkflowAction::TakeOver
+        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpChallenge,
             AuthenticationWorkflowStage::SecondFactor,
-            AuthenticationWorkflowAction::FillTotp,
+            action,
             2,
             3,
+        ));
+    }
+
+    if observation.generic_password_field_count > 1 {
+        return Some(AuthenticationWorkflowSnapshot::new(
+            AuthenticationWorkflowKind::Manual,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            1,
+            1,
         ));
     }
 
@@ -314,16 +329,28 @@ mod tests {
     }
 
     #[test]
-    fn password_fields_take_precedence_over_a_colocated_code_field() {
+    fn combined_password_and_code_fields_yield_to_manual_second_factor() {
         let combined = AuthenticationPageObservation {
             current_password_field_count: 1,
             one_time_code_field_count: 1,
             ..observation()
         };
-        assert_eq!(
-            classify_authentication_workflow(combined).unwrap().kind,
-            AuthenticationWorkflowKind::Login
-        );
+        let snapshot = classify_authentication_workflow(combined).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::SecondFactor);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+    }
+
+    #[test]
+    fn generic_multi_password_forms_never_offer_login_fill() {
+        let ambiguous = AuthenticationPageObservation {
+            username_field_count: 1,
+            generic_password_field_count: 2,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(ambiguous).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
     }
 
     #[test]
@@ -345,6 +372,24 @@ mod tests {
             snapshot.action,
             AuthenticationWorkflowAction::ContinueWithNook
         );
+        assert_eq!(snapshot.observation_index, 1);
+    }
+
+    #[test]
+    fn active_totp_takes_precedence_over_unrelated_signup() {
+        let signup = AuthenticationPageObservation {
+            username_field_count: 1,
+            new_password_field_count: 1,
+            ..observation()
+        };
+        let code = AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            ..observation()
+        };
+
+        let snapshot = classify_authentication_workflow_candidates(&[signup, code]).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!(snapshot.observation_index, 1);
     }
 }

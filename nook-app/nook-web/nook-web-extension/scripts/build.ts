@@ -158,7 +158,9 @@ type NookLocaleCatalog = {
       unlock_then_continue: string
       no_match: string
       choose_account: string
+      saved_login: string
       fill_failed: string
+      filled_manual: string
       authenticator_step: string
       authenticator_title: string
       authenticator_description: string
@@ -168,7 +170,9 @@ type NookLocaleCatalog = {
       no_authenticator: string
       add_authenticator: string
       choose_authenticator: string
+      saved_authenticator: string
       authenticator_fill_failed: string
+      authenticator_filled: string
     }
     passkey: {
       save_title: string
@@ -232,7 +236,11 @@ async function buildChromeLocales() {
         widgetChooseAccount: {
           message: catalog.extension.widget.choose_account,
         },
+        widgetSavedLogin: { message: catalog.extension.widget.saved_login },
         widgetFillFailed: { message: catalog.extension.widget.fill_failed },
+        widgetFilledManual: {
+          message: catalog.extension.widget.filled_manual,
+        },
         widgetAuthenticatorStep: {
           message: catalog.extension.widget.authenticator_step,
         },
@@ -260,8 +268,14 @@ async function buildChromeLocales() {
         widgetChooseAuthenticator: {
           message: catalog.extension.widget.choose_authenticator,
         },
+        widgetSavedAuthenticator: {
+          message: catalog.extension.widget.saved_authenticator,
+        },
         widgetAuthenticatorFillFailed: {
           message: catalog.extension.widget.authenticator_fill_failed,
+        },
+        widgetAuthenticatorFilled: {
+          message: catalog.extension.widget.authenticator_filled,
         },
         passkeySaveTitle: { message: catalog.extension.passkey.save_title },
         passkeyUseTitle: { message: catalog.extension.passkey.use_title },
