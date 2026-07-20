@@ -968,7 +968,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const otpPage = await context.newPage()
     await otpPage.goto(`${loginServer.origin}/otp`)
     const otpWidget = otpPage.locator('#nook-auth-widget')
-    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
+    await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
     await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
     await otpWidget
       .getByRole('button', { name: 'Nook extension e2e — alice@nook.test' })
