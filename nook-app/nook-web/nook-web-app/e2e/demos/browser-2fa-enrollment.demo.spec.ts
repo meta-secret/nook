@@ -3,10 +3,7 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  installStaticDemoChromeStub,
-  type ChromeMessage,
-} from './static-chrome-stub'
+import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -56,7 +53,7 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
   ) as Record<string, ChromeMessage>
   const stubArgs = enrollmentChromeStubArgs(messages)
 
-  await page.addInitScript(installStaticDemoChromeStub, stubArgs)
+  await page.addInitScript(installDemoChromeStub, stubArgs)
 
   await page.goto('/')
   await page.setContent(`<!doctype html>
@@ -105,7 +102,7 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
       </body>
     </html>`)
 
-  await page.evaluate(installStaticDemoChromeStub, stubArgs)
+  await page.evaluate(installDemoChromeStub, stubArgs)
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
     type: 'module',
