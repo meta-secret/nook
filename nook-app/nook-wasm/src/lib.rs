@@ -314,6 +314,62 @@ pub fn generate_password(
     })?)
 }
 
+/// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
+#[wasm_bindgen(js_name = generateTotpCode)]
+pub fn generate_totp_code(
+    secret: &str,
+    unix_seconds: u64,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(authenticator_from_secret(secret)?
+        .current_code(unix_seconds)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
+        .code)
+}
+
+/// Verify a TOTP code against a base32 secret with a ±1-step window.
+#[wasm_bindgen(js_name = verifyTotpCode)]
+pub fn verify_totp_code(
+    secret: &str,
+    code: &str,
+    unix_seconds: u64,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let authenticator = authenticator_from_secret(secret)?;
+    let trimmed = code.trim();
+    if trimmed.len() < 6 || trimmed.len() > 8 || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
+        return Ok(false);
+    }
+    let period = authenticator.period.get();
+    for step_offset in [-1_i64, 0, 1] {
+        let Some(shifted) = unix_seconds.checked_add_signed(step_offset * i64::try_from(period).unwrap_or(30))
+        else {
+            continue;
+        };
+        let candidate = authenticator
+            .current_code(shifted)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        if candidate.code == trimmed {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn authenticator_from_secret(
+    secret: &str,
+) -> Result<nook_core::AuthenticatorSecret, wasm_bindgen::JsError> {
+    Ok(nook_core::AuthenticatorSecret {
+        issuer: "Nook".to_owned(),
+        account: String::new(),
+        website_url: String::new(),
+        secret: nook_core::TotpSecret::parse(secret)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?,
+        algorithm: nook_core::TotpAlgorithm::Sha1,
+        digits: nook_core::TotpDigits::default(),
+        period: nook_core::TotpPeriod::default(),
+        backup_codes: Vec::new(),
+    })
+}
+
 #[wasm_bindgen(js_name = vaultPasswordMinLength)]
 #[must_use]
 pub fn vault_password_min_length() -> u32 {
@@ -1868,6 +1924,17 @@ mod wasm_tests {
             .expect("icloud storage mode"),
             "icloud"
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn totp_helpers_match_core_authenticator_for_fixture_seed() {
+        let secret = "JBSWY3DPEHPK3PXP";
+        let unix_seconds = 1_721_520_000_u64;
+        let code = generate_totp_code(secret, unix_seconds).expect("totp code");
+        assert_eq!(code.len(), 6);
+        assert!(code.bytes().all(|b| b.is_ascii_digit()));
+        assert!(verify_totp_code(secret, &code, unix_seconds).expect("verify"));
+        assert!(!verify_totp_code(secret, "000000", unix_seconds).expect("reject"));
     }
 
     #[wasm_bindgen_test]
