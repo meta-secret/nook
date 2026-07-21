@@ -52,7 +52,7 @@
       >Password <input
         autocomplete="current-password"
         name="password"
-        type="text"
+        type="password"
         bind:value={password}
       /></label
     >
