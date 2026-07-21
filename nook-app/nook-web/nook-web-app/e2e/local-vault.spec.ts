@@ -515,7 +515,7 @@ test.describe('local vault', () => {
     await expect(row).toBeVisible()
     await expect(row).toContainText('recovery.txt')
 
-    await expandSecretRow(row)
+    await expandSecretRow(page, title)
     await expect(row.getByTestId('file-attachment-name')).toHaveText(
       'recovery.txt',
     )
