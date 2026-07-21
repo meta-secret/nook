@@ -29,6 +29,9 @@
     "../nook-web-extension/scripts/{build,deployment-package}.ts",
     "../nook-web-extension/scripts/**/*.test.ts",
     "../nook-web-extension/e2e/**/*.spec.ts",
+    "../nook-web-extension/e2e/mock-auth/{build,vite.config}.ts",
+    "../nook-web-extension/e2e/mock-auth/src/main.ts",
+    "../nook-web-extension/e2e/mock-auth/src/App.svelte",
     "../nook-web-extension/src/background/service-worker.ts",
     "../nook-web-extension/src/content/{autofill,simple-vault-bridge,webauthn-content,webauthn-page}.ts",
     "../nook-web-extension/src/offscreen/session.ts",
@@ -47,6 +50,8 @@
     "../nook-vault-{simple,sentinel}/vite.config.ts",
     "../nook-web-extension/scripts/**/*.ts",
     "../nook-web-extension/e2e/**/*.ts",
+    "../nook-web-extension/e2e/mock-auth/src/**/*.{ts,svelte}",
+    "!../nook-web-extension/e2e/mock-auth/src/**/*.d.ts",
     "../nook-web-extension/src/**/*.{ts,svelte}",
     "!../nook-web-extension/src/**/*.d.ts"
   ]
