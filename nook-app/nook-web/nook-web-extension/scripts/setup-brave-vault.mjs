@@ -34,8 +34,7 @@ const cdpUrl = process.env.NOOK_EXTENSION_SETUP_CDP_URL
 const extensionId = process.env.NOOK_EXTENSION_SETUP_EXTENSION_ID
 const simpleVaultUrl = process.env.NOOK_SIMPLE_VAULT_URL
 const pin = process.env.NOOK_EXTENSION_SETUP_PIN || '123456'
-const vaultName =
-  process.env.NOOK_EXTENSION_SETUP_VAULT_NAME || 'test'
+const vaultName = process.env.NOOK_EXTENSION_SETUP_VAULT_NAME || 'test'
 
 if (!cdpUrl || !extensionId || !simpleVaultUrl) {
   throw new Error(
