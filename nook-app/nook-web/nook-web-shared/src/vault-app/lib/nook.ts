@@ -52,7 +52,8 @@ export type VaultItemType =
   | "secure-note"
   | "passkey"
   | "authenticator"
-  | "credit-card";
+  | "credit-card"
+  | "file-attachment";
 
 export type AuthenticatorCodeView = {
   code: string;
@@ -159,6 +160,14 @@ export type SecretFormInput =
       expirationYear: string;
       cvv: string;
       notes: string;
+    }
+  | {
+      type: "file-attachment";
+      title: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      contentBase64: string;
     };
 
 /** Build a validated YAML payload from one core-owned secret form variant. */
@@ -207,6 +216,15 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.expirationYear,
         input.cvv,
         input.notes,
+      );
+      break;
+    case "file-attachment":
+      fields = NookSecretFormFields.fileAttachment(
+        input.title,
+        input.fileName,
+        input.mimeType,
+        input.sizeBytes,
+        input.contentBase64,
       );
       break;
   }

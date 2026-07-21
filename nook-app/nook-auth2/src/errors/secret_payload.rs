@@ -37,6 +37,12 @@ pub enum SecretPayloadError {
     #[error("Invalid credit card payload")]
     InvalidCreditCard(#[source] serde_yaml::Error),
 
+    #[error("Invalid file attachment payload: {reason}")]
+    InvalidFileAttachment { reason: String },
+
+    #[error("Invalid file attachment YAML payload")]
+    InvalidFileAttachmentYaml(#[source] serde_yaml::Error),
+
     #[error("Failed to serialize secret payload")]
     Serialize(#[source] serde_yaml::Error),
 

@@ -1620,7 +1620,8 @@ impl NookSecretListItem {
     pub fn title(&self) -> String {
         match &self.item.data {
             nook_core::SecretListItemData::SecureNote { title }
-            | nook_core::SecretListItemData::CreditCard { title, .. } => title.clone(),
+            | nook_core::SecretListItemData::CreditCard { title, .. }
+            | nook_core::SecretListItemData::FileAttachment { title, .. } => title.clone(),
             _ => String::new(),
         }
     }
@@ -1660,6 +1661,32 @@ impl NookSecretListItem {
                 expiration_year, ..
             } => expiration_year.clone(),
             _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = fileName)]
+    pub fn file_name(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::FileAttachment { file_name, .. } => file_name.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = mimeType)]
+    pub fn mime_type(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::FileAttachment { mime_type, .. } => mime_type.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = sizeBytes)]
+    pub fn size_bytes(&self) -> u32 {
+        match self.item.data {
+            nook_core::SecretListItemData::FileAttachment { size_bytes, .. } => {
+                u32::try_from(size_bytes).unwrap_or(u32::MAX)
+            }
+            _ => 0,
         }
     }
 
@@ -1842,6 +1869,7 @@ impl NookSecretRecord {
         match &self.record.data {
             nook_core::SecretValue::SecureNote(value) => value.title.clone(),
             nook_core::SecretValue::CreditCard(value) => value.title.clone(),
+            nook_core::SecretValue::FileAttachment(value) => value.title.clone(),
             _ => String::new(),
         }
     }
@@ -1898,6 +1926,40 @@ impl NookSecretRecord {
     pub fn cvv(&self) -> String {
         match &self.record.data {
             nook_core::SecretValue::CreditCard(value) => value.cvv.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = fileName)]
+    pub fn file_name(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::FileAttachment(value) => value.file_name.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = mimeType)]
+    pub fn mime_type(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::FileAttachment(value) => value.mime_type.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = sizeBytes)]
+    pub fn size_bytes(&self) -> u32 {
+        match &self.record.data {
+            nook_core::SecretValue::FileAttachment(value) => {
+                u32::try_from(value.size_bytes).unwrap_or(u32::MAX)
+            }
+            _ => 0,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = contentBase64)]
+    pub fn content_base64(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::FileAttachment(value) => value.content_base64.clone(),
             _ => String::new(),
         }
     }
