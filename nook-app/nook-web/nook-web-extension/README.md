@@ -124,8 +124,8 @@ leaves Brave open on the channel profile, use:
 task extension:setup:brave CHANNEL=dev
 task extension:setup:brave PR=410
 # Optional:
-# NOOK_EXTENSION_SETUP_PIN=123456
-# NOOK_EXTENSION_SETUP_VAULT_NAME=dev-setup-vault
+# Defaults: NOOK_EXTENSION_SETUP_PIN=123456
+#           NOOK_EXTENSION_SETUP_VAULT_NAME=test
 ```
 
 This uses PIN instead of an OS passkey so the ceremony is scriptable. Re-running
