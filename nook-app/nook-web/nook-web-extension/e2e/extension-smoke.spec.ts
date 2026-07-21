@@ -509,7 +509,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await hiddenHeaderLoginPage.goto(
       `${loginServer.origin}/login-with-hidden-header`,
     )
-    const hiddenHeaderWidget = hiddenHeaderLoginPage.locator('#nook-auth-widget')
+    const hiddenHeaderWidget = hiddenHeaderLoginPage.locator(
+      '#nook-auth-widget',
+    )
     await expect(hiddenHeaderWidget.getByText('Ready to sign in')).toBeVisible()
     await expect(
       hiddenHeaderWidget.getByRole('button', { name: 'Continue with Nook' }),
