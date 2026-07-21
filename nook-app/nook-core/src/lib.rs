@@ -53,7 +53,6 @@ pub use authenticator::{
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,
 };
-pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
@@ -109,6 +108,7 @@ pub use i18n::{
     translate, translate_from_catalog,
 };
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
+pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,

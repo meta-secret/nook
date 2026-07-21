@@ -58,9 +58,7 @@ static LOGIN_SITE_HOSTS: LazyLock<LoginSiteHosts> = LazyLock::new(|| {
 /// Normalize a hostname the same way login matching strips `www.`.
 #[must_use]
 pub fn normalize_login_host(raw: &str) -> String {
-    raw.trim()
-        .trim_start_matches("www.")
-        .to_ascii_lowercase()
+    raw.trim().trim_start_matches("www.").to_ascii_lowercase()
 }
 
 /// Look up the bundled login family id for a normalized host, if any.
@@ -70,10 +68,7 @@ pub fn login_host_family(host: &str) -> Option<&'static str> {
     if host.is_empty() {
         return None;
     }
-    LOGIN_SITE_HOSTS
-        .by_host
-        .get(&host)
-        .map(String::as_str)
+    LOGIN_SITE_HOSTS.by_host.get(&host).map(String::as_str)
 }
 
 /// True when two hosts share an explicit login family allowlist entry.
@@ -95,13 +90,14 @@ mod tests {
             serde_json::from_str(r#"{ "Login.MicrosoftOnline.com": "microsoft" }"#)
                 .expect("valid hosts deserialize");
         assert_eq!(
-            hosts.by_host.get("login.microsoftonline.com").map(String::as_str),
+            hosts
+                .by_host
+                .get("login.microsoftonline.com")
+                .map(String::as_str),
             Some("microsoft")
         );
         assert!(serde_json::from_str::<LoginSiteHosts>(r#"{ "": "microsoft" }"#).is_err());
-        assert!(
-            serde_json::from_str::<LoginSiteHosts>(r#"{ "microsoft.com": "" }"#).is_err()
-        );
+        assert!(serde_json::from_str::<LoginSiteHosts>(r#"{ "microsoft.com": "" }"#).is_err());
     }
 
     #[test]

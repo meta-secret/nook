@@ -183,10 +183,7 @@ pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
         return false;
     }
     secret_host.eq_ignore_ascii_case(&origin_host)
-        || crate::secrets::login_site_hosts::login_hosts_share_family(
-            &secret_host,
-            &origin_host,
-        )
+        || crate::secrets::login_site_hosts::login_hosts_share_family(&secret_host, &origin_host)
 }
 
 /// Intrinsic list clustering key for an authenticator.
