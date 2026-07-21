@@ -1,0 +1,160 @@
+schema_version: 1
+source_pr:
+  number: 542
+  url: https://github.com/meta-secret/nook/pull/542
+  title: Refactor mock auth e2e into client-side Svelte SPA
+  change_surface: extension_e2e_mock_auth_pilot
+  head_sha: b5631a5a423f7d0510621d8d757e8cfc9c1e8225
+  started_at: 2026-07-21T01:47:00Z
+  opened_at: 2026-07-21T01:55:04Z
+  merged_at: 2026-07-21T02:14:41Z
+  elapsed_seconds: 1661
+  open_to_merge_seconds: 1177
+summary:
+  local_execution_count: 8
+  local_check_count: 3
+  local_test_count: 2
+  local_combined_count: 3
+  local_execution_seconds: 723
+  github_actions_run_count: 5
+  github_actions_seconds: 1118
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T01:57:00Z
+    finished_at: 2026-07-21T02:00:24Z
+    duration_seconds: 204
+    outcome: failed
+    reason: detection_login_missed_nook_login_submitted_window_hook
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T02:00:52Z
+    finished_at: 2026-07-21T02:03:29Z
+    duration_seconds: 157
+    outcome: passed
+    reason: full_extension_suite_after_submit_capture_fix
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:03:40Z
+    finished_at: 2026-07-21T02:04:44Z
+    duration_seconds: 64
+    outcome: failed
+    reason: prettier_check_on_new_mock_auth_svelte_sources
+  - command: task extension:format
+    category: check
+    started_at: 2026-07-21T02:05:00Z
+    finished_at: 2026-07-21T02:05:10Z
+    duration_seconds: 10
+    outcome: passed
+    reason: sealed_image_format_did_not_apply_host_diff
+  - command: task format
+    category: check
+    started_at: 2026-07-21T02:05:20Z
+    finished_at: 2026-07-21T02:05:50Z
+    duration_seconds: 30
+    outcome: passed
+    reason: host_applied_prettier_diff_via_git_apply
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:06:20Z
+    finished_at: 2026-07-21T02:07:24Z
+    duration_seconds: 64
+    outcome: failed
+    reason: knip_unused_files_for_mock_auth_spa_entrypoints
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:07:40Z
+    finished_at: 2026-07-21T02:10:47Z
+    duration_seconds: 187
+    outcome: passed
+    reason: final_local_gate_after_knip_entry_registration
+  - command: task pr:ready PR=542
+    category: check
+    started_at: 2026-07-21T02:14:00Z
+    finished_at: 2026-07-21T02:14:07Z
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29794424019
+    run_attempt: 1
+    head_sha: 2c78a3e99bab07e1ce899475674cd0c9c9e2939a
+    trigger: pull_request
+    started_at: 2026-07-21T01:55:07Z
+    finished_at: 2026-07-21T01:56:05Z
+    duration_seconds: 58
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29794445817
+    run_attempt: 1
+    head_sha: 0737052b12434aeabb26b3a34f22d2bd7b997333
+    trigger: pull_request
+    started_at: 2026-07-21T01:55:35Z
+    finished_at: 2026-07-21T02:00:26Z
+    duration_seconds: 291
+    conclusion: failure
+  - workflow: PR
+    run_id: 29794692948
+    run_attempt: 1
+    head_sha: 8910da8f7c4ba3fe2e53a088fdc8dfc1e81c2007
+    trigger: pull_request
+    started_at: 2026-07-21T02:00:59Z
+    finished_at: 2026-07-21T02:05:10Z
+    duration_seconds: 251
+    conclusion: failure
+  - workflow: PR
+    run_id: 29794938785
+    run_attempt: 1
+    head_sha: bf8c3ac90da3f1b9990740fb53e8aa1f2b3a2684
+    trigger: pull_request
+    started_at: 2026-07-21T02:06:10Z
+    finished_at: 2026-07-21T02:08:12Z
+    duration_seconds: 122
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29795010382
+    run_attempt: 1
+    head_sha: b5631a5a423f7d0510621d8d757e8cfc9c1e8225
+    trigger: pull_request
+    started_at: 2026-07-21T02:07:45Z
+    finished_at: 2026-07-21T02:14:21Z
+    duration_seconds: 396
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T01:55:35Z
+    cause: head_push
+    run_id: 29794445817
+  - at: 2026-07-21T02:00:59Z
+    cause: head_push
+    run_id: 29794692948
+  - at: 2026-07-21T02:06:10Z
+    cause: head_push
+    run_id: 29794938785
+  - at: 2026-07-21T02:07:45Z
+    cause: head_push
+    run_id: 29795010382
+merge_attempts:
+  - at: 2026-07-21T02:14:41Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [537, 530]
+  baseline_quality: comparable
+  baseline_note: Same extension Pilot/mock-auth e2e surface as 537; 530 is the nearest prior extension browser-flow record
+  elapsed_seconds_change_percent: -34.9
+  local_execution_seconds_change_percent: -55.1
+  github_actions_seconds_change_percent: -42.3
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - Svelte form onsubmit did not preserve window.__nookLoginSubmitted for Pilot-driven submits, forcing a full extension e2e rebuild after the SPA refactor
+    - task extension:format formats inside the sealed image without applying a host diff; needed task format | git apply, burning an extra format/check cycle
+    - New mock-auth Vite SPA entrypoints were omitted from knip.json, so lint failed only after prettier was fixed
+  required_actions: []
