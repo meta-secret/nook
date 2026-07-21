@@ -238,15 +238,7 @@ mod tests {
             Err(ValidationError::CreditCardNumberInvalid)
         );
         assert_eq!(
-            CreditCardSecret::from_fields(
-                "Bad",
-                "",
-                "4111111111111111",
-                "12",
-                "",
-                "",
-                ""
-            ),
+            CreditCardSecret::from_fields("Bad", "", "4111111111111111", "12", "", "", ""),
             Err(ValidationError::CreditCardExpirationInvalid)
         );
         assert_eq!(
@@ -261,16 +253,8 @@ mod tests {
 
     #[test]
     fn allows_empty_optional_fields() {
-        let card = CreditCardSecret::from_fields(
-            "Debit",
-            "",
-            "4111111111111111",
-            "",
-            "",
-            "",
-            "",
-        )
-        .unwrap();
+        let card =
+            CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "").unwrap();
         assert!(card.cardholder_name.is_empty());
         assert!(card.cvv.is_empty());
         assert!(card.expiration_display().is_empty());

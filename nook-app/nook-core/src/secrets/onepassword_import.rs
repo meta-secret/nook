@@ -460,7 +460,13 @@ fn convert_credit_card(item: &OnePasswordItem, vault_name: &str) -> Option<Secre
     );
     let expiry = section_credential(
         &item.details.sections,
-        &["expiry", "expires", "expiration", "expiry date", "valid thru"],
+        &[
+            "expiry",
+            "expires",
+            "expiration",
+            "expiry date",
+            "valid thru",
+        ],
     );
     let (expiration_month, expiration_year) = parse_month_year(&expiry);
     let cvv = section_credential(

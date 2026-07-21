@@ -567,9 +567,7 @@ impl SecretListItem {
                 issuer,
                 ..
             } => authenticator_group_key(website_url, issuer),
-            SecretListItemData::CreditCard { title, .. } => {
-                titled_group_key(title, "Unnamed Card")
-            }
+            SecretListItemData::CreditCard { title, .. } => titled_group_key(title, "Unnamed Card"),
         }
     }
 
@@ -916,8 +914,8 @@ mod tests {
 
     #[test]
     fn build_secret_yaml_from_credit_card_form_validates_number() {
-        let yaml = build_secret_yaml_from_form(&SecretFormFields::CreditCard(
-            CreditCardSecretForm {
+        let yaml =
+            build_secret_yaml_from_form(&SecretFormFields::CreditCard(CreditCardSecretForm {
                 title: "Debit".to_owned(),
                 cardholder_name: String::new(),
                 number: "4111111111111111".to_owned(),
@@ -925,17 +923,16 @@ mod tests {
                 expiration_year: String::new(),
                 cvv: String::new(),
                 notes: String::new(),
-            },
-        ))
-        .unwrap();
+            }))
+            .unwrap();
         let value = SecretValue::from_yaml(SecretType::CreditCard, &yaml).unwrap();
         let SecretValue::CreditCard(card) = value else {
             panic!("expected credit card");
         };
         assert_eq!(card.number, "4111111111111111");
 
-        let err = build_secret_yaml_from_form(&SecretFormFields::CreditCard(
-            CreditCardSecretForm {
+        let err =
+            build_secret_yaml_from_form(&SecretFormFields::CreditCard(CreditCardSecretForm {
                 title: "Bad".to_owned(),
                 cardholder_name: String::new(),
                 number: "4111111111111112".to_owned(),
@@ -943,8 +940,7 @@ mod tests {
                 expiration_year: String::new(),
                 cvv: String::new(),
                 notes: String::new(),
-            },
-        ));
+            }));
         assert!(err.is_err());
     }
 
