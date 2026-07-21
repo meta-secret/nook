@@ -14,7 +14,7 @@ mod vault;
 
 pub(crate) use auth::{
     authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
-    multi_device, password_envelope,
+    multi_device, password_envelope, website_login_save,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
@@ -42,6 +42,9 @@ pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
+};
+pub use website_login_save::{
+    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
 pub use authenticator::{
     AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,

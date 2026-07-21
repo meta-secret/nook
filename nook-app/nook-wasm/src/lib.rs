@@ -36,6 +36,7 @@ pub use types::{
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
     NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder, NookImportResult,
     NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookPasskeyAccount,
+    NookWebsiteLoginSavePlan,
     NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
     NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
     NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,

@@ -35,6 +35,46 @@ let initPromise: Promise<unknown> | undefined
 let manager: NookVaultManager | undefined
 let sessionTimer: ReturnType<typeof setTimeout> | undefined
 
+const LOGIN_SAVE_OFFER_TTL_MS = 2 * 60 * 1000
+
+type PendingLoginSaveOffer = {
+  offerId: string
+  origin: string
+  username: string
+  password: string
+  vaultStoreId: string
+  decision: 'create' | 'update'
+  replaceSecretId?: string
+  expiresAt: number
+}
+
+const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
+
+function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
+  if (!offer) return
+  offer.username = ''
+  offer.password = ''
+  pendingLoginSaveOffers.delete(offer.offerId)
+}
+
+function purgeExpiredLoginSaveOffers(now = Date.now()): void {
+  for (const offer of [...pendingLoginSaveOffers.values()]) {
+    if (offer.expiresAt <= now) {
+      clearLoginSaveOffer(offer)
+    }
+  }
+}
+
+function findPendingLoginSaveOffer(
+  origin: string,
+): PendingLoginSaveOffer | undefined {
+  purgeExpiredLoginSaveOffers()
+  for (const offer of pendingLoginSaveOffers.values()) {
+    if (offer.origin === origin) return offer
+  }
+  return undefined
+}
+
 function ensureWasm(): Promise<unknown> {
   initPromise ??= initNookWasm({
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
@@ -500,6 +540,123 @@ async function handleMessage(message: unknown): Promise<unknown> {
       } finally {
         code.free()
       }
+    }
+    case 'nook:extension-session-plan-login-save': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (
+        typeof payload.origin !== 'string' ||
+        typeof payload.username !== 'string' ||
+        typeof payload.password !== 'string'
+      ) {
+        throw new Error('Extension session received an invalid login save plan.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const plan = await activeManager.planWebsiteLoginSave(
+        payload.origin,
+        payload.username,
+        payload.password,
+      )
+      try {
+        const decision = plan.decision
+        if (decision !== 'create' && decision !== 'update') {
+          payload.password = ''
+          return { ok: true, decision, secretId: plan.secretId }
+        }
+        purgeExpiredLoginSaveOffers()
+        for (const existing of [...pendingLoginSaveOffers.values()]) {
+          if (existing.origin === payload.origin) {
+            clearLoginSaveOffer(existing)
+          }
+        }
+        const offerId = crypto.randomUUID()
+        const replaceSecretId =
+          decision === 'update' && typeof plan.secretId === 'string'
+            ? plan.secretId
+            : undefined
+        pendingLoginSaveOffers.set(offerId, {
+          offerId,
+          origin: payload.origin,
+          username: payload.username,
+          password: payload.password,
+          vaultStoreId: grant.vaultStoreId,
+          decision,
+          replaceSecretId,
+          expiresAt: Date.now() + LOGIN_SAVE_OFFER_TTL_MS,
+        })
+        payload.password = ''
+        return {
+          ok: true,
+          decision,
+          offerId,
+          secretId: replaceSecretId,
+          vaultStoreId: grant.vaultStoreId,
+        }
+      } finally {
+        plan.free()
+      }
+    }
+    case 'nook:extension-session-pending-login-save': {
+      const payload = messagePayload(message)
+      if (typeof payload.origin !== 'string') {
+        throw new Error(
+          'Extension session received an invalid pending login save lookup.',
+        )
+      }
+      const offer = findPendingLoginSaveOffer(payload.origin)
+      if (!offer) {
+        return { ok: true, offer: undefined }
+      }
+      return {
+        ok: true,
+        offer: {
+          offerId: offer.offerId,
+          decision: offer.decision,
+          vaultStoreId: offer.vaultStoreId,
+        },
+      }
+    }
+    case 'nook:extension-session-commit-login-save': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (typeof payload.offerId !== 'string') {
+        throw new Error(
+          'Extension session received an invalid login save commit.',
+        )
+      }
+      purgeExpiredLoginSaveOffers()
+      const offer = pendingLoginSaveOffers.get(payload.offerId)
+      if (!offer || offer.origin !== (payload.origin as string)) {
+        throw new Error('Login save offer is missing or expired.')
+      }
+      if (offer.vaultStoreId !== grant.vaultStoreId) {
+        throw new Error('Login save offer does not match the vault grant.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      try {
+        await activeManager.commitWebsiteLoginSave(
+          offer.origin,
+          offer.username,
+          offer.password,
+          offer.replaceSecretId ?? '',
+        )
+        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+        return { ok: true, decision: offer.decision }
+      } finally {
+        clearLoginSaveOffer(offer)
+      }
+    }
+    case 'nook:extension-session-dismiss-login-save': {
+      const payload = messagePayload(message)
+      if (typeof payload.offerId !== 'string') {
+        throw new Error(
+          'Extension session received an invalid login save dismissal.',
+        )
+      }
+      clearLoginSaveOffer(pendingLoginSaveOffers.get(payload.offerId))
+      return { ok: true }
     }
     case 'nook:extension-session-register-passkey': {
       const payload = messagePayload(message)

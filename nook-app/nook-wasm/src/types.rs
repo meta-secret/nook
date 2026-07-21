@@ -653,6 +653,41 @@ impl Drop for NookLoginFillCredential {
 }
 
 #[wasm_bindgen]
+pub struct NookWebsiteLoginSavePlan {
+    decision: String,
+    secret_id: Option<String>,
+}
+
+#[wasm_bindgen]
+impl NookWebsiteLoginSavePlan {
+    pub(crate) fn from_decision(decision: nook_core::WebsiteLoginSaveDecision) -> Self {
+        let label = decision.as_str().to_owned();
+        match decision {
+            nook_core::WebsiteLoginSaveDecision::Create
+            | nook_core::WebsiteLoginSaveDecision::Invalid => Self {
+                decision: label,
+                secret_id: None,
+            },
+            nook_core::WebsiteLoginSaveDecision::Update { secret_id }
+            | nook_core::WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
+                decision: label,
+                secret_id: Some(secret_id.to_string()),
+            },
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn decision(&self) -> String {
+        self.decision.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = secretId)]
+    pub fn secret_id(&self) -> Option<String> {
+        self.secret_id.clone()
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookAuthenticatorAccount {
     secret_id: String,
