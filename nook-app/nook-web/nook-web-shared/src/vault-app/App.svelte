@@ -21,6 +21,7 @@
   import LocalFolderMultipleVaultsDialog from "$lib/components/LocalFolderMultipleVaultsDialog.svelte";
   import VaultSyncConflictDialog from "$lib/components/VaultSyncConflictDialog.svelte";
   import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
+  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
   import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
@@ -46,6 +47,12 @@
     requestPairedExtensionUnlock,
     type ExtensionConnectRequest,
   } from "$lib/extension-connect";
+  import {
+    loadExtensionInstallTarget,
+    openExtensionInstallTarget,
+    resolveExtensionSetupStatus,
+    type ExtensionSetupStatus,
+  } from "$lib/extension-install";
   import type { VaultItemType } from "$lib/nook";
   import { assessVaultSecurity, configuredVaultApplication } from "$app-wasm";
   import { consumeSentinelOnboardingFromLocation } from "$lib/sentinel-onboarding-link";
@@ -113,6 +120,10 @@
   );
   let extensionBackedVaultSession = $state(false);
   let extensionDiscoveryStoreId = $state("");
+  let extensionSetupStatus = $state<ExtensionSetupStatus | undefined>(
+    undefined,
+  );
+  let extensionInstallBusy = $state(false);
   const EXTENSION_LOCKED_RETRY_MS = 3_000;
   let sentinelInvitationRequest = $state(
     typeof window !== "undefined" && APP_KIND !== "simple"
@@ -527,6 +538,52 @@
     sentinelOnboardingPackage = "";
   }
 
+  async function refreshExtensionSetupStatus() {
+    if (!SUPPORTS_EXTENSION || !vault.isAuthenticated) {
+      extensionSetupStatus = undefined;
+      return;
+    }
+    extensionSetupStatus = await resolveExtensionSetupStatus(
+      vault.activeVaultStoreId,
+    );
+  }
+
+  async function handleExtensionInstall() {
+    extensionInstallBusy = true;
+    try {
+      const target = await loadExtensionInstallTarget();
+      openExtensionInstallTarget(target);
+    } finally {
+      extensionInstallBusy = false;
+    }
+  }
+
+  $effect(() => {
+    void vault.isAuthenticated;
+    void vault.activeVaultStoreId;
+    void refreshExtensionSetupStatus();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshExtensionSetupStatus();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const observer = new MutationObserver(() => {
+      void refreshExtensionSetupStatus();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-nook-extension-runtime-id"],
+    });
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      observer.disconnect();
+    };
+  });
+
   $effect(() => {
     const pending = pendingVaultCreation;
     if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return;
@@ -907,6 +964,14 @@
                 ? 'space-y-4'
                 : 'flex min-h-0 flex-1 flex-col gap-4'}"
             >
+              {#if !vault.settingsOpen && SUPPORTS_EXTENSION && extensionSetupStatus && extensionSetupStatus !== "paired"}
+                <ExtensionInstallSetupCard
+                  {vault}
+                  status={extensionSetupStatus}
+                  installBusy={extensionInstallBusy}
+                  onInstall={() => void handleExtensionInstall()}
+                />
+              {/if}
               {#if !vault.settingsOpen && vaultSecurityRecommendations.hasRecommendations}
                 <VaultSecurityGuideBanner
                   {vault}

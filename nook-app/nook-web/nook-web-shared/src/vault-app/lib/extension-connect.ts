@@ -113,7 +113,7 @@ function requestId(): string {
   );
 }
 
-function installedExtensionRuntimeId(): string | undefined {
+export function readInstalledExtensionRuntimeId(): string | undefined {
   return (
     document.documentElement
       .getAttribute(extensionRuntimeIdAttribute)
@@ -169,7 +169,7 @@ function sendExtensionMessage(
 async function discoverPairedExtensionIdentityOnce(
   vaultStoreId: string,
 ): Promise<PairedExtensionIdentityDiscovery | undefined> {
-  const extensionRuntimeId = installedExtensionRuntimeId();
+  const extensionRuntimeId = readInstalledExtensionRuntimeId();
   if (!extensionRuntimeId) return Promise.resolve(undefined);
 
   const discoveryRequestId = requestId();
@@ -226,7 +226,7 @@ export async function discoverPairedExtensionIdentity(
 export async function requestPairedExtensionUnlock(
   vaultStoreId: string,
 ): Promise<boolean> {
-  const extensionId = installedExtensionRuntimeId();
+  const extensionId = readInstalledExtensionRuntimeId();
   if (!extensionId) return false;
 
   const unlockRequestId = requestId();

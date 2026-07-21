@@ -41,6 +41,12 @@ test.describe('vault connect flow', () => {
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
+    await expect(page.getByTestId('extension-install-setup')).toBeVisible()
+    await expect(page.getByTestId('extension-install-setup')).toHaveAttribute(
+      'data-status',
+      'not_installed',
+    )
+    await expect(page.getByTestId('extension-install-setup-cta')).toBeVisible()
     await expect(page.getByTestId('vault-security-guide')).toBeVisible()
     await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
       'data-folded',
