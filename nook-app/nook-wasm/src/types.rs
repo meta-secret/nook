@@ -2231,9 +2231,11 @@ pub(crate) fn records_to_vec(
 }
 
 pub(crate) fn list_items_to_vec(items: Vec<nook_core::SecretListItem>) -> Vec<NookSecretListItem> {
+    let group_keys = nook_core::resolve_entity_group_keys(&items);
     items
         .into_iter()
-        .map(NookSecretListItem::from_core)
+        .zip(group_keys)
+        .map(|(item, group_key)| NookSecretListItem::from_core(item, group_key))
         .collect()
 }
 

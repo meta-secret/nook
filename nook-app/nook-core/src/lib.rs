@@ -133,8 +133,9 @@ pub use secret_types::{
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorSecretForm, LoginSecretForm, SecretFormFields, SecretListItem,
-    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, build_secret_yaml,
-    build_secret_yaml_from_form, hostname_from_url, login_host_matches_origin,
+    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, authenticator_group_key,
+    build_secret_yaml, build_secret_yaml_from_form, hostname_from_url, login_host_matches_origin,
+    resolve_entity_group_keys,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
