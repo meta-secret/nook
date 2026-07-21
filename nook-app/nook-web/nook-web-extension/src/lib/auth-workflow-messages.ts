@@ -11,7 +11,10 @@ export type AuthenticationPageObservationView = Pick<
   | 'genericPasswordFieldCount'
   | 'oneTimeCodeFieldCount'
   | 'manualCheckpointPresent'
->
+> & {
+  authenticatorSetupHint: boolean
+  backupCodesHint: boolean
+}
 
 export type AuthenticationWorkflowSnapshotView = {
   kind: string
@@ -71,7 +74,9 @@ export function isAuthenticationWorkflowSnapshotMessage(
         observation.genericPasswordFieldCount,
         observation.oneTimeCodeFieldCount,
       ].every(isBoundedCount) &&
-      typeof observation.manualCheckpointPresent === 'boolean'
+      typeof observation.manualCheckpointPresent === 'boolean' &&
+      typeof observation.authenticatorSetupHint === 'boolean' &&
+      typeof observation.backupCodesHint === 'boolean'
     )
   })
 }

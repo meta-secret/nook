@@ -34,6 +34,18 @@ function enrollmentChromeStubArgs(messages: Record<string, ChromeMessage>) {
           period: 30,
         },
       },
+      'nook:website-authenticator-enroll-stage': {
+        ok: true,
+        stageId: 'demo-enroll-stage',
+      },
+      'nook:website-authenticator-enroll-code': {
+        ok: true,
+        code: '482913',
+      },
+      'nook:authentication-outcome-classify': {
+        ok: true,
+        verdict: { name: 'sufficient', allowsCredentialCommit: true },
+      },
       'nook:website-authenticator-enroll-confirm': {
         ok: true,
         secretId: 'demo-authenticator-1',
@@ -42,7 +54,7 @@ function enrollmentChromeStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
-test('capture an authenticator QR through consented Pilot enrollment', async ({
+test('guide authenticator enrollment through consented Pilot ceremony', async ({
   page,
 }) => {
   const messages = JSON.parse(
@@ -85,10 +97,23 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
             border-radius: 12px;
             background: #fff;
           }
+          form { display: grid; gap: 12px; margin-top: 18px; text-align: left; }
+          input {
+            min-height: 44px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgb(255 255 255 / 12%);
+            background: #11131a;
+            color: #f7f7f8;
+            font: inherit;
+          }
+          #success { display: none; color: #94d4ae; font-weight: 650; }
+          body.verified #setup { display: none; }
+          body.verified #success { display: block; }
         </style>
       </head>
       <body>
-        <main>
+        <main id="setup">
           <h1>Authenticator setup</h1>
           <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
           <img
@@ -98,10 +123,27 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
             height="220"
             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Crect width='220' height='220' fill='%23fff'/%3E%3Crect x='20' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='160' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='20' y='160' width='40' height='40' fill='%23000'/%3E%3C/svg%3E"
           />
+          <form id="verify-form">
+            <label>Verification code
+              <input autocomplete="one-time-code" name="Code" type="text" />
+            </label>
+            <button type="submit">Verify</button>
+          </form>
+        </main>
+        <main id="success" data-nook-auth-outcome="success" data-testid="mock-auth-success">
+          Authentication complete
         </main>
       </body>
     </html>`)
 
+  await page.evaluate(() => {
+    document
+      .querySelector('#verify-form')
+      ?.addEventListener('submit', (event) => {
+        event.preventDefault()
+        document.body.classList.add('verified')
+      })
+  })
   await page.evaluate(installDemoChromeStub, stubArgs)
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
@@ -120,7 +162,7 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
   await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
   await expect(
     widget.getByRole('heading', {
-      name: /Review this authenticator before saving/,
+      name: /Review this authenticator before continuing/,
     }),
   ).toBeVisible()
   await expect(widget.getByText(/Service:\s*Demo Service/)).toBeVisible()
@@ -130,7 +172,15 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
   await expect(widget.getByText(/JBSWY3DPEHPK3PXP/)).toHaveCount(0)
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Save authenticator' }).click()
+  await widget.getByRole('button', { name: 'Continue enrollment' }).click()
+  await expect(
+    widget.getByText(/Verification code filled|Complete verification/i),
+  ).toBeVisible()
+  await expect(page.locator('input[name="Code"]')).toHaveValue('482913')
+  await demoBeat(page)
+
+  await page.getByRole('button', { name: 'Verify' }).click()
+  await expect(page.getByTestId('mock-auth-success')).toBeVisible()
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible()

@@ -34,6 +34,7 @@ import type {
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import {
   detectEnrollmentHints,
+  enrollmentCeremonyActive,
   renderEnrollmentActions,
   type EnrollmentFlowHost,
   type EnrollmentPageHints,
@@ -1997,6 +1998,7 @@ function renderWidget(
 
 async function scanAndRender(): Promise<void> {
   if (dismissed) return
+  if (enrollmentCeremonyActive()) return
   const sequence = ++scanSequence
   if (activeSaveOffer) {
     if (renderedWorkflowKey !== `save:${activeSaveOffer.offerId}`) {
@@ -2046,6 +2048,8 @@ async function scanAndRender(): Promise<void> {
         ),
         oneTimeCodeFieldCount: boundedCount(summary.oneTimeCodeFieldCount),
         manualCheckpointPresent: summary.manualCheckpointPresent,
+        authenticatorSetupHint: detectEnrollmentHints().qr,
+        backupCodesHint: detectEnrollmentHints().backupCodes,
       })),
     },
   })

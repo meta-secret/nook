@@ -217,9 +217,10 @@ Signup and password-change pages may offer **Generate password** through
 Rust/WASM; generated values fill only `new-password` fields and stay in page
 memory until an evidence-gated Save / Update. CAPTCHA, terms acceptance, and
 email-verification style checkpoints force Take over. Pilot-guided 2FA
-enrollment ceremony remains a separately tracked flight plan; until it is
-implemented, Nook Pilot identifies that checkpoint and yields to manual control
-instead of implying automation.
+enrollment stages an otpauth setup in extension memory after consent, fills the
+verification code via Rust/WASM, and encrypts the authenticator only after
+Sufficient outcome evidence. Consented backup-code capture follows; secrets
+never appear in the HUD.
 
 ### In-Page HUD
 

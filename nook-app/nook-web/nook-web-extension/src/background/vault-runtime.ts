@@ -51,6 +51,8 @@ export async function authenticationWorkflowSnapshot(
         observation.genericPasswordFieldCount,
         observation.oneTimeCodeFieldCount,
         observation.manualCheckpointPresent,
+        observation.authenticatorSetupHint,
+        observation.backupCodesHint,
       )
       try {
         inputs.add(input)

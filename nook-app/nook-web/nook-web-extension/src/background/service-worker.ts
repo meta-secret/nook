@@ -40,8 +40,12 @@ import {
 } from '../lib/simple-vault-runtime'
 import {
   isWebsiteAuthenticatorBackupAttachMessage,
+  isWebsiteAuthenticatorEnrollCodeMessage,
   isWebsiteAuthenticatorEnrollConfirmMessage,
+  isWebsiteAuthenticatorEnrollDismissMessage,
+  isWebsiteAuthenticatorEnrollPendingMessage,
   isWebsiteAuthenticatorEnrollPreviewMessage,
+  isWebsiteAuthenticatorEnrollStageMessage,
   type OtpauthEnrollmentPreview,
 } from '../lib/enrollment-messages'
 import {
@@ -1054,7 +1058,37 @@ async function websiteAuthenticatorEnrollPreview(
   }
 }
 
-async function websiteAuthenticatorEnrollConfirm(
+type StagedAuthenticatorEnrollment = {
+  stageId: string
+  origin: string
+  vaultStoreId: string
+  otpauthUri: string
+  expiresAt: number
+}
+
+const STAGED_ENROLLMENT_TTL_MS = 5 * 60 * 1000
+const stagedAuthenticatorEnrollments = new Map<
+  string,
+  StagedAuthenticatorEnrollment
+>()
+
+function purgeExpiredStagedEnrollments(now = Date.now()): void {
+  for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
+    if (staged.expiresAt <= now) {
+      staged.otpauthUri = ''
+      stagedAuthenticatorEnrollments.delete(stageId)
+    }
+  }
+}
+
+function clearStagedEnrollment(stageId: string): void {
+  const staged = stagedAuthenticatorEnrollments.get(stageId)
+  if (!staged) return
+  staged.otpauthUri = ''
+  stagedAuthenticatorEnrollments.delete(stageId)
+}
+
+async function websiteAuthenticatorEnrollStage(
   message: {
     payload: { origin: string; vaultStoreId: string; otpauthUri: string }
   },
@@ -1062,6 +1096,70 @@ async function websiteAuthenticatorEnrollConfirm(
 ): Promise<unknown> {
   if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
     return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const grant = (await passwordPairingGrants()).find(
+    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  )
+  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
+  purgeExpiredStagedEnrollments()
+  for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
+    if (staged.origin === message.payload.origin) {
+      clearStagedEnrollment(stageId)
+    }
+  }
+  const stageId = crypto.randomUUID()
+  stagedAuthenticatorEnrollments.set(stageId, {
+    stageId,
+    origin: message.payload.origin,
+    vaultStoreId: message.payload.vaultStoreId,
+    otpauthUri: message.payload.otpauthUri,
+    expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
+  })
+  return { ok: true, stageId }
+}
+
+async function websiteAuthenticatorEnrollCode(
+  message: {
+    payload: { origin: string; stageId: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  purgeExpiredStagedEnrollments()
+  const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
+  if (!staged || staged.origin !== message.payload.origin) {
+    return { ok: false, reason: 'authenticator-stage-missing' }
+  }
+  await ensureExtensionSessionDocument()
+  try {
+    return await sendSessionMessage({
+      type: 'nook:extension-session-authenticator-enroll-code',
+      payload: { otpauthUri: staged.otpauthUri },
+    })
+  } catch {
+    return { ok: false, reason: 'authenticator-code-failed' }
+  }
+}
+
+async function websiteAuthenticatorEnrollConfirm(
+  message: {
+    payload: { origin: string; vaultStoreId: string; stageId: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  purgeExpiredStagedEnrollments()
+  const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
+  if (
+    !staged ||
+    staged.origin !== message.payload.origin ||
+    staged.vaultStoreId !== message.payload.vaultStoreId
+  ) {
+    return { ok: false, reason: 'authenticator-stage-missing' }
   }
   const grant = (await passwordPairingGrants()).find(
     (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
@@ -1080,14 +1178,58 @@ async function websiteAuthenticatorEnrollConfirm(
     openCompanionLauncher()
     return { ok: false, reason: 'authenticator-locked' }
   }
-  return sendSessionMessage({
-    type: 'nook:extension-session-authenticator-enroll-confirm',
-    payload: {
-      ...grant,
-      otpauthUri: message.payload.otpauthUri,
-      origin: message.payload.origin,
-    },
-  })
+  try {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-authenticator-enroll-confirm',
+      payload: {
+        ...grant,
+        otpauthUri: staged.otpauthUri,
+        origin: message.payload.origin,
+      },
+    })
+    clearStagedEnrollment(message.payload.stageId)
+    return response
+  } catch {
+    return { ok: false, reason: 'authenticator-enroll-failed' }
+  }
+}
+
+async function websiteAuthenticatorEnrollDismiss(
+  message: {
+    payload: { origin: string; stageId: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
+  if (staged && staged.origin === message.payload.origin) {
+    clearStagedEnrollment(message.payload.stageId)
+  }
+  return { ok: true }
+}
+
+async function websiteAuthenticatorEnrollPending(
+  message: {
+    payload: { origin: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  purgeExpiredStagedEnrollments()
+  for (const staged of stagedAuthenticatorEnrollments.values()) {
+    if (staged.origin === message.payload.origin) {
+      return {
+        ok: true,
+        stageId: staged.stageId,
+        vaultStoreId: staged.vaultStoreId,
+      }
+    }
+  }
+  return { ok: true }
 }
 
 async function websiteAuthenticatorBackupAttach(
@@ -1505,11 +1647,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (isWebsiteAuthenticatorEnrollStageMessage(message)) {
+    void websiteAuthenticatorEnrollStage(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-stage-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorEnrollCodeMessage(message)) {
+    void websiteAuthenticatorEnrollCode(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-code-failed' }),
+      )
+    return true
+  }
+
   if (isWebsiteAuthenticatorEnrollConfirmMessage(message)) {
     void websiteAuthenticatorEnrollConfirm(message, sender)
       .then(sendResponse)
       .catch(() =>
         sendResponse({ ok: false, reason: 'authenticator-enroll-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorEnrollDismissMessage(message)) {
+    void websiteAuthenticatorEnrollDismiss(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-dismiss-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorEnrollPendingMessage(message)) {
+    void websiteAuthenticatorEnrollPending(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-pending-failed' }),
       )
     return true
   }

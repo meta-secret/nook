@@ -491,6 +491,8 @@ impl NookAuthenticationPageObservation {
         generic_password_field_count: u32,
         one_time_code_field_count: u32,
         manual_checkpoint_present: bool,
+        authenticator_setup_hint: bool,
+        backup_codes_hint: bool,
     ) -> Self {
         Self(nook_core::AuthenticationPageObservation {
             username_field_count,
@@ -499,6 +501,8 @@ impl NookAuthenticationPageObservation {
             generic_password_field_count,
             one_time_code_field_count,
             manual_checkpoint_present,
+            authenticator_setup_hint,
+            backup_codes_hint,
         })
     }
 }
