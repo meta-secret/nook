@@ -1464,15 +1464,7 @@ pub struct NookSecretListItem {
 
 #[wasm_bindgen]
 impl NookSecretListItem {
-    pub(crate) fn from_core(item: nook_core::SecretListItem) -> Self {
-        let group_key = item.group_key();
-        Self { item, group_key }
-    }
-
-    pub(crate) fn from_core_with_group_key(
-        item: nook_core::SecretListItem,
-        group_key: String,
-    ) -> Self {
+    pub(crate) fn from_core(item: nook_core::SecretListItem, group_key: String) -> Self {
         Self { item, group_key }
     }
 
@@ -1892,13 +1884,16 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn list_item_exports_metadata_without_secret_accessors() {
-        let item = NookSecretListItem::from_core(nook_core::SecretListItem {
-            id: nook_core::SecretId::from_vault_record("secret_login"),
-            data: nook_core::SecretListItemData::Login {
-                website_url: "https://example.com".to_owned(),
-                username: "alice".to_owned(),
+        let item = NookSecretListItem::from_core(
+            nook_core::SecretListItem {
+                id: nook_core::SecretId::from_vault_record("secret_login"),
+                data: nook_core::SecretListItemData::Login {
+                    website_url: "https://example.com".to_owned(),
+                    username: "alice".to_owned(),
+                },
             },
-        });
+            "example.com".to_owned(),
+        );
 
         assert_eq!(item.id(), "secret_login");
         assert_eq!(item.secret_type(), "login");
@@ -1910,14 +1905,17 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn passkey_list_item_exports_only_rp_and_account_metadata() {
-        let item = NookSecretListItem::from_core(nook_core::SecretListItem {
-            id: nook_core::SecretId::from_vault_record("secret_passkey"),
-            data: nook_core::SecretListItemData::Passkey {
-                rp_id: "login.example.com".to_owned(),
-                user_name: "alice@example.com".to_owned(),
-                user_display_name: "Alice".to_owned(),
+        let item = NookSecretListItem::from_core(
+            nook_core::SecretListItem {
+                id: nook_core::SecretId::from_vault_record("secret_passkey"),
+                data: nook_core::SecretListItemData::Passkey {
+                    rp_id: "login.example.com".to_owned(),
+                    user_name: "alice@example.com".to_owned(),
+                    user_display_name: "Alice".to_owned(),
+                },
             },
-        });
+            "login.example.com".to_owned(),
+        );
 
         assert_eq!(item.secret_type(), "passkey");
         assert_eq!(item.rp_id(), "login.example.com");

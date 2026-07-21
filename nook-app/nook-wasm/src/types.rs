@@ -2235,7 +2235,7 @@ pub(crate) fn list_items_to_vec(items: Vec<nook_core::SecretListItem>) -> Vec<No
     items
         .into_iter()
         .zip(group_keys)
-        .map(|(item, group_key)| NookSecretListItem::from_core_with_group_key(item, group_key))
+        .map(|(item, group_key)| NookSecretListItem::from_core(item, group_key))
         .collect()
 }
 
