@@ -340,7 +340,8 @@ pub fn verify_totp_code(
     }
     let period = authenticator.period.get();
     for step_offset in [-1_i64, 0, 1] {
-        let Some(shifted) = unix_seconds.checked_add_signed(step_offset * i64::try_from(period).unwrap_or(30))
+        let Some(shifted) =
+            unix_seconds.checked_add_signed(step_offset * i64::try_from(period).unwrap_or(30))
         else {
             continue;
         };
