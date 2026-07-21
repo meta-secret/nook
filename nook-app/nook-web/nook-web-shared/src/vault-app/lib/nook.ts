@@ -142,6 +142,7 @@ export type SecretFormInput =
       type: "authenticator";
       issuer: string;
       account: string;
+      websiteUrl: string;
       totpSecret: string;
       algorithm: string;
       digits: string;
@@ -178,6 +179,7 @@ export function buildSecretYaml(input: SecretFormInput): string {
       fields = NookSecretFormFields.authenticator(
         input.issuer,
         input.account,
+        input.websiteUrl,
         input.totpSecret,
         input.algorithm,
         input.digits,

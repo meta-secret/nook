@@ -1066,6 +1066,8 @@
     "passkey_creation_description": "When a website asks to create a passkey, choose Nook in the extension prompt. Nook creates the credential inside Rust/WASM and saves it as an encrypted item in this Simple Vault.",
     "passkey_creation_hint": "Pair and unlock the Nook browser extension first. Passkeys cannot be typed, revealed, copied, or imported through this form.",
     "placeholder_issuer": "Google, GitHub, email provider…",
+    "placeholder_authenticator_website": "https://example.com (optional)",
+    "authenticator_website_hint": "Optional. Links this authenticator to a site so it groups with the matching login. Popular services are inferred from the service name when left blank.",
     "placeholder_authenticator_account": "alice@example.com",
     "placeholder_authenticator_secret": "Setup key or otpauth:// URI",
     "authenticator_secret_hint": "Paste the setup key or otpauth:// URI from the service.",

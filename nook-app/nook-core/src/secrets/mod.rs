@@ -2,6 +2,7 @@
 
 pub(crate) mod apple_passwords_import;
 pub(crate) mod authenticator;
+pub(crate) mod authenticator_issuer_hosts;
 pub(crate) mod bip39;
 pub(crate) mod bitwarden_import;
 pub(crate) mod chrome_passwords_import;

@@ -7,7 +7,13 @@ Add RFC 6238 TOTP authenticators as a first-class secure-item type.
 - An authenticator is a standalone vault item, not a field that only exists on
   website logins. This supports websites, native apps, CLIs, email accounts,
   and other services equally.
-- Non-secret metadata is an issuer/service name and optional account label.
+- Non-secret metadata is an issuer/service name, optional account label, and
+  optional website URL used for vault list clustering with matching logins.
+- When the website URL is empty at create/import time, Nook may infer
+  `https://{host}` from a domain-like issuer or a bundled popular-issuer map
+  (`nook-core/data/authenticator_issuer_hosts.json`, e.g. `OpenAI` →
+  `openai.com`). Existing vault items without a URL keep working; clustering
+  still uses the same inference for display keys.
 - Encrypted payload data contains the Base32 shared secret and TOTP parameters.
   Existing items may also contain service-issued recovery codes for backward
   compatibility, but recovery codes are not part of TOTP setup.
@@ -26,9 +32,11 @@ Add RFC 6238 TOTP authenticators as a first-class secure-item type.
 
 ## UI and security
 
-- The create/edit form exposes only service, account, and setup key/URI.
-- The vault list exposes only issuer, account, and the recovery-code count for
-  backward-compatible items that already contain recovery codes.
+- The create/edit form exposes service, account, optional website URL, and setup
+  key/URI.
+- The vault list exposes issuer, account, optional website URL, and the
+  recovery-code count for backward-compatible items that already contain
+  recovery codes.
 - Expanding an item requests the current code from Rust/WASM. The browser owns
   only the one-second display timer and refresh request.
 - The shared secret and legacy recovery-code values stay masked until explicit
@@ -41,9 +49,10 @@ Add RFC 6238 TOTP authenticators as a first-class secure-item type.
 - The content script recognizes standard `autocomplete="one-time-code"` fields
   and conservative OTP/TOTP/2FA/MFA name/id conventions.
 - A user action asks the unlocked extension session for safe authenticator
-  metadata. Because standalone authenticator records do not carry a trusted
-  website association, Nook always requires the user to choose the displayed
-  service/account before deriving and releasing a code.
+  metadata. Optional website URLs improve vault clustering with logins, but
+  until fill treats that association as trusted origin matching, Nook still
+  requires the user to choose the displayed service/account before deriving
+  and releasing a code.
 - Rust/WASM decrypts the selected item and derives the current code only after
   that choice. The short-lived value crosses only the local extension fill
   path, is cleared from the response object, and is never persisted or logged.

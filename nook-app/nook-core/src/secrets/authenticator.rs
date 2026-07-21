@@ -134,6 +134,13 @@ pub struct AuthenticatorSecret {
     pub issuer: String,
     #[serde(default)]
     pub account: String,
+    /// Optional website association for vault clustering and login pairing.
+    ///
+    /// Empty for legacy items and for services without a browser origin. When
+    /// unset at create/import time, Nook may infer `https://{host}` from a
+    /// domain-like issuer or the bundled popular-issuer map.
+    #[serde(default)]
+    pub website_url: String,
     pub secret: TotpSecret,
     #[serde(default)]
     pub algorithm: TotpAlgorithm,
@@ -159,6 +166,7 @@ impl AuthenticatorSecret {
     pub fn normalize(&mut self) -> Result<(), ValidationError> {
         self.issuer = self.issuer.trim().to_owned();
         self.account = self.account.trim().to_owned();
+        self.website_url = self.website_url.trim().to_owned();
         self.secret = TotpSecret::parse(self.secret.as_str())?;
         self.digits = TotpDigits::parse(self.digits.get())?;
         self.period = TotpPeriod::parse(self.period.get())?;
@@ -166,6 +174,21 @@ impl AuthenticatorSecret {
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
         self.validate()
+    }
+
+    /// Fill [`Self::website_url`] from issuer host text or the popular-issuer map.
+    pub fn apply_inferred_website_url_if_empty(&mut self) {
+        if !self.website_url.trim().is_empty() {
+            return;
+        }
+        if let Some(host) =
+            crate::secrets::authenticator_issuer_hosts::resolve_authenticator_website_host(
+                "",
+                &self.issuer,
+            )
+        {
+            self.website_url = format!("https://{host}");
+        }
     }
 
     pub fn current_code(&self, unix_seconds: u64) -> Result<TotpCode, ValidationError> {
@@ -212,6 +235,7 @@ impl AuthenticatorSecret {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_form_fields(
         issuer: &str,
         account: &str,
@@ -220,6 +244,7 @@ impl AuthenticatorSecret {
         digits: &str,
         period: &str,
         backup_codes: &str,
+        website_url: &str,
     ) -> Result<Self, ValidationError> {
         let mut item = if secret_or_uri.trim().starts_with("otpauth://") {
             Self::from_otpauth_uri(secret_or_uri)?
@@ -227,6 +252,7 @@ impl AuthenticatorSecret {
             Self {
                 issuer: issuer.to_owned(),
                 account: account.to_owned(),
+                website_url: website_url.to_owned(),
                 secret: TotpSecret::parse(secret_or_uri)?,
                 algorithm: TotpAlgorithm::parse(algorithm)?,
                 digits: TotpDigits::parse(parse_u32_or_default(digits, DEFAULT_DIGITS)?)?,
@@ -240,7 +266,11 @@ impl AuthenticatorSecret {
         if !account.trim().is_empty() {
             account.clone_into(&mut item.account);
         }
+        if !website_url.trim().is_empty() {
+            website_url.clone_into(&mut item.website_url);
+        }
         item.backup_codes = backup_codes.lines().map(str::to_owned).collect();
+        item.apply_inferred_website_url_if_empty();
         item.normalize()?;
         Ok(item)
     }
@@ -279,12 +309,14 @@ impl AuthenticatorSecret {
         let mut item = Self {
             issuer: issuer.to_owned(),
             account: account.to_owned(),
+            website_url: String::new(),
             secret: TotpSecret::parse(secret)?,
             algorithm,
             digits,
             period,
             backup_codes: Vec::new(),
         };
+        item.apply_inferred_website_url_if_empty();
         item.normalize()?;
         Ok(item)
     }
@@ -294,6 +326,7 @@ impl Zeroize for AuthenticatorSecret {
     fn zeroize(&mut self) {
         self.issuer.zeroize();
         self.account.zeroize();
+        self.website_url.zeroize();
         self.secret.zeroize();
         self.backup_codes.zeroize();
     }
@@ -455,6 +488,7 @@ mod tests {
         AuthenticatorSecret {
             issuer: "RFC".to_owned(),
             account: "test".to_owned(),
+            website_url: String::new(),
             secret: rfc_secret(secret),
             algorithm,
             digits: TotpDigits::parse(8).unwrap(),
@@ -511,6 +545,7 @@ mod tests {
             "",
             "",
             " first-code \nsecond-code\nfirst-code\n",
+            "",
         )
         .unwrap();
         assert_eq!(item.issuer, "Example Co");

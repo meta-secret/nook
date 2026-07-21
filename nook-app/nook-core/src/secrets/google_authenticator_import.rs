@@ -263,12 +263,14 @@ fn convert_parameter(mut parameter: OtpParameters) -> Result<SecretValue, ()> {
     let mut authenticator = AuthenticatorSecret {
         issuer,
         account,
+        website_url: String::new(),
         secret: TotpSecret::parse(&encoded_secret).map_err(|_| ())?,
         algorithm,
         digits,
         period: TotpPeriod::parse(30).map_err(|_| ())?,
         backup_codes: Vec::new(),
     };
+    authenticator.apply_inferred_website_url_if_empty();
     authenticator.normalize().map_err(|_| ())?;
     Ok(SecretValue::Authenticator(authenticator))
 }

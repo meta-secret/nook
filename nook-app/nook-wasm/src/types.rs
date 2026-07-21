@@ -2158,6 +2158,7 @@ impl NookSecretFormFields {
     pub fn authenticator(
         issuer: String,
         account: String,
+        website_url: String,
         totp_secret: String,
         algorithm: String,
         digits: String,
@@ -2168,6 +2169,7 @@ impl NookSecretFormFields {
             inner: nook_core::SecretFormFields::Authenticator(nook_core::AuthenticatorSecretForm {
                 issuer,
                 account,
+                website_url,
                 totp_secret,
                 algorithm,
                 digits,

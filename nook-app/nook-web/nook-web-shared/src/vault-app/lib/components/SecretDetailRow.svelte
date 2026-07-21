@@ -516,6 +516,35 @@
             </div>
           </div>
 
+          <div
+            class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs"
+            data-testid="authenticator-website"
+          >
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.website_label")}</span
+            >
+            <div
+              class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
+            >
+              <span class="truncate text-foreground"
+                >{item.websiteUrl || vault.t("vault.fields.no_website")}</span
+              >
+              {#if item.websiteUrl}
+                <button
+                  type="button"
+                  onclick={() =>
+                    void onCopyToClipboard(item.websiteUrl, item.id, "website")}
+                  aria-label={vault.t("vault.copy_website_url")}
+                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
+                >
+                  {#if copiedKey === `${item.id}-website`}<Check
+                      class="size-3 text-emerald-500"
+                    />{:else}<Copy class="size-3" />{/if}
+                </button>
+              {/if}
+            </div>
+          </div>
+
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.authenticator_secret")}</span
