@@ -6,7 +6,6 @@ import {
   type Page,
 } from '@playwright/test'
 import { mkdir, readFile } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
@@ -23,11 +22,7 @@ import {
   normalizeSimpleVaultBaseUrl,
   simpleVaultUrl,
 } from '../src/lib/simple-vault-target'
-
-type TestServer = {
-  origin: string
-  close: () => Promise<void>
-}
+import { startMockAuthServer } from './mock-auth'
 
 const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
 
@@ -85,156 +80,8 @@ const extensionApprovalVaultName = isHostedSmoke
   ? 'test-vault'
   : 'Extension approval vault'
 
-async function startLoginServer(): Promise<TestServer> {
-  const server = createServer((request, response) => {
-    if (
-      ![
-        '/login',
-        '/signup',
-        '/otp',
-        '/otp-hidden',
-        '/combined',
-        '/spa',
-        '/login-with-hidden-header',
-      ].includes(request.url ?? '')
-    ) {
-      response.writeHead(404)
-      response.end('Not found')
-      return
-    }
-
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    if (request.url === '/signup') {
-      response.end(`<!doctype html>
-        <html><body><main><h1>Create account</h1>
-          <form>
-            <input autocomplete="username" name="email" type="email" />
-            <input autocomplete="new-password" name="password" type="password" />
-            <input autocomplete="new-password" name="password-confirm" type="password" />
-            <button type="submit">Create account</button>
-          </form>
-        </main></body></html>`)
-      return
-    }
-    if (request.url === '/otp') {
-      response.end(`<!doctype html>
-        <html><body><main><h1>Verify account</h1>
-          <form>
-            <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
-            <button type="submit">Verify</button>
-          </form>
-        </main></body></html>`)
-      return
-    }
-    if (request.url === '/otp-hidden') {
-      response.end(`<!doctype html>
-        <html><body><main><h1>Verify account</h1>
-          <form id="otp-form" hidden>
-            <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
-            <button type="submit">Verify</button>
-          </form>
-          <button id="reveal-otp" type="button">Continue to verification</button>
-          <script>
-            document.getElementById('reveal-otp').addEventListener('click', (event) => {
-              document.getElementById('otp-form').hidden = false
-              event.currentTarget.remove()
-            })
-          </script>
-        </main></body></html>`)
-      return
-    }
-    if (request.url === '/combined') {
-      response.end(`<!doctype html>
-        <html><body><main>
-          <form id="signup-form">
-            <input autocomplete="section-signup username" name="signup-email" type="email" />
-            <input autocomplete="section-signup new-password" name="signup-password" type="password" />
-            <button type="submit">Create account</button>
-          </form>
-          <form id="login-form">
-            <input autocomplete="section-login username" name="email" type="email" />
-            <input autocomplete="section-login current-password webauthn" name="password" type="password" />
-            <button type="submit">Sign in</button>
-          </form>
-        </main></body></html>`)
-      return
-    }
-    if (request.url === '/spa') {
-      response.end(`<!doctype html>
-        <html><body><main>
-          <form id="login-form">
-            <input autocomplete="username" name="email" type="email" />
-            <button id="next" type="button">Next</button>
-          </form>
-          <script>
-            document.getElementById('next').addEventListener('click', (event) => {
-              const form = document.getElementById('login-form')
-              event.currentTarget.remove()
-              form.insertAdjacentHTML('beforeend',
-                '<input autocomplete="current-password" name="password" type="password" /><button type="submit">Sign in</button>')
-            })
-          </script>
-        </main></body></html>`)
-      return
-    }
-    if (request.url === '/login-with-hidden-header') {
-      response.end(`<!doctype html>
-        <html><body>
-          <form id="aspnetForm">
-            <div class="gb-dropdown__holder" style="display: none">
-              <input name="LoginUserName" type="text" />
-              <input id="header-password" name="LoginPassword" type="password" />
-            </div>
-            <fieldset class="loginForm">
-              <h1>Log in to your account</h1>
-              <input name="LoginUserName" type="text" />
-              <input id="main-password" name="LoginPassword" type="password" autocomplete="on" />
-              <button type="submit">Sign in</button>
-            </fieldset>
-          </form>
-        </body></html>`)
-      return
-    }
-    response.end(`<!doctype html>
-      <html>
-        <head><title>Nook extension e2e login</title></head>
-        <body>
-          <main>
-            <h1>Sign in</h1>
-            <form id="login-form">
-              <label>Email <input autocomplete="username" name="email" type="email" /></label>
-              <label>Password <input autocomplete="current-password" name="password" type="password" /></label>
-              <button type="submit">Sign in</button>
-            </form>
-          </main>
-          <script>
-            window.__nookLoginSubmitted = null
-            document.getElementById('login-form').addEventListener('submit', (event) => {
-              event.preventDefault()
-              const form = event.currentTarget
-              window.__nookLoginSubmitted = {
-                email: form.querySelector('[name="email"]').value,
-                password: form.querySelector('[name="password"]').value,
-              }
-            })
-          </script>
-        </body>
-      </html>`)
-  })
-
-  await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', resolve)
-  })
-
-  const address = server.address()
-  if (typeof address !== 'object' || !address) {
-    throw new Error('Expected the login server to listen on a TCP port')
-  }
-
-  return {
-    origin: `http://localhost:${address.port}`,
-    close: () => closeServer(server),
-  }
+async function startLoginServer() {
+  return startMockAuthServer()
 }
 
 async function registerWebsitePasskey(page: Page): Promise<string> {
@@ -299,18 +146,6 @@ async function assertWebsitePasskey(
     authenticatorDataLength: 37,
   })
   expect(result.signatureLength).toBeGreaterThan(64)
-}
-
-function closeServer(server: Server) {
-  return new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
 }
 
 async function getServiceWorker(context: BrowserContext) {
