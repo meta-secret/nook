@@ -194,7 +194,7 @@ tasks:
   _extension:test:e2e:
     desc: Run browser extension Playwright e2e.
     cmds:
-      - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
+      - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e e2e/twofa-enrollment.spec.ts
 
   _extension:smoke:hosted:
     desc: Run the disposable hosted extension smoke inside the e2e image.
