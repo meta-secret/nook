@@ -513,10 +513,12 @@ test.describe('local vault', () => {
     const row = page.getByTestId('secret-row').filter({ hasText: title })
     await expect(page.getByTestId('vault-group-file-attachment')).toBeVisible()
     await expect(row).toBeVisible()
+    await expect(row).toContainText('recovery.txt')
+
+    await expandSecretRow(row)
     await expect(row.getByTestId('file-attachment-name')).toHaveText(
       'recovery.txt',
     )
-
     await revealSecretInRow(row)
     const downloadPromise = page.waitForEvent('download')
     await row.getByTestId('download-file-attachment-btn').click()
