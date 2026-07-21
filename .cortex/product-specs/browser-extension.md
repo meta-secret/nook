@@ -205,12 +205,17 @@ standalone one-time-code structures through Rust/WASM. It performs explicit
 login selection/fill/submit and TOTP selection/fill. It shows a
 verification-wait state only after a site form was actually submitted; a
 filled-only login or TOTP remains at the current checkpoint for manual review
-and submission. After a login or signup form submit, Nook Pilot may offer a consented Save /
-Update for the captured credentials and persist them through the unlocked
-extension WASM session (`add_secret` / `replace_secret`). Password generation
-for signup, verified password-change replacement automation, 2FA enrollment,
-recovery-code capture, and cross-site success-evidence policy remain separately
-tracked flight plans; until each is implemented, Nook Pilot identifies those
+and submission. After a login or signup form submit, Nook Pilot stages
+credentials in extension memory and waits for Rust-classified outcome evidence
+before offering Save / Update. Durable writes through the unlocked extension
+WASM session (`add_secret` / `replace_secret`) require a Sufficient verdict —
+navigation alone never counts. Content scripts report only bounded non-secret
+signals (`data-nook-auth-outcome`, auth-field presence, SPA mutation, iframe
+context, elapsed time). Site-specific plugins may add markers through that
+adapter attribute; they must not scrape secrets or bypass the Rust classifier.
+Password generation for signup, verified password-change replacement
+automation, and Pilot-guided 2FA enrollment ceremony remain separately tracked
+flight plans; until each is implemented, Nook Pilot identifies those
 checkpoints and yields to manual control instead of implying automation.
 
 ### In-Page HUD

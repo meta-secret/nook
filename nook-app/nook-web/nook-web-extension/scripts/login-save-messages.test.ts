@@ -30,6 +30,15 @@ describe('website login save runtime messages', () => {
         payload: {
           origin: 'https://login.example.com',
           offerId: 'offer_1',
+          evidence: {
+            navigatedAwayFromAuthPath: true,
+            authFieldsPresent: false,
+            successMarkerPresent: true,
+            errorMarkerPresent: false,
+            sameDocumentMutation: false,
+            inIframe: false,
+            elapsedMs: 400,
+          },
         },
       }),
     ).toBe(true)
@@ -58,7 +67,7 @@ describe('website login save runtime messages', () => {
     expect(
       isWebsiteLoginSaveCommitMessage({
         type: 'nook:website-login-save-commit',
-        payload: { origin: 'https://login.example.com' },
+        payload: { origin: 'https://login.example.com', offerId: 'offer_1' },
       }),
     ).toBe(false)
   })

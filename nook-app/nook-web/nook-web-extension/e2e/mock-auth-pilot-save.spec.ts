@@ -5,6 +5,35 @@ import { startMockAuthServer } from './mock-auth'
 test.describe('PIN Pilot save login', () => {
   test.describe.configure({ timeout: 180_000 })
 
+  test('never offers save after wrong-password evidence', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock auth no-save-on-error vault',
+    })
+    try {
+      const loginPage = await paired.context.newPage()
+      await loginPage.goto(`${mockAuth.origin}/plain/login`)
+      await loginPage.locator('input[name="username"]').fill('alice@nook.test')
+      await loginPage.locator('input[name="password"]').fill('wrong-password')
+      await loginPage.getByRole('button', { name: 'Sign in' }).click()
+      await expect(loginPage.getByRole('alert')).toHaveText(
+        'Invalid username or password.',
+        { timeout: 20_000 },
+      )
+      await expect(loginPage.getByTestId('mock-auth-success')).toHaveCount(0)
+      await expect(
+        loginPage.locator('#nook-auth-widget').getByText('Save this login?'),
+      ).toHaveCount(0, { timeout: 3_000 })
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('saves a new sign-in and fills it on the next visit', async ({
     browserName,
   }, testInfo) => {

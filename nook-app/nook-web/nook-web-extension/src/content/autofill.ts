@@ -26,6 +26,10 @@ import type {
   WebsiteLoginAccountOption,
 } from '../lib/login-fill-messages'
 import type { WebsiteLoginSaveOfferView } from '../lib/login-save-messages'
+import type {
+  AuthenticationOutcomeObservationView,
+  AuthenticationOutcomeVerdictView,
+} from '../lib/outcome-evidence-messages'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import {
   detectEnrollmentHints,
@@ -59,6 +63,18 @@ let widgetCollapsed = false
 let widgetPosition: WidgetPosition | undefined
 let activeSaveOffer: WebsiteLoginSaveOfferView | undefined
 let saveOfferDismissedIds = new Set<string>()
+let pendingSaveWatch:
+  | {
+      offer: WebsiteLoginSaveOfferView
+      startedAt: number
+      authPath: string
+      sawMutation: boolean
+      timer?: number
+      observer?: MutationObserver
+    }
+  | undefined
+const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
+const OUTCOME_EVIDENCE_POLL_MS = 250
 
 type LoginOptionsResponse = {
   ok?: boolean
@@ -228,7 +244,134 @@ type LoginSaveActionResponse = {
   reason?: string
 }
 
-async function offerSaveForCredentials(
+function stopPendingSaveWatch(): void {
+  if (!pendingSaveWatch) return
+  if (pendingSaveWatch.timer !== undefined) {
+    window.clearInterval(pendingSaveWatch.timer)
+  }
+  pendingSaveWatch.observer?.disconnect()
+  pendingSaveWatch = undefined
+}
+
+function pageLooksLikeAuthPath(pathname: string): boolean {
+  return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify)(?:\/|$)/i.test(
+    pathname,
+  )
+}
+
+function collectOutcomeObservation(
+  startedAt: number,
+  authPath: string,
+  sawMutation: boolean,
+): AuthenticationOutcomeObservationView {
+  const successMarkerPresent = Boolean(
+    document.querySelector(
+      '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+    ),
+  )
+  const errorMarkerPresent = Boolean(
+    document.querySelector(
+      '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]',
+    ),
+  )
+  const forms = summarizeAuthenticationWorkflowForms()
+  const authFieldsPresent = forms.some(
+    (form) =>
+      form.summary.passwordFieldCount > 0 ||
+      form.summary.usernameFieldCount > 0 ||
+      form.summary.oneTimeCodeFieldCount > 0,
+  )
+  return {
+    navigatedAwayFromAuthPath:
+      location.pathname !== authPath ||
+      !pageLooksLikeAuthPath(location.pathname),
+    authFieldsPresent,
+    successMarkerPresent,
+    errorMarkerPresent,
+    sameDocumentMutation: sawMutation,
+    inIframe: window !== window.top,
+    elapsedMs: Math.max(0, Date.now() - startedAt),
+  }
+}
+
+async function classifyOutcomeEvidence(
+  observation: AuthenticationOutcomeObservationView,
+): Promise<AuthenticationOutcomeVerdictView | undefined> {
+  const response = await sendRuntimeMessage<{
+    ok?: boolean
+    verdict?: AuthenticationOutcomeVerdictView
+  }>({
+    type: 'nook:authentication-outcome-classify',
+    payload: {
+      observation,
+      timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
+    },
+  })
+  if (!response?.ok || !response.verdict) return undefined
+  return response.verdict
+}
+
+async function evaluatePendingSaveEvidence(): Promise<void> {
+  const watch = pendingSaveWatch
+  if (!watch) return
+  const observation = collectOutcomeObservation(
+    watch.startedAt,
+    watch.authPath,
+    watch.sawMutation,
+  )
+  const verdict = await classifyOutcomeEvidence(observation)
+  if (!verdict || pendingSaveWatch?.offer.offerId !== watch.offer.offerId) {
+    return
+  }
+  if (verdict.allowsCredentialCommit) {
+    stopPendingSaveWatch()
+    if (saveOfferDismissedIds.has(watch.offer.offerId)) return
+    dismissed = false
+    activeSaveOffer = watch.offer
+    renderSaveOfferWidget(watch.offer)
+    return
+  }
+  if (
+    verdict.name === 'conflicting' ||
+    verdict.name === 'timeout' ||
+    (verdict.name === 'insufficient' && observation.errorMarkerPresent)
+  ) {
+    stopPendingSaveWatch()
+    void sendRuntimeMessage({
+      type: 'nook:website-login-save-dismiss',
+      payload: { origin: location.origin, offerId: watch.offer.offerId },
+    })
+  }
+}
+
+function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
+  stopPendingSaveWatch()
+  const startedAt = Date.now()
+  const authPath = location.pathname
+  const watch: NonNullable<typeof pendingSaveWatch> = {
+    offer,
+    startedAt,
+    authPath,
+    sawMutation: false,
+  }
+  watch.observer = new MutationObserver(() => {
+    if (!pendingSaveWatch) return
+    pendingSaveWatch.sawMutation = true
+    void evaluatePendingSaveEvidence()
+  })
+  watch.observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  })
+  watch.timer = window.setInterval(() => {
+    void evaluatePendingSaveEvidence()
+  }, OUTCOME_EVIDENCE_POLL_MS)
+  pendingSaveWatch = watch
+  void evaluatePendingSaveEvidence()
+}
+
+async function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
   const response = await sendRuntimeMessage<LoginSaveOfferResponse>({
@@ -243,9 +386,7 @@ async function offerSaveForCredentials(
   credentials.username = ''
   if (!response?.ok || !response.offer) return
   if (saveOfferDismissedIds.has(response.offer.offerId)) return
-  dismissed = false
-  activeSaveOffer = response.offer
-  renderSaveOfferWidget(response.offer)
+  beginPendingSaveWatch(response.offer)
 }
 
 function captureSubmittedLogin(event: Event): void {
@@ -260,7 +401,7 @@ function captureSubmittedLogin(event: Event): void {
   if (!workflow || workflow.summary.passwordFieldCount === 0) return
   const credentials = readLoginCredentials(workflow.root, workflow.formScope)
   if (!credentials) return
-  void offerSaveForCredentials(credentials)
+  void stageSaveForCredentials(credentials)
 }
 
 async function loadPendingSaveOffer(): Promise<
@@ -356,9 +497,30 @@ function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
     if (!isTrustedAuthAction(event.isTrusted) || busy) return
     busy = true
     saveButton.disabled = true
+    const evidence = collectOutcomeObservation(
+      Date.now(),
+      location.pathname,
+      false,
+    )
+    // Commit re-checks the live page; require an explicit success marker now.
+    evidence.successMarkerPresent = Boolean(
+      document.querySelector(
+        '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+      ),
+    )
+    evidence.errorMarkerPresent = Boolean(
+      document.querySelector(
+        '[data-nook-auth-outcome="error"], [role="alert"]',
+      ),
+    )
+    evidence.elapsedMs = 0
     void sendRuntimeMessage<LoginSaveActionResponse>({
       type: 'nook:website-login-save-commit',
-      payload: { origin: location.origin, offerId: offer.offerId },
+      payload: {
+        origin: location.origin,
+        offerId: offer.offerId,
+        evidence,
+      },
     })
       .then((response) => {
         if (!response?.ok) {
@@ -1746,12 +1908,20 @@ function renderWidget(
 async function scanAndRender(): Promise<void> {
   if (dismissed) return
   const sequence = ++scanSequence
-  const pendingOffer = activeSaveOffer ?? (await loadPendingSaveOffer())
+  if (activeSaveOffer) {
+    if (renderedWorkflowKey !== `save:${activeSaveOffer.offerId}`) {
+      renderSaveOfferWidget(activeSaveOffer)
+    }
+    return
+  }
+  if (pendingSaveWatch) {
+    void evaluatePendingSaveEvidence()
+    return
+  }
+  const pendingOffer = await loadPendingSaveOffer()
   if (sequence !== scanSequence) return
   if (pendingOffer) {
-    if (renderedWorkflowKey !== `save:${pendingOffer.offerId}`) {
-      renderSaveOfferWidget(pendingOffer)
-    }
+    beginPendingSaveWatch(pendingOffer)
     return
   }
   const enrollmentHints = detectEnrollmentHints()

@@ -14,7 +14,7 @@ mod vault;
 
 pub(crate) use auth::{
     authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
-    multi_device, password_envelope, website_login_save,
+    multi_device, outcome_evidence, password_envelope, website_login_save,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
@@ -120,6 +120,10 @@ pub use nook_auth2::{
 };
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
+};
+pub use outcome_evidence::{
+    AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
+    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
 };
 pub use passkey_authenticator::{
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,

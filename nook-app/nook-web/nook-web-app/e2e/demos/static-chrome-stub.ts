@@ -53,6 +53,40 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               observationIndex: 0,
             },
           }
+        case 'nook:authentication-outcome-classify': {
+          const observation = (
+            message as {
+              payload?: {
+                observation?: {
+                  successMarkerPresent?: boolean
+                  errorMarkerPresent?: boolean
+                }
+              }
+            }
+          ).payload?.observation
+          if (observation?.errorMarkerPresent) {
+            return {
+              ok: true,
+              verdict: {
+                name: 'insufficient',
+                allowsCredentialCommit: false,
+              },
+            }
+          }
+          if (observation?.successMarkerPresent) {
+            return {
+              ok: true,
+              verdict: { name: 'sufficient', allowsCredentialCommit: true },
+            }
+          }
+          return {
+            ok: true,
+            verdict: {
+              name: 'insufficient',
+              allowsCredentialCommit: false,
+            },
+          }
+        }
         case 'nook:website-login-save-offer':
           stagedOffer = {
             offerId: 'demo-save-offer',

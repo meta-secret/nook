@@ -31,6 +31,7 @@ pub use manager::{
 };
 pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
+    NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservation, NookAuthenticationPageObservations,
     NookAuthenticationWorkflowSnapshot, NookBrowserLocale, NookClientRunMode,
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
@@ -114,6 +115,19 @@ pub fn authentication_workflow_snapshot(
 ) -> Option<NookAuthenticationWorkflowSnapshot> {
     nook_core::classify_authentication_workflow_candidates(observations.as_core())
         .map(NookAuthenticationWorkflowSnapshot::from_core)
+}
+
+#[wasm_bindgen(js_name = classifyAuthenticationOutcome)]
+#[must_use]
+pub fn classify_authentication_outcome(
+    observation: &NookAuthenticationOutcomeObservation,
+    timeout_ms: Option<u32>,
+) -> NookAuthenticationOutcomeVerdict {
+    let timeout = timeout_ms.unwrap_or(nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS);
+    NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
+        observation.to_core(),
+        timeout,
+    ))
 }
 
 #[wasm_bindgen(js_name = parseAppLocale)]
@@ -2136,6 +2150,28 @@ mod wasm_tests {
         assert_eq!(snapshot.total_steps(), 3);
         assert!(snapshot.requires_human_approval());
         assert_eq!(snapshot.observation_index(), 0);
+    }
+
+    #[wasm_bindgen_test]
+    fn classify_authentication_outcome_preserves_core_policy() {
+        let navigation_only =
+            NookAuthenticationOutcomeObservation::new(true, false, false, false, false, false, 500);
+        let navigation = classify_authentication_outcome(&navigation_only, None);
+        assert_eq!(navigation.name(), "insufficient");
+        assert!(!navigation.allows_credential_commit());
+
+        let success =
+            NookAuthenticationOutcomeObservation::new(true, false, true, false, false, false, 300);
+        let sufficient = classify_authentication_outcome(&success, None);
+        assert_eq!(sufficient.name(), "sufficient");
+        assert!(sufficient.allows_credential_commit());
+
+        let conflict =
+            NookAuthenticationOutcomeObservation::new(false, true, true, true, false, false, 100);
+        assert_eq!(
+            classify_authentication_outcome(&conflict, None).name(),
+            "conflicting"
+        );
     }
 
     #[wasm_bindgen_test]

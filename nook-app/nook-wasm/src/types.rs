@@ -533,6 +533,58 @@ impl NookAuthenticationPageObservation {
 pub struct NookAuthenticationWorkflowSnapshot(nook_core::AuthenticationWorkflowSnapshot);
 
 #[wasm_bindgen]
+pub struct NookAuthenticationOutcomeObservation(nook_core::AuthenticationOutcomeObservation);
+
+#[wasm_bindgen]
+impl NookAuthenticationOutcomeObservation {
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        navigated_away_from_auth_path: bool,
+        auth_fields_present: bool,
+        success_marker_present: bool,
+        error_marker_present: bool,
+        same_document_mutation: bool,
+        in_iframe: bool,
+        elapsed_ms: u32,
+    ) -> Self {
+        Self(nook_core::AuthenticationOutcomeObservation {
+            navigated_away_from_auth_path,
+            auth_fields_present,
+            success_marker_present,
+            error_marker_present,
+            same_document_mutation,
+            in_iframe,
+            elapsed_ms,
+        })
+    }
+
+    pub(crate) const fn to_core(&self) -> nook_core::AuthenticationOutcomeObservation {
+        self.0
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookAuthenticationOutcomeVerdict(nook_core::AuthenticationOutcomeVerdict);
+
+#[wasm_bindgen]
+impl NookAuthenticationOutcomeVerdict {
+    pub(crate) const fn from_core(value: nook_core::AuthenticationOutcomeVerdict) -> Self {
+        Self(value)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        self.0.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = allowsCredentialCommit)]
+    pub fn allows_credential_commit(&self) -> bool {
+        self.0.allows_credential_commit()
+    }
+}
+
+#[wasm_bindgen]
 impl NookAuthenticationWorkflowSnapshot {
     pub(crate) const fn from_core(value: nook_core::AuthenticationWorkflowSnapshot) -> Self {
         Self(value)
