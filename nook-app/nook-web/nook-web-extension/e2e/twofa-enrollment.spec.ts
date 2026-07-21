@@ -139,9 +139,9 @@ test.describe('Browser 2FA enrollment', () => {
       const otpWidget = otpPage.locator('#nook-auth-widget')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
       await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
-      await expect(otpPage.locator('[autocomplete="one-time-code"]')).toHaveValue(
-        /^\d{6}$/,
-      )
+      await expect(
+        otpPage.locator('[autocomplete="one-time-code"]'),
+      ).toHaveValue(/^\d{6}$/)
     } finally {
       await paired.context.close()
       await mockAuth.close()

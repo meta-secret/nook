@@ -11,8 +11,8 @@
   <h1>Save your backup codes</h1>
   <p data-testid="mock-auth-scenario">totp-backup-codes</p>
   <p>
-    Store these recovery codes in a safe place. Each code can be used once if you
-    lose access to your authenticator.
+    Store these recovery codes in a safe place. Each code can be used once if
+    you lose access to your authenticator.
   </p>
   <ul data-testid="mock-auth-backup-code-list">
     {#each backupCodes as code (code)}

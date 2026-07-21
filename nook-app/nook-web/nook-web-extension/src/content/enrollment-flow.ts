@@ -39,7 +39,10 @@ export type EnrollmentFlowHost = {
   isBusy: () => boolean
   sendRuntimeMessage: <T>(message: unknown) => Promise<T | undefined>
   translatedMessage: (key: string) => string
-  translatedMessageWithSubstitution: (key: string, substitution: string) => string
+  translatedMessageWithSubstitution: (
+    key: string,
+    substitution: string,
+  ) => string
 }
 
 const ENROLLMENT_SECTION_CLASS = 'enrollment-actions'
@@ -270,7 +273,10 @@ async function showQrPreview(
             } else if (confirmResponse?.reason === 'authenticator-locked') {
               setHostDescription(host, lockedEnrollMessage(host))
             } else {
-              setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+              setHostDescription(
+                host,
+                host.translatedMessage('widgetEnrollFailed'),
+              )
             }
           })
           .finally(() => {
@@ -282,13 +288,17 @@ async function showQrPreview(
       },
     )
 
-    const cancelButton = createTextButton(host, 'widgetEnrollCancel', (event) => {
-      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      clearOtpauthUri(otpauthUri)
-      clearCandidate(candidate)
-      resetEnrollmentHeadline(host, detectEnrollmentHints())
-      renderEnrollmentActions(host, detectEnrollmentHints())
-    })
+    const cancelButton = createTextButton(
+      host,
+      'widgetEnrollCancel',
+      (event) => {
+        if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+        clearOtpauthUri(otpauthUri)
+        clearCandidate(candidate)
+        resetEnrollmentHeadline(host, detectEnrollmentHints())
+        renderEnrollmentActions(host, detectEnrollmentHints())
+      },
+    )
 
     appendButtonRow(section, [confirmButton, cancelButton])
   } finally {
@@ -340,7 +350,10 @@ async function startQrEnrollment(
   try {
     const result = await decodeVisibleOtpauthCandidates()
     if (result.status === 'unsupported') {
-      setHostDescription(host, host.translatedMessage('widgetEnrollUnsupported'))
+      setHostDescription(
+        host,
+        host.translatedMessage('widgetEnrollUnsupported'),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       return
     }
@@ -366,7 +379,10 @@ async function startQrEnrollment(
   }
 }
 
-function mergeBackupCandidates(existing: string[], incoming: string[]): string[] {
+function mergeBackupCandidates(
+  existing: string[],
+  incoming: string[],
+): string[] {
   const merged = [...existing]
   const seen = new Set(existing)
   for (const code of incoming) {
@@ -451,7 +467,10 @@ function showBackupAuthenticatorChooser(
   codes: string[],
 ): void {
   section.replaceChildren()
-  setHostDescription(host, host.translatedMessage('widgetBackupChooseAuthenticator'))
+  setHostDescription(
+    host,
+    host.translatedMessage('widgetBackupChooseAuthenticator'),
+  )
   const list = document.createElement('div')
   list.className = 'account-list'
   accounts.forEach((account, index) => {
@@ -488,10 +507,11 @@ async function continueBackupWithAuthenticatorOptions(
   host.setBusy(true)
 
   try {
-    const response = await host.sendRuntimeMessage<AuthenticatorOptionsResponse>({
-      type: 'nook:website-authenticator-options',
-      payload: { origin: location.origin },
-    })
+    const response =
+      await host.sendRuntimeMessage<AuthenticatorOptionsResponse>({
+        type: 'nook:website-authenticator-options',
+        payload: { origin: location.origin },
+      })
 
     if (!response?.ok) {
       setHostDescription(host, host.translatedMessage('widgetBackupFailed'))
@@ -609,7 +629,10 @@ function showBackupReview(
   const pasteArea = document.createElement('textarea')
   pasteArea.className = 'description'
   pasteArea.rows = 4
-  pasteArea.setAttribute('aria-label', host.translatedMessage('widgetBackupPaste'))
+  pasteArea.setAttribute(
+    'aria-label',
+    host.translatedMessage('widgetBackupPaste'),
+  )
   pasteArea.addEventListener('input', () => {
     const pasted = extractBackupCodeCandidates(pasteArea.value)
     if (pasted.length === 0) return

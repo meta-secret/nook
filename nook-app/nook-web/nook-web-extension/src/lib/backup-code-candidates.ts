@@ -5,8 +5,7 @@ const MIN_CODE_LEN = 6
 const RECOVERY_HINT =
   /\b(backup|recovery|one[-\s]?time|emergency)\s+codes?\b|\b2fa\b|\bmfa\b|\bauthenticator\b/i
 
-const CODE_LINE =
-  /^(?:[-*•]\s*)?([A-Za-z0-9][A-Za-z0-9 _-]{4,62}[A-Za-z0-9])$/
+const CODE_LINE = /^(?:[-*•]\s*)?([A-Za-z0-9][A-Za-z0-9 _-]{4,62}[A-Za-z0-9])$/
 
 export function pageHasBackupCodeHint(): boolean {
   const bodyText = document.body?.innerText ?? ''
@@ -23,7 +22,11 @@ function normalizeCandidate(value: string): string | undefined {
     return undefined
   }
   // Reject ordinary sentences and URLs.
-  if (trimmed.includes('://') || trimmed.includes('@') || /\s{2,}/.test(trimmed)) {
+  if (
+    trimmed.includes('://') ||
+    trimmed.includes('@') ||
+    /\s{2,}/.test(trimmed)
+  ) {
     return undefined
   }
   const compact = trimmed.replace(/[\s_-]/g, '')
@@ -33,9 +36,7 @@ function normalizeCandidate(value: string): string | undefined {
   return trimmed
 }
 
-export function extractBackupCodeCandidates(
-  sourceText?: string,
-): string[] {
+export function extractBackupCodeCandidates(sourceText?: string): string[] {
   const text = sourceText ?? document.body?.innerText ?? ''
   const lines = text.split(/\r?\n/)
   const candidates: string[] = []

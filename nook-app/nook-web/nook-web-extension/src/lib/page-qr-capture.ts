@@ -153,7 +153,9 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
   return { status: 'ready', candidates }
 }
 
-export function clearOtpauthCandidate(candidate: DecodedOtpauthCandidate): void {
+export function clearOtpauthCandidate(
+  candidate: DecodedOtpauthCandidate,
+): void {
   candidate.otpauthUri = ''
   candidate.sourceLabel = ''
 }

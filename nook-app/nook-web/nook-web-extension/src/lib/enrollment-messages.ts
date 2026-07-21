@@ -46,15 +46,15 @@ function hasOriginPayload(
 ): message is OriginRuntimeMessage {
   return Boolean(
     message &&
-      typeof message === 'object' &&
-      'type' in message &&
-      message.type === type &&
-      'payload' in message &&
-      typeof message.payload === 'object' &&
-      message.payload &&
-      'origin' in message.payload &&
-      typeof message.payload.origin === 'string' &&
-      message.payload.origin.length > 0,
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === type &&
+    'payload' in message &&
+    typeof message.payload === 'object' &&
+    message.payload &&
+    'origin' in message.payload &&
+    typeof message.payload.origin === 'string' &&
+    message.payload.origin.length > 0,
   )
 }
 
