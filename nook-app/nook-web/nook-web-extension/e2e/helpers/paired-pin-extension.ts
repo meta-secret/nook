@@ -213,6 +213,47 @@ export async function saveVaultAuthenticator(
   await expect(
     vaultPage
       .getByTestId('vault-group-authenticator')
-      .getByTestId('secret-row'),
+      .getByTestId('secret-row')
+      .filter({ hasText: issuer }),
   ).toBeVisible({ timeout: 15_000 })
+}
+
+/** Force-lock the extension device session (same path as idle expiry). */
+export async function lockExtensionSession(
+  context: BrowserContext,
+): Promise<void> {
+  const worker = await getServiceWorker(context)
+  const result = await worker.evaluate(async () => {
+    await new Promise<{ ok?: boolean }>((resolve) => {
+      globalThis.chrome.runtime.sendMessage(
+        { type: 'nook:ensure-extension-session-runtime' },
+        (response) => resolve(response ?? {}),
+      )
+    })
+    return new Promise<{ ok?: boolean; error?: string }>((resolve) => {
+      globalThis.chrome.runtime.sendMessage(
+        { type: 'nook:extension-session-lock' },
+        (response) => resolve(response ?? { ok: false, error: 'no-response' }),
+      )
+    })
+  })
+  if (result?.ok !== true) {
+    throw new Error(
+      `Failed to lock extension session: ${result?.error ?? 'unknown'}`,
+    )
+  }
+}
+
+export async function unlockExtensionPopupPin(
+  context: BrowserContext,
+  extensionId: string,
+  pin = MOCK_AUTH_DEFAULT_PIN,
+): Promise<void> {
+  const popupPage = await context.newPage()
+  try {
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await ensurePinProtectedPopup(popupPage, pin)
+  } finally {
+    await popupPage.close()
+  }
 }

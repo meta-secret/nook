@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { findMockAuthAccount, MOCK_AUTH_ACCOUNTS } from '../../accounts'
+  import { MOCK_AUTH_ACCOUNTS } from '../../accounts'
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
-  import { navigate, recordLoginSubmission } from '../lib/navigation'
+  import { completePlainLogin } from '../lib/plain-login'
 
   const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
     (account) => !account.totpSecret,
@@ -22,13 +22,9 @@
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
-    recordLoginSubmission(username, password)
-    const account = findMockAuthAccount(username, password)
-    if (!account || account.totpSecret) {
+    if (completePlainLogin(username, password) === 'invalid') {
       error = 'Invalid username or password.'
-      return
     }
-    navigate('/plain/success')
   }
 </script>
 
