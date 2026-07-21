@@ -964,7 +964,7 @@
                 ? 'space-y-4'
                 : 'flex min-h-0 flex-1 flex-col gap-4'}"
             >
-              {#if !vault.settingsOpen && SUPPORTS_EXTENSION && extensionSetupStatus && extensionSetupStatus !== "paired"}
+              {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupStatus && extensionSetupStatus !== "paired"}
                 <ExtensionInstallSetupCard
                   {vault}
                   status={extensionSetupStatus}
@@ -972,7 +972,7 @@
                   onInstall={() => void handleExtensionInstall()}
                 />
               {/if}
-              {#if !vault.settingsOpen && vaultSecurityRecommendations.hasRecommendations}
+              {#if !vault.settingsOpen && !secretsAddOpen && vaultSecurityRecommendations.hasRecommendations}
                 <VaultSecurityGuideBanner
                   {vault}
                   needsSyncProvider={vaultSecurityRecommendations.needsSyncProvider}
