@@ -1,0 +1,217 @@
+schema_version: 2
+source_pr:
+  number: 593
+  url: https://github.com/meta-secret/nook/pull/593
+  title: fix(extension): unblock Main chromium-extension e2e
+  change_surface: extension_auth_workflow_qr_backup_hints
+  head_sha: 91447113b7a7211bbdac4722520a71e7373e9deb
+  started_at: 2026-07-21T18:50:00Z
+  opened_at: 2026-07-21T19:01:46Z
+  merged_at: 2026-07-21T19:47:20Z
+  elapsed_seconds: 3440
+  open_to_merge_seconds: 2734
+summary:
+  local_execution_count: 11
+  local_check_count: 5
+  local_test_count: 4
+  local_combined_count: 2
+  local_execution_seconds: 2480
+  github_actions_run_count: 7
+  github_actions_seconds: 1680
+  pr_retrigger_count: 5
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T19:48:00Z
+  head_sha: 0f135843bcece452b0ce41a7ea3f722c83a11ee9
+  by_type:
+    rust: 620
+    preflight: 31
+    web_unit: 227
+    e2e: 195
+  total: 1073
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-21T18:58:00Z
+    finished_at: 2026-07-21T18:59:00Z
+    duration_seconds: 60
+    outcome: passed
+    reason: pre_push_hygiene_initial_extension_fix
+  - command: task check
+    category: check
+    started_at: 2026-07-21T19:02:12Z
+    finished_at: 2026-07-21T19:08:46Z
+    duration_seconds: 394
+    outcome: passed
+    reason: parallel_with_pr_and_extension_e2e
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T19:02:12Z
+    finished_at: 2026-07-21T19:06:40Z
+    duration_seconds: 268
+    outcome: passed
+    reason: parallel_with_pr_verify
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T19:02:18Z
+    finished_at: 2026-07-21T19:10:51Z
+    duration_seconds: 513
+    outcome: failed
+    reason: diagnose_remaining_chromium_extension_failures
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T19:15:00Z
+    finished_at: 2026-07-21T19:20:29Z
+    duration_seconds: 329
+    outcome: failed
+    reason: after_mock_auth_otpauth_uri_fix
+  - command: task format
+    category: check
+    started_at: 2026-07-21T19:24:00Z
+    finished_at: 2026-07-21T19:25:00Z
+    duration_seconds: 60
+    outcome: passed
+    reason: after_backup_hint_email_false_positive_fix
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T19:25:19Z
+    finished_at: 2026-07-21T19:30:56Z
+    duration_seconds: 337
+    outcome: failed
+    reason: after_backup_hint_fix_enroll_saved_still_failing
+  - command: task format
+    category: check
+    started_at: 2026-07-21T19:31:50Z
+    finished_at: 2026-07-21T19:32:50Z
+    duration_seconds: 60
+    outcome: passed
+    reason: after_enroll_saved_hold_fix
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T19:33:00Z
+    finished_at: 2026-07-21T19:36:14Z
+    duration_seconds: 194
+    outcome: failed
+    reason: focused_twofa_enrollment_after_hold_fix
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T19:37:25Z
+    finished_at: 2026-07-21T19:40:40Z
+    duration_seconds: 195
+    outcome: passed
+    reason: full_suite_after_backup_review_click_fix
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T19:40:40Z
+    finished_at: 2026-07-21T19:43:10Z
+    duration_seconds: 150
+    outcome: passed
+    reason: final_local_pr_mirror_after_extension_green
+github_actions_runs:
+  - workflow: PR
+    run_id: 29859760558
+    run_attempt: 1
+    head_sha: df4ff6e53c5bd8dba88cfa6a231a3685c394d575
+    trigger: pull_request
+    started_at: 2026-07-21T19:01:49Z
+    finished_at: 2026-07-21T19:14:59Z
+    duration_seconds: 790
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29860704674
+    run_attempt: 1
+    head_sha: 11d8bf1e03bd11cab43ad11ee708b0effef12fb8
+    trigger: pull_request
+    started_at: 2026-07-21T19:14:58Z
+    finished_at: 2026-07-21T19:22:57Z
+    duration_seconds: 479
+    conclusion: success
+  - workflow: PR
+    run_id: 29861446145
+    run_attempt: 1
+    head_sha: 6e19aa0b1f8554b005a559d24774b1303013bc53
+    trigger: pull_request
+    started_at: 2026-07-21T19:25:27Z
+    finished_at: 2026-07-21T19:33:21Z
+    duration_seconds: 474
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29861985137
+    run_attempt: 1
+    head_sha: d3163631138e36191f0a717e8286f36fc7ee2b1c
+    trigger: pull_request
+    started_at: 2026-07-21T19:33:06Z
+    finished_at: 2026-07-21T19:36:02Z
+    duration_seconds: 176
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29862164932
+    run_attempt: 1
+    head_sha: ad84122f25a5c34b797d9a655307bb7cd13dacba
+    trigger: pull_request
+    started_at: 2026-07-21T19:35:32Z
+    finished_at: 2026-07-21T19:37:56Z
+    duration_seconds: 144
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29862296724
+    run_attempt: 1
+    head_sha: 91447113b7a7211bbdac4722520a71e7373e9deb
+    trigger: pull_request
+    started_at: 2026-07-21T19:37:25Z
+    finished_at: 2026-07-21T19:46:35Z
+    duration_seconds: 550
+    conclusion: success
+  - workflow: PR
+    run_id: 29862993790
+    run_attempt: 1
+    head_sha: 91447113b7a7211bbdac4722520a71e7373e9deb
+    trigger: pull_request
+    started_at: 2026-07-21T19:47:23Z
+    finished_at: 2026-07-21T19:47:24Z
+    duration_seconds: 1
+    conclusion: skipped
+pr_retriggers:
+  - at: 2026-07-21T19:14:58Z
+    kind: head_push
+    reason: mock_auth_otpauth_uri_correction
+  - at: 2026-07-21T19:25:27Z
+    kind: head_push
+    reason: backup_hint_email_false_positive_fix
+  - at: 2026-07-21T19:33:06Z
+    kind: head_push
+    reason: enroll_saved_hold_against_backup_hint_rescan
+  - at: 2026-07-21T19:35:32Z
+    kind: head_push
+    reason: restore_full_extension_e2e_task_after_accidental_filter
+  - at: 2026-07-21T19:37:25Z
+    kind: head_push
+    reason: backup_review_confirm_click_in_e2e
+merge_attempts:
+  - at: 2026-07-21T19:47:20Z
+    method: squash
+    outcome: success
+    reason: readiness_passed_after_marking_ready_for_review
+comparison:
+  baseline_prs: [591, 587]
+  baseline_quality: comparable
+  baseline_note: 591 was the prior Main unblocker (shell-height); 587 is a recent extension Pilot policy PR
+  elapsed_seconds_change_percent: 129.5
+  local_execution_seconds_change_percent: 334.1
+  github_actions_seconds_change_percent: 125.8
+  test_inventory_total_change: 4
+  regression: true
+  regression_reasons:
+    - Multiple iterative head pushes while diagnosing layered extension e2e failures (passkey, QR, backup hint, enroll-saved wipe)
+    - Accidental focused e2e filter commit required an extra restore push
+waste_assessment:
+  wasteful: true
+  findings:
+    - Ran task check, task ci:pr, and task extension:test:e2e fully in parallel; Docker contention contributed to an early Verify exit-130 flake and noisier local extension results
+    - Accidentally committed a focused twofa e2e filter into extension.yml and needed a follow-up restore commit
+    - Backup e2e asserted Replace immediately after the CTA click even though review confirm reuses the same Save backup codes label
+  required_actions:
+    - Prefer serializing heavy Docker validation (extension e2e vs ci:pr) when diagnosing flaky browser suites
+    - Never leave temporary Taskfile e2e filters staged with product fixes
+    - When CTA and confirm share a label, assert an intermediate review affordance before mode chooser buttons
