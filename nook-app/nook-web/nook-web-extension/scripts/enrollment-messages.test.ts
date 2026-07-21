@@ -3,11 +3,12 @@ import {
   isWebsiteAuthenticatorBackupAttachMessage,
   isWebsiteAuthenticatorEnrollConfirmMessage,
   isWebsiteAuthenticatorEnrollPreviewMessage,
+  isWebsiteAuthenticatorEnrollStageMessage,
 } from '../src/lib/enrollment-messages'
 import { extractBackupCodeCandidates } from '../src/lib/backup-code-candidates'
 
 describe('enrollment message guards', () => {
-  test('accepts bounded otpauth preview and confirm payloads', () => {
+  test('accepts bounded otpauth preview, stage, and confirm payloads', () => {
     expect(
       isWebsiteAuthenticatorEnrollPreviewMessage({
         type: 'nook:website-authenticator-enroll-preview',
@@ -15,6 +16,29 @@ describe('enrollment message guards', () => {
           origin: 'https://example.test',
           otpauthUri:
             'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+        },
+      }),
+    ).toBe(true)
+
+    expect(
+      isWebsiteAuthenticatorEnrollStageMessage({
+        type: 'nook:website-authenticator-enroll-stage',
+        payload: {
+          origin: 'https://example.test',
+          vaultStoreId: 'store-1',
+          otpauthUri:
+            'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+        },
+      }),
+    ).toBe(true)
+
+    expect(
+      isWebsiteAuthenticatorEnrollConfirmMessage({
+        type: 'nook:website-authenticator-enroll-confirm',
+        payload: {
+          origin: 'https://example.test',
+          vaultStoreId: 'store-1',
+          stageId: 'stage-1',
         },
       }),
     ).toBe(true)
@@ -29,7 +53,7 @@ describe('enrollment message guards', () => {
             'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
         },
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   test('rejects hotp, missing vault, and invalid backup attach modes', () => {
