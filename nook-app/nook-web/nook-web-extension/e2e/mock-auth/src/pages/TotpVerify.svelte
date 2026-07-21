@@ -54,11 +54,7 @@
     <form id="otp-form" method="post" action="/totp/verify" {onsubmit}>
       <label
         >Authentication code
-        <input
-          autocomplete="one-time-code"
-          inputmode="numeric"
-          name="otp"
-        />
+        <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
       </label>
       <button type="submit" disabled={busy}>Verify</button>
     </form>

@@ -58,7 +58,11 @@ button {
   border-radius: 10px;
   background: #171921;
   color: #fff;
-  font: 700 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  font:
+    700 14px/1 Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
   cursor: pointer;
 }
 

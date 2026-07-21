@@ -16,11 +16,10 @@
       event.preventDefault()
       const current = event.currentTarget
       if (!(current instanceof HTMLFormElement)) return
-      const email = current.querySelector<HTMLInputElement>('[name="email"]')
-        ?.value
-      const password = current.querySelector<HTMLInputElement>(
-        '[name="password"]',
-      )?.value
+      const email =
+        current.querySelector<HTMLInputElement>('[name="email"]')?.value
+      const password =
+        current.querySelector<HTMLInputElement>('[name="password"]')?.value
       if (typeof email !== 'string' || typeof password !== 'string') return
       recordLoginSubmission(email, password)
     }
