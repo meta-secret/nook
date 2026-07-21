@@ -8,6 +8,7 @@ import {
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
 import {
   belongsToSimpleVault,
   normalizeSimpleVaultBaseUrl,
@@ -102,6 +103,9 @@ export async function launchPairedPinExtension(
       `--load-extension=${extensionDir}`,
     ],
   })
+  // Vault pages need a WebAuthn mock so LoginGate can boot under Chromium e2e.
+  // Extension pages then force-hide PublicKeyCredential to take the PIN path.
+  await context.addInitScript(installMockPasskeyRuntime)
   await context.addInitScript(installForcePinDeviceProtection)
 
   const worker = await getServiceWorker(context)
@@ -119,9 +123,15 @@ export async function launchPairedPinExtension(
 
   const consent = simplePage.getByTestId('extension-connect-consent')
   const chooser = simplePage.getByTestId('login-create-vault-chooser')
-  await expect(chooser.or(consent)).toBeVisible({
+  const invalidConnect = simplePage.getByTestId('extension-connect-invalid')
+  await expect(chooser.or(consent).or(invalidConnect)).toBeVisible({
     timeout: EXTENSION_TIMEOUT_MS,
   })
+  if (await invalidConnect.isVisible()) {
+    throw new Error(
+      `Extension connect request was rejected at ${simplePage.url()}`,
+    )
+  }
 
   if (!(await consent.isVisible())) {
     await advanceCreateVaultWizardToFinalStep(simplePage)
