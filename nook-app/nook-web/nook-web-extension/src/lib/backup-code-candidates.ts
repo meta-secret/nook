@@ -21,18 +21,25 @@ function normalizeCandidate(value: string): string | undefined {
   ) {
     return undefined
   }
-  // Reject ordinary sentences and URLs.
+  // Reject ordinary sentences, hint copy, and URLs.
   if (
     trimmed.includes('://') ||
     trimmed.includes('@') ||
-    /\s{2,}/.test(trimmed)
+    /\s{2,}/.test(trimmed) ||
+    RECOVERY_HINT.test(trimmed)
   ) {
+    return undefined
+  }
+  const words = trimmed.split(' ')
+  // Recovery codes are single tokens or short grouped tokens, not prose.
+  if (words.length > 2) return undefined
+  if (words.length === 2 && words.every((word) => /^[A-Za-z]+$/.test(word))) {
     return undefined
   }
   const compact = trimmed.replace(/[\s_-]/g, '')
   if (compact.length < MIN_CODE_LEN) return undefined
-  // Prefer tokens that look like recovery codes (mixed alnum / grouped).
-  if (!/[0-9]/.test(compact) && compact.length > 20) return undefined
+  // Real backup codes always include at least one digit.
+  if (!/[0-9]/.test(compact)) return undefined
   return trimmed
 }
 

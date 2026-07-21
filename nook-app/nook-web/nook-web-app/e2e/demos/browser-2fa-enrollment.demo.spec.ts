@@ -3,6 +3,10 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  installStaticDemoChromeStub,
+  type ChromeMessage,
+} from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -10,114 +14,34 @@ const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const otpauthUri =
   'otpauth://totp/Demo%20Service:demo.user%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=Demo%20Service&algorithm=SHA1&digits=6&period=30'
 
-type ChromeMessage = { message: string }
-
 async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-function installEnrollmentChromeStub(args: {
-  localizedMessages: Record<string, ChromeMessage>
-  otpauthUri: string
-}) {
-  const { localizedMessages, otpauthUri: demoOtpauthUri } = args
-  type RuntimeMessage = {
-    type?: string
-    payload?: Record<string, unknown>
-  }
-  type RuntimeCallback = (response?: unknown) => void
-
-  const responseFor = (message: RuntimeMessage): unknown => {
-    switch (message.type) {
-      case 'nook:website-authenticator-enroll-preview':
-        return {
-          ok: true,
-          status: 'ready',
-          vaultStoreId: 'demo-vault',
-          vaultName: 'Demo vault',
-          preview: {
-            issuer: 'Demo Service',
-            account: 'demo.user@example.test',
-            websiteUrl: 'https://demo.example.test',
-            algorithm: 'SHA1',
-            digits: 6,
-            period: 30,
-          },
-        }
-      case 'nook:website-authenticator-enroll-confirm':
-        return { ok: true, secretId: 'demo-authenticator-1' }
-      default:
-        return { ok: true }
-    }
-  }
-
-  class FakeBarcodeDetector {
-    async detect() {
-      return [{ rawValue: demoOtpauthUri, format: 'qr_code' }]
-    }
-  }
-
-  const chromeStub = {
-    i18n: {
-      getMessage(key: string, substitution?: string) {
-        const message = localizedMessages[key]?.message ?? ''
-        return substitution ? message.replaceAll('$1', substitution) : message
-      },
-    },
-    runtime: {
-      lastError: undefined,
-      getURL(resource: string) {
-        return resource === 'icons/nook.png' ? '/favicon.png' : resource
-      },
-      sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
-        const response = responseFor(message)
-        if (callback) queueMicrotask(() => callback(response))
-      },
-    },
-    storage: {
-      local: {
-        get(
-          _keys: string | string[] | Record<string, unknown>,
-          callback: (items: Record<string, unknown>) => void,
-        ) {
-          queueMicrotask(() =>
-            callback({
-              'nook:extension-setup': {
-                status: 'ready',
-                deviceLabel: 'Demo browser',
-                pairedVaults: ['Demo vault'],
-                selectedVaultName: 'Demo vault',
-                syncProviderCount: 1,
-                eventCount: 3,
-                eventLogHeads: ['demo-head'],
-                lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
-              },
-            }),
-          )
+function enrollmentChromeStubArgs(messages: Record<string, ChromeMessage>) {
+  return {
+    localizedMessages: messages,
+    barcodeRawValue: otpauthUri,
+    responsesByType: {
+      'nook:website-authenticator-enroll-preview': {
+        ok: true,
+        status: 'ready',
+        vaultStoreId: 'demo-vault',
+        vaultName: 'Demo vault',
+        preview: {
+          issuer: 'Demo Service',
+          account: 'demo.user@example.test',
+          websiteUrl: 'https://demo.example.test',
+          algorithm: 'SHA1',
+          digits: 6,
+          period: 30,
         },
       },
+      'nook:website-authenticator-enroll-confirm': {
+        ok: true,
+        secretId: 'demo-authenticator-1',
+      },
     },
-  }
-
-  const browserGlobal = globalThis as typeof globalThis & {
-    chrome?: Record<string, unknown>
-    BarcodeDetector?: unknown
-  }
-  Object.defineProperty(browserGlobal, 'BarcodeDetector', {
-    configurable: true,
-    value: FakeBarcodeDetector,
-  })
-  if (browserGlobal.chrome) {
-    Object.defineProperties(browserGlobal.chrome, {
-      i18n: { configurable: true, value: chromeStub.i18n },
-      runtime: { configurable: true, value: chromeStub.runtime },
-      storage: { configurable: true, value: chromeStub.storage },
-    })
-  } else {
-    Object.defineProperty(browserGlobal, 'chrome', {
-      configurable: true,
-      value: chromeStub,
-    })
   }
 }
 
@@ -130,11 +54,9 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
       'utf8',
     ),
   ) as Record<string, ChromeMessage>
+  const stubArgs = enrollmentChromeStubArgs(messages)
 
-  await page.addInitScript(installEnrollmentChromeStub, {
-    localizedMessages: messages,
-    otpauthUri,
-  })
+  await page.addInitScript(installStaticDemoChromeStub, stubArgs)
 
   await page.goto('/')
   await page.setContent(`<!doctype html>
@@ -183,10 +105,7 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
       </body>
     </html>`)
 
-  await page.evaluate(installEnrollmentChromeStub, {
-    localizedMessages: messages,
-    otpauthUri,
-  })
+  await page.evaluate(installStaticDemoChromeStub, stubArgs)
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
     type: 'module',
