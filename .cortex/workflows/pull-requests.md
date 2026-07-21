@@ -299,6 +299,10 @@ Investigation order: **test output** → **static analysis** → **app logs** (m
 important after the first two). See
 [logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
+Static analysis includes Knip unused findings and jscpd clone/duplicate
+findings. Fix those problems in code; do not silence the gate. See
+[quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
+
 1. Read the failed job log: `gh run view <run-id> --log-failed`
 2. For **e2e / web failures**, read persisted app logs before changing code:
    Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` /

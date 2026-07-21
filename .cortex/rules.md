@@ -126,8 +126,14 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
     images **and applies the diff to the host working tree**. Sealed-only
     commands such as `task extension:format` do not write the host and must not
     be the sole format step. After push, run `task check` in parallel with PR CI
-    (format check, Clippy, vitest, svelte-check, web build). See
+    (format check, Clippy, vitest, svelte-check, web lint including Knip unused
+    and jscpd clone detection, web build). See
     [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
+  - **Fix findings, do not silence them:** If Knip, jscpd, or any other check in
+    `task check` / CI fails, agents must fix the underlying code in the same
+    task. Raising thresholds, ignoring authored product sources, or shipping
+    with a red gate is forbidden unless the task explicitly maintains the gate.
+    See [workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
 
 ### Dockerfile cache mounts — never use them
 

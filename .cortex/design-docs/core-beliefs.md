@@ -9,8 +9,9 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Locality & Discoverability**: Code structure should be self-revealing. If an architecture choice or decision is not captured in the repository (e.g., hidden in chat transcripts, PR comments, or external docs), it does not exist for the agent.
 
 ## 2. Enforce Invariants Mechanically, Don't Micromanage Implementations
-* **System of Checks**: We do not tell agents to "try harder" or rely on prose instructions to enforce rules. We write automated checks (linters, formatting rules, unit tests, Svelte diagnostics) that fail early and loud.
+* **System of Checks**: We do not tell agents to "try harder" or rely on prose instructions to enforce rules. We write automated checks (linters, formatting rules, unit tests, Svelte diagnostics, Knip unused-code detection, jscpd clone detection) that fail early and loud.
 * **Actionable Failures**: When a script or test fails, the output must be clear and offer actionable remediation instructions so the agent can self-correct immediately.
+* **Fix the finding**: A failing Knip, jscpd, lint, test, coverage, or CI gate is a required fix in the same task — not a license to raise thresholds, add authored-code ignores, or defer. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
 ## 3. Strict boundaries & Parse at the Boundary
 * **No YOLO Data Probing**: We avoid guessing data shapes or traversing weakly-typed objects. Data must be parsed and validated at the system boundary (e.g., when passing data between Rust and JS/Svelte).
