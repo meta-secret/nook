@@ -82,13 +82,13 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 | Artifact                        | Purpose                                                                                                                               |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `nook-app/nook-core/coverage-floor.json` | Minimum **line** coverage % for `nook-core + nook-auth2` (currently **90**)                                                            |
-| `task rust:coverage:check`      | CI/local gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check`, `task ci:pr`) |
+| `task rust:coverage:check`      | CI gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check` / `task ci:pr` / PR CI) |
 | `task rust:coverage`            | Report only (no threshold check)                                                                                                      |
 | `task rust:coverage:update`     | Optional — rewrite floor file to measured % (user approval only)                                                                      |
 
 **Agent rules:**
 
-1. Run `task rust:coverage:check` (or `task check`) on the latest pushed head before merge or handoff — coverage **below 90% fails the build**.
+1. Coverage **below 90% fails the GitHub Actions build** (`task rust:coverage:check` / PR Verify). Agents must not require a local coverage run for merge or handoff.
 2. When measured coverage is **under 90%**, **add Rust tests** in the same task before finishing (prioritize new/changed domain code).
 3. At or above 90%, do **not** chase marginal line coverage — focus tests on behavior and invariants instead.
 4. Change `lines_percent` in `coverage-floor.json` only with explicit user approval.
@@ -120,17 +120,19 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Svelte project dependencies must be managed using Bun.
   - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
 - **Harness Verification:**
-  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. Local `task check` and PR CI use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
+  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. PR CI and local optional mirrors use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
   - Before every push, agents and developers must run **`task format`
     unconditionally**. It formats Rust and JS/TS/Svelte inside sealed Docker
     images **and applies the diff to the host working tree**. Sealed-only
     commands such as `task extension:format` do not write the host and must not
-    be the sole format step. After push, run `task check` in parallel with PR CI
-    (format check, Clippy, vitest, svelte-check, web lint including Knip unused
-    and jscpd clone detection, web build). See
-    [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
+    be the sole format step. **`task format` is the only required local product
+    action.** Product gates (format check, Clippy, vitest, svelte-check, web
+    lint including Knip unused and jscpd clone detection, web build, coverage,
+    e2e) run on **GitHub Actions**. See
+    [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) and
+    [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
   - **Fix findings, do not silence them:** If Knip, jscpd, or any other check in
-    `task check` / CI fails, agents must fix the underlying code in the same
+    CI / `task check` fails, agents must fix the underlying code in the same
     task. Raising thresholds, ignoring authored product sources, or shipping
     with a red gate is forbidden unless the task explicitly maintains the gate.
     See [workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
@@ -193,24 +195,24 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > when no feedback is present. Optional review never means optional handling of
 > feedback that already arrived.
 
-> ## ⛔ PUSH BEFORE FINAL CHECKS — RUN LOCAL AND PR CHECKS IN PARALLEL
+> ## ⛔ FORMAT LOCALLY; PRODUCT GATES ON GITHUB ACTIONS ONLY
 >
 > Once a change or fix is coherent enough to check, the mandatory sequence is:
-> **commit → push/open or update the PR → start local validation while the
-> applicable repository-owned PR workflows run**. Never finish `task check`, a
-> full test suite, build, e2e, or another final gate before pushing the checkable
-> change; serializing local then remote validation wastes wall-clock time.
-> GitHub Actions PR checks are the primary validation pipeline and are attached
-> to the pushed head SHA. Push the coherent commit first so those checks start;
-> local Docker validation is complementary and must not delay that event.
+> **`task format` → commit → push/open or update the PR → monitor the applicable
+> repository-owned PR workflows**. Never finish `task check`, a full test suite,
+> build, e2e, or another product gate as a required local step before or after
+> the push. GitHub Actions PR checks are the sole product validation pipeline
+> and are attached to the pushed head SHA. Push the coherent formatted commit
+> first so those checks start; optional local Docker commands are debug-only and
+> must not delay that event or replace a green Actions run for merge/handoff.
 >
 > Fast focused commands needed during implementation are allowed before the
-> commit. Required final validation and post-fix validation run on the latest
-> already-pushed head. A local failure still must be fixed, committed, and pushed
-> before rerunning the required local gate in parallel with refreshed PR checks.
+> commit. Required product validation and post-fix validation run on GitHub
+> Actions. After a red remote run, fix, `task format`, commit, and push before
+> waiting for the refreshed PR checks.
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
-- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, commit and push/open/update the PR before required final checks, run local validation while Nook's applicable PR test checks run, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically when ready. Do not stop at a ready-PR handoff or ask for separate merge permission.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, monitor Nook's applicable PR test checks on GitHub Actions, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically when ready. Do not stop at a ready-PR handoff or ask for separate merge permission. Do not require local `task check` / `task ci:pr` for merge.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery. Do not wait for or monitor the post-merge Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure. Main remains an independently observable repository signal, not a task completion gate.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open and land a pull request.** After pushing a branch, create a PR with a summary and test plan, own it through validation and conflict/comment resolution, then squash-merge it after the readiness audit succeeds. Never push directly to `main`.
@@ -219,7 +221,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, run `task check` on the latest pushed head (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews.
+- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, monitor applicable repository-owned checks (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews. Do not require a local product gate.
 - **Record PR statistics after merge.** Follow
   [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
   completed YAML (including repository test counts by type and absolute total)

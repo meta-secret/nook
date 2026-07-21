@@ -305,8 +305,13 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 ## Development
 
+Agent workflow: run **`task format`** before every push; product gates
+(`check`, lint, tests, coverage, builds, e2e) run on **GitHub Actions**. Local
+Task mirrors below remain available for humans and optional debugging.
+
 ```sh
-task check                 # format, lint, tests, coverage floor, builds
+task format                # required local agent action (host-applied)
+task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
 task web:dev               # trusted-HTTPS local Vite development server
@@ -324,8 +329,8 @@ task extension:smoke:hosted CHANNEL=dev # disposable Chromium hosted extension +
 task extension:setup:brave CHANNEL=dev # Brave PIN bootstrap: install, create vault, approve, leave open
 task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded Chrome opens one-time setup
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile (no vault setup)
-task ci:pr                 # health-checked BuildKit mirror of the non-browser PR gate
-task ci:pr:e2e             # explicit full web + extension e2e validation
+task ci:pr                 # health-checked BuildKit mirror of the non-browser PR gate (optional)
+task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
 task pr:review PR=410      # optional idempotent exact-head Codex review request
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges

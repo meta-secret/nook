@@ -4,7 +4,8 @@
 
 Prevent avoidable PR Verify failures from sealed-image formatting lag and missing
 UI demo contract updates by making cheap host-side hygiene unconditional before
-every push.
+every push. This is the **only required local product work**; every other gate
+runs on GitHub Actions.
 
 ## Problem Pattern
 
@@ -16,14 +17,17 @@ Agents push a coherent change, then burn a full remote cycle on:
   shared vault UI, or extension `src` paths
 - Treating format as optional ("I barely changed anything") even though Verify
   always runs `format:check`
+- Running heavy local product gates (`task check`, `task ci:pr`) instead of
+  pushing and letting GitHub Actions validate
 
 These show up in `.stats/ai-agent` as waste-flagged PRs with early cancelled or
-failed Verify runs.
+failed Verify runs, or as duplicated local+remote validation time.
 
 ## Preferred Pattern
 
 **Always format on the host before every push.** Do not decide whether
-formatting is needed — it is cheap; skip logic is not.
+formatting is needed — it is cheap; skip logic is not. Do **not** follow format
+with a required local `task check` / `task ci:pr`.
 
 ```bash
 # Unconditional. Formats in sealed images AND applies the diff to the host.
@@ -37,7 +41,8 @@ git fetch origin main
 # then re-run task format && git add -u
 ```
 
-Then commit → push → run `task check` / `task ci:pr` in parallel with PR CI.
+Then commit → push → monitor GitHub Actions. See
+[github-actions-only-validation.md](github-actions-only-validation.md).
 
 ### Sealed-image rule
 
@@ -88,7 +93,8 @@ Does not apply to:
 - [ ] If UI-facing paths changed, pass `.github/scripts/ui-demo-contract.sh`
       against `origin/main` before push.
 - [ ] Do not use `task extension:format` as the sole format step.
-- [ ] Keep full `task check` / e2e after the push (parallel with PR CI).
+- [ ] Do not require `task check` / e2e / `task ci:pr` after the push; monitor
+      GitHub Actions instead.
 
 ## Validation
 

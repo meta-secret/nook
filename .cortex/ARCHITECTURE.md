@@ -334,9 +334,10 @@ PR auto-merger: workflows do not merge blindly from check events. Instead, the
 task-owning agent runs the readiness audit and squash-merges immediately when it
 passes. Local ci-agent Docker tags are worktree-scoped so another checkout cannot
 replace the audit binary between build and readiness execution. Extension
-iteration has a host-cached `task extension:check:fast` gate, while required
-full local validation still begins after the coherent iteration is pushed and
-runs in parallel with repository CI.
+iteration has a host-cached `task extension:check:fast` gate for optional debug.
+Required product validation runs on GitHub Actions after the coherent iteration
+is formatted and pushed; agents must not require a local `task check` /
+`task ci:pr` merge gate.
 
 ### Split Rust/WASM and web images
 
@@ -405,4 +406,7 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
 
 - **Native linking:** `nook-app/.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in `rust-base`); wasm32 targets keep the default linker.
 - **Wasm:** `builder-wasm` compiles the featureless `nook-wasm` bridge and runs `wasm-pack` exactly once. Unified, Simple, Sentinel, and extension consumers share that generated package; immutable Rust-owned application configuration and manager capability checks enforce the active realm. The package crosses the host artifact boundary and is seeded into the web image. Mounted local-iteration paths regenerate it from the on-demand Rust image. `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`; PR/main CI use dev mode, while release passes `WASM_BUILD_MODE=prod` explicitly.
-- **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set.
+- **Verify:** GitHub Actions `pr.yml` / `task check` (fmt, clippy,
+  `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the
+  default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set. Agents
+  require only `task format` locally; product verification runs on Actions.

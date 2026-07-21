@@ -2,24 +2,26 @@
 
 ## Purpose
 
-Minimize agent wall time by batching feedback, parallelizing local and remote
-validation, carrying ready PRs directly through squash merge, and stopping
-implementation monitoring at that merge boundary.
+Minimize agent wall time by formatting locally, pushing immediately, letting
+GitHub Actions own product validation, carrying ready PRs directly through
+squash merge, and stopping implementation monitoring at that merge boundary.
 
 ## Problem Pattern
 
-Agents repeatedly query PR/check state, serialize local and remote validation,
-run full gates before inspecting feedback already present, or wait for optional
-external reviewers. Moving `main`, unresolved-conversation policy, and
-exact-head deployment requirements are then discovered only at merge time.
+Agents repeatedly query PR/check state, serialize or duplicate local and remote
+validation, run full local gates before inspecting feedback already present, or
+wait for optional external reviewers. Moving `main`, unresolved-conversation
+policy, and exact-head deployment requirements are then discovered only at merge
+time.
 
 ## Preferred Pattern
 
-Run `task pr:preflight PR=<number>` as soon as a PR exists. Use focused checks
-while editing, then commit and push the coherent iteration before starting the
-long local gate. Inspect repository-owned checks directly while local validation
-runs. The read-only `task pr:ready PR=<number>` audit may summarize exact-head
-state, but it never performs a merge by itself.
+Run `task format` (and the UI demo contract when UI paths change), then commit
+and push. Run `task pr:preflight PR=<number>` as soon as a PR exists. Inspect
+repository-owned checks directly. Do **not** require `task check` /
+`task ci:pr` as a parallel local product gate. The read-only
+`task pr:ready PR=<number>` audit may summarize exact-head state, but it never
+performs a merge by itself.
 
 Inspect feedback at the readiness boundary. A green audit is the task-owning
 agent's signal to squash-merge immediately. A later push invalidates the audit.
@@ -38,14 +40,13 @@ Applies to:
 Does not apply to:
 
 - Requesting or waiting for optional external AI review/check state.
-- Replacing focused development tests with remote CI.
+- Replacing GitHub Actions with a required local product gate.
 - Automatically classifying substantive review feedback as resolved.
 
 ## Examples
 
-- Before: add a blind delay hoping an automatic review arrives.
-- After: local validation runs alongside repository-owned workflows, then
-  `task pr:ready PR=410` verifies the exact head without waiting for reviewers.
+- Before: format → push → `task check` ‖ PR CI → merge after both green.
+- After: format → push → PR CI → `task pr:ready PR=410` → squash merge.
 - Before: discover conversation-resolution and stale-base requirements after a
   failed merge command.
 - After: `task pr:preflight PR=410` reports policy, base divergence, runs,
@@ -54,9 +55,8 @@ Does not apply to:
 ## Application Checklist
 
 - [ ] Establish the branch and PR path from current `origin/main`.
-- [ ] Run focused checks while iterating.
 - [ ] Run `task format` unconditionally (host-applied) before every push; pass the UI demo contract when UI paths change.
-- [ ] Commit and push before required full local validation.
+- [ ] Commit and push; do not require a local product gate.
 - [ ] Inspect and address all feedback already present without waiting for reviewers.
 - [ ] Run `task pr:ready` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.

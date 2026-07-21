@@ -48,8 +48,9 @@ When the user says `Use <skill-name> and refactor <scope>`:
 3. Refactor to the preferred pattern without unrelated cleanup.
 4. Add or update tests when behavior or a durable invariant changes.
 5. Use focused development validation as needed. For implementation tasks,
-   follow [coding-bro](../coding-bro/SKILL.md): commit and push the coherent
-   change first, then run the required local gate in parallel with PR checks.
+   follow [coding-bro](../coding-bro/SKILL.md): `task format`, commit and push
+   the coherent change, then monitor GitHub Actions (no required local product
+   gate).
 
 ## Output
 

@@ -9,11 +9,11 @@ re-instrumenting the code.
 When a test fails, CI goes red, or the UI misbehaves, work through sources in
 this order:
 
-1. **Test output** — Rust unit/integration (`task rust:test`,
-   `task rust:coverage:check`), web unit (`task web:test`), Playwright report
-   and failure attachments.
+1. **Test output** — failed GitHub Actions job logs, Rust unit/integration
+   (`task rust:test`, `task rust:coverage:check`), web unit (`task web:test`),
+   Playwright report and failure attachments.
 2. **Static analysis** — fmt, clippy, svelte-check, eslint, and type errors from
-   `task check` / `task ci:pr`.
+   CI / optional local `task check` / `task ci:pr`.
 3. **Persisted application logs** — **the most important source after steps 1–2.**
    Vault unlock, sync reconciliation, WASM tracing, and captured `console.*`
    output live here. Test output and linters do not surface this layer.
