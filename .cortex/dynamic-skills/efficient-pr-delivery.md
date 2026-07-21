@@ -55,6 +55,7 @@ Does not apply to:
 
 - [ ] Establish the branch and PR path from current `origin/main`.
 - [ ] Run focused checks while iterating.
+- [ ] Run `task format` unconditionally (host-applied) before every push; pass the UI demo contract when UI paths change.
 - [ ] Commit and push before required full local validation.
 - [ ] Inspect and address all feedback already present without waiting for reviewers.
 - [ ] Run `task pr:ready` on the exact head.

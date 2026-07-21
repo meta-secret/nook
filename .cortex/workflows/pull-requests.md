@@ -91,18 +91,26 @@ around getting that PR green and merged.
 
 ### 3. Push at the final-validation boundary
 
-When the branch has a coherent implementation commit, commit and push/open or
-update the PR **before** starting any required final local gate. This lets remote
-CI and local Docker validation run in the same wall-clock window. Never run
-`task check`, a full test suite, build, e2e, or post-fix final validation and only
-then push; that serializes work and wastes the full local-check duration. This is
-not a license to push half-finished work: use only focused development checks
-while implementing, and push once the branch is coherent enough to validate.
+When the branch has a coherent implementation commit, run pre-push hygiene, then
+commit and push/open or update the PR **before** starting any required final
+local gate. This lets remote CI and local Docker validation run in the same
+wall-clock window. Never run `task check`, a full test suite, build, e2e, or
+post-fix final validation and only then push; that serializes work and wastes
+the full local-check duration. This is not a license to push half-finished or
+unformatted work: use focused development checks while implementing, always run
+`task format` (host-applied) before the push, and push once the branch is
+coherent enough to validate.
 
 ```bash
+task format   # unconditional — sealed format + apply to host
+git add -u
+# When UI-facing paths change vs origin/main:
+#   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
+
+See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 After the final push, inspect feedback already present and handle every
 actionable finding. Do not request or wait for external reviewers. See
@@ -126,15 +134,17 @@ the repository runner environment; local Docker remains the complementary
 diagnostic loop. Concurrent PR and AI jobs scale across GitHub-hosted runners.
 
 ```text
-implement/fix → commit → push/update PR → local required gate ‖ applicable PR workflows
+implement/fix → task format (+ ui-demo-contract when UI) → commit → push/update PR → local required gate ‖ applicable PR workflows
 ```
 
-**Minimum local final gate before merge or handoff:**
+**Minimum local final gate before merge or handoff** (after push):
 
 ```bash
-task format:check    # or task format after edits
+task format:check    # confirms the already host-applied format is clean
 task check           # format check, lint, coverage-gated tests, web build (Docker)
 ```
+
+Always run `task format` again before every fix re-push.
 
 For scoped changes, faster subsets are acceptable when the touch surface is narrow:
 

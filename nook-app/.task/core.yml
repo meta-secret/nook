@@ -34,7 +34,17 @@ tasks:
         vars: { TASK: _check }
 
   format:
-    desc: Format all projects in Docker.
+    desc: >-
+      Format all projects in sealed Docker images and apply the diff to the host
+      working tree. Always run before every commit/push — formatting is cheap and
+      unconditional.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
+
+  format:diff:
+    desc: >-
+      Format in sealed Docker images and print the unified diff without applying
+      it to the host (debug only). Agents should use `task format` instead.
     cmds:
       - task: setup:rust
       - task: docker:rust:task
@@ -197,15 +207,15 @@ tasks:
       - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 --json --summary-only
 
   _format:
-    desc: Format web projects, then print the changes as a git diff (sealed image — apply on host).
+    desc: Format web projects, then print a host-applicable git diff (sealed image).
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run format
       - cd "{{.EXTENSION_ROOT}}" && bun run format
       - >-
         sh -c 'if git diff --quiet; then
-          echo "==> Already formatted; no changes.";
+          echo "==> Web/extension already formatted; no changes." >&2;
         else
-          echo "==> Formatting changes (apply with: task format | git apply):";
+          echo "==> Web/extension formatting changes (host apply via task format):" >&2;
           git --no-pager diff;
         fi'
 
@@ -216,14 +226,14 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
 
   _rust:format:
-    desc: Format Rust projects, then print the changes as a git diff from the sealed Rust image.
+    desc: Format Rust projects, then print a host-applicable git diff (sealed image).
     cmds:
       - bash -c 'cd "{{.APP_ROOT}}" && cargo fmt --all'
       - >-
         sh -c 'if git diff --quiet; then
-          echo "==> Rust already formatted; no changes.";
+          echo "==> Rust already formatted; no changes." >&2;
         else
-          echo "==> Rust formatting changes (apply with: task format | git apply):";
+          echo "==> Rust formatting changes (host apply via task format):" >&2;
           git --no-pager diff;
         fi'
 

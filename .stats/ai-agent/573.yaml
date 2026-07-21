@@ -1,0 +1,134 @@
+schema_version: 2
+source_pr:
+  number: 573
+  url: https://github.com/meta-secret/nook/pull/573
+  title: Require host-applied formatting before every PR push
+  change_surface: docs_cortex_format_hygiene
+  head_sha: 1510684f37ededff0bb849fab97b1288be7db340
+  started_at: 2026-07-21T06:49:00Z
+  opened_at: 2026-07-21T07:12:01Z
+  merged_at: 2026-07-21T07:20:38Z
+  elapsed_seconds: 1898
+  open_to_merge_seconds: 517
+summary:
+  local_execution_count: 8
+  local_check_count: 7
+  local_test_count: 1
+  local_combined_count: 0
+  local_execution_seconds: 1054
+  github_actions_run_count: 2
+  github_actions_seconds: 503
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T07:21:30Z
+  head_sha: db7bdb5bcf9cd6e9801ad2a381aefe9e90d32ac9
+  by_type:
+    rust: 592
+    preflight: 30
+    web_unit: 216
+    e2e: 181
+  total: 1019
+local_executions:
+  - command: .github/scripts/format-host-apply.test.sh
+    category: test
+    started_at: 2026-07-21T07:00:10Z
+    finished_at: 2026-07-21T07:00:11Z
+    duration_seconds: 1
+    outcome: passed
+    reason: patch_extraction_unit_test
+  - command: .github/scripts/ui-demo-contract.test.sh
+    category: check
+    started_at: 2026-07-21T07:00:11Z
+    finished_at: 2026-07-21T07:00:12Z
+    duration_seconds: 1
+    outcome: passed
+    reason: demo_contract_script_regression
+  - command: task format
+    category: check
+    started_at: 2026-07-21T06:54:08Z
+    finished_at: 2026-07-21T07:11:20Z
+    duration_seconds: 1032
+    outcome: interrupted
+    reason: setup_rust_contended_with_other_worktree_bake
+  - command: bash -n .github/scripts/format-host-apply.sh && git diff --check
+    category: check
+    started_at: 2026-07-21T07:11:40Z
+    finished_at: 2026-07-21T07:11:41Z
+    duration_seconds: 1
+    outcome: passed
+    reason: shell_syntax_and_whitespace
+  - command: .github/scripts/format-host-apply.test.sh
+    category: check
+    started_at: 2026-07-21T07:11:45Z
+    finished_at: 2026-07-21T07:11:46Z
+    duration_seconds: 1
+    outcome: passed
+    reason: pre_commit_retest
+  - command: task pr:preflight PR=573
+    category: check
+    started_at: 2026-07-21T07:12:10Z
+    finished_at: 2026-07-21T07:12:28Z
+    duration_seconds: 18
+    outcome: passed
+    reason: readiness_preflight
+  - command: .github/scripts/format-host-apply.test.sh && .github/scripts/ui-demo-contract.test.sh
+    category: check
+    started_at: 2026-07-21T07:12:12Z
+    finished_at: 2026-07-21T07:12:14Z
+    duration_seconds: 2
+    outcome: passed
+    reason: parallel_script_validation_with_preflight
+  - command: task pr:ready PR=573
+    category: check
+    started_at: 2026-07-21T07:20:10Z
+    finished_at: 2026-07-21T07:20:24Z
+    duration_seconds: 14
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29809576122
+    run_attempt: 1
+    head_sha: 3e04b699939a348344052639c37447ff9c2102f8
+    trigger: pull_request
+    started_at: 2026-07-21T07:12:05Z
+    finished_at: 2026-07-21T07:13:03Z
+    duration_seconds: 58
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29809605447
+    run_attempt: 1
+    head_sha: 1510684f37ededff0bb849fab97b1288be7db340
+    trigger: pull_request
+    started_at: 2026-07-21T07:12:34Z
+    finished_at: 2026-07-21T07:19:59Z
+    duration_seconds: 445
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T07:12:28Z
+    reason: merge_origin_main_for_freshness
+merge_attempts:
+  - at: 2026-07-21T07:20:38Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [556, 552]
+  baseline_quality: comparable
+  baseline_note: Closest docs/process cortex PRs; 556 is schema_v2 docs_cortex_stats, 552 is docs_readme.
+  elapsed_seconds_change_percent: 415.0
+  local_execution_seconds_change_percent: 3600.0
+  github_actions_seconds_change_percent: null
+  test_inventory_total_change: 33
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - One PR run was cancelled after merging origin/main; the refreshed exact-head Verify succeeded without product failures.
+    - A local task format attempt spent ~17m stuck on setup:rust while another worktree held BuildKit; it was interrupted. Docs/script changes did not require a green sealed format apply for Verify.
+    - New format-host-apply unit test and ui-demo-contract regression test passed before push; no Prettier/demo-contract Verify failure occurred.
+  required_actions: []
