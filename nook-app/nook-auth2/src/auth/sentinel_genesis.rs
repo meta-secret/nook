@@ -281,19 +281,17 @@ pub fn build_sentinel_genesis_participant_response_link(
     ))
 }
 
-/// Accept a signed response/public-key announcement as JSON or as a return URL.
+/// Accept a signed session-bound participant response as JSON or as a return URL.
 /// Signature and session verification still happen in
-/// `add_sentinel_genesis_participant_payload`.
+/// `add_sentinel_genesis_participant_payload`. Standalone public-key
+/// announcements are rejected here and at enrollment.
 pub fn normalize_sentinel_genesis_participant_payload(input: &str) -> MultiDeviceResult<String> {
     let json =
         decode_sentinel_link_payload(input, SENTINEL_RESPONSE_HASH_PREFIX, "sentinel-response")?;
     let value: serde_json::Value =
         serde_json::from_str(&json).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
-        let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        return serde_json::to_string(&announcement)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload);
+        return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
     }
     let response: SentinelGenesisParticipantResponse = serde_json::from_value(value)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
@@ -302,16 +300,26 @@ pub fn normalize_sentinel_genesis_participant_payload(input: &str) -> MultiDevic
 
 /// Return the validated public fingerprint rendered by participant-pairing UI
 /// without requiring the host to inspect the signed domain payload.
+///
+/// Local initiator-key prep may still create a signed public-key announcement
+/// for display; that payload is fingerprint-readable here but rejected for
+/// remote enrollment.
 pub fn sentinel_genesis_participant_fingerprint(input: &str) -> MultiDeviceResult<String> {
-    let canonical = normalize_sentinel_genesis_participant_payload(input)?;
-    let value: serde_json::Value = serde_json::from_str(&canonical)
-        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-    if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
-        let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
+    let trimmed = input.trim();
+    if trimmed.starts_with('{') {
+        let value: serde_json::Value = serde_json::from_str(trimmed)
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        return Ok(announcement.fingerprint);
+        if value.get("kind").and_then(serde_json::Value::as_str)
+            == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND)
+        {
+            let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
+                .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+            verify_public_key_announcement(&announcement)?;
+            return Ok(announcement.fingerprint);
+        }
     }
-    let response: SentinelGenesisParticipantResponse = serde_json::from_value(value)
+    let canonical = normalize_sentinel_genesis_participant_payload(input)?;
+    let response: SentinelGenesisParticipantResponse = serde_json::from_str(&canonical)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     Ok(response.participant.fingerprint)
 }
@@ -369,7 +377,8 @@ fn extract_link_value<'a>(input: &'a str, hash_prefix: &str, query_key: &str) ->
     })
 }
 
-/// Accept either a session-bound response or a standalone public-key announcement.
+/// Accept a session-bound participant response bound to the active owner invitation.
+/// Standalone `publicKeyAnnouncement` payloads are rejected for remote enrollment.
 pub fn add_sentinel_genesis_participant_payload(
     session: &mut SentinelGenesisSession,
     payload_json: &str,
@@ -377,9 +386,7 @@ pub fn add_sentinel_genesis_participant_payload(
     let value: serde_json::Value = serde_json::from_str(payload_json)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
-        let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        return add_sentinel_genesis_public_key_announcement(session, &announcement);
+        return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
     }
     let response: SentinelGenesisParticipantResponse = serde_json::from_str(payload_json)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
@@ -432,27 +439,15 @@ pub fn add_sentinel_genesis_response(
     Ok(())
 }
 
+/// Reject standalone public-key announcements for remote enrollment.
+///
+/// Kept as an explicit fail-closed entry point so callers cannot accidentally
+/// reintroduce announcement-based roster import.
 pub fn add_sentinel_genesis_public_key_announcement(
-    session: &mut SentinelGenesisSession,
-    announcement: &SentinelGenesisPublicKeyAnnouncement,
+    _session: &mut SentinelGenesisSession,
+    _announcement: &SentinelGenesisPublicKeyAnnouncement,
 ) -> MultiDeviceResult<()> {
-    validate_request(&session.request)?;
-    verify_public_key_announcement(announcement)?;
-    let participant = bind_announcement_to_session(announcement, &session.request.session_id);
-    if session.participants.iter().any(|existing| {
-        existing.device_id == participant.device_id
-            || existing.encryption_public_key == participant.encryption_public_key
-            || existing.signing_public_key == participant.signing_public_key
-    }) {
-        return Err(MultiDeviceError::DuplicateSentinelGenesisParticipant {
-            device_id: participant.device_id.to_string(),
-        });
-    }
-    if session.participants.len() >= usize::from(session.request.policy.participant_count) {
-        return Err(MultiDeviceError::SentinelGenesisRosterFull);
-    }
-    session.participants.push(participant);
-    Ok(())
+    Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
 }
 
 #[allow(clippy::needless_pass_by_value)] // Consuming the session prevents issuing twice.
@@ -700,23 +695,6 @@ fn standalone_participant_fingerprint(
     hex::encode(digest.finalize())
 }
 
-fn bind_announcement_to_session(
-    announcement: &SentinelGenesisPublicKeyAnnouncement,
-    session_id: &CompactToken,
-) -> SentinelGenesisParticipant {
-    SentinelGenesisParticipant {
-        device_id: announcement.device_id.clone(),
-        encryption_public_key: announcement.encryption_public_key.clone(),
-        signing_public_key: announcement.signing_public_key.clone(),
-        label: announcement.label.clone(),
-        fingerprint: participant_fingerprint(
-            &announcement.encryption_public_key,
-            &announcement.signing_public_key,
-            session_id,
-        ),
-    }
-}
-
 fn verify_public_key_announcement(
     announcement: &SentinelGenesisPublicKeyAnnouncement,
 ) -> MultiDeviceResult<()> {
@@ -829,7 +807,7 @@ mod tests {
     }
 
     #[test]
-    fn public_key_announcement_joins_without_initiator_request() {
+    fn standalone_public_key_announcement_is_rejected_for_enrollment() {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
         let mut session =
@@ -840,29 +818,31 @@ mod tests {
             create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
                 .unwrap();
         let payload = serde_json::to_string(&announcement).unwrap();
-        add_sentinel_genesis_participant_payload(&mut session, &payload).unwrap();
-        assert!(session.is_complete());
-        let issued = finalize_sentinel_genesis_shares(
-            session,
-            &StoreId::parse("store_AAAAAAAAAAA").unwrap(),
-            &owner_signing,
-        )
-        .unwrap();
-        assert_eq!(issued.deliveries.len(), 2);
+        assert!(matches!(
+            add_sentinel_genesis_participant_payload(&mut session, &payload),
+            Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
+        ));
+        assert!(matches!(
+            add_sentinel_genesis_public_key_announcement(&mut session, &announcement),
+            Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
+        ));
+        let announcement_link =
+            build_sentinel_genesis_participant_response_link(&payload, "https://nook.example/app/");
+        assert!(matches!(
+            announcement_link,
+            Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
+        ));
+        assert_eq!(session.participants().len(), 1);
     }
 
     #[test]
-    fn owner_can_name_a_verified_participant_device() {
+    fn owner_can_name_a_verified_session_bound_participant() {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
         let mut session =
             start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
-        let peer = DeviceIdentity::generate().unwrap();
-        let peer_signing = signing_key();
-        let announcement =
-            create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
-                .unwrap();
-        let payload = serde_json::to_string(&announcement).unwrap();
+        let (peer, _, response) = participant(&session.request, "Peer");
+        let payload = serde_json::to_string(&response).unwrap();
 
         add_sentinel_genesis_participant_payload_with_label(
             &mut session,
@@ -925,20 +905,21 @@ mod tests {
     }
 
     #[test]
-    fn tampered_public_key_announcement_fails() {
-        let owner = DeviceIdentity::generate().unwrap();
-        let owner_signing = signing_key();
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+    fn local_announcement_fingerprint_remains_readable_but_not_enrollable() {
         let peer = DeviceIdentity::generate().unwrap();
         let peer_signing = signing_key();
-        let mut announcement =
+        let announcement =
             create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
                 .unwrap();
-        announcement.label = "Mallory".into();
         let payload = serde_json::to_string(&announcement).unwrap();
+        assert_eq!(
+            sentinel_genesis_participant_fingerprint(&payload).unwrap(),
+            announcement.fingerprint
+        );
+        let mut tampered = announcement.clone();
+        tampered.label = "Mallory".into();
         assert!(matches!(
-            add_sentinel_genesis_participant_payload(&mut session, &payload),
+            sentinel_genesis_participant_fingerprint(&serde_json::to_string(&tampered).unwrap()),
             Err(MultiDeviceError::InvalidSentinelGenesisSignature)
         ));
     }
