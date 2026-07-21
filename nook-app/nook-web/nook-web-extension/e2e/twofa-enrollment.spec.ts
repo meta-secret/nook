@@ -203,17 +203,32 @@ test.describe('Browser 2FA enrollment', () => {
       const enrollPage = await paired.context.newPage()
       await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
       const enrollWidget = enrollPage.locator('#nook-auth-widget')
+      await expect(
+        enrollWidget.getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toBeVisible({ timeout: 15_000 })
       await enrollWidget
         .getByRole('button', { name: 'Add 2FA from this page' })
         .click()
+      await expect(
+        enrollWidget.getByRole('button', { name: 'Continue enrollment' }),
+      ).toBeVisible({ timeout: 20_000 })
       await enrollWidget
         .getByRole('button', { name: 'Continue enrollment' })
         .click()
+      await expect(
+        enrollWidget.getByText(
+          /Verification code filled|Complete verification/i,
+        ),
+      ).toBeVisible({ timeout: 20_000 })
       await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
       await expect(
         enrollPage.getByTestId('mock-auth-enroll-otp-input'),
       ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
       await enrollPage.getByRole('button', { name: 'Verify' }).click()
+      await expect(enrollPage.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
       await expect(
         enrollWidget.getByText('Authenticator saved to your vault.'),
       ).toBeVisible({ timeout: 20_000 })
