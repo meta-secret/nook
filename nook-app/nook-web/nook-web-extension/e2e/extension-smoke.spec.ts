@@ -95,6 +95,7 @@ async function startLoginServer(): Promise<TestServer> {
         '/otp-hidden',
         '/combined',
         '/spa',
+        '/login-with-hidden-header',
       ].includes(request.url ?? '')
     ) {
       response.writeHead(404)
@@ -174,6 +175,24 @@ async function startLoginServer(): Promise<TestServer> {
             })
           </script>
         </main></body></html>`)
+      return
+    }
+    if (request.url === '/login-with-hidden-header') {
+      response.end(`<!doctype html>
+        <html><body>
+          <form id="aspnetForm">
+            <div class="gb-dropdown__holder" style="display: none">
+              <input name="LoginUserName" type="text" />
+              <input id="header-password" name="LoginPassword" type="password" />
+            </div>
+            <fieldset class="loginForm">
+              <h1>Log in to your account</h1>
+              <input name="LoginUserName" type="text" />
+              <input id="main-password" name="LoginPassword" type="password" autocomplete="on" />
+              <button type="submit">Sign in</button>
+            </fieldset>
+          </form>
+        </body></html>`)
       return
     }
     response.end(`<!doctype html>
@@ -476,12 +495,28 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
+    await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+      'Vault not connected',
+    )
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
     ).toBeVisible()
+
+    const hiddenHeaderLoginPage = await context.newPage()
+    await hiddenHeaderLoginPage.goto(
+      `${loginServer.origin}/login-with-hidden-header`,
+    )
+    const hiddenHeaderWidget = hiddenHeaderLoginPage.locator('#nook-auth-widget')
+    await expect(hiddenHeaderWidget.getByText('Ready to sign in')).toBeVisible()
+    await expect(
+      hiddenHeaderWidget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
+    await expect(
+      hiddenHeaderWidget.getByText('Manual checkpoint'),
+    ).toHaveCount(0)
 
     await widget.evaluate((host) => {
       host.shadowRoot

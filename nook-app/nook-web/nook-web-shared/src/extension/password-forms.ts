@@ -101,7 +101,8 @@ export function findPasswordFields(
   formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
   return findFields(root, 'input[type="password"]', formScope).filter(
-    (field) => !field.disabled && field.type === "password",
+    (field) =>
+      !field.disabled && field.type === "password" && isRenderedInput(field),
   );
 }
 

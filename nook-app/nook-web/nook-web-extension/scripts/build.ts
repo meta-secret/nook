@@ -136,6 +136,9 @@ type NookLocaleCatalog = {
       collapse: string
       expand: string
       pilot_label: string
+      vault_connected: string
+      vault_not_connected: string
+      connect_vault: string
       login_title: string
       login_description: string
       signup_title: string
@@ -194,6 +197,15 @@ async function buildChromeLocales() {
         widgetCollapse: { message: catalog.extension.widget.collapse },
         widgetExpand: { message: catalog.extension.widget.expand },
         widgetPilotLabel: { message: catalog.extension.widget.pilot_label },
+        widgetVaultConnected: {
+          message: catalog.extension.widget.vault_connected,
+        },
+        widgetVaultNotConnected: {
+          message: catalog.extension.widget.vault_not_connected,
+        },
+        widgetConnectVault: {
+          message: catalog.extension.widget.connect_vault,
+        },
         widgetLoginTitle: { message: catalog.extension.widget.login_title },
         widgetLoginDescription: {
           message: catalog.extension.widget.login_description,

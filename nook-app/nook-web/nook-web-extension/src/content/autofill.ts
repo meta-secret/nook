@@ -7,6 +7,10 @@ import {
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import type { PasswordFormObservation } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  isExtensionReadySetupState,
+  setupStorageKey,
+} from '../background/pairing-grants'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import {
   compactProgressState,
@@ -18,6 +22,11 @@ import type {
   WebsiteLoginAccountOption,
 } from '../lib/login-fill-messages'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
+
+type PilotVaultConnection = {
+  connected: boolean
+  vaultName?: string
+}
 
 const WIDGET_HOST_ID = 'nook-auth-widget'
 const DRAG_THRESHOLD_PX = 4
@@ -148,6 +157,33 @@ function translatedMessageWithSubstitution(
   substitution: string,
 ): string {
   return chrome.i18n.getMessage(key, substitution) || 'Nook'
+}
+
+function loadPilotVaultConnection(): Promise<PilotVaultConnection> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(setupStorageKey, (items) => {
+      if (chrome.runtime.lastError) {
+        resolve({ connected: false })
+        return
+      }
+      const setup = items[setupStorageKey]
+      if (!isExtensionReadySetupState(setup)) {
+        resolve({ connected: false })
+        return
+      }
+      resolve({ connected: true, vaultName: setup.selectedVaultName })
+    })
+  })
+}
+
+function vaultConnectionLabel(connection: PilotVaultConnection): string {
+  if (connection.connected && connection.vaultName) {
+    return translatedMessageWithSubstitution(
+      'widgetVaultConnected',
+      connection.vaultName,
+    )
+  }
+  return translatedMessage('widgetVaultNotConnected')
 }
 
 function removeWidget(): void {
@@ -426,6 +462,17 @@ async function continueWithNook(
       return
     }
 
+    if (response.status === 'unavailable') {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetConnectVault'),
+        true,
+      )
+      return
+    }
+
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
       setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
@@ -612,6 +659,17 @@ async function continueWithAuthenticator(
       return
     }
 
+    if (response.status === 'unavailable') {
+      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetConnectVault'),
+        true,
+      )
+      return
+    }
+
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
       setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
@@ -650,6 +708,7 @@ async function continueWithAuthenticator(
 function renderWidget(
   snapshot: AuthenticationWorkflowSnapshotView,
   workflow: PasswordFormObservation,
+  vaultConnection: PilotVaultConnection,
 ): void {
   if (dismissed) {
     removeWidget()
@@ -662,6 +721,8 @@ function renderWidget(
     snapshot.currentStep,
     snapshot.totalSteps,
     snapshot.observationIndex,
+    vaultConnection.connected ? 'connected' : 'disconnected',
+    vaultConnection.vaultName ?? '',
   ].join(':')
   if (
     widgetHost &&
@@ -729,6 +790,12 @@ function renderWidget(
   const site = document.createElement('p')
   site.className = 'site-context'
   site.textContent = location.hostname
+
+  const vaultStatus = document.createElement('p')
+  vaultStatus.className = 'vault-status'
+  vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
+  vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
+  vaultStatus.textContent = vaultConnectionLabel(vaultConnection)
 
   const description = document.createElement('p')
   description.className = 'description'
@@ -807,6 +874,7 @@ function renderWidget(
   body.append(
     mark,
     site,
+    vaultStatus,
     title,
     description,
     continueButton,
@@ -948,6 +1016,25 @@ function renderWidget(
       letter-spacing: 0.02em;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .vault-status {
+      width: fit-content;
+      max-width: 100%;
+      margin: -8px auto 0;
+      overflow: hidden;
+      color: oklch(0.705 0.015 286.067);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .vault-status[data-connected='true'] {
+      color: oklch(0.82 0.04 155);
+    }
+    .vault-status[data-connected='false'] {
+      color: oklch(0.78 0.05 70);
     }
     .mark {
       display: block;
@@ -1122,7 +1209,9 @@ async function scanAndRender(): Promise<void> {
     removeWidget()
     return
   }
-  renderWidget(response.snapshot, selected)
+  const vaultConnection = await loadPilotVaultConnection()
+  if (sequence !== scanSequence) return
+  renderWidget(response.snapshot, selected, vaultConnection)
 }
 
 function scheduleScan() {

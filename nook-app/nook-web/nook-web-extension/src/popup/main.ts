@@ -13,14 +13,22 @@ import {
 import PopupApp from './PopupApp.svelte'
 import './popup.css'
 
-function isConnectedToSimpleVault(): Promise<boolean> {
+function loadCompanionVaultConnection(): Promise<{
+  isConnected: boolean
+  vaultName?: string
+}> {
   return new Promise((resolve) => {
     chrome.storage.local.get(setupStorageKey, (items) => {
       if (chrome.runtime.lastError) {
-        resolve(false)
+        resolve({ isConnected: false })
         return
       }
-      resolve(isExtensionReadySetupState(items[setupStorageKey]))
+      const setup = items[setupStorageKey]
+      if (!isExtensionReadySetupState(setup)) {
+        resolve({ isConnected: false })
+        return
+      }
+      resolve({ isConnected: true, vaultName: setup.selectedVaultName })
     })
   })
 }
@@ -29,9 +37,9 @@ async function main() {
   const target = document.getElementById('app')
   if (!target) return
 
-  const [i18n, isConnected] = await Promise.all([
+  const [i18n, vaultConnection] = await Promise.all([
     initializeExtensionI18n(),
-    isConnectedToSimpleVault(),
+    loadCompanionVaultConnection(),
   ])
   let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
   let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
@@ -44,7 +52,8 @@ async function main() {
     target,
     props: {
       i18n,
-      isConnected,
+      isConnected: vaultConnection.isConnected,
+      vaultName: vaultConnection.vaultName,
       protectionStatus,
       activeSessionDevice,
     },

@@ -18,11 +18,13 @@
   let {
     i18n,
     isConnected,
+    vaultName,
     protectionStatus,
     activeSessionDevice,
   }: {
     i18n: ExtensionI18n
     isConnected: boolean
+    vaultName?: string
     protectionStatus: ExtensionDeviceProtectionStatus
     activeSessionDevice?: ExtensionDeviceProtectionResult
   } = $props()
@@ -185,6 +187,15 @@
           ? 'extension.companion.ready_description'
           : 'extension.companion.connect_description',
       )}
+    </p>
+    <p
+      class="vault-connection"
+      data-testid="companion-vault-status"
+      data-connected={isConnected ? 'true' : 'false'}
+    >
+      {isConnected && vaultName
+        ? i18n.t('extension.companion.ready_vault', { vault: vaultName })
+        : i18n.t('extension.companion.not_connected')}
     </p>
 
     {#if isConnected}
