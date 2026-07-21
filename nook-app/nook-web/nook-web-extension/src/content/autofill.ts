@@ -2017,17 +2017,19 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const enrollmentHints = detectEnrollmentHints()
+  // Prefer enrollment ceremony UI when setup/recovery material is present,
+  // even if password or OTP fields share the page.
+  if (enrollmentHints.qr || enrollmentHints.backupCodes) {
+    const vaultConnection = await loadPilotVaultConnection()
+    if (sequence !== scanSequence) return
+    renderEnrollmentWidget(enrollmentHints, vaultConnection)
+    return
+  }
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
     MAX_WORKFLOW_OBSERVATIONS,
   )
   if (workflowForms.length === 0) {
-    if (enrollmentHints.qr || enrollmentHints.backupCodes) {
-      const vaultConnection = await loadPilotVaultConnection()
-      if (sequence !== scanSequence) return
-      renderEnrollmentWidget(enrollmentHints, vaultConnection)
-      return
-    }
     removeWidget()
     return
   }
