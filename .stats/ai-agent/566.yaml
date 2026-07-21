@@ -1,0 +1,195 @@
+schema_version: 2
+source_pr:
+  number: 566
+  url: https://github.com/meta-secret/nook/pull/566
+  title: Save website logins from Pilot after sign-in and signup
+  change_surface: extension_pilot_login_save
+  head_sha: 7b87c12e2e7ab73a814fcb08fea538837786a59e
+  started_at: 2026-07-21T05:15:00Z
+  opened_at: 2026-07-21T05:30:59Z
+  merged_at: 2026-07-21T06:32:23Z
+  elapsed_seconds: 4643
+  open_to_merge_seconds: 3684
+summary:
+  local_execution_count: 14
+  local_check_count: 5
+  local_test_count: 3
+  local_combined_count: 6
+  local_execution_seconds: 5890
+  github_actions_run_count: 4
+  github_actions_seconds: 1293
+  pr_retrigger_count: 3
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T06:34:00Z
+  head_sha: 7544e34f86a858dd31a83a7515107402beadbd20
+  by_type:
+    rust: 587
+    preflight: 30
+    web_unit: 211
+    e2e: 178
+  total: 1006
+local_executions:
+  - command: cargo test -p nook-core --lib website_login
+    category: test
+    started_at: 2026-07-21T05:25:10Z
+    finished_at: 2026-07-21T05:25:17Z
+    duration_seconds: 7
+    outcome: failed
+    reason: rejects_invalid_origin_expected_create
+  - command: cargo check -p nook-wasm
+    category: check
+    started_at: 2026-07-21T05:25:20Z
+    finished_at: 2026-07-21T05:30:00Z
+    duration_seconds: 280
+    outcome: failed
+    reason: jserror_display_and_secret_record_free
+  - command: cargo test -p nook-core --lib website_login
+    category: test
+    started_at: 2026-07-21T05:30:20Z
+    finished_at: 2026-07-21T05:30:27Z
+    duration_seconds: 7
+    outcome: passed
+    reason: website_login_save_policy_green
+  - command: cargo check -p nook-wasm
+    category: check
+    started_at: 2026-07-21T05:30:28Z
+    finished_at: 2026-07-21T05:30:37Z
+    duration_seconds: 9
+    outcome: passed
+    reason: login_save_wasm_compiles
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:31:10Z
+    finished_at: 2026-07-21T05:36:42Z
+    duration_seconds: 332
+    outcome: failed
+    reason: rustfmt_reexport_order
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:31:10Z
+    finished_at: 2026-07-21T05:36:36Z
+    duration_seconds: 326
+    outcome: failed
+    reason: rustfmt_reexport_order
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:37:20Z
+    finished_at: 2026-07-21T05:44:19Z
+    duration_seconds: 419
+    outcome: failed
+    reason: prettier_extension_files
+  - command: task extension:format
+    category: check
+    started_at: 2026-07-21T05:44:30Z
+    finished_at: 2026-07-21T05:45:11Z
+    duration_seconds: 41
+    outcome: passed
+    reason: container_format_without_host_writeback
+  - command: docker run prettier --write save-login files
+    category: check
+    started_at: 2026-07-21T05:45:20Z
+    finished_at: 2026-07-21T05:45:31Z
+    duration_seconds: 11
+    outcome: passed
+    reason: host_mounted_prettier_write
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:45:40Z
+    finished_at: 2026-07-21T06:10:23Z
+    duration_seconds: 1483
+    outcome: failed
+    reason: oom_exit_137_while_parallel_with_ci_pr
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:45:44Z
+    finished_at: 2026-07-21T06:31:35Z
+    duration_seconds: 2751
+    outcome: failed
+    reason: buildkit_rpc_eof_during_wasm_pack_test
+  - command: bash .github/scripts/ui-demo-contract.sh
+    category: check
+    started_at: 2026-07-21T05:32:10Z
+    finished_at: 2026-07-21T05:32:11Z
+    duration_seconds: 1
+    outcome: passed
+    reason: demo_spec_satisfies_contract
+  - command: task pr:ready PR=566
+    category: check
+    started_at: 2026-07-21T06:32:05Z
+    finished_at: 2026-07-21T06:32:16Z
+    duration_seconds: 11
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+  - command: cargo test -p nook-core --lib website_login
+    category: test
+    started_at: 2026-07-21T05:21:22Z
+    finished_at: 2026-07-21T05:25:06Z
+    duration_seconds: 224
+    outcome: failed
+    reason: empty_filter_before_lib_flag
+github_actions_runs:
+  - workflow: PR
+    run_id: 29804214726
+    run_attempt: 1
+    head_sha: 240df60ad702c3797849bc351e3c1ae9a9430969
+    trigger: pull_request
+    started_at: 2026-07-21T05:31:02Z
+    finished_at: 2026-07-21T05:32:54Z
+    duration_seconds: 112
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29804277125
+    run_attempt: 1
+    head_sha: 2bfd8fb0cd85d329e4d85db32fd99bec3c179117
+    trigger: pull_request
+    started_at: 2026-07-21T05:32:21Z
+    finished_at: 2026-07-21T05:36:40Z
+    duration_seconds: 259
+    conclusion: failure
+  - workflow: PR
+    run_id: 29804517812
+    run_attempt: 1
+    head_sha: 2f40182b245d9d34134d1441f4256cd3770c1476
+    trigger: pull_request
+    started_at: 2026-07-21T05:37:19Z
+    finished_at: 2026-07-21T05:42:42Z
+    duration_seconds: 323
+    conclusion: failure
+  - workflow: PR
+    run_id: 29804916043
+    run_attempt: 1
+    head_sha: 7b87c12e2e7ab73a814fcb08fea538837786a59e
+    trigger: pull_request
+    started_at: 2026-07-21T05:45:45Z
+    finished_at: 2026-07-21T05:55:44Z
+    duration_seconds: 599
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T05:32:21Z
+    reason: ui_demo_contract_spec
+  - kind: head_push
+    at: 2026-07-21T05:37:19Z
+    reason: rustfmt_reexports
+  - kind: head_push
+    at: 2026-07-21T05:45:45Z
+    reason: prettier_extension_sources
+merge_attempts:
+  - at: 2026-07-21T06:32:20Z
+    method: squash
+    outcome: success
+    reason: ready_true_remote_green
+comparison:
+  baseline_prs: [559, 562]
+  baseline_quality: comparable
+  notes:
+    - Extension/Pilot surface like 559; longer elapsed than 562 due to format/demo contract misses and parallel Docker OOM/BuildKit flake.
+waste_assessment:
+  findings:
+    - Three avoidable head-push PR cycles from late UI-demo-contract, rustfmt export order, and Prettier formatting.
+    - Parallel task check + task ci:pr exhausted local Docker and produced OOM/BuildKit EOF without adding signal beyond remote PR CI.
+  required_actions:
+    - Run ui-demo-contract.sh and host-mounted Prettier before the first push when extension or shared sources change.
+    - Prefer a single local gate (task check or task ci:pr) in parallel with remote PR CI, not both heavy Docker gates at once.
