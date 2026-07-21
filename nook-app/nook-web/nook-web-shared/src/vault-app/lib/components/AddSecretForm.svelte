@@ -137,7 +137,7 @@
       noteTitle = item.title
       noteBody = item.note
     } else if (item.type === 'authenticator') {
-      websiteUrl = item.websiteUrl
+      websiteUrl = item.websiteUrl ?? ''
       authenticatorIssuer = item.issuer
       authenticatorAccount = item.account
       authenticatorSecret = item.totpSecret

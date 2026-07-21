@@ -18,6 +18,7 @@ const legacyAuthenticator = {
   type: 'authenticator',
   issuer: 'Legacy service',
   account: 'alice@example.com',
+  websiteUrl: '',
   totpSecret: 'JBSWY3DPEHPK3PXP',
   algorithm: 'SHA256',
   digits: 8,
