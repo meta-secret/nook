@@ -180,8 +180,9 @@ impl NookVaultManager {
         )
     }
 
-    /// Create this device's signed public-key announcement. No initiator request
-    /// is required; the vault owner binds it to the active genesis session.
+    /// Create this device's signed public-key announcement for local initiator
+    /// key-prep display. Remote enrollment rejects these payloads; participants
+    /// must respond to an owner-issued invitation instead.
     #[wasm_bindgen(js_name = createSentinelGenesisPublicKeyAnnouncement)]
     pub async fn create_sentinel_genesis_public_key_announcement(
         &mut self,
@@ -233,8 +234,8 @@ impl NookVaultManager {
         Ok(())
     }
 
-    /// Verify and add a participant's signed response or public-key announcement
-    /// to the active roster.
+    /// Verify and add a participant's session-bound response to the active roster.
+    /// Standalone public-key announcements are rejected.
     #[wasm_bindgen(js_name = addSentinelGenesisParticipantResponse)]
     pub fn add_sentinel_genesis_participant_response(
         &mut self,

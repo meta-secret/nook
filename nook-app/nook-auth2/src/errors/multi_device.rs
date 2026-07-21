@@ -90,6 +90,11 @@ pub enum MultiDeviceError {
     #[error("Invalid sentinel genesis payload.")]
     InvalidSentinelGenesisPayload,
 
+    #[error(
+        "Standalone Sentinel public-key announcements are rejected; participants must respond to an owner-issued invitation."
+    )]
+    StandaloneSentinelGenesisAnnouncementRejected,
+
     #[error("Invalid sentinel unlock session binding.")]
     InvalidSentinelUnlockSession,
 

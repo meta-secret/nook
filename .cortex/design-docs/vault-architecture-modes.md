@@ -25,20 +25,20 @@ access model.
 
 Creation and import are separate top-level workflows. Empty-device get started
 uses the **Landing → Sentinel** handoff: **name the vault first**, then choose
-exactly one of Simple create, Sentinel create, or Sentinel join. Sync-provider
-import remains a secondary “already have a vault” action, not a fourth
-create/join intent.
+exactly one of Simple create or Sentinel create. Participants join only through
+an owner-issued invitation URL. Sync-provider import remains a secondary
+“already have a vault” action, not a third create intent.
 
 | Stage / surface | Choice or state | Transition |
 | --- | --- | --- |
 | Landing handoff (empty device) | Vault name | Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (passkey + vault password). |
-| Path chooser | Path | Choose exactly one: Create Simple, Create Sentinel, or Join Sentinel. |
+| Path chooser | Path | Choose exactly one: Create Simple or Create Sentinel. There is no unrestricted Join path. |
 | Create Simple confirm | Create action | Confirm local create; **then** show the passkey/device-protection form (top-right overlay) before sealing the vault. |
 | Existing vault unlock | Device protection | Passkey/PIN gate runs **first** when a local vault already exists on this browser. |
 | Create Sentinel | Name (carried), then Sentinel policy | Choose participant count `N` and unlock threshold `T`; do not create/open a vault yet. |
-| Create Sentinel waiting | Participant public keys | Gather standalone signed public-key announcements through QR/link/paste. An initiator request and provider are not required. |
+| Create Sentinel waiting | Participant responses | Gather session-bound responses to the owner-issued invitation through QR/link/paste. Standalone public-key announcements are rejected. |
 | Sentinel atomic genesis | Encrypted shares | Generate the Sentinel root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically. |
-| Join Sentinel | Public-key announcement | Generate this device's standalone signed public-key announcement and give it to the vault owner. Share delivery is a secondary post-genesis step. |
+| Owner invitation / participant response | Invitation-bound join | Participant opens the owner invitation URL, authorizes this device, and returns a signed session-bound response. Share delivery is a secondary post-genesis step. |
 | Sentinel open | Quorum contributions | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM. |
 | Import | Detected vault type | Fetch from a provider, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel. |
 | Unlocked provider management / Onboard | Sync provider | Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists. |
