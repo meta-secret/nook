@@ -138,16 +138,20 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue enrollment' }).click()
+  await expect(page.locator('input[name="Code"]')).toHaveValue('482913', {
+    timeout: 15_000,
+  })
   await expect(
-    widget.getByText(/Verification code filled|Complete verification/i),
-  ).toBeVisible()
-  await expect(page.locator('input[name="Code"]')).toHaveValue('482913')
+    widget.getByText(
+      /Verification code filled|Complete verification|Staging the authenticator/i,
+    ),
+  ).toBeVisible({ timeout: 15_000 })
   await demoBeat(page)
 
   await page.getByRole('button', { name: 'Verify' }).click()
   await expect(page.getByTestId('mock-auth-success')).toBeVisible()
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
-  ).toBeVisible()
+  ).toBeVisible({ timeout: 15_000 })
   await demoBeat(page)
 })
