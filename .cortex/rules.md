@@ -123,7 +123,12 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. Local `task check` and PR CI use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
   - Before committing, developers must run:
     1. `task format` - Automatically formats all Rust and JS/TS/Svelte files.
-    2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and web builds.
+    2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, web lint (including Knip unused and jscpd clone detection), and web builds.
+  - **Fix findings, do not silence them:** If Knip, jscpd, or any other check in
+    `task check` / CI fails, agents must fix the underlying code in the same
+    task. Raising thresholds, ignoring authored product sources, or shipping
+    with a red gate is forbidden unless the task explicitly maintains the gate.
+    See [workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
 
 ### Dockerfile cache mounts — never use them
 

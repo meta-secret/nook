@@ -83,6 +83,35 @@ the push. The minimum local gate, full suites, builds, e2e, and any repeated
 post-fix validation must run after the completed change is pushed so remote work
 starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--parallel-final-validation).
 
+## ⛔ Non-negotiable: fix every failing check finding
+
+**When Knip, jscpd, or any other quality/CI check reports issues, the agent must
+fix the underlying problems in the same task.** A red gate is a completion
+blocker, not a report to leave for later.
+
+This includes, without exception:
+
+- **Knip** (`bun run unused`) — unused/unreachable files, exports, and
+  dependencies in the web packages.
+- **jscpd** (`bun run duplicates`) — copy/paste clones above the checked-in
+  threshold in authored `nook-app` / `preflight` sources.
+- **Every other gate** in `task check` / `task ci:pr` / PR CI — fmt, clippy,
+  svelte-check, eslint, TypeScript unused locals/parameters, prettier, vitest,
+  vite build, coverage floor, preflight, e2e, and any future mechanical check.
+
+**Required response:** delete or wire up dead code, extract shared helpers for
+clones, correct types/lints/tests, and re-run until green.
+
+**Forbidden responses:** raising Knip/jscpd thresholds to silence findings;
+adding ignore/exclude entries for authored product code; leaving the failure as
+tech debt, a comment-only note, or an issue without fixing it; marking the task
+done while any applicable check is red.
+
+Threshold or ignore changes are allowed only when the task explicitly changes
+the gate itself (for example, widening an ignore for generated WASM output) and
+the PR documents why. Full policy:
+[workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
+
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
 
 Task-owning AI agents must measure every normal PR's local check/test runs,
@@ -132,7 +161,7 @@ normal build-performance PR. Full policy:
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
-* [workflows/quality.md](workflows/quality.md) — Quality gates, **testing pyramid** (Rust ~99% domain coverage), and release.
+* [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
 * [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory (by type + total), historical comparison, waste analysis, and the check-free stats-only PR exception.
 
 ## 7. Agent duties beyond code
