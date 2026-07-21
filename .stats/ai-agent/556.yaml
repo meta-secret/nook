@@ -1,0 +1,73 @@
+schema_version: 2
+source_pr:
+  number: 556
+  url: https://github.com/meta-secret/nook/pull/556
+  title: Require test inventory in AI-agent PR stats
+  change_surface: docs_cortex_stats
+  head_sha: 450337a6ee4242c4a41b1ffdb07744d36a234ddc
+  started_at: 2026-07-21T04:04:00Z
+  opened_at: 2026-07-21T04:05:49Z
+  merged_at: 2026-07-21T04:06:32Z
+  elapsed_seconds: 152
+  open_to_merge_seconds: 43
+summary:
+  local_execution_count: 2
+  local_check_count: 2
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 13
+  github_actions_run_count: 0
+  github_actions_seconds: 0
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 2
+test_inventory:
+  measured_at: 2026-07-21T04:07:06Z
+  head_sha: 450337a6ee4242c4a41b1ffdb07744d36a234ddc
+  by_type:
+    rust: 576
+    preflight: 30
+    web_unit: 205
+    e2e: 175
+  total: 986
+local_executions:
+  - command: task pr:preflight PR=556
+    category: check
+    started_at: 2026-07-21T04:05:55Z
+    finished_at: 2026-07-21T04:06:01Z
+    duration_seconds: 6
+    outcome: passed
+    reason: readiness_preflight
+  - command: task pr:ready PR=556
+    category: check
+    started_at: 2026-07-21T04:06:05Z
+    finished_at: 2026-07-21T04:06:12Z
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_readiness
+github_actions_runs: []
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-21T04:06:20Z
+    method: squash
+    outcome: blocked
+    reason: ruleset_required_github_pages_deployment
+  - at: 2026-07-21T04:06:32Z
+    method: squash_admin
+    outcome: success
+    reason: path_filtered_docs_pr_admin_bypass_after_ready
+comparison:
+  baseline_prs: [552, 516]
+  baseline_quality: comparable
+  baseline_note: Docs/process PRs; schema_version 1 baselines lack test_inventory
+  elapsed_seconds_change_percent: -61.8
+  local_execution_seconds_change_percent: -91.4
+  github_actions_seconds_change_percent: null
+  test_inventory_total_change: null
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - Path-filtered .cortex PR skipped product workflows and github-pages; first squash merge was blocked by required_deployments until admin bypass after task pr:ready.
+  required_actions: []
