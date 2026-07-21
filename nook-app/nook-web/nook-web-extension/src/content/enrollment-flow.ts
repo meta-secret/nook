@@ -214,7 +214,7 @@ async function commitStagedEnrollment(
 
 async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   const watch = pendingEnrollmentWatch
-  if (!watch) return
+  if (!watch || watch.stageId === 'pending') return
   const observation = collectEnrollmentOutcomeObservation(
     watch.startedAt,
     watch.authPath,
@@ -274,7 +274,9 @@ function beginEnrollmentEvidenceWatch(
   watch.observer = new MutationObserver(() => {
     if (!pendingEnrollmentWatch) return
     pendingEnrollmentWatch.sawMutation = true
-    void fillStagedEnrollmentCode(host, stageId)
+    if (stageId !== 'pending') {
+      void fillStagedEnrollmentCode(host, stageId)
+    }
     void evaluatePendingEnrollmentEvidence()
   })
   watch.observer.observe(document.documentElement, {
@@ -283,7 +285,9 @@ function beginEnrollmentEvidenceWatch(
     attributes: true,
   })
   watch.timer = window.setInterval(() => {
-    void fillStagedEnrollmentCode(host, stageId)
+    if (stageId !== 'pending') {
+      void fillStagedEnrollmentCode(host, stageId)
+    }
     void evaluatePendingEnrollmentEvidence()
   }, ENROLLMENT_EVIDENCE_POLL_MS)
   pendingEnrollmentWatch = watch
@@ -298,6 +302,8 @@ async function beginEnrollmentCeremony(
   candidate: DecodedOtpauthCandidate | undefined,
 ): Promise<void> {
   setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
+  // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
+  beginEnrollmentEvidenceWatch(host, section, 'pending', vaultStoreId)
   const stageResponse = await host.sendRuntimeMessage<EnrollStageResponse>({
     type: 'nook:website-authenticator-enroll-stage',
     payload: {
@@ -309,11 +315,19 @@ async function beginEnrollmentCeremony(
   clearOtpauthUri(otpauthUri)
   clearCandidate(candidate)
   if (!stageResponse?.ok || typeof stageResponse.stageId !== 'string') {
+    stopPendingEnrollmentWatch()
     setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
     host.setBusy(false)
     renderEnrollmentActions(host, detectEnrollmentHints())
     return
   }
+  // Replace the temporary pending watch with the real stage id.
+  beginEnrollmentEvidenceWatch(
+    host,
+    section,
+    stageResponse.stageId,
+    vaultStoreId,
+  )
 
   const filled = await fillStagedEnrollmentCode(host, stageResponse.stageId)
   setHostDescription(
@@ -337,12 +351,6 @@ async function beginEnrollmentCeremony(
     renderEnrollmentActions(host, detectEnrollmentHints())
   })
   section.append(cancelButton)
-  beginEnrollmentEvidenceWatch(
-    host,
-    section,
-    stageResponse.stageId,
-    vaultStoreId,
-  )
   host.setBusy(false)
 }
 
