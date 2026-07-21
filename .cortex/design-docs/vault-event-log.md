@@ -109,8 +109,13 @@ The reducer (`nook-app/nook-core/src/vault_projection.rs`) must yield the same r
 | Concurrent replacements | Both new records live; conflict group on old id |
 | `secret-conflict-resolved` | Tombstones rejected candidates and causally clears the conflict |
 | Independent concurrent adds | Both preserved |
+| Concurrent creates with the same login identity (same website+username, different secret ids / passwords) | Both preserved as separate live secrets — **no password merge, no LWW**; neither password may be dropped. Sync is not import enrich/dedup. |
 | `device-revoked` / password rotate/remove | Starts new **key epoch** with fresh vault keys and checkpoint |
 | Concurrent security epochs | Security conflict — fail closed; local edits are blocked until all devices sync/recover |
+
+File-sync disconnect/reconnect coverage (shared vault bucket cleared, offline concurrent
+`login-a-1` creates, reconnect):
+`nook-app/nook-core/tests/event_log_file_sync_replication.rs`.
 
 ## Key epochs
 
