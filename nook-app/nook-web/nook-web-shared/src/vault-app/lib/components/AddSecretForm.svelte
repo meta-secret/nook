@@ -11,6 +11,7 @@
     Eye,
     EyeOff,
     ChevronDown,
+    CreditCard,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -83,6 +84,15 @@
   let authenticatorDigits = $state('6')
   let authenticatorPeriod = $state('30')
   let authenticatorBackupCodes = $state('')
+  let cardTitle = $state('')
+  let cardholderName = $state('')
+  let cardNumber = $state('')
+  let expirationMonth = $state('')
+  let expirationYear = $state('')
+  let cardCvv = $state('')
+  let cardNotes = $state('')
+  let showCardNumber = $state(false)
+  let showCvv = $state(false)
   let submitError = $state('')
 
   let genLength = $state(defaultPasswordGenerationOptions.length)
@@ -103,7 +113,9 @@
               ? vault.t('add_secret.title_edit_secure_note')
               : selectedType === 'authenticator'
                 ? vault.t('add_secret.title_edit_authenticator')
-              : vault.t('add_secret.title_edit_item')
+                : selectedType === 'credit-card'
+                  ? vault.t('add_secret.title_edit_credit_card')
+                  : vault.t('add_secret.title_edit_item')
       : selectedType === 'login'
         ? vault.t('add_secret.title_new_login')
         : selectedType === 'api-key'
@@ -114,7 +126,9 @@
               ? vault.t('add_secret.title_new_secure_note')
               : selectedType === 'authenticator'
                 ? vault.t('add_secret.title_new_authenticator')
-              : vault.t('add_secret.title_add_item'),
+                : selectedType === 'credit-card'
+                  ? vault.t('add_secret.title_new_credit_card')
+                  : vault.t('add_secret.title_add_item'),
   )
 
   $effect(() => {
@@ -145,6 +159,14 @@
       authenticatorDigits = String(item.digits)
       authenticatorPeriod = String(item.period)
       authenticatorBackupCodes = item.backupCodes.join('\n')
+    } else if (item.type === 'credit-card') {
+      cardTitle = item.title
+      cardholderName = item.cardholderName
+      cardNumber = item.cardNumber
+      expirationMonth = item.expirationMonth
+      expirationYear = item.expirationYear
+      cardCvv = item.cvv
+      cardNotes = item.notes ?? ''
     }
   })
 
@@ -192,6 +214,18 @@
         backupCodes: setupKeyChanged ? '' : authenticatorBackupCodes,
       }
     }
+    if (selectedType === 'credit-card') {
+      return {
+        type: 'credit-card',
+        title: cardTitle.trim(),
+        cardholderName: cardholderName.trim(),
+        number: cardNumber.trim(),
+        expirationMonth: expirationMonth.trim(),
+        expirationYear: expirationYear.trim(),
+        cvv: cardCvv.trim(),
+        notes: cardNotes.trim(),
+      }
+    }
     return {
       type: 'secure-note',
       title: noteTitle.trim(),
@@ -218,9 +252,18 @@
     authenticatorDigits = '6'
     authenticatorPeriod = '30'
     authenticatorBackupCodes = ''
+    cardTitle = ''
+    cardholderName = ''
+    cardNumber = ''
+    expirationMonth = ''
+    expirationYear = ''
+    cardCvv = ''
+    cardNotes = ''
     submitError = ''
     showPasswordOptions = false
     showPasswordValue = false
+    showCardNumber = false
+    showCvv = false
   }
 
   function handleCancel() {
@@ -286,6 +329,9 @@
         username.trim().length > 0 &&
         password.length > 0
       )
+    }
+    if (selectedType === 'credit-card') {
+      return cardTitle.trim().length > 0 && cardNumber.trim().length > 0
     }
     return false
   })
@@ -398,6 +444,24 @@
         >
         <span class="mt-1 block text-xs text-muted-foreground"
           >{vault.t('add_secret.private_text_desc')}</span
+        >
+      </button>
+      <button
+        type="button"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid="item-type-credit-card"
+        onclick={() => (selectedType = 'credit-card')}
+      >
+        <div
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
+        >
+          <CreditCard class="size-6" />
+        </div>
+        <span class="block text-sm font-semibold text-foreground"
+          >{vault.t('vault.types.credit_card')}</span
+        >
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >{vault.t('add_secret.credit_card_desc')}</span
         >
       </button>
       <button
@@ -808,6 +872,148 @@
         <p class="text-xs text-muted-foreground text-pretty">
           {vault.t('add_secret.authenticator_secret_hint')}
         </p>
+      </div>
+    {:else if selectedType === 'credit-card'}
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="secret-label"
+          >{vault.t('vault.fields.title')}</label
+        >
+        <input
+          id="secret-label"
+          type="text"
+          data-testid="secret-label"
+          bind:value={cardTitle}
+          placeholder={vault.t('add_secret.placeholder_title')}
+          required
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="credit-card-cardholder"
+          >{vault.t('vault.fields.cardholder_name')}</label
+        >
+        <input
+          id="credit-card-cardholder"
+          type="text"
+          data-testid="credit-card-cardholder"
+          bind:value={cardholderName}
+          placeholder={vault.t('add_secret.placeholder_cardholder')}
+          autocomplete="cc-name"
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="credit-card-number"
+          >{vault.t('vault.fields.card_number')}</label
+        >
+        <div class="relative">
+          <input
+            id="credit-card-number"
+            type={showCardNumber ? 'text' : 'password'}
+            data-testid="credit-card-number"
+            bind:value={cardNumber}
+            placeholder={vault.t('add_secret.placeholder_card_number')}
+            autocomplete="cc-number"
+            inputmode="numeric"
+            required
+            spellcheck="false"
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          />
+          <button
+            type="button"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label={showCardNumber
+              ? vault.t('vault.hide_value')
+              : vault.t('vault.show_value')}
+            data-testid="toggle-card-number-visibility"
+            onclick={() => (showCardNumber = !showCardNumber)}
+          >
+            {#if showCardNumber}
+              <EyeOff class="size-4" />
+            {:else}
+              <Eye class="size-4" />
+            {/if}
+          </button>
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div class="space-y-1.5 sm:col-span-2">
+          <span class="text-xs font-medium"
+            >{vault.t('vault.fields.expiration')}</span
+          >
+          <div class="grid grid-cols-2 gap-3">
+            <input
+              id="credit-card-exp-month"
+              type="text"
+              data-testid="credit-card-exp-month"
+              bind:value={expirationMonth}
+              placeholder={vault.t('add_secret.placeholder_expiration_month')}
+              aria-label={vault.t('add_secret.placeholder_expiration_month')}
+              autocomplete="cc-exp-month"
+              inputmode="numeric"
+              maxlength="2"
+              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+            />
+            <input
+              id="credit-card-exp-year"
+              type="text"
+              data-testid="credit-card-exp-year"
+              bind:value={expirationYear}
+              placeholder={vault.t('add_secret.placeholder_expiration_year')}
+              aria-label={vault.t('add_secret.placeholder_expiration_year')}
+              autocomplete="cc-exp-year"
+              inputmode="numeric"
+              maxlength="4"
+              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+            />
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium" for="credit-card-cvv"
+            >{vault.t('vault.fields.cvv')}</label
+          >
+          <div class="relative">
+            <input
+              id="credit-card-cvv"
+              type={showCvv ? 'text' : 'password'}
+              data-testid="credit-card-cvv"
+              bind:value={cardCvv}
+              placeholder={vault.t('add_secret.placeholder_cvv')}
+              autocomplete="cc-csc"
+              inputmode="numeric"
+              spellcheck="false"
+              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+            />
+            <button
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={showCvv
+                ? vault.t('vault.hide_value')
+                : vault.t('vault.show_value')}
+              data-testid="toggle-cvv-visibility"
+              onclick={() => (showCvv = !showCvv)}
+            >
+              {#if showCvv}
+                <EyeOff class="size-4" />
+              {:else}
+                <Eye class="size-4" />
+              {/if}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="credit-card-notes"
+          >{vault.t('add_secret.notes_label')}</label
+        >
+        <textarea
+          id="credit-card-notes"
+          data-testid="credit-card-notes"
+          bind:value={cardNotes}
+          rows="3"
+          placeholder={vault.t('add_secret.placeholder_notes')}
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        ></textarea>
       </div>
     {:else}
       <div class="shrink-0 space-y-1.5">

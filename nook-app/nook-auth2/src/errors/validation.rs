@@ -138,6 +138,18 @@ pub enum ValidationError {
     #[error("errors.validation.authenticator_uri_invalid")]
     AuthenticatorUriInvalid,
 
+    #[error("errors.validation.credit_card_title_required")]
+    CreditCardTitleRequired,
+
+    #[error("errors.validation.credit_card_number_invalid")]
+    CreditCardNumberInvalid,
+
+    #[error("errors.validation.credit_card_expiration_invalid")]
+    CreditCardExpirationInvalid,
+
+    #[error("errors.validation.credit_card_cvv_invalid")]
+    CreditCardCvvInvalid,
+
     #[error("errors.validation.symmetric_key_invalid")]
     SymmetricKeyInvalid,
 

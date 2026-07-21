@@ -2213,6 +2213,30 @@ impl NookSecretFormFields {
             }),
         }
     }
+
+    #[wasm_bindgen(js_name = creditCard)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn credit_card(
+        title: String,
+        cardholder_name: String,
+        number: String,
+        expiration_month: String,
+        expiration_year: String,
+        cvv: String,
+        notes: String,
+    ) -> Self {
+        Self {
+            inner: nook_core::SecretFormFields::CreditCard(nook_core::CreditCardSecretForm {
+                title,
+                cardholder_name,
+                number,
+                expiration_month,
+                expiration_year,
+                cvv,
+                notes,
+            }),
+        }
+    }
 }
 
 #[wasm_bindgen]

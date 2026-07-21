@@ -7,12 +7,13 @@ use serde_json::Value;
 use thiserror::Error;
 use zip::ZipArchive;
 
-use crate::{LoginSecret, SecretValue, SecureNoteSecret};
+use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
 const SUPPORTED_1PUX_VERSION: u32 = 3;
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
 const MAX_EXPORT_DATA_BYTES: u64 = 64 * 1024 * 1024;
 const LOGIN_CATEGORY_UUID: &str = "001";
+const CREDIT_CARD_CATEGORY_UUID: &str = "002";
 const SECURE_NOTE_CATEGORY_UUID: &str = "003";
 const PASSWORD_CATEGORY_UUID: &str = "005";
 
@@ -284,8 +285,28 @@ fn section_metadata(
                 .enumerate()
                 .filter_map(move |(index, field)| {
                     if omit_login_credentials
-                        && ["username", "email", "password"]
-                            .contains(&normalized_field_name(field).as_str())
+                        && [
+                            "username",
+                            "email",
+                            "password",
+                            "cardholder",
+                            "cardholder name",
+                            "name on card",
+                            "number",
+                            "card number",
+                            "credit card number",
+                            "ccnum",
+                            "expiry",
+                            "expires",
+                            "expiration",
+                            "expiry date",
+                            "valid thru",
+                            "cvv",
+                            "cvc",
+                            "security code",
+                            "verification number",
+                        ]
+                        .contains(&normalized_field_name(field).as_str())
                     {
                         return None;
                     }
@@ -417,10 +438,55 @@ fn convert_secure_note(item: &OnePasswordItem, vault_name: &str) -> SecretValue 
     })
 }
 
+fn parse_month_year(raw: &str) -> (String, String) {
+    let digits: String = raw.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    if digits.len() == 6 {
+        return (digits[4..6].to_owned(), digits[..4].to_owned());
+    }
+    if let Some((month, year)) = raw.split_once(['/', '-']) {
+        return (month.trim().to_owned(), year.trim().to_owned());
+    }
+    (String::new(), String::new())
+}
+
+fn convert_credit_card(item: &OnePasswordItem, vault_name: &str) -> Option<SecretValue> {
+    let cardholder = section_credential(
+        &item.details.sections,
+        &["cardholder", "cardholder name", "name on card"],
+    );
+    let number = section_credential(
+        &item.details.sections,
+        &["number", "card number", "credit card number", "ccnum"],
+    );
+    let expiry = section_credential(
+        &item.details.sections,
+        &["expiry", "expires", "expiration", "expiry date", "valid thru"],
+    );
+    let (expiration_month, expiration_year) = parse_month_year(&expiry);
+    let cvv = section_credential(
+        &item.details.sections,
+        &["cvv", "cvc", "security code", "verification number"],
+    );
+    let mut notes = item.details.notes_plain.clone();
+    append_onepassword_metadata(&mut notes, item_metadata(item, vault_name, "", true));
+    CreditCardSecret::from_fields(
+        item.overview.title.trim(),
+        cardholder.trim(),
+        number.trim(),
+        expiration_month.trim(),
+        expiration_year.trim(),
+        cvv.trim(),
+        &notes,
+    )
+    .ok()
+    .map(SecretValue::CreditCard)
+}
+
 fn convert_item(item: &OnePasswordItem, vault_name: &str) -> Option<SecretValue> {
     match item.category_uuid.as_str() {
         LOGIN_CATEGORY_UUID | PASSWORD_CATEGORY_UUID => Some(convert_login(item, vault_name)),
         SECURE_NOTE_CATEGORY_UUID => Some(convert_secure_note(item, vault_name)),
+        CREDIT_CARD_CATEGORY_UUID => convert_credit_card(item, vault_name),
         _ => None,
     }
 }
@@ -586,7 +652,12 @@ mod tests {
             "vaults": [{
               "items": [
                 {"item":{"categoryUuid":"003","overview":{"title":"Wrapped"},"details":{"notesPlain":"ok"}}},
-                {"categoryUuid":"002","overview":{"title":"Credit card"}},
+                {"categoryUuid":"002","overview":{"title":"Credit card"},"details":{"sections":[{"fields":[
+                  {"id":"cardholder","value":"Ada"},
+                  {"id":"ccnum","value":{"creditCardNumber":"4111111111111111"}},
+                  {"id":"expiry","value":{"monthYear":203012}},
+                  {"id":"cvv","value":{"concealed":"123"}}
+                ]}]}},
                 {"categoryUuid":"006","overview":{"title":"Document"}},
                 {"categoryUuid":"109","overview":{"title":"SSH key"}}
               ]
@@ -595,8 +666,14 @@ mod tests {
         }"#;
         let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)).unwrap();
         assert_eq!(plan.source_count, 4);
-        assert_eq!(plan.skipped_unsupported, 3);
-        assert_eq!(plan.items.len(), 1);
+        assert_eq!(plan.skipped_unsupported, 2);
+        assert_eq!(plan.items.len(), 2);
+        let SecretValue::CreditCard(card) = &plan.items[1] else {
+            panic!("expected credit card");
+        };
+        assert_eq!(card.number, "4111111111111111");
+        assert_eq!(card.expiration_month, "12");
+        assert_eq!(card.expiration_year, "2030");
     }
 
     #[test]

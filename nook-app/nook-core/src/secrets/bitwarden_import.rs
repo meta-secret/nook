@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::{LoginSecret, SecretValue, SecureNoteSecret};
+use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
 const MIN_PBKDF2_ITERATIONS: u32 = 5_000;
 const MAX_PBKDF2_ITERATIONS: u32 = 10_000_000;
@@ -58,6 +58,24 @@ struct BitwardenItem {
     #[serde(default)]
     fields: Vec<BitwardenField>,
     login: Option<BitwardenLogin>,
+    card: Option<BitwardenCard>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BitwardenCard {
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    cardholder_name: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    brand: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    number: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    exp_month: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    exp_year: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_default")]
+    code: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -344,6 +362,27 @@ fn convert_login(item: BitwardenItem) -> Option<SecretValue> {
     }))
 }
 
+fn convert_card(item: BitwardenItem) -> Option<SecretValue> {
+    let card = item.card?;
+    let mut notes = item.notes;
+    let mut metadata = custom_field_metadata(item.fields);
+    if !card.brand.trim().is_empty() {
+        metadata.insert(0, ("brand".to_owned(), card.brand));
+    }
+    append_bitwarden_metadata(&mut notes, metadata);
+    CreditCardSecret::from_fields(
+        item.name.trim(),
+        card.cardholder_name.trim(),
+        card.number.trim(),
+        card.exp_month.trim(),
+        card.exp_year.trim(),
+        card.code.trim(),
+        &notes,
+    )
+    .ok()
+    .map(SecretValue::CreditCard)
+}
+
 fn convert_item(item: BitwardenItem) -> Option<SecretValue> {
     match item.item_type {
         1 => convert_login(item),
@@ -355,6 +394,7 @@ fn convert_item(item: BitwardenItem) -> Option<SecretValue> {
                 note: notes,
             }))
         }
+        3 => convert_card(item),
         _ => None,
     }
 }
@@ -451,19 +491,27 @@ mod tests {
     fn converts_plaintext_export_notes_and_skips_unsupported_items() {
         let json = r#"{"items":[
           {"type":2,"name":"Private note","notes":"hello"},
-          {"type":3,"name":"Card"},
+          {"type":3,"name":"Card","card":{"cardholderName":"Ada","number":"4111111111111111","expMonth":"12","expYear":"2030","code":"123","brand":"Visa"}},
           {"type":4,"name":"Identity"}
         ]}"#;
         let plan = plan_bitwarden_import(json).unwrap();
         assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 2);
+        assert_eq!(plan.skipped_unsupported, 1);
+        assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items,
-            vec![SecretValue::SecureNote(SecureNoteSecret {
+            plan.items[0],
+            SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
                 note: "hello".to_owned(),
-            })]
+            })
         );
+        let SecretValue::CreditCard(card) = &plan.items[1] else {
+            panic!("expected credit card");
+        };
+        assert_eq!(card.title, "Card");
+        assert_eq!(card.number, "4111111111111111");
+        assert_eq!(card.cardholder_name, "Ada");
+        assert!(card.notes.contains("brand: Visa"));
     }
 
     #[test]

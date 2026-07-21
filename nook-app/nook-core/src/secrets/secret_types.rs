@@ -5,6 +5,7 @@
 //! password-manager payloads and session records.
 
 use crate::AuthenticatorSecret;
+use crate::CreditCardSecret;
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
@@ -349,6 +350,7 @@ pub enum SecretValue {
     SecureNote(SecureNoteSecret),
     Passkey(PasskeySecret),
     Authenticator(AuthenticatorSecret),
+    CreditCard(CreditCardSecret),
 }
 
 impl SecretValue {
@@ -388,6 +390,12 @@ impl SecretValue {
                 secret.normalize()?;
                 Ok(Self::Authenticator(secret))
             }
+            SecretType::CreditCard => {
+                let mut secret: CreditCardSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidCreditCard)?;
+                secret.normalize()?;
+                Ok(Self::CreditCard(secret))
+            }
         }
     }
 
@@ -402,6 +410,7 @@ impl SecretValue {
                 serde_yaml::to_string(value)
             }
             Self::Authenticator(value) => serde_yaml::to_string(value),
+            Self::CreditCard(value) => serde_yaml::to_string(value),
         }
         .map_err(SecretPayloadError::Serialize)?;
         Ok(SecretPayloadYaml::from_trusted(yaml))
@@ -416,6 +425,7 @@ impl SecretValue {
             Self::SecureNote(_) => SecretType::SecureNote,
             Self::Passkey(_) => SecretType::Passkey,
             Self::Authenticator(_) => SecretType::Authenticator,
+            Self::CreditCard(_) => SecretType::CreditCard,
         }
     }
 
@@ -442,6 +452,7 @@ impl SecretValue {
             }
             Self::Passkey(value) => value.zeroize_plaintext(),
             Self::Authenticator(value) => value.zeroize(),
+            Self::CreditCard(value) => value.zeroize_plaintext(),
         }
     }
 }
