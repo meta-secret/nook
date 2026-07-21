@@ -1,0 +1,159 @@
+schema_version: 1
+source_pr:
+  number: 530
+  url: https://github.com/meta-secret/nook/pull/530
+  title: Fix Pilot Continue on Namecheap-style logins
+  change_surface: rust_wasm_extension_browser_flow
+  head_sha: 258009810851edcac39bf797359649eab770581a
+  started_at: 2026-07-21T00:18:00Z
+  opened_at: 2026-07-21T00:25:42Z
+  merged_at: 2026-07-21T00:58:12Z
+  elapsed_seconds: 2412
+  open_to_merge_seconds: 1950
+summary:
+  local_execution_count: 8
+  local_check_count: 4
+  local_test_count: 0
+  local_combined_count: 4
+  local_execution_seconds: 1324
+  github_actions_run_count: 5
+  github_actions_seconds: 1733
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T00:25:56Z
+    finished_at: 2026-07-21T00:33:02Z
+    duration_seconds: 426
+    outcome: failed
+    reason: extension_prettier_check_failed_on_smoke_spec
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T00:25:56Z
+    finished_at: 2026-07-21T00:33:12Z
+    duration_seconds: 436
+    outcome: failed
+    reason: extension_prettier_check_failed_on_smoke_spec
+  - command: task extension:format
+    category: check
+    started_at: 2026-07-21T00:33:14Z
+    finished_at: 2026-07-21T00:34:02Z
+    duration_seconds: 48
+    outcome: passed
+    reason: format_sealed_image_did_not_include_latest_host_edits
+  - command: docker prettier --write e2e/extension-smoke.spec.ts
+    category: check
+    started_at: 2026-07-21T00:34:20Z
+    finished_at: 2026-07-21T00:34:30Z
+    duration_seconds: 10
+    outcome: passed
+    reason: host_mounted_prettier_fix_for_smoke_assertions
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T00:34:52Z
+    finished_at: 2026-07-21T00:38:51Z
+    duration_seconds: 239
+    outcome: passed
+    reason: final_local_gate_after_format_and_demo_fixes
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T00:34:52Z
+    finished_at: 2026-07-21T00:37:22Z
+    duration_seconds: 150
+    outcome: passed
+    reason: final_pr_mirror_after_format_and_demo_fixes
+  - command: task pr:ready PR=530
+    category: check
+    started_at: 2026-07-21T00:46:00Z
+    finished_at: 2026-07-21T00:46:09Z
+    duration_seconds: 9
+    outcome: failed
+    reason: head_behind_main_by_2_commits
+  - command: task pr:ready PR=530
+    category: check
+    started_at: 2026-07-21T00:58:00Z
+    finished_at: 2026-07-21T00:58:06Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29790252902
+    run_attempt: 1
+    head_sha: 72b702475ffd423de1126a0a5eda28434f4309d8
+    trigger: pull_request
+    started_at: 2026-07-21T00:25:45Z
+    finished_at: 2026-07-21T00:26:47Z
+    duration_seconds: 62
+    conclusion: failure
+  - workflow: PR
+    run_id: 29790388913
+    run_attempt: 1
+    head_sha: 67e96c2b8ced7ebb3c9dc289af9b78435d099d75
+    trigger: pull_request
+    started_at: 2026-07-21T00:28:37Z
+    finished_at: 2026-07-21T00:32:40Z
+    duration_seconds: 243
+    conclusion: failure
+  - workflow: PR
+    run_id: 29790671921
+    run_attempt: 1
+    head_sha: 67882aed8f1940b5dc0e0ca5b7a536477ca87ba8
+    trigger: pull_request
+    started_at: 2026-07-21T00:34:19Z
+    finished_at: 2026-07-21T00:35:35Z
+    duration_seconds: 76
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29790697683
+    run_attempt: 1
+    head_sha: 07d5692624b39472537f9f7b7ea7741865f2a0b1
+    trigger: pull_request
+    started_at: 2026-07-21T00:34:53Z
+    finished_at: 2026-07-21T00:46:54Z
+    duration_seconds: 721
+    conclusion: success
+  - workflow: PR
+    run_id: 29791311635
+    run_attempt: 1
+    head_sha: 258009810851edcac39bf797359649eab770581a
+    trigger: pull_request
+    started_at: 2026-07-21T00:47:25Z
+    finished_at: 2026-07-21T00:57:56Z
+    duration_seconds: 631
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T00:28:37Z
+    cause: head_push
+    run_id: 29790388913
+  - at: 2026-07-21T00:34:19Z
+    cause: head_push
+    run_id: 29790671921
+  - at: 2026-07-21T00:34:53Z
+    cause: head_push
+    run_id: 29790697683
+  - at: 2026-07-21T00:47:25Z
+    cause: base_update
+    run_id: 29791311635
+merge_attempts:
+  - at: 2026-07-21T00:58:12Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [511, 522]
+  baseline_quality: comparable
+  baseline_note: Both baselines cover extension browser-flow changes through the same PR Verify and preview gate family
+  elapsed_seconds_change_percent: -78.3
+  local_execution_seconds_change_percent: -65.1
+  github_actions_seconds_change_percent: -39.1
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - First push omitted the required UI demo contract update and Prettier-clean extension smoke edits, burning two failed PR cycles before a green head
+    - Format was iterated with sealed-image formatting that did not see host edits; host-mounted prettier --check/--write on touched extension files should precede the first push
+  required_actions: []
