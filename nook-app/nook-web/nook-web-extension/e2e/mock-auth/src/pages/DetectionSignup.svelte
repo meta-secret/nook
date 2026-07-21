@@ -35,7 +35,7 @@
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
-  <form onsubmit={onsubmit}>
+  <form {onsubmit}>
     <input autocomplete="username" name="email" type="email" />
     <input autocomplete="new-password" name="password" type="password" />
     <input

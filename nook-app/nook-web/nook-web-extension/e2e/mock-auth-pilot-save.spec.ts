@@ -38,7 +38,9 @@ test.describe('PIN Pilot save login', () => {
       await nextLogin.goto(`${mockAuth.origin}/plain/login`)
       const nextWidget = nextLogin.locator('#nook-auth-widget')
       await expect(nextWidget.getByText('Ready to sign in')).toBeVisible()
-      await nextWidget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await nextWidget
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
       await expect(nextLogin.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -65,7 +67,9 @@ test.describe('PIN Pilot save login', () => {
         signupPage.locator('#nook-auth-widget').getByText('Signup detected'),
       ).toBeVisible()
       await signupPage.locator('input[name="email"]').fill('new@nook.test')
-      await signupPage.locator('input[name="password"]').fill('signup-save-pass')
+      await signupPage
+        .locator('input[name="password"]')
+        .fill('signup-save-pass')
       await signupPage
         .locator('input[name="password-confirm"]')
         .fill('signup-save-pass')

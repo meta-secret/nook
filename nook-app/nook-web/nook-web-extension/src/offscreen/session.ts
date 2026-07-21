@@ -549,7 +549,9 @@ async function handleMessage(message: unknown): Promise<unknown> {
         typeof payload.username !== 'string' ||
         typeof payload.password !== 'string'
       ) {
-        throw new Error('Extension session received an invalid login save plan.')
+        throw new Error(
+          'Extension session received an invalid login save plan.',
+        )
       }
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)

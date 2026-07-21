@@ -1252,7 +1252,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isWebsiteLoginSaveOfferMessage(message)) {
     void websiteLoginSaveOffer(message, sender)
       .then(sendResponse)
-      .catch(() => sendResponse({ ok: false, reason: 'login-save-offer-failed' }))
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'login-save-offer-failed' }),
+      )
     return true
   }
 
