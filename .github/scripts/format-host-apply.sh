@@ -15,11 +15,10 @@ trap 'rm -f "$tmp" "$patch"' EXIT
 set -o pipefail
 status=0
 # Stream progress to the terminal while capturing for patch extraction.
+# Invoke sealed format tasks through Taskfile deps (internal docker:* tasks cannot
+# be called as bare CLI targets in Task v3.42+).
 {
-  task setup:rust
-  task docker:rust:task TASK=_rust:format
-  task setup PREPARE_GROUP=prepare-with-unformatted-rust
-  task docker:task TASK=_format
+  task format:diff
 } 2>&1 | tee "$tmp" || status=$?
 
 if [[ "$status" -ne 0 ]]; then

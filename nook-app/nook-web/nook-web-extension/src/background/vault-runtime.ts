@@ -1,7 +1,9 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import initNookWasm, {
   authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
+  classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
   configureVaultApplication,
+  NookAuthenticationOutcomeObservation,
   NookAuthenticationPageObservation,
   NookAuthenticationPageObservations,
   NookExternalEventLogRecords,
@@ -11,6 +13,11 @@ import type {
   AuthenticationPageObservationView,
   AuthenticationWorkflowSnapshotView,
 } from '../lib/auth-workflow-messages'
+import type {
+  AuthenticationOutcomeObservationView,
+  AuthenticationOutcomeVerdictView,
+} from '../lib/outcome-evidence-messages'
+import { isAuthenticationOutcomeVerdictName } from '../lib/outcome-evidence-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
 let initPromise: Promise<unknown> | undefined
@@ -62,6 +69,42 @@ export async function authenticationWorkflowSnapshot(
     }
   } finally {
     inputs.free()
+  }
+}
+
+export async function classifyAuthenticationOutcome(
+  observation: AuthenticationOutcomeObservationView,
+  timeoutMs?: number,
+): Promise<AuthenticationOutcomeVerdictView> {
+  await ensureExtensionWasm()
+  const input = new NookAuthenticationOutcomeObservation(
+    observation.navigatedAwayFromAuthPath,
+    observation.authFieldsPresent,
+    observation.successMarkerPresent,
+    observation.errorMarkerPresent,
+    observation.sameDocumentMutation,
+    observation.inIframe,
+    Math.max(0, Math.floor(observation.elapsedMs)),
+  )
+  try {
+    const verdict = wasmClassifyAuthenticationOutcome(
+      input,
+      timeoutMs === undefined ? undefined : Math.max(1, Math.floor(timeoutMs)),
+    )
+    try {
+      const name = verdict.name
+      if (!isAuthenticationOutcomeVerdictName(name)) {
+        return { name: 'insufficient', allowsCredentialCommit: false }
+      }
+      return {
+        name,
+        allowsCredentialCommit: verdict.allowsCredentialCommit === true,
+      }
+    } finally {
+      verdict.free()
+    }
+  } finally {
+    input.free()
   }
 }
 

@@ -37,7 +37,7 @@
   <p data-testid="mock-auth-scenario">plain-login</p>
   <FixtureCredentials account={fixtureAccount} />
   {#if error}
-    <p class="error" role="alert">{error}</p>
+    <p class="error" role="alert" data-nook-auth-outcome="error">{error}</p>
   {/if}
   <form id="login-form" method="post" action="/plain/login" {onsubmit}>
     <label

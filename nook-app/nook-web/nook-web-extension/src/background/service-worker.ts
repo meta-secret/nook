@@ -30,6 +30,7 @@ import {
 import type { StoredExtensionPairingGrant } from './pairing-grants'
 import {
   authenticationWorkflowSnapshot,
+  classifyAuthenticationOutcome,
   importExtensionEventLog,
 } from './vault-runtime'
 import {
@@ -64,6 +65,7 @@ import {
   type WebsitePasskeyCeremony,
 } from '../lib/webauthn-messages'
 import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
+import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
 
 const extensionSessionDocument = 'offscreen/session.html'
 let extensionSessionDocumentCreation: Promise<void> | undefined
@@ -781,11 +783,33 @@ async function websiteLoginSavePending(
 }
 
 async function websiteLoginSaveCommit(
-  message: { payload: { origin: string; offerId: string } },
+  message: {
+    payload: {
+      origin: string
+      offerId: string
+      evidence: {
+        navigatedAwayFromAuthPath: boolean
+        authFieldsPresent: boolean
+        successMarkerPresent: boolean
+        errorMarkerPresent: boolean
+        sameDocumentMutation: boolean
+        inIframe: boolean
+        elapsedMs: number
+      }
+    }
+  },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
   if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
+  }
+  const verdict = await classifyAuthenticationOutcome(message.payload.evidence)
+  if (!verdict.allowsCredentialCommit) {
+    return {
+      ok: false,
+      reason: 'login-save-evidence-insufficient',
+      verdict: verdict.name,
+    }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
@@ -1341,6 +1365,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then((snapshot) => sendResponse({ ok: true, snapshot }))
       .catch(() =>
         sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),
+      )
+    return true
+  }
+
+  if (isAuthenticationOutcomeClassifyMessage(message)) {
+    void classifyAuthenticationOutcome(
+      message.payload.observation,
+      message.payload.timeoutMs,
+    )
+      .then((verdict) => sendResponse({ ok: true, verdict }))
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'outcome-classify-failed' }),
       )
     return true
   }

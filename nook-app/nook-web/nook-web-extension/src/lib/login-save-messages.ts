@@ -1,3 +1,5 @@
+import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
+
 export type WebsiteLoginSaveDecision =
   | 'create'
   | 'update'
@@ -32,6 +34,7 @@ export type WebsiteLoginSaveCommitMessage = {
   payload: {
     origin: string
     offerId: string
+    evidence: AuthenticationOutcomeObservationView
   }
 }
 
@@ -64,6 +67,24 @@ function hasOriginPayload(
   )
 }
 
+function isOutcomeObservation(
+  value: unknown,
+): value is AuthenticationOutcomeObservationView {
+  if (typeof value !== 'object' || value === null) return false
+  const view = value as Record<string, unknown>
+  return (
+    typeof view.navigatedAwayFromAuthPath === 'boolean' &&
+    typeof view.authFieldsPresent === 'boolean' &&
+    typeof view.successMarkerPresent === 'boolean' &&
+    typeof view.errorMarkerPresent === 'boolean' &&
+    typeof view.sameDocumentMutation === 'boolean' &&
+    typeof view.inIframe === 'boolean' &&
+    typeof view.elapsedMs === 'number' &&
+    Number.isFinite(view.elapsedMs) &&
+    view.elapsedMs >= 0
+  )
+}
+
 export function isWebsiteLoginSaveOfferMessage(
   message: unknown,
 ): message is WebsiteLoginSaveOfferMessage {
@@ -93,7 +114,8 @@ export function isWebsiteLoginSaveCommitMessage(
   }
   return (
     typeof message.payload.offerId === 'string' &&
-    message.payload.offerId.length > 0
+    message.payload.offerId.length > 0 &&
+    isOutcomeObservation(message.payload.evidence)
   )
 }
 
