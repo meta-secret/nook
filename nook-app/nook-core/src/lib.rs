@@ -14,7 +14,7 @@ mod vault;
 
 pub(crate) use auth::{
     authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
-    multi_device, password_envelope,
+    multi_device, password_envelope, website_login_save,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
@@ -149,6 +149,9 @@ pub use vault_sentinel_onboarding::{
 };
 pub use vault_sync_conflict::{
     ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
+};
+pub use website_login_save::{
+    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
 
 pub use nook_auth2::{

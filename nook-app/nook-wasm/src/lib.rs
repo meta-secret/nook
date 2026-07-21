@@ -45,7 +45,7 @@ pub use types::{
     NookStorageConnectArgs, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult,
+    NookVaultSyncResult, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
