@@ -1,0 +1,343 @@
+schema_version: 2
+source_pr:
+  number: 568
+  url: https://github.com/meta-secret/nook/pull/568
+  title: Add encrypted file-attachment vault secret type
+  change_surface: vault_core_wasm_file_attachment_ui
+  head_sha: 8af7ef94c219d26269d53992aa5a239287aa2444
+  started_at: 2026-07-21T05:20:00Z
+  opened_at: 2026-07-21T05:42:23Z
+  merged_at: 2026-07-21T08:39:50Z
+  elapsed_seconds: 11990
+  open_to_merge_seconds: 10647
+summary:
+  local_execution_count: 18
+  local_check_count: 12
+  local_test_count: 5
+  local_combined_count: 1
+  local_execution_seconds: 3175
+  github_actions_run_count: 14
+  github_actions_seconds: 6025
+  pr_retrigger_count: 11
+  agent_requested_rerun_count: 2
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T08:45:00Z
+  head_sha: 8af7ef94c219d26269d53992aa5a239287aa2444
+  by_type:
+    rust: 598
+    preflight: 30
+    web_unit: 221
+    e2e: 188
+  total: 1037
+local_executions:
+  - command: cargo check -p nook-core -p nook-auth2 -p nook-wasm
+    category: check
+    started_at: 2026-07-21T07:05:00Z
+    finished_at: 2026-07-21T07:05:16Z
+    duration_seconds: 16
+    outcome: passed
+    reason: post_main_merge_compile
+  - command: cargo test -p nook-core --lib file_attachment
+    category: test
+    started_at: 2026-07-21T07:05:20Z
+    finished_at: 2026-07-21T07:05:46Z
+    duration_seconds: 26
+    outcome: passed
+    reason: focused_file_attachment_domain_tests
+  - command: cargo test -p nook-core --lib credit_card
+    category: test
+    started_at: 2026-07-21T07:05:46Z
+    finished_at: 2026-07-21T07:05:47Z
+    duration_seconds: 1
+    outcome: passed
+    reason: confirm_credit_card_still_green_after_merge
+  - command: cargo fmt --all
+    category: check
+    started_at: 2026-07-21T07:06:00Z
+    finished_at: 2026-07-21T07:06:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: host_rustfmt_after_merge_resolution
+  - command: bash nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh
+    category: check
+    started_at: 2026-07-21T07:19:40Z
+    finished_at: 2026-07-21T07:19:42Z
+    duration_seconds: 2
+    outcome: passed
+    reason: reproduce_ci_extension_check_locally
+  - command: task format
+    category: check
+    started_at: 2026-07-21T07:30:00Z
+    finished_at: 2026-07-21T07:32:20Z
+    duration_seconds: 140
+    outcome: failed
+    reason: format_host_apply_called_internal_docker_task_exit_202
+  - command: task format
+    category: check
+    started_at: 2026-07-21T07:40:00Z
+    finished_at: 2026-07-21T07:42:55Z
+    duration_seconds: 175
+    outcome: passed
+    reason: after_format_diff_entrypoint_fix
+  - command: bash .github/scripts/format-host-apply.test.sh
+    category: check
+    started_at: 2026-07-21T07:40:00Z
+    finished_at: 2026-07-21T07:40:01Z
+    duration_seconds: 1
+    outcome: passed
+    reason: format_host_apply_unit_guard
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-21T07:42:56Z
+    finished_at: 2026-07-21T07:42:57Z
+    duration_seconds: 1
+    outcome: passed
+    reason: file_attachment_demo_required
+  - command: cargo test -p nook-core --lib file_attachment
+    category: test
+    started_at: 2026-07-21T07:52:50Z
+    finished_at: 2026-07-21T07:52:54Z
+    duration_seconds: 4
+    outcome: passed
+    reason: recheck_after_buildkit_flake_rerun
+  - command: task format
+    category: check
+    started_at: 2026-07-21T08:03:00Z
+    finished_at: 2026-07-21T08:09:13Z
+    duration_seconds: 373
+    outcome: passed
+    reason: pre_push_after_extension_install_main_merge
+  - command: task format
+    category: check
+    started_at: 2026-07-21T08:15:00Z
+    finished_at: 2026-07-21T08:21:33Z
+    duration_seconds: 393
+    outcome: passed
+    reason: pre_push_after_sentinel_enrollment_main_merge
+  - command: task format
+    category: check
+    started_at: 2026-07-21T08:27:00Z
+    finished_at: 2026-07-21T08:28:01Z
+    duration_seconds: 61
+    outcome: passed
+    reason: pre_push_after_format_script_conflict_resolution
+  - command: bash .github/scripts/format-host-apply.test.sh
+    category: check
+    started_at: 2026-07-21T08:28:01Z
+    finished_at: 2026-07-21T08:28:02Z
+    duration_seconds: 1
+    outcome: passed
+    reason: confirm_canonical_main_format_entrypoint
+  - command: task pr:ready PR=568
+    category: check
+    started_at: 2026-07-21T08:39:20Z
+    finished_at: 2026-07-21T08:39:28Z
+    duration_seconds: 8
+    outcome: passed
+    reason: ready_true_before_squash_merge
+  - command: cargo nextest list -E 'package(nook-core) + package(nook-auth2)' --lib --tests
+    category: check
+    started_at: 2026-07-21T08:44:00Z
+    finished_at: 2026-07-21T08:44:35Z
+    duration_seconds: 35
+    outcome: passed
+    reason: post_merge_test_inventory_rust
+  - command: cargo nextest list --lib --tests
+    category: check
+    started_at: 2026-07-21T08:44:35Z
+    finished_at: 2026-07-21T08:44:36Z
+    duration_seconds: 1
+    outcome: passed
+    reason: post_merge_test_inventory_preflight
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T07:12:45Z
+    finished_at: 2026-07-21T07:45:00Z
+    duration_seconds: 1935
+    outcome: cancelled
+    reason: background_docker_check_superseded_by_green_remote_ci
+github_actions_runs:
+  - workflow: PR
+    run_id: 29804757263
+    run_attempt: 1
+    head_sha: 48bbb717b090c0b0ba4c52dfa2323cf45472b21b
+    trigger: pull_request
+    started_at: 2026-07-21T05:42:27Z
+    finished_at: 2026-07-21T05:44:35Z
+    duration_seconds: 128
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29804834844
+    run_attempt: 1
+    head_sha: 6034ca58525279236bfc13e0ef239f39c68dafba
+    trigger: pull_request
+    started_at: 2026-07-21T05:44:05Z
+    finished_at: 2026-07-21T05:48:41Z
+    duration_seconds: 276
+    conclusion: failure
+  - workflow: PR
+    run_id: 29805218899
+    run_attempt: 1
+    head_sha: afbfb6bf6921419f13ae6e376ebe4d0526872939
+    trigger: pull_request
+    started_at: 2026-07-21T05:51:52Z
+    finished_at: 2026-07-21T05:58:32Z
+    duration_seconds: 400
+    conclusion: failure
+  - workflow: PR
+    run_id: 29806051273
+    run_attempt: 1
+    head_sha: 21d69446b35582c9c7458b403723b4c5ddfa0223
+    trigger: pull_request
+    started_at: 2026-07-21T06:07:24Z
+    finished_at: 2026-07-21T06:08:12Z
+    duration_seconds: 48
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29806064906
+    run_attempt: 1
+    head_sha: ba113537a0c18d8fbb7f6db3a4c5fcf536c02637
+    trigger: pull_request
+    started_at: 2026-07-21T06:07:40Z
+    finished_at: 2026-07-21T06:15:51Z
+    duration_seconds: 491
+    conclusion: failure
+  - workflow: PR
+    run_id: 29806573843
+    run_attempt: 1
+    head_sha: b2ddbcac3ea27f95bee8b8a53026e41d1ac8cb69
+    trigger: pull_request
+    started_at: 2026-07-21T06:17:35Z
+    finished_at: 2026-07-21T06:28:59Z
+    duration_seconds: 684
+    conclusion: success
+  - workflow: PR
+    run_id: 29809586897
+    run_attempt: 1
+    head_sha: 36727974edf509c6eb62c13be31618a61b5ccc76
+    trigger: pull_request
+    started_at: 2026-07-21T07:12:16Z
+    finished_at: 2026-07-21T07:13:27Z
+    duration_seconds: 71
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29809629485
+    run_attempt: 1
+    head_sha: 723c71825524e7ce90fef221d24dcfdb1f8b9297
+    trigger: pull_request
+    started_at: 2026-07-21T07:12:57Z
+    finished_at: 2026-07-21T07:18:15Z
+    duration_seconds: 318
+    conclusion: failure
+  - workflow: PR
+    run_id: 29809629485
+    run_attempt: 2
+    head_sha: 723c71825524e7ce90fef221d24dcfdb1f8b9297
+    trigger: manual_rerun
+    started_at: 2026-07-21T07:18:56Z
+    finished_at: 2026-07-21T07:29:05Z
+    duration_seconds: 609
+    conclusion: success
+  - workflow: PR
+    run_id: 29810647453
+    run_attempt: 1
+    head_sha: 3da45cd17774e36452bccd763375521a7f7235fd
+    trigger: pull_request
+    started_at: 2026-07-21T07:29:36Z
+    finished_at: 2026-07-21T07:39:43Z
+    duration_seconds: 607
+    conclusion: success
+  - workflow: PR
+    run_id: 29811492533
+    run_attempt: 1
+    head_sha: 68ac5042ccf5a2b1ff19c18fb6fcd8392d490bcb
+    trigger: pull_request
+    started_at: 2026-07-21T07:43:07Z
+    finished_at: 2026-07-21T07:52:22Z
+    duration_seconds: 555
+    conclusion: failure
+  - workflow: PR
+    run_id: 29811492533
+    run_attempt: 2
+    head_sha: 68ac5042ccf5a2b1ff19c18fb6fcd8392d490bcb
+    trigger: manual_rerun
+    started_at: 2026-07-21T07:52:44Z
+    finished_at: 2026-07-21T08:01:30Z
+    duration_seconds: 526
+    conclusion: success
+  - workflow: PR
+    run_id: 29813104870
+    run_attempt: 1
+    head_sha: a58ddf7ff4c123d03c8110068f8f319cec556826
+    trigger: pull_request
+    started_at: 2026-07-21T08:08:13Z
+    finished_at: 2026-07-21T08:19:38Z
+    duration_seconds: 685
+    conclusion: success
+  - workflow: PR
+    run_id: 29814458007
+    run_attempt: 1
+    head_sha: 4bd915cbd1d026847b276710977c00bae5483832
+    trigger: pull_request
+    started_at: 2026-07-21T08:29:02Z
+    finished_at: 2026-07-21T08:39:29Z
+    duration_seconds: 627
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T05:44:05Z
+    reason: early_ci_fix_iteration
+  - kind: head_push
+    at: 2026-07-21T05:51:52Z
+    reason: early_ci_fix_iteration
+  - kind: head_push
+    at: 2026-07-21T06:07:24Z
+    reason: early_ci_fix_iteration
+  - kind: head_push
+    at: 2026-07-21T06:07:40Z
+    reason: early_ci_fix_iteration
+  - kind: head_push
+    at: 2026-07-21T06:17:35Z
+    reason: green_feature_head_before_main_catchup
+  - kind: head_push
+    at: 2026-07-21T07:12:16Z
+    reason: merge_origin_main_credit_card_conflict_resolution
+  - kind: manual_rerun
+    at: 2026-07-21T07:18:56Z
+    reason: buildkit_flake_exit_130_rerun
+  - kind: head_push
+    at: 2026-07-21T07:29:36Z
+    reason: merge_origin_main_format_hygiene
+  - kind: head_push
+    at: 2026-07-21T07:43:07Z
+    reason: format_entrypoint_fix_push
+  - kind: manual_rerun
+    at: 2026-07-21T07:52:44Z
+    reason: builder_deps_buildkit_flake_rerun
+  - kind: head_push
+    at: 2026-07-21T08:08:13Z
+    reason: merge_origin_main_extension_install
+merge_attempts:
+  - at: 2026-07-21T08:39:50Z
+    method: squash
+    outcome: success
+    reason: readiness_passed_local_main_checkout_failed_but_github_merged
+comparison:
+  baseline_prs: [567]
+  baseline_quality: comparable
+  baseline_note: Closest peer is credit-card vault secret type (#567); same core/wasm/UI secret-type surface.
+  elapsed_seconds_change_percent: 116.3
+  local_execution_seconds_change_percent: -67.2
+  github_actions_seconds_change_percent: 168.3
+  test_inventory_total_change: 25
+  regression: true
+  regression_reasons:
+    - elapsed_and_gha_inflated_by_repeated_main_catchup_and_two_buildkit_flake_reruns
+waste_assessment:
+  wasteful: true
+  findings:
+    - Repeated origin/main merges to clear behind-by from unrelated stats/docs PRs doubled wall-clock and PR run count versus #567.
+    - Duplicated format-host-apply CLI fix overlapped with #580; conflict resolution discarded our copy for the canonical main fix.
+    - Two agent-requested reruns recovered BuildKit flakes (exit 130 / builder-deps exit 2) without code changes.
+  required_actions: []
