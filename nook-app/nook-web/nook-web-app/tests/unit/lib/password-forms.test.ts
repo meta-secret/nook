@@ -56,6 +56,60 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('ignores closed-dropdown password fields inside the same page form', () => {
+    document.body.innerHTML = `
+      <form id="aspnetForm">
+        <div class="gb-dropdown">
+          <div class="gb-dropdown__holder" style="display: none">
+            <input name="LoginUserName" type="text" />
+            <input id="header-password" name="LoginPassword" type="password" />
+          </div>
+        </div>
+        <fieldset class="loginForm">
+          <input name="LoginUserName" type="text" />
+          <input
+            id="main-password"
+            name="LoginPassword"
+            type="password"
+            autocomplete="on"
+          />
+          <button type="submit">Sign in</button>
+        </fieldset>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      passwordFieldCount: 1,
+      genericPasswordFieldCount: 1,
+      currentPasswordFieldCount: 0,
+    })
+    expect(
+      fillLoginCredentials({ username: 'pilot', password: 'secret' }),
+    ).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('#header-password')?.value,
+    ).toBe('')
+    expect(
+      document.querySelector<HTMLInputElement>('#main-password')?.value,
+    ).toBe('secret')
+  })
+
+  test('does not surface a closed header-only login as a pilot workflow', () => {
+    document.body.innerHTML = `
+      <form id="aspnetForm">
+        <div class="gb-dropdown__holder" style="display: none">
+          <input name="LoginUserName" type="text" />
+          <input name="LoginPassword" type="password" />
+        </div>
+        <main><p>Marketing homepage</p></main>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+  })
+
   test('keeps unowned login controls isolated from owned signup fields', () => {
     document.body.innerHTML = `
       <form id="signup">

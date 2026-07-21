@@ -85,6 +85,23 @@ h1 {
   text-align: center;
 }
 
+.vault-connection {
+  margin: -10px 8px 2px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.vault-connection[data-connected='true'] {
+  color: color-mix(in oklab, oklch(0.78 0.08 155) 85%, var(--foreground));
+}
+
+.vault-connection[data-connected='false'] {
+  color: color-mix(in oklab, oklch(0.8 0.08 70) 80%, var(--foreground));
+}
+
 .field-group {
   display: grid;
   gap: 7px;
