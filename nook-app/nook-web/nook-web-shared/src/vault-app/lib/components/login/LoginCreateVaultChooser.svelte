@@ -178,8 +178,6 @@
   $effect(() => {
     const deviceProtectionReady = vault.deviceProtectionReady
     const invitationPending = sentinelInvitationRequest.trim().length > 0
-    const shouldLoadStandalone =
-      !invitationPending && (!joinPasskeyRequested || deviceProtectionReady)
     const shouldResumeInvitation =
       invitationPending && joinPasskeyRequested && deviceProtectionReady
     if (
@@ -188,28 +186,27 @@
       !generatedParticipantResponse &&
       !joinPublicKeysLoading &&
       !isBusy &&
-      (shouldLoadStandalone || shouldResumeInvitation) &&
-      onCreateSentinelGenesisPublicKeyAnnouncement
+      shouldResumeInvitation &&
+      onCreateSentinelGenesisParticipantResponse
     ) {
       void loadJoinPublicKeys()
     }
   })
 
   async function loadJoinPublicKeys() {
+    const requestPayload = participantRequest.trim()
     if (
       joinPublicKeysLoading ||
       generatedParticipantResponse ||
-      !onCreateSentinelGenesisPublicKeyAnnouncement
+      !requestPayload ||
+      !onCreateSentinelGenesisParticipantResponse
     ) {
       return
     }
     joinPublicKeysLoading = true
     try {
-      const requestPayload = participantRequest.trim()
       generatedParticipantResponse =
-        requestPayload && onCreateSentinelGenesisParticipantResponse
-          ? await onCreateSentinelGenesisParticipantResponse(requestPayload)
-          : await onCreateSentinelGenesisPublicKeyAnnouncement()
+        await onCreateSentinelGenesisParticipantResponse(requestPayload)
       if (!generatedParticipantResponse && !vault.deviceProtectionReady) {
         joinPasskeyRequested = true
         return
@@ -1154,7 +1151,7 @@
                 >
                   {vault.t('login.sentinel_genesis_join_loading')}
                 </p>
-              {:else}
+              {:else if sentinelInvitationRequest.trim()}
                 <div
                   class="rounded-lg border border-primary/25 bg-primary/5 p-4"
                   data-testid="sentinel-genesis-connect-card"
@@ -1168,73 +1165,60 @@
                   <Button
                     type="button"
                     class="mt-4 w-full sm:w-auto"
-                    data-testid={sentinelInvitationRequest.trim()
-                      ? 'sentinel-genesis-connect-device'
-                      : 'sentinel-genesis-refresh-public-keys'}
+                    data-testid="sentinel-genesis-connect-device"
                     disabled={isBusy || sentinelActionBusy}
                     onclick={() => refreshJoinPublicKeys()}
                   >
                     <ShieldCheck class="size-4" />
-                    {sentinelInvitationRequest.trim()
-                      ? vault.t('login.sentinel_genesis_connect_action')
-                      : vault.t('login.sentinel_genesis_refresh_public_keys')}
+                    {vault.t('login.sentinel_genesis_connect_action')}
                   </Button>
                 </div>
-              {/if}
-
-              {#if !sentinelInvitationRequest.trim() && !sentinelOnboardingPackage.trim()}
-                <details
-                  class="rounded-lg border border-border/60 bg-muted/10 p-4"
+              {:else if !sentinelOnboardingPackage.trim()}
+                <div
+                  class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
+                  data-testid="sentinel-genesis-invitation-required"
                 >
-                  <summary
-                    class="cursor-pointer text-sm font-medium text-foreground"
-                    data-testid="sentinel-genesis-join-request-toggle"
+                  <p class="text-sm font-semibold text-foreground">
+                    {vault.t('login.sentinel_genesis_invitation_required_title')}
+                  </p>
+                  <p class="text-xs text-pretty text-muted-foreground">
+                    {vault.t(
+                      'login.sentinel_genesis_invitation_required_description',
+                    )}
+                  </p>
+                  <label
+                    class="text-xs font-medium text-foreground"
+                    for="sentinel-participant-request"
                   >
-                    {vault.t('login.sentinel_genesis_join_request_optional')}
-                  </summary>
-                  <div class="mt-3 space-y-2">
-                    <p class="text-xs text-pretty text-muted-foreground">
-                      {vault.t(
-                        'login.sentinel_genesis_join_request_optional_description',
-                      )}
-                    </p>
-                    <label
-                      class="text-xs font-medium text-foreground"
-                      for="sentinel-participant-request"
-                    >
-                      {vault.t('login.sentinel_genesis_join_request_label')}
-                    </label>
-                    <textarea
-                      id="sentinel-participant-request"
-                      class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                      data-testid="sentinel-genesis-join-request-input"
-                      placeholder={vault.t(
-                        'login.sentinel_genesis_join_request_placeholder',
-                      )}
-                      bind:value={sessionParticipantRequest}
-                      disabled={isBusy || sentinelActionBusy}></textarea>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      data-testid="sentinel-genesis-create-response"
-                      disabled={isBusy ||
-                        sentinelActionBusy ||
-                        !sessionParticipantRequest.trim() ||
-                        !onCreateSentinelGenesisParticipantResponse}
-                      onclick={() => void createParticipantResponse()}
-                    >
-                      {#if sentinelActionBusy}
-                        <RefreshCw class="size-4 animate-spin" />
-                      {:else}
-                        <ShieldCheck class="size-4" />
-                      {/if}
-                      {vault.t(
-                        'login.sentinel_genesis_create_session_response',
-                      )}
-                    </Button>
-                  </div>
-                </details>
+                    {vault.t('login.sentinel_genesis_join_request_label')}
+                  </label>
+                  <textarea
+                    id="sentinel-participant-request"
+                    class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    data-testid="sentinel-genesis-join-request-input"
+                    placeholder={vault.t(
+                      'login.sentinel_genesis_join_request_placeholder',
+                    )}
+                    bind:value={sessionParticipantRequest}
+                    disabled={isBusy || sentinelActionBusy}></textarea>
+                  <Button
+                    type="button"
+                    class="w-full sm:w-auto"
+                    data-testid="sentinel-genesis-create-response"
+                    disabled={isBusy ||
+                      sentinelActionBusy ||
+                      !sessionParticipantRequest.trim() ||
+                      !onCreateSentinelGenesisParticipantResponse}
+                    onclick={() => void createParticipantResponse()}
+                  >
+                    {#if sentinelActionBusy}
+                      <RefreshCw class="size-4 animate-spin" />
+                    {:else}
+                      <ShieldCheck class="size-4" />
+                    {/if}
+                    {vault.t('login.sentinel_genesis_create_session_response')}
+                  </Button>
+                </div>
               {/if}
 
               {#if !sentinelOnboardingPackage.trim()}

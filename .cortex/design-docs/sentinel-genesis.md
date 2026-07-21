@@ -31,10 +31,9 @@ Get started (empty device) presents exactly two owner creation paths:
 
 There is no unrestricted **Join Sentinel** choice on the creation landing page.
 The initiating owner onboards participants from the Sentinel workspace; a
-participant never starts genesis independently. The current wire format accepts
-signed public-key announcements, while cryptographically binding every remote
-response to an owner-issued QR/link request is tracked in
-[#337](https://github.com/meta-secret/nook/issues/337).
+participant never starts genesis independently. Remote participant enrollment
+accepts only session-bound responses to an owner-issued invitation QR/link;
+standalone `publicKeyAnnouncement` payloads are rejected for roster import.
 After genesis, the owner returns each participant's encrypted share directly;
 share delivery does not require or initialize a sync provider. The owner then
 uses the normal Sentinel quorum ceremony to unlock the empty vault. Provider
@@ -77,26 +76,23 @@ or vault key to another device.
 ### Round 1: collect participant public keys
 
 1. Device A names an in-memory Sentinel genesis draft, then chooses `N` and `T`.
-2. Each participant device independently creates a signed public-key
-   announcement after completing its own device initialization. The announcement
-   contains its participant identity, public encryption key, public signing key,
-   label, signature, and a human-verification fingerprint.
-3. Device A initiates the onboarding exchange and the participant returns the
-   announcement through QR, link, or paste; participant setup is never entered
-   as a free-standing landing-page choice.
-4. Device A imports the announcement into the active genesis session, verifies
-   it in Rust/WASM, rejects duplicates, and adds the participant to the pending
-   roster.
+2. Device A starts genesis, which includes its own signed session-bound response
+   and publishes an owner-issued invitation (QR/link) for the remaining members.
+3. Each remote participant opens that invitation, initializes its protected
+   device identity, and returns a signed session-bound response through QR,
+   link, or paste. Participant setup is never a free-standing landing-page
+   choice and never uses a standalone `publicKeyAnnouncement`.
+4. Device A imports each response into the active genesis session, verifies
+   invitation/session binding and signature in Rust/WASM, rejects duplicates
+   and cross-session replay, and adds the participant to the pending roster.
 5. Repeat until all configured `N` participant public keys are present,
    including Device A's own public keys.
 
 The Card Stack presents this dependency explicitly: Device A creates its local
 keys, defines the `T`-of-`N` share policy, and only then opens the device roster.
-The roster includes Device A and accepts exactly the remaining `N - 1` signed
-public-key announcements; it must not infer `N` from however many devices the
-user happened to add. The user must not have to create a vault or start a
-request-bound flow before the `+` action can collect standalone participant
-keys.
+The roster includes Device A and accepts exactly the remaining `N - 1`
+session-bound invitation responses; it must not infer `N` from however many
+devices the user happened to add.
 
 The Card Stack also keeps a stable interaction boundary between its two
 columns. The left column owns every setup and management action: creating local
