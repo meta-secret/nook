@@ -1173,10 +1173,8 @@ mod tests {
 
     #[test]
     fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list() {
-        let content = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            b"secret-bytes",
-        );
+        let content =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"secret-bytes");
         let fields = serde_json::json!({
             "title": "",
             "fileName": "notes.txt",
