@@ -1,0 +1,160 @@
+schema_version: 1
+source_pr:
+  number: 551
+  url: https://github.com/meta-secret/nook/pull/551
+  title: Expand PIN Pilot e2e coverage against mock-auth (#547)
+  change_surface: extension_e2e_mock_auth_pilot
+  head_sha: 6de16d1691c347d2fbafabce7ce3ac96a5fd0e3a
+  started_at: 2026-07-21T02:47:00Z
+  opened_at: 2026-07-21T02:51:30Z
+  merged_at: 2026-07-21T03:32:08Z
+  elapsed_seconds: 2708
+  open_to_merge_seconds: 2438
+summary:
+  local_execution_count: 7
+  local_check_count: 2
+  local_test_count: 3
+  local_combined_count: 2
+  local_execution_seconds: 1656
+  github_actions_run_count: 5
+  github_actions_seconds: 1693
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 2
+local_executions:
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:52:30Z
+    finished_at: 2026-07-21T02:58:03Z
+    duration_seconds: 333
+    outcome: passed
+    reason: local_gate_after_initial_push
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T02:52:00Z
+    finished_at: 2026-07-21T03:01:48Z
+    duration_seconds: 588
+    outcome: failed
+    reason: prefilled_password_broke_continue_and_vault_row_strict_mode
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T03:03:40Z
+    finished_at: 2026-07-21T03:09:21Z
+    duration_seconds: 341
+    outcome: failed
+    reason: authenticator_row_strict_mode_and_lock_unlock_sequencing
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T03:09:40Z
+    finished_at: 2026-07-21T03:12:43Z
+    duration_seconds: 183
+    outcome: passed
+    reason: full_extension_suite_after_helper_hardening
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T03:14:40Z
+    finished_at: 2026-07-21T03:17:31Z
+    duration_seconds: 171
+    outcome: passed
+    reason: local_gate_after_ui_demo_contract_update
+  - command: task pr:ready PR=551
+    category: check
+    started_at: 2026-07-21T03:22:00Z
+    finished_at: 2026-07-21T03:22:22Z
+    duration_seconds: 22
+    outcome: failed
+    reason: head_behind_main_by_2
+  - command: task pr:ready PR=551
+    category: check
+    started_at: 2026-07-21T03:31:50Z
+    finished_at: 2026-07-21T03:32:08Z
+    duration_seconds: 18
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29796939017
+    run_attempt: 1
+    head_sha: 997d37631e262222b5b6d4de20f84a7d9a310cb2
+    trigger: pull_request
+    started_at: 2026-07-21T02:51:33Z
+    finished_at: 2026-07-21T02:55:21Z
+    duration_seconds: 228
+    conclusion: failure
+  - workflow: PR
+    run_id: 29797482158
+    run_attempt: 1
+    head_sha: 1e1bde35cdab211fdd158cad7dad7b49137de725
+    trigger: pull_request
+    started_at: 2026-07-21T03:03:29Z
+    finished_at: 2026-07-21T03:07:11Z
+    duration_seconds: 222
+    conclusion: failure
+  - workflow: PR
+    run_id: 29797788696
+    run_attempt: 1
+    head_sha: bcc04050ba9f8bf835901da24a4454ee281d5fb5
+    trigger: pull_request
+    started_at: 2026-07-21T03:09:55Z
+    finished_at: 2026-07-21T03:13:59Z
+    duration_seconds: 244
+    conclusion: failure
+  - workflow: PR
+    run_id: 29798014571
+    run_attempt: 1
+    head_sha: 38d7ed3f08671827f0ab4704b51646f4a0fec29e
+    trigger: pull_request
+    started_at: 2026-07-21T03:14:41Z
+    finished_at: 2026-07-21T03:22:14Z
+    duration_seconds: 453
+    conclusion: success
+  - workflow: PR
+    run_id: 29798378301
+    run_attempt: 1
+    head_sha: 6de16d1691c347d2fbafabce7ce3ac96a5fd0e3a
+    trigger: pull_request
+    started_at: 2026-07-21T03:22:52Z
+    finished_at: 2026-07-21T03:31:58Z
+    duration_seconds: 546
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T03:03:29Z
+    cause: head_push
+    run_id: 29797482158
+  - at: 2026-07-21T03:09:55Z
+    cause: head_push
+    run_id: 29797788696
+  - at: 2026-07-21T03:14:41Z
+    cause: head_push
+    run_id: 29798014571
+  - at: 2026-07-21T03:22:52Z
+    cause: base_update
+    run_id: 29798378301
+merge_attempts:
+  - at: 2026-07-21T03:32:08Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+  - at: 2026-07-21T03:32:08Z
+    method: squash
+    outcome: failed
+    reason: merge_already_in_progress
+comparison:
+  baseline_prs: [545, 542]
+  baseline_quality: comparable
+  baseline_note: Same mock-auth / Pilot extension e2e surface; 551 adds broader Pilot coverage plus session-lock helpers and a UI demo update
+  elapsed_seconds_change_percent: 25.2
+  local_execution_seconds_change_percent: 46.1
+  github_actions_seconds_change_percent: 21.8
+  regression: true
+  regression_reasons:
+    - elapsed_exceeds_20pct_and_60s_vs_median_of_545_542
+    - local_execution_exceeds_20pct_and_60s_vs_median_of_545_542
+    - gha_exceeds_20pct_and_60s_vs_median_of_545_542
+waste_assessment:
+  wasteful: true
+  findings:
+    - Three PR Verify cycles failed solely on the UI demo contract before the demo spec was updated, despite local extension e2e already iterating
+    - Prefilling mock-auth password fields (from #544) broke Continue-with-Nook detection and cost the first full extension suite cycle
+    - Vault-row assertions needed .last()/identity filters for multi-login and multi-2FA saves; lock/unlock sequencing needed a second e2e fix cycle
+  required_actions: []
