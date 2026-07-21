@@ -15,12 +15,9 @@ trap 'rm -f "$tmp" "$patch"' EXIT
 set -o pipefail
 status=0
 # Stream progress to the terminal while capturing for patch extraction.
-{
-  task setup:rust
-  task docker:rust:task TASK=_rust:format
-  task setup PREPARE_GROUP=prepare-with-unformatted-rust
-  task docker:task TASK=_format
-} 2>&1 | tee "$tmp" || status=$?
+# Use `format:diff` so sealed `docker:task` / `docker:rust:task` stay nested —
+# those tasks are internal and cannot be invoked from the CLI.
+task format:diff 2>&1 | tee "$tmp" || status=$?
 
 if [[ "$status" -ne 0 ]]; then
   echo "==> task format failed (see output above)." >&2
