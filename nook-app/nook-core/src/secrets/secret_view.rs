@@ -342,9 +342,8 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.key.as_str(),
             SecretValue::SeedPhrase(value) => value.seed.as_str(),
             SecretValue::SecureNote(value) => value.note.as_str(),
-            SecretValue::Passkey(_) => "",
+            SecretValue::Passkey(_) | SecretValue::FileAttachment(_) => "",
             SecretValue::Authenticator(value) => value.secret.as_str(),
-            SecretValue::FileAttachment(_) => "",
         }
     }
 
@@ -535,10 +534,10 @@ impl SecretListItem {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
             SecretListItemData::SeedPhrase { name, .. } => name.clone(),
-            SecretListItemData::SecureNote { title } => title.clone(),
+            SecretListItemData::SecureNote { title }
+            | SecretListItemData::FileAttachment { title, .. } => title.clone(),
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator { issuer, .. } => issuer.clone(),
-            SecretListItemData::FileAttachment { title, .. } => title.clone(),
         }
     }
 
