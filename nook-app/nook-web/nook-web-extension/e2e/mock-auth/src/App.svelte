@@ -3,9 +3,11 @@
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
+  import DetectionMicrosoft from './pages/DetectionMicrosoft.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
+  import DetectionSlack from './pages/DetectionSlack.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
   import NotFound from './pages/NotFound.svelte'
   import PlainLogin from './pages/PlainLogin.svelte'
@@ -62,6 +64,10 @@
   <DetectionCombined />
 {:else if pathname === '/spa'}
   <DetectionSpa />
+{:else if pathname === '/microsoft'}
+  <DetectionMicrosoft />
+{:else if pathname === '/slack'}
+  <DetectionSlack />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
 {:else}

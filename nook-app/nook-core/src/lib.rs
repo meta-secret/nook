@@ -21,8 +21,8 @@ pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, google_authenticator_import, lastpass_import,
-    onepassword_import, passkey_authenticator, password, proton_pass_import, secret_fingerprint,
-    secret_types, secret_view, session,
+    login_site_hosts, onepassword_import, passkey_authenticator, password, proton_pass_import,
+    secret_fingerprint, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -53,6 +53,7 @@ pub use authenticator::{
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,
 };
+pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,

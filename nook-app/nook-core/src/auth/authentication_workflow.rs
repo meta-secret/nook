@@ -348,7 +348,7 @@ pub const fn classify_authentication_workflow(
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
                 AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::TakeOver,
+                AuthenticationWorkflowAction::ContinueWithNook,
                 1,
                 3,
             ),
@@ -398,7 +398,7 @@ mod tests {
         };
         let login = classify_authentication_workflow(username_only).unwrap();
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
-        assert_eq!(login.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
         assert_eq!((login.current_step, login.total_steps), (1, 3));
         assert!(login.requires_human_approval);
 

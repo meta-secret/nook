@@ -9,6 +9,7 @@ pub(crate) mod chrome_passwords_import;
 pub(crate) mod credit_card;
 pub(crate) mod google_authenticator_import;
 pub(crate) mod lastpass_import;
+pub(crate) mod login_site_hosts;
 pub(crate) mod onepassword_import;
 pub(crate) mod passkey_authenticator;
 pub(crate) mod password;

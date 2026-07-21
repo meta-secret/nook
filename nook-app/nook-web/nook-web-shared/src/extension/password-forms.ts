@@ -30,13 +30,41 @@ export type PasswordFormObservation = {
 
 export const usernameFieldSelectors = [
   'input[autocomplete~="username" i]',
+  'input[autocomplete~="email" i]',
   'input[type="email"]',
   'input[type="text"][autocomplete~="username" i]',
   'input[type="text"][name*="user" i]',
   'input[type="text"][name*="email" i]',
   'input[type="text"][id*="user" i]',
   'input[type="text"][id*="email" i]',
+  // Popular SSO / email-first login field names (Microsoft, Google, Slack, …).
+  'input[name="loginfmt" i]',
+  'input[name="identifier" i]',
+  'input[name*="login" i]',
+  'input[id*="login" i]',
+  'input[name*="account" i]',
+  'input[id*="account" i]',
+  'input[data-qa="login_email"]',
+  'input[data-qa*="login_email" i]',
+  'input[data-testid*="login" i][type="email"]',
+  'input[data-testid*="username" i]',
+  'input[data-testid*="email" i]',
 ] as const;
+
+const usernameCandidateSelector = [
+  'input:not([type])',
+  'input[type="text"]',
+  'input[type="email"]',
+  'input[type="tel"]',
+].join(',');
+
+/** Account-identity fields: username, email, Microsoft loginfmt, Slack login_email. */
+const usernamePositivePattern =
+  /\b(?:user(?:\s*name)?|e[\s-]*mail|login(?:\s*fmt)?|log\s*in|sign[\s-]*in|account|identifier|phone(?:\s*number)?|skype)\b/u;
+
+/** Ignore newsletter / search / contact fields that happen to accept email. */
+const usernameNegativePattern =
+  /\b(?:newsletter|subscribe|marketing|promo|search|filter|recipient|contact\s*us|feedback|support\s*email)\b/u;
 
 export const oneTimeCodeFieldSelectors = [
   'input[autocomplete~="one-time-code" i]',
@@ -130,9 +158,17 @@ export function findUsernameFields(
   root: ParentNode = document,
   formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
-  return findFields(root, usernameFieldSelectors.join(","), formScope).filter(
-    (field) => !field.disabled && !field.readOnly && isRenderedInput(field),
-  );
+  const seen = new Set<HTMLInputElement>();
+  const fields: HTMLInputElement[] = [];
+  for (const field of [
+    ...findFields(root, usernameFieldSelectors.join(","), formScope),
+    ...findFields(root, usernameCandidateSelector, formScope),
+  ]) {
+    if (seen.has(field) || !looksLikeUsernameField(field)) continue;
+    seen.add(field);
+    fields.push(field);
+  }
+  return fields;
 }
 
 function expandIdentityText(value: string): string {
@@ -163,7 +199,7 @@ function associatedLabelText(field: HTMLInputElement): string {
   return parts.join(" ");
 }
 
-function oneTimeCodeIdentityText(field: HTMLInputElement): string {
+function fieldIdentityText(field: HTMLInputElement): string {
   return expandIdentityText(
     [
       field.name,
@@ -172,9 +208,91 @@ function oneTimeCodeIdentityText(field: HTMLInputElement): string {
       field.title,
       field.getAttribute("aria-label") ?? "",
       field.getAttribute("autocomplete") ?? "",
+      field.getAttribute("data-qa") ?? "",
+      field.getAttribute("data-testid") ?? "",
       associatedLabelText(field),
     ].join(" "),
   );
+}
+
+function oneTimeCodeIdentityText(field: HTMLInputElement): string {
+  return fieldIdentityText(field);
+}
+
+function hasLoginContext(field: HTMLInputElement): boolean {
+  const form = field.form;
+  if (form) {
+    const formIdentity = expandIdentityText(
+      [form.id, form.className, form.getAttribute("action") ?? "", form.name].join(
+        " ",
+      ),
+    );
+    if (/\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(formIdentity)) {
+      return true;
+    }
+  }
+  let container: HTMLElement | undefined = field.parentElement ?? undefined;
+  let depth = 0;
+  while (container && depth < 6) {
+    const identity = expandIdentityText(
+      [container.id, container.className, container.getAttribute("role") ?? ""].join(
+        " ",
+      ),
+    );
+    if (/\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(identity)) {
+      return true;
+    }
+    container = container.parentElement ?? undefined;
+    depth += 1;
+  }
+  const doc = field.ownerDocument;
+  const advanceControl = (form ?? field.parentElement)?.querySelector(
+    'button[type="submit"], input[type="submit"], button:not([type])',
+  );
+  if (advanceControl) {
+    const label = expandIdentityText(
+      [
+        advanceControl.textContent ?? "",
+        advanceControl.getAttribute("aria-label") ?? "",
+        (advanceControl as HTMLInputElement).value ?? "",
+      ].join(" "),
+    );
+    if (
+      /\b(?:next|continue|sign[\s-]*in|log[\s-]*in|verify)\b/u.test(label)
+    ) {
+      return true;
+    }
+  }
+  const path = `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`;
+  return /\b(?:login|signin|sign-in|account|oauth|sso|microsoftonline|live\.com)\b/iu.test(
+    path,
+  );
+}
+
+function looksLikeUsernameField(field: HTMLInputElement): boolean {
+  if (
+    field.disabled ||
+    field.readOnly ||
+    !isRenderedInput(field) ||
+    !["text", "email", "tel"].includes(field.type)
+  ) {
+    return false;
+  }
+  if (
+    hasAutocompleteToken(field, "username") ||
+    hasAutocompleteToken(field, "email")
+  ) {
+    return true;
+  }
+  const identity = fieldIdentityText(field);
+  if (!identity || usernameNegativePattern.test(identity)) {
+    return false;
+  }
+  if (usernamePositivePattern.test(identity)) {
+    return true;
+  }
+  // Bare type=email only counts inside a login-looking container / path.
+  return field.type === "email" && hasLoginContext(field);
 }
 
 function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
@@ -358,16 +476,24 @@ function nearestUnownedAuthContainer(
   return root;
 }
 
+function isAuthUsernameField(field: HTMLInputElement): boolean {
+  return (
+    hasAutocompleteToken(field, "username") ||
+    hasAutocompleteToken(field, "email") ||
+    looksLikeUsernameField(field)
+  );
+}
+
 export function summarizeAuthenticationWorkflowForms(
   root: ParentNode = document,
 ): PasswordFormObservation[] {
   const allPasswordFields = findPasswordFields(root);
   const allUsernameFields = findUsernameFields(root);
   const allOneTimeCodeFields = findOneTimeCodeFields(root);
+  const authUsernameFields = allUsernameFields.filter(isAuthUsernameField);
   const authFieldCount =
     allPasswordFields.length +
-    allUsernameFields.filter((field) => hasAutocompleteToken(field, "username"))
-      .length +
+    authUsernameFields.length +
     allOneTimeCodeFields.length;
   if (authFieldCount === 0) {
     if (!pageHasPasskeyControl(root)) return [];
@@ -388,9 +514,7 @@ export function summarizeAuthenticationWorkflowForms(
     return (
       summary.passwordFieldCount > 0 ||
       summary.oneTimeCodeFieldCount > 0 ||
-      findUsernameFields(root, formScope).some((field) =>
-        hasAutocompleteToken(field, "username"),
-      )
+      findUsernameFields(root, formScope).some(isAuthUsernameField)
     );
   });
   const observations: PasswordFormObservation[] = forms.map((form) => ({
@@ -400,7 +524,7 @@ export function summarizeAuthenticationWorkflowForms(
   }));
   const unownedFields = [
     ...allPasswordFields,
-    ...allUsernameFields,
+    ...authUsernameFields,
     ...allOneTimeCodeFields,
   ].filter((field) => !field.form);
   const unownedContainers = new Set(
@@ -447,12 +571,17 @@ export function fillLoginCredentials(
   formScope?: PasswordFormScope,
 ): boolean {
   const passwordFields = findPasswordFields(root, formScope);
-  if (passwordFields.length === 0) return false;
-
-  const passwordField = passwordFields[0];
   const usernameCandidates = findUsernameFields(root, formScope);
   const usernameField = usernameCandidates[0];
 
+  if (passwordFields.length === 0) {
+    if (!usernameField) return false;
+    setNativeInputValue(usernameField, credentials.username);
+    usernameField.focus();
+    return true;
+  }
+
+  const passwordField = passwordFields[0];
   if (usernameField) {
     setNativeInputValue(usernameField, credentials.username);
   }
@@ -507,9 +636,20 @@ export function submitLoginForm(
   formScope?: PasswordFormScope,
 ): boolean {
   const passwordField = findPasswordFields(root, formScope)[0];
-  if (!passwordField) return false;
-  const form = passwordField.form;
-  if (!form) return false;
+  const usernameField = findUsernameFields(root, formScope)[0];
+  const anchor = passwordField ?? usernameField;
+  if (!anchor) return false;
+
+  // Email-first / multi-step logins often use a type=button "Next" control
+  // rather than a real submit. Prefer an advance control before requestSubmit.
+  if (!passwordField && clickAdvanceControl(root, formScope)) {
+    return true;
+  }
+
+  const form = anchor.form;
+  if (!form) {
+    return clickAdvanceControl(root, formScope);
+  }
 
   const submitControl = form.querySelector<
     HTMLButtonElement | HTMLInputElement
@@ -525,6 +665,44 @@ export function submitLoginForm(
   }
   if (typeof form.requestSubmit === "function") {
     return observeSubmit(form, () => form.requestSubmit());
+  }
+  return false;
+}
+
+function clickAdvanceControl(
+  root: ParentNode,
+  formScope?: PasswordFormScope,
+): boolean {
+  const queryRoot =
+    formScope?.kind === "owned" ? formScope.owner : root;
+  const controls = Array.from(
+    queryRoot.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+      'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
+    ),
+  );
+  for (const control of controls) {
+    if (
+      control.disabled ||
+      control.getAttribute("aria-disabled") === "true"
+    ) {
+      continue;
+    }
+    const label = expandIdentityText(
+      [
+        control.textContent ?? "",
+        control.getAttribute("aria-label") ?? "",
+        control.value ?? "",
+      ].join(" "),
+    );
+    if (
+      !/\b(?:next|continue|sign[\s-]*in|log[\s-]*in|submit|verify)\b/u.test(
+        label,
+      )
+    ) {
+      continue;
+    }
+    control.click();
+    return true;
   }
   return false;
 }

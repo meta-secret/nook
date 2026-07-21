@@ -424,12 +424,28 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await spaPage.goto(`${loginServer.origin}/spa`)
     const spaWidget = spaPage.locator('#nook-auth-widget')
     await expect(
-      spaWidget.getByRole('button', { name: 'Take over' }),
+      spaWidget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
     await spaPage.getByRole('button', { name: 'Next' }).click()
     await expect(
       spaWidget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
+
+    const microsoftPage = await context.newPage()
+    await microsoftPage.goto(`${loginServer.origin}/microsoft`)
+    const microsoftWidget = microsoftPage.locator('#nook-auth-widget')
+    await expect(
+      microsoftWidget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
+    await expect(microsoftPage.locator('[name="loginfmt"]')).toBeVisible()
+
+    const slackPage = await context.newPage()
+    await slackPage.goto(`${loginServer.origin}/slack`)
+    const slackWidget = slackPage.locator('#nook-auth-widget')
+    await expect(
+      slackWidget.getByRole('button', { name: 'Continue with Nook' }),
+    ).toBeVisible()
+    await expect(slackPage.locator('[data-qa="login_email"]')).toBeVisible()
 
     const sentinelPage = await context.newPage()
     const sentinelUrl =

@@ -200,9 +200,15 @@ The layers have intentionally different responsibilities:
   contents or secret material;
 - Simple Vault remains the complete management and recovery surface.
 
-The initial production slice classifies login, signup, password-change, and
-standalone one-time-code structures through Rust/WASM. It performs explicit
-login selection/fill/submit and TOTP selection/fill. It shows a
+The initial production slice classifies login (including email-first /
+username-only steps used by Microsoft, Slack, and similar SSO shells),
+signup, password-change, and standalone one-time-code structures through
+Rust/WASM. Username detection uses autocomplete tokens plus identity heuristics
+(`loginfmt`, `login_email`, account/email labels) while still ignoring
+newsletter-style email fields. Credential matching may use an explicit
+related-login host allowlist so a saved `microsoft.com` login can fill on
+`login.microsoftonline.com`. It performs explicit login selection/fill/submit
+and TOTP selection/fill. It shows a
 verification-wait state only after a site form was actually submitted; a
 filled-only login or TOTP remains at the current checkpoint for manual review
 and submission. After a login or signup form submit, Nook Pilot stages
