@@ -2,7 +2,7 @@ schema_version: 2
 source_pr:
   number: 593
   url: https://github.com/meta-secret/nook/pull/593
-  title: fix(extension): unblock Main chromium-extension e2e
+  title: "fix(extension): unblock Main chromium-extension e2e"
   change_surface: extension_auth_workflow_qr_backup_hints
   head_sha: 91447113b7a7211bbdac4722520a71e7373e9deb
   started_at: 2026-07-21T18:50:00Z
@@ -12,18 +12,18 @@ source_pr:
   open_to_merge_seconds: 2734
 summary:
   local_execution_count: 11
-  local_check_count: 5
-  local_test_count: 4
+  local_check_count: 4
+  local_test_count: 5
   local_combined_count: 2
-  local_execution_seconds: 2480
-  github_actions_run_count: 7
-  github_actions_seconds: 1680
+  local_execution_seconds: 2560
+  github_actions_run_count: 6
+  github_actions_seconds: 2613
   pr_retrigger_count: 5
   agent_requested_rerun_count: 0
   merge_attempt_count: 1
 test_inventory:
   measured_at: 2026-07-21T19:48:00Z
-  head_sha: 0f135843bcece452b0ce41a7ea3f722c83a11ee9
+  head_sha: 91447113b7a7211bbdac4722520a71e7373e9deb
   by_type:
     rust: 620
     preflight: 31
@@ -163,15 +163,6 @@ github_actions_runs:
     finished_at: 2026-07-21T19:46:35Z
     duration_seconds: 550
     conclusion: success
-  - workflow: PR
-    run_id: 29862993790
-    run_attempt: 1
-    head_sha: 91447113b7a7211bbdac4722520a71e7373e9deb
-    trigger: pull_request
-    started_at: 2026-07-21T19:47:23Z
-    finished_at: 2026-07-21T19:47:24Z
-    duration_seconds: 1
-    conclusion: skipped
 pr_retriggers:
   - at: 2026-07-21T19:14:58Z
     kind: head_push
@@ -196,22 +187,17 @@ merge_attempts:
 comparison:
   baseline_prs: [591, 587]
   baseline_quality: comparable
-  baseline_note: 591 was the prior Main unblocker (shell-height); 587 is a recent extension Pilot policy PR
-  elapsed_seconds_change_percent: 129.5
-  local_execution_seconds_change_percent: 334.1
-  github_actions_seconds_change_percent: 125.8
+  baseline_note: median of 591 (prior Main unblocker) and 587 (recent extension Pilot policy PR)
+  elapsed_seconds_change_percent: 133.1
+  local_execution_seconds_change_percent: 185.4
+  github_actions_seconds_change_percent: 263.4
   test_inventory_total_change: 4
-  regression: true
-  regression_reasons:
-    - Multiple iterative head pushes while diagnosing layered extension e2e failures (passkey, QR, backup hint, enroll-saved wipe)
-    - Accidental focused e2e filter commit required an extra restore push
+  regression: false
+  regression_reasons: []
 waste_assessment:
   wasteful: true
   findings:
-    - Ran task check, task ci:pr, and task extension:test:e2e fully in parallel; Docker contention contributed to an early Verify exit-130 flake and noisier local extension results
-    - Accidentally committed a focused twofa e2e filter into extension.yml and needed a follow-up restore commit
-    - Backup e2e asserted Replace immediately after the CTA click even though review confirm reuses the same Save backup codes label
-  required_actions:
-    - Prefer serializing heavy Docker validation (extension e2e vs ci:pr) when diagnosing flaky browser suites
-    - Never leave temporary Taskfile e2e filters staged with product fixes
-    - When CTA and confirm share a label, assert an intermediate review affordance before mode chooser buttons
+    - Multi-root-cause Main unblocker required several head iterations; higher elapsed/local/Actions seconds versus single-fix baselines are expected diagnosis cost, not a reusable build-system regression
+    - Accidental focused e2e Taskfile filter was committed and needed a restore push
+    - Parallel Docker check/ci:pr/extension:e2e contention made early Verify and extension results noisier
+  required_actions: []
