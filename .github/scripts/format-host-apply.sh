@@ -14,9 +14,8 @@ trap 'rm -f "$tmp" "$patch"' EXIT
 
 set -o pipefail
 status=0
-# Stream progress to the terminal while capturing for patch extraction.
-# Invoke sealed format tasks through Taskfile deps (internal docker:* tasks cannot
-# be called as bare CLI targets in Task v3.42+).
+# Use `task format:diff` so sealed format runs through Taskfile deps. Calling
+# internal tasks like `docker:task` from the CLI exits 202 on go-task v3.42+.
 {
   task format:diff
 } 2>&1 | tee "$tmp" || status=$?

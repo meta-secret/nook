@@ -47,4 +47,13 @@ empty="$(printf '%s\n' '==> Already formatted; no changes.' | awk -f "$extract_a
   exit 1
 }
 
+# Guard the known failure mode: CLI invocation of internal docker:task exits 202.
+script="$(cat "$scripts_dir/format-host-apply.sh")"
+printf '%s\n' "$script" | grep -q 'task format:diff' \
+  || { echo 'format-host-apply test: expected task format:diff entrypoint' >&2; exit 1; }
+printf '%s\n' "$script" | grep -Eq 'task docker:task( |$)' \
+  && { echo 'format-host-apply test: must not CLI-invoke internal docker:task' >&2; exit 1; }
+printf '%s\n' "$script" | grep -Eq 'task docker:rust:task( |$)' \
+  && { echo 'format-host-apply test: must not CLI-invoke internal docker:rust:task' >&2; exit 1; }
+
 echo 'format-host-apply test: ok'

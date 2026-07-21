@@ -1,0 +1,155 @@
+schema_version: 2
+source_pr:
+  number: 577
+  url: https://github.com/meta-secret/nook/pull/577
+  title: Reject standalone Sentinel enrollment announcements
+  change_surface: vault_sentinel_genesis_invitation_hardening
+  head_sha: aeee7e341f38e754ced59aff600b23a95d0c4157
+  started_at: 2026-07-21T07:32:00Z
+  opened_at: 2026-07-21T07:48:28Z
+  merged_at: 2026-07-21T08:14:42Z
+  elapsed_seconds: 2562
+  open_to_merge_seconds: 1574
+summary:
+  local_execution_count: 11
+  local_check_count: 8
+  local_test_count: 2
+  local_combined_count: 1
+  local_execution_seconds: 2147
+  github_actions_run_count: 2
+  github_actions_seconds: 1228
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T08:16:30Z
+  head_sha: aeee7e341f38e754ced59aff600b23a95d0c4157
+  by_type:
+    rust: 594
+    preflight: 30
+    web_unit: 187
+    e2e: 184
+  total: 995
+local_executions:
+  - command: cargo test -p nook-auth2 auth::sentinel_genesis
+    category: test
+    started_at: 2026-07-21T07:34:50Z
+    finished_at: 2026-07-21T07:35:27Z
+    duration_seconds: 37
+    outcome: passed
+    reason: domain_tests_for_announcement_rejection
+  - command: task format
+    category: check
+    started_at: 2026-07-21T07:35:35Z
+    finished_at: 2026-07-21T07:46:02Z
+    duration_seconds: 627
+    outcome: failed
+    reason: format_host_apply_calls_internal_docker_task_exit_202
+  - command: task format
+    category: check
+    started_at: 2026-07-21T07:46:10Z
+    finished_at: 2026-07-21T07:46:21Z
+    duration_seconds: 11
+    outcome: failed
+    reason: format_host_apply_calls_internal_docker_task_exit_202
+  - command: task format:diff
+    category: check
+    started_at: 2026-07-21T07:46:40Z
+    finished_at: 2026-07-21T07:46:58Z
+    duration_seconds: 18
+    outcome: passed
+    reason: workaround_apply_sealed_format_patch
+  - command: task format:diff
+    category: check
+    started_at: 2026-07-21T07:47:10Z
+    finished_at: 2026-07-21T07:47:28Z
+    duration_seconds: 18
+    outcome: passed
+    reason: second_host_apply_before_commit
+  - command: task pr:preflight PR=577
+    category: check
+    started_at: 2026-07-21T07:48:49Z
+    finished_at: 2026-07-21T07:48:55Z
+    duration_seconds: 6
+    outcome: passed
+    reason: initial_readiness_snapshot_pr_in_progress
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T07:48:49Z
+    finished_at: 2026-07-21T07:58:50Z
+    duration_seconds: 601
+    outcome: passed
+    reason: parallel_final_local_gate
+  - command: E2E_SPEC="e2e/device-key-protection.spec.ts e2e/sentinel-unlock-ceremony.spec.ts e2e/vault-architecture-modes.spec.ts e2e/demos/sentinel-invitation.demo.spec.ts" task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T07:49:21Z
+    finished_at: 2026-07-21T07:58:08Z
+    duration_seconds: 527
+    outcome: passed
+    reason: focused_sentinel_invitation_e2e
+  - command: task pr:ready PR=577
+    category: check
+    started_at: 2026-07-21T07:58:55Z
+    finished_at: 2026-07-21T07:59:01Z
+    duration_seconds: 6
+    outcome: failed
+    reason: head_behind_main_by_2
+  - command: task format:diff
+    category: check
+    started_at: 2026-07-21T07:59:04Z
+    finished_at: 2026-07-21T08:03:54Z
+    duration_seconds: 290
+    outcome: passed
+    reason: post_rebase_format_hygiene
+  - command: task pr:ready PR=577
+    category: check
+    started_at: 2026-07-21T08:14:25Z
+    finished_at: 2026-07-21T08:14:31Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29811828813
+    run_attempt: 1
+    head_sha: cdc9fdb0f21bf245a4d048963c338f3d2195bf6a
+    trigger: pull_request
+    started_at: 2026-07-21T07:48:32Z
+    finished_at: 2026-07-21T07:58:33Z
+    duration_seconds: 601
+    conclusion: success
+  - workflow: PR
+    run_id: 29812818212
+    run_attempt: 1
+    head_sha: aeee7e341f38e754ced59aff600b23a95d0c4157
+    trigger: pull_request
+    started_at: 2026-07-21T08:03:57Z
+    finished_at: 2026-07-21T08:14:24Z
+    duration_seconds: 627
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T08:03:54Z
+    reason: rebase_onto_origin_main_for_freshness
+merge_attempts:
+  - at: 2026-07-21T08:14:42Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [569, 567]
+  baseline_quality: comparable
+  baseline_note: Recent vault/web UI PRs with e2e and Docker validation
+  elapsed_seconds_change_percent: -51.0
+  local_execution_seconds_change_percent: -49.0
+  github_actions_seconds_change_percent: -41.0
+  test_inventory_total_change: -27
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - task format failed twice with exit 202 because format-host-apply.sh invokes internal task docker:task from the CLI; agents must fall back to task format:diff and manually apply the patch.
+    - One avoidable PR CI cycle came from rebasing after readiness found the head behind main; parallel local gates were otherwise used correctly.
+  required_actions:
+    - Fix format-host-apply.sh to invoke format through Taskfile deps (or an exported wrapper) so task format does not call internal docker:task from the CLI.
