@@ -1,16 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { findMockAuthAccount, MOCK_AUTH_ACCOUNTS } from '../../accounts'
+  import { MOCK_AUTH_ACCOUNTS } from '../../accounts'
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
-  import { navigate, recordLoginSubmission } from '../lib/navigation'
+  import { completePlainLogin } from '../lib/plain-login'
 
   const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
     (account) => !account.totpSecret,
   )!
 
   let error = $state('')
-  let username = $state(fixtureAccount.username)
-  let password = $state(fixtureAccount.password)
 
   onMount(() => {
     ;(
@@ -22,13 +20,15 @@
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
-    recordLoginSubmission(username, password)
-    const account = findMockAuthAccount(username, password)
-    if (!account || account.totpSecret) {
+    const form = event.currentTarget
+    if (!(form instanceof HTMLFormElement)) return
+    const username =
+      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? ''
+    const password =
+      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
+    if (completePlainLogin(username, password) === 'invalid') {
       error = 'Invalid username or password.'
-      return
     }
-    navigate('/plain/success')
   }
 </script>
 
@@ -45,7 +45,6 @@
         autocomplete="username"
         name="username"
         type="email"
-        bind:value={username}
       /></label
     >
     <label
@@ -53,7 +52,6 @@
         autocomplete="current-password"
         name="password"
         type="password"
-        bind:value={password}
       /></label
     >
     <button type="submit">Sign in</button>

@@ -278,6 +278,17 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await (await getManager()).unlockPinDeviceIdentity(pin)
       return { ok: true, device: await activateSession() }
     }
+    case 'nook:extension-session-lock': {
+      // Mirror idle expiry so callers (including e2e) can force a locked session.
+      if (sessionTimer) clearTimeout(sessionTimer)
+      sessionTimer = undefined
+      const activeManager = manager
+      manager = undefined
+      activeManager?.lockDeviceIdentity()
+      activeManager?.free()
+      chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
+      return { ok: true }
+    }
     case 'nook:extension-session-seal-identity-handoff': {
       const payload = messagePayload(message)
       const recipientPublicKey = payload.recipientPublicKey

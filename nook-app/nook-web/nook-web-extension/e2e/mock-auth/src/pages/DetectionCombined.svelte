@@ -1,5 +1,33 @@
+<script lang="ts">
+  import { completePlainLogin, readLoginFields } from '../lib/plain-login'
+
+  let error = $state('')
+
+  function onLoginSubmit(event: SubmitEvent) {
+    event.preventDefault()
+    const form = event.currentTarget
+    if (!(form instanceof HTMLFormElement)) return
+    const { username, password } = readLoginFields(
+      form,
+      '[name="email"]',
+      '[name="password"]',
+    )
+    if (completePlainLogin(username, password) === 'invalid') {
+      error = 'Invalid username or password.'
+    }
+  }
+
+  function onSignupSubmit(event: SubmitEvent) {
+    event.preventDefault()
+  }
+</script>
+
 <main>
-  <form id="signup-form">
+  <p data-testid="mock-auth-scenario">combined-login</p>
+  {#if error}
+    <p class="error" role="alert">{error}</p>
+  {/if}
+  <form id="signup-form" onsubmit={onSignupSubmit}>
     <input
       autocomplete="section-signup username"
       name="signup-email"
@@ -12,7 +40,7 @@
     />
     <button type="submit">Create account</button>
   </form>
-  <form id="login-form">
+  <form id="login-form" onsubmit={onLoginSubmit}>
     <input autocomplete="section-login username" name="email" type="email" />
     <input
       autocomplete="section-login current-password webauthn"

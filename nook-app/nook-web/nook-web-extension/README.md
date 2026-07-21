@@ -112,8 +112,11 @@ That suite includes:
   passkey unavailability, protect the extension device with PIN `123456`, pair
   a vault, and complete Continue with Nook / Fill 2FA against mock auth — no
   real third-party sites.
+- Expanded PIN Pilot coverage (`e2e/mock-auth-pilot-coverage.spec.ts`):
+  multi-login chooser, no-match / empty 2FA, quirk fill-to-success, wrong
+  password evidence, lock mid-flow, and multi-authenticator chooser (#547).
 
-Tracked as #534 (service #535, PIN Pilot e2e #536).
+Tracked as #534 (service #535, PIN Pilot e2e #536) and #547.
 
 To test the exact extension ZIP deployed by development or a PR, run the
 disposable hosted smoke. It verifies the hosted metadata, checksum, archive,

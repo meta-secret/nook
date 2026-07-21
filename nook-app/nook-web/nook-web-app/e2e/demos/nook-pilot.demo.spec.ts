@@ -21,6 +21,8 @@ function installChromeStub(localizedMessages: Record<string, ChromeMessage>) {
   }
   type RuntimeCallback = (response?: unknown) => void
 
+  // First Continue shows unlock (locked session); later Continues use chooser.
+  let loginOptionsCalls = 0
   const responseFor = (message: RuntimeMessage): unknown => {
     switch (message.type) {
       case 'nook:authentication-workflow-snapshot':
@@ -36,6 +38,10 @@ function installChromeStub(localizedMessages: Record<string, ChromeMessage>) {
           },
         }
       case 'nook:website-login-options':
+        loginOptionsCalls += 1
+        if (loginOptionsCalls === 1) {
+          return { ok: true, status: 'locked', accounts: [] }
+        }
         return {
           ok: true,
           status: 'ready',
@@ -235,6 +241,14 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
+  await demoBeat(page)
+
+  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await expect(
+    widget.getByText(
+      'Unlock Nook in the companion window, then click Continue with Nook again.',
+    ),
+  ).toBeVisible()
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
