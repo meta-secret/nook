@@ -141,11 +141,6 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   await expect(page.locator('input[name="Code"]')).toHaveValue('482913', {
     timeout: 15_000,
   })
-  await expect(
-    widget.getByText(
-      /Verification code filled|Complete verification|Staging the authenticator/i,
-    ),
-  ).toBeVisible({ timeout: 15_000 })
   await demoBeat(page)
 
   await page.getByRole('button', { name: 'Verify' }).click()

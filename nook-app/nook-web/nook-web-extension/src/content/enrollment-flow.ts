@@ -236,7 +236,6 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
 
   if (
     verdict.name === 'conflicting' ||
-    verdict.name === 'timeout' ||
     (verdict.name === 'insufficient' && observation.errorMarkerPresent)
   ) {
     stopPendingEnrollmentWatch()
@@ -250,6 +249,15 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
     )
     watch.host.setBusy(false)
     renderEnrollmentActions(watch.host, detectEnrollmentHints())
+    return
+  }
+
+  if (verdict.name === 'timeout') {
+    // Keep the staged secret; ask the user to finish verification or cancel.
+    setHostDescription(
+      watch.host,
+      watch.host.translatedMessage('widgetEnrollVerifyPending'),
+    )
   }
 }
 
