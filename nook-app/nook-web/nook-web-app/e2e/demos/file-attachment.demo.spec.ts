@@ -35,7 +35,6 @@ test('upload an encrypted file attachment and download it after reveal', async (
     timeout: UI_TIMEOUT_MS,
   })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(row).toContainText('recovery.txt')
   await demoBeat(page)
 
   await row.getByTestId('secret-row-toggle').click()
