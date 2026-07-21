@@ -121,9 +121,13 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
 - **Harness Verification:**
   - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. Local `task check` and PR CI use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
-  - Before committing, developers must run:
-    1. `task format` - Automatically formats all Rust and JS/TS/Svelte files.
-    2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and web builds.
+  - Before every push, agents and developers must run **`task format`
+    unconditionally**. It formats Rust and JS/TS/Svelte inside sealed Docker
+    images **and applies the diff to the host working tree**. Sealed-only
+    commands such as `task extension:format` do not write the host and must not
+    be the sole format step. After push, run `task check` in parallel with PR CI
+    (format check, Clippy, vitest, svelte-check, web build). See
+    [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
 
 ### Dockerfile cache mounts — never use them
 
@@ -209,7 +213,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head and inspect feedback already present. Do not request or wait for external reviews.
+- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, run `task check` on the latest pushed head (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews.
 - **Record PR statistics after merge.** Follow
   [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
   completed YAML (including repository test counts by type and absolute total)

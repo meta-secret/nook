@@ -63,7 +63,10 @@ tasks:
         vars: { TASK: _extension:smoke:hosted }
 
   extension:format:
-    desc: Format the browser extension in Docker.
+    desc: >-
+      Format the browser extension inside the sealed image only (does not write
+      the host). Prefer `task format`, which formats Rust + web + extension and
+      applies the sealed-image diff to the host working tree.
     deps:
       - setup
     cmds:
