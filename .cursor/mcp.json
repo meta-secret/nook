@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "bash",
+      "args": [
+        ".codex/run-playwright-mcp.sh",
+        "--caps=devtools",
+        "--isolated",
+        "--block-service-workers",
+        "--ignore-https-errors",
+        "--allowed-origins=http://127.0.0.1:5173;http://localhost:5173;https://127.0.0.1:5173;https://localhost:5173;ws://127.0.0.1:5173;ws://localhost:5173;wss://127.0.0.1:5173;wss://localhost:5173;http://127.0.0.1:5175;http://localhost:5175;https://127.0.0.1:5175;https://localhost:5175;ws://127.0.0.1:5175;ws://localhost:5175;wss://127.0.0.1:5175;wss://localhost:5175",
+        "--init-page=.codex/playwright-local-only.ts",
+        "--test-id-attribute=data-testid",
+        "--console-level=warning"
+      ]
+    }
+  }
+}
