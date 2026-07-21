@@ -31,7 +31,9 @@ Default PR-first loop:
    deploy research catalog` workflows while local validation runs.
 5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
    logs for web/e2e failures, fix locally, and push the completed fix; the
-   synchronize event re-evaluates the refreshed repository-owned check.
+   synchronize event re-evaluates the refreshed repository-owned check. This
+   includes Knip unused findings, jscpd clone/duplicate findings, and every
+   other mechanical gate — fix the code, do not silence the check.
 6. **Settle existing review feedback** — inspect the current comments and
    reviews, reply to every actionable human or automated finding, and resolve
    each thread. Do not request or wait for optional reviewers.
@@ -144,9 +146,15 @@ completed fix, not an exploratory checkpoint.
 When investigating failures, use sources in order:
 
 1. **Tests** — `task rust:test`, `task web:test`, e2e Playwright output.
-2. **Static analysis** — `task check` (fmt, clippy, svelte-check, eslint).
+2. **Static analysis** — `task check` (fmt, clippy, svelte-check, eslint, Knip
+   unused, jscpd clones/duplicates, prettier).
 3. **Persisted app logs** — **most important after 1–2.** Vault unlock, sync, WASM
    tracing, and console capture live in IndexedDB (`/app-logs`, `nook-app-logs.json`).
+
+Every failing finding in step 1–2 must be fixed in the same task (delete/wire
+dead code, extract shared code for clones, correct types/lints/tests). Do not
+raise Knip/jscpd thresholds or ignore authored sources to make the gate pass.
+See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
 
 Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
@@ -405,6 +413,7 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call
   `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never merge after a Nook PR-test failure without green local validation on the latest head** (`task ci:pr` for broad failures; a matching subset is enough for trivial fmt/lint).
+- **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit;
   once it succeeds, the task-owning agent must squash-merge without asking
   again. Workflows do not blindly merge based on a check event.

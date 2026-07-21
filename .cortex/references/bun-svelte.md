@@ -38,18 +38,25 @@ not recover on its own.
 
 ## 3. E2e tests
 
-Unused TypeScript and Svelte code is enforced by `bun run unused` in both
-`nook-web-app` and `nook-web-research`. The normal app `bun run lint` / `task
-check` path covers the vault/shared/extension graph; the research package's
-`bun run check` and research-only workflow run its workspace-scoped Knip graph
-with the correct local `$lib` mapping. Knip rejects unreachable files and exports
-and stays pinned to 5.88 until the sibling vault/extension packages become a real
-root workspace. TypeScript and ESLint reject unused locals and parameters inside
-`.ts`, `.svelte.ts`, and `.svelte` files; the extension `check` script explicitly
-lints its build scripts, Playwright config, and E2E spec. Public class methods
-are not covered by those tools because they may be called through an exported
-object; verify suspected state-controller methods at their component call sites
-rather than treating a missing import as proof that they are dead.
+Unused TypeScript and Svelte code is enforced by `bun run unused` (Knip) in both
+`nook-web-app` and `nook-web-research`. Copy/paste clones are enforced by
+`bun run duplicates` (jscpd) from the app lint path across authored `nook-app`
+and `preflight` sources. Both run under `bun run lint` / `task check` for the
+vault app; the research package's `bun run check` and research-only workflow run
+its workspace-scoped Knip graph with the correct local `$lib` mapping. Knip
+rejects unreachable files and exports and stays pinned to 5.88 until the sibling
+vault/extension packages become a real root workspace. TypeScript and ESLint
+reject unused locals and parameters inside `.ts`, `.svelte.ts`, and `.svelte`
+files; the extension `check` script explicitly lints its build scripts,
+Playwright config, and E2E spec. Public class methods are not covered by those
+tools because they may be called through an exported object; verify suspected
+state-controller methods at their component call sites rather than treating a
+missing import as proof that they are dead.
+
+**Agent duty:** Knip unused findings and jscpd clone findings are hard failures.
+Delete or wire unused code; extract shared helpers for clones. Do not raise
+thresholds, add authored-code ignores, or leave the task done while either gate
+is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
 - **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
 - Full stub Playwright: `task web:test:e2e` — runs the `stable` IndexedDB group at 6 workers, then the provider/sync `unstable` group at 4; runs on main CI and explicitly for PR validation.
