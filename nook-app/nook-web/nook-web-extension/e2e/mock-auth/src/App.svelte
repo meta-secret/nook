@@ -4,6 +4,7 @@
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
+  import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
   import NotFound from './pages/NotFound.svelte'
@@ -43,6 +44,10 @@
   <DetectionSignup />
 {:else if pathname === '/signup/success'}
   <Success flow="signup" />
+{:else if pathname === '/password-change'}
+  <DetectionPasswordChange />
+{:else if pathname === '/password-change/success'}
+  <Success flow="password-change" />
 {:else if pathname === '/otp'}
   <DetectionOtp />
 {:else if pathname === '/otp-hidden'}

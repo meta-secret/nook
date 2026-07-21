@@ -213,10 +213,13 @@ navigation alone never counts. Content scripts report only bounded non-secret
 signals (`data-nook-auth-outcome`, auth-field presence, SPA mutation, iframe
 context, elapsed time). Site-specific plugins may add markers through that
 adapter attribute; they must not scrape secrets or bypass the Rust classifier.
-Password generation for signup, verified password-change replacement
-automation, and Pilot-guided 2FA enrollment ceremony remain separately tracked
-flight plans; until each is implemented, Nook Pilot identifies those
-checkpoints and yields to manual control instead of implying automation.
+Signup and password-change pages may offer **Generate password** through
+Rust/WASM; generated values fill only `new-password` fields and stay in page
+memory until an evidence-gated Save / Update. CAPTCHA, terms acceptance, and
+email-verification style checkpoints force Take over. Pilot-guided 2FA
+enrollment ceremony remains a separately tracked flight plan; until it is
+implemented, Nook Pilot identifies that checkpoint and yields to manual control
+instead of implying automation.
 
 ### In-Page HUD
 

@@ -145,6 +145,10 @@ type NookLocaleCatalog = {
       signup_description: string
       password_change_title: string
       password_change_description: string
+      generate_password: string
+      generate_password_working: string
+      generate_password_failed: string
+      generated_password_filled: string
       save_login_title: string
       save_login_description: string
       update_login_title: string
@@ -262,6 +266,18 @@ async function buildChromeLocales() {
         },
         widgetPasswordChangeDescription: {
           message: catalog.extension.widget.password_change_description,
+        },
+        widgetGeneratePassword: {
+          message: catalog.extension.widget.generate_password,
+        },
+        widgetGeneratePasswordWorking: {
+          message: catalog.extension.widget.generate_password_working,
+        },
+        widgetGeneratePasswordFailed: {
+          message: catalog.extension.widget.generate_password_failed,
+        },
+        widgetGeneratedPasswordFilled: {
+          message: catalog.extension.widget.generated_password_filled,
         },
         widgetSaveLoginTitle: {
           message: catalog.extension.widget.save_login_title,

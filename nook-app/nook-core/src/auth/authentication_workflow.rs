@@ -82,6 +82,8 @@ pub struct AuthenticationPageObservation {
     pub new_password_field_count: u32,
     pub generic_password_field_count: u32,
     pub one_time_code_field_count: u32,
+    /// CAPTCHA, legal acceptance, email verification, or similar human gate.
+    pub manual_checkpoint_present: bool,
 }
 
 impl AuthenticationPageObservation {
@@ -170,20 +172,38 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.current_password_field_count > 0 && observation.new_password_field_count > 0 {
+        let action = if observation.manual_checkpoint_present {
+            AuthenticationWorkflowAction::TakeOver
+        } else {
+            AuthenticationWorkflowAction::GeneratePassword
+        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::PasswordChange,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::GeneratePassword,
+            if observation.manual_checkpoint_present {
+                AuthenticationWorkflowStage::Manual
+            } else {
+                AuthenticationWorkflowStage::Credentials
+            },
+            action,
             2,
             4,
         ));
     }
 
     if observation.new_password_field_count > 0 {
+        let action = if observation.manual_checkpoint_present {
+            AuthenticationWorkflowAction::TakeOver
+        } else {
+            AuthenticationWorkflowAction::GeneratePassword
+        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Signup,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::GeneratePassword,
+            if observation.manual_checkpoint_present {
+                AuthenticationWorkflowStage::Manual
+            } else {
+                AuthenticationWorkflowStage::Credentials
+            },
+            action,
             2,
             5,
         ));
@@ -313,9 +333,27 @@ mod tests {
             AuthenticationWorkflowKind::PasswordChange
         );
         assert_eq!(
+            password_change.action,
+            AuthenticationWorkflowAction::GeneratePassword
+        );
+        assert_eq!(
             (password_change.current_step, password_change.total_steps),
             (2, 4)
         );
+    }
+
+    #[test]
+    fn signup_with_manual_checkpoint_yields_to_takeover() {
+        let signup = AuthenticationPageObservation {
+            username_field_count: 1,
+            new_password_field_count: 1,
+            manual_checkpoint_present: true,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(signup).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
     }
 
     #[test]

@@ -5,6 +5,8 @@ export type PasswordFormSummary = {
   genericPasswordFieldCount: number;
   usernameFieldCount: number;
   oneTimeCodeFieldCount: number;
+  /** CAPTCHA, terms acceptance, or email-verification style human gate. */
+  manualCheckpointPresent: boolean;
   formCount: number;
   observedAt: number;
 };
@@ -220,6 +222,38 @@ function hasAutocompleteToken(
     .includes(expected);
 }
 
+function pageHasManualCheckpoint(root: ParentNode): boolean {
+  const doc = root.ownerDocument ?? document;
+  if (
+    doc.querySelector(
+      'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i], [data-nook-manual-checkpoint]',
+    )
+  ) {
+    return true;
+  }
+  const checkboxes = Array.from(
+    root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  );
+  for (const checkbox of checkboxes) {
+    const labeled = (
+      checkbox.labels?.[0]?.textContent ??
+      checkbox.getAttribute("aria-label") ??
+      checkbox.name ??
+      checkbox.id ??
+      ""
+    ).toLowerCase();
+    if (
+      /terms|privacy|agree|accept|policy|consent|eula/.test(labeled)
+    ) {
+      return true;
+    }
+  }
+  const bodyText = (root.textContent ?? "").toLowerCase();
+  return /verify your email|check your email|email verification|confirm your email/.test(
+    bodyText,
+  );
+}
+
 function summarizeRoot(
   root: ParentNode,
   formScope?: PasswordFormScope,
@@ -253,6 +287,7 @@ function summarizeRoot(
       passwordFields.length - currentPasswordFieldCount - newPasswordFieldCount,
     usernameFieldCount: usernameFields.length,
     oneTimeCodeFieldCount: oneTimeCodeFields.length,
+    manualCheckpointPresent: pageHasManualCheckpoint(root),
     formCount: forms.size,
     observedAt: Date.now(),
   };
@@ -374,6 +409,24 @@ export function fillLoginCredentials(
     setNativeInputValue(usernameField, credentials.username);
   }
   setNativeInputValue(passwordField, credentials.password);
+  return true;
+}
+
+/** Fill every `new-password` field (and confirm) without touching current-password. */
+export function fillGeneratedPassword(
+  password: string,
+  root: ParentNode = document,
+  formScope?: PasswordFormScope,
+): boolean {
+  const passwordFields = findPasswordFields(root, formScope);
+  const newPasswordFields = passwordFields.filter((field) =>
+    hasAutocompleteToken(field, "new-password"),
+  );
+  if (newPasswordFields.length === 0) return false;
+  for (const field of newPasswordFields) {
+    setNativeInputValue(field, password);
+  }
+  newPasswordFields[0]?.focus();
   return true;
 }
 
