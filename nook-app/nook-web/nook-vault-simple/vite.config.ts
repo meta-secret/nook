@@ -7,6 +7,7 @@ import { vaultAppHeaders } from "../nook-web-shared/src/vault-app/security-heade
 
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
+const siteUrl = process.env.VITE_SITE_URL?.trim() || "https://nokey.sh";
 
 const spaPaths = new Set([
   "/app-logs",
@@ -55,6 +56,7 @@ export default defineConfig({
     __NOOK_WASM_APPLICATION__: JSON.stringify("simple"),
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
+    "import.meta.env.VITE_SITE_URL": JSON.stringify(siteUrl.replace(/\/$/, "")),
   },
   publicDir: new URL("../nook-web-app/public", import.meta.url).pathname,
   plugins: [tailwindcss(), svelte(), simpleSpa()],

@@ -33,6 +33,12 @@ test.describe('authenticated shell height', () => {
 
     await page.getByTestId('vault-settings-tab').click()
     await expect(page.getByTestId('vault-devices-section')).toBeVisible()
+    await expect(page.getByTestId('extension-setup-settings')).toBeVisible()
+    await expect(page.getByTestId('extension-setup-settings')).toHaveAttribute(
+      'data-status',
+      'not_installed',
+    )
+    await expect(page.getByTestId('extension-setup-settings-cta')).toBeVisible()
     const settingsHeight = (await shell.boundingBox())?.height ?? 0
     expect(settingsHeight).toBeCloseTo(vaultHeight, 0)
 

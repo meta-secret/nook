@@ -11,6 +11,13 @@
     X,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import { SUPPORTS_EXTENSION } from '$lib/app-kind'
+  import {
+    loadExtensionInstallTarget,
+    openExtensionInstallTarget,
+    resolveExtensionSetupStatus,
+    type ExtensionSetupStatus,
+  } from '$lib/extension-install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -44,9 +51,65 @@
   let renameAuthId = $state<string | undefined>(undefined)
   let renameLabel = $state('')
   let revokeAuthId = $state<string | undefined>(undefined)
+  let extensionSetupStatus = $state<ExtensionSetupStatus | undefined>(
+    undefined,
+  )
+  let extensionInstallBusy = $state(false)
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === 'sentinel',
   )
+
+  async function refreshExtensionSetupStatus() {
+    if (!SUPPORTS_EXTENSION) return
+    extensionSetupStatus = await resolveExtensionSetupStatus(
+      vault.activeVaultStoreId,
+    )
+  }
+
+  async function handleExtensionInstall() {
+    extensionInstallBusy = true
+    try {
+      const target = await loadExtensionInstallTarget()
+      openExtensionInstallTarget(target)
+    } finally {
+      extensionInstallBusy = false
+    }
+  }
+
+  function extensionStatusLabel(status: ExtensionSetupStatus): string {
+    if (status === 'not_installed') {
+      return vault.t('extension_setup.status_not_installed')
+    }
+    if (status === 'installed_unpaired') {
+      return vault.t('extension_setup.status_installed_unpaired')
+    }
+    return vault.t('extension_setup.status_paired')
+  }
+
+  $effect(() => {
+    void vault.activeVaultStoreId
+    void refreshExtensionSetupStatus()
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshExtensionSetupStatus()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    const observer = new MutationObserver(() => {
+      void refreshExtensionSetupStatus()
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-nook-extension-runtime-id'],
+    })
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      observer.disconnect()
+    }
+  })
 
   const sortedMembers = $derived(
     [...vaultMembers].sort((a, b) => {
@@ -120,6 +183,61 @@
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
+  {#if SUPPORTS_EXTENSION}
+    <section
+      class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
+      data-testid="extension-setup-settings"
+      data-status={extensionSetupStatus ?? 'unknown'}
+    >
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0 space-y-1">
+          <h3 class="text-sm font-semibold text-foreground">
+            {vault.t('extension_setup.settings_title')}
+          </h3>
+          <p class="text-xs leading-relaxed text-muted-foreground">
+            {vault.t('extension_setup.settings_body')}
+          </p>
+        </div>
+        {#if extensionSetupStatus}
+          <span
+            class="shrink-0 rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+            data-testid="extension-setup-settings-status"
+          >
+            {extensionStatusLabel(extensionSetupStatus)}
+          </span>
+        {/if}
+      </div>
+      {#if extensionSetupStatus === 'installed_unpaired'}
+        <p class="text-[11px] leading-relaxed text-muted-foreground/80">
+          {vault.t('extension_setup.pair_hint')}
+        </p>
+      {/if}
+      {#if extensionSetupStatus && extensionSetupStatus !== 'paired'}
+        <Button
+          type="button"
+          size="sm"
+          variant={extensionSetupStatus === 'not_installed'
+            ? 'default'
+            : 'outline'}
+          class={extensionSetupStatus === 'installed_unpaired'
+            ? 'border-border'
+            : undefined}
+          disabled={extensionInstallBusy || isBusy}
+          data-testid="extension-setup-settings-cta"
+          onclick={() => void handleExtensionInstall()}
+        >
+          {#if extensionInstallBusy}
+            {vault.t('extension_setup.loading_install')}
+          {:else if extensionSetupStatus === 'not_installed'}
+            {vault.t('extension_setup.install_cta')}
+          {:else}
+            {vault.t('extension_setup.open_install_page')}
+          {/if}
+        </Button>
+      {/if}
+    </section>
+  {/if}
+
   {#if vaultMembers.length <= 1}
     <div
       class="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300"
