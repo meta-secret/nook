@@ -1458,12 +1458,22 @@ pub fn read_vault_version(yaml: &str) -> u64 {
 #[derive(Clone)]
 pub struct NookSecretListItem {
     item: nook_core::SecretListItem,
+    /// Entity-resolved clustering key for vault list cards.
+    group_key: String,
 }
 
 #[wasm_bindgen]
 impl NookSecretListItem {
     pub(crate) fn from_core(item: nook_core::SecretListItem) -> Self {
-        Self { item }
+        let group_key = item.group_key();
+        Self { item, group_key }
+    }
+
+    pub(crate) fn from_core_with_group_key(
+        item: nook_core::SecretListItem,
+        group_key: String,
+    ) -> Self {
+        Self { item, group_key }
     }
 
     #[wasm_bindgen(getter)]
@@ -1483,7 +1493,7 @@ impl NookSecretListItem {
 
     #[wasm_bindgen(getter, js_name = groupKey)]
     pub fn group_key(&self) -> String {
-        self.item.group_key()
+        self.group_key.clone()
     }
 
     #[wasm_bindgen(getter, js_name = summary)]
@@ -1913,6 +1923,38 @@ mod wasm_tests {
         assert_eq!(item.rp_id(), "login.example.com");
         assert_eq!(item.passkey_user_name(), "alice@example.com");
         assert_eq!(item.passkey_user_display_name(), "Alice");
+    }
+
+    #[wasm_bindgen_test]
+    fn page_resolves_brand_authenticator_onto_site_host() {
+        let mut page = NookSecretPage::from_core(nook_core::SecretPage {
+            records: vec![
+                nook_core::SecretListItem {
+                    id: nook_core::SecretId::from_vault_record("secret_login"),
+                    data: nook_core::SecretListItemData::Login {
+                        website_url: "https://namecheap.com".to_owned(),
+                        username: "bynull".to_owned(),
+                    },
+                },
+                nook_core::SecretListItem {
+                    id: nook_core::SecretId::from_vault_record("secret_totp"),
+                    data: nook_core::SecretListItemData::Authenticator {
+                        issuer: "Namecheap".to_owned(),
+                        account: "bynull".to_owned(),
+                        backup_code_count: 0,
+                    },
+                },
+            ],
+            total: 2,
+            offset: 0,
+            limit: 50,
+        })
+        .expect("metadata page");
+
+        let items = page.take_items();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].group_key(), "namecheap.com");
+        assert_eq!(items[1].group_key(), "namecheap.com");
     }
 
     #[wasm_bindgen_test]
