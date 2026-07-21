@@ -89,6 +89,29 @@ function installChromeStub(localizedMessages: Record<string, ChromeMessage>) {
         if (callback) queueMicrotask(() => callback(response))
       },
     },
+    storage: {
+      local: {
+        get(
+          _keys: string | string[] | Record<string, unknown>,
+          callback: (items: Record<string, unknown>) => void,
+        ) {
+          queueMicrotask(() =>
+            callback({
+              'nook:extension-setup': {
+                status: 'ready',
+                deviceLabel: 'Demo browser',
+                pairedVaults: ['Demo vault'],
+                selectedVaultName: 'Demo vault',
+                syncProviderCount: 1,
+                eventCount: 3,
+                eventLogHeads: ['demo-head'],
+                lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
+              },
+            }),
+          )
+        },
+      },
+    },
   }
   const browserGlobal = globalThis as typeof globalThis & {
     chrome?: Record<string, unknown>
@@ -102,6 +125,10 @@ function installChromeStub(localizedMessages: Record<string, ChromeMessage>) {
       runtime: {
         configurable: true,
         value: chromeStub.runtime,
+      },
+      storage: {
+        configurable: true,
+        value: chromeStub.storage,
       },
     })
   } else {
@@ -205,6 +232,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Connected to Demo vault',
+  )
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()

@@ -161,6 +161,10 @@ function translatedMessageWithSubstitution(
 
 function loadPilotVaultConnection(): Promise<PilotVaultConnection> {
   return new Promise((resolve) => {
+    if (!chrome.storage?.local?.get) {
+      resolve({ connected: false })
+      return
+    }
     chrome.storage.local.get(setupStorageKey, (items) => {
       if (chrome.runtime.lastError) {
         resolve({ connected: false })
