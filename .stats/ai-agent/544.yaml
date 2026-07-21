@@ -1,0 +1,94 @@
+schema_version: 1
+source_pr:
+  number: 544
+  url: https://github.com/meta-secret/nook/pull/544
+  title: Show fixture credentials on mock-auth login pages
+  change_surface: extension_e2e_mock_auth_pilot
+  head_sha: 2fbeb5a4d41e7b0b72da5fc62b6c8d33fb168e99
+  started_at: 2026-07-21T02:26:00Z
+  opened_at: 2026-07-21T02:27:52Z
+  merged_at: 2026-07-21T02:40:22Z
+  elapsed_seconds: 862
+  open_to_merge_seconds: 750
+summary:
+  local_execution_count: 4
+  local_check_count: 3
+  local_test_count: 0
+  local_combined_count: 1
+  local_execution_seconds: 254
+  github_actions_run_count: 2
+  github_actions_seconds: 717
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-21T02:26:30Z
+    finished_at: 2026-07-21T02:27:29Z
+    duration_seconds: 59
+    outcome: passed
+    reason: prettier_host_apply_before_commit
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:28:00Z
+    finished_at: 2026-07-21T02:31:01Z
+    duration_seconds: 181
+    outcome: passed
+    reason: final_local_gate_after_push
+  - command: task pr:ready PR=544
+    category: check
+    started_at: 2026-07-21T02:33:15Z
+    finished_at: 2026-07-21T02:33:22Z
+    duration_seconds: 7
+    outcome: failed
+    reason: first_pr_run_failed_on_buildkit_flake
+  - command: task pr:ready PR=544
+    category: check
+    started_at: 2026-07-21T02:40:12Z
+    finished_at: 2026-07-21T02:40:19Z
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29795894156
+    run_attempt: 1
+    head_sha: 2fbeb5a4d41e7b0b72da5fc62b6c8d33fb168e99
+    trigger: pull_request
+    started_at: 2026-07-21T02:27:55Z
+    finished_at: 2026-07-21T02:33:12Z
+    duration_seconds: 317
+    conclusion: failure
+  - workflow: PR
+    run_id: 29795894156
+    run_attempt: 2
+    head_sha: 2fbeb5a4d41e7b0b72da5fc62b6c8d33fb168e99
+    trigger: pull_request
+    started_at: 2026-07-21T02:33:31Z
+    finished_at: 2026-07-21T02:40:11Z
+    duration_seconds: 400
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T02:33:31Z
+    cause: manual_rerun
+    run_id: 29795894156
+merge_attempts:
+  - at: 2026-07-21T02:40:22Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [542, 537]
+  baseline_quality: comparable
+  baseline_note: Same mock-auth extension e2e fixture surface; this PR is a small UX follow-up on that SPA
+  elapsed_seconds_change_percent: -60.5
+  local_execution_seconds_change_percent: -80.6
+  github_actions_seconds_change_percent: -56.4
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - First PR Native Rust verification failed on a BuildKit/buildx health flake with no Rust changes; one failed-job rerun recovered green
+  required_actions: []
