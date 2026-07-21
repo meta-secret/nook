@@ -62,3 +62,20 @@ Add RFC 6238 TOTP authenticators as a first-class secure-item type.
 QR enrollment and service-provided backup-code capture require a separate,
 explicit settings-page consent and confirmation flow. They must never run as
 silent page scraping.
+
+## Browser enrollment capture
+
+- **Add 2FA from this page** appears only as a user-initiated Pilot action on
+  pages that look like authenticator setup. Nook discovers visible QR
+  images/canvases and decodes them locally only after that trusted click.
+- Only bounded `otpauth://totp/...` payloads are accepted. Rust/WASM validates
+  and canonicalizes the URI; the Pilot preview shows service, account, page
+  origin, and protocol parameters before save. The shared secret never appears
+  in the preview, URLs, logs, or durable browser storage.
+- Cancelling or closing the flow writes no vault event and clears any decoded
+  URI from memory.
+- **Save backup codes** is a separate consented action. Candidate codes are
+  extracted only after approval, reviewed (edit/select/remove or paste), then
+  attached to a named authenticator through typed replace/merge policy in
+  Rust/WASM. Ambiguous page text cannot be saved without choosing the target
+  authenticator.

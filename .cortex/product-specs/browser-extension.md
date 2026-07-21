@@ -45,8 +45,10 @@ association exists, the in-page gate uses non-secret ordinal choices and
 requires an explicit selection for every OTP fill. Disambiguating metadata
 belongs in a future extension-controlled picker, not the host page DOM. An
 empty vault state says that no 2FA code is saved and offers to open Simple
-Vault. Page QR and backup code enrollment is a separate consented capture flow,
-not background scanning.
+Vault. Page QR and backup code enrollment uses explicit Pilot actions
+(**Add 2FA from this page** / **Save backup codes**) with local decode/extract,
+WASM validation, and confirmation before any vault write. It is never silent
+page scraping or background scanning.
 
 "No vault UI in the extension" means no second vault-management UI. The toolbar
 popup may contain the standard one-time device-protection widget because

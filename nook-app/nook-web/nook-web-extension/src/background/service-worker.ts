@@ -37,6 +37,12 @@ import {
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
 import {
+  isWebsiteAuthenticatorBackupAttachMessage,
+  isWebsiteAuthenticatorEnrollConfirmMessage,
+  isWebsiteAuthenticatorEnrollPreviewMessage,
+  type OtpauthEnrollmentPreview,
+} from '../lib/enrollment-messages'
+import {
   isWebsiteAuthenticatorFillMessage,
   isWebsiteAuthenticatorOptionsMessage,
   isWebsiteLoginOptionsMessage,
@@ -980,6 +986,128 @@ async function websiteAuthenticatorFill(
   })
 }
 
+async function websiteAuthenticatorEnrollPreview(
+  message: {
+    payload: { origin: string; otpauthUri: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { ok: true, status: 'unavailable' }
+  }
+  await ensureExtensionSessionDocument()
+  try {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-authenticator-enroll-preview',
+      payload: { otpauthUri: message.payload.otpauthUri },
+    })
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true ||
+      !('preview' in response) ||
+      !response.preview ||
+      typeof response.preview !== 'object'
+    ) {
+      return { ok: false, reason: 'authenticator-preview-failed' }
+    }
+    const preview = response.preview as OtpauthEnrollmentPreview
+    return {
+      ok: true,
+      status: 'ready',
+      preview,
+      vaultStoreId: grants[0]?.vaultStoreId,
+      vaultName: grants[0]?.vaultName,
+    }
+  } catch {
+    return { ok: false, reason: 'authenticator-preview-invalid' }
+  }
+}
+
+async function websiteAuthenticatorEnrollConfirm(
+  message: {
+    payload: { origin: string; vaultStoreId: string; otpauthUri: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const grant = (await passwordPairingGrants()).find(
+    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  )
+  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: false, reason: 'authenticator-locked' }
+  }
+  return sendSessionMessage({
+    type: 'nook:extension-session-authenticator-enroll-confirm',
+    payload: {
+      ...grant,
+      otpauthUri: message.payload.otpauthUri,
+      origin: message.payload.origin,
+    },
+  })
+}
+
+async function websiteAuthenticatorBackupAttach(
+  message: {
+    payload: {
+      origin: string
+      vaultStoreId: string
+      secretId: string
+      codes: string[]
+      mode: 'replace' | 'merge'
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'authenticator-forbidden-origin' }
+  }
+  const grant = (await passwordPairingGrants()).find(
+    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  )
+  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: false, reason: 'authenticator-locked' }
+  }
+  return sendSessionMessage({
+    type: 'nook:extension-session-authenticator-backup-attach',
+    payload: {
+      ...grant,
+      secretId: message.payload.secretId,
+      codes: message.payload.codes,
+      mode: message.payload.mode,
+    },
+  })
+}
+
 function passkeyRequestKey(
   sender: chrome.runtime.MessageSender,
   requestId: string,
@@ -1299,6 +1427,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(sendResponse)
       .catch(() =>
         sendResponse({ ok: false, reason: 'authenticator-fill-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorEnrollPreviewMessage(message)) {
+    void websiteAuthenticatorEnrollPreview(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-preview-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorEnrollConfirmMessage(message)) {
+    void websiteAuthenticatorEnrollConfirm(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-enroll-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteAuthenticatorBackupAttachMessage(message)) {
+    void websiteAuthenticatorBackupAttach(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-backup-failed' }),
       )
     return true
   }

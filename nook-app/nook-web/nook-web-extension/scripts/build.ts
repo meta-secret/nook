@@ -186,6 +186,39 @@ type NookLocaleCatalog = {
       saved_authenticator: string
       authenticator_fill_failed: string
       authenticator_filled: string
+      enroll_title: string
+      enroll_description: string
+      add_from_page: string
+      save_backup_codes: string
+      enroll_working: string
+      enroll_unsupported: string
+      enroll_no_qr: string
+      enroll_ambiguous: string
+      enroll_preview: string
+      enroll_confirm: string
+      enroll_cancel: string
+      enroll_saved: string
+      enroll_failed: string
+      enroll_unlock: string
+      enroll_issuer: string
+      enroll_account: string
+      enroll_origin: string
+      enroll_algorithm: string
+      enroll_digits: string
+      enroll_period: string
+      backup_title: string
+      backup_description: string
+      backup_working: string
+      backup_empty: string
+      backup_review: string
+      backup_paste: string
+      backup_confirm: string
+      backup_cancel: string
+      backup_saved: string
+      backup_failed: string
+      backup_choose_authenticator: string
+      backup_mode_replace: string
+      backup_mode_merge: string
     }
     passkey: {
       save_title: string
@@ -324,6 +357,89 @@ async function buildChromeLocales() {
         },
         widgetAuthenticatorFilled: {
           message: catalog.extension.widget.authenticator_filled,
+        },
+        widgetEnrollTitle: { message: catalog.extension.widget.enroll_title },
+        widgetEnrollDescription: {
+          message: catalog.extension.widget.enroll_description,
+        },
+        widgetAddFromPage: { message: catalog.extension.widget.add_from_page },
+        widgetSaveBackupCodes: {
+          message: catalog.extension.widget.save_backup_codes,
+        },
+        widgetEnrollWorking: {
+          message: catalog.extension.widget.enroll_working,
+        },
+        widgetEnrollUnsupported: {
+          message: catalog.extension.widget.enroll_unsupported,
+        },
+        widgetEnrollNoQr: { message: catalog.extension.widget.enroll_no_qr },
+        widgetEnrollAmbiguous: {
+          message: catalog.extension.widget.enroll_ambiguous,
+        },
+        widgetEnrollPreview: {
+          message: catalog.extension.widget.enroll_preview,
+        },
+        widgetEnrollConfirm: {
+          message: catalog.extension.widget.enroll_confirm,
+        },
+        widgetEnrollCancel: {
+          message: catalog.extension.widget.enroll_cancel,
+        },
+        widgetEnrollSaved: { message: catalog.extension.widget.enroll_saved },
+        widgetEnrollFailed: {
+          message: catalog.extension.widget.enroll_failed,
+        },
+        widgetEnrollUnlock: {
+          message: catalog.extension.widget.enroll_unlock,
+        },
+        widgetEnrollIssuer: {
+          message: catalog.extension.widget.enroll_issuer,
+        },
+        widgetEnrollAccount: {
+          message: catalog.extension.widget.enroll_account,
+        },
+        widgetEnrollOrigin: {
+          message: catalog.extension.widget.enroll_origin,
+        },
+        widgetEnrollAlgorithm: {
+          message: catalog.extension.widget.enroll_algorithm,
+        },
+        widgetEnrollDigits: {
+          message: catalog.extension.widget.enroll_digits,
+        },
+        widgetEnrollPeriod: {
+          message: catalog.extension.widget.enroll_period,
+        },
+        widgetBackupTitle: { message: catalog.extension.widget.backup_title },
+        widgetBackupDescription: {
+          message: catalog.extension.widget.backup_description,
+        },
+        widgetBackupWorking: {
+          message: catalog.extension.widget.backup_working,
+        },
+        widgetBackupEmpty: { message: catalog.extension.widget.backup_empty },
+        widgetBackupReview: {
+          message: catalog.extension.widget.backup_review,
+        },
+        widgetBackupPaste: { message: catalog.extension.widget.backup_paste },
+        widgetBackupConfirm: {
+          message: catalog.extension.widget.backup_confirm,
+        },
+        widgetBackupCancel: {
+          message: catalog.extension.widget.backup_cancel,
+        },
+        widgetBackupSaved: { message: catalog.extension.widget.backup_saved },
+        widgetBackupFailed: {
+          message: catalog.extension.widget.backup_failed,
+        },
+        widgetBackupChooseAuthenticator: {
+          message: catalog.extension.widget.backup_choose_authenticator,
+        },
+        widgetBackupModeReplace: {
+          message: catalog.extension.widget.backup_mode_replace,
+        },
+        widgetBackupModeMerge: {
+          message: catalog.extension.widget.backup_mode_merge,
         },
         passkeySaveTitle: { message: catalog.extension.passkey.save_title },
         passkeyUseTitle: { message: catalog.extension.passkey.use_title },
