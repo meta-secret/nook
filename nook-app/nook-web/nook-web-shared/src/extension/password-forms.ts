@@ -641,14 +641,17 @@ export function submitLoginForm(
   if (!anchor) return false;
 
   // Email-first / multi-step logins often use a type=button "Next" control
-  // rather than a real submit. Prefer an advance control before requestSubmit.
+  // rather than a real submit. Prefer an advance control before requestSubmit
+  // only while the password step is still missing.
   if (!passwordField && clickAdvanceControl(root, formScope)) {
     return true;
   }
 
   const form = anchor.form;
   if (!form) {
-    return clickAdvanceControl(root, formScope);
+    // Password present without a real <form>: fill succeeded, but do not
+    // claim submission for opaque type=button host chrome.
+    return false;
   }
 
   const submitControl = form.querySelector<
