@@ -697,14 +697,21 @@ mod tests {
         assert_eq!(preview.algorithm, TotpAlgorithm::Sha256);
         assert_eq!(preview.digits.get(), 8);
         assert_eq!(preview.period.get(), 45);
-        assert!(AuthenticatorSecret::preview_otpauth_uri("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP").is_err());
+        assert!(
+            AuthenticatorSecret::preview_otpauth_uri("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP")
+                .is_err()
+        );
         assert!(AuthenticatorSecret::preview_otpauth_uri("https://example.com").is_err());
     }
 
     #[test]
     fn backup_code_replace_and_merge_enforce_bounds() {
         let existing = vec!["keep-me".to_owned(), "old-code".to_owned()];
-        let incoming = vec!["  new-code ".to_owned(), "keep-me".to_owned(), String::new()];
+        let incoming = vec![
+            "  new-code ".to_owned(),
+            "keep-me".to_owned(),
+            String::new(),
+        ];
         assert_eq!(
             apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Replace).unwrap(),
             ["new-code", "keep-me"]

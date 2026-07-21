@@ -36,17 +36,16 @@ pub use types::{
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
     NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder, NookImportResult,
     NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookOtpauthPreview,
-    NookPasskeyAccount,
-    NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
-    NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
-    NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
-    NookSecretPage, NookSecurityConflict, NookSentinelGenesisDelivery,
-    NookSentinelGenesisFinalizeResult, NookSentinelGenesisParticipantStatus,
-    NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
-    NookStorageConnectArgs, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
-    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
-    NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult,
+    NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup,
+    NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookProviderReplicationCapability, NookReplacementCandidate, NookReplacementConflict,
+    NookRuntimeConfig, NookSecretFormFields, NookSecretPage, NookSecurityConflict,
+    NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
+    NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
+    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
+    NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
+    NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultMember,
+    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -1904,9 +1903,7 @@ pub fn authenticator_setup_key_changed(
 }
 
 #[wasm_bindgen(js_name = previewOtpauthUri)]
-pub fn preview_otpauth_uri(
-    uri: &str,
-) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
+pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
     nook_core::AuthenticatorSecret::preview_otpauth_uri(uri)
         .map(types::NookOtpauthPreview::from_core)
         .map_err(NookError::from)

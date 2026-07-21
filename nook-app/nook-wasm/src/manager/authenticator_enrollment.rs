@@ -34,9 +34,8 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        let mut record =
-            nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)
-                .map_err(NookError::from)?;
+        let mut record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)
+            .map_err(NookError::from)?;
         let result = match &mut record.data {
             nook_core::SecretValue::Authenticator(authenticator) => {
                 let attached =
