@@ -15,6 +15,7 @@
     width="220"
     height="220"
     alt="Authenticator QR code"
+    data-nook-otpauth-uri="otpauth://totp/Nook:alice-2fa@nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Nook"
   />
   <p>
     <button

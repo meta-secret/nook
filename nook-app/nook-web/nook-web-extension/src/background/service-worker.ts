@@ -1282,6 +1282,8 @@ function passkeyRequestKey(
   return `${sender.tab?.id ?? -1}:${sender.frameId ?? 0}:${requestId}`
 }
 
+const PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS = 1500
+
 async function matchingPasskeyAccountCountForOrigin(
   origin: string,
 ): Promise<number> {
@@ -1328,6 +1330,22 @@ async function matchingPasskeyAccountCountForOrigin(
     }
   }
   return Math.min(count, 100)
+}
+
+/** Never fail a workflow snapshot on passkey lookup; slow/failed → 0. */
+async function matchingPasskeyAccountCountForOriginSafe(
+  origin: string,
+): Promise<number> {
+  try {
+    return await Promise.race([
+      matchingPasskeyAccountCountForOrigin(origin),
+      new Promise<number>((resolve) => {
+        setTimeout(() => resolve(0), PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS)
+      }),
+    ])
+  } catch {
+    return 0
+  }
 }
 
 async function websitePasskeyOptions(
@@ -1552,12 +1570,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })
       return false
     }
-    void matchingPasskeyAccountCountForOrigin(message.payload.origin)
+    const needsPasskeyLookup = message.payload.observations.some(
+      (observation) => observation.passkeyControlPresent,
+    )
+    void (
+      needsPasskeyLookup
+        ? matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
+        : Promise.resolve(0)
+    )
       .then((matchingPasskeyAccountCount) =>
         authenticationWorkflowSnapshot(
           message.payload.observations.map((observation) => ({
             ...observation,
-            matchingPasskeyAccountCount,
+            matchingPasskeyAccountCount: observation.passkeyControlPresent
+              ? matchingPasskeyAccountCount
+              : 0,
           })),
         ),
       )

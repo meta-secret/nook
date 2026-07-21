@@ -3,6 +3,8 @@ import {
   fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
+  findPasskeyControl,
+  pageHasPasskeyControl,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
@@ -293,5 +295,43 @@ describe('website one-time-code fields', () => {
     expect(field?.value).toBe('123456')
     expect(inputEvents).toBe(1)
     expect(document.activeElement).toBe(field)
+  })
+})
+
+describe('passkey control detection', () => {
+  test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
+    document.body.innerHTML = `
+      <form>
+        <input autocomplete="section-login username" name="email" type="email" />
+        <input
+          autocomplete="section-login current-password webauthn"
+          name="password"
+          type="password"
+        />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    expect(findPasskeyControl()).toBeUndefined()
+    expect(pageHasPasskeyControl()).toBe(false)
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      passkeyControlPresent: false,
+      currentPasswordFieldCount: 1,
+    })
+  })
+
+  test('detects marked and labeled passkey controls', () => {
+    document.body.innerHTML = `
+      <button type="button" data-nook-passkey-control>Continue</button>
+    `
+    expect(
+      findPasskeyControl()?.getAttribute('data-nook-passkey-control'),
+    ).toBe('')
+
+    document.body.innerHTML = `
+      <button type="button">Sign in with a passkey</button>
+    `
+    expect(findPasskeyControl()?.textContent).toContain('passkey')
+    expect(pageHasPasskeyControl()).toBe(true)
   })
 })
