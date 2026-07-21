@@ -241,6 +241,17 @@ surfaces must add or update a focused spec under
 change without a changed demo. Only those changed demo specs run, serially with
 one worker, so PR CI does not inherit the cost of the full browser suite.
 
+**Run the contract on the host before the first push** (and after any later UI
+edit) so Verify does not discover a missing demo:
+
+```bash
+git fetch origin main
+.github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+```
+
+Combine with unconditional `task format` — see
+[pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
+
 The `ui-demo` Playwright project runs Chromium headlessly at 1280x720 and always
 records WebM video. Demo-only waits are allowed to hold meaningful before/after
 states long enough for a reviewer to understand them; ordinary regression specs

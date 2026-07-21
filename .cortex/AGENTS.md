@@ -63,13 +63,39 @@ current and mergeable, and all feedback already present is addressed.
 `task pr:ready` enforces the machine-checkable parts. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
 
+## ⛔ Non-negotiable: format on the host before every push
+
+**Always run `task format` before every commit that will be pushed** — not only
+when you "think" formatting might be needed. Formatting is cheap; a failed
+Prettier/rustfmt Verify cycle is not.
+
+`task format` formats inside sealed Docker images **and applies the diff to the
+host working tree**. Sealed images never write the host: `task extension:format`
+and bare in-container format commands discard their edits when the container
+exits. Do not treat a successful sealed format as a host-clean tree.
+
+Pre-push hygiene (cheap, required) before the first push and every later fix
+push:
+
+```bash
+task format
+git add -u
+# When UI / shared vault / extension `src` paths change vs origin/main:
+git fetch origin main
+.github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+```
+
+Only after that commit → push → run the long local gate in parallel with PR CI.
+Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#pre-push-hygiene--always-format)
+and [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
+
 ## ⛔ Non-negotiable: push before final checks; run them in parallel
 
 As soon as a change is coherent enough to validate, **commit it, push it to the
 PR, and only then start the required local checks**. Never serialize the final
 gate as `local checks → push → remote checks`; that wastes the entire local-check
-duration. The required order is `commit → push/open or update PR → local checks
-and repository-owned PR checks in parallel`.
+duration. The required order is `pre-push hygiene → commit → push/open or update
+PR → local checks and repository-owned PR checks in parallel`.
 
 The repository-owned GitHub Actions PR workflow is the primary validation
 pipeline and its checks are bound to the pushed head SHA. Therefore publishing
@@ -78,10 +104,12 @@ after local validation, timing measurements, PR-description cleanup, or other
 follow-up work. Local Docker checks are complementary diagnostics and must not
 delay triggering or refreshing the PR workflow.
 
-Tiny focused commands used to develop or make the commit coherent may run before
-the push. The minimum local gate, full suites, builds, e2e, and any repeated
-post-fix validation must run after the completed change is pushed so remote work
-starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--parallel-final-validation).
+**Required** before the push: unconditional `task format` (host-applied) and,
+when UI paths change, the UI demo contract. Other tiny focused commands used to
+develop or make the commit coherent may also run before the push. The minimum
+local gate, full suites, builds, e2e, and any repeated post-fix validation must
+run after the completed change is pushed so remote work starts immediately. Full
+policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--parallel-final-validation).
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
 
@@ -124,10 +152,11 @@ normal build-performance PR. Full policy:
 * [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → commit/push first → local and applicable PR checks in parallel → fix loop → address comments and conflicts → readiness audit → automatic agent-owned squash merge). Prefer cached local Docker over cold GH Actions.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → local and applicable PR checks in parallel → fix loop → address comments and conflicts → readiness audit → automatic agent-owned squash merge). Prefer cached local Docker over cold GH Actions.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
+* [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
