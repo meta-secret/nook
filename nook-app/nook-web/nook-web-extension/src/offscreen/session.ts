@@ -572,8 +572,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         throw new Error('Extension session received an invalid otpauth URI.')
       }
       await ensureWasm()
-      const unixSeconds = Math.floor(Date.now() / 1000)
-      const code = currentCodeFromOtpauthUri(payload.otpauthUri, unixSeconds)
+      const code = currentCodeFromOtpauthUri(payload.otpauthUri)
       try {
         return { ok: true, code: code.code }
       } finally {

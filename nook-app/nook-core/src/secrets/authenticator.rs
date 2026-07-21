@@ -688,8 +688,7 @@ mod tests {
 
     #[test]
     fn current_code_from_otpauth_matches_persisted_secret() {
-        let uri =
-            "otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth";
+        let uri = "otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth";
         let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59).unwrap();
         let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)
             .unwrap()

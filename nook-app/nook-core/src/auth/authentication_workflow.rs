@@ -178,14 +178,9 @@ pub fn classify_authentication_workflow_candidates(
     selected
 }
 
-#[must_use]
-pub const fn classify_authentication_workflow(
+const fn classify_enrollment_workflow(
     observation: AuthenticationPageObservation,
 ) -> Option<AuthenticationWorkflowSnapshot> {
-    if !observation.has_authentication_fields() {
-        return None;
-    }
-
     if observation.authenticator_setup_hint {
         if observation.one_time_code_field_count > 0 {
             return Some(AuthenticationWorkflowSnapshot::new(
@@ -204,7 +199,6 @@ pub const fn classify_authentication_workflow(
             5,
         ));
     }
-
     if observation.backup_codes_hint {
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
@@ -214,40 +208,51 @@ pub const fn classify_authentication_workflow(
             5,
         ));
     }
+    None
+}
+
+const fn generate_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
+    if manual_checkpoint_present {
+        AuthenticationWorkflowAction::TakeOver
+    } else {
+        AuthenticationWorkflowAction::GeneratePassword
+    }
+}
+
+const fn credentials_or_manual(manual_checkpoint_present: bool) -> AuthenticationWorkflowStage {
+    if manual_checkpoint_present {
+        AuthenticationWorkflowStage::Manual
+    } else {
+        AuthenticationWorkflowStage::Credentials
+    }
+}
+
+#[must_use]
+pub const fn classify_authentication_workflow(
+    observation: AuthenticationPageObservation,
+) -> Option<AuthenticationWorkflowSnapshot> {
+    if !observation.has_authentication_fields() {
+        return None;
+    }
+    if let Some(enrollment) = classify_enrollment_workflow(observation) {
+        return Some(enrollment);
+    }
 
     if observation.current_password_field_count > 0 && observation.new_password_field_count > 0 {
-        let action = if observation.manual_checkpoint_present {
-            AuthenticationWorkflowAction::TakeOver
-        } else {
-            AuthenticationWorkflowAction::GeneratePassword
-        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::PasswordChange,
-            if observation.manual_checkpoint_present {
-                AuthenticationWorkflowStage::Manual
-            } else {
-                AuthenticationWorkflowStage::Credentials
-            },
-            action,
+            credentials_or_manual(observation.manual_checkpoint_present),
+            generate_or_takeover(observation.manual_checkpoint_present),
             2,
             4,
         ));
     }
 
     if observation.new_password_field_count > 0 {
-        let action = if observation.manual_checkpoint_present {
-            AuthenticationWorkflowAction::TakeOver
-        } else {
-            AuthenticationWorkflowAction::GeneratePassword
-        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Signup,
-            if observation.manual_checkpoint_present {
-                AuthenticationWorkflowStage::Manual
-            } else {
-                AuthenticationWorkflowStage::Credentials
-            },
-            action,
+            credentials_or_manual(observation.manual_checkpoint_present),
+            generate_or_takeover(observation.manual_checkpoint_present),
             2,
             5,
         ));

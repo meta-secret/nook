@@ -148,9 +148,7 @@ test.describe('Browser 2FA enrollment', () => {
       ).toBeVisible({ timeout: 20_000 })
       expect(await listExtensionAuthenticators(paired.context)).toEqual([])
 
-      await enrollPage
-        .getByTestId('mock-auth-enroll-continue-verify')
-        .click()
+      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
       await expect(
         enrollPage.getByTestId('mock-auth-enroll-otp-input'),
       ).toBeVisible({ timeout: 10_000 })
@@ -211,9 +209,7 @@ test.describe('Browser 2FA enrollment', () => {
       await enrollWidget
         .getByRole('button', { name: 'Continue enrollment' })
         .click()
-      await enrollPage
-        .getByTestId('mock-auth-enroll-continue-verify')
-        .click()
+      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
       await expect(
         enrollPage.getByTestId('mock-auth-enroll-otp-input'),
       ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
@@ -237,7 +233,9 @@ test.describe('Browser 2FA enrollment', () => {
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toHaveCount(0)
 
-      await widget.getByRole('button', { name: 'Replace existing codes' }).click()
+      await widget
+        .getByRole('button', { name: 'Replace existing codes' })
+        .click()
       await expect(
         widget.getByText(/backup codes saved|резервные коды сохранены/i),
       ).toBeVisible({ timeout: 20_000 })

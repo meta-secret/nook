@@ -2080,13 +2080,13 @@ pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_
 #[wasm_bindgen(js_name = currentCodeFromOtpauthUri)]
 pub fn current_code_from_otpauth_uri(
     uri: &str,
-    unix_seconds: f64,
 ) -> Result<types::NookTotpCode, wasm_bindgen::JsError> {
-    let seconds = if unix_seconds.is_finite() && unix_seconds >= 0.0 {
-        unix_seconds as u64
-    } else {
+    let millis = js_sys::Date::now();
+    if !(millis.is_finite() && millis >= 0.0) {
         return Err(NookError::from(nook_core::ValidationError::AuthenticatorSecretInvalid).into());
-    };
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let seconds = (millis / 1000.0) as u64;
     nook_core::AuthenticatorSecret::current_code_from_otpauth_uri(uri, seconds)
         .map(types::NookTotpCode::from_core)
         .map_err(NookError::from)

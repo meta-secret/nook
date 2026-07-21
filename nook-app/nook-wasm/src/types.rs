@@ -484,6 +484,7 @@ pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObserv
 #[wasm_bindgen]
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         username_field_count: u32,
         current_password_field_count: u32,

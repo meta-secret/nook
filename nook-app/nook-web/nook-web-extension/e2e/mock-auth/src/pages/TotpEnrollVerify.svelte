@@ -3,7 +3,9 @@
   import { softNavigate } from '../lib/navigation'
   import { verifyTotpCode } from '../lib/totp'
 
-  const enrollAccount = MOCK_AUTH_ACCOUNTS.find((account) => account.totpSecret)!
+  const enrollAccount = MOCK_AUTH_ACCOUNTS.find(
+    (account) => account.totpSecret,
+  )!
 
   let error = $state('')
   let busy = $state(false)
