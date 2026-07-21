@@ -1,5 +1,6 @@
 import initNookWasm, {
   configureVaultApplication,
+  currentCodeFromOtpauthUri,
   NookExternalEventLogRecords,
   NookVaultManager,
   previewOtpauthUri,
@@ -563,6 +564,19 @@ async function handleMessage(message: unknown): Promise<unknown> {
         }
       } finally {
         preview.free()
+      }
+    }
+    case 'nook:extension-session-authenticator-enroll-code': {
+      const payload = messagePayload(message)
+      if (typeof payload.otpauthUri !== 'string') {
+        throw new Error('Extension session received an invalid otpauth URI.')
+      }
+      await ensureWasm()
+      const code = currentCodeFromOtpauthUri(payload.otpauthUri)
+      try {
+        return { ok: true, code: code.code }
+      } finally {
+        code.free()
       }
     }
     case 'nook:extension-session-authenticator-enroll-confirm': {

@@ -15,6 +15,7 @@ pub enum AuthenticationWorkflowKind {
     Signup,
     PasswordChange,
     TotpChallenge,
+    TotpEnrollment,
     Manual,
 }
 
@@ -26,6 +27,7 @@ impl AuthenticationWorkflowKind {
             Self::Signup => "signup",
             Self::PasswordChange => "password-change",
             Self::TotpChallenge => "totp-challenge",
+            Self::TotpEnrollment => "totp-enrollment",
             Self::Manual => "manual",
         }
     }
@@ -38,6 +40,8 @@ pub enum AuthenticationWorkflowStage {
     Credentials,
     SecondFactor,
     Verification,
+    Setup,
+    Recovery,
     Manual,
 }
 
@@ -48,6 +52,8 @@ impl AuthenticationWorkflowStage {
             Self::Credentials => "credentials",
             Self::SecondFactor => "second-factor",
             Self::Verification => "verification",
+            Self::Setup => "setup",
+            Self::Recovery => "recovery",
             Self::Manual => "manual",
         }
     }
@@ -60,6 +66,7 @@ pub enum AuthenticationWorkflowAction {
     ContinueWithNook,
     GeneratePassword,
     FillTotp,
+    EnrollAuthenticator,
     TakeOver,
 }
 
@@ -70,6 +77,7 @@ impl AuthenticationWorkflowAction {
             Self::ContinueWithNook => "continue-with-nook",
             Self::GeneratePassword => "generate-password",
             Self::FillTotp => "fill-totp",
+            Self::EnrollAuthenticator => "enroll-authenticator",
             Self::TakeOver => "take-over",
         }
     }
@@ -84,6 +92,10 @@ pub struct AuthenticationPageObservation {
     pub one_time_code_field_count: u32,
     /// CAPTCHA, legal acceptance, email verification, or similar human gate.
     pub manual_checkpoint_present: bool,
+    /// Visible authenticator QR / otpauth setup material on the page.
+    pub authenticator_setup_hint: bool,
+    /// Visible recovery / backup-code material on the page.
+    pub backup_codes_hint: bool,
 }
 
 impl AuthenticationPageObservation {
@@ -99,6 +111,8 @@ impl AuthenticationPageObservation {
         self.username_field_count > 0
             || self.password_field_count() > 0
             || self.one_time_code_field_count > 0
+            || self.authenticator_setup_hint
+            || self.backup_codes_hint
     }
 }
 
@@ -135,6 +149,7 @@ impl AuthenticationWorkflowSnapshot {
 
 const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
     match (snapshot.kind, snapshot.action) {
+        (AuthenticationWorkflowKind::TotpEnrollment, _) => 8,
         (AuthenticationWorkflowKind::TotpChallenge, _) => 7,
         (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
         (AuthenticationWorkflowKind::PasswordChange, _) => 5,
@@ -163,6 +178,55 @@ pub fn classify_authentication_workflow_candidates(
     selected
 }
 
+const fn classify_enrollment_workflow(
+    observation: AuthenticationPageObservation,
+) -> Option<AuthenticationWorkflowSnapshot> {
+    if observation.authenticator_setup_hint {
+        if observation.one_time_code_field_count > 0 {
+            return Some(AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowStage::Verification,
+                AuthenticationWorkflowAction::FillTotp,
+                3,
+                5,
+            ));
+        }
+        return Some(AuthenticationWorkflowSnapshot::new(
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Setup,
+            AuthenticationWorkflowAction::EnrollAuthenticator,
+            2,
+            5,
+        ));
+    }
+    if observation.backup_codes_hint {
+        return Some(AuthenticationWorkflowSnapshot::new(
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Recovery,
+            AuthenticationWorkflowAction::TakeOver,
+            4,
+            5,
+        ));
+    }
+    None
+}
+
+const fn generate_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
+    if manual_checkpoint_present {
+        AuthenticationWorkflowAction::TakeOver
+    } else {
+        AuthenticationWorkflowAction::GeneratePassword
+    }
+}
+
+const fn credentials_or_manual(manual_checkpoint_present: bool) -> AuthenticationWorkflowStage {
+    if manual_checkpoint_present {
+        AuthenticationWorkflowStage::Manual
+    } else {
+        AuthenticationWorkflowStage::Credentials
+    }
+}
+
 #[must_use]
 pub const fn classify_authentication_workflow(
     observation: AuthenticationPageObservation,
@@ -170,40 +234,25 @@ pub const fn classify_authentication_workflow(
     if !observation.has_authentication_fields() {
         return None;
     }
+    if let Some(enrollment) = classify_enrollment_workflow(observation) {
+        return Some(enrollment);
+    }
 
     if observation.current_password_field_count > 0 && observation.new_password_field_count > 0 {
-        let action = if observation.manual_checkpoint_present {
-            AuthenticationWorkflowAction::TakeOver
-        } else {
-            AuthenticationWorkflowAction::GeneratePassword
-        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::PasswordChange,
-            if observation.manual_checkpoint_present {
-                AuthenticationWorkflowStage::Manual
-            } else {
-                AuthenticationWorkflowStage::Credentials
-            },
-            action,
+            credentials_or_manual(observation.manual_checkpoint_present),
+            generate_or_takeover(observation.manual_checkpoint_present),
             2,
             4,
         ));
     }
 
     if observation.new_password_field_count > 0 {
-        let action = if observation.manual_checkpoint_present {
-            AuthenticationWorkflowAction::TakeOver
-        } else {
-            AuthenticationWorkflowAction::GeneratePassword
-        };
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Signup,
-            if observation.manual_checkpoint_present {
-                AuthenticationWorkflowStage::Manual
-            } else {
-                AuthenticationWorkflowStage::Credentials
-            },
-            action,
+            credentials_or_manual(observation.manual_checkpoint_present),
+            generate_or_takeover(observation.manual_checkpoint_present),
             2,
             5,
         ));
@@ -354,6 +403,31 @@ mod tests {
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+    }
+
+    #[test]
+    fn classifies_authenticator_setup_and_verify_enrollment() {
+        let setup = AuthenticationPageObservation {
+            authenticator_setup_hint: true,
+            ..observation()
+        };
+        let setup = classify_authentication_workflow(setup).unwrap();
+        assert_eq!(setup.kind, AuthenticationWorkflowKind::TotpEnrollment);
+        assert_eq!(setup.stage, AuthenticationWorkflowStage::Setup);
+        assert_eq!(
+            setup.action,
+            AuthenticationWorkflowAction::EnrollAuthenticator
+        );
+
+        let verify = AuthenticationPageObservation {
+            authenticator_setup_hint: true,
+            one_time_code_field_count: 1,
+            ..observation()
+        };
+        let verify = classify_authentication_workflow(verify).unwrap();
+        assert_eq!(verify.kind, AuthenticationWorkflowKind::TotpEnrollment);
+        assert_eq!(verify.stage, AuthenticationWorkflowStage::Verification);
+        assert_eq!(verify.action, AuthenticationWorkflowAction::FillTotp);
     }
 
     #[test]

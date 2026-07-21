@@ -201,6 +201,9 @@ type NookLocaleCatalog = {
       enroll_preview: string
       enroll_confirm: string
       enroll_cancel: string
+      enroll_staging: string
+      enroll_verify_filled: string
+      enroll_verify_pending: string
       enroll_saved: string
       enroll_failed: string
       enroll_unlock: string
@@ -400,6 +403,15 @@ async function buildChromeLocales() {
         },
         widgetEnrollCancel: {
           message: catalog.extension.widget.enroll_cancel,
+        },
+        widgetEnrollStaging: {
+          message: catalog.extension.widget.enroll_staging,
+        },
+        widgetEnrollVerifyFilled: {
+          message: catalog.extension.widget.enroll_verify_filled,
+        },
+        widgetEnrollVerifyPending: {
+          message: catalog.extension.widget.enroll_verify_pending,
         },
         widgetEnrollSaved: { message: catalog.extension.widget.enroll_saved },
         widgetEnrollFailed: {

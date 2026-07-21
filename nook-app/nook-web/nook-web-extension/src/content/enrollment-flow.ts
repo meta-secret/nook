@@ -15,6 +15,11 @@ import {
   safeSavedOptionNumber,
 } from '../lib/auth-widget-policy'
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
+import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
+import type {
+  AuthenticationOutcomeObservationView,
+  AuthenticationOutcomeVerdictView,
+} from '../lib/outcome-evidence-messages'
 
 export type EnrollmentPageHints = {
   qr: boolean
@@ -61,14 +66,300 @@ type EnrollPreviewResponse = {
   reason?: string
 }
 
+type EnrollStageResponse = {
+  ok?: boolean
+  stageId?: string
+  reason?: string
+}
+
+type EnrollCodeResponse = {
+  ok?: boolean
+  code?: string
+  reason?: string
+}
+
 type EnrollConfirmResponse = {
   ok?: boolean
+  secretId?: string
   reason?: string
 }
 
 type BackupAttachResponse = {
   ok?: boolean
   reason?: string
+}
+
+const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 12_000
+const ENROLLMENT_EVIDENCE_POLL_MS = 250
+
+let pendingEnrollmentWatch:
+  | {
+      stageId: string
+      vaultStoreId: string
+      startedAt: number
+      authPath: string
+      sawMutation: boolean
+      timer?: number
+      observer?: MutationObserver
+      host: EnrollmentFlowHost
+      section: HTMLElement
+    }
+  | undefined
+
+function stopPendingEnrollmentWatch(): void {
+  if (!pendingEnrollmentWatch) return
+  if (pendingEnrollmentWatch.timer !== undefined) {
+    window.clearInterval(pendingEnrollmentWatch.timer)
+  }
+  pendingEnrollmentWatch.observer?.disconnect()
+  pendingEnrollmentWatch = undefined
+}
+
+function pageLooksLikeAuthPath(pathname: string): boolean {
+  return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify|enroll)(?:\/|$)/i.test(
+    pathname,
+  )
+}
+
+function collectEnrollmentOutcomeObservation(
+  startedAt: number,
+  authPath: string,
+  sawMutation: boolean,
+): AuthenticationOutcomeObservationView {
+  const successMarkerPresent = Boolean(
+    document.querySelector(
+      '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+    ),
+  )
+  const errorMarkerPresent = Boolean(
+    document.querySelector(
+      '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]',
+    ),
+  )
+  return {
+    navigatedAwayFromAuthPath:
+      location.pathname !== authPath ||
+      !pageLooksLikeAuthPath(location.pathname),
+    authFieldsPresent: Boolean(
+      document.querySelector(
+        'input[autocomplete~="one-time-code" i], input[type="password"], input[type="email"]',
+      ),
+    ),
+    successMarkerPresent,
+    errorMarkerPresent,
+    sameDocumentMutation: sawMutation,
+    inIframe: window !== window.top,
+    elapsedMs: Math.max(0, Date.now() - startedAt),
+  }
+}
+
+async function classifyEnrollmentOutcome(
+  host: EnrollmentFlowHost,
+  observation: AuthenticationOutcomeObservationView,
+): Promise<AuthenticationOutcomeVerdictView | undefined> {
+  const response = await host.sendRuntimeMessage<{
+    ok?: boolean
+    verdict?: AuthenticationOutcomeVerdictView
+  }>({
+    type: 'nook:authentication-outcome-classify',
+    payload: {
+      observation,
+      timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
+    },
+  })
+  if (!response?.ok || !response.verdict) return undefined
+  return response.verdict
+}
+
+async function fillStagedEnrollmentCode(
+  host: EnrollmentFlowHost,
+  stageId: string,
+): Promise<boolean> {
+  const response = await host.sendRuntimeMessage<EnrollCodeResponse>({
+    type: 'nook:website-authenticator-enroll-code',
+    payload: { origin: location.origin, stageId },
+  })
+  if (!response?.ok || typeof response.code !== 'string') return false
+  return fillOneTimeCode(response.code)
+}
+
+async function commitStagedEnrollment(
+  host: EnrollmentFlowHost,
+  section: HTMLElement,
+  stageId: string,
+  vaultStoreId: string,
+): Promise<void> {
+  setHostDescription(host, host.translatedMessage('widgetEnrollWorking'))
+  const confirmResponse = await host.sendRuntimeMessage<EnrollConfirmResponse>({
+    type: 'nook:website-authenticator-enroll-confirm',
+    payload: {
+      origin: location.origin,
+      vaultStoreId,
+      stageId,
+    },
+  })
+  if (confirmResponse?.ok) {
+    setHostDescription(host, host.translatedMessage('widgetEnrollSaved'))
+    if (detectEnrollmentHints().backupCodes) {
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    }
+  } else if (confirmResponse?.reason === 'authenticator-locked') {
+    setHostDescription(host, lockedEnrollMessage(host))
+  } else {
+    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+  }
+  host.setBusy(false)
+  section.replaceChildren()
+}
+
+async function evaluatePendingEnrollmentEvidence(): Promise<void> {
+  const watch = pendingEnrollmentWatch
+  if (!watch || watch.stageId === 'pending') return
+  const observation = collectEnrollmentOutcomeObservation(
+    watch.startedAt,
+    watch.authPath,
+    watch.sawMutation,
+  )
+  const verdict = await classifyEnrollmentOutcome(watch.host, observation)
+  if (!verdict || pendingEnrollmentWatch?.stageId !== watch.stageId) return
+
+  if (verdict.allowsCredentialCommit) {
+    stopPendingEnrollmentWatch()
+    await commitStagedEnrollment(
+      watch.host,
+      watch.section,
+      watch.stageId,
+      watch.vaultStoreId,
+    )
+    return
+  }
+
+  if (
+    verdict.name === 'conflicting' ||
+    (verdict.name === 'insufficient' && observation.errorMarkerPresent)
+  ) {
+    stopPendingEnrollmentWatch()
+    void watch.host.sendRuntimeMessage({
+      type: 'nook:website-authenticator-enroll-dismiss',
+      payload: { origin: location.origin, stageId: watch.stageId },
+    })
+    setHostDescription(
+      watch.host,
+      watch.host.translatedMessage('widgetEnrollFailed'),
+    )
+    watch.host.setBusy(false)
+    renderEnrollmentActions(watch.host, detectEnrollmentHints())
+    return
+  }
+
+  if (verdict.name === 'timeout') {
+    // Keep the staged secret; ask the user to finish verification or cancel.
+    setHostDescription(
+      watch.host,
+      watch.host.translatedMessage('widgetEnrollVerifyPending'),
+    )
+  }
+}
+
+function beginEnrollmentEvidenceWatch(
+  host: EnrollmentFlowHost,
+  section: HTMLElement,
+  stageId: string,
+  vaultStoreId: string,
+): void {
+  stopPendingEnrollmentWatch()
+  const startedAt = Date.now()
+  const authPath = location.pathname
+  const watch: NonNullable<typeof pendingEnrollmentWatch> = {
+    stageId,
+    vaultStoreId,
+    startedAt,
+    authPath,
+    sawMutation: false,
+    host,
+    section,
+  }
+  watch.observer = new MutationObserver(() => {
+    if (!pendingEnrollmentWatch) return
+    pendingEnrollmentWatch.sawMutation = true
+    if (stageId !== 'pending') {
+      void fillStagedEnrollmentCode(host, stageId)
+    }
+    void evaluatePendingEnrollmentEvidence()
+  })
+  watch.observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  })
+  watch.timer = window.setInterval(() => {
+    if (stageId !== 'pending') {
+      void fillStagedEnrollmentCode(host, stageId)
+    }
+    void evaluatePendingEnrollmentEvidence()
+  }, ENROLLMENT_EVIDENCE_POLL_MS)
+  pendingEnrollmentWatch = watch
+  void evaluatePendingEnrollmentEvidence()
+}
+
+async function beginEnrollmentCeremony(
+  host: EnrollmentFlowHost,
+  section: HTMLElement,
+  vaultStoreId: string,
+  otpauthUri: { value: string },
+  candidate: DecodedOtpauthCandidate | undefined,
+): Promise<void> {
+  setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
+  // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
+  beginEnrollmentEvidenceWatch(host, section, 'pending', vaultStoreId)
+  const stageResponse = await host.sendRuntimeMessage<EnrollStageResponse>({
+    type: 'nook:website-authenticator-enroll-stage',
+    payload: {
+      origin: location.origin,
+      vaultStoreId,
+      otpauthUri: otpauthUri.value,
+    },
+  })
+  clearOtpauthUri(otpauthUri)
+  clearCandidate(candidate)
+  if (!stageResponse?.ok || typeof stageResponse.stageId !== 'string') {
+    stopPendingEnrollmentWatch()
+    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+    host.setBusy(false)
+    renderEnrollmentActions(host, detectEnrollmentHints())
+    return
+  }
+  // Replace the temporary pending watch with the real stage id.
+  beginEnrollmentEvidenceWatch(
+    host,
+    section,
+    stageResponse.stageId,
+    vaultStoreId,
+  )
+
+  const filled = await fillStagedEnrollmentCode(host, stageResponse.stageId)
+  setHostDescription(
+    host,
+    host.translatedMessage(
+      filled ? 'widgetEnrollVerifyFilled' : 'widgetEnrollVerifyPending',
+    ),
+  )
+  section.replaceChildren()
+  const cancelButton = createTextButton(host, 'widgetEnrollCancel', (event) => {
+    if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+    stopPendingEnrollmentWatch()
+    void host.sendRuntimeMessage({
+      type: 'nook:website-authenticator-enroll-dismiss',
+      payload: {
+        origin: location.origin,
+        stageId: stageResponse.stageId,
+      },
+    })
+    resetEnrollmentHeadline(host, detectEnrollmentHints())
+    renderEnrollmentActions(host, detectEnrollmentHints())
+  })
+  section.append(cancelButton)
+  host.setBusy(false)
 }
 
 function resetEnrollmentHeadline(
@@ -254,37 +545,13 @@ async function showQrPreview(
         host.setBusy(true)
         confirmButton.disabled = true
         cancelButton.disabled = true
-        setHostDescription(host, host.translatedMessage('widgetEnrollWorking'))
-        void host
-          .sendRuntimeMessage<EnrollConfirmResponse>({
-            type: 'nook:website-authenticator-enroll-confirm',
-            payload: {
-              origin: location.origin,
-              vaultStoreId,
-              otpauthUri: otpauthUri.value,
-            },
-          })
-          .then((confirmResponse) => {
-            if (confirmResponse?.ok) {
-              setHostDescription(
-                host,
-                host.translatedMessage('widgetEnrollSaved'),
-              )
-            } else if (confirmResponse?.reason === 'authenticator-locked') {
-              setHostDescription(host, lockedEnrollMessage(host))
-            } else {
-              setHostDescription(
-                host,
-                host.translatedMessage('widgetEnrollFailed'),
-              )
-            }
-          })
-          .finally(() => {
-            clearOtpauthUri(otpauthUri)
-            clearCandidate(candidate)
-            host.setBusy(false)
-            renderEnrollmentActions(host, detectEnrollmentHints())
-          })
+        void beginEnrollmentCeremony(
+          host,
+          section,
+          vaultStoreId,
+          otpauthUri,
+          candidate,
+        )
       },
     )
 
@@ -691,10 +958,15 @@ async function startBackupEnrollment(
   }
 }
 
+export function enrollmentCeremonyActive(): boolean {
+  return pendingEnrollmentWatch !== undefined
+}
+
 export function renderEnrollmentActions(
   host: EnrollmentFlowHost,
   hints: EnrollmentPageHints,
 ): void {
+  if (enrollmentCeremonyActive()) return
   if (!hints.qr && !hints.backupCodes) {
     clearEnrollmentSection(host.panel)
     return

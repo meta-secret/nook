@@ -8,12 +8,44 @@ export type WebsiteAuthenticatorEnrollPreviewMessage = {
   }
 }
 
+export type WebsiteAuthenticatorEnrollStageMessage = {
+  type: 'nook:website-authenticator-enroll-stage'
+  payload: {
+    origin: string
+    vaultStoreId: string
+    otpauthUri: string
+  }
+}
+
+export type WebsiteAuthenticatorEnrollCodeMessage = {
+  type: 'nook:website-authenticator-enroll-code'
+  payload: {
+    origin: string
+    stageId: string
+  }
+}
+
 export type WebsiteAuthenticatorEnrollConfirmMessage = {
   type: 'nook:website-authenticator-enroll-confirm'
   payload: {
     origin: string
     vaultStoreId: string
-    otpauthUri: string
+    stageId: string
+  }
+}
+
+export type WebsiteAuthenticatorEnrollDismissMessage = {
+  type: 'nook:website-authenticator-enroll-dismiss'
+  payload: {
+    origin: string
+    stageId: string
+  }
+}
+
+export type WebsiteAuthenticatorEnrollPendingMessage = {
+  type: 'nook:website-authenticator-enroll-pending'
+  payload: {
+    origin: string
   }
 }
 
@@ -37,6 +69,10 @@ export type OtpauthEnrollmentPreview = {
   period: number
 }
 
+function isOtpauthTotpUri(value: unknown): value is string {
+  return typeof value === 'string' && value.startsWith('otpauth://totp/')
+}
+
 export function isWebsiteAuthenticatorEnrollPreviewMessage(
   message: unknown,
 ): message is WebsiteAuthenticatorEnrollPreviewMessage {
@@ -44,10 +80,31 @@ export function isWebsiteAuthenticatorEnrollPreviewMessage(
     return false
   }
   const payload = message.payload as Record<string, unknown>
+  return isOtpauthTotpUri(payload.otpauthUri)
+}
+
+export function isWebsiteAuthenticatorEnrollStageMessage(
+  message: unknown,
+): message is WebsiteAuthenticatorEnrollStageMessage {
+  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-stage')) {
+    return false
+  }
+  const payload = message.payload as Record<string, unknown>
   return (
-    typeof payload.otpauthUri === 'string' &&
-    payload.otpauthUri.startsWith('otpauth://totp/')
+    typeof payload.vaultStoreId === 'string' &&
+    payload.vaultStoreId.length > 0 &&
+    isOtpauthTotpUri(payload.otpauthUri)
   )
+}
+
+export function isWebsiteAuthenticatorEnrollCodeMessage(
+  message: unknown,
+): message is WebsiteAuthenticatorEnrollCodeMessage {
+  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-code')) {
+    return false
+  }
+  const payload = message.payload as Record<string, unknown>
+  return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
 export function isWebsiteAuthenticatorEnrollConfirmMessage(
@@ -60,9 +117,25 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
-    typeof payload.otpauthUri === 'string' &&
-    payload.otpauthUri.startsWith('otpauth://totp/')
+    typeof payload.stageId === 'string' &&
+    payload.stageId.length > 0
   )
+}
+
+export function isWebsiteAuthenticatorEnrollDismissMessage(
+  message: unknown,
+): message is WebsiteAuthenticatorEnrollDismissMessage {
+  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-dismiss')) {
+    return false
+  }
+  const payload = message.payload as Record<string, unknown>
+  return typeof payload.stageId === 'string' && payload.stageId.length > 0
+}
+
+export function isWebsiteAuthenticatorEnrollPendingMessage(
+  message: unknown,
+): message is WebsiteAuthenticatorEnrollPendingMessage {
+  return hasOriginPayload(message, 'nook:website-authenticator-enroll-pending')
 }
 
 export function isWebsiteAuthenticatorBackupAttachMessage(

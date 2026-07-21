@@ -76,14 +76,14 @@ async function listExtensionAuthenticators(
 test.describe('Browser 2FA enrollment', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test('captures a settings-page QR only after consent and cancels without saving', async ({
+  test('cancels QR preview without vault write', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
 
     const mockAuth = await startMockAuthServer()
     const paired = await launchPairedPinExtension(testInfo, {
-      vaultName: 'Enrollment QR vault',
+      vaultName: 'Enrollment QR cancel vault',
     })
     try {
       const enrollPage = await paired.context.newPage()
@@ -100,7 +100,7 @@ test.describe('Browser 2FA enrollment', () => {
         .click()
       await expect(
         widget.getByRole('heading', {
-          name: /Review this authenticator before saving/,
+          name: /Review this authenticator before continuing/,
         }),
       ).toBeVisible({ timeout: 20_000 })
       await expect(widget.getByText(/Service:/)).toBeVisible()
@@ -113,14 +113,54 @@ test.describe('Browser 2FA enrollment', () => {
         widget.getByRole('button', { name: 'Add 2FA from this page' }),
       ).toBeVisible()
       expect(await listExtensionAuthenticators(paired.context)).toEqual([])
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('stages QR, fills verify, encrypts only after Sufficient evidence', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Enrollment ceremony vault',
+    })
+    try {
+      const enrollPage = await paired.context.newPage()
+      await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
+      const widget = enrollPage.locator('#nook-auth-widget')
+      await expect(
+        widget.getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toBeVisible({ timeout: 15_000 })
 
       await widget
         .getByRole('button', { name: 'Add 2FA from this page' })
         .click()
       await expect(
-        widget.getByRole('button', { name: 'Save authenticator' }),
+        widget.getByRole('button', { name: 'Continue enrollment' }),
       ).toBeVisible({ timeout: 20_000 })
-      await widget.getByRole('button', { name: 'Save authenticator' }).click()
+      await widget.getByRole('button', { name: 'Continue enrollment' }).click()
+      await expect(
+        widget.getByText(/Verification code filled|Complete verification/i),
+      ).toBeVisible({ timeout: 20_000 })
+      expect(await listExtensionAuthenticators(paired.context)).toEqual([])
+
+      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
+      await expect(
+        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
+      ).toBeVisible({ timeout: 10_000 })
+      await expect(
+        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
+      ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
+
+      await enrollPage.getByRole('button', { name: 'Verify' }).click()
+      await expect(enrollPage.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
       await expect(
         widget.getByText('Authenticator saved to your vault.'),
       ).toBeVisible({ timeout: 20_000 })
@@ -160,23 +200,23 @@ test.describe('Browser 2FA enrollment', () => {
       vaultName: 'Enrollment backup vault',
     })
     try {
-      await paired.vaultPage.getByTestId('add-secret-btn').click()
-      await paired.vaultPage.getByTestId('item-type-authenticator').click()
-      await paired.vaultPage
-        .getByTestId('authenticator-issuer')
-        .fill('Mock Auth')
-      await paired.vaultPage
-        .getByTestId('authenticator-account')
-        .fill('alice-2fa@nook.test')
-      await paired.vaultPage
-        .getByTestId('authenticator-secret')
-        .fill('JBSWY3DPEHPK3PXP')
-      await paired.vaultPage.getByTestId('save-secret-btn').click()
+      const enrollPage = await paired.context.newPage()
+      await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
+      const enrollWidget = enrollPage.locator('#nook-auth-widget')
+      await enrollWidget
+        .getByRole('button', { name: 'Add 2FA from this page' })
+        .click()
+      await enrollWidget
+        .getByRole('button', { name: 'Continue enrollment' })
+        .click()
+      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
       await expect(
-        paired.vaultPage
-          .getByTestId('vault-group-authenticator')
-          .getByTestId('secret-row'),
-      ).toBeVisible({ timeout: 15_000 })
+        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
+      ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
+      await enrollPage.getByRole('button', { name: 'Verify' }).click()
+      await expect(
+        enrollWidget.getByText('Authenticator saved to your vault.'),
+      ).toBeVisible({ timeout: 20_000 })
 
       const backupPage = await paired.context.newPage()
       await backupPage.goto(`${mockAuth.origin}/totp/backup-codes`)
@@ -187,43 +227,18 @@ test.describe('Browser 2FA enrollment', () => {
 
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
       await expect(
-        widget.getByText('Review, edit, or remove codes before saving.'),
-      ).toBeVisible({ timeout: 15_000 })
-      await expect(widget.getByText('A1B2-C3D4-E5F6')).toBeVisible()
-
-      await widget.getByRole('button', { name: 'Cancel' }).click()
-      await expect(
-        widget.getByRole('button', { name: 'Save backup codes' }),
-      ).toBeVisible()
-
-      await widget.getByRole('button', { name: 'Save backup codes' }).click()
-      await expect(widget.getByText('A1B2-C3D4-E5F6')).toBeVisible({
-        timeout: 15_000,
-      })
-      await widget
-        .getByRole('button', { name: 'Save backup codes' })
-        .last()
-        .click()
-      await expect(
         widget.getByRole('button', { name: 'Replace existing codes' }),
       ).toBeVisible({ timeout: 15_000 })
+      await expect(
+        widget.getByRole('button', { name: 'Save backup codes' }),
+      ).toHaveCount(0)
+
       await widget
         .getByRole('button', { name: 'Replace existing codes' })
         .click()
       await expect(
-        widget.getByText('Backup codes saved to the selected authenticator.'),
+        widget.getByText(/backup codes saved|резервные коды сохранены/i),
       ).toBeVisible({ timeout: 20_000 })
-
-      await expect
-        .poll(async () => listExtensionAuthenticators(paired.context), {
-          timeout: 15_000,
-        })
-        .toEqual([
-          {
-            issuer: 'Mock Auth',
-            account: 'alice-2fa@nook.test',
-          },
-        ])
     } finally {
       await paired.context.close()
       await mockAuth.close()

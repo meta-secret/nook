@@ -9,6 +9,8 @@ const validMessage = {
       {
         usernameFieldCount: 1,
         manualCheckpointPresent: false,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
         currentPasswordFieldCount: 1,
         newPasswordFieldCount: 0,
         genericPasswordFieldCount: 0,

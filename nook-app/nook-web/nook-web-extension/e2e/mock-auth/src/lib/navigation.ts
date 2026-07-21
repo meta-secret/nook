@@ -1,3 +1,9 @@
+/** Soft SPA navigation keeps the content-script enrollment ceremony alive. */
+export function softNavigate(path: string): void {
+  history.pushState({}, '', path)
+  dispatchEvent(new PopStateEvent('popstate'))
+}
+
 /** Full navigation so the extension content script re-scans the next page. */
 export function navigate(path: string): void {
   // Yield briefly so the extension can stage a save offer before unload.

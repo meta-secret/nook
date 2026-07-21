@@ -10,6 +10,8 @@ export type DemoChromeStubArgs = {
   savePilotFlow?: boolean
   /** Signup generate-password Pilot replies. */
   generatePilotFlow?: boolean
+  /** 2FA enrollment ceremony replies with evidence-gated confirm. */
+  enrollPilotFlow?: boolean
   barcodeRawValue?: string
 }
 
@@ -33,14 +35,82 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     loginPilotFlow = false,
     savePilotFlow = false,
     generatePilotFlow = false,
+    enrollPilotFlow = false,
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
   let stagedOffer: StagedSaveOffer | undefined
+  let enrollStaged = false
 
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
+    }
+    if (enrollPilotFlow) {
+      switch (message.type) {
+        case 'nook:website-authenticator-enroll-preview':
+          return {
+            ok: true,
+            status: 'ready',
+            vaultStoreId: 'demo-vault',
+            vaultName: 'Demo vault',
+            preview: {
+              issuer: 'Demo Service',
+              account: 'demo.user@example.test',
+              websiteUrl: 'https://demo.example.test',
+              algorithm: 'SHA1',
+              digits: 6,
+              period: 30,
+            },
+          }
+        case 'nook:website-authenticator-enroll-stage':
+          enrollStaged = true
+          return { ok: true, stageId: 'demo-enroll-stage' }
+        case 'nook:website-authenticator-enroll-code':
+          return { ok: true, code: '482913' }
+        case 'nook:authentication-outcome-classify': {
+          const observation = (
+            message as {
+              payload?: {
+                observation?: {
+                  successMarkerPresent?: boolean
+                  errorMarkerPresent?: boolean
+                }
+              }
+            }
+          ).payload?.observation
+          if (observation?.errorMarkerPresent) {
+            return {
+              ok: true,
+              verdict: {
+                name: 'insufficient',
+                allowsCredentialCommit: false,
+              },
+            }
+          }
+          if (observation?.successMarkerPresent && enrollStaged) {
+            return {
+              ok: true,
+              verdict: { name: 'sufficient', allowsCredentialCommit: true },
+            }
+          }
+          return {
+            ok: true,
+            verdict: {
+              name: 'insufficient',
+              allowsCredentialCommit: false,
+            },
+          }
+        }
+        case 'nook:website-authenticator-enroll-confirm':
+          enrollStaged = false
+          return { ok: true, secretId: 'demo-authenticator-1' }
+        case 'nook:website-authenticator-enroll-dismiss':
+          enrollStaged = false
+          return { ok: true }
+        default:
+          return { ok: true }
+      }
     }
     if (generatePilotFlow) {
       switch (message.type) {
