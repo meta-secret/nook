@@ -747,7 +747,7 @@
             >
               <code
                 class="truncate font-mono text-foreground"
-                data-testid="revealed-secret"
+                data-testid="credit-card-number-value"
               >
                 {decrypted
                   ? decrypted.cardNumber
@@ -812,7 +812,10 @@
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
-              <code class="truncate font-mono text-foreground">
+              <code
+                class="truncate font-mono text-foreground"
+                data-testid="credit-card-cvv-value"
+              >
                 {decrypted ? decrypted.cvv || vault.t("common.none") : "•••"}
               </code>
               {#if decrypted?.cvv}
