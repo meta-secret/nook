@@ -96,11 +96,23 @@ That writes to:
 - `~/Library/Application Support/Nook/browser-extensions/nook-web-extension/current`
 - `~/Library/Application Support/Nook/browser-extensions/nook-web-extension/releases/nook-web-extension-<version>.zip`
 
-Run the basic Chromium extension smoke with:
+Run the Chromium extension e2e suite with:
 
 ```bash
 task extension:test:e2e
 ```
+
+That suite includes:
+
+- Detection/smoke coverage against the local **mock auth** fixture server
+  (`e2e/mock-auth/`) for plain login, login→2FA, and DOM quirks (hidden header
+  password, SPA step-up, standalone OTP, etc.).
+- PIN-initialized Pilot flows (`e2e/mock-auth-pilot.spec.ts`) that force
+  passkey unavailability, protect the extension device with PIN `123456`, pair
+  a vault, and complete Continue with Nook / Fill 2FA against mock auth — no
+  real third-party sites.
+
+Tracked as #534 (service #535, PIN Pilot e2e #536).
 
 To test the exact extension ZIP deployed by development or a PR, run the
 disposable hosted smoke. It verifies the hosted metadata, checksum, archive,

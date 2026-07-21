@@ -1,0 +1,198 @@
+import {
+  chromium,
+  expect,
+  type BrowserContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  belongsToSimpleVault,
+  DEFAULT_SIMPLE_VAULT_URL,
+  normalizeSimpleVaultBaseUrl,
+} from '../../src/lib/simple-vault-target'
+import { MOCK_AUTH_DEFAULT_PIN } from '../mock-auth'
+import {
+  ensurePinProtectedPopup,
+  installForcePinDeviceProtection,
+} from './pin-device'
+
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../..',
+)
+const extensionDir =
+  process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+const setupStorageKey = 'nook:extension-setup'
+const EXTENSION_TIMEOUT_MS = 45_000
+
+export type PairedPinExtension = {
+  context: BrowserContext
+  extensionId: string
+  popupPage: Page
+  vaultPage: Page
+  simpleVaultBaseUrl: string
+  vaultName: string
+}
+
+async function getServiceWorker(context: BrowserContext) {
+  return (
+    context.serviceWorkers()[0] ??
+    (await context.waitForEvent('serviceworker', {
+      timeout: EXTENSION_TIMEOUT_MS,
+    }))
+  )
+}
+
+async function readExtensionStorage(context: BrowserContext) {
+  const worker = await getServiceWorker(context)
+  return worker.evaluate(
+    () =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        globalThis.chrome.storage.local.get(undefined, resolve)
+      }),
+  )
+}
+
+async function advanceCreateVaultWizardToFinalStep(page: Page) {
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  await expect(chooser).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+
+  const finalStep = page.getByTestId('create-vault-wizard-create')
+  if (await finalStep.isVisible()) return
+
+  const simplePath = page.getByTestId('get-started-path-simple')
+  await expect(simplePath).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+  await simplePath.click()
+  await expect(finalStep).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+  const nameInput = page.getByTestId('login-vault-name-input')
+  if (!(await nameInput.inputValue()).trim()) {
+    await nameInput.fill('Mock auth vault', {
+      timeout: EXTENSION_TIMEOUT_MS,
+    })
+  }
+}
+
+export async function launchPairedPinExtension(
+  testInfo: TestInfo,
+  options?: { vaultName?: string; pin?: string },
+): Promise<PairedPinExtension> {
+  const vaultName = options?.vaultName ?? 'Mock auth vault'
+  const pin = options?.pin ?? MOCK_AUTH_DEFAULT_PIN
+  const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
+    process.env.NOOK_SIMPLE_VAULT_URL || DEFAULT_SIMPLE_VAULT_URL,
+  )
+
+  const userDataDir = testInfo.outputPath('chromium-profile-pin')
+  await mkdir(userDataDir, { recursive: true })
+
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    executablePath: chromiumExecutablePath,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+    ],
+  })
+  await context.addInitScript(installForcePinDeviceProtection)
+
+  const worker = await getServiceWorker(context)
+  const extensionId = new URL(worker.url()).host
+  const popupPage = await context.newPage()
+  await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+  await ensurePinProtectedPopup(popupPage, pin)
+
+  const openedConnectPage = context.waitForEvent('page')
+  await popupPage.getByTestId('connect-simple-vault-btn').click()
+  const simplePage = await openedConnectPage
+  await expect(simplePage).toHaveURL((url) =>
+    belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+  )
+
+  await advanceCreateVaultWizardToFinalStep(simplePage)
+  await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
+  await simplePage.getByTestId('login-create-device-vault-btn').click()
+  await expect(simplePage.getByTestId('extension-connect-consent')).toBeVisible(
+    { timeout: EXTENSION_TIMEOUT_MS },
+  )
+  await simplePage.getByTestId('approve-extension-device-btn').click()
+  await expect
+    .poll(
+      async () => {
+        if (
+          await simplePage.getByTestId('extension-connect-approved').isVisible()
+        ) {
+          return 'approved'
+        }
+        const alerts = await simplePage.getByRole('alert').allTextContents()
+        return alerts.at(-1) ?? 'pending'
+      },
+      { timeout: 15_000 },
+    )
+    .toBe('approved')
+
+  await expect
+    .poll(async () => {
+      const storage = await readExtensionStorage(context)
+      return storage[setupStorageKey]
+    })
+    .toMatchObject({
+      status: 'ready',
+      selectedVaultName: vaultName,
+      eventCount: expect.any(Number),
+    })
+
+  await simplePage.getByRole('button', { name: 'Done' }).click()
+  await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
+    timeout: EXTENSION_TIMEOUT_MS,
+  })
+
+  return {
+    context,
+    extensionId,
+    popupPage,
+    vaultPage: simplePage,
+    simpleVaultBaseUrl,
+    vaultName,
+  }
+}
+
+export async function saveVaultLogin(
+  vaultPage: Page,
+  websiteOrigin: string,
+  username: string,
+  password: string,
+): Promise<void> {
+  await vaultPage.getByTestId('add-secret-btn').click()
+  await vaultPage.getByTestId('item-type-login').click()
+  await vaultPage.getByTestId('secret-label').fill(websiteOrigin)
+  await vaultPage.getByTestId('login-username').fill(username)
+  await vaultPage.getByTestId('secret-value').fill(password)
+  await vaultPage.getByTestId('save-secret-btn').click()
+  await expect(
+    vaultPage.getByTestId('vault-group-login').getByTestId('secret-row'),
+  ).toBeVisible({ timeout: 15_000 })
+}
+
+export async function saveVaultAuthenticator(
+  vaultPage: Page,
+  issuer: string,
+  account: string,
+  secret: string,
+): Promise<void> {
+  await vaultPage.getByTestId('add-secret-btn').click()
+  await vaultPage.getByTestId('item-type-authenticator').click()
+  await vaultPage.getByTestId('authenticator-issuer').fill(issuer)
+  await vaultPage.getByTestId('authenticator-account').fill(account)
+  await vaultPage.getByTestId('authenticator-secret').fill(secret)
+  await vaultPage.getByTestId('save-secret-btn').click()
+  await expect(
+    vaultPage
+      .getByTestId('vault-group-authenticator')
+      .getByTestId('secret-row'),
+  ).toBeVisible({ timeout: 15_000 })
+}
