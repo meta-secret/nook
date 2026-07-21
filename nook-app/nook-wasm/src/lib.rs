@@ -1928,6 +1928,22 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn issuer_host_map_loads_under_wasm() {
+        assert_eq!(
+            nook_core::mapped_host_for_issuer("OpenAI"),
+            Some("openai.com")
+        );
+        assert_eq!(
+            nook_core::resolve_authenticator_website_host("", "GitHub"),
+            Some("github.com".to_owned())
+        );
+        assert_eq!(
+            nook_core::authenticator_group_key("", "Namecheap"),
+            "namecheap.com"
+        );
+    }
+
+    #[wasm_bindgen_test]
     fn page_resolves_brand_authenticator_onto_site_host() {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: vec![
