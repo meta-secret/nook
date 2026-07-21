@@ -38,7 +38,7 @@
 
 <div
   class="min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-background {fill
-    ? 'flex min-h-48 flex-1 flex-col sm:h-full sm:min-h-0'
+    ? 'flex min-h-0 flex-1 flex-col sm:h-full'
     : ''}"
   data-testid="markdown-editor"
 >
