@@ -31,8 +31,8 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveText(/Connected to Mock auth vault/)
+      // Single matching login fills and submits without an account chooser.
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await widget.getByRole('button', { name: 'Saved login 1' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -76,7 +76,6 @@ test.describe('PIN Pilot against mock auth', () => {
       await loginWidget
         .getByRole('button', { name: 'Continue with Nook' })
         .click()
-      await loginWidget.getByRole('button', { name: 'Saved login 1' }).click()
 
       await expect(loginPage).toHaveURL(/\/totp\/verify$/, { timeout: 20_000 })
       const otpWidget = loginPage.locator('#nook-auth-widget')
