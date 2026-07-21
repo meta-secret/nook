@@ -396,7 +396,8 @@
       "secure_note": "Secure Note",
       "seed_phrase": "Seed Phrase",
       "passkey": "Passkey",
-      "authenticator": "Authenticator"
+      "authenticator": "Authenticator",
+      "credit_card": "Credit Card"
     },
     "fields": {
       "username": "Username",
@@ -425,13 +426,24 @@
       "current_code": "Current code",
       "code_expires_in": "Refreshes in {count}s",
       "relying_party": "Website",
-      "passkey_managed_hint": "This passkey is created and used through website requests handled by the Nook extension. Its private key is never revealed or copied."
+      "passkey_managed_hint": "This passkey is created and used through website requests handled by the Nook extension. Its private key is never revealed or copied.",
+      "cardholder_name": "Name on card",
+      "card_number": "Card number",
+      "expiration": "Expiration",
+      "cvv": "Security code",
+      "last4": "Last four",
+      "unnamed_card": "Unnamed Card",
+      "masked_card_number": "•••• {last4}"
     },
     "status": {
       "synced": "Synced",
       "syncing": "Syncing…",
       "never_synced": "Never synced"
-    }
+    },
+    "copy_card_number": "Copy card number",
+    "copy_cvv": "Copy security code",
+    "copy_expiration": "Copy expiration",
+    "copy_cardholder_name": "Copy name on card"
   },
   "bitwarden_import": {
     "button": "Import Bitwarden",
@@ -815,7 +827,11 @@
       "authenticator_digits_invalid": "Authenticator codes must contain 6 to 8 digits.",
       "authenticator_period_invalid": "Authenticator period must be between 15 and 300 seconds.",
       "authenticator_uri_invalid": "Enter a valid otpauth:// TOTP URI.",
-      "unknown_storage_mode": "Unknown storage mode: {mode}"
+      "unknown_storage_mode": "Unknown storage mode: {mode}",
+      "credit_card_title_required": "Enter a title for this card.",
+      "credit_card_number_invalid": "Enter a valid card number.",
+      "credit_card_expiration_invalid": "Enter a valid expiration month and year.",
+      "credit_card_cvv_invalid": "Enter a valid 3 or 4 digit security code."
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
     "engine_loading": "Vault engine is still loading. Try again in a moment.",
@@ -1086,7 +1102,15 @@
     "placeholder_authenticator_account": "alice@example.com",
     "placeholder_authenticator_secret": "Setup key or otpauth:// URI",
     "authenticator_secret_hint": "Paste the setup key or otpauth:// URI from the service.",
-    "markdown_support": "Markdown"
+    "markdown_support": "Markdown",
+    "title_edit_credit_card": "Edit credit card",
+    "title_new_credit_card": "New credit card",
+    "credit_card_desc": "Payment card details",
+    "placeholder_cardholder": "Name on card",
+    "placeholder_card_number": "Card number",
+    "placeholder_expiration_month": "MM",
+    "placeholder_expiration_year": "YYYY",
+    "placeholder_cvv": "CVV"
   },
   "status_bar": {
     "synced": "Synced",
@@ -1467,9 +1491,19 @@
       "login_title": "Ready to sign in",
       "login_description": "Nook detected a login step and is ready to continue with your approval.",
       "signup_title": "Signup detected",
-      "signup_description": "Nook is observing this signup. Continue manually while the guided flight plan is unavailable.",
+      "signup_description": "Nook is observing this signup. After you create the account, Nook can save the login with your approval.",
       "password_change_title": "Password change detected",
       "password_change_description": "Nook is observing this password change. Continue manually until verified replacement is available.",
+      "save_login_title": "Save this login?",
+      "save_login_description": "Nook can store this sign-in for next time. Secrets stay in your vault.",
+      "update_login_title": "Update this login?",
+      "update_login_description": "Nook found a saved login for this site. Update the password with your approval.",
+      "save_login": "Save login",
+      "update_login": "Update login",
+      "save_login_not_now": "Not now",
+      "save_login_failed": "Nook could not save this login. Unlock Nook and try again.",
+      "save_login_saved_title": "Login saved",
+      "save_login_saved_description": "Nook stored this login. Continue with Nook can use it next time.",
       "totp_title": "Verification code requested",
       "totp_description": "Nook detected a second-factor step. Continue manually while guided code fill is unavailable.",
       "manual_title": "Manual checkpoint",

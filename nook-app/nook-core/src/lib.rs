@@ -14,14 +14,14 @@ mod vault;
 
 pub(crate) use auth::{
     authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
-    multi_device, password_envelope,
+    multi_device, password_envelope, website_login_save,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
-    chrome_passwords_import, google_authenticator_import, lastpass_import, onepassword_import,
-    passkey_authenticator, password, proton_pass_import, secret_fingerprint, secret_types,
-    secret_view, session,
+    chrome_passwords_import, credit_card, google_authenticator_import, lastpass_import,
+    onepassword_import, passkey_authenticator, password, proton_pass_import, secret_fingerprint,
+    secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -62,6 +62,7 @@ pub use bitwarden_import::{
 pub use chrome_passwords_import::{
     ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
 };
+pub use credit_card::CreditCardSecret;
 pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
@@ -136,10 +137,10 @@ pub use secret_types::{
     SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{
-    ApiKeySecretForm, AuthenticatorSecretForm, LoginSecretForm, SecretFormFields, SecretListItem,
-    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, authenticator_group_key,
-    build_secret_yaml, build_secret_yaml_from_form, hostname_from_url, login_host_matches_origin,
-    resolve_entity_group_keys,
+    ApiKeySecretForm, AuthenticatorSecretForm, CreditCardSecretForm, LoginSecretForm,
+    SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
+    SeedPhraseSecretForm, authenticator_group_key, build_secret_yaml, build_secret_yaml_from_form,
+    hostname_from_url, login_host_matches_origin, resolve_entity_group_keys,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
@@ -149,6 +150,9 @@ pub use vault_sentinel_onboarding::{
 };
 pub use vault_sync_conflict::{
     ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
+};
+pub use website_login_save::{
+    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
 
 pub use nook_auth2::{

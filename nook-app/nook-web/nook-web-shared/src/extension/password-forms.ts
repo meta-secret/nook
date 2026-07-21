@@ -377,6 +377,30 @@ export function fillLoginCredentials(
   return true;
 }
 
+/** Read username/password from a classified auth form scope for a save offer. */
+export function readLoginCredentials(
+  root: ParentNode = document,
+  formScope?: PasswordFormScope,
+): LoginCredentials | undefined {
+  const passwordFields = findPasswordFields(root, formScope);
+  if (passwordFields.length === 0) return undefined;
+
+  const newPasswordFields = passwordFields.filter((field) =>
+    hasAutocompleteToken(field, "new-password"),
+  );
+  const passwordField =
+    newPasswordFields[0] ??
+    passwordFields.find((field) =>
+      hasAutocompleteToken(field, "current-password"),
+    ) ??
+    passwordFields[0];
+  const password = passwordField.value.trim();
+  const username =
+    findUsernameFields(root, formScope)[0]?.value.trim() ?? "";
+  if (!username || !password) return undefined;
+  return { username, password };
+}
+
 export function submitLoginForm(
   root: ParentNode = document,
   formScope?: PasswordFormScope,

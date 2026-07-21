@@ -51,7 +51,8 @@ export type VaultItemType =
   | "seed-phrase"
   | "secure-note"
   | "passkey"
-  | "authenticator";
+  | "authenticator"
+  | "credit-card";
 
 export type AuthenticatorCodeView = {
   code: string;
@@ -148,6 +149,16 @@ export type SecretFormInput =
       digits: string;
       period: string;
       backupCodes: string;
+    }
+  | {
+      type: "credit-card";
+      title: string;
+      cardholderName: string;
+      number: string;
+      expirationMonth: string;
+      expirationYear: string;
+      cvv: string;
+      notes: string;
     };
 
 /** Build a validated YAML payload from one core-owned secret form variant. */
@@ -185,6 +196,17 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.digits,
         input.period,
         input.backupCodes,
+      );
+      break;
+    case "credit-card":
+      fields = NookSecretFormFields.creditCard(
+        input.title,
+        input.cardholderName,
+        input.number,
+        input.expirationMonth,
+        input.expirationYear,
+        input.cvv,
+        input.notes,
       );
       break;
   }

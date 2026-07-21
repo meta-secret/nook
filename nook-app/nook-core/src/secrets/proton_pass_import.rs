@@ -8,7 +8,7 @@ use serde_json::Value;
 use thiserror::Error;
 use zip::ZipArchive;
 
-use crate::{LoginSecret, SecretValue, SecureNoteSecret};
+use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
 const MAX_EXPORT_DATA_BYTES: u64 = 64 * 1024 * 1024;
@@ -100,6 +100,16 @@ struct ProtonPassContent {
     totp_uri: String,
     #[serde(default)]
     passkeys: Vec<Value>,
+    #[serde(default)]
+    cardholder_name: String,
+    #[serde(default)]
+    number: String,
+    #[serde(default)]
+    expiration_date: String,
+    #[serde(default)]
+    verification_number: String,
+    #[serde(default)]
+    pin: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -288,6 +298,39 @@ fn convert_note(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
     })
 }
 
+fn parse_proton_expiration(raw: &str) -> (String, String) {
+    let trimmed = raw.trim();
+    if let Some((year, month)) = trimmed.split_once('-') {
+        return (month.trim().to_owned(), year.trim().to_owned());
+    }
+    if let Some((month, year)) = trimmed.split_once('/') {
+        return (month.trim().to_owned(), year.trim().to_owned());
+    }
+    (String::new(), String::new())
+}
+
+fn convert_credit_card(item: &ProtonPassItem, vault_name: &str) -> Option<SecretValue> {
+    let content = &item.data.content;
+    let (expiration_month, expiration_year) = parse_proton_expiration(&content.expiration_date);
+    let mut notes = item.data.metadata.note.clone();
+    let mut metadata = item_metadata(item, vault_name, "", "");
+    if !content.pin.trim().is_empty() {
+        metadata.push(("pin".to_owned(), content.pin.trim().to_owned()));
+    }
+    append_proton_metadata(&mut notes, metadata);
+    CreditCardSecret::from_fields(
+        item.data.metadata.name.trim(),
+        content.cardholder_name.trim(),
+        content.number.trim(),
+        expiration_month.trim(),
+        expiration_year.trim(),
+        content.verification_number.trim(),
+        &notes,
+    )
+    .ok()
+    .map(SecretValue::CreditCard)
+}
+
 fn plan_json(json: &str) -> Result<ProtonPassImportPlan, ProtonPassImportError> {
     let export: ProtonPassExport =
         serde_json::from_str(json).map_err(ProtonPassImportError::InvalidData)?;
@@ -299,6 +342,11 @@ fn plan_json(json: &str) -> Result<ProtonPassImportPlan, ProtonPassImportError> 
             match item.data.item_type.as_str() {
                 "login" => items.push(convert_login(&item, &vault.name)),
                 "note" => items.push(convert_note(&item, &vault.name)),
+                "creditCard" => {
+                    if let Some(card) = convert_credit_card(&item, &vault.name) {
+                        items.push(card);
+                    }
+                }
                 _ => {}
             }
         }
@@ -389,10 +437,15 @@ mod tests {
                 },
                 {
                   "data":{
-                    "metadata":{"name":"Card","note":""},
+                    "metadata":{"name":"Card","note":"travel"},
                     "extraFields":[],
                     "type":"creditCard",
-                    "content":{}
+                    "content":{
+                      "cardholderName":"Ada Lovelace",
+                      "number":"4111111111111111",
+                      "expirationDate":"2030-12",
+                      "verificationNumber":"123"
+                    }
                   },
                   "state":1
                 }
@@ -407,8 +460,8 @@ mod tests {
         let plan =
             plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes())).unwrap();
         assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 1);
-        assert_eq!(plan.items.len(), 2);
+        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(plan.items.len(), 3);
         assert_eq!(
             plan.items[0],
             SecretValue::Login(LoginSecret {

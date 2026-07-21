@@ -1,4 +1,5 @@
 import { findPlainMockAuthAccount } from '../../accounts'
+import { findDynamicMockAuthAccount } from './dynamic-accounts'
 import { navigate, recordLoginSubmission } from './navigation'
 
 export type PlainLoginResult = 'success' | 'invalid'
@@ -12,7 +13,9 @@ export function completePlainLogin(
   password: string,
 ): PlainLoginResult {
   recordLoginSubmission(username, password)
-  const account = findPlainMockAuthAccount(username, password)
+  const account =
+    findPlainMockAuthAccount(username, password) ??
+    findDynamicMockAuthAccount(username, password)
   if (!account) return 'invalid'
   navigate('/plain/success')
   return 'success'

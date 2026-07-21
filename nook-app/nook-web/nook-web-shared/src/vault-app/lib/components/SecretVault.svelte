@@ -12,6 +12,7 @@
     StickyNote,
     ShieldCheck,
     KeyRound,
+    CreditCard,
     TriangleAlert,
   } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -91,6 +92,7 @@
     { value: 'api-key', labelKey: 'vault.types.api_key' },
     { value: 'seed-phrase', labelKey: 'vault.types.seed_phrase' },
     { value: 'secure-note', labelKey: 'vault.types.secure_note' },
+    { value: 'credit-card', labelKey: 'vault.types.credit_card' },
     { value: 'passkey', labelKey: 'vault.types.passkey' },
   ]
 
@@ -117,6 +119,7 @@
     if (items.some((item) => item.type === 'api-key')) return Braces
     if (items.some((item) => item.type === 'seed-phrase')) return Sprout
     if (items.some((item) => item.type === 'authenticator')) return ShieldCheck
+    if (items.some((item) => item.type === 'credit-card')) return CreditCard
     if (items.some((item) => item.type === 'passkey')) return KeyRound
     return StickyNote
   }
@@ -443,7 +446,8 @@
             {@const titleAsCardHeader =
               group.items.length === 1 &&
               (group.items[0].type === 'secure-note' ||
-                group.items[0].type === 'login')}
+                group.items[0].type === 'login' ||
+                group.items[0].type === 'credit-card')}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"

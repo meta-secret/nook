@@ -396,7 +396,8 @@
       "secure_note": "Безопасная заметка",
       "seed_phrase": "Сид-фраза",
       "passkey": "Ключ доступа",
-      "authenticator": "Аутентификатор"
+      "authenticator": "Аутентификатор",
+      "credit_card": "Банковская карта"
     },
     "fields": {
       "username": "Имя пользователя",
@@ -425,13 +426,24 @@
       "current_code": "Текущий код",
       "code_expires_in": "Обновится через {count} с",
       "relying_party": "Сайт",
-      "passkey_managed_hint": "Этот ключ доступа создаётся и используется по запросам сайтов через расширение Nook. Его закрытый ключ нельзя показать или скопировать."
+      "passkey_managed_hint": "Этот ключ доступа создаётся и используется по запросам сайтов через расширение Nook. Его закрытый ключ нельзя показать или скопировать.",
+      "cardholder_name": "Имя на карте",
+      "card_number": "Номер карты",
+      "expiration": "Срок действия",
+      "cvv": "Код безопасности",
+      "last4": "Последние цифры",
+      "unnamed_card": "Карта без названия",
+      "masked_card_number": "•••• {last4}"
     },
     "status": {
       "synced": "Синхронизировано",
       "syncing": "Синхронизация…",
       "never_synced": "Ни разу не синхронизировано"
-    }
+    },
+    "copy_card_number": "Скопировать номер карты",
+    "copy_cvv": "Скопировать код безопасности",
+    "copy_expiration": "Скопировать срок действия",
+    "copy_cardholder_name": "Скопировать имя на карте"
   },
   "bitwarden_import": {
     "button": "Импорт Bitwarden",
@@ -843,7 +855,15 @@
     "placeholder_authenticator_account": "alice@example.com",
     "placeholder_authenticator_secret": "Ключ настройки или URI otpauth://",
     "authenticator_secret_hint": "Вставьте ключ настройки или URI otpauth:// от сервиса.",
-    "markdown_support": "Markdown"
+    "markdown_support": "Markdown",
+    "title_edit_credit_card": "Редактировать карту",
+    "title_new_credit_card": "Новая банковская карта",
+    "credit_card_desc": "Данные платёжной карты",
+    "placeholder_cardholder": "Имя на карте",
+    "placeholder_card_number": "Номер карты",
+    "placeholder_expiration_month": "ММ",
+    "placeholder_expiration_year": "ГГГГ",
+    "placeholder_cvv": "CVV"
   },
   "status_bar": {
     "synced": "Синхронизировано",
@@ -1081,7 +1101,11 @@
       "authenticator_period_invalid": "Период аутентификатора должен быть от 15 до 300 секунд.",
       "authenticator_uri_invalid": "Введите корректный TOTP URI otpauth://.",
       "unknown_storage_mode": "Неизвестный режим хранилища: {mode}",
-      "oauth_access_token_empty": "Войдите через Google, чтобы подключить Google Drive."
+      "oauth_access_token_empty": "Войдите через Google, чтобы подключить Google Drive.",
+      "credit_card_title_required": "Введите название карты.",
+      "credit_card_number_invalid": "Введите корректный номер карты.",
+      "credit_card_expiration_invalid": "Введите корректный месяц и год срока действия.",
+      "credit_card_cvv_invalid": "Введите корректный код безопасности из 3 или 4 цифр."
     },
     "google_sign_in_required": "Войдите через Google перед разблокировкой.",
     "engine_loading": "Движок сейфа ещё загружается. Повторите попытку через мгновение.",
@@ -1474,9 +1498,19 @@
       "login_title": "Готово ко входу",
       "login_description": "Nook обнаружил этап входа и готов продолжить после вашего подтверждения.",
       "signup_title": "Обнаружена регистрация",
-      "signup_description": "Nook отслеживает регистрацию. Продолжите вручную, пока управляемый сценарий недоступен.",
+      "signup_description": "Nook отслеживает регистрацию. После создания аккаунта Nook может сохранить вход с вашего согласия.",
       "password_change_title": "Обнаружена смена пароля",
       "password_change_description": "Nook отслеживает смену пароля. Продолжите вручную, пока проверенная замена недоступна.",
+      "save_login_title": "Сохранить этот вход?",
+      "save_login_description": "Nook может сохранить эти данные для следующего раза. Секреты остаются в сейфе.",
+      "update_login_title": "Обновить этот вход?",
+      "update_login_description": "Nook нашёл сохранённый вход для этого сайта. Обновите пароль с вашего согласия.",
+      "save_login": "Сохранить вход",
+      "update_login": "Обновить вход",
+      "save_login_not_now": "Не сейчас",
+      "save_login_failed": "Nook не удалось сохранить этот вход. Разблокируйте Nook и попробуйте снова.",
+      "save_login_saved_title": "Вход сохранён",
+      "save_login_saved_description": "Nook сохранил этот вход. В следующий раз его можно использовать через «Продолжить с Nook».",
       "totp_title": "Запрошен код подтверждения",
       "totp_description": "Nook обнаружил второй фактор. Продолжите вручную, пока управляемое заполнение кода недоступно.",
       "manual_title": "Ручной этап",
