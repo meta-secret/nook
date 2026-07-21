@@ -232,6 +232,16 @@ test.describe('Browser 2FA enrollment', () => {
       await expect(
         enrollWidget.getByText('Authenticator saved to your vault.'),
       ).toBeVisible({ timeout: 20_000 })
+      await expect
+        .poll(async () => listExtensionAuthenticators(paired.context), {
+          timeout: 15_000,
+        })
+        .toEqual([
+          {
+            issuer: 'Mock Auth',
+            account: 'alice-2fa@nook.test',
+          },
+        ])
 
       const backupPage = await paired.context.newPage()
       await backupPage.goto(`${mockAuth.origin}/totp/backup-codes`)
@@ -240,17 +250,29 @@ test.describe('Browser 2FA enrollment', () => {
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toBeVisible({ timeout: 15_000 })
 
+      // CTA opens the review UI; the confirm control reuses the same label.
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
-      await expect(
-        widget.getByRole('button', { name: 'Replace existing codes' }),
-      ).toBeVisible({ timeout: 15_000 })
+      await expect(widget.locator('textarea')).toBeVisible({ timeout: 15_000 })
+      await widget.getByRole('button', { name: 'Save backup codes' }).click()
+
+      const replaceButton = widget.getByRole('button', {
+        name: 'Replace existing codes',
+      })
+      const authenticatorChoice = widget.getByRole('button', {
+        name: 'Saved 2FA 1',
+      })
+      await expect(replaceButton.or(authenticatorChoice)).toBeVisible({
+        timeout: 15_000,
+      })
+      if (await authenticatorChoice.isVisible()) {
+        await authenticatorChoice.click()
+      }
+      await expect(replaceButton).toBeVisible({ timeout: 15_000 })
       await expect(
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toHaveCount(0)
 
-      await widget
-        .getByRole('button', { name: 'Replace existing codes' })
-        .click()
+      await replaceButton.click()
       await expect(
         widget.getByText(/backup codes saved|резервные коды сохранены/i),
       ).toBeVisible({ timeout: 20_000 })
