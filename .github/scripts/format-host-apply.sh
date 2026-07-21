@@ -14,12 +14,10 @@ trap 'rm -f "$tmp" "$patch"' EXIT
 
 set -o pipefail
 status=0
-# Stream progress to the terminal while capturing for patch extraction.
+# Use `task format:diff` so sealed format runs through Taskfile deps. Calling
+# internal tasks like `docker:task` from the CLI exits 202 on go-task v3.42+.
 {
-  task setup:rust
-  task docker:rust:task TASK=_rust:format
-  task setup PREPARE_GROUP=prepare-with-unformatted-rust
-  task docker:task TASK=_format
+  task format:diff
 } 2>&1 | tee "$tmp" || status=$?
 
 if [[ "$status" -ne 0 ]]; then
