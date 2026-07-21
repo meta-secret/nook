@@ -41,6 +41,8 @@
   <DetectionLogin />
 {:else if pathname === '/signup'}
   <DetectionSignup />
+{:else if pathname === '/signup/success'}
+  <Success flow="signup" />
 {:else if pathname === '/otp'}
   <DetectionOtp />
 {:else if pathname === '/otp-hidden'}

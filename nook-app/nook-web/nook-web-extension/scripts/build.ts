@@ -145,6 +145,16 @@ type NookLocaleCatalog = {
       signup_description: string
       password_change_title: string
       password_change_description: string
+      save_login_title: string
+      save_login_description: string
+      update_login_title: string
+      update_login_description: string
+      save_login: string
+      update_login: string
+      save_login_not_now: string
+      save_login_failed: string
+      save_login_saved_title: string
+      save_login_saved_description: string
       totp_title: string
       totp_description: string
       manual_title: string
@@ -252,6 +262,32 @@ async function buildChromeLocales() {
         },
         widgetPasswordChangeDescription: {
           message: catalog.extension.widget.password_change_description,
+        },
+        widgetSaveLoginTitle: {
+          message: catalog.extension.widget.save_login_title,
+        },
+        widgetSaveLoginDescription: {
+          message: catalog.extension.widget.save_login_description,
+        },
+        widgetUpdateLoginTitle: {
+          message: catalog.extension.widget.update_login_title,
+        },
+        widgetUpdateLoginDescription: {
+          message: catalog.extension.widget.update_login_description,
+        },
+        widgetSaveLogin: { message: catalog.extension.widget.save_login },
+        widgetUpdateLogin: { message: catalog.extension.widget.update_login },
+        widgetSaveLoginNotNow: {
+          message: catalog.extension.widget.save_login_not_now,
+        },
+        widgetSaveLoginFailed: {
+          message: catalog.extension.widget.save_login_failed,
+        },
+        widgetSaveLoginSavedTitle: {
+          message: catalog.extension.widget.save_login_saved_title,
+        },
+        widgetSaveLoginSavedDescription: {
+          message: catalog.extension.widget.save_login_saved_description,
         },
         widgetTotpTitle: { message: catalog.extension.widget.totp_title },
         widgetTotpDescription: {
