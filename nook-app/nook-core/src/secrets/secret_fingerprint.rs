@@ -177,6 +177,12 @@ fn canonical_identity(value: &SecretValue) -> Vec<u8> {
             append_field(&mut bytes, normalized_text(&authenticator.issuer).as_str());
             append_field(&mut bytes, normalized_text(&authenticator.account).as_str());
         }
+        SecretValue::CreditCard(card) => {
+            append_field(&mut bytes, "credit-card");
+            append_field(&mut bytes, normalized_text(&card.title).as_str());
+            append_field(&mut bytes, normalized_text(&card.cardholder_name).as_str());
+            append_field(&mut bytes, card.last4().as_str());
+        }
     }
     bytes
 }
@@ -226,6 +232,16 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
             for code in backup_codes {
                 append_field(&mut bytes, code.as_str());
             }
+        }
+        SecretValue::CreditCard(card) => {
+            append_field(&mut bytes, card.number.as_str());
+            append_field(&mut bytes, card.expiration_month.as_str());
+            append_field(&mut bytes, card.expiration_year.as_str());
+            append_field(&mut bytes, card.cvv.as_str());
+            append_field(
+                &mut bytes,
+                provider_neutral_notes(&card.notes, &IMPORT_METADATA_MARKERS).as_str(),
+            );
         }
     }
     bytes
