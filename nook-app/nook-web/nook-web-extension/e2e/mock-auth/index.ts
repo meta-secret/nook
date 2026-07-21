@@ -4,5 +4,4 @@ export {
   findMockAuthAccount,
   type MockAuthAccount,
 } from './accounts'
-export { startMockAuthServer, type MockAuthServer } from './server'
-export { generateTotpCode, verifyTotpCode } from './totp'
+export { startMockAuthServer, type MockAuthServer } from './static-host'

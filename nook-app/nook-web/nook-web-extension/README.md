@@ -104,9 +104,10 @@ task extension:test:e2e
 
 That suite includes:
 
-- Detection/smoke coverage against the local **mock auth** fixture server
-  (`e2e/mock-auth/`) for plain login, login→2FA, and DOM quirks (hidden header
-  password, SPA step-up, standalone OTP, etc.).
+- Detection/smoke coverage against a local **client-side mock auth SPA**
+  (`e2e/mock-auth/`, Svelte pages + static host) for plain login, login→2FA, and
+  DOM quirks (hidden header password, SPA step-up, standalone OTP, etc.).
+  Auth quirks run in the browser; TOTP verify uses `nook-core` via WASM.
 - PIN-initialized Pilot flows (`e2e/mock-auth-pilot.spec.ts`) that force
   passkey unavailability, protect the extension device with PIN `123456`, pair
   a vault, and complete Continue with Nook / Fill 2FA against mock auth — no

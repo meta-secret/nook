@@ -1,4 +1,4 @@
-/** Test-only fixture identities for the local mock auth service. */
+/** Test-only fixture identities for the local mock auth SPA. */
 
 export type MockAuthAccount = {
   username: string

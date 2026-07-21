@@ -8,6 +8,7 @@ fi
 export NOOK_SIMPLE_VAULT_URL="${NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL:-http://127.0.0.1:5174/}"
 
 bun run build
+bun run e2e:mock-auth:build
 
 if command -v Xvfb >/dev/null 2>&1 && [ -z "${NOOK_EXTENSION_E2E_NO_XVFB:-}" ]; then
   display="${DISPLAY:-:99}"
