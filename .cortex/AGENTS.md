@@ -85,31 +85,29 @@ git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-Only after that commit → push → run the long local gate in parallel with PR CI.
+Only after that commit → push → monitor GitHub Actions. Do **not** run
+`task check`, `task ci:pr`, full suites, builds, or e2e as a required local gate.
 Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#pre-push-hygiene--always-format)
 and [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
 
-## ⛔ Non-negotiable: push before final checks; run them in parallel
+## ⛔ Non-negotiable: GitHub Actions is the only product gate
 
-As soon as a change is coherent enough to validate, **commit it, push it to the
-PR, and only then start the required local checks**. Never serialize the final
-gate as `local checks → push → remote checks`; that wastes the entire local-check
-duration. The required order is `pre-push hygiene → commit → push/open or update
-PR → local checks and repository-owned PR checks in parallel`.
+**The only required local action is `task format`** (plus the light UI demo
+contract when UI paths change). Every product check — lint, clippy, unit tests,
+coverage, web build, Knip, jscpd, e2e, and the full PR mirror — runs on
+**GitHub Actions**, not on the agent machine.
 
-The repository-owned GitHub Actions PR workflow is the primary validation
-pipeline and its checks are bound to the pushed head SHA. Therefore publishing
-the coherent commit is the first final-validation action, not an optional step
-after local validation, timing measurements, PR-description cleanup, or other
-follow-up work. Local Docker checks are complementary diagnostics and must not
-delay triggering or refreshing the PR workflow.
+As soon as a change is coherent enough to validate: **pre-push hygiene → commit
+→ push/open or update PR → monitor repository-owned PR workflows**. Never run
+`task check`, `task ci:pr`, a full test suite, build, or e2e as a merge or
+handoff requirement. Never serialize a local product gate before the push.
 
-**Required** before the push: unconditional `task format` (host-applied) and,
-when UI paths change, the UI demo contract. Other tiny focused commands used to
-develop or make the commit coherent may also run before the push. The minimum
-local gate, full suites, builds, e2e, and any repeated post-fix validation must
-run after the completed change is pushed so remote work starts immediately. Full
-policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--parallel-final-validation).
+Optional local Task commands remain available for focused debugging when an
+agent chooses them, but they must not delay the push and must not replace green
+GitHub Actions. On a red remote run: read the failed job logs (and app logs for
+web/e2e) → fix → `task format` → push → wait for the refreshed Actions run.
+Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--github-actions-only)
+and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
 
 ## ⛔ Non-negotiable: fix every failing check finding
 
@@ -181,11 +179,12 @@ normal build-performance PR. Full policy:
 * [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → local and applicable PR checks in parallel → fix loop → address comments and conflicts → readiness audit → automatic agent-owned squash merge). Prefer cached local Docker over cold GH Actions.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → **GitHub Actions only** for product checks → fix loop → address comments and conflicts → readiness audit → automatic agent-owned squash merge).
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 * [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
+* [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; every product gate runs on GitHub Actions**.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
@@ -214,9 +213,10 @@ normal build-performance PR. Full policy:
 * `.cursor/skills/` entries are executable mirrors for tools that support project skills. They must point back to `.cortex/dynamic-skills/`; do not treat `.cursor/skills/` as the source of truth.
 
 ### Debugging and CI verification — always check app logs
-* Investigation order: **tests** → **static analysis** (`task check`) → **persisted app logs**.
-  App logs are the most important source after the first two — vault session, sync,
-  and WASM tracing do not appear in clippy or Playwright DOM assertions.
+* Investigation order: **GitHub Actions / test output** → **static analysis findings
+  from CI** → **persisted app logs**. App logs are the most important source after
+  the first two — vault session, sync, and WASM tracing do not appear in clippy or
+  Playwright DOM assertions.
 * When debugging Playwright/e2e, vault UI flows, or red CI, **always consult app logs**
   (`nook-app-logs.json` is attached to every Playwright result; `fetchAppLogs`
   and `/app-logs` are available for local repro) before changing code.

@@ -68,4 +68,7 @@ is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Prefer local Docker (cached images) over GitHub Actions for e2e iteration; when an iteration is ready for final validation, push/open/update the PR first, then run local gates while remote CI runs. See [workflows/coding-bro.md](../workflows/coding-bro.md).
+- Optional local Docker e2e (`E2E_SPEC=… task web:test:e2e:file`) is for
+  focused debug only. Product validation after a coherent iteration is
+  GitHub Actions — format, push/open/update the PR, then monitor remote CI.
+  See [workflows/coding-bro.md](../workflows/coding-bro.md).

@@ -18,7 +18,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Predictable Structure**: Each package has a strict layer of responsibility. We enforce a one-way dependency flow: `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI). Any cross-layer leakage is disallowed.
 
 ## 4. Centralize Tooling behind a Single Command Surface
-* **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml`, cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Agents do not run raw compiler, bundler, or environment commands. They call `task setup`, `task check`, `task build`, or `task web:dev`.
+* **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml`, cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Agents do not run raw compiler, bundler, or environment commands. They call Task targets such as `task format`, `task setup`, `task check` (optional debug / CI mirror), `task build`, or `task web:dev`. Product gates for agents run on GitHub Actions after `task format` and push.
 * **Containerized Toolchain**: All compiles, tests, and package installs run inside Docker to ensure environment parity between the host machine and GitHub Actions CI.
 
 ## 5. Pay Down Tech Debt Continuously
@@ -32,7 +32,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done). See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
-* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → commit and push/update PR → GitHub Actions PR checks plus local validation in parallel → fix failures/comments/conflicts → exact-head readiness audit → automatic agent-owned squash merge.
+* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → `task format` → commit and push/update PR → GitHub Actions PR checks (sole product gate) → fix failures/comments/conflicts → exact-head readiness audit → automatic agent-owned squash merge.
 * **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
 * **Question-only turns** (no code changes) skip the pipeline.
 

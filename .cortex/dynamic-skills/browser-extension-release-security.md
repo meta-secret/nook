@@ -57,11 +57,11 @@ Does not apply to:
 - [ ] Verify injection exclusions for every vault boundary.
 - [ ] Verify archive and redirect safety before activation.
 - [ ] Keep profiles isolated by channel/PR.
-- [ ] Run the full local/remote final gate after pushing the coherent change.
+- [ ] Run `task format`, push, and let GitHub Actions own product validation.
 
 ## Validation
 
-Run `task extension:check:fast` for host-cached unit/manifest/shell proof, then
-push and run `task check` for type/build validation concurrently with
-the repository-owned PR workflow. Deployment verification must prove the exact
-head SHA, selected channel, selected origins, checksum, and packaged manifest.
+Run `task extension:check:fast` only when debugging extension packaging. For
+implementation tasks, run `task format`, push, and monitor the repository-owned
+PR workflow. Deployment verification must prove the exact head SHA, selected
+channel, selected origins, checksum, and packaged manifest.

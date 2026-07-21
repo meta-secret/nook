@@ -13,8 +13,8 @@ update the PR as soon as there is a coherent commit to show, then keep working
 on that same PR branch.
 
 Do not treat implementation as complete after local edits, a push, or a PR link.
-The agent owns the loop through local validation, Nook's applicable
-repository-owned PR test checks, fixes, re-pushes, comments already present,
+The agent owns the loop through Nook's applicable repository-owned PR test
+checks on **GitHub Actions**, fixes, re-pushes, comments already present,
 conflict resolution, the exact-head readiness audit, and squash merge. A ready
 PR must be merged without asking the user for separate authorization.
 
@@ -22,15 +22,15 @@ Default PR-first loop:
 
 1. **Prepare the PR path** — fetch `origin/main`, create a feature branch, and
    decide whether this will be a draft or normal PR.
-2. **Implement functionality** — make scoped changes on the feature branch with
-   focused local checks while iterating.
-3. **Push and create/update the PR** — once the branch has a coherent commit,
-   push it and open the PR; subsequent fixes update the same PR.
-4. **Preflight and validate** — run `task pr:preflight PR=<number>`, then inspect
-   the path-applicable `PR / Verify and preview` and `Web research / Build and
-   deploy research catalog` workflows while local validation runs.
+2. **Implement functionality** — make scoped changes on the feature branch.
+3. **Push and create/update the PR** — once the branch has a coherent formatted
+   commit, push it and open the PR; subsequent fixes update the same PR.
+4. **Preflight and validate on GitHub Actions** — run
+   `task pr:preflight PR=<number>`, then monitor the path-applicable
+   `PR / Verify and preview` and `Web research / Build and deploy research
+   catalog` workflows. Do **not** run a required local `task check` / `task ci:pr`.
 5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
-   logs for web/e2e failures, fix locally, and push the completed fix; the
+   logs for web/e2e failures, fix, `task format`, and push the completed fix; the
    synchronize event re-evaluates the refreshed repository-owned check. This
    includes Knip unused findings, jscpd clone/duplicate findings, and every
    other mechanical gate — fix the code, do not silence the check.
@@ -43,13 +43,17 @@ Default PR-first loop:
    resolved. Do not pause for a ready-PR handoff or separate merge
    permission.
 
-## Testing strategy — parallel final validation
+## Testing strategy — GitHub Actions only
 
-### ⛔ Pre-push hygiene — always format
+### ⛔ Pre-push hygiene — always format (the only required local action)
 
 Before every push, run host-applied formatting **unconditionally**. Do not skip
 it for "tiny" edits. Sealed Docker images never write the host tree; only
 `task format` applies the format diff to the files you will commit.
+
+**`task format` is the only required local product action.** Do not run
+`task check`, `task ci:pr`, full suites, builds, or e2e as a merge/handoff gate.
+Those run exclusively on GitHub Actions.
 
 ```bash
 task format          # sealed format + apply to host (always)
@@ -63,45 +67,49 @@ Never use `task extension:format` alone before push — it formats inside the
 sealed image and discards the result. See
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-### ⛔ Push first; never serialize final validation
+### ⛔ Format, push, trust GitHub Actions
 
-Once the current change is coherent and checkable, **do not run the required
-local gate yet**. Run pre-push hygiene, then commit and push/open or update the
-PR. Immediately after the push, start local validation and monitor applicable
-repository-owned PR checks at the same time:
+Once the current change is coherent and checkable, run pre-push hygiene, then
+commit and push/open or update the PR. Immediately after the push, monitor
+applicable repository-owned PR checks. Do **not** start a required local product
+gate in parallel:
 
 ```text
 WRONG: implement → task check / full tests / build → push → PR checks
 WRONG: implement → push (unformatted / missing demo) → Verify fails → re-push
-RIGHT: implement → task format (+ ui-demo-contract when UI) → commit → push → local checks ‖ PR checks
+WRONG: implement → task format → push → task check ‖ PR checks   (local product gate forbidden)
+RIGHT: implement → task format (+ ui-demo-contract when UI) → commit → push → GitHub Actions
 ```
 
 This ordering applies to the first implementation and every review/CI fix.
 Required pre-push hygiene (`task format`, and the UI demo contract when UI paths
-change) always runs before the push. Other focused commands used to debug or
-make the commit coherent may also run before the push; required final gates,
-full suites, builds, e2e, and repeated post-fix validation may not. If a local
-check fails after the push, fix it, run `task format` again, commit and push the
-complete fix immediately, then rerun local validation in parallel with the
-refreshed PR workflow.
+change) always runs before the push. Optional focused commands used to debug or
+make the commit coherent may also run before the push; required product gates,
+full suites, builds, e2e, and repeated post-fix validation must run on GitHub
+Actions after the push. If Actions fails, fix it, run `task format` again, commit
+and push the complete fix immediately, then wait for the refreshed PR workflow.
 
-**PR GitHub Actions is the primary validation pipeline.** `pr.yml` runs on
+**PR GitHub Actions is the sole product validation pipeline.** `pr.yml` runs on
 GitHub-hosted `ubuntu-latest` and every result is bound to the pushed PR head.
 Once a coherent change is ready, push immediately to trigger or refresh these
-checks; do not postpone the push for a full local gate, benchmark, PR metadata
+checks; do not postpone the push for a local product gate, benchmark, PR metadata
 edit, or other optional follow-up. The Docker setup restores separate GitHub Actions
 BuildKit cache scopes for Rust/WASM, web dependencies, and the final web image;
 main refreshes the default-branch cache visible to new PRs, and follow-up pushes
 reuse the PR branch cache. A failing fmt, clippy,
-unit test, or e2e spec still burns a remote validation cycle, so do not use PR
-CI as the primary debug loop. Unconditional `task format` before push exists
-specifically to stop the most common avoidable Verify failures.
+unit test, or e2e spec still burns a remote validation cycle, so unconditional
+`task format` before push exists specifically to stop the most common avoidable
+Verify failures.
 
-**Local Docker is warm and fast.** The same Task commands reuse independently cached Rust/WASM and web image lineages on the developer machine. Local runs are **strongly preferred** for focused debugging and iteration, but they complement rather than precede the primary PR pipeline.
+**Local Task commands are optional debug tools only.** Agents may use scoped
+commands (`task rust:test`, `E2E_SPEC=… task web:test:e2e:file`) while
+investigating a red remote finding, but those runs are never a merge requirement
+and must not delay the next completed-fix push. See
+[github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
 
-When functionality for the current iteration is complete, **commit and push/open/update the PR before starting any required final local gate**, then immediately run the local gate while Nook's PR workflows start remotely. This is for final-validation parallelism, not half-finished work: do only focused development checks before the push, and do not merge until the latest branch has both passing local validation and green applicable repository-owned PR test checks.
-
-**Debug e2e one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
+**Debug e2e one spec at a time (optional).** During a fix/debug session, do not
+re-run the full e2e suite after every change. If you choose a local repro, run
+individual specs:
 
 ```bash
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
@@ -109,45 +117,48 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 E2E_SPEC="e2e/connect.spec.ts e2e/login-unlock-flow.spec.ts" task web:test:e2e:file
 ```
 
-After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the PR mirror plus any relevant e2e project locally while remote CI runs (`task ci:pr`, `task web:test:e2e:pr`, or `task ci:pr:e2e`).
+After targeted fixes, `task format`, push/open/update the PR, and let remote CI
+be the validation gate. Do not require `task ci:pr` or full local e2e before
+merge.
 
 Default agent flow:
 
 1. **Prepare the PR path first** — fetch `origin/main`, branch from it, and plan
    the PR title/scope before editing.
-2. **Implement and iterate locally** — scoped checks as you go (`task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
+2. **Implement** — optional scoped debug commands only when useful.
 3. **Pre-push hygiene** — always `task format` (host-applied); when UI paths
    change, pass `.github/scripts/ui-demo-contract.sh` against `origin/main`.
-4. **Push and open/update the PR before long final local checks** — once the branch has a coherent formatted commit, commit, push, and create/update the PR.
-5. **Validate locally in parallel** — immediately run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e:pr` or `task ci:pr:e2e` when web/vault/sync flows change.
-6. **Inspect Nook's applicable PR workflows** — inspect `PR / Verify and
-   preview`, plus `Web research / Build and deploy research catalog` for
-   web-research paths, while the local gate runs. Green status is necessary but
-   the full readiness audit must also pass. See [code-review.md](code-review.md).
-7. **On any local or Nook PR-test failure** — read **app logs** (`nook-app-logs.json` attachment,
-   `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
-   debugging) → `task format` → commit and push the completed fix → run local
-   validation in parallel with the refreshed repository-owned PR test checks.
-8. **Address actionable PR comments currently present** — reply with the fix,
+4. **Push and open/update the PR** — once the branch has a coherent formatted
+   commit, commit, push, and create/update the PR.
+5. **Validate on GitHub Actions** — monitor `PR / Verify and preview`, plus
+   `Web research / Build and deploy research catalog` for web-research paths.
+   Green status is necessary but the full readiness audit must also pass. See
+   [code-review.md](code-review.md).
+6. **On any Nook PR-test failure** — read **app logs** (`nook-app-logs.json`
+   attachment, `fetchAppLogs`, or `/app-logs`) → fix → `task format` → commit
+   and push the completed fix → monitor the refreshed repository-owned PR test
+   checks. Optional single-spec local repro is allowed; required local product
+   gates are not.
+7. **Address actionable PR comments currently present** — reply with the fix,
    validation, or no-change rationale, and push any needed changes; GitHub
    events re-evaluate Nook's applicable PR test checks. Do not wait for another review cycle.
-9. **Resolve conflicts and merge** — before merging, verify the PR branch is not
+8. **Resolve conflicts and merge** — before merging, verify the PR branch is not
    stale against `origin/main`; update it and let the synchronize event
    re-evaluate Nook's applicable PR test checks if needed. After every push,
    re-run readiness, then squash-merge automatically when it passes.
 
 Never merge until the latest pushed branch has green applicable repository-owned
-PR test checks and has passed the required local gate for the change. External checks do
-not affect readiness. After a Nook PR-test failure, the next push must be a
-completed fix, not an exploratory checkpoint.
+PR test checks. External checks do not affect readiness. After a Nook PR-test
+failure, the next push must be a completed fix, not an exploratory checkpoint.
 
 ## Debug information — always check app logs
 
 When investigating failures, use sources in order:
 
-1. **Tests** — `task rust:test`, `task web:test`, e2e Playwright output.
-2. **Static analysis** — `task check` (fmt, clippy, svelte-check, eslint, Knip
-   unused, jscpd clones/duplicates, prettier).
+1. **GitHub Actions / test output** — failed job logs, Playwright report,
+   optional local `task rust:test` / single-spec e2e when reproducing.
+2. **Static analysis findings from CI** — fmt, clippy, svelte-check, eslint, Knip
+   unused, jscpd clones/duplicates, prettier (surfaced by `pr.yml` / Verify).
 3. **Persisted app logs** — **most important after 1–2.** Vault unlock, sync, WASM
    tracing, and console capture live in IndexedDB (`/app-logs`, `nook-app-logs.json`).
 
@@ -171,41 +182,36 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    aggregate GitHub issue and focused sub-issues for the missing work.
 4. **Pre-push hygiene** — Always run `task format` (host-applied). When UI-facing
    paths change, pass the UI demo contract against `origin/main`. Stage the
-   applied format diff before committing.
+   applied format diff before committing. Do not run a required local product gate.
 5. **Push and open/update PR** — Commit and push as soon as the branch has a
-   coherent formatted implementation commit. If no PR exists, open it before
-   starting the long local final gate so remote CI can run in parallel.
-6. **Local validation + event-driven Nook PR checks** — Immediately run `task check`
-   (or a scoped subset) and relevant e2e after arming Nook's event continuation. Prefer local
-   Docker (cached images) for diagnosis and iteration; use remote CI as the
-   clean-run gate. During debug, run specs one at a time with
-   `E2E_SPEC=… task web:test:e2e:file`.
-7. **Continue on Nook's PR events** — Evaluate `PR / Verify and
-   preview`, plus `Web research / Build and deploy research catalog` when its
-   paths change. Inspect any feedback already present, but never request or wait
-   for Codex, Claude, Cursor, CodeRabbit, or another optional external
-   review/check/service.
-   Before merging, fetch `origin/main` and verify
-   GitHub does not mark the PR branch stale/out-of-date; if it is stale, merge
-   `origin/main` into the PR branch and push; the synchronize event re-evaluates
-   the refreshed Nook PR test checks.
-8. **Fix loop on failure** — If local validation or Nook's PR test checks fail: read **app
-   logs** (Playwright `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) →
-   fix → `task format` → run targeted local checks while debugging → commit and
-   push the completed fix → run the required local gate while monitoring refreshed CI.
-9. **Address and resolve PR comments** — Inspect human, Codex, and automated
+   coherent formatted implementation commit. If no PR exists, open it so remote
+   CI can start immediately.
+6. **Event-driven Nook PR checks** — Monitor `PR / Verify and preview`, plus
+   `Web research / Build and deploy research catalog` when its paths change.
+   Inspect any feedback already present, but never request or wait for Codex,
+   Claude, Cursor, CodeRabbit, or another optional external review/check/service.
+   Before merging, fetch `origin/main` and verify GitHub does not mark the PR
+   branch stale/out-of-date; if it is stale, merge `origin/main` into the PR
+   branch and push; the synchronize event re-evaluates the refreshed Nook PR
+   test checks.
+7. **Fix loop on failure** — If Nook's PR test checks fail: read **app logs**
+   (Playwright `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) → fix →
+   `task format` → optional targeted local repro while debugging → commit and
+   push the completed fix → monitor refreshed CI. Do not require `task ci:pr`
+   or `task check` before the next push or merge.
+8. **Address and resolve PR comments** — Inspect human, Codex, and automated
    feedback; reply with the fix, validation, or no-change rationale, resolve the
    targeted thread, and push changes when needed.
-10. **Repeat** — Return to step 8 until Nook's applicable PR checks are green and
+9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and
     every actionable comment is resolved.
-11. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
+10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
     readiness audit succeeds.
-12. **Publish and analyze statistics** — write
+11. **Publish and analyze statistics** — write
     `.stats/ai-agent/<n>.yaml`, compare it with one or two recent comparable PRs,
     publish it in a separate check-free stats-only PR, and squash-merge that PR
     immediately. Open a separate normal performance PR for actionable waste or
     regression. See [agent-statistics.md](agent-statistics.md).
-13. **Finish** — report the task duration after the implementation and stats PRs
+12. **Finish** — report the task duration after the implementation and stats PRs
     are merged and any required performance PR is also landed.
 
 ```mermaid
@@ -215,20 +221,17 @@ flowchart TD
   B --> I[3 Implement]
   I --> H[4 Always task format + demo contract]
   H --> PU[5 Push + open/update PR]
-  PU --> L[6 Local validation: check / e2e / ci:pr]
-  PU --> PR[7 Monitor applicable Nook PR checks]
-  L --> G{Local + Nook PR checks green?}
-  PR --> G
-  G -->|yes| C[9 Address comments]
-  C --> M[11 Squash merge]
-  G -->|no| FIX[8 Read app logs + fix + task format]
+  PU --> PR[6 Monitor applicable Nook PR checks on GHA]
+  PR --> G{Nook PR checks green?}
+  G -->|yes| C[8 Address comments]
+  C --> M[10 Squash merge]
+  G -->|no| FIX[7 Read app logs + fix + task format]
   FIX --> PUSH[Push completed fix]
-  PUSH --> L
   PUSH --> PR
-  M --> S[12 Publish + merge stats-only PR]
+  M --> S[11 Publish + merge stats-only PR]
   S --> W{Actionable regression or waste?}
   W -->|yes| BP[Open normal build-performance PR]
-  W -->|no| D[13 Duration report]
+  W -->|no| D[12 Duration report]
   BP --> D
 ```
 
@@ -248,103 +251,79 @@ git checkout -b <branch-name> origin/main
 
 Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
-### 4–6 — Push, validate locally, and monitor remotely
+### 4–6 — Format, push, and monitor remotely
 
-**Why push before the long final gate:** GitHub Actions runners download Docker
-images and run the full prepared test set from scratch every time. Locally, the
-Rust/WASM and web lineages are **already cached** — the same gates finish much faster. Use
-local Task commands for implementation/debug loops. Once the current iteration is
-functionally complete, commit and push/open/update the PR, then run the local
-final gate immediately while remote CI runs.
+**Why not a required local product gate:** GitHub Actions is the system of
+record for lint, tests, coverage, builds, and e2e. Local Docker mirrors remain
+available for optional debugging, but agents must not spend wall-clock on a
+mandatory `task check` / `task ci:pr` loop. Format on the host, push, and let
+`pr.yml` validate the exact head.
 
 Inspect feedback already present after the final push. Do not request or wait
 for external reviewers. Follow [code-review.md](code-review.md) for handling
 every finding that already exists.
 
-**Minimum local final gate** (must finish before merge or handoff; runs after push):
+**Required local action** (before every push):
 
 ```bash
-task format:check    # confirms the already host-applied format is clean
-task check           # fmt, lint, unit tests, web build
+task format          # host-applied format — the only required local product action
+git add -u
+# When UI paths change:
+#   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-`task format` itself belongs in **pre-push hygiene**, not only in this post-push
-gate. Run it again after every fix before re-pushing.
+`task format` itself belongs in **pre-push hygiene**. Run it again after every
+fix before re-pushing. Do **not** require `task format:check`, `task check`, or
+`task ci:pr` for merge or handoff.
 
-Scoped subsets when the touch surface is narrow:
+Optional scoped debug commands (never merge gates):
 
 ```bash
-task web:check && task web:test    # web-only
+task web:check && task web:test    # web-only debug
 task rust:test                     # nook-core + nook-auth2 only
 task extension:check:fast          # host-cached extension security/build checks
-```
-
-**E2e during fix/debug — one spec at a time.** Do not wait for the full suite while iterating. Run the failing or touched spec only:
-
-```bash
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
-E2E_SPEC=e2e/multi-device-local.spec.ts task web:test:e2e:file
 ```
 
-After single-spec fixes pass and the iteration is functionally complete, push the
-branch/PR and run the relevant project or full PR mirror while remote CI runs:
+Optional full mirrors exist for humans and deep debugging; agents must not treat
+them as required:
 
 ```bash
-task web:test:e2e                # full local-provider e2e project
-task ci:pr:e2e                   # explicit full web + extension e2e
-task ci:pr                       # PR mirror without browser e2e; mandatory after a prior PR CI failure
+task ci:pr                       # PR mirror without browser e2e (optional debug)
+task ci:pr:e2e                   # explicit full web + extension e2e (optional)
+task web:test:e2e                # full local-provider e2e project (optional)
 ```
 
 ```text
-implement → fix → E2E_SPEC=… task web:test:e2e:file   (fast debug loop)
-           → task format (+ ui-demo-contract when UI)   (unconditional host apply)
-           → commit → push → gh pr create/update        (final-validation boundary)
-           → task check / web:test:e2e / task ci:pr     (parallel with remote CI)
+implement → optional E2E_SPEC=… task web:test:e2e:file   (debug only)
+           → task format (+ ui-demo-contract when UI)     (unconditional host apply)
+           → commit → push → gh pr create/update          (final-validation boundary)
+           → monitor GitHub Actions                       (sole product gate)
 ```
 
-Add `task web:test:e2e` or `task ci:pr:e2e` to the parallel local gate when the
-change touches vault sync, login/unlock, multi-step web flows, or Playwright
-helpers. Skip e2e for isolated Rust-only or docs-only changes.
-
-### 8 — Full local loop (after any remote CI failure)
+### 7 — Fix loop (after any remote CI failure)
 
 **Mandatory after every red remote build before merge/handoff:**
 
 ```bash
 gh run view <run-id> --log-failed   # CI job output
-# For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
+# For e2e failures: read nook-app-logs.json from the Playwright report, or optionally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
-task ci:pr                          # full PR mirror (no browser e2e)
+task format                         # host-apply before the fix push
+# commit + push completed fix
 task pr:ready PR=<number>           # read-only exact-head readiness assertion
 ```
 
-`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. The automatic full browser gate is main-only (`task ci:main`).
+Do **not** require `task ci:pr` before merge. The remote `pr.yml` run is the
+product gate. The automatic full browser gate is main-only (`task ci:main` /
+`main.yml`).
 
-E2e helpers when debugging web flows:
-
-```bash
-# One spec — preferred during fix/debug (fast feedback)
-E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
-
-# Full stub e2e project — final local gate or after remote e2e failure
-task web:test:e2e
-# or, after task check already built wasm + dist:
-task web:test:e2e:parallel
-```
-
-If the failure was obviously fmt/lint-only, `task format:check` plus the relevant
-lint/test subset can prove the fix. For broader failures, use `task ci:pr` as
-the local gate after pushing the completed fix, and do not merge or hand off
-until the latest head has both local and remote green.
-
-See [pull-requests.md § Local checks](pull-requests.md#5-local-checks) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
+See [pull-requests.md § Validation](pull-requests.md#5-validation-github-actions-only) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 5–7 — Push, open PR, monitor
 
-Push once the current iteration is functionally complete and ready for final
-validation. Then run the local gate immediately while monitoring remote CI.
-Include scoped e2e or `task ci:pr:e2e` when the touch surface warrants it (see step
-5).
+Push once the current iteration is functionally complete and formatted. Then
+monitor remote CI. Do not start a required local product gate.
 
 ```bash
 git push -u origin HEAD
@@ -369,7 +348,7 @@ git push origin HEAD
 task pr:ready PR=<number>
 ```
 
-### 11 — Merge
+### 10 — Merge
 
 When Nook's applicable repository-owned PR test checks are complete, every
 actionable thread is resolved, and `task pr:ready` succeeds:
@@ -384,14 +363,14 @@ or monitor the resulting Main workflow, development deployment, or live origins
 unless the user explicitly requested deployment/live verification or assigned
 a Main failure.
 
-### 12 — Publish statistics
+### 11 — Publish statistics
 
 After the implementation PR merges, follow
 [agent-statistics.md](agent-statistics.md). Create the YAML from current `main`,
 include the repository test inventory (counts by type and absolute total) for
 the merged head, compare it with one or two comparable prior records, publish
 it as the only file in a stats-only PR, and squash-merge it immediately without
-local/product checks, review, or `task pr:ready`. Stats-only PRs never generate
+product checks, review, or `task pr:ready`. Stats-only PRs never generate
 another stats record. Do not wait for post-merge Main before publishing the
 record. Any performance fix belongs in a separate normal PR.
 
@@ -408,11 +387,14 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
   [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 - **Never stop after push.** Monitor Nook's applicable PR test checks through
   squash merge, fixing failures, comments, and conflicts along the way.
-- **Prefer local Docker over remote CI for iteration** — cached images, faster feedback; push at the final-validation boundary, then run local validation while Nook's applicable PR test checks run.
-- **During e2e debug, run one spec at a time** (`E2E_SPEC=… task web:test:e2e:file`) — do not re-run the full suite after every fix.
+- **GitHub Actions is the only product gate** — do not require `task check`,
+  `task ci:pr`, full suites, builds, or e2e locally for merge/handoff. Optional
+  local commands are debug-only. See
+  [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
+- **During optional e2e debug, run one spec at a time** (`E2E_SPEC=… task web:test:e2e:file`) — do not re-run the full suite after every fix.
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call
   `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
-- **Never merge after a Nook PR-test failure without green local validation on the latest head** (`task ci:pr` for broad failures; a matching subset is enough for trivial fmt/lint).
+- **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**
 - **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit;
   once it succeeds, the task-owning agent must squash-merge without asking
@@ -433,6 +415,7 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
+- [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
 - [issues.md](issues.md) — aggregate issue and sub-issue management for deferred scope
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
 - [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and stats-only PR exception

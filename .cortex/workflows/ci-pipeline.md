@@ -283,24 +283,23 @@ The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stab
 All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands are included through `nook-app/Taskfile.yml`, with cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`:
 
 ```bash
-# Minimum local final gate after final-validation push
+# Agent-required local action before every push
+task format                         # host-applied format only
+
+# Optional local mirrors (humans / deep debug — not agent merge gates)
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
-
-# Full PR CI mirror — parallel local gate; mandatory before merge/handoff after broad remote failure
 WASM_BUILD_MODE=dev task ci:pr       # prepare → no-opt WASM → verify ‖ build (no browser e2e)
-
-# Explicit full browser validation for high-risk PRs
 task ci:pr:e2e                       # full local-provider web e2e + extension e2e
 
 # E2e projects
-task web:test:e2e                   # full local-provider e2e (main gate; explicit on PRs)
+task web:test:e2e                   # full local-provider e2e (main gate; optional local debug)
 task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
 
 # WASM tests
 task wasm:test                      # wasm-bindgen smoke tests in Node (PR/main gate)
 task wasm:test:browser              # browser-only wasm tests (manual/debug)
 
-# Single spec — preferred during fix/debug (E2E_SPEC paths relative to nook-app/nook-web/)
+# Single spec — preferred during optional fix/debug (E2E_SPEC paths relative to nook-app/nook-web/)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 
 # Main CI equivalent
@@ -364,9 +363,7 @@ must not declare another `setup` dependency. PR coverage always checks the curre
 `nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
 inputs reuse the exact base commit's main artifact (with a coverage-only build
 fallback), while unchanged source reuses the current artifact as the base
-comparison. Use
-remote CI as the **PR validation gate** — not as the primary
-place to discover fmt/clippy/unit/e2e failures.
+comparison. Use remote CI as the **sole PR product validation gate**.
 
 Agents wait only for the applicable repository-owned PR checks (`PR / Verify and
 preview`, plus `Web research / Build and deploy research catalog` when its paths
@@ -421,30 +418,42 @@ exact-commit query to every mutable artifact URL and retries convergence on PR,
 main, and release. This prevents a fresh metadata response from being paired
 with an older edge-cached archive that reused the same channel filename.
 
-**The GitHub Actions PR workflow is the primary validation pipeline.** Its
+**The GitHub Actions PR workflow is the sole product validation pipeline.** Its
 checks validate the exact pushed PR head, so a coherent ready change must be
-committed and pushed immediately to trigger or refresh `pr.yml`. Do not delay
-that push for a full local gate, benchmark, PR metadata update, or other
-follow-up work.
+formatted with `task format`, committed, and pushed immediately to trigger or
+refresh `pr.yml`. Do not delay that push for a local product gate, benchmark,
+PR metadata update, or other follow-up work.
 
-**Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to debug failures and iterate, but treat them as complementary to the primary PR pipeline. After pushing, run local validation while remote CI runs. Never serialize a full local gate before the push.
+**Local Docker is optional debug tooling.** Rust/WASM and web image lineages can
+stay warm on a developer machine, and Task mirrors (`task check`, `task ci:pr`,
+e2e) remain available for humans and focused reproduction. Agents must **not**
+require those commands for merge or handoff. After pushing, monitor remote CI.
+Never serialize a full local product gate before or after the push as a
+workflow requirement.
 
-**E2e debug — one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
+**E2e debug — one spec at a time (optional).** During a fix/debug session, do
+not re-run the full e2e suite after every change. If you choose a local repro,
+run individual specs:
 
 ```bash
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the relevant project or full PR mirror while remote CI runs.
+After targeted fixes, `task format`, push/open/update the PR, and let remote CI
+validate.
 
 **Agent efficiency rules:**
 
-1. **Before long final local checks** — push/open/update the PR once the iteration is functionally complete so remote CI can start.
-2. **Parallel local gate** — run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e` or `task ci:pr:e2e` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
+1. **Before product validation** — `task format` (+ UI demo contract when UI),
+   then push/open/update the PR once the iteration is functionally complete so
+   remote CI can start.
+2. **No required local product gate** — do not run `task check` / `task ci:pr`
+   as a merge requirement. Optional `E2E_SPEC=… task web:test:e2e:file` is
+   allowed while debugging a specific e2e failure.
 3. **After any remote CI failure** — read test output and static-analysis errors,
-   then **persisted app logs** (see below), fix locally (prefer single-spec e2e
-   while iterating), push the completed fix, then run the required local gate
-   while remote CI refreshes.
+   then **persisted app logs** (see below), fix, `task format`, push the
+   completed fix, then wait for remote CI to refresh. Do not require a local
+   `task ci:pr` mirror before merge.
 
 ## Runner cleanup
 
@@ -477,7 +486,9 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
-Local `task ci:pr` is still much faster with warm Rust/WASM and web caches than a cold remote run. See [pull-requests.md § Local checks](pull-requests.md#4-local-checks) and [coding-bro.md](coding-bro.md).
+Local `task ci:pr` remains available as an optional warm-cache debug mirror.
+See [pull-requests.md § Validation](pull-requests.md#5-validation-github-actions-only)
+and [coding-bro.md](coding-bro.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -569,7 +580,7 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
+3. **Do** push after `task format` and let GitHub Actions own product validation; optional local `task ci:pr` / e2e is debug-only, never a merge gate.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
 5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs; the full browser regression suites remain on main. Main runs full local-provider and extension **e2e** and leaves failures for manual handling; nightly runs **sync-live** and invokes `ci-fix` on failure.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.

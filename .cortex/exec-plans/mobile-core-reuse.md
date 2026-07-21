@@ -107,4 +107,5 @@ used by those adapters still belong in Rust core.
 1. Add behavior-focused core tests for every moved rule.
 2. Run targeted `nook-core` tests and native/wasm checks.
 3. Regenerate WASM bindings and run the relevant web unit/type checks.
-4. Finish with the repository `task check` gate for a completed batch.
+4. Finish by running `task format`, pushing, and proving the batch with green
+   GitHub Actions. Do not require local `task check` for merge.

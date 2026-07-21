@@ -119,10 +119,10 @@ source_pr:
   open_to_merge_seconds: 1800
 summary:
   local_execution_count: 1
-  local_check_count: 0
+  local_check_count: 1
   local_test_count: 0
-  local_combined_count: 1
-  local_execution_seconds: 600
+  local_combined_count: 0
+  local_execution_seconds: 40
   github_actions_run_count: 1
   github_actions_seconds: 1200
   pr_retrigger_count: 0
@@ -138,13 +138,13 @@ test_inventory:
     e2e: 175
   total: 1028
 local_executions:
-  - command: task check
-    category: combined
-    started_at: 2026-07-18T18:26:00Z
-    finished_at: 2026-07-18T18:36:00Z
-    duration_seconds: 600
+  - command: task format
+    category: check
+    started_at: 2026-07-18T18:24:00Z
+    finished_at: 2026-07-18T18:24:40Z
+    duration_seconds: 40
     outcome: passed
-    reason: final_validation
+    reason: pre_push_hygiene
 github_actions_runs:
   - workflow: PR
     run_id: 123456789
@@ -177,7 +177,10 @@ waste_assessment:
   required_actions: []
 ```
 
-`summary` values must be derivable from the detailed lists. `test_inventory.total`
+`summary` values must be derivable from the detailed lists. Prefer recording
+`task format` as the normal local execution; do not invent required local
+`task check` / `task ci:pr` runs under the GitHub Actions-only policy.
+`test_inventory.total`
 must equal the sum of `test_inventory.by_type`, and `test_inventory.head_sha`
 must match `source_pr.head_sha`. Parallel local and remote durations may overlap,
 so never add them together and call the result PR elapsed time. Percent changes

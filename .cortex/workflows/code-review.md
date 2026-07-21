@@ -26,8 +26,8 @@ Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Make the minimal correct fix or document why no change is needed.
-3. Run the smallest relevant local validation.
-4. Push the completed fix when files changed.
+3. Run `task format` when files changed; optional focused debug only.
+4. Push the completed fix when files changed so GitHub Actions re-validates.
 5. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 6. Resolve only after the targeted reply is visible and the finding is fixed or
@@ -53,7 +53,7 @@ Report:
 
 - every actionable finding that was already present and how it was handled;
 - unresolved active review-thread count at the time of the final inspection;
-- local validation results; and
+- `task format` / optional debug results when used; and
 - the state of Nook's applicable repository-owned PR test checks.
 
 Confirm that unresolved review-thread count was zero at the final readiness
