@@ -7,6 +7,8 @@ export type PasswordFormSummary = {
   oneTimeCodeFieldCount: number;
   /** CAPTCHA, terms acceptance, or email-verification style human gate. */
   manualCheckpointPresent: boolean;
+  /** Visible passkey / WebAuthn control the user can activate. */
+  passkeyControlPresent: boolean;
   formCount: number;
   observedAt: number;
 };
@@ -222,6 +224,40 @@ function hasAutocompleteToken(
     .includes(expected);
 }
 
+const passkeyControlPositivePattern =
+  /\b(?:pass\s*key|passkey|webauthn|security\s*key|hardware\s*key|fido|touch\s*id|face\s*id|windows\s*hello)\b/iu;
+
+export function findPasskeyControl(
+  root: ParentNode = document,
+): HTMLElement | undefined {
+  const marked = root.querySelector?.(
+    '[data-nook-passkey-control], input[autocomplete~="webauthn" i]',
+  );
+  if (marked instanceof HTMLElement) return marked;
+  const controls = Array.from(
+    root.querySelectorAll?.<HTMLElement>(
+      'button, a[href], [role="button"], input[type="button"], input[type="submit"]',
+    ) ?? [],
+  );
+  for (const control of controls) {
+    const labeled = (
+      control.textContent ??
+      control.getAttribute("aria-label") ??
+      control.getAttribute("title") ??
+      (control as HTMLInputElement).value ??
+      ""
+    ).trim();
+    if (labeled && passkeyControlPositivePattern.test(labeled)) {
+      return control;
+    }
+  }
+  return undefined;
+}
+
+export function pageHasPasskeyControl(root: ParentNode = document): boolean {
+  return Boolean(findPasskeyControl(root));
+}
+
 function pageHasManualCheckpoint(root: ParentNode): boolean {
   const doc = root.ownerDocument ?? document;
   if (
@@ -288,6 +324,7 @@ function summarizeRoot(
     usernameFieldCount: usernameFields.length,
     oneTimeCodeFieldCount: oneTimeCodeFields.length,
     manualCheckpointPresent: pageHasManualCheckpoint(root),
+    passkeyControlPresent: pageHasPasskeyControl(root),
     formCount: forms.size,
     observedAt: Date.now(),
   };
@@ -330,7 +367,16 @@ export function summarizeAuthenticationWorkflowForms(
     allUsernameFields.filter((field) => hasAutocompleteToken(field, "username"))
       .length +
     allOneTimeCodeFields.length;
-  if (authFieldCount === 0) return [];
+  if (authFieldCount === 0) {
+    if (!pageHasPasskeyControl(root)) return [];
+    return [
+      {
+        root,
+        formScope: { kind: "unowned" },
+        summary: summarizeRoot(root, { kind: "unowned" }),
+      },
+    ];
+  }
 
   const forms = Array.from(
     root.querySelectorAll<HTMLFormElement>("form"),

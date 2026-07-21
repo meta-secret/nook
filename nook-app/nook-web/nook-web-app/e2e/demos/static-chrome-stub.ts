@@ -10,6 +10,8 @@ export type DemoChromeStubArgs = {
   savePilotFlow?: boolean
   /** Signup generate-password Pilot replies. */
   generatePilotFlow?: boolean
+  /** Pilot-gated Create/Use passkey proposal replies. */
+  passkeyPilotFlow?: boolean
   /** 2FA enrollment ceremony replies with evidence-gated confirm. */
   enrollPilotFlow?: boolean
   barcodeRawValue?: string
@@ -35,6 +37,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     loginPilotFlow = false,
     savePilotFlow = false,
     generatePilotFlow = false,
+    passkeyPilotFlow = false,
     enrollPilotFlow = false,
     barcodeRawValue,
   } = args
@@ -45,6 +48,24 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
+    }
+    if (passkeyPilotFlow) {
+      switch (message.type) {
+        case 'nook:authentication-workflow-snapshot':
+          return {
+            ok: true,
+            snapshot: {
+              kind: 'login',
+              stage: 'credentials',
+              action: 'create-passkey',
+              currentStep: 1,
+              totalSteps: 3,
+              observationIndex: 0,
+            },
+          }
+        default:
+          return { ok: true }
+      }
     }
     if (enrollPilotFlow) {
       switch (message.type) {

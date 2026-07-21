@@ -1282,6 +1282,54 @@ function passkeyRequestKey(
   return `${sender.tab?.id ?? -1}:${sender.frameId ?? 0}:${requestId}`
 }
 
+async function matchingPasskeyAccountCountForOrigin(
+  origin: string,
+): Promise<number> {
+  let hostname: string
+  try {
+    hostname = new URL(origin).hostname
+  } catch {
+    return 0
+  }
+  if (!hostname) return 0
+  const grants = await passkeyPairingGrants()
+  if (grants.length === 0) return 0
+  try {
+    await ensureExtensionSessionDocument()
+  } catch {
+    return 0
+  }
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    return 0
+  }
+  let count = 0
+  for (const grant of grants) {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-list-passkeys',
+      payload: { ...grant, rpId: hostname, origin },
+    })
+    if (
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true &&
+      'accounts' in response &&
+      Array.isArray(response.accounts)
+    ) {
+      count += response.accounts.length
+    }
+  }
+  return Math.min(count, 100)
+}
+
 async function websitePasskeyOptions(
   message: Parameters<typeof isWebsitePasskeyOptionsMessage>[0] & {
     payload: {
@@ -1504,7 +1552,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })
       return false
     }
-    void authenticationWorkflowSnapshot(message.payload.observations)
+    void matchingPasskeyAccountCountForOrigin(message.payload.origin)
+      .then((matchingPasskeyAccountCount) =>
+        authenticationWorkflowSnapshot(
+          message.payload.observations.map((observation) => ({
+            ...observation,
+            matchingPasskeyAccountCount,
+          })),
+        ),
+      )
       .then((snapshot) => sendResponse({ ok: true, snapshot }))
       .catch(() =>
         sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),

@@ -68,6 +68,18 @@ credentials still require explicit account selection.
 | Malformed or oversized page input | Reject over 64 KiB in the isolated bridge and runtime validator, then apply typed bounded parsing in Rust. |
 | Extension is locked or unavailable | Do not expose account metadata; invoke the browser's original WebAuthn method. |
 | Nook ceremony fails after selection | Return a generic `NotAllowedError`; do not leak vault, key, or provider details to the website. |
+| Spoofed Pilot HUD proposes Create/Use passkey | Treat HUD approval only as permission to activate a site passkey control. Ceremony consent, RP/origin binding, and private-key ops stay in the existing WebAuthn intercept (`webauthn-content` / Rust). |
+| Pilot proposal mints challenges or signs | Forbidden. Proposal policy returns non-secret eligibility only (`none` / `use-passkey` / `create-passkey`). Create/assert remain on the consented ceremony path. |
+| Locked session advertises vault matches | Matching account counts are attached only from an unlocked, granted Simple Vault projection; locked/unavailable sessions contribute `0` and never expose metadata. |
+| Pilot auto-submits or silently creates | Default remains explicit user action. No permanent site autopilot grant; Take over always available. |
+
+## Pilot proposals
+
+Nook Pilot may propose **Use passkey** when an unlocked vault has confident RP
+matches, or **Create passkey** when the page exposes a passkey control and no
+matches exist. Proposals require human approval in the Pilot gate, then only
+activate the site's own WebAuthn entry point so the existing consent chooser
+runs. Automatic submit/sign-up remains out of scope.
 
 The extension prompt is visually Nook-owned but a website can imitate any
 in-page UI. It therefore never asks for recovery material, provider tokens, or

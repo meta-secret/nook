@@ -11,6 +11,8 @@ const validMessage = {
         manualCheckpointPresent: false,
         authenticatorSetupHint: false,
         backupCodesHint: false,
+        passkeyControlPresent: false,
+        matchingPasskeyAccountCount: 0,
         currentPasswordFieldCount: 1,
         newPasswordFieldCount: 0,
         genericPasswordFieldCount: 0,

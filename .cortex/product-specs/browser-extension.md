@@ -256,8 +256,12 @@ The gate must:
 
 An injected DOM widget is not a trusted place for primary authentication because
 the host page can imitate it. Passkey authorization stays browser-native or in
-an extension-controlled top-level window. Future auth-agent automation
-(automatic passkey create or sign-in) is policy-gated and tracked separately.
+an extension-controlled top-level window. Pilot may propose Create/Use passkey
+from Rust policy after an unlocked vault match or a page passkey-control hint;
+approval only starts the site's WebAuthn ceremony so the existing consent
+chooser remains the user-presence gate. Silent create/assert and automatic
+submit stay out of scope. See
+[passkey-manager.md](../design-docs/passkey-manager.md).
 
 ## Device And Storage Boundary
 
