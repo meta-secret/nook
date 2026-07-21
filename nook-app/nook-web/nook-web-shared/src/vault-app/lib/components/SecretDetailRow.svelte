@@ -6,6 +6,8 @@
     StickyNote,
     ShieldCheck,
     KeyRound,
+    Paperclip,
+    Download,
     Eye,
     EyeOff,
     Pencil,
@@ -95,10 +97,16 @@
         vault.t("vault.types.passkey")
       );
     }
+    if (item.type === "file-attachment") {
+      return item.fileName.trim() || item.title.trim() || vault.t("vault.fields.no_title");
+    }
     return item.title.trim() || vault.t("vault.fields.no_title");
   });
 
   const headerTitle = $derived.by(() => {
+    if (item.type === "file-attachment") {
+      return item.title.trim() || item.fileName.trim() || vault.t("vault.fields.no_title");
+    }
     if (item.type !== "login") return summary;
     return item.websiteHost || vault.t("vault.fields.no_website");
   });
@@ -106,6 +114,30 @@
   const accountSubtitle = $derived(
     item.type === "login" ? item.username.trim() : "",
   );
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function downloadFileAttachment() {
+    if (!decrypted || item.type !== "file-attachment") return;
+    const binary = atob(decrypted.contentBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    const blob = new Blob([bytes], {
+      type: decrypted.mimeType || "application/octet-stream",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = decrypted.fileName || item.fileName || "secret-file";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 </script>
 
 <div data-testid="vault-group-{item.type}">
@@ -148,6 +180,8 @@
               <ShieldCheck class="size-3.5" />
             {:else if item.type === "passkey"}
               <KeyRound class="size-3.5" />
+            {:else if item.type === "file-attachment"}
+              <Paperclip class="size-3.5" />
             {:else}
               <StickyNote class="size-3.5" />
             {/if}
@@ -185,6 +219,9 @@
             {:else if item.type === "passkey"}
               <KeyRound class="size-3 text-primary/70" />
               {vault.t("vault.types.passkey")}
+            {:else if item.type === "file-attachment"}
+              <Paperclip class="size-3 text-primary/70" />
+              {vault.t("vault.types.file_attachment")}
             {:else}
               <StickyNote class="size-3 text-primary/70" />
               {vault.t("vault.types.secure_note")}
@@ -658,6 +695,60 @@
           <p class="text-[11px] leading-relaxed text-muted-foreground">
             {vault.t("vault.fields.passkey_managed_hint")}
           </p>
+        {:else if item.type === "file-attachment"}
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.file_name")}</span
+            >
+            <div
+              class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+            >
+              <span class="truncate text-foreground" data-testid="file-attachment-name"
+                >{item.fileName || vault.t("vault.fields.no_title")}</span
+              >
+            </div>
+          </div>
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.file_size")}</span
+            >
+            <div
+              class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+            >
+              <span class="truncate text-foreground" data-testid="file-attachment-size"
+                >{formatFileSize(item.sizeBytes)}</span
+              >
+            </div>
+          </div>
+          {#if item.mimeType}
+            <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+              <span class="text-muted-foreground/70 font-medium"
+                >{vault.t("vault.fields.mime_type")}</span
+              >
+              <div
+                class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+              >
+                <span class="truncate text-foreground">{item.mimeType}</span>
+              </div>
+            </div>
+          {/if}
+          <div class="pt-1">
+            <button
+              type="button"
+              data-testid="download-file-attachment-btn"
+              disabled={!decrypted}
+              onclick={downloadFileAttachment}
+              class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/20 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download class="size-3.5" />
+              {vault.t("vault.download_file")}
+            </button>
+            {#if !decrypted}
+              <p class="mt-1 text-[11px] text-muted-foreground">
+                {vault.t("vault.reveal_to_download")}
+              </p>
+            {/if}
+          </div>
         {:else}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium pt-1"

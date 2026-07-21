@@ -19,6 +19,7 @@ pub enum SecretType {
     SecureNote,
     Passkey,
     Authenticator,
+    FileAttachment,
 }
 
 impl SecretType {
@@ -30,6 +31,7 @@ impl SecretType {
             "secure-note" => Ok(Self::SecureNote),
             "passkey" => Ok(Self::Passkey),
             "authenticator" => Ok(Self::Authenticator),
+            "file-attachment" => Ok(Self::FileAttachment),
             _ => Err(SecretPayloadError::UnknownSecretType {
                 value: value.to_owned(),
             }),
@@ -45,6 +47,7 @@ impl SecretType {
             Self::SecureNote => "secure-note",
             Self::Passkey => "passkey",
             Self::Authenticator => "authenticator",
+            Self::FileAttachment => "file-attachment",
         }
     }
 }
@@ -113,6 +116,7 @@ mod tests {
             ("secure-note", SecretType::SecureNote),
             ("passkey", SecretType::Passkey),
             ("authenticator", SecretType::Authenticator),
+            ("file-attachment", SecretType::FileAttachment),
         ];
         for (tag, expected) in cases {
             assert_eq!(SecretType::parse(tag).unwrap(), expected);

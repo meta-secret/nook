@@ -8,7 +8,10 @@ use crate::AuthenticatorSecret;
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::Zeroize;
@@ -44,6 +47,124 @@ pub struct SeedPhraseSecret {
 pub struct SecureNoteSecret {
     pub title: String,
     pub note: String,
+}
+
+/// Maximum decoded file size stored in a file-attachment secret (1 MiB).
+pub const FILE_ATTACHMENT_MAX_BYTES: usize = 1_048_576;
+const FILE_ATTACHMENT_MAX_TITLE_CHARS: usize = 256;
+const FILE_ATTACHMENT_MAX_FILE_NAME_CHARS: usize = 255;
+const FILE_ATTACHMENT_MAX_MIME_TYPE_CHARS: usize = 127;
+
+/// Encrypted file blob stored as a vault secret.
+///
+/// Binary content is standard base64 so the browser can round-trip
+/// `File` / `Blob` bytes without a custom codec. List projections expose only
+/// metadata — never `content_base64`.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileAttachmentSecret {
+    pub title: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
+    pub content_base64: String,
+}
+
+impl fmt::Debug for FileAttachmentSecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FileAttachmentSecret")
+            .field("title", &self.title)
+            .field("file_name", &self.file_name)
+            .field("mime_type", &self.mime_type)
+            .field("size_bytes", &self.size_bytes)
+            .field("content_base64", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl FileAttachmentSecret {
+    pub fn validate(&self) -> SecretPayloadResult<()> {
+        let title = self.title.trim();
+        let file_name = self.file_name.trim();
+        let mime_type = self.mime_type.trim();
+        if title.is_empty() {
+            return invalid_file_attachment("title is required");
+        }
+        if title.chars().count() > FILE_ATTACHMENT_MAX_TITLE_CHARS {
+            return invalid_file_attachment("title is too long");
+        }
+        if title.chars().any(char::is_control) {
+            return invalid_file_attachment("title contains control characters");
+        }
+        if file_name.is_empty() {
+            return invalid_file_attachment("file name is required");
+        }
+        if file_name.chars().count() > FILE_ATTACHMENT_MAX_FILE_NAME_CHARS {
+            return invalid_file_attachment("file name is too long");
+        }
+        if file_name.contains('/') || file_name.contains('\\') || file_name.contains('\0') {
+            return invalid_file_attachment("file name must not contain path separators");
+        }
+        if file_name.chars().any(char::is_control) {
+            return invalid_file_attachment("file name contains control characters");
+        }
+        if mime_type.is_empty() {
+            return invalid_file_attachment("mime type is required");
+        }
+        if mime_type.chars().count() > FILE_ATTACHMENT_MAX_MIME_TYPE_CHARS {
+            return invalid_file_attachment("mime type is too long");
+        }
+        if mime_type.chars().any(char::is_control) {
+            return invalid_file_attachment("mime type contains control characters");
+        }
+        if !mime_type
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'+' | b'.'))
+        {
+            return invalid_file_attachment("mime type has an invalid format");
+        }
+        let decoded = STANDARD.decode(&self.content_base64).map_err(|_| {
+            SecretPayloadError::InvalidFileAttachment {
+                reason: "content is not valid standard base64".to_owned(),
+            }
+        })?;
+        if decoded.is_empty() {
+            return invalid_file_attachment("file content is empty");
+        }
+        if decoded.len() > FILE_ATTACHMENT_MAX_BYTES {
+            return invalid_file_attachment(format!(
+                "file exceeds the {FILE_ATTACHMENT_MAX_BYTES}-byte limit"
+            ));
+        }
+        if u64::try_from(decoded.len()).unwrap_or(u64::MAX) != self.size_bytes {
+            return invalid_file_attachment("sizeBytes does not match decoded content length");
+        }
+        if STANDARD.encode(&decoded) != self.content_base64 {
+            return invalid_file_attachment("content is not canonical standard base64");
+        }
+        Ok(())
+    }
+
+    pub fn zeroize_plaintext(&mut self) {
+        self.title.zeroize();
+        self.file_name.zeroize();
+        self.mime_type.zeroize();
+        self.size_bytes.zeroize();
+        self.content_base64.zeroize();
+    }
+}
+
+impl Zeroize for FileAttachmentSecret {
+    fn zeroize(&mut self) {
+        self.zeroize_plaintext();
+    }
+}
+
+fn invalid_file_attachment<T>(reason: impl Into<String>) -> SecretPayloadResult<T> {
+    Err(SecretPayloadError::InvalidFileAttachment {
+        reason: reason.into(),
+    })
 }
 
 pub const PASSKEY_SECRET_VERSION: u32 = 1;
@@ -349,6 +470,7 @@ pub enum SecretValue {
     SecureNote(SecureNoteSecret),
     Passkey(PasskeySecret),
     Authenticator(AuthenticatorSecret),
+    FileAttachment(FileAttachmentSecret),
 }
 
 impl SecretValue {
@@ -388,6 +510,12 @@ impl SecretValue {
                 secret.normalize()?;
                 Ok(Self::Authenticator(secret))
             }
+            SecretType::FileAttachment => {
+                let secret: FileAttachmentSecret = serde_yaml::from_str(yaml)
+                    .map_err(SecretPayloadError::InvalidFileAttachmentYaml)?;
+                secret.validate()?;
+                Ok(Self::FileAttachment(secret))
+            }
         }
     }
 
@@ -402,6 +530,10 @@ impl SecretValue {
                 serde_yaml::to_string(value)
             }
             Self::Authenticator(value) => serde_yaml::to_string(value),
+            Self::FileAttachment(value) => {
+                value.validate()?;
+                serde_yaml::to_string(value)
+            }
         }
         .map_err(SecretPayloadError::Serialize)?;
         Ok(SecretPayloadYaml::from_trusted(yaml))
@@ -416,6 +548,7 @@ impl SecretValue {
             Self::SecureNote(_) => SecretType::SecureNote,
             Self::Passkey(_) => SecretType::Passkey,
             Self::Authenticator(_) => SecretType::Authenticator,
+            Self::FileAttachment(_) => SecretType::FileAttachment,
         }
     }
 
@@ -442,6 +575,7 @@ impl SecretValue {
             }
             Self::Passkey(value) => value.zeroize_plaintext(),
             Self::Authenticator(value) => value.zeroize(),
+            Self::FileAttachment(value) => value.zeroize_plaintext(),
         }
     }
 }
@@ -554,5 +688,59 @@ mod tests {
                 assert!(public_key_cose.0.is_empty());
             }
         }
+    }
+
+    fn file_attachment() -> FileAttachmentSecret {
+        let content = b"hello vault file";
+        FileAttachmentSecret {
+            title: "Recovery PDF".to_owned(),
+            file_name: "recovery.pdf".to_owned(),
+            mime_type: "application/pdf".to_owned(),
+            size_bytes: content.len() as u64,
+            content_base64: STANDARD.encode(content),
+        }
+    }
+
+    #[test]
+    fn file_attachment_payload_round_trips_as_yaml() {
+        let value = SecretValue::FileAttachment(file_attachment());
+        let yaml = value.to_yaml().unwrap();
+        let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml).unwrap();
+        assert_eq!(decoded, value);
+        assert!(yaml.as_str().contains("fileName: recovery.pdf"));
+        assert!(yaml.as_str().contains("mimeType: application/pdf"));
+    }
+
+    #[test]
+    fn file_attachment_validation_rejects_oversize_and_mismatched_length() {
+        let mut oversize = file_attachment();
+        let big = vec![7u8; FILE_ATTACHMENT_MAX_BYTES + 1];
+        oversize.size_bytes = big.len() as u64;
+        oversize.content_base64 = STANDARD.encode(&big);
+        assert!(oversize.validate().is_err());
+
+        let mut mismatched = file_attachment();
+        mismatched.size_bytes = 1;
+        assert!(mismatched.validate().is_err());
+
+        let mut path_name = file_attachment();
+        path_name.file_name = "../escape.pdf".to_owned();
+        assert!(path_name.validate().is_err());
+    }
+
+    #[test]
+    fn file_attachment_debug_and_zeroize_redact_content() {
+        let mut value = SecretValue::FileAttachment(file_attachment());
+        let encoded_content = STANDARD.encode(b"hello vault file");
+        let debug = format!("{value:?}");
+        assert!(debug.contains("[REDACTED]"));
+        assert!(!debug.contains(&encoded_content));
+
+        value.zeroize_plaintext();
+        let SecretValue::FileAttachment(value) = value else {
+            panic!("expected file attachment");
+        };
+        assert!(value.content_base64.is_empty());
+        assert!(value.file_name.is_empty());
     }
 }

@@ -12,6 +12,7 @@
     StickyNote,
     ShieldCheck,
     KeyRound,
+    Paperclip,
     TriangleAlert,
   } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -91,6 +92,7 @@
     { value: 'api-key', labelKey: 'vault.types.api_key' },
     { value: 'seed-phrase', labelKey: 'vault.types.seed_phrase' },
     { value: 'secure-note', labelKey: 'vault.types.secure_note' },
+    { value: 'file-attachment', labelKey: 'vault.types.file_attachment' },
     { value: 'passkey', labelKey: 'vault.types.passkey' },
   ]
 
@@ -118,6 +120,7 @@
     if (items.some((item) => item.type === 'seed-phrase')) return Sprout
     if (items.some((item) => item.type === 'authenticator')) return ShieldCheck
     if (items.some((item) => item.type === 'passkey')) return KeyRound
+    if (items.some((item) => item.type === 'file-attachment')) return Paperclip
     return StickyNote
   }
 
@@ -443,6 +446,7 @@
             {@const titleAsCardHeader =
               group.items.length === 1 &&
               (group.items[0].type === 'secure-note' ||
+                group.items[0].type === 'file-attachment' ||
                 group.items[0].type === 'login')}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"

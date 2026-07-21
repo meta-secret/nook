@@ -132,13 +132,16 @@ secrets:
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Supported user-secret tags:** `login`, `api-key`, `seed-phrase`,
-  `secure-note`, and `passkey`. A `passkey` plaintext payload is versioned and
-  contains the RP/account metadata, credential id, user handle, ES256
-  PKCS#8/COSE key material, signature counter, discoverability, and backup
-  flags. It is encrypted as one ordinary per-record payload; private key
-  material never appears in projection YAML or event operations as plaintext.
-  Creation and assertion run through the approved, unlocked extension device,
-  not the generic add/edit form.
+  `secure-note`, `authenticator`, `file-attachment`, and `passkey`. A `passkey`
+  plaintext payload is versioned and contains the RP/account metadata,
+  credential id, user handle, ES256 PKCS#8/COSE key material, signature
+  counter, discoverability, and backup flags. It is encrypted as one ordinary
+  per-record payload; private key material never appears in projection YAML or
+  event operations as plaintext. Creation and assertion run through the
+  approved, unlocked extension device, not the generic add/edit form. A
+  `file-attachment` payload stores title/file metadata plus standard-base64
+  file bytes (max 1 MiB decoded); list projections expose metadata only. See
+  [file-attachments.md](file-attachments.md).
 Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)

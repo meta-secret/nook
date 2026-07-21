@@ -51,7 +51,8 @@ export type VaultItemType =
   | "seed-phrase"
   | "secure-note"
   | "passkey"
-  | "authenticator";
+  | "authenticator"
+  | "file-attachment";
 
 export type AuthenticatorCodeView = {
   code: string;
@@ -148,6 +149,14 @@ export type SecretFormInput =
       digits: string;
       period: string;
       backupCodes: string;
+    }
+  | {
+      type: "file-attachment";
+      title: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      contentBase64: string;
     };
 
 /** Build a validated YAML payload from one core-owned secret form variant. */
@@ -185,6 +194,15 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.digits,
         input.period,
         input.backupCodes,
+      );
+      break;
+    case "file-attachment":
+      fields = NookSecretFormFields.fileAttachment(
+        input.title,
+        input.fileName,
+        input.mimeType,
+        input.sizeBytes,
+        input.contentBase64,
       );
       break;
   }

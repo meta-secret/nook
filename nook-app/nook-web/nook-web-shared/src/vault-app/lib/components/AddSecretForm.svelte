@@ -5,6 +5,7 @@
     Sprout,
     StickyNote,
     ShieldCheck,
+    Paperclip,
     ArrowLeft,
     KeyRound,
     RefreshCw,
@@ -76,6 +77,12 @@
   let seedPhraseValid = $state(false)
   let noteTitle = $state('')
   let noteBody = $state('')
+  let fileTitle = $state('')
+  let fileName = $state('')
+  let fileMimeType = $state('')
+  let fileSizeBytes = $state(0)
+  let fileContentBase64 = $state('')
+  let fileInputError = $state('')
   let authenticatorIssuer = $state('')
   let authenticatorAccount = $state('')
   let authenticatorSecret = $state('')
@@ -84,6 +91,51 @@
   let authenticatorPeriod = $state('30')
   let authenticatorBackupCodes = $state('')
   let submitError = $state('')
+
+  /** Must match `FILE_ATTACHMENT_MAX_BYTES` in nook-core. */
+  const FILE_ATTACHMENT_MAX_BYTES = 1_048_576
+
+  function bytesToBase64(bytes: Uint8Array): string {
+    let binary = ''
+    const chunk = 0x8000
+    for (let offset = 0; offset < bytes.length; offset += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk))
+    }
+    return btoa(binary)
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  async function handleFileSelected(event: Event) {
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    fileInputError = ''
+    if (!file) return
+    if (file.size === 0) {
+      fileInputError = vault.t('add_secret.file_empty')
+      input.value = ''
+      return
+    }
+    if (file.size > FILE_ATTACHMENT_MAX_BYTES) {
+      fileInputError = vault.t('add_secret.file_too_large', {
+        max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
+      })
+      input.value = ''
+      return
+    }
+    const buffer = new Uint8Array(await file.arrayBuffer())
+    fileName = file.name
+    fileMimeType = file.type || 'application/octet-stream'
+    fileSizeBytes = buffer.byteLength
+    fileContentBase64 = bytesToBase64(buffer)
+    if (!fileTitle.trim()) {
+      fileTitle = file.name
+    }
+  }
 
   let genLength = $state(defaultPasswordGenerationOptions.length)
   let genUppercase = $state(defaultPasswordGenerationOptions.uppercase)
@@ -103,7 +155,9 @@
               ? vault.t('add_secret.title_edit_secure_note')
               : selectedType === 'authenticator'
                 ? vault.t('add_secret.title_edit_authenticator')
-              : vault.t('add_secret.title_edit_item')
+                : selectedType === 'file-attachment'
+                  ? vault.t('add_secret.title_edit_file_attachment')
+                  : vault.t('add_secret.title_edit_item')
       : selectedType === 'login'
         ? vault.t('add_secret.title_new_login')
         : selectedType === 'api-key'
@@ -114,7 +168,9 @@
               ? vault.t('add_secret.title_new_secure_note')
               : selectedType === 'authenticator'
                 ? vault.t('add_secret.title_new_authenticator')
-              : vault.t('add_secret.title_add_item'),
+                : selectedType === 'file-attachment'
+                  ? vault.t('add_secret.title_new_file_attachment')
+                  : vault.t('add_secret.title_add_item'),
   )
 
   $effect(() => {
@@ -136,6 +192,12 @@
     } else if (item.type === 'secure-note') {
       noteTitle = item.title
       noteBody = item.note
+    } else if (item.type === 'file-attachment') {
+      fileTitle = item.title
+      fileName = item.fileName
+      fileMimeType = item.mimeType
+      fileSizeBytes = item.sizeBytes
+      fileContentBase64 = item.contentBase64
     } else if (item.type === 'authenticator') {
       websiteUrl = item.websiteUrl ?? ''
       authenticatorIssuer = item.issuer
@@ -192,6 +254,16 @@
         backupCodes: setupKeyChanged ? '' : authenticatorBackupCodes,
       }
     }
+    if (selectedType === 'file-attachment') {
+      return {
+        type: 'file-attachment',
+        title: fileTitle.trim() || fileName.trim(),
+        fileName: fileName.trim(),
+        mimeType: fileMimeType.trim() || 'application/octet-stream',
+        sizeBytes: fileSizeBytes,
+        contentBase64: fileContentBase64,
+      }
+    }
     return {
       type: 'secure-note',
       title: noteTitle.trim(),
@@ -211,6 +283,12 @@
     seedPhrase = ''
     noteTitle = ''
     noteBody = ''
+    fileTitle = ''
+    fileName = ''
+    fileMimeType = ''
+    fileSizeBytes = 0
+    fileContentBase64 = ''
+    fileInputError = ''
     authenticatorIssuer = ''
     authenticatorAccount = ''
     authenticatorSecret = ''
@@ -234,6 +312,7 @@
     submitError = ''
 
     if (selectedType === 'secure-note' && !noteBody.trim()) return
+    if (selectedType === 'file-attachment' && !fileContentBase64) return
     if (selectedType === 'seed-phrase' && !seedPhraseValid) return
 
     let dataYaml: string
@@ -272,6 +351,9 @@
     if (isSaving || !selectedType) return false
     if (selectedType === 'seed-phrase') return seedPhraseValid
     if (selectedType === 'secure-note') return noteBody.trim().length > 0
+    if (selectedType === 'file-attachment') {
+      return fileContentBase64.length > 0 && fileName.trim().length > 0
+    }
     if (selectedType === 'api-key') return apiKey.trim().length > 0
     if (selectedType === 'authenticator') {
       return (
@@ -398,6 +480,24 @@
         >
         <span class="mt-1 block text-xs text-muted-foreground"
           >{vault.t('add_secret.private_text_desc')}</span
+        >
+      </button>
+      <button
+        type="button"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid="item-type-file-attachment"
+        onclick={() => (selectedType = 'file-attachment')}
+      >
+        <div
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
+        >
+          <Paperclip class="size-6" />
+        </div>
+        <span class="block text-sm font-semibold text-foreground"
+          >{vault.t('vault.types.file_attachment')}</span
+        >
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >{vault.t('add_secret.file_attachment_desc')}</span
         >
       </button>
       <button
@@ -809,6 +909,59 @@
           {vault.t('add_secret.authenticator_secret_hint')}
         </p>
       </div>
+    {:else if selectedType === 'file-attachment'}
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="file-attachment-title"
+          >{vault.t('vault.fields.title')}</label
+        >
+        <input
+          id="file-attachment-title"
+          data-testid="file-attachment-title"
+          bind:value={fileTitle}
+          placeholder={vault.t('add_secret.placeholder_file_title')}
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="file-attachment-input"
+          >{vault.t('vault.fields.file')}</label
+        >
+        <input
+          id="file-attachment-input"
+          type="file"
+          data-testid="file-attachment-input"
+          onchange={(event) => void handleFileSelected(event)}
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        />
+        <p class="text-xs text-muted-foreground text-pretty">
+          {vault.t('add_secret.file_attachment_hint', {
+            max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
+          })}
+        </p>
+        {#if fileInputError}
+          <p
+            class="text-sm text-destructive"
+            role="alert"
+            data-testid="file-attachment-error"
+          >
+            {fileInputError}
+          </p>
+        {/if}
+        {#if fileName}
+          <div
+            class="rounded-md border border-border/40 bg-muted/15 px-3 py-2 text-xs"
+            data-testid="file-attachment-selected"
+          >
+            <p class="truncate font-medium text-foreground">{fileName}</p>
+            <p class="mt-0.5 text-muted-foreground">
+              {formatFileSize(fileSizeBytes)}
+              {#if fileMimeType}
+                · {fileMimeType}
+              {/if}
+            </p>
+          </div>
+        {/if}
+      </div>
     {:else}
       <div class="shrink-0 space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
@@ -818,7 +971,7 @@
           id="secret-label"
           data-testid="secret-label"
           bind:value={noteTitle}
-          placeholder="Recovery instructions"
+          placeholder={vault.t('add_secret.placeholder_title')}
           required
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
@@ -826,7 +979,9 @@
       <div class="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-1.5">
         <span class="shrink-0 text-xs font-medium"
           >{vault.t('vault.fields.note')}
-          <span class="text-muted-foreground">(Markdown)</span></span
+          <span class="text-muted-foreground"
+            >({vault.t('add_secret.markdown_support')})</span
+          ></span
         >
         <MarkdownEditor
           bind:value={noteBody}
