@@ -43,9 +43,6 @@ pub use authentication_workflow::{
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
-pub use website_login_save::{
-    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
-};
 pub use authenticator::{
     AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,
     authenticator_setup_key_changed,
@@ -152,6 +149,9 @@ pub use vault_sentinel_onboarding::{
 };
 pub use vault_sync_conflict::{
     ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
+};
+pub use website_login_save::{
+    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
 
 pub use nook_auth2::{

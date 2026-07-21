@@ -36,7 +36,6 @@ pub use types::{
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
     NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder, NookImportResult,
     NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookPasskeyAccount,
-    NookWebsiteLoginSavePlan,
     NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
     NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
     NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
@@ -46,7 +45,7 @@ pub use types::{
     NookStorageConnectArgs, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult,
+    NookVaultSyncResult, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
