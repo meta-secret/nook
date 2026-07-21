@@ -135,10 +135,8 @@ export async function resolveExtensionSetupStatus(
   return "installed_unpaired";
 }
 
-export function openExtensionInstallTarget(target: ExtensionInstallTarget): void {
-  const features =
-    target.installMethod === "chrome_web_store"
-      ? "noopener,noreferrer"
-      : "noopener,noreferrer";
-  window.open(target.installUrl, "_blank", features);
+export function openExtensionInstallTarget(
+  target: ExtensionInstallTarget,
+): void {
+  window.open(target.installUrl, "_blank", "noopener,noreferrer");
 }
