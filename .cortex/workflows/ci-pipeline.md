@@ -106,6 +106,10 @@ Registry and factories live in `nook-app/nook-web/e2e/sync-provider.ts`:
 - **`createSyncTarget()`** — isolated e2e remote (reads provider from env)
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
 - **`live/sync.smoke.spec.ts`** — one nightly smoke per matrix row
+- **`live/google-drive-shared-grant.smoke.spec.ts`** — opt-in real Drive
+  shared-folder create + `permissions.create` (+ optional joiner verify);
+  skips unless `NOOK_GOOGLE_E2E_ACCESS_TOKEN` and `NOOK_GOOGLE_E2E_JOINER_EMAIL`
+  are set. Distinct from private `drive.appdata` sync smoke.
 - **`local` is a legacy alias for `file`** in e2e; new tests should use
   `file` when they need the default local file-backed provider explicitly.
 
@@ -129,7 +133,15 @@ Live credentials per provider:
 | Provider       | Secret / env                                              |
 | -------------- | --------------------------------------------------------- |
 | `github`       | `NOOK_GITHUB_PAT`                                         |
-| `google-drive` | `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (when live smoke is wired) |
+| `google-drive` | `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (private sync smoke, when wired) |
+
+Shared-folder grant live smoke (issue #289; not the private sync matrix row):
+
+| Env | Purpose |
+| --- | --- |
+| `NOOK_GOOGLE_E2E_ACCESS_TOKEN` | Owner token with `drive.file` |
+| `NOOK_GOOGLE_E2E_JOINER_EMAIL` | Email granted writer on the folder |
+| `NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` | Optional joiner token to verify access under that folder id |
 
 No-live-provider mode uses Playwright route handlers (`sync-stub.ts`,
 `drive-stub.ts`, `file-sync-stub.ts`) — no API quota. For the default `file`

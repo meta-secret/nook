@@ -126,14 +126,25 @@ must fail closed in Rust, but they do not create a `personal` or `shared` vault
 mode.
 
 The Google Drive `private` / `shared` choice is a provider feature independent
-of vault architecture. Private mode uses app-private storage; shared mode uses
-a visible folder and the following grant flow:
+of vault architecture. Private mode uses app-private storage (`drive.appdata`);
+shared mode uses a visible folder and the following grant flow:
 
-1. the owner creates a folder and grants the joiner's external identity;
+1. the owner creates a folder and grants the joiner's external identity
+   (`drive.file` + `permissions.create` when the token allows it);
 2. the connection records the folder target without embedding owner tokens;
 3. the joiner uses its own OAuth account to access the same encrypted replica.
 
+If automatic grant cannot run (missing owner token, token lacks `drive.file`,
+or Drive API error), the outcome is `ManualGrantRequired`: the UI shows
+localized manual-share instructions and may still bind an already-created
+`folderId`. See [auth-providers.md](auth-providers.md) § Google Drive modes.
+
 This provider-account flow must not be used as Sentinel membership or quorum.
+
+Live coverage outside Playwright Drive stubs is opt-in under
+`nook-web-app/e2e/live/google-drive-shared-grant.smoke.spec.ts` (requires
+`NOOK_GOOGLE_E2E_ACCESS_TOKEN` and `NOOK_GOOGLE_E2E_JOINER_EMAIL`; optional
+`NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` proves joiner access under that folder).
 
 iCloud exposes the same provider-level private/shared choice through CloudKit
 rather than a directory ACL. The owner creates a custom-zone root share, and a
