@@ -1,0 +1,192 @@
+schema_version: 2
+source_pr:
+  number: 559
+  url: https://github.com/meta-secret/nook/pull/559
+  title: Fix AI-debug HTTPS allowlist and pilot gaps
+  change_surface: ai_debug_pilot_tooling_web
+  head_sha: 15c0e45d3b99607fd3f9d9a41c135550d4096e67
+  started_at: 2026-07-21T04:34:00Z
+  opened_at: 2026-07-21T04:40:12Z
+  merged_at: 2026-07-21T05:00:37Z
+  elapsed_seconds: 1597
+  open_to_merge_seconds: 1225
+summary:
+  local_execution_count: 9
+  local_check_count: 4
+  local_test_count: 2
+  local_combined_count: 3
+  local_execution_seconds: 579
+  github_actions_run_count: 6
+  github_actions_seconds: 1222
+  pr_retrigger_count: 5
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T05:02:00Z
+  head_sha: 15c0e45d3b99607fd3f9d9a41c135550d4096e67
+  by_type:
+    rust: 576
+    preflight: 30
+    web_unit: 209
+    e2e: 177
+  total: 992
+local_executions:
+  - command: task ai-debug:check
+    category: check
+    started_at: 2026-07-21T04:36:30Z
+    finished_at: 2026-07-21T04:36:33Z
+    duration_seconds: 3
+    outcome: passed
+    reason: pilot_prereq_after_https_cursor_wiring
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T04:40:11Z
+    finished_at: 2026-07-21T04:41:22Z
+    duration_seconds: 71
+    outcome: failed
+    reason: format_check_on_device_protection_files
+  - command: E2E_SPEC=e2e/device-key-protection.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T04:40:11Z
+    finished_at: 2026-07-21T04:42:06Z
+    duration_seconds: 115
+    outcome: passed
+    reason: passkey_log_correlation_coverage
+  - command: task format
+    category: check
+    started_at: 2026-07-21T04:41:30Z
+    finished_at: 2026-07-21T04:41:48Z
+    duration_seconds: 18
+    outcome: passed
+    reason: sealed_image_format_diff_only_host_apply_needed
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T04:43:01Z
+    finished_at: 2026-07-21T04:46:03Z
+    duration_seconds: 182
+    outcome: passed
+    reason: local_gate_after_prettier_host_apply
+  - command: E2E_SPEC=e2e/demos/device-protection.demo.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T04:47:20Z
+    finished_at: 2026-07-21T04:48:22Z
+    duration_seconds: 62
+    outcome: passed
+    reason: ui_demo_contract_spec
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T04:48:30Z
+    finished_at: 2026-07-21T04:50:25Z
+    duration_seconds: 115
+    outcome: passed
+    reason: local_pr_mirror_after_demo_format_fix
+  - command: task pr:ready PR=559
+    category: check
+    started_at: 2026-07-21T04:59:50Z
+    finished_at: 2026-07-21T04:59:57Z
+    duration_seconds: 7
+    outcome: failed
+    reason: self_comment_counted_as_substantive
+  - command: task pr:ready PR=559
+    category: check
+    started_at: 2026-07-21T05:00:20Z
+    finished_at: 2026-07-21T05:00:26Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29801881507
+    run_attempt: 1
+    head_sha: 403406c79ea392a1e757afa0427a6f40ca1090fe
+    trigger: pull_request
+    started_at: 2026-07-21T04:40:16Z
+    finished_at: 2026-07-21T04:43:11Z
+    duration_seconds: 175
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29801988573
+    run_attempt: 1
+    head_sha: b17c14322b168c20a28e97f97af2ae9b31c6c90c
+    trigger: pull_request
+    started_at: 2026-07-21T04:42:42Z
+    finished_at: 2026-07-21T04:43:09Z
+    duration_seconds: 27
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29802008084
+    run_attempt: 1
+    head_sha: 549ac0d4a1a1d5745d649103893ad4624217f749
+    trigger: pull_request
+    started_at: 2026-07-21T04:43:07Z
+    finished_at: 2026-07-21T04:46:55Z
+    duration_seconds: 228
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29802145385
+    run_attempt: 1
+    head_sha: f4b7563541d1257d38e46aa4e736a8cd8daed9ab
+    trigger: pull_request
+    started_at: 2026-07-21T04:46:25Z
+    finished_at: 2026-07-21T04:47:05Z
+    duration_seconds: 40
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29802175801
+    run_attempt: 1
+    head_sha: f70484953a27bde60da4b03ea8404522ce1b49bb
+    trigger: pull_request
+    started_at: 2026-07-21T04:47:02Z
+    finished_at: 2026-07-21T04:51:22Z
+    duration_seconds: 260
+    conclusion: failure
+  - workflow: PR
+    run_id: 29802379690
+    run_attempt: 1
+    head_sha: 15c0e45d3b99607fd3f9d9a41c135550d4096e67
+    trigger: pull_request
+    started_at: 2026-07-21T04:51:45Z
+    finished_at: 2026-07-21T04:59:57Z
+    duration_seconds: 492
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T04:42:42Z
+    reason: handoff_hints_commit
+  - kind: head_push
+    at: 2026-07-21T04:43:07Z
+    reason: prettier_host_apply
+  - kind: head_push
+    at: 2026-07-21T04:46:25Z
+    reason: merge_origin_main
+  - kind: head_push
+    at: 2026-07-21T04:47:02Z
+    reason: add_ui_demo_spec
+  - kind: head_push
+    at: 2026-07-21T04:51:45Z
+    reason: prettier_demo_format_fix
+merge_attempts:
+  - at: 2026-07-21T05:00:37Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [558, 556]
+  baseline_quality: weak
+  baseline_note: Closest recent records are live-drive smoke and stats/docs gates; no prior AI-debug tooling PR in the stats set.
+  elapsed_seconds_change_percent: 154.0
+  local_execution_seconds_change_percent: 157.0
+  github_actions_seconds_change_percent: 213.0
+  test_inventory_total_change: 5
+  regression: true
+  regression_reasons:
+    - Five head-push PR retriggers from sealed-image Prettier lag and late UI-demo-contract discovery burned cancelled/failed CI cycles.
+waste_assessment:
+  wasteful: true
+  findings:
+    - task format prints a sealed-image diff without writing the host tree; discovering that after a failed task check cost one full local gate and a cancelled PR run.
+    - Shared vault-app edits require an e2e/demos/*.demo.spec.ts update; learning that from CI cost a failed Verify and preview cycle.
+    - Self-posted PR status comments are counted as substantive and blocked pr:ready until deleted.
+  required_actions:
+    - Prefer host-applied Prettier via the sealed image before the first push when web files change.
+    - Run .github/scripts/ui-demo-contract.sh against origin/main before opening PRs that touch nook-web-shared/src.

@@ -1,12 +1,22 @@
+// Keep in sync with .codex/ai-debug-allowed-origins.json (enforced by
+// .codex/check-ai-debug-origins.mjs / `task ai-debug:check`).
 const allowedOrigins = new Set([
   'http://127.0.0.1:5173',
   'http://localhost:5173',
-  'http://127.0.0.1:5175',
-  'http://localhost:5175',
+  'https://127.0.0.1:5173',
+  'https://localhost:5173',
   'ws://127.0.0.1:5173',
   'ws://localhost:5173',
+  'wss://127.0.0.1:5173',
+  'wss://localhost:5173',
+  'http://127.0.0.1:5175',
+  'http://localhost:5175',
+  'https://127.0.0.1:5175',
+  'https://localhost:5175',
   'ws://127.0.0.1:5175',
   'ws://localhost:5175',
+  'wss://127.0.0.1:5175',
+  'wss://localhost:5175',
 ])
 
 function hasAllowedOrigin(rawUrl: string): boolean {
@@ -35,6 +45,9 @@ export default async ({ page }) => {
       return
     }
 
-    await webSocket.close({ code: 1008, reason: 'Nook AI-debug local-only policy' })
+    await webSocket.close({
+      code: 1008,
+      reason: 'Nook AI-debug local-only policy',
+    })
   })
 }
