@@ -396,7 +396,8 @@
       "seed_phrase": "Сид-фраза",
       "passkey": "Ключ доступа",
       "authenticator": "Аутентификатор",
-      "credit_card": "Банковская карта"
+      "credit_card": "Банковская карта",
+      "file_attachment": "Файл"
     },
     "fields": {
       "username": "Имя пользователя",
@@ -432,7 +433,12 @@
       "cvv": "Код безопасности",
       "last4": "Последние цифры",
       "unnamed_card": "Карта без названия",
-      "masked_card_number": "•••• {last4}"
+      "masked_card_number": "•••• {last4}",
+      "file": "Файл",
+      "file_name": "Имя файла",
+      "file_size": "Размер",
+      "mime_type": "Тип",
+      "unnamed_file": "Безымянный файл"
     },
     "status": {
       "synced": "Синхронизировано",
@@ -442,7 +448,9 @@
     "copy_card_number": "Скопировать номер карты",
     "copy_cvv": "Скопировать код безопасности",
     "copy_expiration": "Скопировать срок действия",
-    "copy_cardholder_name": "Скопировать имя на карте"
+    "copy_cardholder_name": "Скопировать имя на карте",
+    "download_file": "Скачать файл",
+    "reveal_to_download": "Покажите секрет, чтобы скачать файл."
   },
   "bitwarden_import": {
     "button": "Импорт Bitwarden",
@@ -862,7 +870,14 @@
     "placeholder_card_number": "Номер карты",
     "placeholder_expiration_month": "ММ",
     "placeholder_expiration_year": "ГГГГ",
-    "placeholder_cvv": "CVV"
+    "placeholder_cvv": "CVV",
+    "title_edit_file_attachment": "Редактировать файл",
+    "title_new_file_attachment": "Новый файл",
+    "placeholder_file_title": "например, PDF для восстановления",
+    "file_attachment_desc": "Зашифрованный файл",
+    "file_attachment_hint": "Выберите файл размером до {max}. Файл шифруется в вашем сейфе.",
+    "file_empty": "Выберите непустой файл.",
+    "file_too_large": "Файл слишком большой. Максимальный размер — {max}."
   },
   "status_bar": {
     "synced": "Синхронизировано",

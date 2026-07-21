@@ -26,6 +26,23 @@ const legacyAuthenticator = {
   backupCodes: ['recovery-one', 'recovery-two'],
 } as unknown as NookSecretRecord
 
+describe('AddSecretForm file attachment picker', () => {
+  test('shows the file attachment type in the item picker', async () => {
+    const view = render(AddSecretForm, {
+      vault,
+      isSaving: false,
+      onAddSecret: vi.fn(async () => undefined),
+      onGeneratePassword: vi.fn(() => ''),
+      onCancel: vi.fn(),
+    })
+
+    expect(view.getByTestId('item-type-file-attachment')).toBeTruthy()
+    await fireEvent.click(view.getByTestId('item-type-file-attachment'))
+    expect(await view.findByTestId('file-attachment-input')).toBeTruthy()
+    expect(view.getByTestId('file-attachment-title')).toBeTruthy()
+  })
+})
+
 describe('AddSecretForm authenticator editing', () => {
   test('preserves hidden settings when only setup-key formatting changes', async () => {
     const onReplaceSecret = vi

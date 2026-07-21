@@ -42,6 +42,12 @@ pub enum SecretListItemData {
         expiration_month: String,
         expiration_year: String,
     },
+    FileAttachment {
+        title: String,
+        file_name: String,
+        mime_type: String,
+        size_bytes: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +106,15 @@ pub struct CreditCardSecretForm {
     pub notes: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileAttachmentSecretForm {
+    pub title: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
+    pub content_base64: String,
+}
+
 /// Secret creation input with variant-specific fields.
 ///
 /// A host must choose exactly one secret kind instead of populating a flat bag
@@ -112,6 +127,7 @@ pub enum SecretFormFields {
     SecureNote(SecureNoteSecretForm),
     Authenticator(AuthenticatorSecretForm),
     CreditCard(CreditCardSecretForm),
+    FileAttachment(FileAttachmentSecretForm),
 }
 
 impl SecretFormFields {
@@ -124,6 +140,7 @@ impl SecretFormFields {
             Self::SecureNote(_) => SecretType::SecureNote,
             Self::Authenticator(_) => SecretType::Authenticator,
             Self::CreditCard(_) => SecretType::CreditCard,
+            Self::FileAttachment(_) => SecretType::FileAttachment,
         }
     }
 }
@@ -328,6 +345,12 @@ impl SecretRecord {
                 expiration_month: value.expiration_month.clone(),
                 expiration_year: value.expiration_year.clone(),
             },
+            SecretValue::FileAttachment(value) => SecretListItemData::FileAttachment {
+                title: value.title.clone(),
+                file_name: value.file_name.clone(),
+                mime_type: value.mime_type.clone(),
+                size_bytes: value.size_bytes,
+            },
         };
         SecretListItem {
             id: self.id.clone(),
@@ -347,6 +370,7 @@ impl SecretRecord {
             SecretValue::Passkey(value) => value.rp_id.clone(),
             SecretValue::Authenticator(value) => value.issuer.clone(),
             SecretValue::CreditCard(value) => value.title.clone(),
+            SecretValue::FileAttachment(value) => value.title.clone(),
         }
     }
 
@@ -358,7 +382,7 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.key.as_str(),
             SecretValue::SeedPhrase(value) => value.seed.as_str(),
             SecretValue::SecureNote(value) => value.note.as_str(),
-            SecretValue::Passkey(_) => "",
+            SecretValue::Passkey(_) | SecretValue::FileAttachment(_) => "",
             SecretValue::Authenticator(value) => value.secret.as_str(),
             SecretValue::CreditCard(value) => value.number.as_str(),
         }
@@ -398,6 +422,19 @@ impl SecretRecord {
                 authenticator_group_key(&value.website_url, &value.issuer)
             }
             SecretValue::CreditCard(value) => titled_group_key(&value.title, "Unnamed Card"),
+            SecretValue::FileAttachment(value) => {
+                let title = value.title.trim();
+                if title.is_empty() {
+                    let name = value.file_name.trim();
+                    if name.is_empty() {
+                        "Unnamed File".to_owned()
+                    } else {
+                        name.to_owned()
+                    }
+                } else {
+                    title.to_owned()
+                }
+            }
         }
     }
 
@@ -437,6 +474,7 @@ impl SecretRecord {
                 }
             }
             SecretValue::CreditCard(value) => value.masked_number(),
+            SecretValue::FileAttachment(value) => value.file_name.trim().to_owned(),
         }
     }
 
@@ -483,6 +521,11 @@ impl SecretRecord {
                 fields.push(value.last4());
                 fields.push(value.expiration_display());
             }
+            SecretValue::FileAttachment(value) => {
+                fields.push(value.title.clone());
+                fields.push(value.file_name.clone());
+                fields.push(value.mime_type.clone());
+            }
         }
 
         fields
@@ -502,6 +545,7 @@ impl SecretListItem {
             SecretListItemData::Passkey { .. } => SecretType::Passkey,
             SecretListItemData::Authenticator { .. } => SecretType::Authenticator,
             SecretListItemData::CreditCard { .. } => SecretType::CreditCard,
+            SecretListItemData::FileAttachment { .. } => SecretType::FileAttachment,
         }
     }
 
@@ -534,7 +578,8 @@ impl SecretListItem {
             | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
             SecretListItemData::SeedPhrase { name, .. } => name.clone(),
             SecretListItemData::SecureNote { title }
-            | SecretListItemData::CreditCard { title, .. } => title.clone(),
+            | SecretListItemData::CreditCard { title, .. }
+            | SecretListItemData::FileAttachment { title, .. } => title.clone(),
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator { issuer, .. } => issuer.clone(),
         }
@@ -568,6 +613,21 @@ impl SecretListItem {
                 ..
             } => authenticator_group_key(website_url, issuer),
             SecretListItemData::CreditCard { title, .. } => titled_group_key(title, "Unnamed Card"),
+            SecretListItemData::FileAttachment {
+                title, file_name, ..
+            } => {
+                let title = title.trim();
+                if title.is_empty() {
+                    let name = file_name.trim();
+                    if name.is_empty() {
+                        "Unnamed File".to_owned()
+                    } else {
+                        name.to_owned()
+                    }
+                } else {
+                    title.to_owned()
+                }
+            }
         }
     }
 
@@ -622,6 +682,7 @@ impl SecretListItem {
                     format!("•••• {last4}")
                 }
             }
+            SecretListItemData::FileAttachment { file_name, .. } => file_name.trim().to_owned(),
         }
     }
 }
@@ -680,6 +741,23 @@ pub fn build_secret_yaml(
             cvv: string_field("cvv"),
             notes: string_field("notes"),
         }),
+        SecretType::FileAttachment => {
+            let size_bytes = fields
+                .get("sizeBytes")
+                .and_then(|value| {
+                    value
+                        .as_u64()
+                        .or_else(|| value.as_str().and_then(|raw| raw.parse().ok()))
+                })
+                .unwrap_or(0);
+            SecretFormFields::FileAttachment(FileAttachmentSecretForm {
+                title: string_field("title"),
+                file_name: string_field("fileName"),
+                mime_type: string_field("mimeType"),
+                size_bytes,
+                content_base64: string_field("contentBase64"),
+            })
+        }
     };
     build_secret_yaml_from_form(&fields)
 }
@@ -732,6 +810,25 @@ pub fn build_secret_yaml_from_form(
                 &fields.notes,
             )?;
             return SecretValue::CreditCard(value).to_yaml();
+        }
+        SecretFormFields::FileAttachment(fields) => {
+            let title = if fields.title.trim().is_empty() {
+                fields.file_name.clone()
+            } else {
+                fields.title.clone()
+            };
+            let value = crate::FileAttachmentSecret {
+                title,
+                file_name: fields.file_name.clone(),
+                mime_type: if fields.mime_type.trim().is_empty() {
+                    "application/octet-stream".to_owned()
+                } else {
+                    fields.mime_type.clone()
+                },
+                size_bytes: fields.size_bytes,
+                content_base64: fields.content_base64.clone(),
+            };
+            return SecretValue::FileAttachment(value).to_yaml();
         }
     };
     let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
@@ -1211,5 +1308,44 @@ mod tests {
             }
             _ => panic!("expected authenticator"),
         }
+    }
+    #[test]
+    fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list() {
+        let content =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"secret-bytes");
+        let fields = serde_json::json!({
+            "title": "",
+            "fileName": "notes.txt",
+            "mimeType": "text/plain",
+            "sizeBytes": 12,
+            "contentBase64": content,
+        });
+        let yaml = build_secret_yaml(SecretType::FileAttachment, &fields).unwrap();
+        let parsed = SecretValue::from_yaml(SecretType::FileAttachment, &yaml).unwrap();
+        let SecretValue::FileAttachment(value) = parsed else {
+            panic!("expected file attachment");
+        };
+        assert_eq!(value.title, "notes.txt");
+        assert_eq!(value.file_name, "notes.txt");
+        assert_eq!(value.size_bytes, 12);
+
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_file"),
+            secret_type: SecretType::FileAttachment,
+            data: SecretValue::FileAttachment(value),
+        };
+        let item = record.list_item();
+        assert_eq!(item.secret_type(), SecretType::FileAttachment);
+        assert_eq!(item.summary(), "notes.txt");
+        assert_eq!(
+            item.data,
+            SecretListItemData::FileAttachment {
+                title: "notes.txt".to_owned(),
+                file_name: "notes.txt".to_owned(),
+                mime_type: "text/plain".to_owned(),
+                size_bytes: 12,
+            }
+        );
+        assert!(!format!("{item:?}").contains("secret-bytes"));
     }
 }

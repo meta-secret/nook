@@ -134,13 +134,14 @@ pub use secret_fingerprint::{
     SecretFingerprint, enrich_secret, secret_fingerprint, secret_identity_fingerprint,
 };
 pub use secret_types::{
-    ApiKeySecret, LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey,
-    PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose, PasskeySecret, SecretRecord, SecretType,
-    SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
+    ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentSecret, LoginSecret,
+    PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose,
+    PasskeySecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret,
+    StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{
-    ApiKeySecretForm, AuthenticatorSecretForm, CreditCardSecretForm, LoginSecretForm,
-    SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
+    ApiKeySecretForm, AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm,
+    LoginSecretForm, SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
     SeedPhraseSecretForm, authenticator_group_key, build_secret_yaml, build_secret_yaml_from_form,
     hostname_from_url, login_host_matches_origin, resolve_entity_group_keys,
 };

@@ -2293,6 +2293,27 @@ impl NookSecretFormFields {
             }),
         }
     }
+
+    #[wasm_bindgen(js_name = fileAttachment)]
+    pub fn file_attachment(
+        title: String,
+        file_name: String,
+        mime_type: String,
+        size_bytes: u32,
+        content_base64: String,
+    ) -> Self {
+        Self {
+            inner: nook_core::SecretFormFields::FileAttachment(
+                nook_core::FileAttachmentSecretForm {
+                    title,
+                    file_name,
+                    mime_type,
+                    size_bytes: u64::from(size_bytes),
+                    content_base64,
+                },
+            ),
+        }
+    }
 }
 
 #[wasm_bindgen]

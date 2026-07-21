@@ -396,7 +396,8 @@
       "seed_phrase": "Seed Phrase",
       "passkey": "Passkey",
       "authenticator": "Authenticator",
-      "credit_card": "Credit Card"
+      "credit_card": "Credit Card",
+      "file_attachment": "File"
     },
     "fields": {
       "username": "Username",
@@ -432,7 +433,12 @@
       "cvv": "Security code",
       "last4": "Last four",
       "unnamed_card": "Unnamed Card",
-      "masked_card_number": "•••• {last4}"
+      "masked_card_number": "•••• {last4}",
+      "file": "File",
+      "file_name": "File name",
+      "file_size": "Size",
+      "mime_type": "Type",
+      "unnamed_file": "Unnamed File"
     },
     "status": {
       "synced": "Synced",
@@ -442,7 +448,9 @@
     "copy_card_number": "Copy card number",
     "copy_cvv": "Copy security code",
     "copy_expiration": "Copy expiration",
-    "copy_cardholder_name": "Copy name on card"
+    "copy_cardholder_name": "Copy name on card",
+    "download_file": "Download file",
+    "reveal_to_download": "Reveal the item to download the file."
   },
   "bitwarden_import": {
     "button": "Import Bitwarden",
@@ -1110,7 +1118,14 @@
     "placeholder_card_number": "Card number",
     "placeholder_expiration_month": "MM",
     "placeholder_expiration_year": "YYYY",
-    "placeholder_cvv": "CVV"
+    "placeholder_cvv": "CVV",
+    "title_edit_file_attachment": "Edit file",
+    "title_new_file_attachment": "New file",
+    "placeholder_file_title": "e.g., Recovery PDF",
+    "file_attachment_desc": "Encrypted file upload",
+    "file_attachment_hint": "Choose a file up to {max}. The file is encrypted in your vault.",
+    "file_empty": "Choose a non-empty file.",
+    "file_too_large": "File is too large. Maximum size is {max}."
   },
   "status_bar": {
     "synced": "Synced",

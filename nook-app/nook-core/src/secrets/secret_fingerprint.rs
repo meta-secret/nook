@@ -183,6 +183,13 @@ fn canonical_identity(value: &SecretValue) -> Vec<u8> {
             append_field(&mut bytes, normalized_text(&card.cardholder_name).as_str());
             append_field(&mut bytes, card.last4().as_str());
         }
+        SecretValue::FileAttachment(file) => {
+            append_field(&mut bytes, "file-attachment");
+            append_field(&mut bytes, normalized_text(&file.title).as_str());
+            append_field(&mut bytes, normalized_text(&file.file_name).as_str());
+            append_field(&mut bytes, normalized_text(&file.mime_type).as_str());
+            append_field(&mut bytes, file.size_bytes.to_string().as_str());
+        }
     }
     bytes
 }
@@ -242,6 +249,9 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
                 &mut bytes,
                 provider_neutral_notes(&card.notes, &IMPORT_METADATA_MARKERS).as_str(),
             );
+        }
+        SecretValue::FileAttachment(file) => {
+            append_field(&mut bytes, file.content_base64.as_str());
         }
     }
     bytes

@@ -493,6 +493,43 @@ test.describe('local vault', () => {
     await deleteSecret(page, title)
   })
 
+  test('adds, reveals, and downloads a file attachment', async ({ page }) => {
+    const title = uniqueSecretKey('e2e-file')
+    const fileContents = 'nook file attachment payload'
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-file-attachment').click()
+    await page.getByTestId('file-attachment-title').fill(title)
+    await page.getByTestId('file-attachment-input').setInputFiles({
+      name: 'recovery.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(fileContents, 'utf8'),
+    })
+    await expect(page.getByTestId('file-attachment-selected')).toContainText(
+      'recovery.txt',
+    )
+    await page.getByTestId('save-secret-btn').click()
+
+    const row = page.getByTestId('secret-row').filter({ hasText: title })
+    await expect(page.getByTestId('vault-group-file-attachment')).toBeVisible()
+    await expect(row).toBeVisible()
+
+    await expandSecretRow(page, title)
+    await expect(row.getByTestId('file-attachment-name')).toHaveText(
+      'recovery.txt',
+    )
+    await revealSecretInRow(row)
+    const downloadPromise = page.waitForEvent('download')
+    await row.getByTestId('download-file-attachment-btn').click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('recovery.txt')
+    const downloadPath = await download.path()
+    expect(downloadPath).toBeTruthy()
+    expect(readFileSync(downloadPath!, 'utf8')).toBe(fileContents)
+
+    await deleteSecret(page, title)
+  })
+
   test('adds an authenticator with a simple setup-key form and live TOTP code', async ({
     page,
   }) => {

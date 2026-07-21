@@ -14,3 +14,4 @@ Product specs detail the user-facing and system-level requirements.
 | [secure-notes.md](secure-notes.md) | Secure notes vault item type (free-form encrypted text) | Draft |
 | [authenticator-items.md](authenticator-items.md) | TOTP authenticator items with a simple setup-key or URI flow | Active |
 | [credit-card-items.md](credit-card-items.md) | Credit/debit card vault item type with Luhn-validated numbers | Active |
+| [file-attachments.md](file-attachments.md) | Encrypted file attachment vault item type (upload/download) | Active |
