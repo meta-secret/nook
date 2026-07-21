@@ -37,6 +37,10 @@ export const extensionConnectRequestFromLocation: (
   location: Location,
 ) => undefined = () => undefined;
 
+export function readInstalledExtensionRuntimeId(): undefined {
+  return undefined;
+}
+
 export async function discoverPairedExtensionIdentity(
   _vaultStoreId: string,
 ): Promise<PairedExtensionIdentityDiscovery> {
