@@ -15,45 +15,6 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-function enrollmentChromeStubArgs(messages: Record<string, ChromeMessage>) {
-  return {
-    localizedMessages: messages,
-    barcodeRawValue: otpauthUri,
-    responsesByType: {
-      'nook:website-authenticator-enroll-preview': {
-        ok: true,
-        status: 'ready',
-        vaultStoreId: 'demo-vault',
-        vaultName: 'Demo vault',
-        preview: {
-          issuer: 'Demo Service',
-          account: 'demo.user@example.test',
-          websiteUrl: 'https://demo.example.test',
-          algorithm: 'SHA1',
-          digits: 6,
-          period: 30,
-        },
-      },
-      'nook:website-authenticator-enroll-stage': {
-        ok: true,
-        stageId: 'demo-enroll-stage',
-      },
-      'nook:website-authenticator-enroll-code': {
-        ok: true,
-        code: '482913',
-      },
-      'nook:authentication-outcome-classify': {
-        ok: true,
-        verdict: { name: 'sufficient', allowsCredentialCommit: true },
-      },
-      'nook:website-authenticator-enroll-confirm': {
-        ok: true,
-        secretId: 'demo-authenticator-1',
-      },
-    },
-  }
-}
-
 test('guide authenticator enrollment through consented Pilot ceremony', async ({
   page,
 }) => {
@@ -63,7 +24,11 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
       'utf8',
     ),
   ) as Record<string, ChromeMessage>
-  const stubArgs = enrollmentChromeStubArgs(messages)
+  const stubArgs = {
+    localizedMessages: messages,
+    barcodeRawValue: otpauthUri,
+    enrollPilotFlow: true,
+  }
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
