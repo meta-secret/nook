@@ -53,7 +53,10 @@ describe('website one-time-code fields', () => {
     `
 
     const fields = findOneTimeCodeFields()
-    expect(fields.map((field) => field.name)).toEqual(['Code', 'VerificationCode'])
+    expect(fields.map((field) => field.name)).toEqual([
+      'Code',
+      'VerificationCode',
+    ])
     expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
       oneTimeCodeFieldCount: 1,
     })
