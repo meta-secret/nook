@@ -17,7 +17,9 @@ The extension owns browser-only responsibilities:
 - filling a credential after explicit user action;
 - detecting one-time-code fields and filling a Rust-derived TOTP only after the
   user chooses a saved authenticator;
-- offering to save or update a credential by opening Simple Vault;
+- offering to save or update a credential in the unlocked extension vault
+  session after an explicit Save approval (Simple Vault remains the full
+  management surface);
 - maintaining separately revocable extension device state and an encrypted,
   extension-owned event-log projection for independent fill.
 - offering to create and use website passkeys through an explicit consent
@@ -201,10 +203,13 @@ standalone one-time-code structures through Rust/WASM. It performs explicit
 login selection/fill/submit and TOTP selection/fill. It shows a
 verification-wait state only after a site form was actually submitted; a
 filled-only login or TOTP remains at the current checkpoint for manual review
-and submission. Signup generation/commit, password replacement, 2FA enrollment,
+and submission. After a login or signup form submit, Nook Pilot may offer a consented Save /
+Update for the captured credentials and persist them through the unlocked
+extension WASM session (`add_secret` / `replace_secret`). Password generation
+for signup, verified password-change replacement automation, 2FA enrollment,
 recovery-code capture, and cross-site success-evidence policy remain separately
-tracked flight plans; until each is implemented, Nook Pilot identifies the
-checkpoint and yields to manual control instead of implying automation.
+tracked flight plans; until each is implemented, Nook Pilot identifies those
+checkpoints and yields to manual control instead of implying automation.
 
 ### In-Page HUD
 

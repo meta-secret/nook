@@ -5,6 +5,7 @@
 //! password-manager payloads and session records.
 
 use crate::AuthenticatorSecret;
+use crate::CreditCardSecret;
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
@@ -470,6 +471,7 @@ pub enum SecretValue {
     SecureNote(SecureNoteSecret),
     Passkey(PasskeySecret),
     Authenticator(AuthenticatorSecret),
+    CreditCard(CreditCardSecret),
     FileAttachment(FileAttachmentSecret),
 }
 
@@ -510,6 +512,12 @@ impl SecretValue {
                 secret.normalize()?;
                 Ok(Self::Authenticator(secret))
             }
+            SecretType::CreditCard => {
+                let mut secret: CreditCardSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidCreditCard)?;
+                secret.normalize()?;
+                Ok(Self::CreditCard(secret))
+            }
             SecretType::FileAttachment => {
                 let secret: FileAttachmentSecret = serde_yaml::from_str(yaml)
                     .map_err(SecretPayloadError::InvalidFileAttachmentYaml)?;
@@ -530,6 +538,7 @@ impl SecretValue {
                 serde_yaml::to_string(value)
             }
             Self::Authenticator(value) => serde_yaml::to_string(value),
+            Self::CreditCard(value) => serde_yaml::to_string(value),
             Self::FileAttachment(value) => {
                 value.validate()?;
                 serde_yaml::to_string(value)
@@ -548,6 +557,7 @@ impl SecretValue {
             Self::SecureNote(_) => SecretType::SecureNote,
             Self::Passkey(_) => SecretType::Passkey,
             Self::Authenticator(_) => SecretType::Authenticator,
+            Self::CreditCard(_) => SecretType::CreditCard,
             Self::FileAttachment(_) => SecretType::FileAttachment,
         }
     }
@@ -575,6 +585,7 @@ impl SecretValue {
             }
             Self::Passkey(value) => value.zeroize_plaintext(),
             Self::Authenticator(value) => value.zeroize(),
+            Self::CreditCard(value) => value.zeroize_plaintext(),
             Self::FileAttachment(value) => value.zeroize_plaintext(),
         }
     }

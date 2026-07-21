@@ -2,7 +2,9 @@
 
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
-use crate::{AuthenticatorSecret, SecretId, SecretRecord, SecretType, SecretValue};
+use crate::{
+    AuthenticatorSecret, CreditCardSecret, SecretId, SecretRecord, SecretType, SecretValue,
+};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +34,13 @@ pub enum SecretListItemData {
         account: String,
         website_url: String,
         backup_code_count: usize,
+    },
+    CreditCard {
+        title: String,
+        cardholder_name: String,
+        last4: String,
+        expiration_month: String,
+        expiration_year: String,
     },
     FileAttachment {
         title: String,
@@ -87,6 +96,17 @@ pub struct AuthenticatorSecretForm {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreditCardSecretForm {
+    pub title: String,
+    pub cardholder_name: String,
+    pub number: String,
+    pub expiration_month: String,
+    pub expiration_year: String,
+    pub cvv: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileAttachmentSecretForm {
     pub title: String,
     pub file_name: String,
@@ -106,6 +126,7 @@ pub enum SecretFormFields {
     SeedPhrase(SeedPhraseSecretForm),
     SecureNote(SecureNoteSecretForm),
     Authenticator(AuthenticatorSecretForm),
+    CreditCard(CreditCardSecretForm),
     FileAttachment(FileAttachmentSecretForm),
 }
 
@@ -118,6 +139,7 @@ impl SecretFormFields {
             Self::SeedPhrase(_) => SecretType::SeedPhrase,
             Self::SecureNote(_) => SecretType::SecureNote,
             Self::Authenticator(_) => SecretType::Authenticator,
+            Self::CreditCard(_) => SecretType::CreditCard,
             Self::FileAttachment(_) => SecretType::FileAttachment,
         }
     }
@@ -180,6 +202,15 @@ pub fn authenticator_group_key(website_url: &str, issuer: &str) -> String {
 
 fn normalize_brand_label(raw: &str) -> String {
     crate::secrets::authenticator_issuer_hosts::normalize_issuer_lookup_key(raw)
+}
+
+fn titled_group_key(title: &str, unnamed: &str) -> String {
+    let title = title.trim();
+    if title.is_empty() {
+        unnamed.to_owned()
+    } else {
+        title.to_owned()
+    }
 }
 
 fn brand_matches_host(brand: &str, host: &str) -> bool {
@@ -307,6 +338,13 @@ impl SecretRecord {
                 website_url: value.website_url.clone(),
                 backup_code_count: value.backup_codes.len(),
             },
+            SecretValue::CreditCard(value) => SecretListItemData::CreditCard {
+                title: value.title.clone(),
+                cardholder_name: value.cardholder_name.clone(),
+                last4: value.last4(),
+                expiration_month: value.expiration_month.clone(),
+                expiration_year: value.expiration_year.clone(),
+            },
             SecretValue::FileAttachment(value) => SecretListItemData::FileAttachment {
                 title: value.title.clone(),
                 file_name: value.file_name.clone(),
@@ -322,6 +360,7 @@ impl SecretRecord {
 
     /// Primary label for list rows (website URL, account name, note title, …).
     #[must_use]
+    #[allow(clippy::match_same_arms)]
     pub fn display_title(&self) -> String {
         match &self.data {
             SecretValue::Login(value) => value.website_url.clone(),
@@ -330,6 +369,7 @@ impl SecretRecord {
             SecretValue::SecureNote(value) => value.title.clone(),
             SecretValue::Passkey(value) => value.rp_id.clone(),
             SecretValue::Authenticator(value) => value.issuer.clone(),
+            SecretValue::CreditCard(value) => value.title.clone(),
             SecretValue::FileAttachment(value) => value.title.clone(),
         }
     }
@@ -344,6 +384,7 @@ impl SecretRecord {
             SecretValue::SecureNote(value) => value.note.as_str(),
             SecretValue::Passkey(_) | SecretValue::FileAttachment(_) => "",
             SecretValue::Authenticator(value) => value.secret.as_str(),
+            SecretValue::CreditCard(value) => value.number.as_str(),
         }
     }
 
@@ -375,18 +416,12 @@ impl SecretRecord {
                     name.to_owned()
                 }
             }
-            SecretValue::SecureNote(value) => {
-                let title = value.title.trim();
-                if title.is_empty() {
-                    "Unnamed Note".to_owned()
-                } else {
-                    title.to_owned()
-                }
-            }
+            SecretValue::SecureNote(value) => titled_group_key(&value.title, "Unnamed Note"),
             SecretValue::Passkey(value) => value.rp_id.clone(),
             SecretValue::Authenticator(value) => {
                 authenticator_group_key(&value.website_url, &value.issuer)
             }
+            SecretValue::CreditCard(value) => titled_group_key(&value.title, "Unnamed Card"),
             SecretValue::FileAttachment(value) => {
                 let title = value.title.trim();
                 if title.is_empty() {
@@ -438,6 +473,7 @@ impl SecretRecord {
                     value.account.trim().to_owned()
                 }
             }
+            SecretValue::CreditCard(value) => value.masked_number(),
             SecretValue::FileAttachment(value) => value.file_name.trim().to_owned(),
         }
     }
@@ -479,6 +515,12 @@ impl SecretRecord {
                 fields.push(value.account.clone());
                 fields.push(value.website_url.clone());
             }
+            SecretValue::CreditCard(value) => {
+                fields.push(value.title.clone());
+                fields.push(value.cardholder_name.clone());
+                fields.push(value.last4());
+                fields.push(value.expiration_display());
+            }
             SecretValue::FileAttachment(value) => {
                 fields.push(value.title.clone());
                 fields.push(value.file_name.clone());
@@ -502,6 +544,7 @@ impl SecretListItem {
             SecretListItemData::SecureNote { .. } => SecretType::SecureNote,
             SecretListItemData::Passkey { .. } => SecretType::Passkey,
             SecretListItemData::Authenticator { .. } => SecretType::Authenticator,
+            SecretListItemData::CreditCard { .. } => SecretType::CreditCard,
             SecretListItemData::FileAttachment { .. } => SecretType::FileAttachment,
         }
     }
@@ -535,6 +578,7 @@ impl SecretListItem {
             | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
             SecretListItemData::SeedPhrase { name, .. } => name.clone(),
             SecretListItemData::SecureNote { title }
+            | SecretListItemData::CreditCard { title, .. }
             | SecretListItemData::FileAttachment { title, .. } => title.clone(),
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator { issuer, .. } => issuer.clone(),
@@ -561,20 +605,14 @@ impl SecretListItem {
                     name.to_owned()
                 }
             }
-            SecretListItemData::SecureNote { title } => {
-                let title = title.trim();
-                if title.is_empty() {
-                    "Unnamed Note".to_owned()
-                } else {
-                    title.to_owned()
-                }
-            }
+            SecretListItemData::SecureNote { title } => titled_group_key(title, "Unnamed Note"),
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
                 ..
             } => authenticator_group_key(website_url, issuer),
+            SecretListItemData::CreditCard { title, .. } => titled_group_key(title, "Unnamed Card"),
             SecretListItemData::FileAttachment {
                 title, file_name, ..
             } => {
@@ -637,6 +675,13 @@ impl SecretListItem {
                     account.trim().to_owned()
                 }
             }
+            SecretListItemData::CreditCard { last4, .. } => {
+                if last4.is_empty() {
+                    "credit-card".to_owned()
+                } else {
+                    format!("•••• {last4}")
+                }
+            }
             SecretListItemData::FileAttachment { file_name, .. } => file_name.trim().to_owned(),
         }
     }
@@ -686,6 +731,15 @@ pub fn build_secret_yaml(
             digits: string_field("digits"),
             period: string_field("period"),
             backup_codes: string_field("backupCodes"),
+        }),
+        SecretType::CreditCard => SecretFormFields::CreditCard(CreditCardSecretForm {
+            title: string_field("title"),
+            cardholder_name: string_field("cardholderName"),
+            number: string_field("number"),
+            expiration_month: string_field("expirationMonth"),
+            expiration_year: string_field("expirationYear"),
+            cvv: string_field("cvv"),
+            notes: string_field("notes"),
         }),
         SecretType::FileAttachment => {
             let size_bytes = fields
@@ -744,6 +798,18 @@ pub fn build_secret_yaml_from_form(
                 &fields.website_url,
             )?;
             return SecretValue::Authenticator(value).to_yaml();
+        }
+        SecretFormFields::CreditCard(fields) => {
+            let value = CreditCardSecret::from_fields(
+                &fields.title,
+                &fields.cardholder_name,
+                &fields.number,
+                &fields.expiration_month,
+                &fields.expiration_year,
+                &fields.cvv,
+                &fields.notes,
+            )?;
+            return SecretValue::CreditCard(value).to_yaml();
         }
         SecretFormFields::FileAttachment(fields) => {
             let title = if fields.title.trim().is_empty() {
@@ -900,6 +966,79 @@ mod tests {
             }
         );
         assert!(!format!("{item:?}").contains("abandon"));
+    }
+
+    #[test]
+    fn credit_card_list_item_exposes_last4_without_pan_or_cvv() {
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_card"),
+            secret_type: SecretType::CreditCard,
+            data: SecretValue::CreditCard(
+                crate::CreditCardSecret::from_fields(
+                    "Personal Visa",
+                    "Ada Lovelace",
+                    "4111 1111 1111 1111",
+                    "12",
+                    "2030",
+                    "123",
+                    "work",
+                )
+                .unwrap(),
+            ),
+        };
+
+        let item = record.list_item();
+        assert_eq!(item.secret_type(), SecretType::CreditCard);
+        assert_eq!(item.group_key(), "Personal Visa");
+        assert_eq!(item.summary(), "•••• 1111");
+        assert_eq!(
+            item.data,
+            SecretListItemData::CreditCard {
+                title: "Personal Visa".to_owned(),
+                cardholder_name: "Ada Lovelace".to_owned(),
+                last4: "1111".to_owned(),
+                expiration_month: "12".to_owned(),
+                expiration_year: "2030".to_owned(),
+            }
+        );
+        let debug = format!("{item:?}");
+        assert!(!debug.contains("4111111111111111"));
+        assert!(!debug.contains("123"));
+        assert_eq!(record.primary_credential(), "4111111111111111");
+        assert!(record.matches_search("1111"));
+        assert!(!record.matches_search("4111111111111111"));
+    }
+
+    #[test]
+    fn build_secret_yaml_from_credit_card_form_validates_number() {
+        let yaml =
+            build_secret_yaml_from_form(&SecretFormFields::CreditCard(CreditCardSecretForm {
+                title: "Debit".to_owned(),
+                cardholder_name: String::new(),
+                number: "4111111111111111".to_owned(),
+                expiration_month: String::new(),
+                expiration_year: String::new(),
+                cvv: String::new(),
+                notes: String::new(),
+            }))
+            .unwrap();
+        let value = SecretValue::from_yaml(SecretType::CreditCard, &yaml).unwrap();
+        let SecretValue::CreditCard(card) = value else {
+            panic!("expected credit card");
+        };
+        assert_eq!(card.number, "4111111111111111");
+
+        let err =
+            build_secret_yaml_from_form(&SecretFormFields::CreditCard(CreditCardSecretForm {
+                title: "Bad".to_owned(),
+                cardholder_name: String::new(),
+                number: "4111111111111112".to_owned(),
+                expiration_month: String::new(),
+                expiration_year: String::new(),
+                cvv: String::new(),
+                notes: String::new(),
+            }));
+        assert!(err.is_err());
     }
 
     #[test]
@@ -1170,7 +1309,6 @@ mod tests {
             _ => panic!("expected authenticator"),
         }
     }
-
     #[test]
     fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list() {
         let content =

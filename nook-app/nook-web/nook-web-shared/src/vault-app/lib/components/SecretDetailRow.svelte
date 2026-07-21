@@ -6,6 +6,7 @@
     StickyNote,
     ShieldCheck,
     KeyRound,
+    CreditCard,
     Paperclip,
     Download,
     Eye,
@@ -97,6 +98,11 @@
         vault.t("vault.types.passkey")
       );
     }
+    if (item.type === "credit-card") {
+      const last4 = item.last4.trim();
+      if (last4) return `•••• ${last4}`;
+      return item.title.trim() || vault.t("vault.fields.unnamed_card");
+    }
     if (item.type === "file-attachment") {
       return item.fileName.trim() || item.title.trim() || vault.t("vault.fields.no_title");
     }
@@ -104,16 +110,39 @@
   });
 
   const headerTitle = $derived.by(() => {
+    if (item.type === "login") {
+      return item.websiteHost || vault.t("vault.fields.no_website");
+    }
+    if (item.type === "credit-card") {
+      return (
+        item.title.trim() ||
+        summary ||
+        vault.t("vault.fields.unnamed_card")
+      );
+    }
     if (item.type === "file-attachment") {
       return item.title.trim() || item.fileName.trim() || vault.t("vault.fields.no_title");
     }
-    if (item.type !== "login") return summary;
-    return item.websiteHost || vault.t("vault.fields.no_website");
+    return summary;
   });
 
   const accountSubtitle = $derived(
-    item.type === "login" ? item.username.trim() : "",
+    item.type === "login"
+      ? item.username.trim()
+      : item.type === "credit-card" && item.title.trim() && item.last4.trim()
+        ? `•••• ${item.last4.trim()}`
+        : "",
   );
+
+  const cardExpiration = $derived.by(() => {
+    const month =
+      decrypted?.expirationMonth?.trim() || item.expirationMonth.trim();
+    const year =
+      decrypted?.expirationYear?.trim() || item.expirationYear.trim();
+    if (!month && !year) return "";
+    if (month && year) return `${month.padStart(2, "0")}/${year}`;
+    return month || year;
+  });
 
   function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -180,6 +209,8 @@
               <ShieldCheck class="size-3.5" />
             {:else if item.type === "passkey"}
               <KeyRound class="size-3.5" />
+            {:else if item.type === "credit-card"}
+              <CreditCard class="size-3.5" />
             {:else if item.type === "file-attachment"}
               <Paperclip class="size-3.5" />
             {:else}
@@ -219,6 +250,9 @@
             {:else if item.type === "passkey"}
               <KeyRound class="size-3 text-primary/70" />
               {vault.t("vault.types.passkey")}
+            {:else if item.type === "credit-card"}
+              <CreditCard class="size-3 text-primary/70" />
+              {vault.t("vault.types.credit_card")}
             {:else if item.type === "file-attachment"}
               <Paperclip class="size-3 text-primary/70" />
               {vault.t("vault.types.file_attachment")}
@@ -695,6 +729,160 @@
           <p class="text-[11px] leading-relaxed text-muted-foreground">
             {vault.t("vault.fields.passkey_managed_hint")}
           </p>
+        {:else if item.type === "credit-card"}
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.title")}</span
+            >
+            <div
+              class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
+            >
+              <span class="truncate text-foreground"
+                >{item.title.trim() ||
+                  vault.t("vault.fields.unnamed_card")}</span
+              >
+            </div>
+          </div>
+
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.cardholder_name")}</span
+            >
+            <div
+              class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
+            >
+              <span class="truncate text-foreground"
+                >{item.cardholderName.trim() ||
+                  vault.t("common.none")}</span
+              >
+              {#if item.cardholderName.trim()}
+                <button
+                  type="button"
+                  onclick={() =>
+                    void onCopyToClipboard(
+                      item.cardholderName,
+                      item.id,
+                      "cardholder",
+                    )}
+                  aria-label={vault.t("vault.copy_cardholder_name")}
+                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
+                >
+                  {#if copiedKey === `${item.id}-cardholder`}<Check
+                      class="size-3 text-emerald-500"
+                    />{:else}<Copy class="size-3" />{/if}
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.card_number")}</span
+            >
+            <div
+              class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
+            >
+              <code
+                class="truncate font-mono text-foreground"
+                data-testid="credit-card-number-value"
+              >
+                {decrypted
+                  ? decrypted.cardNumber
+                  : item.last4.trim()
+                    ? `•••• ${item.last4}`
+                    : "••••••••••••••••"}
+              </code>
+              {#if decrypted?.cardNumber}
+                <button
+                  type="button"
+                  onclick={() =>
+                    void onCopyToClipboard(
+                      decrypted.cardNumber,
+                      item.id,
+                      "card-number",
+                    )}
+                  aria-label={vault.t("vault.copy_card_number")}
+                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
+                >
+                  {#if copiedKey === `${item.id}-card-number`}<Check
+                      class="size-3 text-emerald-500"
+                    />{:else}<Copy class="size-3" />{/if}
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          {#if cardExpiration}
+            <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+              <span class="text-muted-foreground/70 font-medium"
+                >{vault.t("vault.fields.expiration")}</span
+              >
+              <div
+                class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
+              >
+                <span class="truncate font-mono text-foreground"
+                  >{cardExpiration}</span
+                >
+                <button
+                  type="button"
+                  onclick={() =>
+                    void onCopyToClipboard(
+                      cardExpiration,
+                      item.id,
+                      "expiration",
+                    )}
+                  aria-label={vault.t("vault.copy_expiration")}
+                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
+                >
+                  {#if copiedKey === `${item.id}-expiration`}<Check
+                      class="size-3 text-emerald-500"
+                    />{:else}<Copy class="size-3" />{/if}
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t("vault.fields.cvv")}</span
+            >
+            <div
+              class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
+            >
+              <code
+                class="truncate font-mono text-foreground"
+                data-testid="credit-card-cvv-value"
+              >
+                {decrypted ? decrypted.cvv || vault.t("common.none") : "•••"}
+              </code>
+              {#if decrypted?.cvv}
+                <button
+                  type="button"
+                  onclick={() =>
+                    void onCopyToClipboard(decrypted.cvv, item.id, "cvv")}
+                  aria-label={vault.t("vault.copy_cvv")}
+                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
+                >
+                  {#if copiedKey === `${item.id}-cvv`}<Check
+                      class="size-3 text-emerald-500"
+                    />{:else}<Copy class="size-3" />{/if}
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          {#if decrypted?.notes}
+            <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
+              <span class="text-muted-foreground/70 font-medium pt-1"
+                >{vault.t("vault.fields.notes")}</span
+              >
+              <div
+                class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
+              >
+                {decrypted.notes}
+              </div>
+            </div>
+          {/if}
         {:else if item.type === "file-attachment"}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"

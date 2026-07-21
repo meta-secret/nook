@@ -45,6 +45,13 @@ import {
   type WebsiteLoginAccountOption,
 } from '../lib/login-fill-messages'
 import {
+  isWebsiteLoginSaveCommitMessage,
+  isWebsiteLoginSaveDismissMessage,
+  isWebsiteLoginSaveOfferMessage,
+  isWebsiteLoginSavePendingMessage,
+  type WebsiteLoginSaveOfferView,
+} from '../lib/login-save-messages'
+import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
   parsedWebsitePasskeyRequest,
@@ -634,6 +641,207 @@ async function websiteLoginOptions(
   return { ok: true, status: 'ready', accounts }
 }
 
+async function websiteLoginSaveOffer(
+  message: {
+    payload: {
+      origin: string
+      username: string
+      password: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    message.payload.password = ''
+    return { ok: false, reason: 'login-save-forbidden-origin' }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    message.payload.password = ''
+    return { ok: true, status: 'unavailable' }
+  }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    message.payload.password = ''
+    openCompanionLauncher()
+    return { ok: true, status: 'locked' }
+  }
+
+  // Prefer the selected/ready vault, then the first password-filling grant.
+  const grant = grants[0]
+  const response = await sendSessionMessage({
+    type: 'nook:extension-session-plan-login-save',
+    payload: {
+      ...grant,
+      origin: message.payload.origin,
+      username: message.payload.username,
+      password: message.payload.password,
+    },
+  })
+  message.payload.password = ''
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('ok' in response) ||
+    response.ok !== true ||
+    !('decision' in response) ||
+    typeof response.decision !== 'string'
+  ) {
+    return { ok: false, reason: 'login-save-plan-failed' }
+  }
+  if (
+    response.decision === 'already-saved' ||
+    response.decision === 'invalid'
+  ) {
+    return { ok: true, status: 'ready', decision: response.decision }
+  }
+  if (
+    (response.decision !== 'create' && response.decision !== 'update') ||
+    !('offerId' in response) ||
+    typeof response.offerId !== 'string'
+  ) {
+    return { ok: false, reason: 'login-save-plan-failed' }
+  }
+  const offer: WebsiteLoginSaveOfferView = {
+    offerId: response.offerId,
+    decision: response.decision,
+    vaultStoreId: grant.vaultStoreId,
+    vaultName: grant.vaultName,
+  }
+  return { ok: true, status: 'ready', decision: response.decision, offer }
+}
+
+async function websiteLoginSavePending(
+  message: { payload: { origin: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'login-save-forbidden-origin' }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { ok: true, offer: undefined }
+  }
+  await ensureExtensionSessionDocument()
+  const response = await sendSessionMessage({
+    type: 'nook:extension-session-pending-login-save',
+    payload: { origin: message.payload.origin },
+  })
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('ok' in response) ||
+    response.ok !== true
+  ) {
+    return { ok: false, reason: 'login-save-pending-failed' }
+  }
+  if (
+    !('offer' in response) ||
+    !response.offer ||
+    typeof response.offer !== 'object'
+  ) {
+    return { ok: true, offer: undefined }
+  }
+  const staged = response.offer as {
+    offerId?: string
+    decision?: string
+    vaultStoreId?: string
+  }
+  const grant = grants.find(
+    (candidate) => candidate.vaultStoreId === staged.vaultStoreId,
+  )
+  if (
+    !grant ||
+    typeof staged.offerId !== 'string' ||
+    (staged.decision !== 'create' && staged.decision !== 'update')
+  ) {
+    return { ok: true, offer: undefined }
+  }
+  const offer: WebsiteLoginSaveOfferView = {
+    offerId: staged.offerId,
+    decision: staged.decision,
+    vaultStoreId: grant.vaultStoreId,
+    vaultName: grant.vaultName,
+  }
+  return { ok: true, offer }
+}
+
+async function websiteLoginSaveCommit(
+  message: { payload: { origin: string; offerId: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'login-save-forbidden-origin' }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { ok: false, reason: 'login-save-unavailable' }
+  }
+  await ensureExtensionSessionDocument()
+  const pending = await sendSessionMessage({
+    type: 'nook:extension-session-pending-login-save',
+    payload: { origin: message.payload.origin },
+  })
+  const stagedVaultStoreId =
+    pending &&
+    typeof pending === 'object' &&
+    'offer' in pending &&
+    pending.offer &&
+    typeof pending.offer === 'object' &&
+    'vaultStoreId' in pending.offer &&
+    typeof pending.offer.vaultStoreId === 'string'
+      ? pending.offer.vaultStoreId
+      : undefined
+  const grant =
+    grants.find((candidate) => candidate.vaultStoreId === stagedVaultStoreId) ??
+    grants[0]
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    !('status' in status) ||
+    status.status !== 'unlocked'
+  ) {
+    openCompanionLauncher()
+    return { ok: false, reason: 'login-save-locked' }
+  }
+  return sendSessionMessage({
+    type: 'nook:extension-session-commit-login-save',
+    payload: {
+      ...grant,
+      origin: message.payload.origin,
+      offerId: message.payload.offerId,
+    },
+  })
+}
+
+async function websiteLoginSaveDismiss(
+  message: { payload: { origin: string; offerId: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+    return { ok: false, reason: 'login-save-forbidden-origin' }
+  }
+  await ensureExtensionSessionDocument()
+  return sendSessionMessage({
+    type: 'nook:extension-session-dismiss-login-save',
+    payload: {
+      origin: message.payload.origin,
+      offerId: message.payload.offerId,
+    },
+  })
+}
+
 async function websiteLoginFill(
   message: {
     payload: {
@@ -1038,6 +1246,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     void websiteLoginFill(message, sender)
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'login-fill-failed' }))
+    return true
+  }
+
+  if (isWebsiteLoginSaveOfferMessage(message)) {
+    void websiteLoginSaveOffer(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'login-save-offer-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteLoginSavePendingMessage(message)) {
+    void websiteLoginSavePending(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'login-save-pending-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteLoginSaveCommitMessage(message)) {
+    void websiteLoginSaveCommit(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'login-save-commit-failed' }),
+      )
+    return true
+  }
+
+  if (isWebsiteLoginSaveDismissMessage(message)) {
+    void websiteLoginSaveDismiss(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'login-save-dismiss-failed' }),
+      )
     return true
   }
 

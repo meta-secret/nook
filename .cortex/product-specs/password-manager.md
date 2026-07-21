@@ -72,13 +72,13 @@ keys.
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
 8. **Importing from password managers:**
    - The user selects a plaintext Bitwarden JSON export in the browser.
-   - Rust parses the export and maps Bitwarden login items to Nook logins and Bitwarden secure-note items to Nook secure notes. Cards, identities, SSH keys, and other unsupported types are counted and skipped.
+   - Rust parses the export and maps Bitwarden login items to Nook logins, Bitwarden secure-note items to Nook secure notes, and Bitwarden card items to Nook credit cards. Identities, SSH keys, and other unsupported types are counted and skipped.
    - The user can select an unencrypted LastPass generic CSV export. Rust validates the canonical CSV columns, maps normal rows to Nook logins, maps `http://sn` rows to Nook secure notes, and preserves grouping, favorite, and optional TOTP metadata in encrypted notes.
-   - The user can alternatively select an unencrypted 1Password 1PUX archive. Rust validates the bounded ZIP archive and format metadata, reads `export.data` in memory without extracting attachments, maps Login and Password items to Nook logins, and maps Secure Note items to Nook secure notes. Attachments, passkeys, cards, identities, SSH keys, and other unsupported categories are skipped.
+   - The user can alternatively select an unencrypted 1Password 1PUX archive. Rust validates the bounded ZIP archive and format metadata, reads `export.data` in memory without extracting attachments, maps Login and Password items to Nook logins, Secure Note items to Nook secure notes, and Credit Card items to Nook credit cards. Attachments, passkeys, identities, SSH keys, and other unsupported categories are skipped.
    - The user can alternatively select an unencrypted Apple Passwords CSV export. Rust validates the canonical `Title`, `URL`, `Username`, and `Password` columns, maps each row to a Nook login, preserves `Notes` and title metadata, and converts valid `OTPAuth` values into standalone authenticator items. Passkeys, Wi-Fi passwords, and Sign in with Apple accounts are not included in Apple's CSV export.
    - The user can scan Google Authenticator account-export QR codes with the camera or select QR-code images. Rust decodes the `otpauth-migration://` protobuf payloads in memory, requires every part of a multi-code batch before committing, converts supported TOTP accounts into standalone authenticator items, and counts unsupported HOTP or algorithm variants as skipped.
    - The user can alternatively select an unencrypted Chrome-family password CSV export. Rust requires the portable `url`, `username`, and `password` columns, accepts optional `name`/`title` and `note`/`notes` metadata, and maps each non-empty row to a Nook login. Header order, case, BOMs, spaces, underscores, and hyphens are normalized so Chrome, Chromium, Brave, and Edge exports share one import path. Browser passkeys and non-password autofill data are not included.
-   - The user can select an unencrypted Proton Pass ZIP export or a decrypted `data.json`. Rust validates the bounded archive, reads `Proton Pass/data.json` in memory, maps login and note items, and preserves supported vault, state, pin, TOTP, alternate URL/email, and custom-field metadata in encrypted item notes. Encrypted PGP exports require prior decryption; cards, identities, aliases, passkeys, attachments, and other unsupported types are skipped.
+   - The user can select an unencrypted Proton Pass ZIP export or a decrypted `data.json`. Rust validates the bounded archive, reads `Proton Pass/data.json` in memory, maps login, note, and credit-card items, and preserves supported vault, state, pin, TOTP, alternate URL/email, and custom-field metadata in encrypted item notes. Encrypted PGP exports require prior decryption; identities, aliases, passkeys, attachments, and other unsupported types are skipped.
    - Provider-neutral reconciliation is computed in Rust with two HMAC-SHA-256 tags keyed by the active vault `secrets_key`: an item-identity tag that excludes the password and provider metadata, plus a secret-version tag that includes the password or other secret value and is bound to that identity.
    - When both tags match, Nook enriches the existing item with missing notes and provider fields instead of creating a duplicate. When only identity matches, the differing password/secret version is imported as another item rather than silently overwriting either value.
    - The event log stores the opaque tags beside ciphertext, which reveals equality only inside that vault and avoids repeatedly decrypting unrelated fingerprinted records. Legacy records are decrypted and backfilled once; key-epoch rotation recomputes every tag with the new key.
@@ -92,6 +92,12 @@ keys.
      parameters, and derives the current code. Generated codes are ephemeral
      and are never added to the event log.
    - See [authenticator-items.md](authenticator-items.md).
+10. **Credit card items:**
+   - Users can store payment cards as standalone secure items with a title,
+     optional cardholder name, card number, optional expiry, optional CVV, and
+     notes. Numbers are Luhn-validated in Rust; list views expose only last
+     four digits and never log full PAN or CVV.
+   - See [credit-card-items.md](credit-card-items.md).
 
 ### C. Cryptographically Secure Password Generator
 1. **Options Panel:** Located alongside the addition form.
@@ -132,15 +138,18 @@ secrets:
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Supported user-secret tags:** `login`, `api-key`, `seed-phrase`,
-  `secure-note`, `authenticator`, `file-attachment`, and `passkey`. A `passkey`
-  plaintext payload is versioned and contains the RP/account metadata,
-  credential id, user handle, ES256 PKCS#8/COSE key material, signature
-  counter, discoverability, and backup flags. It is encrypted as one ordinary
-  per-record payload; private key material never appears in projection YAML or
-  event operations as plaintext. Creation and assertion run through the
-  approved, unlocked extension device, not the generic add/edit form. A
-  `file-attachment` payload stores title/file metadata plus standard-base64
-  file bytes (max 1 MiB decoded); list projections expose metadata only. See
+  `secure-note`, `passkey`, `authenticator`, `credit-card`, and
+  `file-attachment`. A `passkey` plaintext payload is versioned and contains
+  the RP/account metadata, credential id, user handle, ES256 PKCS#8/COSE key
+  material, signature counter, discoverability, and backup flags. It is
+  encrypted as one ordinary per-record payload; private key material never
+  appears in projection YAML or event operations as plaintext. Creation and
+  assertion run through the approved, unlocked extension device, not the
+  generic add/edit form. A `credit-card` payload stores title, cardholder,
+  normalized number, expiry, CVV, and notes; see
+  [credit-card-items.md](credit-card-items.md). A `file-attachment` payload
+  stores title/file metadata plus standard-base64 file bytes (max 1 MiB
+  decoded); list projections expose metadata only. See
   [file-attachments.md](file-attachments.md).
 Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
 

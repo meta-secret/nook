@@ -845,8 +845,19 @@ test.describe('local vault', () => {
         {
           id: 'bitwarden-card-1',
           type: 3,
-          name: 'Skipped card',
-          card: { number: '4111111111111111' },
+          name: 'Imported card',
+          card: {
+            cardholderName: 'Ada Lovelace',
+            number: '4111111111111111',
+            expMonth: '12',
+            expYear: '2030',
+            code: '123',
+          },
+        },
+        {
+          id: 'bitwarden-identity-1',
+          type: 4,
+          name: 'Skipped identity',
         },
       ],
     })
@@ -859,7 +870,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 3 items',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       '1 unsupported',
@@ -871,6 +882,9 @@ test.describe('local vault', () => {
     )
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Imported private note',
+    )
+    await expect(page.getByTestId('vault-group-credit-card')).toContainText(
+      'Imported card',
     )
 
     await openBitwardenImport(page)
@@ -884,7 +898,7 @@ test.describe('local vault', () => {
       'Imported 0 items',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      '2 duplicates',
+      '3 duplicates',
     )
   })
 
@@ -1195,9 +1209,23 @@ test.describe('local vault', () => {
               },
               {
                 data: {
-                  metadata: { name: 'Skipped card', note: '' },
+                  metadata: { name: 'Imported Proton card', note: '' },
                   extraFields: [],
                   type: 'creditCard',
+                  content: {
+                    cardholderName: 'Ada Lovelace',
+                    number: '4111111111111111',
+                    expirationDate: '2030-12',
+                    verificationNumber: '123',
+                  },
+                },
+                state: 1,
+              },
+              {
+                data: {
+                  metadata: { name: 'Skipped alias', note: '' },
+                  extraFields: [],
+                  type: 'alias',
                   content: {},
                 },
                 state: 1,
@@ -1216,7 +1244,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('proton-pass-import-submit').click()
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 3 items',
     )
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
       '1 unsupported',
@@ -1228,6 +1256,9 @@ test.describe('local vault', () => {
     )
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Imported Proton note',
+    )
+    await expect(page.getByTestId('vault-group-credit-card')).toContainText(
+      'Imported Proton card',
     )
 
     await openProtonPassImport(page)
@@ -1241,7 +1272,7 @@ test.describe('local vault', () => {
       'Imported 0 items',
     )
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
-      '2 duplicates',
+      '3 duplicates',
     )
   })
 

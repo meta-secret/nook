@@ -34,6 +34,9 @@ pub enum SecretPayloadError {
     #[error("Invalid authenticator payload")]
     InvalidAuthenticator(#[source] serde_yaml::Error),
 
+    #[error("Invalid credit card payload")]
+    InvalidCreditCard(#[source] serde_yaml::Error),
+
     #[error("Invalid file attachment payload: {reason}")]
     InvalidFileAttachment { reason: String },
 

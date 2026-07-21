@@ -19,6 +19,7 @@ pub enum SecretType {
     SecureNote,
     Passkey,
     Authenticator,
+    CreditCard,
     FileAttachment,
 }
 
@@ -31,6 +32,7 @@ impl SecretType {
             "secure-note" => Ok(Self::SecureNote),
             "passkey" => Ok(Self::Passkey),
             "authenticator" => Ok(Self::Authenticator),
+            "credit-card" => Ok(Self::CreditCard),
             "file-attachment" => Ok(Self::FileAttachment),
             _ => Err(SecretPayloadError::UnknownSecretType {
                 value: value.to_owned(),
@@ -47,6 +49,7 @@ impl SecretType {
             Self::SecureNote => "secure-note",
             Self::Passkey => "passkey",
             Self::Authenticator => "authenticator",
+            Self::CreditCard => "credit-card",
             Self::FileAttachment => "file-attachment",
         }
     }
@@ -116,6 +119,7 @@ mod tests {
             ("secure-note", SecretType::SecureNote),
             ("passkey", SecretType::Passkey),
             ("authenticator", SecretType::Authenticator),
+            ("credit-card", SecretType::CreditCard),
             ("file-attachment", SecretType::FileAttachment),
         ];
         for (tag, expected) in cases {

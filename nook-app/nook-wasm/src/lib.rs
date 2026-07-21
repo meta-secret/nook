@@ -45,7 +45,7 @@ pub use types::{
     NookStorageConnectArgs, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult,
+    NookVaultSyncResult, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -1605,7 +1605,46 @@ impl NookSecretListItem {
     pub fn title(&self) -> String {
         match &self.item.data {
             nook_core::SecretListItemData::SecureNote { title }
+            | nook_core::SecretListItemData::CreditCard { title, .. }
             | nook_core::SecretListItemData::FileAttachment { title, .. } => title.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = cardholderName)]
+    pub fn cardholder_name(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::CreditCard {
+                cardholder_name, ..
+            } => cardholder_name.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn last4(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::CreditCard { last4, .. } => last4.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = expirationMonth)]
+    pub fn expiration_month(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::CreditCard {
+                expiration_month, ..
+            } => expiration_month.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = expirationYear)]
+    pub fn expiration_year(&self) -> String {
+        match &self.item.data {
+            nook_core::SecretListItemData::CreditCard {
+                expiration_year, ..
+            } => expiration_year.clone(),
             _ => String::new(),
         }
     }
@@ -1772,6 +1811,7 @@ impl NookSecretRecord {
     pub fn notes(&self) -> String {
         match &self.record.data {
             nook_core::SecretValue::Login(value) => value.notes.clone(),
+            nook_core::SecretValue::CreditCard(value) => value.notes.clone(),
             _ => String::new(),
         }
     }
@@ -1809,9 +1849,11 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter)]
+    #[allow(clippy::match_same_arms)]
     pub fn title(&self) -> String {
         match &self.record.data {
             nook_core::SecretValue::SecureNote(value) => value.title.clone(),
+            nook_core::SecretValue::CreditCard(value) => value.title.clone(),
             nook_core::SecretValue::FileAttachment(value) => value.title.clone(),
             _ => String::new(),
         }
@@ -1821,6 +1863,54 @@ impl NookSecretRecord {
     pub fn note(&self) -> String {
         match &self.record.data {
             nook_core::SecretValue::SecureNote(value) => value.note.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = cardholderName)]
+    pub fn cardholder_name(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::CreditCard(value) => value.cardholder_name.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = cardNumber)]
+    pub fn card_number(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::CreditCard(value) => value.number.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn last4(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::CreditCard(value) => value.last4(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = expirationMonth)]
+    pub fn expiration_month(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::CreditCard(value) => value.expiration_month.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = expirationYear)]
+    pub fn expiration_year(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::CreditCard(value) => value.expiration_year.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn cvv(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::CreditCard(value) => value.cvv.clone(),
             _ => String::new(),
         }
     }

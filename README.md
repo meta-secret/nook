@@ -100,12 +100,12 @@ instructions; see [Deployments](#deployments).
 
 | Source | Format | What imports |
 | ------ | ------ | ------------ |
-| Bitwarden | JSON (plaintext or password-protected) | Logins, secure notes |
+| Bitwarden | JSON (plaintext or password-protected) | Logins, secure notes, credit cards |
 | LastPass | Unencrypted generic CSV | Logins, secure notes |
-| 1Password | Unencrypted 1PUX | Logins, passwords, secure notes |
+| 1Password | Unencrypted 1PUX | Logins, passwords, secure notes, credit cards |
 | Apple Passwords | Unencrypted CSV | Website logins, TOTP |
 | Chrome / Chromium / Brave / Edge | Unencrypted password CSV | Website logins |
-| Proton Pass | Unencrypted ZIP or decrypted `data.json` | Logins, secure notes |
+| Proton Pass | Unencrypted ZIP or decrypted `data.json` | Logins, secure notes, credit cards |
 | Google Authenticator | Migration QR codes (camera or images) | TOTP accounts |
 
 Unsupported item types and attachments are skipped. Account-restricted Bitwarden
