@@ -1,0 +1,101 @@
+schema_version: 1
+source_pr:
+  number: 539
+  url: https://github.com/meta-secret/nook/pull/539
+  title: Deserialize authenticator issuer host map with serde
+  change_surface: vault_core_wasm_issuer_map
+  head_sha: ec11c6919b6468beebe2c1328b6cb4ff6e32a00e
+  started_at: 2026-07-21T01:10:00Z
+  opened_at: 2026-07-21T01:14:09Z
+  merged_at: 2026-07-21T01:27:40Z
+  elapsed_seconds: 1060
+  open_to_merge_seconds: 811
+summary:
+  local_execution_count: 5
+  local_check_count: 2
+  local_test_count: 2
+  local_combined_count: 1
+  local_execution_seconds: 840
+  github_actions_run_count: 2
+  github_actions_seconds: 756
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+local_executions:
+  - command: cargo test -p nook-core --lib authenticator_issuer_hosts
+    category: test
+    started_at: 2026-07-21T01:12:30Z
+    finished_at: 2026-07-21T01:12:36Z
+    duration_seconds: 6
+    outcome: passed
+    reason: focused_serde_deserialize_and_lookup_coverage
+  - command: cargo clippy -p nook-core -p nook-wasm --target wasm32-unknown-unknown -- -D warnings
+    category: check
+    started_at: 2026-07-21T01:13:40Z
+    finished_at: 2026-07-21T01:13:47Z
+    duration_seconds: 7
+    outcome: passed
+    reason: pre_push_wasm_clippy
+  - command: task wasm:test
+    category: test
+    started_at: 2026-07-21T01:13:50Z
+    finished_at: 2026-07-21T01:18:42Z
+    duration_seconds: 292
+    outcome: passed
+    reason: wasm_node_proof_issuer_host_map_loads
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T01:14:15Z
+    finished_at: 2026-07-21T01:18:40Z
+    duration_seconds: 265
+    outcome: passed
+    reason: final_repository_validation
+  - command: task pr:ready PR=539
+    category: check
+    started_at: 2026-07-21T01:27:25Z
+    finished_at: 2026-07-21T01:27:35Z
+    duration_seconds: 10
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29792573892
+    run_attempt: 1
+    head_sha: ec11c6919b6468beebe2c1328b6cb4ff6e32a00e
+    trigger: pull_request
+    started_at: 2026-07-21T01:14:12Z
+    finished_at: 2026-07-21T01:18:12Z
+    duration_seconds: 240
+    conclusion: failure
+  - workflow: PR
+    run_id: 29792573892
+    run_attempt: 2
+    head_sha: ec11c6919b6468beebe2c1328b6cb4ff6e32a00e
+    trigger: pull_request
+    started_at: 2026-07-21T01:18:49Z
+    finished_at: 2026-07-21T01:27:25Z
+    duration_seconds: 516
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T01:18:49Z
+    cause: manual_rerun
+    run_id: 29792573892
+merge_attempts:
+  - at: 2026-07-21T01:27:40Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [532, 529]
+  baseline_quality: comparable
+  baseline_note: Follow-up cleanup on the same authenticator issuer-host surface as 532
+  elapsed_seconds_change_percent: -25.3
+  local_execution_seconds_change_percent: 50.0
+  github_actions_seconds_change_percent: -7.8
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - First PR Verify job failed on a Docker/buildx flake before code validation; one manual rerun recovered green
+  required_actions: []
