@@ -33,6 +33,8 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await expect(page.getByTestId('device-protection-error')).toContainText(
     'Passkeys are unavailable in this browser profile',
   )
-  await expect(page.getByTestId('device-protection-pin-setup-btn')).toBeVisible()
+  await expect(
+    page.getByTestId('device-protection-pin-setup-btn'),
+  ).toBeVisible()
   await demoBeat(page)
 })
