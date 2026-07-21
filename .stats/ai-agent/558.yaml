@@ -1,0 +1,92 @@
+schema_version: 2
+source_pr:
+  number: 558
+  url: https://github.com/meta-secret/nook/pull/558
+  title: Add live Google Drive shared-folder grant coverage
+  change_surface: docs_e2e_live_drive_shared_grant
+  head_sha: 247258992fc034d2a83b2ea39aea4d0b677c8c65
+  started_at: 2026-07-21T04:30:00Z
+  opened_at: 2026-07-21T04:33:42Z
+  merged_at: 2026-07-21T04:40:29Z
+  elapsed_seconds: 629
+  open_to_merge_seconds: 407
+summary:
+  local_execution_count: 4
+  local_check_count: 2
+  local_test_count: 1
+  local_combined_count: 1
+  local_execution_seconds: 225
+  github_actions_run_count: 1
+  github_actions_seconds: 390
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T04:41:30Z
+  head_sha: c4addd08b1fd3109ec0883aad1d24fb2b87963e9
+  by_type:
+    rust: 576
+    preflight: 30
+    web_unit: 205
+    e2e: 176
+  total: 987
+local_executions:
+  - command: bunx playwright test --project=sync-live e2e/live/google-drive-shared-grant.smoke.spec.ts
+    category: test
+    started_at: 2026-07-21T04:33:00Z
+    finished_at: 2026-07-21T04:33:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: skip_path_without_live_secrets
+  - command: task pr:preflight PR=558
+    category: check
+    started_at: 2026-07-21T04:33:50Z
+    finished_at: 2026-07-21T04:34:00Z
+    duration_seconds: 10
+    outcome: passed
+    reason: readiness_preflight
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T04:34:10Z
+    finished_at: 2026-07-21T04:37:38Z
+    duration_seconds: 208
+    outcome: passed
+    reason: local_gate_after_initial_push
+  - command: task pr:ready PR=558
+    category: check
+    started_at: 2026-07-21T04:40:00Z
+    finished_at: 2026-07-21T04:40:07Z
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29801585434
+    run_attempt: 1
+    head_sha: 247258992fc034d2a83b2ea39aea4d0b677c8c65
+    trigger: pull_request
+    started_at: 2026-07-21T04:33:44Z
+    finished_at: 2026-07-21T04:40:14Z
+    duration_seconds: 390
+    conclusion: success
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-21T04:40:29Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [556, 552]
+  baseline_quality: comparable
+  baseline_note: Docs/process and small CI/docs PRs; this PR also adds one opt-in live e2e smoke.
+  elapsed_seconds_change_percent: 314.0
+  local_execution_seconds_change_percent: 1630.0
+  github_actions_seconds_change_percent: null
+  test_inventory_total_change: 1
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - Full task check ran for a docs + opt-in live e2e change; acceptable for coding-bro local gate, not a workflow regression.
+  required_actions: []
