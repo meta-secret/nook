@@ -21,7 +21,12 @@ tasks:
         = "Version {{.PLAYWRIGHT_MCP_VERSION}}"
       - node .codex/check-ai-debug-origins.mjs
       - >-
-        echo "AI-debug ready URL: https://localhost:{{.WEB_DEV_PORT}}/app/"
+        printf '%s\n' \
+          "AI-debug ready URL: https://localhost:{{.WEB_DEV_PORT}}/app/" \
+          "Two-window handoff:" \
+          "  1) Google Chrome — interact/navigate on the ready URL until the bug state is visible." \
+          "  2) Playwright Dashboard (theater-mask icon) — call browser_annotate, draw feedback, click Submit, then Done." \
+          "Done alone returns no annotations. Interact and annotate are separate modes."
 
   ai-debug:dev:
     desc: Verify the annotation pilot and start the local Nook development server.
@@ -29,7 +34,10 @@ tasks:
       - ai-debug:check
     cmds:
       - >-
-        echo "Starting Nook for AI-debug on https://localhost:{{.WEB_DEV_PORT}}/app/"
+        printf '%s\n' \
+          "Starting Nook for AI-debug on https://localhost:{{.WEB_DEV_PORT}}/app/" \
+          "After the server is up, ask the agent to browser_navigate that HTTPS URL, verify the origin, then browser_annotate." \
+          "Expect two windows: managed Chrome for clicks, Playwright Dashboard for Submit→Done annotations."
       - task: web:dev:fast
         vars:
           WEB_DEV_PORT: '{{.WEB_DEV_PORT}}'
