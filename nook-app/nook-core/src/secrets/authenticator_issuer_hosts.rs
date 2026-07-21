@@ -1,22 +1,59 @@
 //! Bundled issuer → website host mapping for authenticator clustering.
 
+use serde::Deserialize;
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::fmt;
+use std::sync::LazyLock;
 use url::Url;
 
-const ISSUER_HOSTS_JSON: &str = include_str!("../../data/authenticator_issuer_hosts.json");
-
-fn issuer_host_map() -> &'static HashMap<String, String> {
-    static MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
-    MAP.get_or_init(|| {
-        let raw: HashMap<String, String> = serde_json::from_str(ISSUER_HOSTS_JSON)
-            .expect("authenticator_issuer_hosts.json must be valid JSON");
-        raw.into_iter()
-            .map(|(issuer, host)| (normalize_issuer_lookup_key(&issuer), host))
-            .filter(|(issuer, host)| !issuer.is_empty() && !host.trim().is_empty())
-            .collect()
-    })
+/// Popular authenticator issuer labels mapped to website hosts.
+///
+/// Deserialized once from the bundled JSON. Keys are normalized on deserialize
+/// (`OpenAI` / `openai` → `openai`) so WASM and native share one lookup table.
+#[derive(Debug)]
+struct AuthenticatorIssuerHosts {
+    by_issuer: HashMap<String, String>,
 }
+
+impl<'de> Deserialize<'de> for AuthenticatorIssuerHosts {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct HostsVisitor;
+
+        impl<'de> Visitor<'de> for HostsVisitor {
+            type Value = AuthenticatorIssuerHosts;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a JSON object of issuer labels to website hosts")
+            }
+
+            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
+                let mut by_issuer = HashMap::with_capacity(map.size_hint().unwrap_or(0));
+                while let Some((issuer, host)) = map.next_entry::<String, String>()? {
+                    let key = normalize_issuer_lookup_key(&issuer);
+                    let host = host.trim().to_owned();
+                    if key.is_empty() {
+                        return Err(de::Error::custom("issuer key must not be empty"));
+                    }
+                    if host.is_empty() {
+                        return Err(de::Error::custom(format!(
+                            "host for issuer `{key}` must not be empty"
+                        )));
+                    }
+                    by_issuer.insert(key, host);
+                }
+                Ok(AuthenticatorIssuerHosts { by_issuer })
+            }
+        }
+
+        deserializer.deserialize_map(HostsVisitor)
+    }
+}
+
+static ISSUER_HOSTS: LazyLock<AuthenticatorIssuerHosts> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../data/authenticator_issuer_hosts.json"))
+        .expect("bundled authenticator_issuer_hosts.json must deserialize")
+});
 
 fn hostname_from_raw(raw: &str) -> String {
     let value = raw.trim();
@@ -59,7 +96,7 @@ pub fn mapped_host_for_issuer(issuer: &str) -> Option<&'static str> {
     if key.is_empty() {
         return None;
     }
-    issuer_host_map().get(&key).map(String::as_str)
+    ISSUER_HOSTS.by_issuer.get(&key).map(String::as_str)
 }
 
 /// Resolve a website host for authenticator clustering / optional URL inference.
@@ -88,6 +125,26 @@ pub fn resolve_authenticator_website_host(website_url: &str, issuer: &str) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deserializes_issuer_map_with_normalized_keys() {
+        let hosts: AuthenticatorIssuerHosts =
+            serde_json::from_str(r#"{ "OpenAI": "openai.com", "Epic Games": "epicgames.com" }"#)
+                .expect("valid issuers deserialize");
+        assert_eq!(
+            hosts.by_issuer.get("openai").map(String::as_str),
+            Some("openai.com")
+        );
+        assert_eq!(
+            hosts.by_issuer.get("epicgames").map(String::as_str),
+            Some("epicgames.com")
+        );
+
+        assert!(
+            serde_json::from_str::<AuthenticatorIssuerHosts>(r#"{ "": "openai.com" }"#).is_err()
+        );
+        assert!(serde_json::from_str::<AuthenticatorIssuerHosts>(r#"{ "openai": "" }"#).is_err());
+    }
 
     #[test]
     fn maps_popular_brand_issuers() {
