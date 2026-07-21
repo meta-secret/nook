@@ -85,6 +85,19 @@ for their own Google account. Switching modes clears the scope-bound token and
 target in Rust before the user signs in again; it never reuses an app-data token
 for a shared folder or vice versa.
 
+**Shared-folder grant outcomes:** After Rust validates a shared Google Drive
+grant request, WASM attempts `files.create` (folder) and `permissions.create`
+(writer for the joiner email) with the owner's token. Success returns
+`SharedStorageGrantOutcome::Granted` with the stable `storageTargetId`
+(`folderId`). When the owner token is missing, the token lacks `drive.file`, or
+Drive rejects the create/share call, WASM returns
+`SharedStorageGrantOutcome::ManualGrantRequired` with
+`architecture_modes.shared_grant_manual_instructions`. The UI then shows those
+manual share steps; if folder create succeeded but share failed, the outcome
+may still carry `storageTargetId` so enrollment can bind the existing folder
+without creating a replacement. Personal / private providers keep using
+`drive.appdata` and never enter this grant path.
+
 **Shared-provider onboarding:** The selected provider target determines the
 handoff. A shared Google Drive row persists its stable `folderId`; enrollment
 codes carry that folder id and never the owner's OAuth access or refresh token,
