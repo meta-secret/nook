@@ -1,0 +1,197 @@
+schema_version: 1
+source_pr:
+  number: 545
+  url: https://github.com/meta-secret/nook/pull/545
+  title: Detect Namecheap-like OTP fields for Pilot 2FA fill
+  change_surface: extension_e2e_mock_auth_pilot
+  head_sha: d232aa34fe6383d1aa0ddeee7a27252e299c452a
+  started_at: 2026-07-21T02:34:00Z
+  opened_at: 2026-07-21T02:40:46Z
+  merged_at: 2026-07-21T03:18:24Z
+  elapsed_seconds: 2664
+  open_to_merge_seconds: 2258
+summary:
+  local_execution_count: 13
+  local_check_count: 4
+  local_test_count: 6
+  local_combined_count: 3
+  local_execution_seconds: 1544
+  github_actions_run_count: 5
+  github_actions_seconds: 1661
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: task web:test
+    category: test
+    started_at: 2026-07-21T02:38:00Z
+    finished_at: 2026-07-21T02:39:14Z
+    duration_seconds: 74
+    outcome: failed
+    reason: namecheap_unit_test_hotpot_false_positive
+  - command: task web:test
+    category: test
+    started_at: 2026-07-21T02:39:40Z
+    finished_at: 2026-07-21T02:40:57Z
+    duration_seconds: 77
+    outcome: passed
+    reason: password_forms_after_tokenized_otp_match
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:41:10Z
+    finished_at: 2026-07-21T02:41:33Z
+    duration_seconds: 23
+    outcome: failed
+    reason: prettier_check_on_password_forms_unit_test
+  - command: E2E_SPEC=e2e/mock-auth-pilot.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T02:41:10Z
+    finished_at: 2026-07-21T02:42:17Z
+    duration_seconds: 67
+    outcome: failed
+    reason: wrong_suite_no_tests_found_for_extension_spec
+  - command: task format
+    category: check
+    started_at: 2026-07-21T02:43:00Z
+    finished_at: 2026-07-21T02:43:20Z
+    duration_seconds: 20
+    outcome: passed
+    reason: host_applied_prettier_diff_via_git_apply
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T02:44:30Z
+    finished_at: 2026-07-21T02:47:26Z
+    duration_seconds: 176
+    outcome: passed
+    reason: final_local_gate_after_format_fix
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T02:47:30Z
+    finished_at: 2026-07-21T02:51:42Z
+    duration_seconds: 252
+    outcome: failed
+    reason: mock_auth_password_type_text_broke_continue_with_nook
+  - command: task extension:test:e2e
+    category: test
+    started_at: 2026-07-21T02:52:40Z
+    finished_at: 2026-07-21T02:59:02Z
+    duration_seconds: 382
+    outcome: failed
+    reason: mock_auth_pilot_green_extension_smoke_passkey_flake
+  - command: task format
+    category: check
+    started_at: 2026-07-21T02:59:46Z
+    finished_at: 2026-07-21T03:00:53Z
+    duration_seconds: 67
+    outcome: passed
+    reason: sealed_format_for_demo_spec_no_host_diff
+  - command: E2E_SPEC=e2e/demos/nook-pilot.demo.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T03:03:00Z
+    finished_at: 2026-07-21T03:04:20Z
+    duration_seconds: 80
+    outcome: passed
+    reason: ui_demo_namecheap_otp_and_login_paths
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T03:04:30Z
+    finished_at: 2026-07-21T03:09:28Z
+    duration_seconds: 298
+    outcome: passed
+    reason: local_pr_mirror_parallel_with_remote
+  - command: task pr:ready PR=545
+    category: check
+    started_at: 2026-07-21T03:09:40Z
+    finished_at: 2026-07-21T03:09:48Z
+    duration_seconds: 8
+    outcome: failed
+    reason: head_behind_main_by_3
+  - command: task pr:ready PR=545
+    category: check
+    started_at: 2026-07-21T03:17:50Z
+    finished_at: 2026-07-21T03:18:10Z
+    duration_seconds: 20
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29796466114
+    run_attempt: 1
+    head_sha: e80388d1a18bdc3a7aee65a8bfac87df246917b3
+    trigger: pull_request
+    started_at: 2026-07-21T02:40:49Z
+    finished_at: 2026-07-21T02:44:52Z
+    duration_seconds: 243
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29796620501
+    run_attempt: 1
+    head_sha: 7c19970157acae42d91b10645449590466d0e74e
+    trigger: pull_request
+    started_at: 2026-07-21T02:44:18Z
+    finished_at: 2026-07-21T02:49:08Z
+    duration_seconds: 290
+    conclusion: failure
+  - workflow: PR
+    run_id: 29796982513
+    run_attempt: 1
+    head_sha: 619c65793e1c674306bc5b53f887c599fa5c2258
+    trigger: pull_request
+    started_at: 2026-07-21T02:52:32Z
+    finished_at: 2026-07-21T02:56:17Z
+    duration_seconds: 225
+    conclusion: failure
+  - workflow: PR
+    run_id: 29797428541
+    run_attempt: 1
+    head_sha: 8d390f50603ad4bbc2ee5b539b2478a84e3a2cec
+    trigger: pull_request
+    started_at: 2026-07-21T03:02:23Z
+    finished_at: 2026-07-21T03:10:01Z
+    duration_seconds: 458
+    conclusion: success
+  - workflow: PR
+    run_id: 29797820932
+    run_attempt: 1
+    head_sha: d232aa34fe6383d1aa0ddeee7a27252e299c452a
+    trigger: pull_request
+    started_at: 2026-07-21T03:10:32Z
+    finished_at: 2026-07-21T03:17:57Z
+    duration_seconds: 445
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T02:44:18Z
+    cause: head_push
+    run_id: 29796620501
+  - at: 2026-07-21T02:52:32Z
+    cause: head_push
+    run_id: 29796982513
+  - at: 2026-07-21T03:02:23Z
+    cause: head_push
+    run_id: 29797428541
+  - at: 2026-07-21T03:10:32Z
+    cause: base_update
+    run_id: 29797820932
+merge_attempts:
+  - at: 2026-07-21T03:18:24Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [544, 542]
+  baseline_quality: comparable
+  baseline_note: Same mock-auth / Pilot extension e2e surface; 545 also touches shared OTP detection and a UI demo
+  elapsed_seconds_change_percent: 111.2
+  local_execution_seconds_change_percent: 216.1
+  github_actions_seconds_change_percent: 81.0
+  regression: true
+  regression_reasons:
+    - elapsed_and_gha_exceed_20pct_and_60s_vs_median_of_544_542
+    - avoidable_ui_demo_contract_and_prettier_failures_burned_early_pr_cycles
+waste_assessment:
+  wasteful: true
+  findings:
+    - First coherent push omitted the UI demo contract touch and prettier formatting, producing two failed or cancelled PR cycles before a green Verify run
+    - Local validation initially targeted web:test:e2e:file with an extension spec path (no tests found) instead of task extension:test:e2e
+    - PR #544 left mock-auth password fields as type=text; that latent break surfaced only when running Pilot e2e and cost an extra fix cycle
+  required_actions: []
