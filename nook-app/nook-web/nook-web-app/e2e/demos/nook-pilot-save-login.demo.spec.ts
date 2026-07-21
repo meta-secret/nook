@@ -81,19 +81,23 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
             font: 750 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
           }
           #site-status { min-height: 20px; margin: 18px 0 0; color: #94d4ae; font-size: 13px; }
+          #site-success { display: none; margin: 18px 0 0; color: #94d4ae; font-size: 14px; font-weight: 650; }
+          body.signed-in #login-form { display: none; }
+          body.signed-in #site-success { display: block; }
         </style>
       </head>
       <body>
         <main>
           <p class="eyebrow">Example account</p>
           <h1>Welcome back</h1>
-          <p class="intro">Sign in once. Nook can offer to save the login.</p>
+          <p class="intro">Sign in once. Nook can offer to save the login after verified success.</p>
           <form id="login-form">
             <label>Email<input autocomplete="username" name="email" type="email"></label>
             <label>Password<input autocomplete="current-password" name="password" type="password"></label>
             <button type="submit">Sign in</button>
           </form>
           <p id="site-status" role="status"></p>
+          <p id="site-success" data-nook-auth-outcome="success" data-testid="mock-auth-success">Authentication complete</p>
         </main>
       </body>
     </html>`)
@@ -102,6 +106,7 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
       .querySelector('#login-form')
       ?.addEventListener('submit', (event) => {
         event.preventDefault()
+        document.body.classList.add('signed-in')
         const status = document.querySelector('#site-status')
         if (status) status.textContent = 'Secure sign-in submitted'
       })
