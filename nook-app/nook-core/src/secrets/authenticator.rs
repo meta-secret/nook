@@ -12,6 +12,48 @@ use zeroize::{Zeroize, Zeroizing};
 const DEFAULT_DIGITS: u32 = 6;
 const DEFAULT_PERIOD: u64 = 30;
 const MIN_SECRET_BYTES: usize = 10;
+/// Maximum recovery codes accepted on a single authenticator item.
+pub const MAX_AUTHENTICATOR_BACKUP_CODES: usize = 64;
+/// Maximum Unicode scalar count for one recovery code.
+pub const MAX_AUTHENTICATOR_BACKUP_CODE_LEN: usize = 64;
+
+/// How confirmed recovery codes attach to an existing authenticator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupCodeAttachMode {
+    /// Replace every stored recovery code with the confirmed set.
+    Replace,
+    /// Append confirmed codes and re-normalize (trim, drop empties, dedupe).
+    Merge,
+}
+
+impl BackupCodeAttachMode {
+    pub fn parse(value: &str) -> Result<Self, ValidationError> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "replace" => Ok(Self::Replace),
+            "merge" => Ok(Self::Merge),
+            _ => Err(ValidationError::AuthenticatorBackupCodesInvalid),
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Replace => "replace",
+            Self::Merge => "merge",
+        }
+    }
+}
+
+/// Non-secret metadata from a validated `otpauth://totp/...` URI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtpauthPreview {
+    pub issuer: String,
+    pub account: String,
+    pub website_url: String,
+    pub algorithm: TotpAlgorithm,
+    pub digits: TotpDigits,
+    pub period: TotpPeriod,
+}
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "UPPERCASE")]
@@ -170,7 +212,7 @@ impl AuthenticatorSecret {
         self.secret = TotpSecret::parse(self.secret.as_str())?;
         self.digits = TotpDigits::parse(self.digits.get())?;
         self.period = TotpPeriod::parse(self.period.get())?;
-        let normalized_backup_codes = normalize_backup_codes(&self.backup_codes);
+        let normalized_backup_codes = soft_normalize_backup_codes(&self.backup_codes);
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
         self.validate()
@@ -320,6 +362,62 @@ impl AuthenticatorSecret {
         item.normalize()?;
         Ok(item)
     }
+
+    /// Validate an `otpauth://totp/...` URI and return non-secret preview fields.
+    pub fn preview_otpauth_uri(uri: &str) -> Result<OtpauthPreview, ValidationError> {
+        let item = Self::from_otpauth_uri(uri)?;
+        Ok(OtpauthPreview {
+            issuer: item.issuer.clone(),
+            account: item.account.clone(),
+            website_url: item.website_url.clone(),
+            algorithm: item.algorithm,
+            digits: item.digits,
+            period: item.period,
+        })
+    }
+}
+
+/// Trim, drop empties, and dedupe recovery codes without enforcing enrollment bounds.
+fn soft_normalize_backup_codes(codes: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for code in codes {
+        let trimmed = code.trim();
+        if !trimmed.is_empty() && !normalized.iter().any(|existing| existing == trimmed) {
+            normalized.push(trimmed.to_owned());
+        }
+    }
+    normalized
+}
+
+/// Normalize recovery codes and reject oversized values or sets.
+pub fn normalize_backup_codes(codes: &[String]) -> Result<Vec<String>, ValidationError> {
+    let normalized = soft_normalize_backup_codes(codes);
+    if normalized.len() > MAX_AUTHENTICATOR_BACKUP_CODES {
+        return Err(ValidationError::AuthenticatorBackupCodesInvalid);
+    }
+    for code in &normalized {
+        if code.chars().count() > MAX_AUTHENTICATOR_BACKUP_CODE_LEN {
+            return Err(ValidationError::AuthenticatorBackupCodesInvalid);
+        }
+    }
+    Ok(normalized)
+}
+
+/// Apply a confirmed recovery-code set with replace or merge semantics.
+pub fn apply_backup_codes(
+    existing: &[String],
+    incoming: &[String],
+    mode: BackupCodeAttachMode,
+) -> Result<Vec<String>, ValidationError> {
+    let incoming = normalize_backup_codes(incoming)?;
+    match mode {
+        BackupCodeAttachMode::Replace => Ok(incoming),
+        BackupCodeAttachMode::Merge => {
+            let mut combined = soft_normalize_backup_codes(existing);
+            combined.extend(incoming);
+            normalize_backup_codes(&combined)
+        }
+    }
 }
 
 impl Zeroize for AuthenticatorSecret {
@@ -397,17 +495,6 @@ fn decode_base32(value: &str) -> Result<Vec<u8>, ValidationError> {
         return Err(ValidationError::AuthenticatorSecretInvalid);
     }
     Ok(output)
-}
-
-fn normalize_backup_codes(codes: &[String]) -> Vec<String> {
-    let mut normalized = Vec::new();
-    for code in codes {
-        let trimmed = code.trim();
-        if !trimmed.is_empty() && !normalized.iter().any(|existing| existing == trimmed) {
-            normalized.push(trimmed.to_owned());
-        }
-    }
-    normalized
 }
 
 fn decode_uri_path_component(value: &str) -> Result<String, ValidationError> {
@@ -597,5 +684,42 @@ mod tests {
         assert!(TotpSecret::parse("JBSWY3DP").is_err());
         assert!(TotpDigits::parse(5).is_err());
         assert!(TotpPeriod::parse(10).is_err());
+    }
+
+    #[test]
+    fn previews_otpauth_without_exposing_secret_fields_elsewhere() {
+        let preview = AuthenticatorSecret::preview_otpauth_uri(
+            "otpauth://totp/Example%20Co:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example%20Co&algorithm=SHA256&digits=8&period=45",
+        )
+        .unwrap();
+        assert_eq!(preview.issuer, "Example Co");
+        assert_eq!(preview.account, "alice@example.com");
+        assert_eq!(preview.algorithm, TotpAlgorithm::Sha256);
+        assert_eq!(preview.digits.get(), 8);
+        assert_eq!(preview.period.get(), 45);
+        assert!(AuthenticatorSecret::preview_otpauth_uri("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP").is_err());
+        assert!(AuthenticatorSecret::preview_otpauth_uri("https://example.com").is_err());
+    }
+
+    #[test]
+    fn backup_code_replace_and_merge_enforce_bounds() {
+        let existing = vec!["keep-me".to_owned(), "old-code".to_owned()];
+        let incoming = vec!["  new-code ".to_owned(), "keep-me".to_owned(), String::new()];
+        assert_eq!(
+            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Replace).unwrap(),
+            ["new-code", "keep-me"]
+        );
+        assert_eq!(
+            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Merge).unwrap(),
+            ["keep-me", "old-code", "new-code"]
+        );
+
+        let too_long = vec!["a".repeat(MAX_AUTHENTICATOR_BACKUP_CODE_LEN + 1)];
+        assert!(normalize_backup_codes(&too_long).is_err());
+        let too_many = (0..=MAX_AUTHENTICATOR_BACKUP_CODES)
+            .map(|index| format!("code-{index}"))
+            .collect::<Vec<_>>();
+        assert!(normalize_backup_codes(&too_many).is_err());
+        assert!(BackupCodeAttachMode::parse("append").is_err());
     }
 }

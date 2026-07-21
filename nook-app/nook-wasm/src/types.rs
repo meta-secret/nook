@@ -660,6 +660,62 @@ pub struct NookAuthenticatorAccount {
     account: String,
 }
 
+/// Non-secret preview of a validated authenticator enrollment URI.
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookOtpauthPreview {
+    issuer: String,
+    account: String,
+    website_url: String,
+    algorithm: String,
+    digits: u32,
+    period: u32,
+}
+
+#[wasm_bindgen]
+impl NookOtpauthPreview {
+    pub(crate) fn from_core(preview: nook_core::OtpauthPreview) -> Self {
+        Self {
+            issuer: preview.issuer,
+            account: preview.account,
+            website_url: preview.website_url,
+            algorithm: preview.algorithm.as_str().to_owned(),
+            digits: preview.digits.get(),
+            period: u32::try_from(preview.period.get()).unwrap_or(u32::MAX),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn issuer(&self) -> String {
+        self.issuer.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn account(&self) -> String {
+        self.account.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = websiteUrl)]
+    pub fn website_url(&self) -> String {
+        self.website_url.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn algorithm(&self) -> String {
+        self.algorithm.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn digits(&self) -> u32 {
+        self.digits
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn period(&self) -> u32 {
+        self.period
+    }
+}
+
 #[wasm_bindgen]
 impl NookAuthenticatorAccount {
     pub(crate) fn from_authenticator(

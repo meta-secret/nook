@@ -2,6 +2,7 @@ import initNookWasm, {
   configureVaultApplication,
   NookExternalEventLogRecords,
   NookVaultManager,
+  previewOtpauthUri,
   providerWasmArgs,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -500,6 +501,70 @@ async function handleMessage(message: unknown): Promise<unknown> {
       } finally {
         code.free()
       }
+    }
+    case 'nook:extension-session-authenticator-enroll-preview': {
+      const payload = messagePayload(message)
+      if (typeof payload.otpauthUri !== 'string') {
+        throw new Error('Extension session received an invalid otpauth URI.')
+      }
+      await ensureWasm()
+      const preview = previewOtpauthUri(payload.otpauthUri)
+      try {
+        return {
+          ok: true,
+          preview: {
+            issuer: preview.issuer,
+            account: preview.account,
+            websiteUrl: preview.websiteUrl,
+            algorithm: preview.algorithm,
+            digits: preview.digits,
+            period: preview.period,
+          },
+        }
+      } finally {
+        preview.free()
+      }
+    }
+    case 'nook:extension-session-authenticator-enroll-confirm': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (
+        typeof payload.otpauthUri !== 'string' ||
+        typeof payload.origin !== 'string'
+      ) {
+        throw new Error('Extension session received an invalid enrollment.')
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const secretId = await activeManager.addAuthenticatorFromOtpauth(
+        payload.otpauthUri,
+        payload.origin,
+      )
+      await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+      return { ok: true, secretId }
+    }
+    case 'nook:extension-session-authenticator-backup-attach': {
+      const payload = messagePayload(message)
+      const grant = extensionVaultGrant(payload)
+      if (
+        typeof payload.secretId !== 'string' ||
+        typeof payload.mode !== 'string' ||
+        !Array.isArray(payload.codes) ||
+        !payload.codes.every((code) => typeof code === 'string')
+      ) {
+        throw new Error(
+          'Extension session received an invalid backup-code attach.',
+        )
+      }
+      const activeManager = await getManager()
+      await openPasskeyVault(activeManager, grant)
+      const secretId = await activeManager.attachAuthenticatorBackupCodes(
+        payload.secretId,
+        payload.codes,
+        payload.mode,
+      )
+      await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+      return { ok: true, secretId }
     }
     case 'nook:extension-session-register-passkey': {
       const payload = messagePayload(message)

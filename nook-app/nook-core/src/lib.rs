@@ -44,8 +44,9 @@ pub use authentication_workflow::{
     classify_authentication_workflow_candidates,
 };
 pub use authenticator::{
-    AuthenticatorSecret, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret,
-    authenticator_setup_key_changed,
+    AuthenticatorSecret, BackupCodeAttachMode, MAX_AUTHENTICATOR_BACKUP_CODE_LEN,
+    MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod,
+    TotpSecret, apply_backup_codes, authenticator_setup_key_changed, normalize_backup_codes,
 };
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,

@@ -72,7 +72,7 @@ configured), you lose the vault. Approve at least two devices.
 | BIP39 seed phrase | Account name, seed phrase |
 | Secure note | Title, note (Markdown) |
 | Passkey | Website/RP and account metadata; encrypted ES256 credential |
-| Authenticator | Service, account, and TOTP setup key or `otpauth://` URI |
+| Authenticator | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented settings-page QR and attach reviewed backup codes |
 
 Items are searchable. Secret values stay masked until revealed. Authenticator
 items derive the current one-time code locally in Rust/WASM and never persist
@@ -90,7 +90,8 @@ The extension is a separately protected device. It pairs only with Simple
 Vault; Sentinel never participates. Passkey generation, RP validation, signing,
 and counter updates stay in Rust/WASM. On recognized one-time-code fields, the
 user chooses a saved authenticator and the extension fills a freshly derived
-code.
+code. Settings-page QR enrollment and backup-code capture require the same
+explicit Pilot consent and confirmation before anything is saved.
 
 Production installs through the Chrome Web Store (Brave uses the same listing).
 Development and PR previews offer an unsigned ZIP with Developer-mode install

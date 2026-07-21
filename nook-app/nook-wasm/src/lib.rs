@@ -35,7 +35,8 @@ pub use types::{
     NookAuthenticationWorkflowSnapshot, NookBrowserLocale, NookClientRunMode,
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
     NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder, NookImportResult,
-    NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookPasskeyAccount,
+    NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookOtpauthPreview,
+    NookPasskeyAccount,
     NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
     NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
     NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
@@ -1898,6 +1899,35 @@ pub fn authenticator_setup_key_changed(
     candidate_key: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
     nook_core::authenticator_setup_key_changed(stored_key, candidate_key)
+        .map_err(NookError::from)
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = previewOtpauthUri)]
+pub fn preview_otpauth_uri(
+    uri: &str,
+) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
+    nook_core::AuthenticatorSecret::preview_otpauth_uri(uri)
+        .map(types::NookOtpauthPreview::from_core)
+        .map_err(NookError::from)
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = normalizeBackupCodes)]
+pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
+    nook_core::normalize_backup_codes(&codes)
+        .map_err(NookError::from)
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = applyBackupCodes)]
+pub fn apply_backup_codes(
+    existing: Vec<String>,
+    incoming: Vec<String>,
+    mode: &str,
+) -> Result<Vec<String>, wasm_bindgen::JsError> {
+    let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(NookError::from)?;
+    nook_core::apply_backup_codes(&existing, &incoming, mode)
         .map_err(NookError::from)
         .map_err(Into::into)
 }

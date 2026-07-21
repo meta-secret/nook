@@ -16,6 +16,12 @@ user to choose one, and fills the freshly derived code without persisting or
 logging it. If the vault has none, the widget says so and offers to open Simple
 Vault to add 2FA.
 
+On authenticator setup pages, the Pilot can offer **Add 2FA from this page** and
+**Save backup codes**. Those actions run only after a trusted click: QR decode
+and recovery-code extraction stay local, Rust/WASM validates the payload, and
+the user confirms before any vault write. Cancelling clears transient secrets
+and writes no event.
+
 For ordinary websites, the extension also provides explicit passkey save and
 use prompts. It intercepts non-conditional WebAuthn create/get calls, asks the
 user to choose a granted Simple Vault/account, and delegates validation,

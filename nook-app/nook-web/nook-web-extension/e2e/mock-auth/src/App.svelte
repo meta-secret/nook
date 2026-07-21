@@ -9,6 +9,8 @@
   import NotFound from './pages/NotFound.svelte'
   import PlainLogin from './pages/PlainLogin.svelte'
   import Success from './pages/Success.svelte'
+  import TotpBackupCodes from './pages/TotpBackupCodes.svelte'
+  import TotpEnrollQr from './pages/TotpEnrollQr.svelte'
   import TotpLogin from './pages/TotpLogin.svelte'
   import TotpVerify from './pages/TotpVerify.svelte'
 
@@ -31,6 +33,10 @@
   <TotpVerify />
 {:else if pathname === '/totp/success'}
   <Success flow="login-then-totp" />
+{:else if pathname === '/totp/enroll'}
+  <TotpEnrollQr />
+{:else if pathname === '/totp/backup-codes'}
+  <TotpBackupCodes />
 {:else if pathname === '/login'}
   <DetectionLogin />
 {:else if pathname === '/signup'}
