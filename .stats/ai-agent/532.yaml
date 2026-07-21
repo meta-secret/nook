@@ -1,0 +1,123 @@
+schema_version: 1
+source_pr:
+  number: 532
+  url: https://github.com/meta-secret/nook/pull/532
+  title: Add authenticator website URL and popular issuer map
+  change_surface: vault_core_wasm_authenticator_ui
+  head_sha: 880bf300c3830f40a392f26037d24b51396aa712
+  started_at: 2026-07-21T00:43:00Z
+  opened_at: 2026-07-21T00:50:56Z
+  merged_at: 2026-07-21T01:06:39Z
+  elapsed_seconds: 1419
+  open_to_merge_seconds: 943
+summary:
+  local_execution_count: 8
+  local_check_count: 2
+  local_test_count: 4
+  local_combined_count: 2
+  local_execution_seconds: 560
+  github_actions_run_count: 2
+  github_actions_seconds: 820
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+local_executions:
+  - command: cargo test -p nook-core --lib authenticator_
+    category: test
+    started_at: 2026-07-21T00:47:30Z
+    finished_at: 2026-07-21T00:47:38Z
+    duration_seconds: 8
+    outcome: passed
+    reason: focused_authenticator_and_issuer_map_coverage
+  - command: cargo clippy -p nook-core -p nook-wasm --target wasm32-unknown-unknown -- -D warnings
+    category: check
+    started_at: 2026-07-21T00:49:40Z
+    finished_at: 2026-07-21T00:50:50Z
+    duration_seconds: 70
+    outcome: passed
+    reason: pre_push_clippy_after_too_many_arguments_fix
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T00:51:00Z
+    finished_at: 2026-07-21T00:55:45Z
+    duration_seconds: 285
+    outcome: failed
+    reason: add_secret_form_unit_tests_and_ui_demo_contract
+  - command: E2E_SPEC=e2e/demos/authenticator.demo.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T00:56:15Z
+    finished_at: 2026-07-21T00:56:52Z
+    duration_seconds: 37
+    outcome: failed
+    reason: sentinel_vite_build_sigsegv_during_e2e_image
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T00:57:00Z
+    finished_at: 2026-07-21T01:00:01Z
+    duration_seconds: 181
+    outcome: passed
+    reason: final_repository_validation_after_ui_demo_fix
+  - command: cargo test -p nook-core --lib -- secret_view::tests::resolve_entity
+    category: test
+    started_at: 2026-07-21T00:48:20Z
+    finished_at: 2026-07-21T00:48:23Z
+    duration_seconds: 3
+    outcome: passed
+    reason: entity_group_key_regression_coverage
+  - command: cargo test -p nook-core --lib apple_passwords
+    category: test
+    started_at: 2026-07-21T00:48:30Z
+    finished_at: 2026-07-21T00:48:31Z
+    duration_seconds: 1
+    outcome: passed
+    reason: apple_import_website_url_copy_coverage
+  - command: task pr:ready PR=532
+    category: check
+    started_at: 2026-07-21T01:06:20Z
+    finished_at: 2026-07-21T01:06:30Z
+    duration_seconds: 10
+    outcome: failed
+    reason: head_briefly_behind_main_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29791477198
+    run_attempt: 1
+    head_sha: 2e77bf5d56ce879717f375c7e8c14a347ef438b2
+    trigger: pull_request
+    started_at: 2026-07-21T00:50:59Z
+    finished_at: 2026-07-21T00:54:41Z
+    duration_seconds: 222
+    conclusion: failure
+  - workflow: PR
+    run_id: 29791734117
+    run_attempt: 1
+    head_sha: 880bf300c3830f40a392f26037d24b51396aa712
+    trigger: pull_request
+    started_at: 2026-07-21T00:56:18Z
+    finished_at: 2026-07-21T01:06:16Z
+    duration_seconds: 598
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T00:56:18Z
+    cause: head_push
+    run_id: 29791734117
+merge_attempts:
+  - at: 2026-07-21T01:06:39Z
+    method: squash
+    outcome: success
+    reason: squash_merge_succeeded_after_readiness_behind_main_warning
+comparison:
+  baseline_prs: [529, 527]
+  baseline_quality: incomplete
+  baseline_note: 529 is the closest vault list-grouping baseline; 527 is unrelated extension tooling
+  elapsed_seconds_change_percent: 31.4
+  local_execution_seconds_change_percent: -27.3
+  github_actions_seconds_change_percent: -4.8
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - First push missed the UI demo contract and a unit fixture for websiteUrl, burning one failed PR cycle
+    - Local e2e image build hit a Sentinel Vite SIGSEGV once; retry via task check succeeded without needing another product change
+  required_actions: []
