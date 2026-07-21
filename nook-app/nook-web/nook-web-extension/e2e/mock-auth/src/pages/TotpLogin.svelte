@@ -10,8 +10,6 @@
   )!
 
   let error = $state('')
-  let username = $state(fixtureAccount.username)
-  let password = $state(fixtureAccount.password)
 
   onMount(() => {
     ;(
@@ -23,6 +21,12 @@
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
+    const form = event.currentTarget
+    if (!(form instanceof HTMLFormElement)) return
+    const username =
+      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? ''
+    const password =
+      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
     recordLoginSubmission(username, password)
     const account = findMockAuthAccount(username, password)
     if (!account?.totpSecret) {
@@ -53,7 +57,6 @@
         autocomplete="username"
         name="username"
         type="email"
-        bind:value={username}
       /></label
     >
     <label
@@ -61,7 +64,6 @@
         autocomplete="current-password"
         name="password"
         type="password"
-        bind:value={password}
       /></label
     >
     <button type="submit">Sign in</button>

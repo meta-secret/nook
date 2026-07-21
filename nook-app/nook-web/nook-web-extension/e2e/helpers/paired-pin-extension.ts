@@ -194,7 +194,11 @@ export async function saveVaultLogin(
   await vaultPage.getByTestId('secret-value').fill(password)
   await vaultPage.getByTestId('save-secret-btn').click()
   await expect(
-    vaultPage.getByTestId('vault-group-login').getByTestId('secret-row'),
+    vaultPage
+      .getByTestId('vault-group-login')
+      .getByTestId('secret-row')
+      .filter({ has: vaultPage.getByTestId('secret-row-account') })
+      .filter({ hasText: username }),
   ).toBeVisible({ timeout: 15_000 })
 }
 
@@ -214,7 +218,7 @@ export async function saveVaultAuthenticator(
     vaultPage
       .getByTestId('vault-group-authenticator')
       .getByTestId('secret-row')
-      .filter({ hasText: issuer }),
+      .filter({ hasText: account }),
   ).toBeVisible({ timeout: 15_000 })
 }
 
