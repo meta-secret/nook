@@ -3,7 +3,7 @@ const MAX_CODE_LEN = 64
 const MIN_CODE_LEN = 6
 
 const RECOVERY_HINT =
-  /\b(backup|recovery|one[-\s]?time|emergency)\s+codes?\b|\b2fa\b|\bmfa\b|\bauthenticator\b/i
+  /\b(?:backup|recovery|one[-\s]?time|emergency|(?:2fa|mfa|authenticator))\s+codes?\b/i
 
 const CODE_LINE = /^(?:[-*•]\s*)?([A-Za-z0-9][A-Za-z0-9 _-]{4,62}[A-Za-z0-9])$/
 

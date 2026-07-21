@@ -203,20 +203,45 @@ test.describe('Browser 2FA enrollment', () => {
       const enrollPage = await paired.context.newPage()
       await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
       const enrollWidget = enrollPage.locator('#nook-auth-widget')
+      await expect(
+        enrollWidget.getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toBeVisible({ timeout: 15_000 })
       await enrollWidget
         .getByRole('button', { name: 'Add 2FA from this page' })
         .click()
+      await expect(
+        enrollWidget.getByRole('button', { name: 'Continue enrollment' }),
+      ).toBeVisible({ timeout: 20_000 })
       await enrollWidget
         .getByRole('button', { name: 'Continue enrollment' })
         .click()
+      await expect(
+        enrollWidget.getByText(
+          /Verification code filled|Complete verification/i,
+        ),
+      ).toBeVisible({ timeout: 20_000 })
       await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
       await expect(
         enrollPage.getByTestId('mock-auth-enroll-otp-input'),
       ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
       await enrollPage.getByRole('button', { name: 'Verify' }).click()
+      await expect(enrollPage.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
       await expect(
         enrollWidget.getByText('Authenticator saved to your vault.'),
       ).toBeVisible({ timeout: 20_000 })
+      await expect
+        .poll(async () => listExtensionAuthenticators(paired.context), {
+          timeout: 15_000,
+        })
+        .toEqual([
+          {
+            issuer: 'Mock Auth',
+            account: 'alice-2fa@nook.test',
+          },
+        ])
 
       const backupPage = await paired.context.newPage()
       await backupPage.goto(`${mockAuth.origin}/totp/backup-codes`)
@@ -225,17 +250,29 @@ test.describe('Browser 2FA enrollment', () => {
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toBeVisible({ timeout: 15_000 })
 
+      // CTA opens the review UI; the confirm control reuses the same label.
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
-      await expect(
-        widget.getByRole('button', { name: 'Replace existing codes' }),
-      ).toBeVisible({ timeout: 15_000 })
+      await expect(widget.locator('textarea')).toBeVisible({ timeout: 15_000 })
+      await widget.getByRole('button', { name: 'Save backup codes' }).click()
+
+      const replaceButton = widget.getByRole('button', {
+        name: 'Replace existing codes',
+      })
+      const authenticatorChoice = widget.getByRole('button', {
+        name: 'Saved 2FA 1',
+      })
+      await expect(replaceButton.or(authenticatorChoice)).toBeVisible({
+        timeout: 15_000,
+      })
+      if (await authenticatorChoice.isVisible()) {
+        await authenticatorChoice.click()
+      }
+      await expect(replaceButton).toBeVisible({ timeout: 15_000 })
       await expect(
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toHaveCount(0)
 
-      await widget
-        .getByRole('button', { name: 'Replace existing codes' })
-        .click()
+      await replaceButton.click()
       await expect(
         widget.getByText(/backup codes saved|резервные коды сохранены/i),
       ).toBeVisible({ timeout: 20_000 })

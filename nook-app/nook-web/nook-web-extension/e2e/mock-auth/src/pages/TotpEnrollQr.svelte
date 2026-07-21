@@ -15,6 +15,7 @@
     width="220"
     height="220"
     alt="Authenticator QR code"
+    data-nook-otpauth-uri="otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth"
   />
   <p>
     <button

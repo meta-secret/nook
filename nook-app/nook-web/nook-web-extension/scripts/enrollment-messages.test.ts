@@ -5,7 +5,10 @@ import {
   isWebsiteAuthenticatorEnrollPreviewMessage,
   isWebsiteAuthenticatorEnrollStageMessage,
 } from '../src/lib/enrollment-messages'
-import { extractBackupCodeCandidates } from '../src/lib/backup-code-candidates'
+import {
+  extractBackupCodeCandidates,
+  pageHasBackupCodeHint,
+} from '../src/lib/backup-code-candidates'
 
 describe('enrollment message guards', () => {
   test('accepts bounded otpauth preview, stage, and confirm payloads', () => {
@@ -111,5 +114,32 @@ describe('backup code candidate extraction', () => {
       'A1B2-C3D4-E5F6',
       'G7H8-I9J0-K1L2',
     ])
+  })
+
+  test('does not treat 2fa inside emails as a backup-code page hint', () => {
+    // happy-dom/document unavailable in bun unit tests — exercise the regex
+    // through the same exported helper with a stubbed body when present.
+    const previous = globalThis.document
+    const body = { innerText: 'Email: alice-2fa@nook.test\nPassword: secret' }
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { body },
+    })
+    try {
+      expect(pageHasBackupCodeHint()).toBe(false)
+      body.innerText = 'Save your backup codes\nA1B2-C3D4-E5F6'
+      expect(pageHasBackupCodeHint()).toBe(true)
+      body.innerText = 'Enable 2FA codes for your account'
+      expect(pageHasBackupCodeHint()).toBe(true)
+    } finally {
+      if (previous === undefined) {
+        Reflect.deleteProperty(globalThis, 'document')
+      } else {
+        Object.defineProperty(globalThis, 'document', {
+          configurable: true,
+          value: previous,
+        })
+      }
+    }
   })
 })

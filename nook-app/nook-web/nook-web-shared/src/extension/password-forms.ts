@@ -230,9 +230,11 @@ const passkeyControlPositivePattern =
 export function findPasskeyControl(
   root: ParentNode = document,
 ): HTMLElement | undefined {
-  const marked = root.querySelector?.(
-    '[data-nook-passkey-control], input[autocomplete~="webauthn" i]',
-  );
+  // Only marked controls and labeled activatable elements count. Do not treat
+  // password/username inputs that happen to include `webauthn` in autocomplete
+  // (common on combined login forms) as passkey controls — that falsely
+  // proposes "Create passkey" instead of password autofill.
+  const marked = root.querySelector?.("[data-nook-passkey-control]");
   if (marked instanceof HTMLElement) return marked;
   const controls = Array.from(
     root.querySelectorAll?.<HTMLElement>(

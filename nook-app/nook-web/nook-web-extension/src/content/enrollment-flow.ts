@@ -106,6 +106,9 @@ let pendingEnrollmentWatch:
     }
   | undefined
 
+/** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
+let holdEnrollmentWidgetAfterSave = false
+
 function stopPendingEnrollmentWatch(): void {
   if (!pendingEnrollmentWatch) return
   if (pendingEnrollmentWatch.timer !== undefined) {
@@ -203,6 +206,10 @@ async function commitStagedEnrollment(
     if (detectEnrollmentHints().backupCodes) {
       renderEnrollmentActions(host, detectEnrollmentHints())
     }
+    // Success pages often mention backup codes; without this hold, the next
+    // MutationObserver scan rebuilds the enrollment CTA and wipes the saved
+    // confirmation before the user (or e2e) can observe it.
+    holdEnrollmentWidgetAfterSave = true
   } else if (confirmResponse?.reason === 'authenticator-locked') {
     setHostDescription(host, lockedEnrollMessage(host))
   } else {
@@ -309,6 +316,7 @@ async function beginEnrollmentCeremony(
   otpauthUri: { value: string },
   candidate: DecodedOtpauthCandidate | undefined,
 ): Promise<void> {
+  holdEnrollmentWidgetAfterSave = false
   setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
   // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
   beginEnrollmentEvidenceWatch(host, section, 'pending', vaultStoreId)
@@ -959,14 +967,18 @@ async function startBackupEnrollment(
 }
 
 export function enrollmentCeremonyActive(): boolean {
-  return pendingEnrollmentWatch !== undefined
+  return pendingEnrollmentWatch !== undefined || holdEnrollmentWidgetAfterSave
+}
+
+export function releaseEnrollmentWidgetHold(): void {
+  holdEnrollmentWidgetAfterSave = false
 }
 
 export function renderEnrollmentActions(
   host: EnrollmentFlowHost,
   hints: EnrollmentPageHints,
 ): void {
-  if (enrollmentCeremonyActive()) return
+  if (pendingEnrollmentWatch !== undefined) return
   if (!hints.qr && !hints.backupCodes) {
     clearEnrollmentSection(host.panel)
     return
@@ -979,6 +991,7 @@ export function renderEnrollmentActions(
     buttons.push(
       createSecondaryButton(host, 'widgetAddFromPage', (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+        releaseEnrollmentWidgetHold()
         void startQrEnrollment(host, section)
       }),
     )
@@ -988,6 +1001,7 @@ export function renderEnrollmentActions(
     buttons.push(
       createSecondaryButton(host, 'widgetSaveBackupCodes', (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+        releaseEnrollmentWidgetHold()
         void startBackupEnrollment(host, section)
       }),
     )

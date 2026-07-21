@@ -26,7 +26,6 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   ) as Record<string, ChromeMessage>
   const stubArgs = {
     localizedMessages: messages,
-    barcodeRawValue: otpauthUri,
     enrollPilotFlow: true,
   }
 
@@ -86,6 +85,7 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
             alt="Authenticator QR code"
             width="220"
             height="220"
+            data-nook-otpauth-uri="${otpauthUri}"
             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Crect width='220' height='220' fill='%23fff'/%3E%3Crect x='20' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='160' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='20' y='160' width='40' height='40' fill='%23000'/%3E%3C/svg%3E"
           />
           <form id="verify-form">

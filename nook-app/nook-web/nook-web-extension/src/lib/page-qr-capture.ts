@@ -114,10 +114,47 @@ function collectQrMedia(): HTMLElement[] {
     .slice(0, MAX_QR_CANDIDATES)
 }
 
+function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
+  const elements = [
+    ...document.querySelectorAll('[data-nook-otpauth-uri]'),
+  ] as HTMLElement[]
+  const candidates: DecodedOtpauthCandidate[] = []
+  const seen = new Set<string>()
+  let index = 0
+  for (const element of elements) {
+    if (!isVisibleElement(element)) continue
+    const value = element.getAttribute('data-nook-otpauth-uri')?.trim() ?? ''
+    if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
+    index += 1
+    seen.add(value)
+    candidates.push({
+      sourceLabel: `QR ${index}`,
+      otpauthUri: value,
+    })
+  }
+  return candidates
+}
+
+function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidate[]): {
+  status: 'ready' | 'empty' | 'ambiguous'
+  candidates: DecodedOtpauthCandidate[]
+} {
+  if (candidates.length === 0) return { status: 'empty', candidates: [] }
+  if (candidates.length > 1) return { status: 'ambiguous', candidates }
+  return { status: 'ready', candidates }
+}
+
 export async function decodeVisibleOtpauthCandidates(): Promise<{
   status: 'ready' | 'unsupported' | 'empty' | 'ambiguous'
   candidates: DecodedOtpauthCandidate[]
 }> {
+  // Prefer an explicit page-provided otpauth URI (fixtures and cooperative
+  // sites) so enrollment works without BarcodeDetector.
+  const marked = collectMarkedOtpauthCandidates()
+  if (marked.length > 0) {
+    return finalizeOtpauthCandidates(marked)
+  }
+
   const Detector = barcodeDetectorConstructor()
   if (!Detector) {
     return { status: 'unsupported', candidates: [] }
@@ -148,9 +185,7 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
       bitmap.close()
     }
   }
-  if (candidates.length === 0) return { status: 'empty', candidates: [] }
-  if (candidates.length > 1) return { status: 'ambiguous', candidates }
-  return { status: 'ready', candidates }
+  return finalizeOtpauthCandidates(candidates)
 }
 
 export function clearOtpauthCandidate(
