@@ -13,8 +13,13 @@ Use this workflow for quality, CI, and deployment changes.
    - `task rust:coverage:check` — `cd nook-app && cargo llvm-cov nextest -p nook-core -p nook-auth2 --profile ci` vs **90%** line floor (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`
-   - `jscpd` — copy/paste detection across authored `nook-app` and `preflight`
-     sources, with the checked-in threshold treated as a no-regression ceiling
+   - `knip` (`bun run unused`) — unused/unreachable files, exports, and
+     dependencies in `nook-web-app` / `nook-web-research` (and any package that
+     runs Knip in its check/lint path)
+   - `jscpd` (`bun run duplicates`) — copy/paste clone detection across authored
+     `nook-app` and `preflight` sources; the checked-in threshold in
+     [`.jscpd.json`](../../.jscpd.json) is a no-regression ceiling, not a budget
+     agents may spend by raising it
    - `prettier --check`
    - `vitest run`
    - `vite build`
@@ -36,3 +41,31 @@ Use this workflow for quality, CI, and deployment changes.
 18. **Troubleshooting web/e2e/CI failures:** After test output and static analysis, **always check persisted app logs** — they are the most important source of truth for vault, sync, and WASM behavior. See [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 19. **Coverage reporting:** `task rust:coverage:export` exports baked `nook-core + nook-auth2` coverage artifacts locally (`summary.txt`, `summary.json`, `lcov.info`, and `coverage-floor.json`). PR CI uploads those files directly from the native Rust runner; the combined WASM/web runner downloads them after its web build, builds the base branch coverage target only when comparison fallback is required, uploads both reports as `nook-core-coverage`, and posts a sticky PR comment. The Docker build remains the enforcement point for the 90% floor and the only place PR/base coverage tests run.
 20. **Coverage cache preservation:** Warm the `nook-auth2 + nook-core` coverage dependency graph with one `cargo llvm-cov nextest --no-report` Docker invocation. Both subsequent source-level coverage commands must use `--no-clean` so they reuse and extend that instrumented target. Since llvm-cov forbids `--no-clean` with `--no-report`, the first source-level command emits an interim auth report before the combined core report and floor enforcement.
+
+## Fix check findings — not silence them
+
+Quality gates exist to force remediation. When **Knip**, **jscpd**, or **any
+other** check in `task check` / `task ci:pr` / PR CI fails, agents **must fix the
+reported problems in the same task** and leave the gate green.
+
+| Gate | Typical findings | Correct fix |
+|------|------------------|-------------|
+| Knip (`bun run unused`) | unused files, exports, dependencies | delete dead code, wire it up, or export only what callers need |
+| jscpd (`bun run duplicates`) | copy/paste clones over threshold | extract a shared helper/module; do not duplicate again |
+| fmt / prettier / eslint / svelte-check / clippy / tsc | style, type, lint defects | correct the code |
+| vitest / Rust tests / coverage / e2e / preflight | failing or missing coverage | fix behavior and add the required tests |
+
+**Do not** "resolve" a finding by:
+
+- raising the jscpd `threshold` or Knip config to hide clones/unused code
+- adding ignore/exclude paths for authored product sources that should stay in
+  the graph (generated WASM output and true vendor trees are the exception)
+- filing an issue or leaving a TODO and marking the PR ready while the check is
+  red
+- treating Knip/jscpd output as advisory when it fails the lint/`task check` path
+
+Threshold or ignore edits belong only in an explicit gate-maintenance change,
+with the rationale in the PR. Default agent behavior is: read the failure → fix
+the code → re-run the same gate until green. See
+[AGENTS.md — Fix every failing check finding](../AGENTS.md#non-negotiable-fix-every-failing-check-finding)
+and [coding-bro.md](coding-bro.md).
