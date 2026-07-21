@@ -113,7 +113,7 @@ impl Zeroize for CreditCardSecret {
 }
 
 fn normalize_card_number(raw: &str) -> Result<String, ValidationError> {
-    let digits: String = raw.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
     if !(MIN_CARD_DIGITS..=MAX_CARD_DIGITS).contains(&digits.len()) {
         return Err(ValidationError::CreditCardNumberInvalid);
     }
@@ -164,7 +164,7 @@ fn parse_month(raw: &str) -> Result<u32, ValidationError> {
 }
 
 fn parse_year(raw: &str) -> Result<u32, ValidationError> {
-    let digits: String = raw.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
     match digits.len() {
         2 => {
             let yy: u32 = digits

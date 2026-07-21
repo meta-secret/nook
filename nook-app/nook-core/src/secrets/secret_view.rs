@@ -187,6 +187,15 @@ fn normalize_brand_label(raw: &str) -> String {
     crate::secrets::authenticator_issuer_hosts::normalize_issuer_lookup_key(raw)
 }
 
+fn titled_group_key(title: &str, unnamed: &str) -> String {
+    let title = title.trim();
+    if title.is_empty() {
+        unnamed.to_owned()
+    } else {
+        title.to_owned()
+    }
+}
+
 fn brand_matches_host(brand: &str, host: &str) -> bool {
     if brand.is_empty() || brand.len() < 2 || brand.contains('.') {
         return false;
@@ -328,6 +337,7 @@ impl SecretRecord {
 
     /// Primary label for list rows (website URL, account name, note title, …).
     #[must_use]
+    #[allow(clippy::match_same_arms)]
     pub fn display_title(&self) -> String {
         match &self.data {
             SecretValue::Login(value) => value.website_url.clone(),
@@ -382,26 +392,12 @@ impl SecretRecord {
                     name.to_owned()
                 }
             }
-            SecretValue::SecureNote(value) => {
-                let title = value.title.trim();
-                if title.is_empty() {
-                    "Unnamed Note".to_owned()
-                } else {
-                    title.to_owned()
-                }
-            }
+            SecretValue::SecureNote(value) => titled_group_key(&value.title, "Unnamed Note"),
             SecretValue::Passkey(value) => value.rp_id.clone(),
             SecretValue::Authenticator(value) => {
                 authenticator_group_key(&value.website_url, &value.issuer)
             }
-            SecretValue::CreditCard(value) => {
-                let title = value.title.trim();
-                if title.is_empty() {
-                    "Unnamed Card".to_owned()
-                } else {
-                    title.to_owned()
-                }
-            }
+            SecretValue::CreditCard(value) => titled_group_key(&value.title, "Unnamed Card"),
         }
     }
 
@@ -537,10 +533,10 @@ impl SecretListItem {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
             SecretListItemData::SeedPhrase { name, .. } => name.clone(),
-            SecretListItemData::SecureNote { title } => title.clone(),
+            SecretListItemData::SecureNote { title }
+            | SecretListItemData::CreditCard { title, .. } => title.clone(),
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator { issuer, .. } => issuer.clone(),
-            SecretListItemData::CreditCard { title, .. } => title.clone(),
         }
     }
 
@@ -564,14 +560,7 @@ impl SecretListItem {
                     name.to_owned()
                 }
             }
-            SecretListItemData::SecureNote { title } => {
-                let title = title.trim();
-                if title.is_empty() {
-                    "Unnamed Note".to_owned()
-                } else {
-                    title.to_owned()
-                }
-            }
+            SecretListItemData::SecureNote { title } => titled_group_key(title, "Unnamed Note"),
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator {
                 website_url,
@@ -579,12 +568,7 @@ impl SecretListItem {
                 ..
             } => authenticator_group_key(website_url, issuer),
             SecretListItemData::CreditCard { title, .. } => {
-                let title = title.trim();
-                if title.is_empty() {
-                    "Unnamed Card".to_owned()
-                } else {
-                    title.to_owned()
-                }
+                titled_group_key(title, "Unnamed Card")
             }
         }
     }

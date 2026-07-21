@@ -439,7 +439,7 @@ fn convert_secure_note(item: &OnePasswordItem, vault_name: &str) -> SecretValue 
 }
 
 fn parse_month_year(raw: &str) -> (String, String) {
-    let digits: String = raw.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
     if digits.len() == 6 {
         return (digits[4..6].to_owned(), digits[..4].to_owned());
     }

@@ -1822,6 +1822,7 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter)]
+    #[allow(clippy::match_same_arms)]
     pub fn title(&self) -> String {
         match &self.record.data {
             nook_core::SecretValue::SecureNote(value) => value.title.clone(),
