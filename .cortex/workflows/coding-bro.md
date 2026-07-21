@@ -348,11 +348,12 @@ a Main failure.
 
 After the implementation PR merges, follow
 [agent-statistics.md](agent-statistics.md). Create the YAML from current `main`,
-compare it with one or two comparable prior records, publish it as the only file
-in a stats-only PR, and squash-merge it immediately without local/product
-checks, review, or `task pr:ready`. Stats-only PRs never generate another stats
-record. Do not wait for post-merge Main before publishing the record. Any
-performance fix belongs in a separate normal PR.
+include the repository test inventory (counts by type and absolute total) for
+the merged head, compare it with one or two comparable prior records, publish
+it as the only file in a stats-only PR, and squash-merge it immediately without
+local/product checks, review, or `task pr:ready`. Stats-only PRs never generate
+another stats record. Do not wait for post-merge Main before publishing the
+record. Any performance fix belongs in a separate normal PR.
 
 ## CI fix PRs (nightly failures only)
 
@@ -388,5 +389,5 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [issues.md](issues.md) — aggregate issue and sub-issue management for deferred scope
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
-- [agent-statistics.md](agent-statistics.md) — measurement schema, comparison rules, waste analysis, and stats-only PR exception
+- [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and stats-only PR exception
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)
