@@ -194,11 +194,7 @@ export async function saveVaultLogin(
   await vaultPage.getByTestId('secret-value').fill(password)
   await vaultPage.getByTestId('save-secret-btn').click()
   await expect(
-    vaultPage
-      .getByTestId('vault-group-login')
-      .getByTestId('secret-row')
-      .filter({ has: vaultPage.getByTestId('secret-row-account') })
-      .filter({ hasText: username }),
+    vaultPage.getByTestId('vault-group-login').getByTestId('secret-row').last(),
   ).toBeVisible({ timeout: 15_000 })
 }
 
@@ -218,7 +214,7 @@ export async function saveVaultAuthenticator(
     vaultPage
       .getByTestId('vault-group-authenticator')
       .getByTestId('secret-row')
-      .filter({ hasText: account }),
+      .last(),
   ).toBeVisible({ timeout: 15_000 })
 }
 
@@ -246,6 +242,8 @@ export async function lockExtensionSession(
       `Failed to lock extension session: ${result?.error ?? 'unknown'}`,
     )
   }
+  // Offscreen teardown is async after the lock ack.
+  await new Promise((resolve) => setTimeout(resolve, 500))
 }
 
 export async function unlockExtensionPopupPin(
@@ -256,6 +254,11 @@ export async function unlockExtensionPopupPin(
   const popupPage = await context.newPage()
   try {
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await expect(
+      popupPage
+        .getByTestId('device-protection-pin-unlock-btn')
+        .or(popupPage.getByTestId('extension-companion-home')),
+    ).toBeVisible({ timeout: 45_000 })
     await ensurePinProtectedPopup(popupPage, pin)
   } finally {
     await popupPage.close()

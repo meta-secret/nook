@@ -234,9 +234,14 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await saveVaultAuthenticator(
         paired.vaultPage,
         'Mock Auth Secondary',
-        'alice-2fa@nook.test',
+        'bob-2fa@nook.test',
         MOCK_AUTH_SECOND_TOTP_SECRET,
       )
+      await expect(
+        paired.vaultPage
+          .getByTestId('vault-group-authenticator')
+          .getByTestId('secret-row'),
+      ).toHaveCount(2)
 
       const otpPage = await paired.context.newPage()
       await otpPage.goto(`${mockAuth.origin}/otp`)
@@ -246,8 +251,8 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         otpWidget.getByText('Choose which authenticator to use.'),
       ).toBeVisible()
-      await expect(otpWidget.getByText('Mock Auth Primary')).toHaveCount(0)
-      await expect(otpWidget.getByText('Mock Auth Secondary')).toHaveCount(0)
+      await expect(otpWidget.getByText('alice-2fa@nook.test')).toHaveCount(0)
+      await expect(otpWidget.getByText('bob-2fa@nook.test')).toHaveCount(0)
       await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
       await expect(
         otpPage.locator('[autocomplete="one-time-code"]'),
