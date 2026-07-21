@@ -1,0 +1,99 @@
+schema_version: 2
+source_pr:
+  number: 587
+  url: https://github.com/meta-secret/nook/pull/587
+  title: Propose Pilot Create/Use passkey from Rust policy
+  change_surface: browser_extension_pilot_passkey_propose
+  head_sha: 1830b401a4370b7a562a02d408225e80026b2008
+  started_at: 2026-07-21T11:31:00Z
+  opened_at: 2026-07-21T11:42:13Z
+  merged_at: 2026-07-21T11:55:12Z
+  elapsed_seconds: 1452
+  open_to_merge_seconds: 779
+summary:
+  local_execution_count: 5
+  local_check_count: 2
+  local_test_count: 1
+  local_combined_count: 2
+  local_execution_seconds: 1222
+  github_actions_run_count: 1
+  github_actions_seconds: 694
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T12:00:00Z
+  head_sha: 1830b401a4370b7a562a02d408225e80026b2008
+  by_type:
+    rust: 620
+    preflight: 31
+    web_unit: 223
+    e2e: 194
+  total: 1068
+local_executions:
+  - command: cargo test -p nook-core --lib passkey_proposal
+    category: test
+    started_at: 2026-07-21T11:34:00Z
+    finished_at: 2026-07-21T11:34:20Z
+    duration_seconds: 20
+    outcome: passed
+    reason: focused_domain_policy_tests
+  - command: task format
+    category: check
+    started_at: 2026-07-21T11:35:00Z
+    finished_at: 2026-07-21T11:39:00Z
+    duration_seconds: 240
+    outcome: failed
+    reason: clippy_struct_bools_and_match_arms
+  - command: task format
+    category: check
+    started_at: 2026-07-21T11:39:30Z
+    finished_at: 2026-07-21T11:42:00Z
+    duration_seconds: 150
+    outcome: passed
+    reason: after_clippy_fixes
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T11:42:20Z
+    finished_at: 2026-07-21T11:49:48Z
+    duration_seconds: 448
+    outcome: passed
+    reason: parallel_with_pr_verify
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T11:42:20Z
+    finished_at: 2026-07-21T11:48:24Z
+    duration_seconds: 364
+    outcome: passed
+    reason: parallel_with_pr_verify
+github_actions_runs:
+  - workflow: PR
+    run_id: 29827146249
+    run_attempt: 1
+    head_sha: d81ee789f56b440e36f7015a663cf9da1112ca86
+    trigger: pull_request
+    started_at: 2026-07-21T11:42:16Z
+    finished_at: 2026-07-21T11:53:50Z
+    duration_seconds: 694
+    conclusion: success
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-21T11:55:12Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [582, 584]
+  baseline_quality: comparable
+  baseline_note: Browser-extension Pilot policy + HUD proposal PRs with Rust tests and UI demos
+  elapsed_seconds_change_percent: -9.9
+  local_execution_seconds_change_percent: 0.0
+  github_actions_seconds_change_percent: -42.3
+  test_inventory_total_change: 15
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - Initial task format failed on clippy struct_excessive_bools and identical match arms; fixed before PR open
+  required_actions: []
