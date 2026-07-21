@@ -86,6 +86,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AuthenticatorDigitsInvalid
             | ValidationError::AuthenticatorPeriodInvalid
             | ValidationError::AuthenticatorUriInvalid
+            | ValidationError::AuthenticatorBackupCodesInvalid
             | ValidationError::CreditCardTitleRequired
             | ValidationError::CreditCardNumberInvalid
             | ValidationError::CreditCardExpirationInvalid

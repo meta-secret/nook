@@ -3,145 +3,56 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 
-type ChromeMessage = { message: string }
-
 async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-function installChromeStub(localizedMessages: Record<string, ChromeMessage>) {
-  type RuntimeMessage = {
-    type?: string
-    payload?: { secretId?: string }
+function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
+  return {
+    localizedMessages: messages,
+    loginPilotFlow: true,
   }
-  type RuntimeCallback = (response?: unknown) => void
+}
 
-  // First Continue shows unlock (locked session); later Continues use chooser.
-  let loginOptionsCalls = 0
-  const responseFor = (message: RuntimeMessage): unknown => {
-    switch (message.type) {
-      case 'nook:authentication-workflow-snapshot':
-        return {
-          ok: true,
-          snapshot: {
-            kind: 'login',
-            stage: 'credentials',
-            action: 'continue-with-nook',
-            currentStep: 1,
-            totalSteps: 3,
-            observationIndex: 0,
-          },
-        }
-      case 'nook:website-login-options':
-        loginOptionsCalls += 1
-        if (loginOptionsCalls === 1) {
-          return { ok: true, status: 'locked', accounts: [] }
-        }
-        return {
-          ok: true,
-          status: 'ready',
-          accounts: [
-            {
-              vaultStoreId: 'demo-vault',
-              vaultName: 'Demo vault',
-              secretId: 'demo-login-1',
-              username: 'pilot@example.test',
-              websiteUrl: location.origin,
-              websiteHost: location.hostname,
-            },
-            {
-              vaultStoreId: 'demo-vault',
-              vaultName: 'Demo vault',
-              secretId: 'demo-login-2',
-              username: 'copilot@example.test',
-              websiteUrl: location.origin,
-              websiteHost: location.hostname,
-            },
-          ],
-        }
-      case 'nook:website-login-fill':
-        return {
-          ok: true,
-          username:
-            message.payload?.secretId === 'demo-login-2'
-              ? 'copilot@example.test'
-              : 'pilot@example.test',
-          password: 'demo-password-never-recorded',
-        }
-      default:
-        return { ok: true }
-    }
-  }
-
-  const chromeStub = {
-    i18n: {
-      getMessage(key: string, substitution?: string) {
-        const message = localizedMessages[key]?.message ?? ''
-        return substitution ? message.replaceAll('$1', substitution) : message
-      },
-    },
-    runtime: {
-      lastError: undefined,
-      getURL(resource: string) {
-        return resource === 'icons/nook.png' ? '/favicon.png' : resource
-      },
-      sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
-        const response = responseFor(message)
-        if (callback) queueMicrotask(() => callback(response))
-      },
-    },
-    storage: {
-      local: {
-        get(
-          _keys: string | string[] | Record<string, unknown>,
-          callback: (items: Record<string, unknown>) => void,
-        ) {
-          queueMicrotask(() =>
-            callback({
-              'nook:extension-setup': {
-                status: 'ready',
-                deviceLabel: 'Demo browser',
-                pairedVaults: ['Demo vault'],
-                selectedVaultName: 'Demo vault',
-                syncProviderCount: 1,
-                eventCount: 3,
-                eventLogHeads: ['demo-head'],
-                lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
-              },
-            }),
-          )
+function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
+  return {
+    localizedMessages: messages,
+    responsesByType: {
+      'nook:authentication-workflow-snapshot': {
+        ok: true,
+        snapshot: {
+          kind: 'totp-challenge',
+          stage: 'second-factor',
+          action: 'fill-totp',
+          currentStep: 2,
+          totalSteps: 3,
+          observationIndex: 0,
         },
       },
+      'nook:website-authenticator-options': {
+        ok: true,
+        status: 'ready',
+        accounts: [
+          {
+            vaultStoreId: 'demo-vault',
+            vaultName: 'Demo vault',
+            secretId: 'demo-totp-1',
+            issuer: 'Namecheap',
+            account: 'pilot@example.test',
+          },
+        ],
+      },
+      'nook:website-authenticator-fill': {
+        ok: true,
+        code: '482913',
+      },
     },
-  }
-  const browserGlobal = globalThis as typeof globalThis & {
-    chrome?: Record<string, unknown>
-  }
-  if (browserGlobal.chrome) {
-    Object.defineProperties(browserGlobal.chrome, {
-      i18n: {
-        configurable: true,
-        value: chromeStub.i18n,
-      },
-      runtime: {
-        configurable: true,
-        value: chromeStub.runtime,
-      },
-      storage: {
-        configurable: true,
-        value: chromeStub.storage,
-      },
-    })
-  } else {
-    Object.defineProperty(browserGlobal, 'chrome', {
-      configurable: true,
-      value: chromeStub,
-    })
   }
 }
 
@@ -153,7 +64,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
     ),
   ) as Record<string, ChromeMessage>
 
-  await page.addInitScript(installChromeStub, messages)
+  await page.addInitScript(installDemoChromeStub, loginPilotStubArgs(messages))
 
   await page.goto('/')
   await page.setContent(`<!doctype html>
@@ -229,7 +140,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
         if (status) status.textContent = 'Secure sign-in submitted'
       })
   })
-  await page.evaluate(installChromeStub, messages)
+  await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
     type: 'module',
@@ -270,120 +181,6 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await demoBeat(page)
 })
 
-function installChromeStubForTotp(
-  localizedMessages: Record<string, ChromeMessage>,
-) {
-  type RuntimeMessage = {
-    type?: string
-    payload?: { secretId?: string }
-  }
-  type RuntimeCallback = (response?: unknown) => void
-
-  const responseFor = (message: RuntimeMessage): unknown => {
-    switch (message.type) {
-      case 'nook:authentication-workflow-snapshot':
-        return {
-          ok: true,
-          snapshot: {
-            kind: 'totp-challenge',
-            stage: 'second-factor',
-            action: 'fill-totp',
-            currentStep: 2,
-            totalSteps: 3,
-            observationIndex: 0,
-          },
-        }
-      case 'nook:website-authenticator-options':
-        return {
-          ok: true,
-          status: 'ready',
-          accounts: [
-            {
-              vaultStoreId: 'demo-vault',
-              vaultName: 'Demo vault',
-              secretId: 'demo-totp-1',
-              issuer: 'Namecheap',
-              account: 'pilot@example.test',
-            },
-          ],
-        }
-      case 'nook:website-authenticator-fill':
-        return {
-          ok: true,
-          code: '482913',
-        }
-      default:
-        return { ok: true }
-    }
-  }
-
-  const chromeStub = {
-    i18n: {
-      getMessage(key: string, substitution?: string) {
-        const message = localizedMessages[key]?.message ?? ''
-        return substitution ? message.replaceAll('$1', substitution) : message
-      },
-    },
-    runtime: {
-      lastError: undefined,
-      getURL(resource: string) {
-        return resource === 'icons/nook.png' ? '/favicon.png' : resource
-      },
-      sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
-        const response = responseFor(message)
-        if (callback) queueMicrotask(() => callback(response))
-      },
-    },
-    storage: {
-      local: {
-        get(
-          _keys: string | string[] | Record<string, unknown>,
-          callback: (items: Record<string, unknown>) => void,
-        ) {
-          queueMicrotask(() =>
-            callback({
-              'nook:extension-setup': {
-                status: 'ready',
-                deviceLabel: 'Demo browser',
-                pairedVaults: ['Demo vault'],
-                selectedVaultName: 'Demo vault',
-                syncProviderCount: 1,
-                eventCount: 3,
-                eventLogHeads: ['demo-head'],
-                lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
-              },
-            }),
-          )
-        },
-      },
-    },
-  }
-  const browserGlobal = globalThis as typeof globalThis & {
-    chrome?: Record<string, unknown>
-  }
-  if (browserGlobal.chrome) {
-    Object.defineProperties(browserGlobal.chrome, {
-      i18n: {
-        configurable: true,
-        value: chromeStub.i18n,
-      },
-      runtime: {
-        configurable: true,
-        value: chromeStub.runtime,
-      },
-      storage: {
-        configurable: true,
-        value: chromeStub.storage,
-      },
-    })
-  } else {
-    Object.defineProperty(browserGlobal, 'chrome', {
-      configurable: true,
-      value: chromeStub,
-    })
-  }
-}
-
 test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   page,
 }) => {
@@ -394,7 +191,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
     ),
   ) as Record<string, ChromeMessage>
 
-  await page.addInitScript(installChromeStubForTotp, messages)
+  await page.addInitScript(installDemoChromeStub, totpPilotStubArgs(messages))
 
   await page.goto('/')
   await page.setContent(`<!doctype html>
@@ -464,7 +261,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
         </main>
       </body>
     </html>`)
-  await page.evaluate(installChromeStubForTotp, messages)
+  await page.evaluate(installDemoChromeStub, totpPilotStubArgs(messages))
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
     type: 'module',

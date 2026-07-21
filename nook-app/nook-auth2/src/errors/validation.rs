@@ -138,6 +138,9 @@ pub enum ValidationError {
     #[error("errors.validation.authenticator_uri_invalid")]
     AuthenticatorUriInvalid,
 
+    #[error("errors.validation.authenticator_backup_codes_invalid")]
+    AuthenticatorBackupCodesInvalid,
+
     #[error("errors.validation.credit_card_title_required")]
     CreditCardTitleRequired,
 

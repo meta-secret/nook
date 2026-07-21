@@ -18,6 +18,7 @@
 //! `ensure_event_log_ready`, device-identity helpers, vault-key application) stays
 //! in this file because every submodule depends on it.
 
+mod authenticator_enrollment;
 mod authenticator_fill;
 mod connect;
 mod device_protection;
