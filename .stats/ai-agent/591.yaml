@@ -1,0 +1,127 @@
+schema_version: 2
+source_pr:
+  number: 591
+  url: https://github.com/meta-secret/nook/pull/591
+  title: Fix secure-note editor clipped on short mobile viewports
+  change_surface: vault_web_shell_height_secure_note
+  head_sha: 94057f9474946a401e6f68015fd9151801282516
+  started_at: 2026-07-21T17:44:00Z
+  opened_at: 2026-07-21T17:53:30Z
+  merged_at: 2026-07-21T18:08:59Z
+  elapsed_seconds: 1499
+  open_to_merge_seconds: 929
+summary:
+  local_execution_count: 7
+  local_check_count: 3
+  local_test_count: 2
+  local_combined_count: 2
+  local_execution_seconds: 571
+  github_actions_run_count: 2
+  github_actions_seconds: 744
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T18:15:00Z
+  head_sha: 94057f9474946a401e6f68015fd9151801282516
+  by_type:
+    rust: 620
+    preflight: 31
+    web_unit: 223
+    e2e: 195
+  total: 1069
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-21T17:51:00Z
+    finished_at: 2026-07-21T17:52:11Z
+    duration_seconds: 71
+    outcome: passed
+    reason: pre_push_hygiene_shell_height_fix
+  - command: task web:test:e2e:file E2E_SPEC=e2e/shell-height.spec.ts
+    category: test
+    started_at: 2026-07-21T17:53:00Z
+    finished_at: 2026-07-21T17:56:53Z
+    duration_seconds: 233
+    outcome: passed
+    reason: targeted_release_blocker_validation
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T17:53:30Z
+    finished_at: 2026-07-21T17:55:55Z
+    duration_seconds: 145
+    outcome: passed
+    reason: parallel_with_pr_verify
+  - command: task format
+    category: check
+    started_at: 2026-07-21T17:58:00Z
+    finished_at: 2026-07-21T17:59:00Z
+    duration_seconds: 60
+    outcome: passed
+    reason: after_adding_ui_demo_spec
+  - command: task web:test:e2e:file E2E_SPEC=e2e/demos/secure-note-short-viewport.demo.spec.ts
+    category: test
+    started_at: 2026-07-21T17:59:40Z
+    finished_at: 2026-07-21T18:00:50Z
+    duration_seconds: 70
+    outcome: passed
+    reason: ui_demo_contract_validation
+  - command: task pr:ready PR=591
+    category: check
+    started_at: 2026-07-21T18:08:20Z
+    finished_at: 2026-07-21T18:08:28Z
+    duration_seconds: 8
+    outcome: failed
+    reason: draft_pr_before_ready_for_review
+  - command: task pr:ready PR=591
+    category: check
+    started_at: 2026-07-21T18:08:40Z
+    finished_at: 2026-07-21T18:08:48Z
+    duration_seconds: 8
+    outcome: passed
+    reason: after_marking_pr_ready
+github_actions_runs:
+  - workflow: PR
+    run_id: 29854864410
+    run_attempt: 1
+    head_sha: 1bd53229dae86f4a84129ed79557206fb4ee233b
+    trigger: pull_request
+    started_at: 2026-07-21T17:53:34Z
+    finished_at: 2026-07-21T17:57:32Z
+    duration_seconds: 238
+    conclusion: failure
+  - workflow: PR
+    run_id: 29855310393
+    run_attempt: 1
+    head_sha: 94057f9474946a401e6f68015fd9151801282516
+    trigger: pull_request
+    started_at: 2026-07-21T17:59:45Z
+    finished_at: 2026-07-21T18:08:11Z
+    duration_seconds: 506
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T17:59:45Z
+    kind: head_push
+    reason: added_ui_demo_after_contract_failure
+merge_attempts:
+  - at: 2026-07-21T18:08:59Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [569, 580]
+  baseline_quality: comparable
+  baseline_note: 569 introduced the extension-setup banner that starved short-viewport secure-note editing; 580 is a recent small web/tooling PR
+  elapsed_seconds_change_percent: -79.7
+  local_execution_seconds_change_percent: -92.3
+  github_actions_seconds_change_percent: -75.2
+  test_inventory_total_change: 37
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+    - First PR head failed the UI demo contract because task format/demo-contract was run before the UI change was committed to HEAD
+    - Required a second head push solely for the missing demo spec
+  required_actions:
+    - Always commit UI path changes before relying on ui-demo-contract.sh against HEAD, or stage+commit the demo in the same pre-push hygiene pass
