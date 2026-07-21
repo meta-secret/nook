@@ -6,6 +6,8 @@ export type DemoChromeStubArgs = {
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
   loginPilotFlow?: boolean
+  /** Stateful post-submit save-offer replies for Pilot login capture. */
+  savePilotFlow?: boolean
   barcodeRawValue?: string
 }
 
@@ -16,18 +18,65 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     payload?: { secretId?: string }
   }
   type RuntimeCallback = (response?: unknown) => void
+  type StagedSaveOffer = {
+    offerId: string
+    decision: 'create'
+    vaultStoreId: string
+    vaultName: string
+  }
 
   const {
     localizedMessages,
     responsesByType = {},
     loginPilotFlow = false,
+    savePilotFlow = false,
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
+  let stagedOffer: StagedSaveOffer | undefined
 
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
+    }
+    if (savePilotFlow) {
+      switch (message.type) {
+        case 'nook:authentication-workflow-snapshot':
+          return {
+            ok: true,
+            snapshot: {
+              kind: 'login',
+              stage: 'credentials',
+              action: 'continue-with-nook',
+              currentStep: 1,
+              totalSteps: 3,
+              observationIndex: 0,
+            },
+          }
+        case 'nook:website-login-save-offer':
+          stagedOffer = {
+            offerId: 'demo-save-offer',
+            decision: 'create',
+            vaultStoreId: 'demo-vault',
+            vaultName: 'Demo vault',
+          }
+          return {
+            ok: true,
+            status: 'ready',
+            decision: 'create',
+            offer: stagedOffer,
+          }
+        case 'nook:website-login-save-pending':
+          return { ok: true, offer: stagedOffer }
+        case 'nook:website-login-save-commit':
+          stagedOffer = undefined
+          return { ok: true, decision: 'create' }
+        case 'nook:website-login-save-dismiss':
+          stagedOffer = undefined
+          return { ok: true }
+        default:
+          return { ok: true }
+      }
     }
     if (!loginPilotFlow) return { ok: true }
 
