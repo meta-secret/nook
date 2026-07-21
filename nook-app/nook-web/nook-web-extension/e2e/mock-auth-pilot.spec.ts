@@ -84,11 +84,11 @@ test.describe('PIN Pilot against mock auth', () => {
       })
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
       await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
-      await expect(
-        loginPage.locator('[autocomplete="one-time-code"]'),
-      ).toHaveValue(/^\d{6}$/)
+      await expect(loginPage.getByTestId('mock-auth-otp-input')).toHaveValue(
+        /^\d{6}$/,
+      )
 
-      await loginPage.getByRole('button', { name: 'Verify' }).click()
+      await loginPage.getByRole('button', { name: 'Submit' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },

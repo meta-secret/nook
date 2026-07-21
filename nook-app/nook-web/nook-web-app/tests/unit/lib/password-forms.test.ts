@@ -32,6 +32,33 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('detects Namecheap-like OTP fields from placeholder and camelCase attributes', () => {
+    document.body.innerHTML = `
+      <div role="dialog">
+        <h1>Enter OTP Code</h1>
+        <p>Open the two-factor authentication app on your device.</p>
+        <input
+          id="Code"
+          name="Code"
+          type="text"
+          placeholder="Enter OTP Code"
+        />
+        <button type="submit">Submit</button>
+      </div>
+      <form>
+        <label for="verify">Verification code</label>
+        <input id="verify" name="VerificationCode" type="tel" />
+      </form>
+      <input name="hotpot-special" type="text" placeholder="Favorite dish" />
+    `
+
+    const fields = findOneTimeCodeFields()
+    expect(fields.map((field) => field.name)).toEqual(['Code', 'VerificationCode'])
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      oneTimeCodeFieldCount: 1,
+    })
+  })
+
   test('returns no workflow for ordinary pages and email-only newsletters', () => {
     document.body.innerHTML = `
       <main><p>Documentation</p></main>

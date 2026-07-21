@@ -26,7 +26,7 @@
     if (!session || busy) return
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
-    const otp = new FormData(form).get('otp')
+    const otp = new FormData(form).get('Code')
     if (typeof otp !== 'string') return
     busy = true
     error = ''
@@ -51,12 +51,23 @@
     <p class="error" role="alert">{error}</p>
   {/if}
   {#if session}
+    <!-- Namecheap-like: placeholder/title cues only; no autocomplete/otp name token. -->
     <form id="otp-form" method="post" action="/totp/verify" {onsubmit}>
-      <label
-        >Authentication code
-        <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
-      </label>
-      <button type="submit" disabled={busy}>Verify</button>
+      <h2>Enter OTP Code</h2>
+      <p>
+        Open the two-factor authentication app on your device and verify your
+        identity for your account <strong>{session.username}</strong>.
+      </p>
+      <input
+        data-testid="mock-auth-otp-input"
+        id="Code"
+        name="Code"
+        type="text"
+        inputmode="numeric"
+        placeholder="Enter OTP Code"
+        autocomplete="off"
+      />
+      <button type="submit" disabled={busy}>Submit</button>
     </form>
   {/if}
 </main>

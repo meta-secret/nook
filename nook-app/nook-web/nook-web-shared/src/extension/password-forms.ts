@@ -50,6 +50,22 @@ export const oneTimeCodeFieldSelectors = [
   'input[id*="verification-code" i]',
 ] as const;
 
+const oneTimeCodeCandidateSelector = [
+  'input:not([type])',
+  'input[type="text"]',
+  'input[type="tel"]',
+  'input[type="number"]',
+  'input[type="password"]',
+].join(',');
+
+/** Matches accessible names like "Enter OTP Code" and camelCase attrs like VerificationCode. */
+const oneTimeCodePositivePattern =
+  /\b(?:otp|totp|2\s*fa|mfa|two\s*fa|two\s*factor|one\s*time(?:\s*code)?|auth(?:entication)?\s*code|verification\s*code|authenticator(?:\s*code)?)\b/u;
+
+/** Avoid card CVV / postal / search fields that mention "code". */
+const oneTimeCodeNegativePattern =
+  /\b(?:card|credit|debit|cvv|cvc|csc|security\s*code|pin\s*code|postal|zip|search|coupon)\b/u;
+
 function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
   const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
@@ -115,21 +131,82 @@ export function findUsernameFields(
   );
 }
 
+function expandIdentityText(value: string): string {
+  return value
+    .replace(/([a-z])([A-Z])/gu, "$1 $2")
+    .replace(/([A-Za-z])(\d)/gu, "$1 $2")
+    .replace(/(\d)([A-Za-z])/gu, "$1 $2")
+    .replace(/[_\-.]+/gu, " ")
+    .toLowerCase();
+}
+
+function associatedLabelText(field: HTMLInputElement): string {
+  const parts: string[] = [];
+  if (field.labels) {
+    for (const label of field.labels) {
+      parts.push(label.textContent ?? "");
+    }
+  }
+  const labelledBy = field.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    for (const id of labelledBy.split(/\s+/u).filter(Boolean)) {
+      const labelled = field.ownerDocument.getElementById(id);
+      if (labelled?.textContent) {
+        parts.push(labelled.textContent);
+      }
+    }
+  }
+  return parts.join(" ");
+}
+
+function oneTimeCodeIdentityText(field: HTMLInputElement): string {
+  return expandIdentityText(
+    [
+      field.name,
+      field.id,
+      field.placeholder,
+      field.title,
+      field.getAttribute("aria-label") ?? "",
+      field.getAttribute("autocomplete") ?? "",
+      associatedLabelText(field),
+    ].join(" "),
+  );
+}
+
+function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
+  if (
+    field.disabled ||
+    field.readOnly ||
+    !isRenderedInput(field) ||
+    !["text", "tel", "number", "password"].includes(field.type)
+  ) {
+    return false;
+  }
+  const identity = oneTimeCodeIdentityText(field);
+  if (!identity || oneTimeCodeNegativePattern.test(identity)) {
+    return false;
+  }
+  // Prefer tokenized identity over CSS substring selectors so names like
+  // "hotpot" are not treated as OTP just because they contain "otp".
+  return oneTimeCodePositivePattern.test(identity);
+}
+
 export function findOneTimeCodeFields(
   root: ParentNode = document,
   formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
-  return findFields(
+  const seen = new Set<HTMLInputElement>();
+  const fields: HTMLInputElement[] = [];
+  for (const field of findFields(
     root,
-    oneTimeCodeFieldSelectors.join(","),
+    oneTimeCodeCandidateSelector,
     formScope,
-  ).filter(
-    (field) =>
-      !field.disabled &&
-      !field.readOnly &&
-      isRenderedInput(field) &&
-      ["text", "tel", "number", "password"].includes(field.type),
-  );
+  )) {
+    if (seen.has(field) || !looksLikeOneTimeCodeField(field)) continue;
+    seen.add(field);
+    fields.push(field);
+  }
+  return fields;
 }
 
 function hasAutocompleteToken(
