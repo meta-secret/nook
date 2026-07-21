@@ -10,7 +10,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   belongsToSimpleVault,
-  DEFAULT_SIMPLE_VAULT_URL,
   normalizeSimpleVaultBaseUrl,
 } from '../../src/lib/simple-vault-target'
 import { MOCK_AUTH_DEFAULT_PIN } from '../mock-auth'
@@ -18,6 +17,9 @@ import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './pin-device'
+
+/** Local Simple Vault from playwright webServer / test-e2e.sh. */
+const LOCAL_E2E_SIMPLE_VAULT_URL = 'http://127.0.0.1:5174/'
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -84,7 +86,9 @@ export async function launchPairedPinExtension(
   const vaultName = options?.vaultName ?? 'Mock auth vault'
   const pin = options?.pin ?? MOCK_AUTH_DEFAULT_PIN
   const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
-    process.env.NOOK_SIMPLE_VAULT_URL || DEFAULT_SIMPLE_VAULT_URL,
+    process.env.NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL ||
+      process.env.NOOK_SIMPLE_VAULT_URL ||
+      LOCAL_E2E_SIMPLE_VAULT_URL,
   )
 
   const userDataDir = testInfo.outputPath('chromium-profile-pin')
@@ -113,12 +117,18 @@ export async function launchPairedPinExtension(
     belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
   )
 
-  await advanceCreateVaultWizardToFinalStep(simplePage)
-  await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
-  await simplePage.getByTestId('login-create-device-vault-btn').click()
-  await expect(simplePage.getByTestId('extension-connect-consent')).toBeVisible(
-    { timeout: EXTENSION_TIMEOUT_MS },
-  )
+  const consent = simplePage.getByTestId('extension-connect-consent')
+  const chooser = simplePage.getByTestId('login-create-vault-chooser')
+  await expect(chooser.or(consent)).toBeVisible({
+    timeout: EXTENSION_TIMEOUT_MS,
+  })
+
+  if (!(await consent.isVisible())) {
+    await advanceCreateVaultWizardToFinalStep(simplePage)
+    await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
+    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await expect(consent).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+  }
   await simplePage.getByTestId('approve-extension-device-btn').click()
   await expect
     .poll(

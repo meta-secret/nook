@@ -1,8 +1,14 @@
 import { expect, type Page } from '@playwright/test'
 import { MOCK_AUTH_DEFAULT_PIN } from '../mock-auth'
 
-/** Force the extension popup into the PIN device-protection path. */
+/**
+ * Force the extension popup into the PIN device-protection path.
+ * Only touch chrome-extension pages — Simple Vault still needs WebAuthn APIs
+ * present for boot/detection even when the vault is created from the
+ * extension device key.
+ */
 export function installForcePinDeviceProtection(): void {
+  if (globalThis.location?.protocol !== 'chrome-extension:') return
   Object.defineProperty(globalThis, 'PublicKeyCredential', {
     configurable: true,
     get() {
