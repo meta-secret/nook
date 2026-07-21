@@ -141,6 +141,127 @@ pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
         && secret_host.eq_ignore_ascii_case(&origin_host)
 }
 
+/// Intrinsic list clustering key for an authenticator issuer.
+///
+/// Domain-like issuers (`namecheap.com`, `https://github.com`) normalize to a
+/// host. Brand labels (`Namecheap`) stay as trimmed issuer text until
+/// [`resolve_entity_group_keys`] can attach them to a matching site host.
+#[must_use]
+pub fn authenticator_group_key(issuer: &str) -> String {
+    let trimmed = issuer.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    if issuer_looks_like_host(trimmed) {
+        let host = hostname_from_url(trimmed);
+        if !host.is_empty() {
+            return host;
+        }
+    }
+    trimmed.to_owned()
+}
+
+fn issuer_looks_like_host(issuer: &str) -> bool {
+    issuer.contains("://") || issuer.contains('.')
+}
+
+fn normalize_brand_label(raw: &str) -> String {
+    raw.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn brand_matches_host(brand: &str, host: &str) -> bool {
+    if brand.is_empty() || brand.len() < 2 || brand.contains('.') {
+        return false;
+    }
+    let host = host.to_ascii_lowercase();
+    if host == brand {
+        return true;
+    }
+    if host.starts_with(&format!("{brand}.")) {
+        return true;
+    }
+    host.split('.').any(|label| label == brand)
+}
+
+fn site_anchor_account(item: &SecretListItem) -> &str {
+    match &item.data {
+        SecretListItemData::Login { username, .. } => username.trim(),
+        SecretListItemData::Passkey { user_name, .. } => user_name.trim(),
+        SecretListItemData::Authenticator { account, .. } => account.trim(),
+        _ => "",
+    }
+}
+
+fn is_site_anchor(item: &SecretListItem) -> bool {
+    matches!(
+        item.data,
+        SecretListItemData::Login { .. }
+            | SecretListItemData::ApiKey { .. }
+            | SecretListItemData::Passkey { .. }
+    )
+}
+
+/// Resolve display group keys so brand authenticators cluster with site hosts.
+///
+/// Login / API key / passkey hosts are anchors. Authenticator issuers that are
+/// already hosts stay unchanged. Brand issuers such as `Namecheap` remap onto
+/// `namecheap.com` when that host (or a subdomain) appears in the same item set.
+/// Prefer an anchor whose username/account matches the authenticator account,
+/// then the shortest matching host for a stable site card title.
+#[must_use]
+pub fn resolve_entity_group_keys(items: &[SecretListItem]) -> Vec<String> {
+    let intrinsic: Vec<String> = items.iter().map(SecretListItem::group_key).collect();
+    let anchors: Vec<(usize, String)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| is_site_anchor(item))
+        .map(|(index, _)| (index, intrinsic[index].clone()))
+        .filter(|(_, key)| key.contains('.') && key != "No Website")
+        .collect();
+
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let key = &intrinsic[index];
+            let SecretListItemData::Authenticator { account, .. } = &item.data else {
+                return key.clone();
+            };
+            if key.contains('.') || key.is_empty() {
+                return key.clone();
+            }
+
+            let brand = normalize_brand_label(key);
+            let account = account.trim();
+            let mut best: Option<(bool, usize, String)> = None;
+            for (anchor_index, host) in &anchors {
+                if !brand_matches_host(&brand, host) {
+                    continue;
+                }
+                let account_match = !account.is_empty()
+                    && site_anchor_account(&items[*anchor_index]).eq_ignore_ascii_case(account);
+                let candidate = (account_match, host.len(), host.clone());
+                best = Some(match best {
+                    None => candidate,
+                    Some(current) => {
+                        // Prefer account match, then shorter host, then lexical order.
+                        let better = (candidate.0 && !current.0)
+                            || (candidate.0 == current.0 && candidate.1 < current.1)
+                            || (candidate.0 == current.0
+                                && candidate.1 == current.1
+                                && candidate.2 < current.2);
+                        if better { candidate } else { current }
+                    }
+                });
+            }
+            best.map_or_else(|| key.clone(), |(_, _, host)| host)
+        })
+        .collect()
+}
+
 impl SecretRecord {
     /// Build the secret-free list representation that may cross into UI state.
     ///
@@ -245,7 +366,7 @@ impl SecretRecord {
                 }
             }
             SecretValue::Passkey(value) => value.rp_id.clone(),
-            SecretValue::Authenticator(value) => value.issuer.trim().to_owned(),
+            SecretValue::Authenticator(value) => authenticator_group_key(&value.issuer),
         }
     }
 
@@ -398,7 +519,7 @@ impl SecretListItem {
                 }
             }
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
-            SecretListItemData::Authenticator { issuer, .. } => issuer.trim().to_owned(),
+            SecretListItemData::Authenticator { issuer, .. } => authenticator_group_key(issuer),
         }
     }
 
@@ -807,6 +928,96 @@ mod tests {
         let debug = format!("{item:?}");
         assert!(!debug.contains("JBSWY"));
         assert!(!debug.contains("backup-one"));
+    }
+
+    #[test]
+    fn authenticator_group_key_normalizes_domain_like_issuers() {
+        assert_eq!(
+            authenticator_group_key("https://www.namecheap.com"),
+            "namecheap.com"
+        );
+        assert_eq!(authenticator_group_key("namecheap.com"), "namecheap.com");
+        assert_eq!(authenticator_group_key("Namecheap"), "Namecheap");
+    }
+
+    #[test]
+    fn resolve_entity_group_keys_clusters_brand_authenticator_with_site_host() {
+        let items = vec![
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_login"),
+                data: SecretListItemData::Login {
+                    website_url: "https://www.namecheap.com/".to_owned(),
+                    username: "bynull".to_owned(),
+                },
+            },
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_totp"),
+                data: SecretListItemData::Authenticator {
+                    issuer: "Namecheap".to_owned(),
+                    account: "bynull".to_owned(),
+                    backup_code_count: 0,
+                },
+            },
+        ];
+
+        assert_eq!(
+            resolve_entity_group_keys(&items),
+            vec!["namecheap.com".to_owned(), "namecheap.com".to_owned()]
+        );
+    }
+
+    #[test]
+    fn resolve_entity_group_keys_prefers_account_matched_host() {
+        let items = vec![
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_login_a"),
+                data: SecretListItemData::Login {
+                    website_url: "https://accounts.google.com".to_owned(),
+                    username: "other@example.com".to_owned(),
+                },
+            },
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_login_b"),
+                data: SecretListItemData::Login {
+                    website_url: "https://google.com".to_owned(),
+                    username: "alice@example.com".to_owned(),
+                },
+            },
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_totp"),
+                data: SecretListItemData::Authenticator {
+                    issuer: "Google".to_owned(),
+                    account: "alice@example.com".to_owned(),
+                    backup_code_count: 0,
+                },
+            },
+        ];
+
+        assert_eq!(
+            resolve_entity_group_keys(&items),
+            vec![
+                "accounts.google.com".to_owned(),
+                "google.com".to_owned(),
+                "google.com".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_entity_group_keys_leaves_unmatched_brand_authenticator() {
+        let items = vec![SecretListItem {
+            id: SecretId::from_vault_record("secret_totp"),
+            data: SecretListItemData::Authenticator {
+                issuer: "Namecheap".to_owned(),
+                account: "bynull".to_owned(),
+                backup_code_count: 0,
+            },
+        }];
+
+        assert_eq!(
+            resolve_entity_group_keys(&items),
+            vec!["Namecheap".to_owned()]
+        );
     }
 
     #[test]
