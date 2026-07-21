@@ -1914,18 +1914,22 @@ pub fn preview_otpauth_uri(
 }
 
 #[wasm_bindgen(js_name = normalizeBackupCodes)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
+    // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
     nook_core::normalize_backup_codes(&codes)
         .map_err(NookError::from)
         .map_err(Into::into)
 }
 
 #[wasm_bindgen(js_name = applyBackupCodes)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn apply_backup_codes(
     existing: Vec<String>,
     incoming: Vec<String>,
     mode: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
+    // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
     let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(NookError::from)?;
     nook_core::apply_backup_codes(&existing, &incoming, mode)
         .map_err(NookError::from)
