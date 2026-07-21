@@ -33,10 +33,7 @@ function lockFailedAuthorization(
   }
 }
 
-function logPasskeyCeremony(
-  message: string,
-  error: unknown,
-): void {
+function logPasskeyCeremony(message: string, error: unknown): void {
   log.warn(message, sanitizedPasskeyCeremonyData(error));
 }
 

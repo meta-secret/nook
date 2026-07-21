@@ -492,7 +492,8 @@ test.describe('passkey device-key protection', () => {
     const entry = await waitForPersistedAppLog(page, {
       scope: 'vault-device-protection',
       level: 'warn',
-      messageIncludes: 'passkey unavailable; offering PIN device protection fallback',
+      messageIncludes:
+        'passkey unavailable; offering PIN device protection fallback',
     })
     expect(entry.data ?? '').toContain('passkey_unavailable')
   })

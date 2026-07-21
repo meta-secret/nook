@@ -38,9 +38,7 @@ export function isPasskeyCeremonyNotAllowedError(error: unknown): boolean {
   );
 }
 
-export function passkeyCeremonyOutcome(
-  error: unknown,
-): PasskeyCeremonyOutcome {
+export function passkeyCeremonyOutcome(error: unknown): PasskeyCeremonyOutcome {
   if (isPasskeyUnavailableError(error)) return "passkey_unavailable";
   if (isPasskeyPrfUnavailableError(error)) return "passkey_prf_unavailable";
   if (isPasskeyCeremonyNotAllowedError(error)) {
