@@ -172,8 +172,8 @@ tasks:
     env:
       CHANNEL: '{{default "" .CHANNEL}}'
       PR: '{{default "" .PR}}'
-      NOOK_EXTENSION_SETUP_PIN: '{{default "" .NOOK_EXTENSION_SETUP_PIN}}'
-      NOOK_EXTENSION_SETUP_VAULT_NAME: '{{default "" .NOOK_EXTENSION_SETUP_VAULT_NAME}}'
+      NOOK_EXTENSION_SETUP_PIN: '{{default "123456" .NOOK_EXTENSION_SETUP_PIN}}'
+      NOOK_EXTENSION_SETUP_VAULT_NAME: '{{default "test" .NOOK_EXTENSION_SETUP_VAULT_NAME}}'
     cmds:
       - bash "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh"
 

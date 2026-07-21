@@ -127,7 +127,7 @@ main() {
   simple_vault_url="$EXPECTED_SIMPLE_VAULT_URL"
   extension_id="$(extension_id_from_dir "$extension_dir")"
   pin="${NOOK_EXTENSION_SETUP_PIN:-123456}"
-  vault_name="${NOOK_EXTENSION_SETUP_VAULT_NAME:-dev-setup-vault}"
+  vault_name="${NOOK_EXTENSION_SETUP_VAULT_NAME:-test}"
   marker="$(setup_marker_path "$profile_dir")"
 
   printf 'extension_dir=%s\n' "$extension_dir"
