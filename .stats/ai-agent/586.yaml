@@ -1,0 +1,178 @@
+schema_version: 2
+source_pr:
+  number: 586
+  url: https://github.com/meta-secret/nook/pull/586
+  title: Guide Pilot 2FA enrollment through evidence-gated ceremony
+  change_surface: browser_extension_pilot_enrollment_ceremony
+  head_sha: 04d298b56a797038c39d4fcb98b65570e9a9dd00
+  started_at: 2026-07-21T09:16:00Z
+  opened_at: 2026-07-21T09:24:06Z
+  merged_at: 2026-07-21T11:30:45Z
+  elapsed_seconds: 8085
+  open_to_merge_seconds: 7599
+summary:
+  local_execution_count: 4
+  local_check_count: 2
+  local_test_count: 0
+  local_combined_count: 2
+  local_execution_seconds: 1680
+  github_actions_run_count: 8
+  github_actions_seconds: 4596
+  pr_retrigger_count: 7
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T12:00:00Z
+  head_sha: 04d298b56a797038c39d4fcb98b65570e9a9dd00
+  by_type:
+    rust: 612
+    preflight: 30
+    web_unit: 223
+    e2e: 193
+  total: 1058
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-21T09:18:00Z
+    finished_at: 2026-07-21T09:23:00Z
+    duration_seconds: 300
+    outcome: passed
+    reason: host_apply_before_push
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T09:24:30Z
+    finished_at: 2026-07-21T09:32:00Z
+    duration_seconds: 450
+    outcome: passed
+    reason: parallel_with_pr_verify
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T09:24:30Z
+    finished_at: 2026-07-21T09:35:00Z
+    duration_seconds: 630
+    outcome: failed
+    reason: ui_demo_enrollment_contract_iteration
+  - command: task format
+    category: check
+    started_at: 2026-07-21T10:50:00Z
+    finished_at: 2026-07-21T10:55:00Z
+    duration_seconds: 300
+    outcome: passed
+    reason: after_demo_stub_and_ceremony_fixes
+github_actions_runs:
+  - workflow: PR
+    run_id: 29818131954
+    run_attempt: 1
+    head_sha: fb112f72be482da48151255156ca4837ab2a07cc
+    trigger: pull_request
+    started_at: 2026-07-21T09:24:09Z
+    finished_at: 2026-07-21T09:27:53Z
+    duration_seconds: 224
+    conclusion: failure
+  - workflow: PR
+    run_id: 29818555286
+    run_attempt: 1
+    head_sha: 099e7c85b063018a73bfa0e83b870c1b924d1ed2
+    trigger: pull_request
+    started_at: 2026-07-21T09:30:30Z
+    finished_at: 2026-07-21T09:35:37Z
+    duration_seconds: 307
+    conclusion: failure
+  - workflow: PR
+    run_id: 29819032285
+    run_attempt: 1
+    head_sha: ce2fbf0f37be8ff74c0398d02ee76a0a60a7c3c3
+    trigger: pull_request
+    started_at: 2026-07-21T09:37:43Z
+    finished_at: 2026-07-21T09:44:55Z
+    duration_seconds: 432
+    conclusion: failure
+  - workflow: PR
+    run_id: 29820004597
+    run_attempt: 1
+    head_sha: 2401421c1c93c15b653709b64d490824bdcc7be8
+    trigger: pull_request
+    started_at: 2026-07-21T09:52:39Z
+    finished_at: 2026-07-21T09:59:40Z
+    duration_seconds: 421
+    conclusion: failure
+  - workflow: PR
+    run_id: 29820954562
+    run_attempt: 1
+    head_sha: fa9c9e44dca85b6eac5cf9953c4f34a6b8b758bc
+    trigger: pull_request
+    started_at: 2026-07-21T10:06:41Z
+    finished_at: 2026-07-21T10:15:20Z
+    duration_seconds: 519
+    conclusion: failure
+  - workflow: PR
+    run_id: 29822468880
+    run_attempt: 1
+    head_sha: 230043ddeab26e625d9ff7d2271b477dddb3dc34
+    trigger: pull_request
+    started_at: 2026-07-21T10:30:18Z
+    finished_at: 2026-07-21T10:38:10Z
+    duration_seconds: 472
+    conclusion: failure
+  - workflow: PR
+    run_id: 29823137383
+    run_attempt: 1
+    head_sha: 6a683071c932d14aa9174bba5faf176976b533d6
+    trigger: pull_request
+    started_at: 2026-07-21T10:40:43Z
+    finished_at: 2026-07-21T10:48:36Z
+    duration_seconds: 473
+    conclusion: failure
+  - workflow: PR
+    run_id: 29824348110
+    run_attempt: 2
+    head_sha: 805fb11507d200ea81a89f22887cc986d0280ba3
+    trigger: pull_request
+    started_at: 2026-07-21T10:59:29Z
+    finished_at: 2026-07-21T11:28:37Z
+    duration_seconds: 1748
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-21T09:30:30Z
+    kind: head_push
+    reason: demo_and_stub_fix_after_ui_demo_failure
+  - at: 2026-07-21T09:37:43Z
+    kind: head_push
+    reason: enrollment_ui_priority_and_demo_asserts
+  - at: 2026-07-21T09:52:39Z
+    kind: head_push
+    reason: ceremony_watch_and_evidence_gating
+  - at: 2026-07-21T10:06:41Z
+    kind: head_push
+    reason: clippy_and_demo_stub_statefulness
+  - at: 2026-07-21T10:30:18Z
+    kind: head_push
+    reason: arm_ceremony_watch_before_fill_mutations
+  - at: 2026-07-21T10:40:43Z
+    kind: head_push
+    reason: relax_demo_asserts_around_fill
+  - at: 2026-07-21T11:19:56Z
+    kind: manual_rerun
+    reason: native_rust_infra_failure_after_demo_green
+merge_attempts:
+  - at: 2026-07-21T11:30:45Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [582, 584]
+  baseline_quality: comparable
+  baseline_note: Browser-extension Pilot ceremony PRs with Rust policy, WASM bridge, and UI demos
+  elapsed_seconds_change_percent: 401.9
+  local_execution_seconds_change_percent: 27.3
+  github_actions_seconds_change_percent: 281.9
+  test_inventory_total_change: 5
+  regression: true
+  regression_reasons:
+    - elapsed_and_gha_over_20_percent_and_over_60s_vs_baseline_median
+waste_assessment:
+  wasteful: true
+  findings:
+    - Repeated UI demo contract failures while iterating enrollment ceremony timing and stub evidence state
+    - Final green cycle still required a manual rerun after Native Rust BuildKit infra flake
+  required_actions: []
