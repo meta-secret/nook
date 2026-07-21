@@ -1,10 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { findMockAuthAccount } from '../../accounts'
+  import { findMockAuthAccount, MOCK_AUTH_ACCOUNTS } from '../../accounts'
+  import FixtureCredentials from '../lib/FixtureCredentials.svelte'
   import { navigate, recordLoginSubmission } from '../lib/navigation'
   import { setPendingTotpSession } from '../lib/session'
 
+  const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
+    (account) => account.totpSecret,
+  )!
+
   let error = $state('')
+  let username = $state(fixtureAccount.username)
+  let password = $state(fixtureAccount.password)
 
   onMount(() => {
     ;(
@@ -16,12 +23,6 @@
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
-    const form = event.currentTarget
-    if (!(form instanceof HTMLFormElement)) return
-    const username =
-      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? ''
-    const password =
-      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
     recordLoginSubmission(username, password)
     const account = findMockAuthAccount(username, password)
     if (!account?.totpSecret) {
@@ -39,6 +40,10 @@
 <main>
   <h1>Sign in</h1>
   <p data-testid="mock-auth-scenario">login-then-totp</p>
+  <FixtureCredentials
+    account={fixtureAccount}
+    note="This page rejects the plain-login account (alice@nook.test)."
+  />
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
@@ -48,13 +53,15 @@
         autocomplete="username"
         name="username"
         type="email"
+        bind:value={username}
       /></label
     >
     <label
       >Password <input
         autocomplete="current-password"
         name="password"
-        type="password"
+        type="text"
+        bind:value={password}
       /></label
     >
     <button type="submit">Sign in</button>
