@@ -2,6 +2,8 @@
 # file only when the repository is trusted. Keep this profile isolated: Nook is
 # a password manager, so the pilot must never inherit a developer's daily
 # browser profile or persist its session after the MCP process exits.
+# Allowed origins are listed in .codex/ai-debug-allowed-origins.json and checked
+# by `task ai-debug:check`.
 [mcp_servers.playwright]
 command = "bash"
 args = [
@@ -9,7 +11,8 @@ args = [
   "--caps=devtools",
   "--isolated",
   "--block-service-workers",
-  "--allowed-origins=http://127.0.0.1:5173;http://localhost:5173;ws://127.0.0.1:5173;ws://localhost:5173;http://127.0.0.1:5175;http://localhost:5175;ws://127.0.0.1:5175;ws://localhost:5175",
+  "--ignore-https-errors",
+  "--allowed-origins=http://127.0.0.1:5173;http://localhost:5173;https://127.0.0.1:5173;https://localhost:5173;ws://127.0.0.1:5173;ws://localhost:5173;wss://127.0.0.1:5173;wss://localhost:5173;http://127.0.0.1:5175;http://localhost:5175;https://127.0.0.1:5175;https://localhost:5175;ws://127.0.0.1:5175;ws://localhost:5175;wss://127.0.0.1:5175;wss://localhost:5175",
   "--init-page=.codex/playwright-local-only.ts",
   "--test-id-attribute=data-testid",
   "--console-level=warning",

@@ -6,7 +6,7 @@ vars:
 
 tasks:
   ai-debug:check:
-    desc: Verify the Codex + Playwright MCP annotation pilot prerequisites.
+    desc: Verify Codex/Cursor + Playwright MCP annotation pilot prerequisites.
     cmds:
       - >-
         node -e "const major=Number(process.versions.node.split('.')[0]);
@@ -19,27 +19,17 @@ tasks:
       - >-
         test "$(npx -y @playwright/mcp@{{.PLAYWRIGHT_MCP_VERSION}} --version)"
         = "Version {{.PLAYWRIGHT_MCP_VERSION}}"
+      - node .codex/check-ai-debug-origins.mjs
       - >-
-        codex mcp list --json | node -e '
-          const servers = JSON.parse(require("fs").readFileSync(0, "utf8"));
-          const server = servers.find(({ name }) => name === "playwright");
-          if (!server?.enabled) {
-            console.error("Playwright MCP is not enabled or visible to Codex.");
-            console.error("Trust this repository, then restart Codex so .codex/config.toml is loaded.");
-            process.exit(1);
-          }
-          if (server.transport?.type !== "stdio" ||
-              server.transport.command !== "bash" ||
-              server.transport.args?.[0] !== ".codex/run-playwright-mcp.sh" ||
-              !server.transport.args?.includes("--caps=devtools")) {
-            console.error("The Playwright MCP server is missing its session launcher or --caps=devtools.");
-            process.exit(1);
-          }
-        '
+        echo "AI-debug ready URL: https://localhost:{{.WEB_DEV_PORT}}/app/"
 
   ai-debug:dev:
     desc: Verify the annotation pilot and start the local Nook development server.
     deps:
       - ai-debug:check
     cmds:
+      - >-
+        echo "Starting Nook for AI-debug on https://localhost:{{.WEB_DEV_PORT}}/app/"
       - task: web:dev:fast
+        vars:
+          WEB_DEV_PORT: '{{.WEB_DEV_PORT}}'

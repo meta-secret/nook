@@ -1,6 +1,10 @@
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { createIsolatedContext, ENROLLMENT_UNLOCK_TIMEOUT_MS } from './helpers'
+import {
+  createIsolatedContext,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  waitForPersistedAppLog,
+} from './helpers'
 
 async function clickDeviceProtectionSetup(page: Page) {
   const setupButton = page.getByTestId('device-protection-setup-btn')
@@ -485,6 +489,12 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('device-protection-pin-setup-btn'),
     ).toBeVisible()
     await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
+    const entry = await waitForPersistedAppLog(page, {
+      scope: 'vault-device-protection',
+      level: 'warn',
+      messageIncludes: 'passkey unavailable; offering PIN device protection fallback',
+    })
+    expect(entry.data ?? '').toContain('passkey_unavailable')
   })
 
   test('falls back to a new PIN identity when passkey recovery is unavailable', async ({
