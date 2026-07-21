@@ -1107,4 +1107,184 @@ mod wasm_tests {
         assert_eq!(get_number(&event, "schema_version"), 1.0);
         assert_eq!(get_string(&event, "signature"), "ed25519:test-signature");
     }
+
+    /// WASM-side contract for file-sync reconnect after offline concurrent creates
+    /// of the same login identity: both records survive; passwords are not merged.
+    /// Full multi-provider scenario coverage lives in
+    /// `nook-core/tests/event_log_file_sync_replication.rs`.
+    #[wasm_bindgen_test]
+    fn concurrent_same_identity_logins_both_survive_after_event_union() {
+        use nook_core::{
+            LoginSecret, SecretId, SecretType, SecretValue, SigningIdentity, VaultCrypto,
+            VaultEventSession, VaultOperation, encrypted_secret_from_armored, generate_store_id,
+            generate_vault_keys, secret_fingerprint, secret_identity_fingerprint,
+        };
+        use std::collections::BTreeSet;
+
+        const TS: &str = "2026-06-28T00:00:00Z";
+
+        fn append_login(
+            session: &mut VaultEventSession,
+            crypto: &VaultCrypto,
+            secrets_key: &nook_core::SymmetricKey,
+            secret_id: &str,
+            password: &str,
+        ) {
+            let value = SecretValue::Login(LoginSecret {
+                website_url: "https://login-a-1.example.com".to_owned(),
+                username: "alice".to_owned(),
+                password: password.to_owned(),
+                notes: String::new(),
+            });
+            let identity = secret_identity_fingerprint(&value, secrets_key);
+            let version = secret_fingerprint(&value, secrets_key);
+            let ciphertext = crypto
+                .encrypt_value(value.to_yaml().expect("login yaml").as_str())
+                .expect("encrypt login");
+            session
+                .append_operations(
+                    vec![VaultOperation::SecretCreated {
+                        secret: encrypted_secret_from_armored(
+                            &SecretId::from_vault_record(secret_id),
+                            SecretType::Login,
+                            ciphertext.as_str(),
+                            Some(identity),
+                            Some(version),
+                        ),
+                    }],
+                    TS,
+                    Some("local-folder"),
+                )
+                .expect("append login");
+        }
+
+        let keys = generate_vault_keys().expect("vault keys");
+        let store_id = generate_store_id().expect("store id");
+        let (signing, signing_seed) = SigningIdentity::generate().expect("signing");
+        let crypto = VaultCrypto::new(&keys.secrets_key).expect("crypto");
+
+        let mut device_a = VaultEventSession::new(
+            store_id.to_string(),
+            signing.clone(),
+            signing_seed.clone().into_inner(),
+        );
+        device_a
+            .append_operations(
+                vec![VaultOperation::VaultImported {
+                    source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                    secrets: Vec::new(),
+                    password_entries: Vec::new(),
+                }],
+                TS,
+                Some("local-folder"),
+            )
+            .expect("genesis");
+
+        let mut device_b =
+            VaultEventSession::new(store_id.to_string(), signing, signing_seed.into_inner());
+        let genesis_events: Vec<_> = device_a
+            .store
+            .event_ids()
+            .into_iter()
+            .filter_map(|id| {
+                device_a
+                    .store
+                    .get_bytes(&id)
+                    .map(|bytes| (id, bytes.to_vec()))
+            })
+            .collect();
+        device_b
+            .union_remote(&genesis_events)
+            .expect("device-b joins vault-a");
+
+        let shared_head = device_a.heads[0].clone();
+        // Disconnect: each device appends offline from the same head.
+        device_a.heads = vec![shared_head.clone()];
+        append_login(
+            &mut device_a,
+            &crypto,
+            &keys.secrets_key,
+            "secret_logina1aaaa",
+            "password-from-device-a",
+        );
+        device_b.heads = vec![shared_head];
+        append_login(
+            &mut device_b,
+            &crypto,
+            &keys.secrets_key,
+            "secret_logina1bbbb",
+            "password-from-device-b",
+        );
+
+        // Reconnect via file-sync style set-union.
+        let a_events: Vec<_> = device_a
+            .store
+            .event_ids()
+            .into_iter()
+            .filter_map(|id| {
+                device_a
+                    .store
+                    .get_bytes(&id)
+                    .map(|bytes| (id, bytes.to_vec()))
+            })
+            .collect();
+        let b_events: Vec<_> = device_b
+            .store
+            .event_ids()
+            .into_iter()
+            .filter_map(|id| {
+                device_b
+                    .store
+                    .get_bytes(&id)
+                    .map(|bytes| (id, bytes.to_vec()))
+            })
+            .collect();
+        device_a.union_remote(&b_events).expect("union b into a");
+        device_b.union_remote(&a_events).expect("union a into b");
+
+        let graph = device_a
+            .store
+            .load_graph(device_a.store_id.as_str())
+            .expect("graph");
+        let projection = device_a.project().expect("project");
+        let live = projection.live_secrets(&graph);
+        assert_eq!(live.len(), 2);
+        assert!(!projection.has_blocking_conflicts());
+
+        let mut passwords = BTreeSet::new();
+        for record in live.values() {
+            let plaintext = crypto
+                .decrypt_value(
+                    &nook_core::AgeArmoredCiphertext::parse(record.value.as_str())
+                        .expect("age ciphertext"),
+                )
+                .expect("decrypt");
+            let value =
+                SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str()).expect("yaml");
+            let SecretValue::Login(login) = value else {
+                panic!("expected login");
+            };
+            passwords.insert(login.password);
+        }
+        assert_eq!(
+            passwords,
+            BTreeSet::from([
+                "password-from-device-a".to_owned(),
+                "password-from-device-b".to_owned(),
+            ])
+        );
+
+        let identities: BTreeSet<_> = projection
+            .secrets
+            .values()
+            .filter(|secret| secret.is_live(&graph))
+            .filter_map(|secret| {
+                secret
+                    .identity_fingerprint
+                    .as_ref()
+                    .map(|fp| fp.as_str().to_owned())
+            })
+            .collect();
+        assert_eq!(identities.len(), 1, "same login identity on both records");
+    }
 }

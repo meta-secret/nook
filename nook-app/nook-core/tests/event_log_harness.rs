@@ -4,13 +4,14 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_core::{
-    AuthKeyId, Database, DeviceIdentity, EventId, LocalEventStore, SecretId, SecretType,
-    SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
-    VaultResult, VaultUnlock, encrypted_secret_from_armored, generate_store_id,
-    generate_vault_keys, genesis_auth_record, genesis_members_records,
-    hydrate_keys_from_projection_yaml, serialize_stored_yaml_with_unlock,
+    AuthKeyId, Database, DeviceIdentity, EventId, LocalEventStore, LoginSecret, SecretId,
+    SecretType, SecretValue, SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys,
+    VaultOperation, VaultProjection, VaultResult, VaultUnlock, encrypted_secret_from_armored,
+    generate_store_id, generate_vault_keys, genesis_auth_record, genesis_members_records,
+    hydrate_keys_from_projection_yaml, secret_fingerprint, secret_identity_fingerprint,
+    serialize_stored_yaml_with_unlock,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 const TS: &str = "2026-06-28T00:00:00Z";
 
@@ -89,6 +90,76 @@ impl EventLogDevice {
                 None,
             ),
         }])
+    }
+
+    /// Append a login secret with identity/version fingerprints (matches WASM `add_secret`).
+    pub fn append_login(
+        &mut self,
+        secret_id: &str,
+        website_url: &str,
+        username: &str,
+        password: &str,
+        notes: &str,
+    ) -> VaultResult<EventId> {
+        let value = SecretValue::Login(LoginSecret {
+            website_url: website_url.to_owned(),
+            username: username.to_owned(),
+            password: password.to_owned(),
+            notes: notes.to_owned(),
+        });
+        let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
+        let identity = secret_identity_fingerprint(&value, &secrets_key);
+        let version = secret_fingerprint(&value, &secrets_key);
+        let ciphertext = self.crypto.encrypt_value(value.to_yaml()?.as_str())?;
+        self.append_signed(vec![VaultOperation::SecretCreated {
+            secret: encrypted_secret_from_armored(
+                &SecretId::from_vault_record(secret_id),
+                SecretType::Login,
+                ciphertext.as_str(),
+                Some(identity),
+                Some(version),
+            ),
+        }])
+    }
+
+    pub fn decrypt_live_login_passwords(&self) -> VaultResult<BTreeSet<String>> {
+        let graph = self.session.store.load_graph(self.store_id())?;
+        let live = self.project()?.live_secrets(&graph);
+        let mut passwords = BTreeSet::new();
+        for record in live.values() {
+            if record.secret_type != Some(SecretType::Login) {
+                continue;
+            }
+            let plaintext = self
+                .crypto
+                .decrypt_value(&nook_core::AgeArmoredCiphertext::parse(
+                    record.value.as_str(),
+                )?)?;
+            let value = SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str())?;
+            let SecretValue::Login(login) = value else {
+                continue;
+            };
+            passwords.insert(login.password);
+        }
+        Ok(passwords)
+    }
+
+    pub fn live_identity_fingerprints(&self) -> VaultResult<Vec<String>> {
+        let graph = self.session.store.load_graph(self.store_id())?;
+        let projection = self.project()?;
+        let mut fingerprints = projection
+            .secrets
+            .iter()
+            .filter(|(_, secret)| secret.is_live(&graph))
+            .filter_map(|(_, secret)| {
+                secret
+                    .identity_fingerprint
+                    .as_ref()
+                    .map(|fp| fp.as_str().to_owned())
+            })
+            .collect::<Vec<_>>();
+        fingerprints.sort();
+        Ok(fingerprints)
     }
 
     pub fn append_signed(&mut self, ops: Vec<VaultOperation>) -> VaultResult<EventId> {
