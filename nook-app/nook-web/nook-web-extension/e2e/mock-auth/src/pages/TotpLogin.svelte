@@ -1,17 +1,27 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { findMockAuthAccount } from '../../accounts'
   import { navigate, recordLoginSubmission } from '../lib/navigation'
   import { setPendingTotpSession } from '../lib/session'
 
   let error = $state('')
 
+  onMount(() => {
+    ;(
+      window as Window & {
+        __nookLoginSubmitted?: { email: string; password: string } | null
+      }
+    ).__nookLoginSubmitted = null
+  })
+
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
-    const username = new FormData(form).get('username')
-    const password = new FormData(form).get('password')
-    if (typeof username !== 'string' || typeof password !== 'string') return
+    const username =
+      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? ''
+    const password =
+      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
     recordLoginSubmission(username, password)
     const account = findMockAuthAccount(username, password)
     if (!account?.totpSecret) {
