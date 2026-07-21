@@ -286,3 +286,95 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   ).toBeVisible()
   await demoBeat(page)
 })
+
+test('detect a Microsoft-like email-first login through Nook Pilot', async ({
+  page,
+}) => {
+  const messages = JSON.parse(
+    await readFile(
+      path.join(extensionDist, '_locales/en/messages.json'),
+      'utf8',
+    ),
+  ) as Record<string, ChromeMessage>
+
+  await page.addInitScript(installDemoChromeStub, loginPilotStubArgs(messages))
+
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Sign in to your Microsoft account</title>
+        <style>
+          :root { color-scheme: light; font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif; }
+          * { box-sizing: border-box; }
+          body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: #f2f2f2;
+            color: #1b1b1b;
+          }
+          main {
+            width: min(440px, calc(100vw - 48px));
+            padding: 44px 44px 36px;
+            border: 1px solid #e0e0e0;
+            background: #fff;
+            box-shadow: 0 2px 6px rgb(0 0 0 / 10%);
+          }
+          h1 { margin: 0 0 12px; font-size: 24px; font-weight: 600; }
+          .intro { margin: 0 0 24px; color: #616161; line-height: 1.5; }
+          form { display: grid; gap: 18px; }
+          input {
+            width: 100%;
+            min-height: 48px;
+            padding: 12px 10px;
+            border: 0;
+            border-bottom: 1px solid #605e5c;
+            background: transparent;
+            color: #1b1b1b;
+            font: inherit;
+          }
+          button[type="submit"] {
+            justify-self: end;
+            min-height: 40px;
+            min-width: 108px;
+            border: 0;
+            background: #0067b8;
+            color: #fff;
+            font: 600 15px/1 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+          }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Sign in</h1>
+          <p class="intro">Use your work, school, or personal Microsoft account.</p>
+          <form id="loginForm">
+            <input
+              type="email"
+              name="loginfmt"
+              id="i0116"
+              placeholder="Email, phone, or Skype"
+              aria-label="Enter your email, phone, or Skype."
+            />
+            <button type="submit" id="idSIButton9">Next</button>
+          </form>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await page.addScriptTag({
+    path: path.join(extensionDist, 'content/autofill.js'),
+    type: 'module',
+  })
+
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(
+    widget.getByRole('button', { name: 'Continue with Nook' }),
+  ).toBeVisible()
+  await expect(page.locator('[name="loginfmt"]')).toBeVisible()
+  await demoBeat(page)
+})

@@ -171,15 +171,19 @@ pub fn hostname_from_url(raw: &str) -> String {
 /// True when a stored login website URL targets the same host as a page origin.
 ///
 /// Matching is host equality after URL normalization (credentials, path, query,
-/// fragment, and a leading `www.` are ignored). Substring traps such as
-/// `evil-example.com` vs `example.com` do not match.
+/// fragment, and a leading `www.` are ignored), or an explicit related-login
+/// family from the bundled allowlist (for example `microsoft.com` ↔
+/// `login.microsoftonline.com`). Substring traps such as `evil-example.com` vs
+/// `example.com` do not match.
 #[must_use]
 pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
     let secret_host = hostname_from_url(website_url);
     let origin_host = hostname_from_url(origin);
-    !secret_host.is_empty()
-        && !origin_host.is_empty()
-        && secret_host.eq_ignore_ascii_case(&origin_host)
+    if secret_host.is_empty() || origin_host.is_empty() {
+        return false;
+    }
+    secret_host.eq_ignore_ascii_case(&origin_host)
+        || crate::secrets::login_site_hosts::login_hosts_share_family(&secret_host, &origin_host)
 }
 
 /// Intrinsic list clustering key for an authenticator.
@@ -905,6 +909,18 @@ mod tests {
         assert!(!login_host_matches_origin(
             "https://",
             "https://example.com"
+        ));
+        assert!(login_host_matches_origin(
+            "https://microsoft.com/account",
+            "https://login.microsoftonline.com",
+        ));
+        assert!(login_host_matches_origin(
+            "https://slack.com",
+            "https://app.slack.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://microsoft.com",
+            "https://evil-microsoft.com",
         ));
     }
 
