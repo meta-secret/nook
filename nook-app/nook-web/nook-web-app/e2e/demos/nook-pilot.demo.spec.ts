@@ -255,3 +255,223 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText('Secure sign-in submitted')
   await demoBeat(page)
 })
+
+function installChromeStubForTotp(
+  localizedMessages: Record<string, ChromeMessage>,
+) {
+  type RuntimeMessage = {
+    type?: string
+    payload?: { secretId?: string }
+  }
+  type RuntimeCallback = (response?: unknown) => void
+
+  const responseFor = (message: RuntimeMessage): unknown => {
+    switch (message.type) {
+      case 'nook:authentication-workflow-snapshot':
+        return {
+          ok: true,
+          snapshot: {
+            kind: 'totp-challenge',
+            stage: 'second-factor',
+            action: 'fill-totp',
+            currentStep: 2,
+            totalSteps: 3,
+            observationIndex: 0,
+          },
+        }
+      case 'nook:website-authenticator-options':
+        return {
+          ok: true,
+          status: 'ready',
+          accounts: [
+            {
+              vaultStoreId: 'demo-vault',
+              vaultName: 'Demo vault',
+              secretId: 'demo-totp-1',
+              issuer: 'Namecheap',
+              account: 'pilot@example.test',
+            },
+          ],
+        }
+      case 'nook:website-authenticator-fill':
+        return {
+          ok: true,
+          code: '482913',
+        }
+      default:
+        return { ok: true }
+    }
+  }
+
+  const chromeStub = {
+    i18n: {
+      getMessage(key: string, substitution?: string) {
+        const message = localizedMessages[key]?.message ?? ''
+        return substitution ? message.replaceAll('$1', substitution) : message
+      },
+    },
+    runtime: {
+      lastError: undefined,
+      getURL(resource: string) {
+        return resource === 'icons/nook.png' ? '/favicon.png' : resource
+      },
+      sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
+        const response = responseFor(message)
+        if (callback) queueMicrotask(() => callback(response))
+      },
+    },
+    storage: {
+      local: {
+        get(
+          _keys: string | string[] | Record<string, unknown>,
+          callback: (items: Record<string, unknown>) => void,
+        ) {
+          queueMicrotask(() =>
+            callback({
+              'nook:extension-setup': {
+                status: 'ready',
+                deviceLabel: 'Demo browser',
+                pairedVaults: ['Demo vault'],
+                selectedVaultName: 'Demo vault',
+                syncProviderCount: 1,
+                eventCount: 3,
+                eventLogHeads: ['demo-head'],
+                lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
+              },
+            }),
+          )
+        },
+      },
+    },
+  }
+  const browserGlobal = globalThis as typeof globalThis & {
+    chrome?: Record<string, unknown>
+  }
+  if (browserGlobal.chrome) {
+    Object.defineProperties(browserGlobal.chrome, {
+      i18n: {
+        configurable: true,
+        value: chromeStub.i18n,
+      },
+      runtime: {
+        configurable: true,
+        value: chromeStub.runtime,
+      },
+      storage: {
+        configurable: true,
+        value: chromeStub.storage,
+      },
+    })
+  } else {
+    Object.defineProperty(browserGlobal, 'chrome', {
+      configurable: true,
+      value: chromeStub,
+    })
+  }
+}
+
+test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
+  page,
+}) => {
+  const messages = JSON.parse(
+    await readFile(
+      path.join(extensionDist, '_locales/en/messages.json'),
+      'utf8',
+    ),
+  ) as Record<string, ChromeMessage>
+
+  await page.addInitScript(installChromeStubForTotp, messages)
+
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Enter OTP Code</title>
+        <style>
+          :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          * { box-sizing: border-box; }
+          body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: #f3f4f6;
+            color: #111827;
+          }
+          main {
+            width: min(420px, calc(100vw - 48px));
+            padding: 36px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 16px 40px rgb(15 23 42 / 12%);
+          }
+          h1 { margin: 0 0 12px; font-size: 28px; }
+          .intro { margin: 0 0 24px; color: #4b5563; line-height: 1.5; }
+          form { display: grid; gap: 16px; }
+          input {
+            width: 100%;
+            min-height: 48px;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #111827;
+            font: inherit;
+          }
+          button[type="submit"] {
+            min-height: 48px;
+            border: 0;
+            border-radius: 6px;
+            background: #dc2626;
+            color: #fff;
+            font: 750 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+          }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Enter OTP Code</h1>
+          <p class="intro">
+            Open the two-factor authentication app on your device and verify
+            your identity for your account <strong>pilot</strong>.
+          </p>
+          <form id="otp-form">
+            <input
+              id="Code"
+              name="Code"
+              type="text"
+              inputmode="numeric"
+              placeholder="Enter OTP Code"
+              autocomplete="off"
+            />
+            <button type="submit">Submit</button>
+          </form>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installChromeStubForTotp, messages)
+  await page.addScriptTag({
+    path: path.join(extensionDist, 'content/autofill.js'),
+    type: 'module',
+  })
+
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Nook Pilot · 2/3')).toBeVisible()
+  await expect(widget.getByText('Fill your 2FA code')).toBeVisible()
+  await demoBeat(page)
+
+  await widget.getByRole('button', { name: 'Fill 2FA code' }).click()
+  await expect(
+    widget.getByRole('button', { name: 'Saved 2FA 1' }),
+  ).toBeVisible()
+  await demoBeat(page)
+  await widget.getByRole('button', { name: 'Saved 2FA 1' }).click()
+  await expect(page.getByPlaceholder('Enter OTP Code')).toHaveValue('482913')
+  await expect(
+    widget.getByText(
+      'The code is filled. Review the site and submit it manually.',
+    ),
+  ).toBeVisible()
+  await demoBeat(page)
+})
