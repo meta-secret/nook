@@ -4,6 +4,7 @@
 //! module owns the product decision about which workflow is present, where the
 //! user is in it, and which action Nook may offer next.
 
+use crate::auth::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -67,6 +68,8 @@ pub enum AuthenticationWorkflowAction {
     GeneratePassword,
     FillTotp,
     EnrollAuthenticator,
+    UsePasskey,
+    CreatePasskey,
     TakeOver,
 }
 
@@ -78,12 +81,15 @@ impl AuthenticationWorkflowAction {
             Self::GeneratePassword => "generate-password",
             Self::FillTotp => "fill-totp",
             Self::EnrollAuthenticator => "enroll-authenticator",
+            Self::UsePasskey => "use-passkey",
+            Self::CreatePasskey => "create-passkey",
             Self::TakeOver => "take-over",
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct AuthenticationPageObservation {
     pub username_field_count: u32,
     pub current_password_field_count: u32,
@@ -96,6 +102,10 @@ pub struct AuthenticationPageObservation {
     pub authenticator_setup_hint: bool,
     /// Visible recovery / backup-code material on the page.
     pub backup_codes_hint: bool,
+    /// Page exposes a passkey / `WebAuthn` control the user can activate.
+    pub passkey_control_present: bool,
+    /// Unlocked vault match count for the requesting RP (0 when locked).
+    pub matching_passkey_account_count: u32,
 }
 
 impl AuthenticationPageObservation {
@@ -113,6 +123,8 @@ impl AuthenticationPageObservation {
             || self.one_time_code_field_count > 0
             || self.authenticator_setup_hint
             || self.backup_codes_hint
+            || self.passkey_control_present
+            || self.matching_passkey_account_count > 0
     }
 }
 
@@ -150,9 +162,12 @@ impl AuthenticationWorkflowSnapshot {
 const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
     match (snapshot.kind, snapshot.action) {
         (AuthenticationWorkflowKind::TotpEnrollment, _) => 8,
-        (AuthenticationWorkflowKind::TotpChallenge, _) => 7,
+        (AuthenticationWorkflowKind::TotpChallenge, _)
+        | (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::UsePasskey) => 7,
         (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
-        (AuthenticationWorkflowKind::PasswordChange, _) => 5,
+        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::CreatePasskey)
+        | (AuthenticationWorkflowKind::PasswordChange, _)
+        | (AuthenticationWorkflowKind::Signup, AuthenticationWorkflowAction::UsePasskey) => 5,
         (AuthenticationWorkflowKind::Signup, _) => 4,
         (AuthenticationWorkflowKind::Login, _) => 2,
         (AuthenticationWorkflowKind::Manual, _) => 1,
@@ -227,6 +242,28 @@ const fn credentials_or_manual(manual_checkpoint_present: bool) -> Authenticatio
     }
 }
 
+const fn apply_passkey_proposal(
+    observation: AuthenticationPageObservation,
+    mut snapshot: AuthenticationWorkflowSnapshot,
+) -> AuthenticationWorkflowSnapshot {
+    match propose_website_passkey(
+        snapshot.kind,
+        observation.manual_checkpoint_present,
+        observation.passkey_control_present,
+        observation.matching_passkey_account_count,
+    ) {
+        WebsitePasskeyProposal::None => snapshot,
+        WebsitePasskeyProposal::UsePasskey { .. } => {
+            snapshot.action = AuthenticationWorkflowAction::UsePasskey;
+            snapshot
+        }
+        WebsitePasskeyProposal::CreatePasskey => {
+            snapshot.action = AuthenticationWorkflowAction::CreatePasskey;
+            snapshot
+        }
+    }
+}
+
 #[must_use]
 pub const fn classify_authentication_workflow(
     observation: AuthenticationPageObservation,
@@ -239,22 +276,28 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.current_password_field_count > 0 && observation.new_password_field_count > 0 {
-        return Some(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::PasswordChange,
-            credentials_or_manual(observation.manual_checkpoint_present),
-            generate_or_takeover(observation.manual_checkpoint_present),
-            2,
-            4,
+        return Some(apply_passkey_proposal(
+            observation,
+            AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::PasswordChange,
+                credentials_or_manual(observation.manual_checkpoint_present),
+                generate_or_takeover(observation.manual_checkpoint_present),
+                2,
+                4,
+            ),
         ));
     }
 
     if observation.new_password_field_count > 0 {
-        return Some(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Signup,
-            credentials_or_manual(observation.manual_checkpoint_present),
-            generate_or_takeover(observation.manual_checkpoint_present),
-            2,
-            5,
+        return Some(apply_passkey_proposal(
+            observation,
+            AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::Signup,
+                credentials_or_manual(observation.manual_checkpoint_present),
+                generate_or_takeover(observation.manual_checkpoint_present),
+                2,
+                5,
+            ),
         ));
     }
 
@@ -287,22 +330,41 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.password_field_count() > 0 {
-        return Some(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook,
-            1,
-            3,
+        return Some(apply_passkey_proposal(
+            observation,
+            AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::ContinueWithNook,
+                1,
+                3,
+            ),
         ));
     }
 
     if observation.username_field_count > 0 {
-        return Some(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::TakeOver,
-            1,
-            3,
+        return Some(apply_passkey_proposal(
+            observation,
+            AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::TakeOver,
+                1,
+                3,
+            ),
+        ));
+    }
+
+    if observation.passkey_control_present || observation.matching_passkey_account_count > 0 {
+        return Some(apply_passkey_proposal(
+            observation,
+            AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::TakeOver,
+                1,
+                3,
+            ),
         ));
     }
 
@@ -517,6 +579,59 @@ mod tests {
         let snapshot = classify_authentication_workflow_candidates(&[signup, code]).unwrap();
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
+        assert_eq!(snapshot.observation_index, 1);
+    }
+
+    #[test]
+    fn login_with_matching_passkeys_proposes_use() {
+        let login = AuthenticationPageObservation {
+            current_password_field_count: 1,
+            matching_passkey_account_count: 2,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(login).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
+        assert!(snapshot.requires_human_approval);
+    }
+
+    #[test]
+    fn passkey_control_without_matches_proposes_create() {
+        let login = AuthenticationPageObservation {
+            username_field_count: 1,
+            passkey_control_present: true,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(login).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+    }
+
+    #[test]
+    fn passkey_only_control_classifies_as_login_create() {
+        let passkey_only = AuthenticationPageObservation {
+            passkey_control_present: true,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(passkey_only).unwrap();
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+    }
+
+    #[test]
+    fn matching_passkeys_prefer_use_over_password_continue_candidate() {
+        let password_login = AuthenticationPageObservation {
+            current_password_field_count: 1,
+            ..observation()
+        };
+        let passkey_login = AuthenticationPageObservation {
+            passkey_control_present: true,
+            matching_passkey_account_count: 1,
+            ..observation()
+        };
+        let snapshot =
+            classify_authentication_workflow_candidates(&[password_login, passkey_login]).unwrap();
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert_eq!(snapshot.observation_index, 1);
     }
 }

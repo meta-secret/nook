@@ -282,6 +282,24 @@ async function buildChromeLocales() {
         widgetGeneratedPasswordFilled: {
           message: catalog.extension.widget.generated_password_filled,
         },
+        widgetUsePasskey: {
+          message: catalog.extension.widget.use_passkey,
+        },
+        widgetCreatePasskey: {
+          message: catalog.extension.widget.create_passkey,
+        },
+        widgetUsePasskeyWorking: {
+          message: catalog.extension.widget.use_passkey_working,
+        },
+        widgetCreatePasskeyWorking: {
+          message: catalog.extension.widget.create_passkey_working,
+        },
+        widgetPasskeyControlMissing: {
+          message: catalog.extension.widget.passkey_control_missing,
+        },
+        widgetPasskeyCeremonyStarted: {
+          message: catalog.extension.widget.passkey_ceremony_started,
+        },
         widgetSaveLoginTitle: {
           message: catalog.extension.widget.save_login_title,
         },

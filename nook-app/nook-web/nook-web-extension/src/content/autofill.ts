@@ -4,6 +4,7 @@ import {
   fillGeneratedPassword,
   fillLoginCredentials,
   fillOneTimeCode,
+  findPasskeyControl,
   readLoginCredentials,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
@@ -970,6 +971,49 @@ async function generatePasswordWithNook(
   }
 }
 
+async function proposePasskeyWithNook(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  action: 'use-passkey' | 'create-passkey',
+): Promise<void> {
+  if (busy) return
+  busy = true
+  continueButton.disabled = true
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage(
+      action === 'use-passkey'
+        ? 'widgetUsePasskeyWorking'
+        : 'widgetCreatePasskeyWorking',
+    ),
+    false,
+  )
+  try {
+    const control = findPasskeyControl(document)
+    if (!control) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetPasskeyControlMissing'),
+        true,
+      )
+      return
+    }
+    control.click()
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetPasskeyCeremonyStarted'),
+      false,
+    )
+    continueButton.hidden = true
+  } finally {
+    busy = false
+    continueButton.disabled = false
+  }
+}
+
 function copyTitleForWorkflow(workflow: PasswordFormObservation): string {
   if (
     workflow.summary.currentPasswordFieldCount > 0 &&
@@ -1826,15 +1870,21 @@ function renderWidget(
   const canContinueWithNook =
     snapshot.action === 'continue-with-nook' ||
     snapshot.action === 'fill-totp' ||
-    snapshot.action === 'generate-password'
+    snapshot.action === 'generate-password' ||
+    snapshot.action === 'use-passkey' ||
+    snapshot.action === 'create-passkey'
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? 'widgetFillAuthenticator'
       : snapshot.action === 'generate-password'
         ? 'widgetGeneratePassword'
-        : canContinueWithNook
-          ? 'widgetContinue'
-          : 'widgetTakeOver'
+        : snapshot.action === 'use-passkey'
+          ? 'widgetUsePasskey'
+          : snapshot.action === 'create-passkey'
+            ? 'widgetCreatePasskey'
+            : canContinueWithNook
+              ? 'widgetContinue'
+              : 'widgetTakeOver'
   continueButton.setAttribute(
     'aria-label',
     translatedMessage(continueMessageKey),
@@ -1878,6 +1928,11 @@ function renderWidget(
         description,
         continueButton,
       )
+    } else if (
+      snapshot.action === 'use-passkey' ||
+      snapshot.action === 'create-passkey'
+    ) {
+      void proposePasskeyWithNook(description, continueButton, snapshot.action)
     } else {
       void continueWithNook(
         step,
@@ -2052,6 +2107,8 @@ async function scanAndRender(): Promise<void> {
         manualCheckpointPresent: summary.manualCheckpointPresent,
         authenticatorSetupHint: detectEnrollmentHints().qr,
         backupCodesHint: detectEnrollmentHints().backupCodes,
+        passkeyControlPresent: summary.passkeyControlPresent,
+        matchingPasskeyAccountCount: 0,
       })),
     },
   })

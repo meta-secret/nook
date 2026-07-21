@@ -15,6 +15,7 @@ mod vault;
 pub(crate) use auth::{
     authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
     multi_device, outcome_evidence, password_envelope, website_login_save,
+    website_passkey_proposal,
 };
 pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
 pub(crate) use secrets::{
@@ -161,6 +162,7 @@ pub use vault_sync_conflict::{
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
+pub use website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
 
 pub use nook_auth2::{
     SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
