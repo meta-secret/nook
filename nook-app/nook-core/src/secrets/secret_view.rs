@@ -253,11 +253,7 @@ pub fn resolve_entity_group_keys(items: &[SecretListItem]) -> Vec<String> {
                             || (candidate.0 == current.0
                                 && candidate.1 == current.1
                                 && candidate.2 < current.2);
-                        if better {
-                            candidate
-                        } else {
-                            current
-                        }
+                        if better { candidate } else { current }
                     }
                 });
             }
