@@ -1,0 +1,224 @@
+schema_version: 2
+source_pr:
+  number: 567
+  url: https://github.com/meta-secret/nook/pull/567
+  title: Add credit-card vault secret items
+  change_surface: vault_core_wasm_credit_card_ui
+  head_sha: 9af8b4fe7ad4b84527ef187d4f51aa16382bfaee
+  started_at: 2026-07-21T05:18:00Z
+  opened_at: 2026-07-21T05:36:30Z
+  merged_at: 2026-07-21T06:50:23Z
+  elapsed_seconds: 5543
+  open_to_merge_seconds: 4433
+summary:
+  local_execution_count: 14
+  local_check_count: 4
+  local_test_count: 2
+  local_combined_count: 8
+  local_execution_seconds: 9682
+  github_actions_run_count: 6
+  github_actions_seconds: 2246
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T06:52:00Z
+  head_sha: 9af8b4fe7ad4b84527ef187d4f51aa16382bfaee
+  by_type:
+    rust: 592
+    preflight: 30
+    web_unit: 211
+    e2e: 179
+  total: 1012
+local_executions:
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:36:40Z
+    finished_at: 2026-07-21T05:37:20Z
+    duration_seconds: 40
+    outcome: failed
+    reason: clippy_redundant_closure_and_match_same_arms
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:36:40Z
+    finished_at: 2026-07-21T05:38:00Z
+    duration_seconds: 80
+    outcome: failed
+    reason: clippy_redundant_closure_and_match_same_arms
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:44:00Z
+    finished_at: 2026-07-21T06:10:18Z
+    duration_seconds: 1578
+    outcome: cancelled
+    reason: killed_to_reduce_parallel_docker_load
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:44:00Z
+    finished_at: 2026-07-21T06:08:03Z
+    duration_seconds: 1443
+    outcome: cancelled
+    reason: killed_to_reduce_parallel_docker_load
+  - command: E2E_SPEC=e2e/demos/credit-card.demo.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T05:44:30Z
+    finished_at: 2026-07-21T06:10:18Z
+    duration_seconds: 1548
+    outcome: cancelled
+    reason: killed_with_parallel_docker_gates
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:10:30Z
+    finished_at: 2026-07-21T06:31:34Z
+    duration_seconds: 1264
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:10:30Z
+    finished_at: 2026-07-21T06:31:34Z
+    duration_seconds: 1264
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: E2E_SPEC=e2e/demos/credit-card.demo.spec.ts task web:test:e2e:file
+    category: test
+    started_at: 2026-07-21T06:10:30Z
+    finished_at: 2026-07-21T06:31:34Z
+    duration_seconds: 1264
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: task pr:ready PR=567
+    category: check
+    started_at: 2026-07-21T06:31:50Z
+    finished_at: 2026-07-21T06:32:07Z
+    duration_seconds: 17
+    outcome: passed
+    reason: ready_true_before_main_rebase
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:32:10Z
+    finished_at: 2026-07-21T06:32:21Z
+    duration_seconds: 11
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:32:30Z
+    finished_at: 2026-07-21T06:51:34Z
+    duration_seconds: 1144
+    outcome: cancelled
+    reason: still_running_after_squash_merge
+  - command: task pr:preflight PR=567
+    category: check
+    started_at: 2026-07-21T06:38:50Z
+    finished_at: 2026-07-21T06:39:00Z
+    duration_seconds: 10
+    outcome: passed
+    reason: post_rebase_queued_snapshot
+  - command: task pr:ready PR=567
+    category: check
+    started_at: 2026-07-21T06:49:50Z
+    finished_at: 2026-07-21T06:50:08Z
+    duration_seconds: 18
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+  - command: bash .github/scripts/ui-demo-contract.sh
+    category: check
+    started_at: 2026-07-21T05:48:00Z
+    finished_at: 2026-07-21T05:48:01Z
+    duration_seconds: 1
+    outcome: passed
+    reason: demo_spec_added_after_second_pr_failure
+github_actions_runs:
+  - workflow: PR
+    run_id: 29804481905
+    run_attempt: 1
+    head_sha: eb378f9321d76eefe3e51b107b8272132c3cefb9
+    trigger: pull_request
+    started_at: 2026-07-21T05:36:33Z
+    finished_at: 2026-07-21T05:40:21Z
+    duration_seconds: 228
+    conclusion: failure
+  - workflow: PR
+    run_id: 29804804465
+    run_attempt: 1
+    head_sha: d5f582f6307ef7aff4e5b94ea8dec2a4ad6c6aaf
+    trigger: pull_request
+    started_at: 2026-07-21T05:43:25Z
+    finished_at: 2026-07-21T05:47:40Z
+    duration_seconds: 255
+    conclusion: failure
+  - workflow: PR
+    run_id: 29805105361
+    run_attempt: 1
+    head_sha: a6dfa104b932f428c8e72968990e9504a09d07e7
+    trigger: pull_request
+    started_at: 2026-07-21T05:49:44Z
+    finished_at: 2026-07-21T05:57:36Z
+    duration_seconds: 472
+    conclusion: failure
+  - workflow: PR
+    run_id: 29806196374
+    run_attempt: 1
+    head_sha: 1884e2567c48d6f334faa655f0b006c49dd6876b
+    trigger: pull_request
+    started_at: 2026-07-21T06:10:15Z
+    finished_at: 2026-07-21T06:20:49Z
+    duration_seconds: 634
+    conclusion: success
+  - workflow: PR
+    run_id: 29807664195
+    run_attempt: 1
+    head_sha: e023e48329f98d529065deb0c3e82ed09d3bdaf7
+    trigger: pull_request
+    started_at: 2026-07-21T06:38:44Z
+    finished_at: 2026-07-21T06:49:40Z
+    duration_seconds: 656
+    conclusion: success
+  - workflow: PR
+    run_id: 29808301966
+    run_attempt: 1
+    head_sha: e023e48329f98d529065deb0c3e82ed09d3bdaf7
+    trigger: pull_request
+    started_at: 2026-07-21T06:50:26Z
+    finished_at: 2026-07-21T06:50:27Z
+    duration_seconds: 1
+    conclusion: skipped
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T05:43:25Z
+    reason: clippy_match_and_redundant_closure_fixes
+  - kind: head_push
+    at: 2026-07-21T05:49:44Z
+    reason: ui_demo_contract_spec
+  - kind: head_push
+    at: 2026-07-21T06:10:15Z
+    reason: rustfmt_credit_card_sources
+  - kind: head_push
+    at: 2026-07-21T06:38:44Z
+    reason: rebase_onto_updated_main
+merge_attempts:
+  - at: 2026-07-21T06:50:23Z
+    method: squash
+    outcome: success
+    reason: ready_true_remote_green
+comparison:
+  baseline_prs: [532, 539]
+  baseline_quality: comparable
+  baseline_note: Same vault-core/WASM/UI secret-type surface as authenticator item work
+  elapsed_seconds_change_percent: 347.2
+  local_execution_seconds_change_percent: 1283.1
+  github_actions_seconds_change_percent: 185.0
+  test_inventory_total_change: null
+  regression: true
+  regression_reasons:
+    - Elapsed wall time more than 20% and 60s above the 532/539 median because of avoidable clippy, UI-demo-contract, and rustfmt head-push cycles plus parallel local Docker gates that hit BuildKit EOF
+waste_assessment:
+  wasteful: true
+  findings:
+    - First three PR runs failed on clippy, missing UI demo contract, and rustfmt after the initial push
+    - Parallel task check, task ci:pr, and e2e against flaky local BuildKit burned over three hours without a green local gate while remote PR CI was already the merge signal
+    - Final rebase onto updated main was necessary and healthy; the skipped post-merge PR run is noise
+  required_actions:
+    - Run cargo fmt --check, wasm/native clippy -D warnings, and ui-demo-contract.sh before the first push for new vault item types
+    - Prefer one local Docker gate in parallel with remote PR CI instead of check + ci:pr + e2e together

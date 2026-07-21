@@ -6,6 +6,7 @@ pub(crate) mod authenticator_issuer_hosts;
 pub(crate) mod bip39;
 pub(crate) mod bitwarden_import;
 pub(crate) mod chrome_passwords_import;
+pub(crate) mod credit_card;
 pub(crate) mod google_authenticator_import;
 pub(crate) mod lastpass_import;
 pub(crate) mod onepassword_import;
