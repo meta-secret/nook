@@ -1,0 +1,321 @@
+schema_version: 2
+source_pr:
+  number: 564
+  url: https://github.com/meta-secret/nook/pull/564
+  title: Add consented browser 2FA QR and backup-code enrollment
+  change_surface: browser_extension_2fa_enrollment_wasm
+  head_sha: bfe2d4e5e65a868e36c6ee050bec6e3839779c98
+  started_at: 2026-07-21T05:00:00Z
+  opened_at: 2026-07-21T05:14:22Z
+  merged_at: 2026-07-21T07:10:16Z
+  elapsed_seconds: 7816
+  open_to_merge_seconds: 6954
+summary:
+  local_execution_count: 16
+  local_check_count: 5
+  local_test_count: 3
+  local_combined_count: 8
+  local_execution_seconds: 7420
+  github_actions_run_count: 13
+  github_actions_seconds: 5026
+  pr_retrigger_count: 10
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T07:12:00Z
+  head_sha: bfe2d4e5e65a868e36c6ee050bec6e3839779c98
+  by_type:
+    rust: 592
+    preflight: 30
+    web_unit: 216
+    e2e: 181
+  total: 1019
+local_executions:
+  - command: bun test scripts/enrollment-messages.test.ts
+    category: test
+    started_at: 2026-07-21T05:48:30Z
+    finished_at: 2026-07-21T05:48:31Z
+    duration_seconds: 1
+    outcome: passed
+    reason: backup_code_prose_filter_unit
+  - command: jscpd --config .jscpd.json nook-app preflight
+    category: check
+    started_at: 2026-07-21T05:49:00Z
+    finished_at: 2026-07-21T05:49:03Z
+    duration_seconds: 3
+    outcome: passed
+    reason: duplicates_under_threshold_after_shared_helpers
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:50:45Z
+    finished_at: 2026-07-21T05:59:17Z
+    duration_seconds: 512
+    outcome: cancelled
+    reason: killed_after_push_refresh
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:52:49Z
+    finished_at: 2026-07-21T05:59:17Z
+    duration_seconds: 388
+    outcome: cancelled
+    reason: killed_after_push_refresh
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:59:17Z
+    finished_at: 2026-07-21T06:31:34Z
+    duration_seconds: 1937
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:59:17Z
+    finished_at: 2026-07-21T06:31:34Z
+    duration_seconds: 1937
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: task pr:ready PR=564
+    category: check
+    started_at: 2026-07-21T06:20:00Z
+    finished_at: 2026-07-21T06:20:18Z
+    duration_seconds: 18
+    outcome: failed
+    reason: behind_main_by_2
+  - command: jscpd --config .jscpd.json nook-app preflight
+    category: check
+    started_at: 2026-07-21T06:38:50Z
+    finished_at: 2026-07-21T06:38:51Z
+    duration_seconds: 1
+    outcome: passed
+    reason: post_main_login_save_merge
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:38:47Z
+    finished_at: 2026-07-21T06:55:49Z
+    duration_seconds: 1022
+    outcome: cancelled
+    reason: superseded_by_main_credit_card_merge
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:38:47Z
+    finished_at: 2026-07-21T06:55:49Z
+    duration_seconds: 1022
+    outcome: cancelled
+    reason: superseded_by_main_credit_card_merge
+  - command: jscpd --config .jscpd.json nook-app preflight
+    category: check
+    started_at: 2026-07-21T06:55:49Z
+    finished_at: 2026-07-21T06:55:50Z
+    duration_seconds: 1
+    outcome: passed
+    reason: post_credit_card_merge
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:55:49Z
+    finished_at: 2026-07-21T07:10:16Z
+    duration_seconds: 867
+    outcome: cancelled
+    reason: still_running_after_squash_merge
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:55:49Z
+    finished_at: 2026-07-21T07:10:16Z
+    duration_seconds: 867
+    outcome: cancelled
+    reason: still_running_after_squash_merge
+  - command: bun test scripts/enrollment-messages.test.ts scripts/login-fill-messages.test.ts
+    category: test
+    started_at: 2026-07-21T05:48:00Z
+    finished_at: 2026-07-21T05:48:01Z
+    duration_seconds: 1
+    outcome: passed
+    reason: origin_message_guard_share
+  - command: task pr:ready PR=564
+    category: check
+    started_at: 2026-07-21T07:08:30Z
+    finished_at: 2026-07-21T07:08:49Z
+    duration_seconds: 19
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+  - command: bash .github/scripts/ui-demo-contract.sh
+    category: check
+    started_at: 2026-07-21T05:35:00Z
+    finished_at: 2026-07-21T05:35:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: browser_2fa_enrollment_demo_contract
+github_actions_runs:
+  - workflow: PR
+    run_id: 29803431254
+    run_attempt: 1
+    head_sha: bb7e70fbfde875bdefb9ded61e7e6d82b193e896
+    trigger: pull_request
+    started_at: 2026-07-21T05:14:26Z
+    finished_at: 2026-07-21T05:17:07Z
+    duration_seconds: 161
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29803537243
+    run_attempt: 1
+    head_sha: 151c5c6aab45d8ebc889e71a19b99419c5fd5823
+    trigger: pull_request
+    started_at: 2026-07-21T05:16:39Z
+    finished_at: 2026-07-21T05:21:11Z
+    duration_seconds: 272
+    conclusion: failure
+  - workflow: PR
+    run_id: 29803938709
+    run_attempt: 1
+    head_sha: 06f015da15f673849f5561026018ec12f93813c9
+    trigger: pull_request
+    started_at: 2026-07-21T05:25:13Z
+    finished_at: 2026-07-21T05:29:31Z
+    duration_seconds: 258
+    conclusion: failure
+  - workflow: PR
+    run_id: 29804474486
+    run_attempt: 1
+    head_sha: d0637b913dedfd877a8028489faf0255929f42c4
+    trigger: pull_request
+    started_at: 2026-07-21T05:36:24Z
+    finished_at: 2026-07-21T05:41:14Z
+    duration_seconds: 290
+    conclusion: failure
+  - workflow: PR
+    run_id: 29804740650
+    run_attempt: 1
+    head_sha: b130c72f4fc480f4104b3ad896fb544baedcfe5b
+    trigger: pull_request
+    started_at: 2026-07-21T05:42:05Z
+    finished_at: 2026-07-21T05:48:09Z
+    duration_seconds: 364
+    conclusion: failure
+  - workflow: PR
+    run_id: 29805153201
+    run_attempt: 1
+    head_sha: 7ae6ddd69e8927a24658a91c8a577befb6eb3e3b
+    trigger: pull_request
+    started_at: 2026-07-21T05:50:43Z
+    finished_at: 2026-07-21T05:55:59Z
+    duration_seconds: 316
+    conclusion: failure
+  - workflow: PR
+    run_id: 29805598645
+    run_attempt: 1
+    head_sha: b7933b6dabb6bd8524488e7f19ffdaeca3efe708
+    trigger: pull_request
+    started_at: 2026-07-21T05:59:14Z
+    finished_at: 2026-07-21T06:06:28Z
+    duration_seconds: 434
+    conclusion: failure
+  - workflow: PR
+    run_id: 29806075021
+    run_attempt: 1
+    head_sha: 7e8bd98e15f86f7e1142c0e20fd32ad7ed96cdaf
+    trigger: pull_request
+    started_at: 2026-07-21T06:07:52Z
+    finished_at: 2026-07-21T06:17:56Z
+    duration_seconds: 604
+    conclusion: success
+  - workflow: PR
+    run_id: 29806933209
+    run_attempt: 1
+    head_sha: 7a177c7e7049e0f7f2bbcb6fb66553a73a2157d4
+    trigger: pull_request
+    started_at: 2026-07-21T06:24:40Z
+    finished_at: 2026-07-21T06:36:45Z
+    duration_seconds: 725
+    conclusion: success
+  - workflow: PR
+    run_id: 29807667051
+    run_attempt: 1
+    head_sha: 8ec8cfe1278c19a722351a781dd458382e54d9d9
+    trigger: pull_request
+    started_at: 2026-07-21T06:38:47Z
+    finished_at: 2026-07-21T06:39:59Z
+    duration_seconds: 72
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29807708209
+    run_attempt: 1
+    head_sha: 22766dae0aa364b8a8c99168f279f4292cf0c97a
+    trigger: pull_request
+    started_at: 2026-07-21T06:39:32Z
+    finished_at: 2026-07-21T06:52:36Z
+    duration_seconds: 784
+    conclusion: success
+  - workflow: PR
+    run_id: 29808606551
+    run_attempt: 1
+    head_sha: bfe2d4e5e65a868e36c6ee050bec6e3839779c98
+    trigger: pull_request
+    started_at: 2026-07-21T06:55:51Z
+    finished_at: 2026-07-21T07:08:17Z
+    duration_seconds: 746
+    conclusion: success
+  - workflow: PR
+    run_id: 29809467640
+    run_attempt: 1
+    head_sha: bfe2d4e5e65a868e36c6ee050bec6e3839779c98
+    trigger: pull_request
+    started_at: 2026-07-21T07:10:19Z
+    finished_at: 2026-07-21T07:10:29Z
+    duration_seconds: 10
+    conclusion: skipped
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T05:16:39Z
+    reason: wasm_vec_string_clippy_allow
+  - kind: head_push
+    at: 2026-07-21T05:25:13Z
+    reason: rustfmt_enrollment_sources
+  - kind: head_push
+    at: 2026-07-21T05:36:24Z
+    reason: ui_demo_contract_spec
+  - kind: head_push
+    at: 2026-07-21T05:42:05Z
+    reason: prettier_enrollment_sources
+  - kind: head_push
+    at: 2026-07-21T05:50:43Z
+    reason: backup_code_filter_and_jscpd_dedupe
+  - kind: head_push
+    at: 2026-07-21T05:59:14Z
+    reason: shared_demo_chrome_stub
+  - kind: head_push
+    at: 2026-07-21T06:07:52Z
+    reason: demo_heading_locator_strict_mode
+  - kind: head_push
+    at: 2026-07-21T06:24:40Z
+    reason: merge_origin_main_login_save_prep
+  - kind: head_push
+    at: 2026-07-21T06:38:47Z
+    reason: merge_origin_main_login_save_conflicts
+  - kind: head_push
+    at: 2026-07-21T06:55:51Z
+    reason: merge_origin_main_credit_card_conflicts
+merge_attempts:
+  - at: 2026-07-21T07:10:16Z
+    method: squash
+    outcome: success
+    reason: ready_true_remote_green
+comparison:
+  baseline_prs: [503, 532]
+  baseline_quality: comparable
+  baseline_note: Closest prior authenticator OTP fill (#503) plus vault-core/WASM secret-type surface (#532)
+  elapsed_seconds_change_percent: null
+  local_execution_seconds_change_percent: null
+  github_actions_seconds_change_percent: null
+  test_inventory_total_change: null
+  regression: true
+  regression_reasons:
+    - Multiple Verify-and-preview failures on jscpd threshold, missing UI demo contract, prettier, and demo strict-mode locators before the first green run
+    - Repeated main merges for login-save and credit-card landings forced conflict resolution and extra full PR cycles after the feature was already green
+waste_assessment:
+  wasteful: true
+  findings:
+    - First green PR check arrived only after seven failed/cancelled Verify-and-preview cycles for formatting, jscpd, and demo contract issues that could have been caught with focused local gates before push
+    - Parallel local Docker check/ci:pr runs repeatedly hit BuildKit EOF and were cancelled without contributing a merge signal once remote PR CI was green
+    - Merging main twice late (login-save, credit-card) was necessary for readiness, but each merge re-paid a full ~12m PR cycle
+  required_actions:
+    - Run extension unit tests, prettier --check, jscpd, and ui-demo-contract.sh before the first push for Pilot/extension UI work
+    - Prefer one local Docker gate in parallel with remote PR CI; stop stacking check + ci:pr when BuildKit is flaky
+    - Keep Pilot demo chrome stubs in the shared helper so new demos from main do not re-trip the 1.7% jscpd threshold
