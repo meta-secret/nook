@@ -212,10 +212,11 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head and inspect feedback already present. Do not request or wait for external reviews.
 - **Record PR statistics after merge.** Follow
   [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
-  completed YAML in a separate stats-only PR, compare against recent comparable
-  PRs, and own and land a normal performance-fix PR for actionable regression
-  or waste. Publish the stats record immediately after merge without waiting
-  for post-merge Main workflows or deployments.
+  completed YAML (including repository test counts by type and absolute total)
+  in a separate stats-only PR, compare against recent comparable PRs, and own
+  and land a normal performance-fix PR for actionable regression or waste.
+  Publish the stats record immediately after merge without waiting for
+  post-merge Main workflows or deployments.
   A verified one-file `.stats/ai-agent/<source-pr>.yaml` PR is the only exception
   to local checks, repository checks, exact-head review, and `task pr:ready`; it
   must still use squash merge and must be merged immediately without generating

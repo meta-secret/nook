@@ -329,7 +329,8 @@ Every normal AI-agent-owned PR continues through a separate statistics commit
 after merge. Follow [agent-statistics.md](agent-statistics.md): create
 `.stats/ai-agent/<source-pr-number>.yaml`, include all local validation and
 repository workflow executions/retriggers plus merge attempts and elapsed time,
-compare with one or two recent comparable records, and assess waste.
+record the repository test inventory (counts by type and absolute total) on the
+merged head, compare with one or two recent comparable records, and assess waste.
 
 Publish exactly that one YAML file in a stats-only PR and squash-merge it
 immediately. Product checks, review, deployments, and `task pr:ready` are skipped
