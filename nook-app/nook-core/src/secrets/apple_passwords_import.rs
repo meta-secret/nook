@@ -126,7 +126,7 @@ fn convert_record(
         skipped_unsupported += 1;
     } else {
         items.push(SecretValue::Login(LoginSecret {
-            website_url,
+            website_url: website_url.clone(),
             username,
             password,
             notes,
@@ -135,7 +135,13 @@ fn convert_record(
 
     if !otp_auth.is_empty() {
         match AuthenticatorSecret::from_otpauth_uri(&otp_auth) {
-            Ok(authenticator) => items.push(SecretValue::Authenticator(authenticator)),
+            Ok(mut authenticator) => {
+                if authenticator.website_url.trim().is_empty() && !website_url.trim().is_empty() {
+                    authenticator.website_url = website_url;
+                }
+                authenticator.apply_inferred_website_url_if_empty();
+                items.push(SecretValue::Authenticator(authenticator));
+            }
             Err(_) => skipped_unsupported += 1,
         }
     }

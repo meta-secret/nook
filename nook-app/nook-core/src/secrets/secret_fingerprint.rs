@@ -339,6 +339,7 @@ mod tests {
         SecretValue::Authenticator(AuthenticatorSecret {
             issuer: "Example".to_owned(),
             account: "alice@example.com".to_owned(),
+            website_url: String::new(),
             secret: TotpSecret::parse(secret).unwrap(),
             algorithm: TotpAlgorithm::Sha1,
             digits: TotpDigits::parse(6).unwrap(),

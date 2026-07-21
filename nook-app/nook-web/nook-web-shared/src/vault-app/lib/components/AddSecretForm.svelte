@@ -137,6 +137,7 @@
       noteTitle = item.title
       noteBody = item.note
     } else if (item.type === 'authenticator') {
+      websiteUrl = item.websiteUrl ?? ''
       authenticatorIssuer = item.issuer
       authenticatorAccount = item.account
       authenticatorSecret = item.totpSecret
@@ -181,6 +182,7 @@
         )
       return {
         type: 'authenticator',
+        websiteUrl: websiteUrl.trim(),
         issuer: authenticatorIssuer.trim(),
         account: authenticatorAccount.trim(),
         totpSecret: authenticatorSecret.trim(),
@@ -772,6 +774,22 @@
             class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
           />
         </div>
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="authenticator-website"
+          >{vault.t('vault.fields.website')}</label
+        >
+        <input
+          id="authenticator-website"
+          type="text"
+          data-testid="authenticator-website"
+          bind:value={websiteUrl}
+          placeholder={vault.t('add_secret.placeholder_authenticator_website')}
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        />
+        <p class="text-xs text-muted-foreground text-pretty">
+          {vault.t('add_secret.authenticator_website_hint')}
+        </p>
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="authenticator-secret"

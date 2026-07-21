@@ -1497,7 +1497,10 @@ impl NookSecretListItem {
     pub fn website_url(&self) -> String {
         match &self.item.data {
             nook_core::SecretListItemData::Login { website_url, .. }
-            | nook_core::SecretListItemData::ApiKey { website_url, .. } => website_url.clone(),
+            | nook_core::SecretListItemData::ApiKey { website_url, .. }
+            | nook_core::SecretListItemData::Authenticator { website_url, .. } => {
+                website_url.clone()
+            }
             _ => String::new(),
         }
     }
@@ -1660,6 +1663,7 @@ impl NookSecretRecord {
         match &self.record.data {
             nook_core::SecretValue::Login(value) => value.website_url.clone(),
             nook_core::SecretValue::ApiKey(value) => value.website_url.clone(),
+            nook_core::SecretValue::Authenticator(value) => value.website_url.clone(),
             _ => String::new(),
         }
     }
@@ -1939,6 +1943,7 @@ mod wasm_tests {
                     data: nook_core::SecretListItemData::Authenticator {
                         issuer: "Namecheap".to_owned(),
                         account: "bynull".to_owned(),
+                        website_url: String::new(),
                         backup_code_count: 0,
                     },
                 },

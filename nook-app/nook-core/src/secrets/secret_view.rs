@@ -30,6 +30,7 @@ pub enum SecretListItemData {
     Authenticator {
         issuer: String,
         account: String,
+        website_url: String,
         backup_code_count: usize,
     },
 }
@@ -71,6 +72,7 @@ pub struct SecureNoteSecretForm {
 pub struct AuthenticatorSecretForm {
     pub issuer: String,
     pub account: String,
+    pub website_url: String,
     pub totp_secret: String,
     pub algorithm: String,
     pub digits: String,
@@ -141,35 +143,26 @@ pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
         && secret_host.eq_ignore_ascii_case(&origin_host)
 }
 
-/// Intrinsic list clustering key for an authenticator issuer.
+/// Intrinsic list clustering key for an authenticator.
 ///
-/// Domain-like issuers (`namecheap.com`, `https://github.com`) normalize to a
-/// host. Brand labels (`Namecheap`) stay as trimmed issuer text until
-/// [`resolve_entity_group_keys`] can attach them to a matching site host.
+/// Prefer an explicit website URL, then a domain-like issuer, then the bundled
+/// popular-issuer host map. Unmapped brand labels stay as trimmed issuer text
+/// until [`resolve_entity_group_keys`] can attach them to a co-present site host.
 #[must_use]
-pub fn authenticator_group_key(issuer: &str) -> String {
-    let trimmed = issuer.trim();
-    if trimmed.is_empty() {
-        return String::new();
+pub fn authenticator_group_key(website_url: &str, issuer: &str) -> String {
+    if let Some(host) =
+        crate::secrets::authenticator_issuer_hosts::resolve_authenticator_website_host(
+            website_url,
+            issuer,
+        )
+    {
+        return host;
     }
-    if issuer_looks_like_host(trimmed) {
-        let host = hostname_from_url(trimmed);
-        if !host.is_empty() {
-            return host;
-        }
-    }
-    trimmed.to_owned()
-}
-
-fn issuer_looks_like_host(issuer: &str) -> bool {
-    issuer.contains("://") || issuer.contains('.')
+    issuer.trim().to_owned()
 }
 
 fn normalize_brand_label(raw: &str) -> String {
-    raw.chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
-        .flat_map(char::to_lowercase)
-        .collect()
+    crate::secrets::authenticator_issuer_hosts::normalize_issuer_lookup_key(raw)
 }
 
 fn brand_matches_host(brand: &str, host: &str) -> bool {
@@ -294,6 +287,7 @@ impl SecretRecord {
             SecretValue::Authenticator(value) => SecretListItemData::Authenticator {
                 issuer: value.issuer.clone(),
                 account: value.account.clone(),
+                website_url: value.website_url.clone(),
                 backup_code_count: value.backup_codes.len(),
             },
         };
@@ -366,7 +360,9 @@ impl SecretRecord {
                 }
             }
             SecretValue::Passkey(value) => value.rp_id.clone(),
-            SecretValue::Authenticator(value) => authenticator_group_key(&value.issuer),
+            SecretValue::Authenticator(value) => {
+                authenticator_group_key(&value.website_url, &value.issuer)
+            }
         }
     }
 
@@ -443,6 +439,7 @@ impl SecretRecord {
             SecretValue::Authenticator(value) => {
                 fields.push(value.issuer.clone());
                 fields.push(value.account.clone());
+                fields.push(value.website_url.clone());
             }
         }
 
@@ -474,6 +471,15 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => hostname_from_url(website_url),
+            SecretListItemData::Authenticator {
+                website_url,
+                issuer,
+                ..
+            } => crate::secrets::authenticator_issuer_hosts::resolve_authenticator_website_host(
+                website_url,
+                issuer,
+            )
+            .unwrap_or_default(),
             _ => String::new(),
         }
     }
@@ -519,7 +525,11 @@ impl SecretListItem {
                 }
             }
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
-            SecretListItemData::Authenticator { issuer, .. } => authenticator_group_key(issuer),
+            SecretListItemData::Authenticator {
+                website_url,
+                issuer,
+                ..
+            } => authenticator_group_key(website_url, issuer),
         }
     }
 
@@ -609,6 +619,7 @@ pub fn build_secret_yaml(
         SecretType::Authenticator => SecretFormFields::Authenticator(AuthenticatorSecretForm {
             issuer: string_field("issuer"),
             account: string_field("account"),
+            website_url: string_field("websiteUrl"),
             totp_secret: string_field("totpSecret"),
             algorithm: string_field("algorithm"),
             digits: string_field("digits"),
@@ -652,6 +663,7 @@ pub fn build_secret_yaml_from_form(
                 &fields.digits,
                 &fields.period,
                 &fields.backup_codes,
+                &fields.website_url,
             )?;
             return SecretValue::Authenticator(value).to_yaml();
         }
@@ -905,6 +917,7 @@ mod tests {
             "6",
             "30",
             "backup-one\nbackup-two",
+            "",
         )
         .unwrap();
         let record = SecretRecord {
@@ -922,6 +935,7 @@ mod tests {
             SecretListItemData::Authenticator {
                 issuer: "Example".to_owned(),
                 account: "alice@example.com".to_owned(),
+                website_url: String::new(),
                 backup_code_count: 2,
             }
         );
@@ -931,13 +945,25 @@ mod tests {
     }
 
     #[test]
-    fn authenticator_group_key_normalizes_domain_like_issuers() {
+    fn authenticator_group_key_uses_url_issuer_host_and_popular_map() {
         assert_eq!(
-            authenticator_group_key("https://www.namecheap.com"),
+            authenticator_group_key("https://www.custom.example/login", "OpenAI"),
+            "custom.example"
+        );
+        assert_eq!(
+            authenticator_group_key("", "https://www.namecheap.com"),
             "namecheap.com"
         );
-        assert_eq!(authenticator_group_key("namecheap.com"), "namecheap.com");
-        assert_eq!(authenticator_group_key("Namecheap"), "Namecheap");
+        assert_eq!(
+            authenticator_group_key("", "namecheap.com"),
+            "namecheap.com"
+        );
+        assert_eq!(authenticator_group_key("", "OpenAI"), "openai.com");
+        assert_eq!(authenticator_group_key("", "Namecheap"), "namecheap.com");
+        assert_eq!(
+            authenticator_group_key("", "Totally Unknown Service"),
+            "Totally Unknown Service"
+        );
     }
 
     #[test]
@@ -955,6 +981,7 @@ mod tests {
                 data: SecretListItemData::Authenticator {
                     issuer: "Namecheap".to_owned(),
                     account: "bynull".to_owned(),
+                    website_url: String::new(),
                     backup_code_count: 0,
                 },
             },
@@ -968,6 +995,8 @@ mod tests {
 
     #[test]
     fn resolve_entity_group_keys_prefers_account_matched_host() {
+        // Mapped issuer "Google" already resolves to google.com intrinsically;
+        // page remapping still keeps that host when multiple Google hosts exist.
         let items = vec![
             SecretListItem {
                 id: SecretId::from_vault_record("secret_login_a"),
@@ -988,6 +1017,7 @@ mod tests {
                 data: SecretListItemData::Authenticator {
                     issuer: "Google".to_owned(),
                     account: "alice@example.com".to_owned(),
+                    website_url: String::new(),
                     backup_code_count: 0,
                 },
             },
@@ -1008,15 +1038,16 @@ mod tests {
         let items = vec![SecretListItem {
             id: SecretId::from_vault_record("secret_totp"),
             data: SecretListItemData::Authenticator {
-                issuer: "Namecheap".to_owned(),
+                issuer: "Totally Unknown Service".to_owned(),
                 account: "bynull".to_owned(),
+                website_url: String::new(),
                 backup_code_count: 0,
             },
         }];
 
         assert_eq!(
             resolve_entity_group_keys(&items),
-            vec!["Namecheap".to_owned()]
+            vec!["Totally Unknown Service".to_owned()]
         );
     }
 
