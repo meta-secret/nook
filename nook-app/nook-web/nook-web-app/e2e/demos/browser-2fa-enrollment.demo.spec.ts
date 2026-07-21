@@ -119,7 +119,9 @@ test('capture an authenticator QR through consented Pilot enrollment', async ({
 
   await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
   await expect(
-    widget.getByText('Review this authenticator before saving'),
+    widget.getByRole('heading', {
+      name: /Review this authenticator before saving/,
+    }),
   ).toBeVisible()
   await expect(widget.getByText(/Service:\s*Demo Service/)).toBeVisible()
   await expect(

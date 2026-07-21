@@ -99,7 +99,9 @@ test.describe('Browser 2FA enrollment', () => {
         .getByRole('button', { name: 'Add 2FA from this page' })
         .click()
       await expect(
-        widget.getByText('Review this authenticator before saving'),
+        widget.getByRole('heading', {
+          name: /Review this authenticator before saving/,
+        }),
       ).toBeVisible({ timeout: 20_000 })
       await expect(widget.getByText(/Service:/)).toBeVisible()
       await expect(widget.getByText(/Account:/)).toBeVisible()
