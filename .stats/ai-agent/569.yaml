@@ -1,0 +1,247 @@
+schema_version: 2
+source_pr:
+  number: 569
+  url: https://github.com/meta-secret/nook/pull/569
+  title: Offer browser extension install as Simple Vault setup
+  change_surface: vault_web_extension_install_setup_ui
+  head_sha: 0b3ada9bfeb06e6cb8ceae6da9c26f68a4c6bbfd
+  started_at: 2026-07-21T05:49:00Z
+  opened_at: 2026-07-21T05:56:03Z
+  merged_at: 2026-07-21T07:51:56Z
+  elapsed_seconds: 7376
+  open_to_merge_seconds: 6953
+summary:
+  local_execution_count: 15
+  local_check_count: 4
+  local_test_count: 0
+  local_combined_count: 11
+  local_execution_seconds: 7461
+  github_actions_run_count: 7
+  github_actions_seconds: 3003
+  pr_retrigger_count: 6
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-21T07:55:00Z
+  head_sha: 0b3ada9bfeb06e6cb8ceae6da9c26f68a4c6bbfd
+  by_type:
+    rust: 594
+    preflight: 30
+    web_unit: 220
+    e2e: 188
+  total: 1032
+local_executions:
+  - command: task pr:preflight PR=569
+    category: check
+    started_at: 2026-07-21T05:56:11Z
+    finished_at: 2026-07-21T05:56:41Z
+    duration_seconds: 30
+    outcome: passed
+    reason: initial_readiness_snapshot_pr_in_progress
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T05:56:11Z
+    finished_at: 2026-07-21T06:13:20Z
+    duration_seconds: 1029
+    outcome: cancelled
+    reason: killed_after_buildkit_stall_during_parallel_gates
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T05:56:11Z
+    finished_at: 2026-07-21T06:19:08Z
+    duration_seconds: 1377
+    outcome: failed
+    reason: buildx_web_artifacts_exit_2_under_parallel_load
+  - command: bash .github/scripts/ui-demo-contract.sh
+    category: check
+    started_at: 2026-07-21T05:57:40Z
+    finished_at: 2026-07-21T05:57:41Z
+    duration_seconds: 1
+    outcome: passed
+    reason: after_adding_extension_install_setup_demo
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:18:20Z
+    finished_at: 2026-07-21T06:19:08Z
+    duration_seconds: 48
+    outcome: failed
+    reason: buildx_web_artifacts_exit_2
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:18:20Z
+    finished_at: 2026-07-21T06:31:37Z
+    duration_seconds: 797
+    outcome: failed
+    reason: buildkit_rpc_eof
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:30:40Z
+    finished_at: 2026-07-21T06:31:34Z
+    duration_seconds: 54
+    outcome: failed
+    reason: docker_socket_unavailable
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:31:41Z
+    finished_at: 2026-07-21T06:31:42Z
+    duration_seconds: 1
+    outcome: failed
+    reason: docker_socket_unavailable
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:32:00Z
+    finished_at: 2026-07-21T06:32:19Z
+    duration_seconds: 19
+    outcome: failed
+    reason: buildkit_rpc_eof_graceful_stop
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T06:32:40Z
+    finished_at: 2026-07-21T06:51:25Z
+    duration_seconds: 1125
+    outcome: passed
+    reason: after_buildkit_builder_recreate
+  - command: task check
+    category: combined
+    started_at: 2026-07-21T06:51:30Z
+    finished_at: 2026-07-21T07:17:41Z
+    duration_seconds: 1571
+    outcome: failed
+    reason: svelte_check_stale_wasm_types_after_main_merge
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T07:04:00Z
+    finished_at: 2026-07-21T07:21:04Z
+    duration_seconds: 1024
+    outcome: passed
+    reason: post_main_merge_head_3f0142c8
+  - command: task pr:ready PR=569
+    category: check
+    started_at: 2026-07-21T07:21:10Z
+    finished_at: 2026-07-21T07:21:21Z
+    duration_seconds: 11
+    outcome: failed
+    reason: behind_main
+  - command: task ci:pr
+    category: combined
+    started_at: 2026-07-21T07:39:30Z
+    finished_at: 2026-07-21T07:45:33Z
+    duration_seconds: 363
+    outcome: passed
+    reason: after_latest_main_merge_head_8bfa7dbc
+  - command: task pr:ready PR=569
+    category: check
+    started_at: 2026-07-21T07:51:30Z
+    finished_at: 2026-07-21T07:51:41Z
+    duration_seconds: 11
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29805445142
+    run_attempt: 1
+    head_sha: a445b268478615b2d678079d5e310f9f11f95911
+    trigger: pull_request
+    started_at: 2026-07-21T05:56:05Z
+    finished_at: 2026-07-21T05:57:51Z
+    duration_seconds: 106
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29805500743
+    run_attempt: 1
+    head_sha: fe4744452394412ca54839d73e02440592836c17
+    trigger: pull_request
+    started_at: 2026-07-21T05:57:15Z
+    finished_at: 2026-07-21T06:02:25Z
+    duration_seconds: 310
+    conclusion: failure
+  - workflow: PR
+    run_id: 29805805490
+    run_attempt: 1
+    head_sha: 29801bd020795d5c51a6f52bb0e96dd0ee453c1f
+    trigger: pull_request
+    started_at: 2026-07-21T06:02:52Z
+    finished_at: 2026-07-21T06:08:05Z
+    duration_seconds: 313
+    conclusion: failure
+  - workflow: PR
+    run_id: 29806609023
+    run_attempt: 1
+    head_sha: e9368420763b77a133b6f05e066ba796d5d7cacc
+    trigger: pull_request
+    started_at: 2026-07-21T06:18:18Z
+    finished_at: 2026-07-21T06:30:05Z
+    duration_seconds: 707
+    conclusion: success
+  - workflow: PR
+    run_id: 29808412411
+    run_attempt: 1
+    head_sha: 3f0142c813ea366b13966aa14cd2d8a39e84545d
+    trigger: pull_request
+    started_at: 2026-07-21T06:52:26Z
+    finished_at: 2026-07-21T07:03:24Z
+    duration_seconds: 658
+    conclusion: success
+  - workflow: PR
+    run_id: 29811061974
+    run_attempt: 1
+    head_sha: 34d44f16b185d381f0964f49cd95befe15d978f0
+    trigger: pull_request
+    started_at: 2026-07-21T07:36:15Z
+    finished_at: 2026-07-21T07:39:55Z
+    duration_seconds: 220
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29811255112
+    run_attempt: 1
+    head_sha: 8bfa7dbcdc3e782d3c2829b3add3eec0d80e22d5
+    trigger: pull_request
+    started_at: 2026-07-21T07:39:24Z
+    finished_at: 2026-07-21T07:50:53Z
+    duration_seconds: 689
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-21T05:57:15Z
+    reason: ui_demo_contract_spec
+  - kind: head_push
+    at: 2026-07-21T06:02:52Z
+    reason: sentinel_extension_connect_stub_export
+  - kind: head_push
+    at: 2026-07-21T06:18:18Z
+    reason: prettier_format_fix
+  - kind: head_push
+    at: 2026-07-21T06:52:26Z
+    reason: merge_origin_main
+  - kind: head_push
+    at: 2026-07-21T07:36:15Z
+    reason: merge_origin_main
+  - kind: head_push
+    at: 2026-07-21T07:39:24Z
+    reason: merge_origin_main
+merge_attempts:
+  - at: 2026-07-21T07:51:56Z
+    method: squash
+    outcome: success
+    reason: ready_true_remote_green_local_ci_pr_green
+comparison:
+  baseline_prs: [567, 559]
+  baseline_quality: comparable
+  baseline_note: Recent vault web UI PRs with shared Svelte surfaces and PR Verify gates
+  elapsed_seconds_change_percent: 33.1
+  local_execution_seconds_change_percent: -22.9
+  github_actions_seconds_change_percent: 33.7
+  test_inventory_total_change: 20
+  regression: true
+  regression_reasons:
+    - Elapsed wall time more than 20% and 60s above the 567 median because of first-push UI-demo/prettier/sentinel-stub failures plus repeated main merges and flaky local BuildKit
+waste_assessment:
+  wasteful: true
+  findings:
+    - First three PR heads failed on missing UI demo contract, Sentinel stub export for a new extension-connect helper, and Prettier on new TS files
+    - Parallel local task check and task ci:pr repeatedly hit BuildKit EOF/docker socket flaps; one healthy task ci:pr plus remote PR CI would have been enough
+    - Main moved several times; merge updates were necessary, but early formatting/contract misses added avoidable cycles before those merges
+  required_actions:
+    - Before first push of shared vault UI changes, run ui-demo-contract.sh and project Prettier on touched TS/Svelte
+    - When exporting new symbols from extension-connect, update nook-vault-sentinel extension-connect-disabled.ts in the same commit
+    - Prefer a single local task ci:pr in parallel with remote PR checks; avoid concurrent full check + ci:pr on unstable BuildKit
