@@ -8,6 +8,7 @@ const validMessage = {
     observations: [
       {
         usernameFieldCount: 1,
+        manualCheckpointPresent: false,
         currentPasswordFieldCount: 1,
         newPasswordFieldCount: 0,
         genericPasswordFieldCount: 0,

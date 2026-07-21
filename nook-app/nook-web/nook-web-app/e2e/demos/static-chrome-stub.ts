@@ -8,6 +8,8 @@ export type DemoChromeStubArgs = {
   loginPilotFlow?: boolean
   /** Stateful post-submit save-offer replies for Pilot login capture. */
   savePilotFlow?: boolean
+  /** Signup generate-password Pilot replies. */
+  generatePilotFlow?: boolean
   barcodeRawValue?: string
 }
 
@@ -30,6 +32,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     responsesByType = {},
     loginPilotFlow = false,
     savePilotFlow = false,
+    generatePilotFlow = false,
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
@@ -38,6 +41,29 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
+    }
+    if (generatePilotFlow) {
+      switch (message.type) {
+        case 'nook:authentication-workflow-snapshot':
+          return {
+            ok: true,
+            snapshot: {
+              kind: 'signup',
+              stage: 'credentials',
+              action: 'generate-password',
+              currentStep: 2,
+              totalSteps: 5,
+              observationIndex: 0,
+            },
+          }
+        case 'nook:website-generate-password':
+          return {
+            ok: true,
+            password: 'DemoGeneratedPassword!234567',
+          }
+        default:
+          return { ok: true }
+      }
     }
     if (savePilotFlow) {
       switch (message.type) {

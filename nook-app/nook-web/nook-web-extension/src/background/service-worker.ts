@@ -31,6 +31,7 @@ import type { StoredExtensionPairingGrant } from './pairing-grants'
 import {
   authenticationWorkflowSnapshot,
   classifyAuthenticationOutcome,
+  generateSuggestedPassword,
   importExtensionEventLog,
 } from './vault-runtime'
 import {
@@ -1377,6 +1378,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then((verdict) => sendResponse({ ok: true, verdict }))
       .catch(() =>
         sendResponse({ ok: false, reason: 'outcome-classify-failed' }),
+      )
+    return true
+  }
+
+  if (
+    message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:website-generate-password' &&
+    'payload' in message &&
+    typeof message.payload === 'object' &&
+    message.payload &&
+    'origin' in message.payload &&
+    typeof message.payload.origin === 'string'
+  ) {
+    if (
+      !isAuthorizedWebsiteSender(
+        sender,
+        (message.payload as { origin: string }).origin,
+      )
+    ) {
+      sendResponse({ ok: false, reason: 'generate-password-forbidden-origin' })
+      return false
+    }
+    void generateSuggestedPassword()
+      .then((password) => sendResponse({ ok: true, password }))
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'generate-password-failed' }),
       )
     return true
   }

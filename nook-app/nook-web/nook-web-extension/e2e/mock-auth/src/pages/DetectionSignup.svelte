@@ -33,7 +33,7 @@
   <h1>Create account</h1>
   <p data-testid="mock-auth-scenario">signup</p>
   {#if error}
-    <p class="error" role="alert">{error}</p>
+    <p class="error" role="alert" data-nook-auth-outcome="error">{error}</p>
   {/if}
   <form {onsubmit}>
     <input autocomplete="username" name="email" type="email" />

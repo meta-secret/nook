@@ -10,6 +10,7 @@ export type AuthenticationPageObservationView = Pick<
   | 'newPasswordFieldCount'
   | 'genericPasswordFieldCount'
   | 'oneTimeCodeFieldCount'
+  | 'manualCheckpointPresent'
 >
 
 export type AuthenticationWorkflowSnapshotView = {
@@ -62,12 +63,15 @@ export function isAuthenticationWorkflowSnapshotMessage(
   return message.payload.observations.every((value) => {
     if (!value || typeof value !== 'object') return false
     const observation = value as Record<string, unknown>
-    return [
-      observation.usernameFieldCount,
-      observation.currentPasswordFieldCount,
-      observation.newPasswordFieldCount,
-      observation.genericPasswordFieldCount,
-      observation.oneTimeCodeFieldCount,
-    ].every(isBoundedCount)
+    return (
+      [
+        observation.usernameFieldCount,
+        observation.currentPasswordFieldCount,
+        observation.newPasswordFieldCount,
+        observation.genericPasswordFieldCount,
+        observation.oneTimeCodeFieldCount,
+      ].every(isBoundedCount) &&
+      typeof observation.manualCheckpointPresent === 'boolean'
+    )
   })
 }

@@ -1,6 +1,7 @@
 export {}
 
 import {
+  fillGeneratedPassword,
   fillLoginCredentials,
   fillOneTimeCode,
   readLoginCredentials,
@@ -904,6 +905,83 @@ function renderAccountChooser(
   panel.append(list)
 }
 
+async function generatePasswordWithNook(
+  workflow: PasswordFormObservation,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<void> {
+  if (busy) return
+  busy = true
+  continueButton.disabled = true
+  const totalSteps = workflow.summary.currentPasswordFieldCount > 0 ? 4 : 5
+  setFlightProgress(step, title, 2, totalSteps, copyTitleForWorkflow(workflow))
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetGeneratePasswordWorking'),
+    false,
+  )
+  try {
+    const response = await sendRuntimeMessage<{
+      ok?: boolean
+      password?: string
+      reason?: string
+    }>({
+      type: 'nook:website-generate-password',
+      payload: { origin: location.origin },
+    })
+    if (!response?.ok || typeof response.password !== 'string') {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetGeneratePasswordFailed'),
+        true,
+      )
+      return
+    }
+    const password = response.password
+    const filled = fillGeneratedPassword(
+      password,
+      workflow.root,
+      workflow.formScope,
+    )
+    if (!filled) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetGeneratePasswordFailed'),
+        true,
+      )
+      return
+    }
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetGeneratedPasswordFilled'),
+      false,
+    )
+    continueButton.hidden = true
+  } finally {
+    busy = false
+    continueButton.disabled = false
+  }
+}
+
+function copyTitleForWorkflow(workflow: PasswordFormObservation): string {
+  if (
+    workflow.summary.currentPasswordFieldCount > 0 &&
+    workflow.summary.newPasswordFieldCount > 0
+  ) {
+    return 'widgetPasswordChangeTitle'
+  }
+  if (workflow.summary.newPasswordFieldCount > 0) {
+    return 'widgetSignupTitle'
+  }
+  return 'widgetLoginTitle'
+}
+
 async function continueWithNook(
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
@@ -1745,13 +1823,17 @@ function renderWidget(
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
   const canContinueWithNook =
-    snapshot.action === 'continue-with-nook' || snapshot.action === 'fill-totp'
+    snapshot.action === 'continue-with-nook' ||
+    snapshot.action === 'fill-totp' ||
+    snapshot.action === 'generate-password'
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? 'widgetFillAuthenticator'
-      : canContinueWithNook
-        ? 'widgetContinue'
-        : 'widgetTakeOver'
+      : snapshot.action === 'generate-password'
+        ? 'widgetGeneratePassword'
+        : canContinueWithNook
+          ? 'widgetContinue'
+          : 'widgetTakeOver'
   continueButton.setAttribute(
     'aria-label',
     translatedMessage(continueMessageKey),
@@ -1786,6 +1868,14 @@ function renderWidget(
         continueButton,
         openVaultButton,
         body,
+      )
+    } else if (snapshot.action === 'generate-password') {
+      void generatePasswordWithNook(
+        workflow,
+        step,
+        title,
+        description,
+        continueButton,
       )
     } else {
       void continueWithNook(
@@ -1955,6 +2045,7 @@ async function scanAndRender(): Promise<void> {
           summary.genericPasswordFieldCount,
         ),
         oneTimeCodeFieldCount: boundedCount(summary.oneTimeCodeFieldCount),
+        manualCheckpointPresent: summary.manualCheckpointPresent,
       })),
     },
   })

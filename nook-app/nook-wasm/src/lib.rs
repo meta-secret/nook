@@ -2138,7 +2138,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_preserves_core_policy() {
-        let observation = NookAuthenticationPageObservation::new(1, 1, 0, 0, 0);
+        let observation = NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let snapshot = authentication_workflow_snapshot(&observations).expect("login workflow");
