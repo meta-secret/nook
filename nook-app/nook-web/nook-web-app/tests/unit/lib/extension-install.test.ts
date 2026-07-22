@@ -56,9 +56,8 @@ describe('extension install target', () => {
     expect(
       browserSupportsExtensionInstallation({
         maxTouchPoints: 5,
-        platform: 'iPhone',
-        userAgent:
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) Mobile/15E148 Safari/604.1',
+        platform: 'Linux armv8l',
+        userAgent: 'Mozilla/5.0 (Linux; Android 16) Chrome/140 Safari/537.36',
         userAgentData: { mobile: false },
       }),
     ).toBe(false)
