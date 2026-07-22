@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Check, Fingerprint, Timer } from '@lucide/svelte'
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
+  import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
     VaultAuthWorkflowState,
     type Presence,
@@ -64,7 +65,7 @@
               <p
                 class={`text-lg ${index === step ? 'font-semibold' : 'text-[#666]'}`}
               >
-                {label}
+                {vaultAuthStepMessage(label)}
               </p>
 
               {#if presence === 'empty' && index === step && step === 0}

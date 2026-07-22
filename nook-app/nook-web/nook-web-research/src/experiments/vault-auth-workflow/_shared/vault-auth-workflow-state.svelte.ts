@@ -1,3 +1,5 @@
+import type { VaultAuthStepKey } from './vault-auth-workflow-messages'
+
 export type Presence = 'empty' | 'existing'
 export type VaultPath = 'undecided' | 'simple' | 'sentinel'
 
@@ -6,26 +8,26 @@ export class VaultAuthWorkflowState {
   step = $state(0)
   path = $state<VaultPath>('undecided')
 
-  get steps(): string[] {
+  get steps(): VaultAuthStepKey[] {
     if (this.presence === 'existing') {
       return [
-        'Unlock existing vault',
-        'Confirm vault identity',
-        'Unlock with passkey',
+        'unlock_existing_vault',
+        'confirm_vault_identity',
+        'unlock_with_passkey',
       ]
     }
     if (this.path === 'simple') {
-      return ['Name vault', 'Choose Simple or Sentinel', 'Create locally']
+      return ['name_vault', 'choose_vault_kind', 'create_locally']
     }
     if (this.path === 'sentinel') {
       return [
-        'Name vault',
-        'Choose Simple or Sentinel',
-        'Choose Sentinel interface',
-        'Initialize this device (passkey)',
+        'name_vault',
+        'choose_vault_kind',
+        'choose_sentinel_interface',
+        'initialize_device',
       ]
     }
-    return ['Name vault', 'Choose Simple or Sentinel', 'Create or configure']
+    return ['name_vault', 'choose_vault_kind', 'create_or_configure']
   }
 
   setPresence(next: Presence): void {
