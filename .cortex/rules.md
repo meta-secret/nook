@@ -230,7 +230,8 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   and land a normal performance-fix PR for actionable regression or waste.
   Publish the stats record immediately after merge without waiting for
   post-merge Main workflows or deployments.
-  A verified one-file `.stats/ai-agent/<source-pr>.yaml` PR is the only exception
-  to local checks, repository checks, exact-head review, and `task pr:ready`; it
-  must still use squash merge and must be merged immediately without generating
-  another statistics record.
+  Verified one-file `.stats/ai-agent/<source-pr>.yaml` and automated
+  `.stats/main-build/<run-id>-attempt-<attempt>.yaml` PRs are the only exceptions
+  to local checks, repository checks, exact-head review, and `task pr:ready`;
+  they must still use squash merge and must be merged immediately without
+  generating another statistics record or Main build.

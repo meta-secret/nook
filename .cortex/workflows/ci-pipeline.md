@@ -2,10 +2,12 @@
 
 System of record for how Nook validates changes in GitHub Actions. Agents must understand this split before changing workflows or e2e.
 
-The PR and main product pipelines ignore `.stats/**`. A verified one-file
-`.stats/ai-agent/<source-pr-number>.yaml` PR follows the immediate squash-merge
-exception in [agent-statistics.md](agent-statistics.md); it must not consume the
-product validation pipeline or trigger the main pipeline after merge.
+The PR and main product pipelines ignore `.stats/**`. Verified one-file
+`.stats/ai-agent/<source-pr-number>.yaml` and
+`.stats/main-build/<run-id>-attempt-<run-attempt>.yaml` PRs follow the immediate
+squash-merge exceptions in [agent-statistics.md](agent-statistics.md) and
+[main-build-statistics.md](main-build-statistics.md); they consume no product
+validation and cannot trigger Main after merge.
 
 ## Workflow map
 
@@ -14,6 +16,7 @@ product validation pipeline or trigger the main pipeline after merge.
 | [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, all headless UI demos with a 90-day artifact and the 10 largest recordings added to the merged PR's Linear issue, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No                                        |
+| [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then immediately squash-merge one `.stats/main-build/**` record; the stats merge is ignored by Main, terminating the loop | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -30,6 +33,8 @@ flowchart LR
   merge[Squash merge to main] --> main_yml[main.yml]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
+  main_yml --> main_stats[Persist completed run metrics]
+  main_stats --> stats_only[One-file stats-only PR]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -56,6 +61,7 @@ cancelled required check whenever another contributor pushes.
 | ------------------ | ------------------------------------ | ------------------ | -------------------------------------------------------------------------------- |
 | PR                 | PR number                            | Yes                | Only the newest commit on the same PR needs validation                           |
 | Main               | `main`                               | Yes                | A newer main deployment supersedes the older development deployment              |
+| Main build stats   | Main run ID + attempt                 | No                 | Every completed attempt is immutable evidence; separate runs never supersede it   |
 | Manual PR e2e      | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                |
 | Web research       | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                        |
 | Nightly live sync  | Provider job                         | Yes                | Replace a superseded live-sync build without interrupting an active `ci-fix` job |

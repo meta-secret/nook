@@ -73,7 +73,8 @@ Applies to:
 
 Does not apply to:
 
-- Stats-only PRs that touch only `.stats/ai-agent/<pr>.yaml`.
+- Verified one-file stats-only PRs under `.stats/ai-agent/**` or
+  `.stats/main-build/**`.
 - Read-only / question-only sessions with no commits.
 
 ## Examples

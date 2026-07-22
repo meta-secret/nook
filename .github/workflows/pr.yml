@@ -103,6 +103,9 @@ jobs:
       - name: Test Linear UI demo publishing helper
         run: node --test .github/scripts/linear-ui-demo.test.cjs
 
+      - name: Test Main build statistics collector
+        run: node --test .github/scripts/main-build-stats.test.cjs
+
       - name: Enforce the UI demo contract
         id: ui-demo-contract
         env:

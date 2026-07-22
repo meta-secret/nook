@@ -192,6 +192,7 @@ normal build-performance PR. Full policy:
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
 * [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory (by type + total), historical comparison, waste analysis, and the check-free stats-only PR exception.
+* [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics, trusted automatic publication, and the non-recursive `.stats/**` loop guard.
 
 ## 7. Agent duties beyond code
 

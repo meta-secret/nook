@@ -1,0 +1,180 @@
+# This trusted workflow persists timing data only after Main has completed. The generated PR changes
+# one file under .stats/**, which both PR and Main ignore, so its squash merge cannot trigger another
+# Main run or another Main build statistics record.
+
+name: Main build statistics
+
+on:
+  workflow_run:
+    workflows: [Main]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: main-build-stats-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record completed Main timing
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the trusted collector
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Collect completed Main run metrics
+        id: record
+        uses: actions/github-script@v9
+        with:
+          retries: 3
+          script: |
+            const fs = require('node:fs')
+            const path = require('node:path')
+            const {
+              buildMainBuildStats,
+              serializeMainBuildStats,
+              validateFile,
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-build-stats.cjs`)
+
+            const eventRun = context.payload.workflow_run
+            const run = (
+              await github.request(
+                'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}',
+                {
+                  ...context.repo,
+                  run_id: eventRun.id,
+                  attempt_number: eventRun.run_attempt,
+                },
+              )
+            ).data
+            const jobs = await github.paginate(
+              'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs',
+              {
+                ...context.repo,
+                run_id: eventRun.id,
+                attempt_number: eventRun.run_attempt,
+                per_page: 100,
+              },
+            )
+
+            let sourcePullRequests = []
+            try {
+              sourcePullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  ...context.repo,
+                  commit_sha: run.head_sha,
+                  per_page: 100,
+                },
+              )
+            } catch (error) {
+              core.warning(`Could not associate pull requests with ${run.head_sha}: ${error.message}`)
+            }
+
+            const relativePath = `.stats/main-build/${run.id}-attempt-${run.run_attempt}.yaml`
+            const outputPath = path.join(process.env.GITHUB_WORKSPACE, relativePath)
+            if (fs.existsSync(outputPath)) {
+              validateFile(outputPath, { runId: run.id, runAttempt: run.run_attempt })
+              core.info(`${relativePath} is already present on main`)
+              core.setOutput('already-recorded', 'true')
+              return
+            }
+
+            const statsDir = path.join(process.env.GITHUB_WORKSPACE, '.stats/main-build')
+            const baselineRecords = fs.existsSync(statsDir)
+              ? fs.readdirSync(statsDir)
+                .filter((name) => name.endsWith('.yaml'))
+                .flatMap((name) => {
+                  try {
+                    return [validateFile(path.join(statsDir, name))]
+                  } catch (error) {
+                    core.warning(`Ignoring invalid Main baseline ${name}: ${error.message}`)
+                    return []
+                  }
+                })
+              : []
+
+            const record = buildMainBuildStats({
+              run,
+              jobs,
+              sourcePullRequests,
+              baselineRecords,
+              recordedAt: new Date().toISOString(),
+            })
+            fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+            fs.writeFileSync(outputPath, serializeMainBuildStats(record))
+
+            core.setOutput('already-recorded', 'false')
+            core.setOutput('path', relativePath)
+            core.setOutput('run-id', String(run.id))
+            core.setOutput('run-attempt', String(run.run_attempt))
+            core.setOutput('run-url', run.html_url)
+            core.setOutput('branch', `automation/main-build-stats-${run.id}-${run.run_attempt}`)
+
+      - name: Validate generated metrics
+        if: steps.record.outputs.already-recorded == 'false'
+        env:
+          RECORD_PATH: ${{ steps.record.outputs.path }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.record.outputs.run-attempt }}
+          SOURCE_RUN_ID: ${{ steps.record.outputs.run-id }}
+        run: node .github/scripts/main-build-stats.cjs --validate "$RECORD_PATH"
+
+      - name: Publish and squash-merge the stats-only PR
+        if: steps.record.outputs.already-recorded == 'false'
+        env:
+          BRANCH: ${{ steps.record.outputs.branch }}
+          GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
+          RECORD_PATH: ${{ steps.record.outputs.path }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.record.outputs.run-attempt }}
+          SOURCE_RUN_ID: ${{ steps.record.outputs.run-id }}
+          SOURCE_RUN_URL: ${{ steps.record.outputs.run-url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::NOOK_GITHUB_PAT is required to admin-merge Main build statistics"
+            exit 1
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch -C "$BRANCH"
+          git add -- "$RECORD_PATH"
+          changed="$(git diff --cached --name-only)"
+          if [ "$changed" != "$RECORD_PATH" ]; then
+            echo "::error::Main build statistics PR must contain exactly $RECORD_PATH"
+            exit 1
+          fi
+          git commit -m "chore(stats): record Main run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            git fetch origin "$BRANCH:refs/remotes/origin/$BRANCH"
+          fi
+          git push --force-with-lease origin "$BRANCH"
+
+          pr_number="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$pr_number" ]; then
+            pr_url="$(gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(stats): record Main run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT" \
+              --body "Automated timing record for completed [Main run $SOURCE_RUN_ID attempt $SOURCE_RUN_ATTEMPT]($SOURCE_RUN_URL). This one-file stats-only PR cannot retrigger Main because .stats/** is path-ignored.")"
+            pr_number="${pr_url##*/}"
+          fi
+
+          head_sha="$(git rev-parse HEAD)"
+          gh pr merge "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --admin \
+            --delete-branch \
+            --match-head-commit "$head_sha"
