@@ -7,9 +7,10 @@ use std::{
 };
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
+    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    )
 }
 
 fn read(root: &Path, path: &str) -> String {
@@ -138,6 +139,11 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
 #[test]
 fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
     let root = repository_root();
+    assert_shared_wasm_build_contract(&root);
+    assert_vault_runtime_boundary_contract(&root);
+}
+
+fn assert_shared_wasm_build_contract(root: &Path) {
     for project in ["nook-vault-simple", "nook-vault-sentinel"] {
         assert!(
             root.join("nook-app/nook-web")
@@ -148,16 +154,16 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
         );
     }
 
-    let workspace = read(&root, "nook-app/Cargo.toml");
+    let workspace = read(root, "nook-app/Cargo.toml");
     assert!(
         !workspace.contains("nook-wasm/apps/"),
         "application wrappers must not recompile the shared WASM library"
     );
-    let application = read(&root, "nook-app/nook-wasm/src/application.rs");
+    let application = read(root, "nook-app/nook-wasm/src/application.rs");
     assert!(application.contains("compiles and optimizes one shared WASM library"));
     assert!(application.contains("cannot change it"));
 
-    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
     assert!(
         wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
         "delivery must compile and optimize nook-wasm exactly once"
@@ -174,7 +180,7 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
             "WASM Dockerfile still contains retired artifact {forbidden}"
         );
     }
-    let wasm_tasks = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    let wasm_tasks = read(root, "nook-app/nook-web/.task/wasm.yml");
     assert_eq!(
         wasm_tasks.matches("wasm-pack build nook-wasm").count(),
         1,
@@ -195,7 +201,7 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
             "fast WASM rebuild still contains retired artifact or feature {forbidden}"
         );
     }
-    let web_dockerfile = read(&root, "nook-app/nook-web/nook-web-app/Dockerfile");
+    let web_dockerfile = read(root, "nook-app/nook-web/nook-web-app/Dockerfile");
     assert_eq!(
         web_dockerfile
             .matches("COPY --from=web-artifacts /nook-wasm ")
@@ -203,11 +209,10 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
         1,
         "web build must receive one shared WASM package"
     );
+}
 
-    let sentinel_config = read(
-        &root,
-        "nook-app/nook-web/nook-vault-sentinel/vite.config.ts",
-    );
+fn assert_vault_runtime_boundary_contract(root: &Path) {
+    let sentinel_config = read(root, "nook-app/nook-web/nook-vault-sentinel/vite.config.ts");
     assert!(sentinel_config.contains("lib/nook-wasm/nook_wasm"));
     assert!(sentinel_config.contains("__NOOK_WASM_APPLICATION__"));
     assert!(sentinel_config.contains("JSON.stringify(\"sentinel\")"));
@@ -216,19 +221,19 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
     );
     assert!(!sentinel_config.contains("extension-connect.html"));
 
-    let simple_config = read(&root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
+    let simple_config = read(root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
     assert!(simple_config.contains("lib/nook-wasm/nook_wasm"));
     assert!(simple_config.contains("__NOOK_WASM_APPLICATION__"));
     assert!(simple_config.contains("JSON.stringify(\"simple\")"));
     assert!(simple_config.contains("extension-connect"));
 
     let wasm_bridge = read(
-        &root,
+        root,
         "nook-app/nook-web/nook-web-shared/src/vault-app/lib/wasm-bootstrap.ts",
     );
     assert!(wasm_bridge.contains("configureVaultApplication(WASM_APPLICATION)"));
     let shared_entry = read(
-        &root,
+        root,
         "nook-app/nook-web/nook-web-shared/src/vault-app/main.ts",
     );
     assert!(shared_entry.contains("await ensureAppWasm()"));
@@ -243,11 +248,11 @@ fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
             "mountVaultApp(\"sentinel\")",
         ),
     ] {
-        let source = read(&root, entry);
+        let source = read(root, entry);
         assert!(source.contains(expected_kind));
     }
 
-    let dockerignore = read(&root, ".dockerignore");
+    let dockerignore = read(root, ".dockerignore");
     assert!(
         dockerignore.contains("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*")
     );
@@ -821,12 +826,21 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
 #[test]
 fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let root = repository_root();
+    assert_hosted_workflow_runtime_contract(&root);
+    assert_hosted_buildkit_cache_contract(&root);
+    assert_docker_setup_contract(&root);
+    assert_pr_workflow_contract(&root);
+    assert_artifact_backed_e2e_contract(&root);
+    assert_release_and_main_delivery_contract(&root);
+}
+
+fn assert_hosted_workflow_runtime_contract(root: &Path) {
     for workflow in [
         ".github/workflows/pr.yml",
         ".github/workflows/main.yml",
         ".github/workflows/release.yml",
     ] {
-        let content = read(&root, workflow);
+        let content = read(root, workflow);
         assert!(
             content.contains("runs-on: ubuntu-latest"),
             "{workflow} must use elastic GitHub-hosted capacity"
@@ -841,8 +855,10 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             );
         }
     }
+}
 
-    let bake = read(&root, "nook-app/docker-bake.hcl");
+fn assert_hosted_buildkit_cache_contract(root: &Path) {
+    let bake = read(root, "nook-app/docker-bake.hcl");
     for required in [
         "GHA_CACHE_ENABLED",
         "GHA_CACHE_WRITE_ENABLED",
@@ -862,7 +878,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         );
     }
     assert!(
-        read(&root, "nook-app/docker/base.docker-bake.hcl")
+        read(root, "nook-app/docker/base.docker-bake.hcl")
             .contains("cache-to   = rust_base_cache_to"),
         "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
     );
@@ -876,7 +892,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "every hosted cache exporter must honor the read-only workflow mode"
     );
 
-    let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
+    let rust_bake = read(root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
         rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
             && rust_bake
@@ -885,33 +901,33 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
                 == 2,
         "WASM export and joined web artifacts must persist the source-sensitive hosted lineage"
     );
-    let core_bake = read(&root, "nook-app/nook-core/docker-bake.hcl");
+    let core_bake = read(root, "nook-app/nook-core/docker-bake.hcl");
     assert!(
         core_bake.contains("cache-to   = rust_deps_cache_to")
             && core_bake.contains("cache-from = rust_native_source_cache_from")
             && core_bake.contains("cache-to   = rust_native_source_cache_to"),
         "native dependency and source-sensitive coverage layers need independent hosted caches"
     );
-    let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
     assert!(
         wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm")
             && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification and WASM must run as sibling branches, preserve locale rebuilds, and join only small outputs"
     );
-    let web_bake = read(&root, "nook-app/docker/toolchain.docker-bake.hcl");
+    let web_bake = read(root, "nook-app/docker/toolchain.docker-bake.hcl");
     assert!(
         web_bake.contains("cache-to   = web_deps_cache_to"),
         "web dependencies need an independent cache scope"
     );
-    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("for attempt in 1 2; do")
             && docker_tasks
                 .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
         "hosted web delivery must retry the immediate BuildKit frontend flake once"
     );
-    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    let app_tasks = read(root, "nook-app/Taskfile.yml");
     assert!(
         app_tasks.contains("for attempt in 1 2; do")
             && app_tasks.contains(
@@ -919,8 +935,10 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             ),
         "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
     );
+}
 
-    let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
+fn assert_docker_setup_contract(root: &Path) {
+    let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
     for required in [
         "docker/setup-buildx-action@v3",
         "crazy-max/ghaction-github-runtime@v3",
@@ -938,8 +956,10 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         !setup.contains("systemctl restart docker") && !setup.contains("/etc/docker/daemon.json"),
         "delivery setup must not reconfigure or restart Docker"
     );
+}
 
-    let pr = read(&root, ".github/workflows/pr.yml");
+fn assert_pr_workflow_contract(root: &Path) {
+    let pr = read(root, ".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
         "name: WASM verification and artifact",
@@ -1013,7 +1033,19 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
                 .contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
         "Main-fix extension e2e must consume verified WASM without rebuilding Rust"
     );
-    let ci_tasks = read(&root, "nook-app/.task/ci.yml");
+    assert!(
+        pr.contains("name: pr-wasm-${{ github.run_id }}")
+            && !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !pr
+                .contains("ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !pr.contains("needs: [rust, wasm]"),
+        "split-CI handoffs must remain run-stable for failed-job reruns"
+    );
+}
+
+fn assert_artifact_backed_e2e_contract(root: &Path) {
+    let pr = read(root, ".github/workflows/pr.yml");
+    let ci_tasks = read(root, "nook-app/.task/ci.yml");
     let artifact_e2e = section(
         &ci_tasks,
         "  ci:pr:e2e:web:artifacts:\n",
@@ -1050,12 +1082,15 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         native_job_lookup < artifact_lookup,
         "PR verification must prove the latest native attempt succeeded before accepting a run-stable artifact"
     );
-    let e2e_pr = read(&root, ".github/workflows/e2e-pr.yml");
+    let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(
         e2e_pr.contains("cache-write: \"false\""),
         "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
     );
-    let release = read(&root, ".github/workflows/release.yml");
+}
+
+fn assert_release_and_main_delivery_contract(root: &Path) {
+    let release = read(root, ".github/workflows/release.yml");
     let release_setup = release
         .find("uses: ./.github/actions/nook-docker-setup")
         .expect("release must use the safe workflow-ref Docker setup");
@@ -1066,18 +1101,9 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         release_setup < release_source,
         "release must initialize Docker from the workflow ref before checking out an older source"
     );
-    assert!(
-        pr.contains("name: pr-wasm-${{ github.run_id }}")
-            && !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
-            && !pr
-                .contains("ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}")
-            && !pr.contains("needs: [rust, wasm]"),
-        "split-CI handoffs must remain run-stable for failed-job reruns"
-    );
-
-    let main = read(&root, ".github/workflows/main.yml");
+    let main = read(root, ".github/workflows/main.yml");
     assert!(main.contains("          task ci:main\n"));
-    let cleanup = read(&root, ".github/workflows/runner-cleanup.yml");
+    let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(
         cleanup.contains("--filter until=168h"),
         "runner cleanup must preserve the recent delivery cache"

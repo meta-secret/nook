@@ -1,9 +1,10 @@
 use std::{fs, path::PathBuf};
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
+    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    )
 }
 
 fn read(path: &str) -> String {
@@ -95,6 +96,13 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
 
 #[test]
 fn github_actions_use_the_authenticated_persistent_cache() {
+    assert_cache_actions_use_credential_files();
+    assert_cache_connector_redacts_credentials();
+    assert_workflows_scope_cache_credentials();
+    assert_rust_builds_mount_cache_credentials();
+}
+
+fn assert_cache_actions_use_credential_files() {
     let action = read(".github/actions/nook-docker-setup/action.yml");
     for required in [
         "cache-redis-password",
@@ -148,7 +156,9 @@ fn github_actions_use_the_authenticated_persistent_cache() {
     assert!(
         !cache_action_main.contains("spawnSync(\"task\", [\"infra:cache:connect\", redisPassword")
     );
+}
 
+fn assert_cache_connector_redacts_credentials() {
     let infra_tasks = read("infra/Taskfile.yml");
     let connector = infra_tasks
         .split("\n  cache:connect:\n")
@@ -230,7 +240,9 @@ fn github_actions_use_the_authenticated_persistent_cache() {
             "GITHUB_ENV must contain only credential file paths, never {secret_value}"
         );
     }
+}
 
+fn assert_workflows_scope_cache_credentials() {
     for path in [
         ".github/workflows/agent-implement.yml",
         ".github/workflows/e2e-pr.yml",
@@ -289,7 +301,9 @@ fn github_actions_use_the_authenticated_persistent_cache() {
             "nightly cache credentials must be limited to the trusted default branch"
         );
     }
+}
 
+fn assert_rust_builds_mount_cache_credentials() {
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}"));
     let app_tasks = read("nook-app/Taskfile.yml");
