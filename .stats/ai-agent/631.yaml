@@ -1,0 +1,83 @@
+schema_version: 2
+source_pr:
+  number: 631
+  url: https://github.com/meta-secret/nook/pull/631
+  title: "fix(auth): authenticate before creating passkeys"
+  change_surface: web_extension_passkey_authentication_ui
+  head_sha: 8883af3b3b599d13114681f19a6a6a04345b97c0
+  started_at: 2026-07-22T18:41:00Z
+  opened_at: 2026-07-22T18:52:13Z
+  merged_at: 2026-07-22T19:31:02Z
+  elapsed_seconds: 3002
+  open_to_merge_seconds: 2329
+summary:
+  local_execution_count: 24
+  local_check_count: 23
+  local_test_count: 1
+  local_combined_count: 0
+  local_execution_seconds: 634
+  github_actions_run_count: 2
+  github_actions_seconds: 2051
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T19:36:25Z
+  head_sha: 8883af3b3b599d13114681f19a6a6a04345b97c0
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 241
+    e2e: 200
+  total: 1101
+local_executions:
+  - { command: task format, category: check, started_at: 2026-07-22T18:46:35Z, finished_at: 2026-07-22T18:50:45Z, duration_seconds: 250, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: task format, category: check, started_at: 2026-07-22T18:51:28Z, finished_at: 2026-07-22T18:52:07Z, duration_seconds: 39, outcome: cancelled, reason: accidental_pr_body_command_substitution }
+  - { command: task pr:preflight PR=631, category: check, started_at: 2026-07-22T18:52:18Z, finished_at: 2026-07-22T18:52:25Z, duration_seconds: 7, outcome: passed, reason: initial_pr_policy_and_state_audit }
+  - { command: task pr:ready PR=631, category: check, started_at: 2026-07-22T19:09:33Z, finished_at: 2026-07-22T19:09:41Z, duration_seconds: 8, outcome: failed, reason: detected_two_actionable_review_threads }
+  - { command: task format, category: check, started_at: 2026-07-22T19:10:52Z, finished_at: 2026-07-22T19:12:17Z, duration_seconds: 85, outcome: passed, reason: review_fix_pre_push_hygiene }
+  - { command: .github/scripts/ui-demo-contract.sh merged_base_sha, category: check, started_at: 2026-07-22T19:12:24Z, finished_at: 2026-07-22T19:12:25Z, duration_seconds: 1, outcome: passed, reason: review_fix_ui_demo_contract }
+  - { command: task format, category: check, started_at: 2026-07-22T19:13:10Z, finished_at: 2026-07-22T19:13:50Z, duration_seconds: 40, outcome: passed, reason: accidental_review_reply_command_substitution }
+  - { command: task format, category: check, started_at: 2026-07-22T19:13:10Z, finished_at: 2026-07-22T19:13:50Z, duration_seconds: 40, outcome: passed, reason: accidental_parallel_review_reply_command_substitution }
+  - { command: task pr:ready PR=631, category: check, started_at: 2026-07-22T19:30:47Z, finished_at: 2026-07-22T19:30:53Z, duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest Rust inventory initial compile, category: check, started_at: 2026-07-22T19:31:33Z, finished_at: 2026-07-22T19:32:40Z, duration_seconds: 67, outcome: passed, reason: merged_head_rust_inventory_compile }
+  - { command: cargo nextest JSON shape probe, category: check, started_at: 2026-07-22T19:32:48Z, finished_at: 2026-07-22T19:32:49Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory_shape }
+  - { command: cargo nextest Rust inventory count, category: check, started_at: 2026-07-22T19:32:58Z, finished_at: 2026-07-22T19:32:59Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory }
+  - { command: cargo nextest preflight inventory from wrong workspace, category: check, started_at: 2026-07-22T19:33:03Z, finished_at: 2026-07-22T19:33:04Z, duration_seconds: 1, outcome: failed, reason: preflight_package_outside_app_workspace }
+  - { command: cargo nextest preflight inventory, category: check, started_at: 2026-07-22T19:33:23Z, finished_at: 2026-07-22T19:33:27Z, duration_seconds: 4, outcome: passed, reason: merged_head_preflight_inventory }
+  - { command: bunx vitest inventory probe, category: check, started_at: 2026-07-22T19:33:39Z, finished_at: 2026-07-22T19:33:40Z, duration_seconds: 1, outcome: failed, reason: host_dependencies_absent_and_invalid_json_flag }
+  - { command: bun install frozen lockfile, category: check, started_at: 2026-07-22T19:34:15Z, finished_at: 2026-07-22T19:34:16Z, duration_seconds: 1, outcome: passed, reason: prepare_merged_head_web_inventory }
+  - { command: vitest inventory before generated WASM, category: check, started_at: 2026-07-22T19:34:20Z, finished_at: 2026-07-22T19:34:23Z, duration_seconds: 3, outcome: failed, reason: merged_head_wasm_bindings_absent }
+  - { command: task wasm:build:fast, category: check, started_at: 2026-07-22T19:34:28Z, finished_at: 2026-07-22T19:35:24Z, duration_seconds: 56, outcome: passed, reason: generate_merged_head_wasm_for_web_inventory }
+  - { command: vitest JSON reporter inventory probe, category: check, started_at: 2026-07-22T19:35:27Z, finished_at: 2026-07-22T19:35:35Z, duration_seconds: 8, outcome: failed, reason: list_reporter_output_not_json }
+  - { command: vitest line inventory, category: check, started_at: 2026-07-22T19:35:44Z, finished_at: 2026-07-22T19:35:54Z, duration_seconds: 10, outcome: passed, reason: merged_head_app_unit_inventory }
+  - { command: bun extension JUnit inventory without output file, category: check, started_at: 2026-07-22T19:35:59Z, finished_at: 2026-07-22T19:36:00Z, duration_seconds: 1, outcome: failed, reason: junit_reporter_requires_output_file }
+  - { command: bun extension JUnit inventory, category: test, started_at: 2026-07-22T19:36:11Z, finished_at: 2026-07-22T19:36:12Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_unit_inventory }
+  - { command: Playwright app inventory, category: check, started_at: 2026-07-22T19:36:18Z, finished_at: 2026-07-22T19:36:20Z, duration_seconds: 2, outcome: passed, reason: merged_head_app_e2e_inventory }
+  - { command: Playwright extension inventory, category: check, started_at: 2026-07-22T19:36:24Z, finished_at: 2026-07-22T19:36:25Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_e2e_inventory }
+github_actions_runs:
+  - { workflow: PR, run_id: 29948557054, run_attempt: 1, head_sha: ebee2721c965b9538f6e54290a4fe3e072282581, trigger: pull_request, started_at: 2026-07-22T18:52:16Z, finished_at: 2026-07-22T19:09:13Z, duration_seconds: 1017, conclusion: success }
+  - { workflow: PR, run_id: 29950007932, run_attempt: 1, head_sha: 84c3f822778d265ec47bb0183f90360b984e477b, trigger: pull_request, started_at: 2026-07-22T19:12:44Z, finished_at: 2026-07-22T19:29:58Z, duration_seconds: 1034, conclusion: success }
+pr_retriggers:
+  - { kind: head_push, at: 2026-07-22T19:12:41Z, reason: address_two_actionable_authentication_flow_review_findings }
+merge_attempts:
+  - { at: 2026-07-22T19:30:59Z, method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [603, 629]
+  baseline_quality: comparable
+  baseline_note: Recent site and extension browser-flow UI changes using the same hosted PR gate; PR 629 also required multiple reviewed head cycles.
+  elapsed_seconds_change_percent: 43.3
+  local_execution_seconds_change_percent: 107.9
+  github_actions_seconds_change_percent: 38.3
+  test_inventory_total_change: 10
+  regression: true
+  regression_reasons:
+    - Elapsed and hosted validation time exceeded the comparable median because the first otherwise-green head received two actionable test-caller findings and the corrected head required a complete replacement gate.
+    - Local time exceeded the comparable median because repository-wide formatting is expensive and was accidentally invoked during shell interpolation, in addition to the mandatory merged-head inventory setup.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The second hosted cycle followed material review fixes and was not an unchanged-head rerun.
+    - Shell command substitution in PR and review prose caused one cancelled and two completed redundant formatter invocations; this was agent-local command construction error, not a repository build or workflow defect that a performance PR can correct.
+    - The final exact-head gate had normal lane durations and no persistent cache, runner, or suite regression remained.
+  required_actions: []
