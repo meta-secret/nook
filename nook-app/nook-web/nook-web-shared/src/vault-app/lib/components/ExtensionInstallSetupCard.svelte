@@ -9,11 +9,15 @@
     status,
     installBusy = false,
     onInstall,
+    onConnect,
+    connectError = false,
   }: {
     vault: VaultState;
     status: ExtensionSetupStatus;
     installBusy?: boolean;
     onInstall: () => void;
+    onConnect: () => void;
+    connectError?: boolean;
   } = $props();
 
   const isNotInstalled = $derived(status === "not_installed");
@@ -47,6 +51,11 @@
           <p class="text-[11px] leading-relaxed text-muted-foreground/80">
             {vault.t("extension_setup.pair_hint")}
           </p>
+          {#if connectError}
+            <p class="text-xs text-destructive" role="alert">
+              {vault.t("extension_setup.connect_failed")}
+            </p>
+          {/if}
         {/if}
       </div>
       {#if isNotInstalled}
@@ -68,12 +77,12 @@
           variant="outline"
           class="border-border"
           disabled={installBusy}
-          data-testid="extension-install-setup-open-page"
-          onclick={onInstall}
+          data-testid="extension-install-setup-connect"
+          onclick={onConnect}
         >
           {installBusy
-            ? vault.t("extension_setup.loading_install")
-            : vault.t("extension_setup.open_install_page")}
+            ? vault.t("extension_setup.opening_extension")
+            : vault.t("extension_setup.connect_cta")}
         </Button>
       {/if}
     </div>

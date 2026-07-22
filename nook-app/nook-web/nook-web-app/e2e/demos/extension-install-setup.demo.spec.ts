@@ -19,13 +19,45 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(page.getByTestId('extension-install-setup-cta')).toBeVisible()
   await demoBeat(page)
 
+  await page.evaluate(() => {
+    const browserGlobal = globalThis as typeof globalThis & {
+      chrome?: {
+        runtime?: {
+          sendMessage?: (
+            extensionId: string,
+            message: unknown,
+            callback: (response?: unknown) => void,
+          ) => void
+        }
+      }
+    }
+    browserGlobal.chrome = {
+      runtime: {
+        sendMessage: (_extensionId, _message, callback) => {
+          callback({ ok: false })
+        },
+      },
+    }
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'demo-extension-id',
+    )
+  })
+  await expect(setupCard).toHaveAttribute('data-status', 'installed_unpaired')
+  await expect(page.getByTestId('extension-install-setup-connect')).toHaveText(
+    'Connect extension',
+  )
+  await demoBeat(page)
+
   await page.getByTestId('vault-settings-tab').click()
   await expect(page.getByTestId('vault-devices-section')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   const settingsRow = page.getByTestId('extension-setup-settings')
   await expect(settingsRow).toBeVisible()
-  await expect(settingsRow).toHaveAttribute('data-status', 'not_installed')
-  await expect(page.getByTestId('extension-setup-settings-cta')).toBeVisible()
+  await expect(settingsRow).toHaveAttribute('data-status', 'installed_unpaired')
+  await expect(page.getByTestId('extension-setup-settings-cta')).toHaveText(
+    'Connect extension',
+  )
   await demoBeat(page)
 })

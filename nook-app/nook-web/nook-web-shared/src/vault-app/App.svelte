@@ -44,6 +44,7 @@
     discoverPairedExtensionIdentity,
     extensionConnectRequestFromLocation,
     isExtensionConnectPath,
+    openInstalledExtension,
     requestPairedExtensionUnlock,
     type ExtensionConnectRequest,
   } from "$lib/extension-connect";
@@ -124,6 +125,7 @@
     undefined,
   );
   let extensionInstallBusy = $state(false);
+  let extensionConnectError = $state(false);
   const EXTENSION_LOCKED_RETRY_MS = 3_000;
   let sentinelInvitationRequest = $state(
     typeof window !== "undefined" && APP_KIND !== "simple"
@@ -578,6 +580,16 @@
     }
   }
 
+  async function handleExtensionConnect() {
+    extensionInstallBusy = true;
+    extensionConnectError = false;
+    try {
+      extensionConnectError = !(await openInstalledExtension());
+    } finally {
+      extensionInstallBusy = false;
+    }
+  }
+
   $effect(() => {
     void vault.isAuthenticated;
     void vault.activeVaultStoreId;
@@ -991,6 +1003,8 @@
                   status={extensionSetupStatus}
                   installBusy={extensionInstallBusy}
                   onInstall={() => void handleExtensionInstall()}
+                  onConnect={() => void handleExtensionConnect()}
+                  connectError={extensionConnectError}
                 />
               {/if}
               {#if !vault.settingsOpen && !secretsAddOpen && vaultSecurityRecommendations.hasRecommendations}
