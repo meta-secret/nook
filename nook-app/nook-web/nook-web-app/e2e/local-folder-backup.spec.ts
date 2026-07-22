@@ -268,7 +268,7 @@ test.describe('local folder backup provider', () => {
 
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('device-protection-gate')).toBeVisible()
-    await expect(page.getByTestId('vault-error')).not.toContainText(
+    await expect(page.locator('body')).not.toContainText(
       "Authorize before using this browser's device key.",
     )
   })

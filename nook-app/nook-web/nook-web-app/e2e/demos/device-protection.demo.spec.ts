@@ -117,7 +117,7 @@ test('recover device identity before importing an existing vault', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('device-protection-gate')).toBeVisible()
-  await expect(page.getByTestId('vault-error')).not.toContainText(
+  await expect(page.locator('body')).not.toContainText(
     "Authorize before using this browser's device key.",
   )
   await demoBeat(page)
