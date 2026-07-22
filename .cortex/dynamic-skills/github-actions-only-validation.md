@@ -49,7 +49,8 @@ Applies to:
 Does not apply to:
 
 - Humans who choose to run local mirrors for their own feedback.
-- Stats-only PRs that touch only `.stats/ai-agent/<pr>.yaml`.
+- Verified one-file stats-only PRs under `.stats/ai-agent/**` or
+  `.stats/main-build/**`.
 - Read-only / question-only sessions with no commits.
 - Optional focused debug commands while investigating a specific red finding.
 

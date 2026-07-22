@@ -346,6 +346,12 @@ not generate another record. If the comparison identifies
 actionable performance regression or workflow waste, create a separate normal
 build-performance PR and take it through the full pipeline.
 
+Completed Main attempts independently create one automated
+`.stats/main-build/<run-id>-attempt-<attempt>.yaml` PR after the workflow has
+finished. It uses the same immediate squash-only exception and cannot recurse:
+both PR and Main ignore `.stats/**`. See
+[main-build-statistics.md](main-build-statistics.md).
+
 ### 10. Task completion report
 
 Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.

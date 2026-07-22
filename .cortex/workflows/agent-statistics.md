@@ -62,6 +62,10 @@ including time spent waiting for CI or review when the agent owns that wait.
 The implementation PR's `mergedAt` is the terminal measurement boundary. Only
 record later deployment or live-verification work when the user explicitly made
 that work part of the assignment; do not extend ordinary task ownership to Main.
+Completed Main attempts are measured separately and automatically under
+`.stats/main-build/**`; see [main-build-statistics.md](main-build-statistics.md).
+Those generated stats-only PRs neither extend the source agent's elapsed time nor
+create another AI-agent statistics record.
 
 Never record secrets, credentials, environment values, vault data, raw logs, or
 prompt/chat contents. Commands must be redacted if an argument contains secret
@@ -219,8 +223,11 @@ evidence in `findings`; do not use a vague “this PR was larger” rationale.
 
 ## Stats-only PR exception
 
-A stats-only PR is valid only when its diff contains exactly one file matching
-`.stats/ai-agent/<source-pr-number>.yaml`, and that source PR is already merged.
+A manual AI-agent stats-only PR is valid only when its diff contains exactly one
+file matching `.stats/ai-agent/<source-pr-number>.yaml`, and that source PR is
+already merged. The trusted Main collector has a parallel one-file exception for
+`.stats/main-build/<run-id>-attempt-<run-attempt>.yaml`, defined in
+[main-build-statistics.md](main-build-statistics.md).
 For such a PR:
 
 - do not run local product checks or tests;
