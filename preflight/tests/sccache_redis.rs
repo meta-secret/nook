@@ -171,6 +171,12 @@ fn github_actions_use_the_authenticated_persistent_cache() {
         "SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file",
         "using the job-local Redis fallback",
         "kill \"$cloudflared_pid\"",
+        "cleanup_cloudflared_extract",
+        "fallback_from_cloudflared_extract",
+        "if ! extract_container=\"$(docker create",
+        "if ! docker cp",
+        "if ! chmod 0700 \"$cloudflared_binary\"",
+        "Persistent Rust cache proxy setup failed; using the job-local Redis fallback",
     ] {
         assert!(
             connector.contains(required),

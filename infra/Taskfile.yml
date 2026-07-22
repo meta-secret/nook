@@ -254,12 +254,33 @@ tasks:
             ;;
         esac
 
-        extract_container="$(docker create "$cloudflared_image")"
-        trap 'docker rm -f "$extract_container" >/dev/null 2>&1 || true' EXIT
-        docker cp "$extract_container:/usr/local/bin/cloudflared" "$cloudflared_binary" >/dev/null
-        docker rm -f "$extract_container" >/dev/null
+        extract_container=""
+        cleanup_cloudflared_extract() {
+          if [ -n "$extract_container" ]; then
+            docker rm -f "$extract_container" >/dev/null 2>&1 || true
+          fi
+          rm -f "$cloudflared_binary" "$cloudflared_log"
+        }
+        fallback_from_cloudflared_extract() {
+          cleanup_cloudflared_extract
+          trap - EXIT
+          echo "::warning::Persistent Rust cache proxy setup failed; using the job-local Redis fallback" >&2
+          exit 0
+        }
+
+        if ! extract_container="$(docker create "$cloudflared_image" 2>/dev/null)"; then
+          fallback_from_cloudflared_extract
+        fi
+        trap cleanup_cloudflared_extract EXIT
+        if ! docker cp "$extract_container:/usr/local/bin/cloudflared" "$cloudflared_binary" >/dev/null 2>&1; then
+          fallback_from_cloudflared_extract
+        fi
+        if ! chmod 0700 "$cloudflared_binary"; then
+          fallback_from_cloudflared_extract
+        fi
+        docker rm -f "$extract_container" >/dev/null 2>&1 || true
+        extract_container=""
         trap - EXIT
-        chmod 0700 "$cloudflared_binary"
 
         TUNNEL_SERVICE_TOKEN_ID="$cloudflare_client_id" \
         TUNNEL_SERVICE_TOKEN_SECRET="$cloudflare_client_secret" \
