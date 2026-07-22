@@ -965,8 +965,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         .expect("PR CI must define the label-selected full e2e job")
         .1;
     assert!(
-        full_e2e_job
-            .contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
+        full_e2e_job.contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
         "Main-fix browser e2e must explicitly use its runner-local Simple Vault"
     );
     let native_job_lookup = pr
