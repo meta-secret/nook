@@ -847,6 +847,8 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
+        "type=gha,scope=nook-rust-native-source-v1",
+        "type=gha,scope=nook-rust-wasm-source-v1",
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
@@ -868,21 +870,25 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        6,
+        8,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
 
     let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
         rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
-            && !rust_bake.contains("cache-to   = rust_artifacts_cache_to"),
-        "WASM must branch from cached dependencies without exporting source-heavy snapshots"
+            && rust_bake
+                .matches("cache-to   = rust_wasm_source_cache_to")
+                .count()
+                == 2,
+        "WASM export and joined web artifacts must persist the source-sensitive hosted lineage"
     );
     let core_bake = read(&root, "nook-app/nook-core/docker-bake.hcl");
     assert!(
         core_bake.contains("cache-to   = rust_deps_cache_to")
-            && !core_bake.contains("cache-to   = rust_debug_cache_to"),
-        "only stable Rust dependency layers should be exported"
+            && core_bake.contains("cache-from = rust_native_source_cache_from")
+            && core_bake.contains("cache-to   = rust_native_source_cache_to"),
+        "native dependency and source-sensitive coverage layers need independent hosted caches"
     );
     let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
     assert!(

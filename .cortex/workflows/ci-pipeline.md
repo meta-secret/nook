@@ -391,7 +391,9 @@ parallel worktrees from replacing each other's review/readiness binaries.
 release use GitHub-hosted runners. Main exports the default-branch cache that
 new PRs can restore under GitHub's cache visibility rules; a PR also updates its
 branch cache for later pushes. Separate scopes prevent parallel image lineages
-from overwriting one another.
+from overwriting one another. Native coverage and WASM source-sensitive layers
+have their own GHA BuildKit scopes in addition to the manifest-only dependency
+scopes, so non-Rust pushes do not repeat unchanged Cargo compilation.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
