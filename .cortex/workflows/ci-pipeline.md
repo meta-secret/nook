@@ -173,7 +173,8 @@ repeating the multi-minute Rust/WASM and dependency graph.
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 That label adds the `Full browser e2e (main fix)` job to the ordinary PR
 workflow and runs `task ci:pr:e2e`, including the full deterministic
-local-provider, split-app isolation, and extension suites before merge. Adding
+local-provider, split-app isolation, and extension suites before merge. The task
+uses the same bounded BuildKit health/recovery wrapper as Main. Adding
 or removing the label retriggers PR Actions for the current head. Because the
 readiness audit already requires the exact-head `PR` workflow to succeed, a
 labeled PR cannot be ready while this job is queued, red, or cancelled.

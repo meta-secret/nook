@@ -482,6 +482,7 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
     for required in [
         "task: _buildx:healthy",
         "vars: { BUILD_TASK: _ci:pr:host }",
+        "vars: { BUILD_TASK: _ci:pr:e2e:host }",
         "vars: { BUILD_TASK: _ci:main:host }",
     ] {
         assert!(
