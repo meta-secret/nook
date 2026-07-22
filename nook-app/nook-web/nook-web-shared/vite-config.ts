@@ -6,18 +6,17 @@ import { vaultAppHeaders } from "./src/vault-app/security-headers";
 type VaultSpaOptions = {
   name: string;
   spaPaths: string[];
-  deniedPaths?: string[];
+  denyPath?: (pathname: string) => boolean;
   outputAliases: string[];
 };
 
 export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   const spaPaths = new Set(options.spaPaths);
-  const deniedPaths = new Set(options.deniedPaths ?? []);
   const middleware: NonNullable<Plugin["configureServer"]> = (server) => {
     server.middlewares.use((request, response, next) => {
       const pathname =
         request.url?.split(/[?#]/, 1)[0]?.replace(/\/$/, "") || "/";
-      if (deniedPaths.has(pathname)) {
+      if (options.denyPath?.(pathname)) {
         response.statusCode = 404;
         response.end("Not Found");
         return;
@@ -43,14 +42,11 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   };
 }
 
-export function vaultAppAliases() {
+export function vaultAppAliases(wasmApplicationPath: string) {
   return {
     $lib: new URL("./src/vault-app/lib", import.meta.url).pathname,
     "$vault-shared": new URL("./src/vault-app", import.meta.url).pathname,
     "$web-shared": new URL("./src", import.meta.url).pathname,
-    "$app-wasm": new URL(
-      "./src/vault-app/lib/nook-wasm/nook_wasm",
-      import.meta.url,
-    ).pathname,
+    "$app-wasm": wasmApplicationPath,
   };
 }

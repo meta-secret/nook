@@ -14,7 +14,7 @@ const simpleAppUrl =
 const sentinelSpa = vaultSpaPlugin({
   name: "sentinel-vault-spa",
   spaPaths: ["/app-logs", "/logs", "/privacy", "/terms"],
-  deniedPaths: ["/extension-connect"],
+  denyPath: (pathname) => pathname === "/extension-connect",
   outputAliases: ["app-logs", "logs"],
 });
 
@@ -38,7 +38,12 @@ export default defineConfig({
         "./src/ExtensionConnectDisabled.svelte",
         import.meta.url,
       ).pathname,
-      ...vaultAppAliases(),
+      ...vaultAppAliases(
+        new URL(
+          "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
+          import.meta.url,
+        ).pathname,
+      ),
     },
   },
   server: { fs: { allow: [".."] } },

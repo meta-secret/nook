@@ -29,7 +29,12 @@ export default defineConfig({
   plugins: [tailwindcss(), svelte(), simpleSpa],
   resolve: {
     alias: {
-      ...vaultAppAliases(),
+      ...vaultAppAliases(
+        new URL(
+          "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
+          import.meta.url,
+        ).pathname,
+      ),
     },
   },
   server: { fs: { allow: [".."] } },
