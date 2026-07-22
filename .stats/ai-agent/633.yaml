@@ -1,0 +1,105 @@
+schema_version: 2
+source_pr:
+  number: 633
+  url: https://github.com/meta-secret/nook/pull/633
+  title: Enable Clippy pedantic for all Rust projects
+  change_surface: rust_preflight_clippy_pedantic_policy
+  head_sha: 0a31e934a0030762d68d37161a145ecc09e83cc9
+  started_at: 2026-07-22T20:24:00Z
+  opened_at: 2026-07-22T20:30:44Z
+  merged_at: 2026-07-22T20:48:33Z
+  elapsed_seconds: 1473
+  open_to_merge_seconds: 1069
+summary:
+  local_execution_count: 26
+  local_check_count: 24
+  local_test_count: 1
+  local_combined_count: 1
+  local_execution_seconds: 444
+  github_actions_run_count: 2
+  github_actions_seconds: 1050
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T20:53:32Z
+  head_sha: 0a31e934a0030762d68d37161a145ecc09e83cc9
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 241
+    e2e: 200
+  total: 1101
+local_executions:
+  - { command: "cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings -W clippy::pedantic", category: check, started_at: 2026-07-22T20:25:12Z, finished_at: 2026-07-22T20:25:19Z, duration_seconds: 7, outcome: failed, reason: missing_public_error_documentation }
+  - { command: "cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings", category: check, started_at: 2026-07-22T20:25:47Z, finished_at: 2026-07-22T20:25:49Z, duration_seconds: 2, outcome: failed, reason: pedantic_doc_markdown }
+  - { command: "cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings", category: check, started_at: 2026-07-22T20:26:10Z, finished_at: 2026-07-22T20:26:12Z, duration_seconds: 2, outcome: failed, reason: map_unwrap_or_and_long_invariant_tests }
+  - { command: "cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings", category: check, started_at: 2026-07-22T20:27:42Z, finished_at: 2026-07-22T20:27:44Z, duration_seconds: 2, outcome: failed, reason: needless_borrow_after_test_refactor }
+  - { command: "cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings", category: check, started_at: 2026-07-22T20:28:05Z, finished_at: 2026-07-22T20:28:07Z, duration_seconds: 2, outcome: passed, reason: focused_pedantic_gate }
+  - { command: task format, category: check, started_at: 2026-07-22T20:28:15Z, finished_at: 2026-07-22T20:30:05Z, duration_seconds: 110, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: git diff --check, category: check, started_at: 2026-07-22T20:30:07Z, finished_at: 2026-07-22T20:30:08Z, duration_seconds: 1, outcome: passed, reason: initial_patch_whitespace_validation }
+  - { command: task pr:preflight PR=633, category: check, started_at: 2026-07-22T20:31:02Z, finished_at: 2026-07-22T20:31:09Z, duration_seconds: 7, outcome: passed, reason: initial_pr_policy_and_state_audit }
+  - { command: "cargo fmt --manifest-path preflight/Cargo.toml", category: check, started_at: 2026-07-22T20:32:06Z, finished_at: 2026-07-22T20:32:07Z, duration_seconds: 1, outcome: passed, reason: format_standalone_preflight_crate_after_ci_feedback }
+  - { command: task format, category: check, started_at: 2026-07-22T20:32:09Z, finished_at: 2026-07-22T20:33:17Z, duration_seconds: 68, outcome: passed, reason: review_fix_pre_push_hygiene }
+  - { command: "cargo fmt --manifest-path preflight/Cargo.toml -- --check && cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings && git diff --check", category: combined, started_at: 2026-07-22T20:33:20Z, finished_at: 2026-07-22T20:33:24Z, duration_seconds: 4, outcome: passed, reason: exact_preflight_format_lint_and_patch_proof }
+  - { command: task pr:ready PR=633, category: check, started_at: 2026-07-22T20:47:48Z, finished_at: 2026-07-22T20:47:54Z, duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: "cargo nextest list Rust inventory initial compile", category: check, started_at: 2026-07-22T20:49:10Z, finished_at: 2026-07-22T20:51:42Z, duration_seconds: 152, outcome: passed, reason: merged_head_rust_inventory_compile }
+  - { command: "cargo nextest preflight inventory with workspace filter", category: check, started_at: 2026-07-22T20:49:10Z, finished_at: 2026-07-22T20:49:11Z, duration_seconds: 1, outcome: failed, reason: preflight_package_is_standalone }
+  - { command: "vitest merged-head inventory before host install", category: check, started_at: 2026-07-22T20:49:10Z, finished_at: 2026-07-22T20:49:11Z, duration_seconds: 1, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: "Playwright app inventory before host install", category: check, started_at: 2026-07-22T20:49:10Z, finished_at: 2026-07-22T20:49:11Z, duration_seconds: 1, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: "Playwright extension inventory before host install", category: check, started_at: 2026-07-22T20:49:10Z, finished_at: 2026-07-22T20:49:11Z, duration_seconds: 1, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: "bun install --frozen-lockfile", category: check, started_at: 2026-07-22T20:51:49Z, finished_at: 2026-07-22T20:51:51Z, duration_seconds: 2, outcome: passed, reason: prepare_merged_head_web_inventory }
+  - { command: "cargo nextest Rust inventory JSON shape probe", category: check, started_at: 2026-07-22T20:52:03Z, finished_at: 2026-07-22T20:52:04Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory_shape }
+  - { command: "cargo nextest Rust inventory count", category: check, started_at: 2026-07-22T20:52:12Z, finished_at: 2026-07-22T20:52:13Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory }
+  - { command: "cargo nextest preflight inventory count", category: check, started_at: 2026-07-22T20:52:12Z, finished_at: 2026-07-22T20:52:16Z, duration_seconds: 4, outcome: passed, reason: merged_head_preflight_inventory }
+  - { command: task wasm:build:fast, category: check, started_at: 2026-07-22T20:52:18Z, finished_at: 2026-07-22T20:53:12Z, duration_seconds: 54, outcome: passed, reason: generate_merged_head_wasm_for_web_inventory }
+  - { command: "vitest merged-head line inventory", category: check, started_at: 2026-07-22T20:53:22Z, finished_at: 2026-07-22T20:53:32Z, duration_seconds: 10, outcome: passed, reason: merged_head_app_unit_inventory }
+  - { command: "bun extension JUnit inventory", category: test, started_at: 2026-07-22T20:53:22Z, finished_at: 2026-07-22T20:53:23Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_unit_inventory }
+  - { command: "Playwright app inventory", category: check, started_at: 2026-07-22T20:53:22Z, finished_at: 2026-07-22T20:53:24Z, duration_seconds: 2, outcome: passed, reason: merged_head_app_e2e_inventory }
+  - { command: "Playwright extension inventory", category: check, started_at: 2026-07-22T20:53:22Z, finished_at: 2026-07-22T20:53:23Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_e2e_inventory }
+github_actions_runs:
+  - workflow: PR
+    run_id: 29955433293
+    run_attempt: 1
+    head_sha: 9ee162b3344f12a1918e889c679597db60716f41
+    trigger: pull_request
+    started_at: 2026-07-22T20:30:47Z
+    finished_at: 2026-07-22T20:34:17Z
+    duration_seconds: 210
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29955637084
+    run_attempt: 1
+    head_sha: d4196031607b58d92953be56b1f57b504e73c39a
+    trigger: pull_request
+    started_at: 2026-07-22T20:33:40Z
+    finished_at: 2026-07-22T20:47:40Z
+    duration_seconds: 840
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-22T20:33:40Z
+    kind: head_push
+    reason: apply_standalone_preflight_rustfmt_output
+merge_attempts:
+  - at: 2026-07-22T20:48:33Z
+    method: squash
+    outcome: success
+    reason: exact_head_and_base_readiness_passed
+comparison:
+  baseline_prs: [618, 621]
+  baseline_quality: comparable
+  baseline_note: Recent Rust and WASM changes using the same hosted PR gate; both baselines had broader domain, browser, and generated-WASM surfaces than this lint-policy and preflight cleanup.
+  elapsed_seconds_change_percent: -79.0
+  local_execution_seconds_change_percent: -42.2
+  github_actions_seconds_change_percent: -46.9
+  test_inventory_total_change: 9
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first hosted cycle exposed one standalone preflight rustfmt change that the repository-level task format command does not cover; the corrected head ran the explicit preflight formatter and lint gate before push.
+    - The failed job was superseded by a source-formatting push and the obsolete workflow was cancelled; there were no unchanged reruns, manual reruns, base-update cycles, or premature merge attempts.
+    - Four focused Clippy failures progressively isolated documentation, iterator, test-size, and borrow warnings without repeatedly running the full product suite.
+    - The one formatting cycle was an avoidable validation-order mistake, but it does not identify a build-performance regression or missing hosted gate requiring a separate workflow PR.
+  required_actions: []
