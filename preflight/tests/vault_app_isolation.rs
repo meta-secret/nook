@@ -953,6 +953,22 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
+    let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
+    assert!(
+        verify_job.contains(
+            "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
+        ),
+        "PR preview artifacts must target the isolated Simple Vault alias"
+    );
+    let full_e2e_job = pr
+        .split_once("  full-e2e:\n")
+        .expect("PR CI must define the label-selected full e2e job")
+        .1;
+    assert!(
+        full_e2e_job
+            .contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
+        "Main-fix browser e2e must explicitly use its runner-local Simple Vault"
+    );
     let native_job_lookup = pr
         .find("native_job=\"$(")
         .expect("PR verification must inspect the latest native job");

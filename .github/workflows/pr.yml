@@ -101,7 +101,7 @@ jobs:
             WASM_BUILD_MODE=dev
         env:
           CI: true
-          NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
@@ -799,6 +799,7 @@ jobs:
           CI: true
           GIT_COMMIT_ID: ${{ github.event.pull_request.head.sha }}
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
