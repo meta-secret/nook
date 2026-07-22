@@ -60,6 +60,11 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
     "icloud_shared_storage_target",
 ];
 
+/// Finds browser-only Rust dependencies used by the portable core crate.
+///
+/// # Errors
+///
+/// Returns an error when the core source tree cannot be read.
 pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
     violations_in_tree(
         root,
@@ -69,6 +74,11 @@ pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violati
     )
 }
 
+/// Finds TypeScript declarations that duplicate Rust-owned domain boundaries.
+///
+/// # Errors
+///
+/// Returns an error when the web source tree cannot be read.
 pub fn typescript_domain_boundary_boilerplate(root: &Path) -> io::Result<Vec<Violation>> {
     source_violations(
         root,
@@ -81,6 +91,10 @@ pub fn typescript_domain_boundary_boilerplate(root: &Path) -> io::Result<Vec<Vio
 /// Reject declarations that make a raw JavaScript value look typed only in the
 /// generated declaration file. Provider/auth DTOs must use an actual Rust ABI
 /// type (for example a `Tsify` type), never `JsValue` plus an unchecked hint.
+///
+/// # Errors
+///
+/// Returns an error when the WASM source tree cannot be read.
 pub fn rust_wasm_domain_boundary_escape_hatches(root: &Path) -> io::Result<Vec<Violation>> {
     source_violations(
         root,
@@ -398,6 +412,11 @@ fn is_typescript_identifier(value: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '$'))
 }
 
+/// Finds authored `JsValue` paths in the WASM bridge.
+///
+/// # Errors
+///
+/// Returns an error when a source file cannot be read or parsed as Rust.
 pub fn wasm_js_values(root: &Path) -> io::Result<Vec<Violation>> {
     let directory = root.join("nook-app/nook-wasm/src");
     let mut files = Vec::new();
@@ -513,6 +532,12 @@ fn collect_files_with_extension(
     Ok(())
 }
 
+/// Finds forbidden `BuildKit` cache mounts in repository Dockerfiles.
+///
+/// # Errors
+///
+/// Returns an error when the repository cannot be traversed or contains no
+/// Dockerfiles.
 pub fn dockerfile_cache_mounts(root: &Path) -> io::Result<Vec<Violation>> {
     let mut dockerfiles = Vec::new();
     collect_dockerfiles(root, &mut dockerfiles)?;

@@ -4,9 +4,10 @@ use std::{
 };
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
+    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    )
 }
 
 fn read(path: &str) -> String {
@@ -42,6 +43,12 @@ fn assert_no_shell_scripts(path: &Path) {
 
 #[test]
 fn remote_cache_and_registry_are_private_and_persistent() {
+    assert_remote_compose_contract();
+    assert_infrastructure_deploy_contract();
+    assert_mesh_node_contract();
+}
+
+fn assert_remote_compose_contract() {
     let compose = read("infra/compose.yaml");
     for required in [
         "127.0.0.1:6380:6379",
@@ -83,7 +90,9 @@ fn remote_cache_and_registry_are_private_and_persistent() {
     assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
 
     assert_no_shell_scripts(&repository_root().join("infra"));
+}
 
+fn assert_infrastructure_deploy_contract() {
     let infra_tasks = read("infra/Taskfile.yml");
     let deploy = infra_tasks
         .split("\n  deploy:\n")
@@ -116,7 +125,10 @@ fn remote_cache_and_registry_are_private_and_persistent() {
 
     assert!(read(".gitignore").contains("/infra/secrets/"));
     assert!(read(".dockerignore").contains("infra/secrets"));
+}
 
+fn assert_mesh_node_contract() {
+    let infra_tasks = read("infra/Taskfile.yml");
     let mesh_add = infra_tasks
         .split("\n  mesh:node:add:\n")
         .nth(1)

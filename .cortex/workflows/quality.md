@@ -9,7 +9,10 @@ Use this workflow for quality, CI, and deployment changes.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
 6. Preserve these gates unless the task explicitly changes them:
    - `cd nook-app && cargo fmt --all -- --check`
-   - `cd nook-app && cargo clippy -p nook-core -p nook-auth2 --all-targets` and `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm` (`-D warnings`)
+   - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
+     manifest; `cd nook-app && cargo clippy -p nook-core -p nook-auth2 --all-targets`,
+     `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
+     and the standalone `preflight` Clippy pass enforce them with `-D warnings`
    - `task rust:coverage:check` — `cd nook-app && cargo llvm-cov nextest -p nook-core -p nook-auth2 --profile ci` vs **90%** line floor (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`

@@ -6,9 +6,10 @@ use nook_preflight::{
 };
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
+    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    )
 }
 
 #[test]
