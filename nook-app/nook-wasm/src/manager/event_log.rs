@@ -279,6 +279,7 @@ impl NookVaultManager {
         self.vault.password_entries = projection.password_entries;
         self.vault.unlock = nook_core::VaultUnlock::Keys;
         apply_user_records_to_encrypted_session(user_records, &mut self.vault.meta);
+        self.vault.mark_search_catalog_dirty();
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {

@@ -2030,14 +2030,17 @@ export class VaultState {
   async loadSecretPage(query: string, requestedOffset = 0) {
     if (!this.manager) return;
     const generation = this.secretPageGeneration;
-    const page = await this.enqueueStorage(() =>
-      this.manager!.querySecretPage(
+    const page = await this.enqueueStorage(async () => {
+      if (query.trim().length > 0) {
+        await this.manager!.prepareSecretSearch();
+      }
+      return this.manager!.querySecretPage(
         query,
         this.secretTypeFilter,
         requestedOffset,
         this.secretPageSize,
-      ),
-    );
+      );
+    });
     let records = page.takeItems();
     let total = page.total;
     let offset = page.offset;

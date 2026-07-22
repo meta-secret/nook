@@ -2219,6 +2219,7 @@ mod wasm_tests {
                 id: nook_core::SecretId::from_vault_record("secret_passkey"),
                 data: nook_core::SecretListItemData::Passkey {
                     rp_id: "login.example.com".to_owned(),
+                    rp_name: "Example".to_owned(),
                     user_name: "alice@example.com".to_owned(),
                     user_display_name: "Alice".to_owned(),
                 },

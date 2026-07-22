@@ -74,9 +74,12 @@ configured), you lose the vault. Approve at least two devices.
 | Passkey | Website/RP and account metadata; encrypted ES256 credential |
 | Authenticator | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented settings-page QR and attach reviewed backup codes |
 
-Items are searchable. Secret values stay masked until revealed. Authenticator
-items derive the current one-time code locally in Rust/WASM and never persist
-generated codes. Nook also includes a secure password generator.
+Items are searchable through a browser-local catalog of public list fields.
+Passwords, API keys, note bodies, seed phrases, full card numbers, OTP seeds,
+passkey private keys, backup codes, and file contents are excluded. Secret
+values stay masked until revealed. Authenticator items derive the current
+one-time code locally in Rust/WASM and never persist generated codes. Nook also
+includes a secure password generator.
 
 Vault items are append-only in the UI: add, reveal, copy, delete. To change an
 item, add a corrected copy and delete the old one.
@@ -150,7 +153,10 @@ passwords stay as separate items instead of being overwritten.
   sync to resume.
 - Decrypted secrets exist only in the active browser session. Reveal and copy
   decrypt one item on demand, then free it when that action ends.
-- **Lock vault** clears the plaintext session; encrypted data and providers stay.
+- Public list/search metadata is cached separately in IndexedDB so large-vault
+  search does not decrypt every item. Cached rows are integrity-bound to the
+  vault key and their encrypted records. **Lock vault** clears vault keys and
+  any revealed secret values; encrypted data, public search metadata, and providers stay.
 
 ### When you add another device
 
@@ -174,7 +180,7 @@ local command
   → IndexedDB event store
   ↔ set union ↔ GitHub (nook-log/v1/events/…)
   → causal DAG + deterministic projection
-  → encrypted session + metadata pages
+  → encrypted session + local public-metadata search catalog
   → one-record plaintext exposure on reveal/copy (unlocked only)
 ```
 

@@ -421,6 +421,13 @@ impl NookVaultManager {
         Ok(records)
     }
 
+    #[wasm_bindgen(js_name = prepareSecretSearch)]
+    pub async fn prepare_secret_search_js(&mut self) -> Result<(), JsError> {
+        self.prepare_secret_search_catalog()
+            .await
+            .map_err(Into::into)
+    }
+
     #[allow(clippy::needless_pass_by_value)]
     #[wasm_bindgen(js_name = querySecretPage)]
     pub fn query_secret_page_js(
@@ -567,6 +574,7 @@ impl NookVaultManager {
                 nook_core::StoredRecordPayload::from_trusted(ciphertext.clone()),
             ),
         );
+        self.vault.mark_search_catalog_dirty();
 
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
             secret: nook_core::encrypted_secret_from_armored(
@@ -772,6 +780,7 @@ impl NookVaultManager {
                 data_yaml: &data,
             },
         )?;
+        self.vault.mark_search_catalog_dirty();
         let validated_new = nook_core::validate_secret_id(&new_id)?;
         let validated_old = nook_core::validate_secret_id(&old_id)?;
         let ciphertext = self
@@ -939,6 +948,7 @@ impl NookVaultManager {
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
         self.vault.meta.secrets.remove(&id);
+        self.vault.mark_search_catalog_dirty();
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
             secret_id: id.clone(),
         }])

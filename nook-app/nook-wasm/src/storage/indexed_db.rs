@@ -17,6 +17,8 @@
 //! - `device_id` / `device_identity_wrapped` — stable browser device identity
 //!   metadata for passkey-derived identities or PIN-encrypted identity records.
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
+//! - `secret_search:{store_id}` — local plaintext projection of fields that are
+//!   intentionally public for vault list/search (never secret values).
 //! - `sentinel_genesis_share:{store_id}:{device_id}` — a core-verified encrypted
 //!   Sentinel genesis share delivery for this participant. Unlike a draft genesis
 //!   session, this may survive refresh and does not contain plaintext key
@@ -61,6 +63,10 @@ fn vault_blob_key(store_id: &str) -> String {
 
 fn vault_cache_key(cache_ref: &str) -> String {
     format!("vault_cache:{cache_ref}")
+}
+
+fn secret_search_key(store_id: &str) -> String {
+    format!("secret_search:{store_id}")
 }
 
 fn sentinel_genesis_share_key(store_id: &str, device_id: &str) -> String {
@@ -306,6 +312,19 @@ pub(crate) async fn save_vault_blob(store_id: &str, content: &str) -> Result<(),
     save_vault_registry(&registry).await?;
     set_active_vault_id(store_id).await?;
     clear_pending_new_local_vault().await
+}
+
+pub(crate) async fn load_secret_search_catalog(
+    store_id: &str,
+) -> Result<Option<String>, NookError> {
+    idb_get_string(&secret_search_key(store_id)).await
+}
+
+pub(crate) async fn save_secret_search_catalog(
+    store_id: &str,
+    catalog_json: &str,
+) -> Result<(), NookError> {
+    idb_put_string(&secret_search_key(store_id), catalog_json).await
 }
 
 pub(crate) async fn device_identity_protection_status() -> Result<&'static str, NookError> {

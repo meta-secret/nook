@@ -5,9 +5,11 @@ use crate::vault_wire::SecretPayloadYaml;
 use crate::{
     AuthenticatorSecret, CreditCardSecret, SecretId, SecretRecord, SecretType, SecretValue,
 };
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum SecretListItemData {
     Login {
         website_url: String,
@@ -26,6 +28,7 @@ pub enum SecretListItemData {
     },
     Passkey {
         rp_id: String,
+        rp_name: String,
         user_name: String,
         user_display_name: String,
     },
@@ -50,7 +53,7 @@ pub enum SecretListItemData {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretListItem {
     pub id: SecretId,
     pub data: SecretListItemData,
@@ -333,6 +336,7 @@ impl SecretRecord {
             },
             SecretValue::Passkey(value) => SecretListItemData::Passkey {
                 rp_id: value.rp_id.clone(),
+                rp_name: value.rp_name.clone(),
                 user_name: value.user_name.clone(),
                 user_display_name: value.user_display_name.clone(),
             },
@@ -490,55 +494,86 @@ impl SecretRecord {
             return true;
         }
 
-        let mut fields = vec![self.group_key(), self.summary(), self.id.to_string()];
-        match &self.data {
-            SecretValue::Login(value) => {
-                fields.push(value.website_url.clone());
-                fields.push(value.username.clone());
-            }
-            SecretValue::ApiKey(value) => {
-                fields.push(value.website_url.clone());
-                if !value.expires_at.is_empty() {
-                    fields.push(value.expires_at.clone());
-                }
-            }
-            SecretValue::SeedPhrase(value) => {
-                fields.push(value.name.clone());
-            }
-            SecretValue::SecureNote(value) => {
-                fields.push(value.title.clone());
-            }
-            SecretValue::Passkey(value) => {
-                fields.push(value.rp_id.clone());
-                fields.push(value.rp_name.clone());
-                fields.push(value.user_name.clone());
-                fields.push(value.user_display_name.clone());
-            }
-            SecretValue::Authenticator(value) => {
-                fields.push(value.issuer.clone());
-                fields.push(value.account.clone());
-                fields.push(value.website_url.clone());
-            }
-            SecretValue::CreditCard(value) => {
-                fields.push(value.title.clone());
-                fields.push(value.cardholder_name.clone());
-                fields.push(value.last4());
-                fields.push(value.expiration_display());
-            }
-            SecretValue::FileAttachment(value) => {
-                fields.push(value.title.clone());
-                fields.push(value.file_name.clone());
-                fields.push(value.mime_type.clone());
-            }
-        }
-
-        fields
-            .iter()
-            .any(|field| field.to_lowercase().contains(&needle))
+        self.list_item().normalized_search_text().contains(&needle)
     }
 }
 
 impl SecretListItem {
+    /// Lowercase search projection containing only the fields intentionally
+    /// exposed in the public list/search catalog.
+    #[must_use]
+    pub fn normalized_search_text(&self) -> String {
+        let mut fields = vec![self.group_key(), self.summary(), self.id.to_string()];
+        match &self.data {
+            SecretListItemData::Login {
+                website_url,
+                username,
+            } => {
+                fields.push(website_url.clone());
+                fields.push(username.clone());
+            }
+            SecretListItemData::ApiKey {
+                website_url,
+                expires_at,
+            } => {
+                fields.push(website_url.clone());
+                if !expires_at.is_empty() {
+                    fields.push(expires_at.clone());
+                }
+            }
+            SecretListItemData::SeedPhrase { name, .. } => fields.push(name.clone()),
+            SecretListItemData::SecureNote { title } => fields.push(title.clone()),
+            SecretListItemData::Passkey {
+                rp_id,
+                rp_name,
+                user_name,
+                user_display_name,
+            } => {
+                fields.push(rp_id.clone());
+                fields.push(rp_name.clone());
+                fields.push(user_name.clone());
+                fields.push(user_display_name.clone());
+            }
+            SecretListItemData::Authenticator {
+                issuer,
+                account,
+                website_url,
+                ..
+            } => {
+                fields.push(issuer.clone());
+                fields.push(account.clone());
+                fields.push(website_url.clone());
+            }
+            SecretListItemData::CreditCard {
+                title,
+                cardholder_name,
+                last4,
+                expiration_month,
+                expiration_year,
+            } => {
+                fields.push(title.clone());
+                fields.push(cardholder_name.clone());
+                fields.push(last4.clone());
+                fields.push(format!("{expiration_month}/{expiration_year}"));
+            }
+            SecretListItemData::FileAttachment {
+                title,
+                file_name,
+                mime_type,
+                ..
+            } => {
+                fields.push(title.clone());
+                fields.push(file_name.clone());
+                fields.push(mime_type.clone());
+            }
+        }
+        fields
+            .into_iter()
+            .map(|field| field.to_lowercase())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     #[must_use]
     pub fn secret_type(&self) -> SecretType {
         match &self.data {
