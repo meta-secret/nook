@@ -109,6 +109,30 @@ tasks:
       - task: docker:e2e:run
         vars: { TASK: _ci:main }
 
+  ci:pr:e2e:web:artifacts:
+    desc: Hosted web e2e from the verified split-CI WASM artifact.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:e2e:web:artifacts:host }
+
+  _ci:pr:e2e:web:artifacts:host:
+    cmds:
+      - task: docker:ci:web:e2e:build
+      - task: docker:e2e:run
+        vars: { TASK: _ci:main:web:e2e-only }
+
+  ci:pr:e2e:extension:artifacts:
+    desc: Hosted extension e2e from the verified split-CI WASM artifact.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:e2e:extension:artifacts:host }
+
+  _ci:pr:e2e:extension:artifacts:host:
+    cmds:
+      - task: docker:ci:web:e2e:build
+      - task: docker:e2e:run
+        vars: { TASK: _extension:test:e2e }
+
   ci:pr:e2e:local:
     desc: Alias for ci:pr:e2e.
     cmds:
@@ -253,6 +277,11 @@ tasks:
       - task: _web:test:e2e:isolation
       - task: _web:e2e:restore-prod-dist
       - task: _extension:test:e2e
+
+  _ci:main:web:e2e-only:
+    cmds:
+      - task: _web:test:e2e:parallel
+      - task: _web:test:e2e:isolation
 
   _ci:nightly:e2e:
     desc: Nightly live sync e2e after full main build in one container.
