@@ -6,12 +6,18 @@ import {
   waitForPersistedAppLog,
 } from './helpers'
 
-async function clickDeviceProtectionSetup(page: Page) {
+async function revealDeviceProtectionCreateWorkflow(page: Page) {
   const createChoice = page.getByTestId('device-protection-create-new-choice')
-  await expect(createChoice).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if (await createChoice.isVisible()) {
+    await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  }
+  await expect(
+    page.getByTestId('device-protection-create-workflow'),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+}
+
+async function clickDeviceProtectionSetup(page: Page) {
+  await revealDeviceProtectionCreateWorkflow(page)
   const setupButton = page.getByTestId('device-protection-setup-btn')
   await expect(setupButton).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -40,10 +46,9 @@ async function createSentinelParticipantResponse(
   await expect(participant.getByTestId('passkey-auth-overlay')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await revealDeviceProtectionCreateWorkflow(participant)
   const labelInput = participant.getByTestId('device-protection-label-input')
-  if (await labelInput.isVisible()) {
-    await labelInput.fill(label)
-  }
+  await labelInput.fill(label)
   await clickDeviceProtectionSetup(participant)
   const responseOutput = participant.getByTestId(
     'sentinel-genesis-generated-response',
@@ -332,6 +337,7 @@ test.describe('passkey device-key protection', () => {
     await page.goto('/app/')
 
     await openPasskeyOverlayForSimpleCreate(page)
+    await revealDeviceProtectionCreateWorkflow(page)
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -369,6 +375,7 @@ test.describe('passkey device-key protection', () => {
     await page.goto('/app/')
 
     await openPasskeyOverlayForSimpleCreate(page)
+    await revealDeviceProtectionCreateWorkflow(page)
     await page.getByTestId('device-mode-select').click()
     await page.getByRole('option', { name: 'High security' }).click()
     await clickDeviceProtectionSetup(page)
