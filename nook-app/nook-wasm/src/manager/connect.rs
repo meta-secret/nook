@@ -57,6 +57,22 @@ mod tests {
         assert!(manager.sync_outbox.repo_arg.is_empty());
         assert_eq!(manager.vault.vault_name.as_deref(), Some("Local vault"));
     }
+
+    #[wasm_bindgen_test]
+    async fn remote_store_discovery_drops_stale_vault_session_state() {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "store_stale12345".to_owned();
+        manager.vault.vault_name = Some("Stale vault".to_owned());
+
+        let discovered = manager
+            .discover_remote_vault_store_id("local".to_owned(), String::new(), String::new())
+            .await
+            .expect("discover local storage");
+
+        assert!(discovered.is_empty());
+        assert!(manager.vault.store_id.is_empty());
+        assert!(manager.vault.vault_name.is_none());
+    }
 }
 
 #[wasm_bindgen]
@@ -71,6 +87,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<String, JsError> {
+        self.reset_vault_session();
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         if self.storage.mode != nook_core::StorageMode::Local {

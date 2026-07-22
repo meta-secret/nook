@@ -448,25 +448,49 @@ export async function discoverStagedVaultStoreId(
   state: VaultState,
 ): Promise<string> {
   if (!state.manager || !state.loginSetupType) return "";
-  if (state.loginSetupType === "local-folder") {
-    const handleId = state.localFolder?.handleId?.trim() ?? "";
-    if (!handleId) return "";
-    await state.enqueueStorage(() =>
-      state.manager!.syncLocalFolderProvider(handleId),
-    );
-    return state.manager.vaultStoreId.trim();
+  if (state.isVerifying) {
+    throw new Error(state.t("auth_storage.sync_failed"));
   }
-  const [storageMode, accessToken, remoteRef] =
-    state.stagedRemoteStorageArgs() ?? state.wasmStorageArgs();
-  return (
-    await state.enqueueStorage(() =>
-      state.manager!.discoverRemoteVaultStoreId(
-        storageMode,
-        accessToken,
-        remoteRef,
-      ),
-    )
-  ).trim();
+  state.isVerifying = true;
+  try {
+    const discovery = (async () => {
+      if (state.loginSetupType === "local-folder") {
+        const handleId = state.localFolder?.handleId?.trim() ?? "";
+        if (!handleId) return "";
+        return await state.enqueueStorage(async () => {
+          state.manager!.resetVaultSession();
+          await state.manager!.syncLocalFolderProvider(handleId);
+          return state.manager!.vaultStoreId.trim();
+        });
+      }
+      const [storageMode, accessToken, remoteRef] =
+        state.stagedRemoteStorageArgs() ?? state.wasmStorageArgs();
+      return (
+        await state.enqueueStorage(() =>
+          state.manager!.discoverRemoteVaultStoreId(
+            storageMode,
+            accessToken,
+            remoteRef,
+          ),
+        )
+      ).trim();
+    })();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const timeoutError = new Error(state.t("auth_storage.sync_failed"));
+        timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+        reject(timeoutError);
+      }, 30_000);
+    });
+    try {
+      return await Promise.race([discovery, timeout]);
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    }
+  } finally {
+    state.isVerifying = false;
+  }
 }
 
 export async function connectAndSyncStagedProvider(

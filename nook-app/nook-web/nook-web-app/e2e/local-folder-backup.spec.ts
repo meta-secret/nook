@@ -248,7 +248,7 @@ async function connectLocalFolderProviderFromSettings(page: Page) {
 }
 
 test.describe('local folder backup provider', () => {
-  test('requests device identity before importing into an empty browser', async ({
+  test('rejects an empty folder before requesting device identity', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -264,6 +264,41 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('login-local-folder-selected')).toHaveText(
       'Nook Backup',
     )
+    await page.getByTestId('login-connect-local-folder-btn').click()
+
+    await expect(page.getByTestId('vault-error')).toContainText(
+      'No existing vault was found in this provider',
+    )
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+  })
+
+  test('requests device identity before importing an existing folder vault', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await installPasskeyMock(page)
+    await installLocalFolderPickerMock(page)
+    await page.goto('/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+    await connectLocalFolderProviderFromSettings(page)
+    await page.getByTestId('vault-secrets-tab').click()
+    await assertVaultReady(page)
+    await addSecret(
+      page,
+      uniqueSecretKey('existing-folder-source'),
+      'existing-folder-value',
+    )
+    await waitForLocalFolderEventRecords(page)
+
+    await clearBrowserVault(page)
+    await page.reload()
+    await page.getByTestId('login-connect-storage-btn').click()
+    await page.getByTestId('provider-option-local-folder').click()
+    await page.getByTestId('login-choose-local-folder-btn').click()
     await page.getByTestId('login-connect-local-folder-btn').click()
 
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()

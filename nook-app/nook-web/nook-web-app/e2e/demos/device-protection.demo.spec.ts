@@ -39,7 +39,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await demoBeat(page)
 })
 
-test('recover device identity before importing an existing vault', async ({
+test('reject an empty folder before existing-vault recovery', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -113,12 +113,9 @@ test('recover device identity before importing an existing vault', async ({
   )
   await page.getByTestId('login-connect-local-folder-btn').click()
 
-  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('device-protection-gate')).toBeVisible()
-  await expect(page.locator('body')).not.toContainText(
-    "Authorize before using this browser's device key.",
+  await expect(page.getByTestId('vault-error')).toContainText(
+    'No existing vault was found in this provider',
   )
+  await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   await demoBeat(page)
 })

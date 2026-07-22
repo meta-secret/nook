@@ -128,6 +128,10 @@ from signed encrypted events without decrypting the vault. Simple Vault uses
 that identifier to ask an already-paired extension for its memory-only identity;
 a locked extension owns and displays its unlock window. Only when no paired
 extension is available does the website present its own passkey/PIN device gate.
+Discovery is a bounded busy operation, and a missing `store_id` rejects an empty
+or incorrect provider before device authorization. The discovered identifier
+remains staged: it must not replace the active local vault until that exact
+provider vault connects successfully.
 The flow must never call provider connect first and surface the internal
 `authorization_required` error to the user.
 
