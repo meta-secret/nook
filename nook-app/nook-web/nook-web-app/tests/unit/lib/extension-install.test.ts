@@ -52,6 +52,18 @@ describe('extension install target', () => {
     ).toBe(true)
   })
 
+  test('uses the mobile user agent fallback when client hints report desktop', () => {
+    expect(
+      browserSupportsExtensionInstallation({
+        maxTouchPoints: 5,
+        platform: 'iPhone',
+        userAgent:
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) Mobile/15E148 Safari/604.1',
+        userAgentData: { mobile: false },
+      }),
+    ).toBe(false)
+  })
+
   test.each([
     {
       label: 'Android browser',

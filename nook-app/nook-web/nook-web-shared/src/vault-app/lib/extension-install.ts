@@ -49,9 +49,7 @@ export function extensionInstallLandingUrl(): string {
 export function browserSupportsExtensionInstallation(
   environment: BrowserExtensionEnvironment = navigator,
 ): boolean {
-  if (environment.userAgentData) {
-    return !environment.userAgentData.mobile;
-  }
+  if (environment.userAgentData?.mobile) return false;
 
   if (
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(
