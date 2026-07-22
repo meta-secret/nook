@@ -5,6 +5,7 @@ import {
   clearBrowserVault,
   connectLocalVault,
   expandSettingsSection,
+  expectEmptyLocalFolderRejected,
   installPasskeyMock,
   openStorageSettings,
   uniqueSecretKey,
@@ -247,6 +248,21 @@ async function connectLocalFolderProviderFromSettings(page: Page) {
   await waitForVaultOperationsIdle(page)
 }
 
+async function prepareVaultForFolderSettings(
+  page: Page,
+  installPicker: (page: Page) => Promise<void>,
+): Promise<void> {
+  await installPasskeyMock(page)
+  await installPicker(page)
+  await page.goto('/app/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await connectLocalVault(page)
+  await openStorageSettings(page)
+  await expandSettingsSection(page, 'storage')
+  await page.getByTestId('add-provider-btn').first().click()
+}
+
 test.describe('local folder backup provider', () => {
   test('rejects an empty folder before requesting device identity', async ({
     page,
@@ -258,18 +274,7 @@ test.describe('local folder backup provider', () => {
     await installLocalFolderPickerMock(page)
     await page.goto('/app/')
 
-    await page.getByTestId('login-connect-storage-btn').click()
-    await page.getByTestId('provider-option-local-folder').click()
-    await page.getByTestId('login-choose-local-folder-btn').click()
-    await expect(page.getByTestId('login-local-folder-selected')).toHaveText(
-      'Nook Backup',
-    )
-    await page.getByTestId('login-connect-local-folder-btn').click()
-
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'No existing vault was found in this provider',
-    )
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expectEmptyLocalFolderRejected(page)
   })
 
   test('requests device identity before importing an existing folder vault', async ({
@@ -334,16 +339,10 @@ test.describe('local folder backup provider', () => {
   test('disables local folder backup when writable folders are unavailable', async ({
     page,
   }) => {
-    await installPasskeyMock(page)
-    await installUnsupportedLocalFolderPickerMock(page)
-    await page.goto('/app/')
-    await clearBrowserVault(page)
-    await page.reload()
-    await connectLocalVault(page)
-
-    await openStorageSettings(page)
-    await expandSettingsSection(page, 'storage')
-    await page.getByTestId('add-provider-btn').first().click()
+    await prepareVaultForFolderSettings(
+      page,
+      installUnsupportedLocalFolderPickerMock,
+    )
     const localFolderOption = page.getByTestId('provider-option-local-folder')
     await expect(localFolderOption).toBeDisabled()
     await expect(localFolderOption).toContainText(
@@ -355,16 +354,7 @@ test.describe('local folder backup provider', () => {
   test('connects from settings and writes flat YAML event files', async ({
     page,
   }) => {
-    await installPasskeyMock(page)
-    await installLocalFolderPickerMock(page)
-    await page.goto('/app/')
-    await clearBrowserVault(page)
-    await page.reload()
-    await connectLocalVault(page)
-
-    await openStorageSettings(page)
-    await expandSettingsSection(page, 'storage')
-    await page.getByTestId('add-provider-btn').first().click()
+    await prepareVaultForFolderSettings(page, installLocalFolderPickerMock)
     await page.getByTestId('provider-option-local-folder').click()
     await expect(page.getByTestId('local-folder-setup')).toBeVisible()
     await page.getByTestId('settings-choose-local-folder-btn').click()
@@ -415,16 +405,7 @@ test.describe('local folder backup provider', () => {
   test('blocks a second local vault before writing to a folder with another store id', async ({
     page,
   }) => {
-    await installPasskeyMock(page)
-    await installLocalFolderPickerMock(page)
-    await page.goto('/app/')
-    await clearBrowserVault(page)
-    await page.reload()
-    await connectLocalVault(page)
-
-    await openStorageSettings(page)
-    await expandSettingsSection(page, 'storage')
-    await page.getByTestId('add-provider-btn').first().click()
+    await prepareVaultForFolderSettings(page, installLocalFolderPickerMock)
     await page.getByTestId('provider-option-local-folder').click()
     await page.getByTestId('settings-choose-local-folder-btn').click()
     await expect(page.getByTestId('settings-local-folder-selected')).toHaveText(

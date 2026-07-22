@@ -147,13 +147,7 @@ impl GoogleDriveMode {
     }
 
     pub fn parse(value: &str) -> ValidationResult<Self> {
-        match value.trim() {
-            "" | "private" => Ok(Self::Private),
-            "shared" => Ok(Self::Shared),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: format!("google-drive:{other}"),
-            }),
-        }
+        parse_provider_visibility(value, "google-drive", Self::Private, Self::Shared)
     }
 }
 
@@ -182,13 +176,22 @@ impl ICloudMode {
     }
 
     pub fn parse(value: &str) -> ValidationResult<Self> {
-        match value.trim() {
-            "" | "private" => Ok(Self::Private),
-            "shared" => Ok(Self::Shared),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: format!("icloud:{other}"),
-            }),
-        }
+        parse_provider_visibility(value, "icloud", Self::Private, Self::Shared)
+    }
+}
+
+fn parse_provider_visibility<T: Copy>(
+    value: &str,
+    provider: &str,
+    private: T,
+    shared: T,
+) -> ValidationResult<T> {
+    match value.trim() {
+        "" | "private" => Ok(private),
+        "shared" => Ok(shared),
+        other => Err(ValidationError::UnknownStorageMode {
+            mode: format!("{provider}:{other}"),
+        }),
     }
 }
 

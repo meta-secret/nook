@@ -1,4 +1,10 @@
-import { test, expect, type BrowserContext, type Page } from './fixtures'
+import {
+  test,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from './fixtures'
 import {
   addSecret,
   approveJoinFromBanner,
@@ -38,6 +44,19 @@ const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
 // One worker per file — nested describes share the same remote timing and must not overlap.
 test.describe.configure({ mode: 'serial' })
+
+async function createMultiDevicePair(browser: Browser, targetName: string) {
+  const target = createSyncTarget('', targetName)
+  const contextA = await createIsolatedContext(browser)
+  const contextB = await createIsolatedContext(browser)
+  const deviceA = await contextA.newPage()
+  const deviceB = await contextB.newPage()
+  await disableVaultIdleLock(deviceB)
+  await installSyncRemoteOnPages([deviceA, deviceB], target)
+  await connectSyncGenesisDevice(deviceA, target)
+  await disableVaultIdleLock(deviceA)
+  return { contextA, contextB, deviceA, deviceB, target }
+}
 
 test.describe(`multi-device ${providerLabel} vault`, () => {
   test.setTimeout(120_000)
@@ -192,17 +211,8 @@ test.describe(`multi-device approve from settings (${providerLabel})`, () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    target = createSyncTarget('', 'multi-device-settings')
-
-    contextA = await createIsolatedContext(browser)
-    contextB = await createIsolatedContext(browser)
-    deviceA = await contextA.newPage()
-    deviceB = await contextB.newPage()
-    await disableVaultIdleLock(deviceB)
-
-    await installSyncRemoteOnPages([deviceA, deviceB], target)
-    await connectSyncGenesisDevice(deviceA, target)
-    await disableVaultIdleLock(deviceA)
+    ;({ contextA, contextB, deviceA, deviceB, target } =
+      await createMultiDevicePair(browser, 'multi-device-settings'))
   })
 
   test.afterAll(async () => {
@@ -243,17 +253,8 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    target = createSyncTarget('', 'multi-device-bg')
-
-    contextA = await createIsolatedContext(browser)
-    contextB = await createIsolatedContext(browser)
-    deviceA = await contextA.newPage()
-    deviceB = await contextB.newPage()
-    await disableVaultIdleLock(deviceB)
-
-    await installSyncRemoteOnPages([deviceA, deviceB], target)
-    await connectSyncGenesisDevice(deviceA, target)
-    await disableVaultIdleLock(deviceA)
+    ;({ contextA, contextB, deviceA, deviceB, target } =
+      await createMultiDevicePair(browser, 'multi-device-bg'))
   })
 
   test.afterAll(async () => {

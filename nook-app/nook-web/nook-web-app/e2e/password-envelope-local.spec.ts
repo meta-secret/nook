@@ -23,6 +23,7 @@ import {
   waitForStorageChainIdle,
   waitForSyncRemoteVaultState,
   waitForVaultUnlocked,
+  wipeDeviceIdentity,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -100,27 +101,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
 
     // Simulate lost device keys: wipe identity from nook_db but keep providers.
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve, reject) => {
-          const request = indexedDB.open('nook_db')
-          request.onerror = () =>
-            reject(request.error ?? new Error('idb open failed'))
-          request.onsuccess = () => {
-            const db = request.result
-            const tx = db.transaction('vault', 'readwrite')
-            const store = tx.objectStore('vault')
-            store.delete('device_id')
-            store.delete('device_identity_wrapped')
-            tx.oncomplete = () => {
-              db.close()
-              resolve()
-            }
-            tx.onerror = () =>
-              reject(tx.error ?? new Error('idb delete failed'))
-          }
-        }),
-    )
+    await wipeDeviceIdentity(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,

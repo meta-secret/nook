@@ -245,6 +245,27 @@ pub struct StorageProvider {
     pub created_at: String,
 }
 
+impl StorageProvider {
+    #[must_use]
+    pub fn github(id: &str, label: &str, pat: &str, repo: &str, created_at: &str) -> Self {
+        Self {
+            id: id.to_owned(),
+            provider_type: "github".to_owned(),
+            label: label.to_owned(),
+            github_pat: Some(pat.to_owned()),
+            github_repo: Some(repo.to_owned()),
+            oauth_file: None,
+            local_folder: None,
+            store_id: None,
+            last_synced_version: None,
+            last_synced_at: None,
+            last_sync_revision: None,
+            last_common_content_hash: None,
+            created_at: created_at.to_owned(),
+        }
+    }
+}
+
 pub type StorageProviderData = StorageProvider;
 
 /// The full persisted snapshot: provider rows plus the active vault scope.

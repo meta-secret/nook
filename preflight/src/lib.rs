@@ -70,38 +70,42 @@ pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violati
 }
 
 pub fn typescript_domain_boundary_boilerplate(root: &Path) -> io::Result<Vec<Violation>> {
-    let directory = root.join("nook-app/nook-web");
-    let mut files = Vec::new();
-    collect_files_with_extension(&directory, "ts", &mut files)?;
-    collect_files_with_extension(&directory, "svelte", &mut files)?;
-
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in typescript_boundary_violation_lines(&contents) {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
-        }
-    }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
+    source_violations(
+        root,
+        Path::new("nook-app/nook-web"),
+        &["ts", "svelte"],
+        typescript_boundary_violation_lines,
+    )
 }
 
 /// Reject declarations that make a raw JavaScript value look typed only in the
 /// generated declaration file. Provider/auth DTOs must use an actual Rust ABI
 /// type (for example a `Tsify` type), never `JsValue` plus an unchecked hint.
 pub fn rust_wasm_domain_boundary_escape_hatches(root: &Path) -> io::Result<Vec<Violation>> {
-    let directory = root.join("nook-app/nook-wasm/src");
+    source_violations(
+        root,
+        Path::new("nook-app/nook-wasm/src"),
+        &["rs"],
+        rust_wasm_boundary_violation_lines,
+    )
+}
+
+fn source_violations(
+    root: &Path,
+    relative_directory: &Path,
+    extensions: &[&str],
+    detector: fn(&str) -> Vec<usize>,
+) -> io::Result<Vec<Violation>> {
+    let directory = root.join(relative_directory);
     let mut files = Vec::new();
-    collect_files_with_extension(&directory, "rs", &mut files)?;
+    for extension in extensions {
+        collect_files_with_extension(&directory, extension, &mut files)?;
+    }
 
     let mut violations = Vec::new();
     for path in files {
         let contents = fs::read_to_string(&path)?;
-        for line in rust_wasm_boundary_violation_lines(&contents) {
+        for line in detector(&contents) {
             violations.push(Violation {
                 path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
                 line,
@@ -461,11 +465,21 @@ fn violations_in_tree(
     let directory = root.join(relative_directory);
     let mut files = Vec::new();
     collect_files_with_extension(&directory, extension, &mut files)?;
+    marker_violations(root, files, |line| {
+        markers.iter().any(|marker| line.contains(marker))
+    })
+}
+
+fn marker_violations(
+    root: &Path,
+    files: Vec<PathBuf>,
+    matches: impl Fn(&str) -> bool,
+) -> io::Result<Vec<Violation>> {
     let mut violations = Vec::new();
     for path in files {
         let contents = fs::read_to_string(&path)?;
         for (index, line) in contents.lines().enumerate() {
-            if markers.iter().any(|marker| line.contains(marker)) {
+            if matches(line) {
                 violations.push(Violation {
                     path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
                     line: index + 1,
@@ -510,21 +524,7 @@ pub fn dockerfile_cache_mounts(root: &Path) -> io::Result<Vec<Violation>> {
         ));
     }
 
-    let mut violations = Vec::new();
-    for path in dockerfiles {
-        let contents = fs::read_to_string(&path)?;
-        for (index, line) in contents.lines().enumerate() {
-            if contains_cache_mount(line) {
-                violations.push(Violation {
-                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                    line: index + 1,
-                });
-            }
-        }
-    }
-
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
+    marker_violations(root, dockerfiles, contains_cache_mount)
 }
 
 fn contains_cache_mount(line: &str) -> bool {

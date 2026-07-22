@@ -415,69 +415,64 @@ fn existing_icloud_event_matches(
     )
 }
 
-async fn confirm_icloud_create_conflict_matches(
-    token: &str,
-    target: &ICloudEventTarget,
-    event_id: &EventId,
-    record_name: &str,
-    bytes: &[u8],
-    expected_event: &VaultEvent,
-) -> Result<bool, NookError> {
-    if let Some(existing) = lookup_record(token, target, record_name).await? {
-        let (matches, existing_len) =
-            existing_icloud_event_matches(&existing, bytes, expected_event);
-        if matches {
-            tracing::info!(
-                scope = "wasm-icloud",
-                event_id = event_id.as_str(),
-                record_name,
-                existing_len,
-                "CloudKit create conflict matched existing content"
-            );
-            return Ok(true);
-        }
-    }
-    tracing::warn!(
-        scope = "wasm-icloud",
-        event_id = event_id.as_str(),
-        record_name,
-        "CloudKit create conflict did not match existing content"
-    );
-    Ok(false)
+#[derive(Clone, Copy)]
+enum ExistingEventPolicy {
+    ConfirmCreateConflict,
+    RejectMismatch,
 }
 
-async fn return_if_existing_icloud_event_matches(
+async fn resolve_existing_icloud_event(
     token: &str,
     target: &ICloudEventTarget,
     event_id: &EventId,
     record_name: &str,
     bytes: &[u8],
     expected_event: &VaultEvent,
+    policy: ExistingEventPolicy,
 ) -> Result<bool, NookError> {
     if let Some(existing) = lookup_record(token, target, record_name).await? {
         let (matches, existing_len) =
             existing_icloud_event_matches(&existing, bytes, expected_event);
         if matches {
-            tracing::info!(
+            match policy {
+                ExistingEventPolicy::ConfirmCreateConflict => tracing::info!(
+                    scope = "wasm-icloud",
+                    event_id = event_id.as_str(),
+                    record_name,
+                    existing_len,
+                    "CloudKit create conflict matched existing content"
+                ),
+                ExistingEventPolicy::RejectMismatch => tracing::info!(
+                    scope = "wasm-icloud",
+                    event_id = event_id.as_str(),
+                    record_name,
+                    existing_len,
+                    "CloudKit event already exists with matching content"
+                ),
+            }
+            return Ok(true);
+        }
+        match policy {
+            ExistingEventPolicy::ConfirmCreateConflict => tracing::warn!(
                 scope = "wasm-icloud",
                 event_id = event_id.as_str(),
                 record_name,
-                existing_len,
-                "CloudKit event already exists with matching content"
-            );
-            return Ok(true);
+                "CloudKit create conflict did not match existing content"
+            ),
+            ExistingEventPolicy::RejectMismatch => {
+                tracing::warn!(
+                    scope = "wasm-icloud",
+                    event_id = event_id.as_str(),
+                    record_name,
+                    existing_len,
+                    expected_len = bytes.len(),
+                    "CloudKit event exists with different content"
+                );
+                return Err(NookError::ICloud(
+                    "Event record exists with different content (corruption).".to_owned(),
+                ));
+            }
         }
-        tracing::warn!(
-            scope = "wasm-icloud",
-            event_id = event_id.as_str(),
-            record_name,
-            existing_len,
-            expected_len = bytes.len(),
-            "CloudKit event exists with different content"
-        );
-        return Err(NookError::ICloud(
-            "Event record exists with different content (corruption).".to_owned(),
-        ));
     }
     Ok(false)
 }
@@ -529,13 +524,14 @@ pub(crate) async fn put_icloud_event_if_absent(
         "CloudKit event put-if-absent started"
     );
 
-    if return_if_existing_icloud_event_matches(
+    if resolve_existing_icloud_event(
         token.as_ref(),
         target,
         event_id,
         &record_name,
         bytes,
         &expected_event,
+        ExistingEventPolicy::RejectMismatch,
     )
     .await?
     {
@@ -587,13 +583,14 @@ pub(crate) async fn put_icloud_event_if_absent(
             record_name,
             "CloudKit create conflict detected; checking existing record"
         );
-        if confirm_icloud_create_conflict_matches(
+        if resolve_existing_icloud_event(
             token.as_ref(),
             target,
             event_id,
             &record_name,
             bytes,
             &expected_event,
+            ExistingEventPolicy::ConfirmCreateConflict,
         )
         .await?
         {

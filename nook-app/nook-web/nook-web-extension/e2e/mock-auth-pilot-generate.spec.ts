@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { launchPairedPinExtension } from './helpers/paired-pin-extension'
+import { signInAndSaveMockLogin } from './helpers/mock-auth-login'
 import { startMockAuthServer } from './mock-auth'
 
 test.describe('PIN Pilot generate password', () => {
@@ -59,22 +60,7 @@ test.describe('PIN Pilot generate password', () => {
     })
     try {
       const loginPage = await paired.context.newPage()
-      await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      await loginPage.locator('input[name="username"]').fill('alice@nook.test')
-      await loginPage
-        .locator('input[name="password"]')
-        .fill('extension-fill-password')
-      await loginPage.getByRole('button', { name: 'Sign in' }).click()
-      await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
-        'Authentication complete',
-        { timeout: 20_000 },
-      )
-      const saveWidget = loginPage.locator('#nook-auth-widget')
-      await expect(saveWidget.getByText('Save this login?')).toBeVisible({
-        timeout: 15_000,
-      })
-      await saveWidget.getByTestId('nook-auth-gate-save').click()
-      await expect(saveWidget.getByText('Login saved')).toBeVisible()
+      await signInAndSaveMockLogin(loginPage, mockAuth.origin)
 
       const changePage = await paired.context.newPage()
       await changePage.goto(`${mockAuth.origin}/password-change`)

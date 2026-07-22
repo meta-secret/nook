@@ -1,17 +1,10 @@
 import { expect, test } from '../fixtures'
-import type { Page } from '@playwright/test'
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import {
+  demoBeat,
+  injectPilotAutofill,
+  loadPilotMessages,
+} from './pilot-demo-helpers'
 import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
-
-const DEMO_BEAT_MS = 900
-const demoDir = path.dirname(fileURLToPath(import.meta.url))
-const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
-
-async function demoBeat(page: Page) {
-  await page.waitForTimeout(DEMO_BEAT_MS)
-}
 
 function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
@@ -57,12 +50,7 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
 }
 
 test('guide a login through the Nook Pilot control plane', async ({ page }) => {
-  const messages = JSON.parse(
-    await readFile(
-      path.join(extensionDist, '_locales/en/messages.json'),
-      'utf8',
-    ),
-  ) as Record<string, ChromeMessage>
+  const messages = await loadPilotMessages()
 
   await page.addInitScript(installDemoChromeStub, loginPilotStubArgs(messages))
 
@@ -141,10 +129,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
       })
   })
   await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
-  await page.addScriptTag({
-    path: path.join(extensionDist, 'content/autofill.js'),
-    type: 'module',
-  })
+  await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
@@ -184,12 +169,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
 test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   page,
 }) => {
-  const messages = JSON.parse(
-    await readFile(
-      path.join(extensionDist, '_locales/en/messages.json'),
-      'utf8',
-    ),
-  ) as Record<string, ChromeMessage>
+  const messages = await loadPilotMessages()
 
   await page.addInitScript(installDemoChromeStub, totpPilotStubArgs(messages))
 
@@ -262,10 +242,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
       </body>
     </html>`)
   await page.evaluate(installDemoChromeStub, totpPilotStubArgs(messages))
-  await page.addScriptTag({
-    path: path.join(extensionDist, 'content/autofill.js'),
-    type: 'module',
-  })
+  await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 2/3')).toBeVisible()
@@ -290,12 +267,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
 test('detect a Microsoft-like email-first login through Nook Pilot', async ({
   page,
 }) => {
-  const messages = JSON.parse(
-    await readFile(
-      path.join(extensionDist, '_locales/en/messages.json'),
-      'utf8',
-    ),
-  ) as Record<string, ChromeMessage>
+  const messages = await loadPilotMessages()
 
   await page.addInitScript(installDemoChromeStub, loginPilotStubArgs(messages))
 
@@ -364,10 +336,7 @@ test('detect a Microsoft-like email-first login through Nook Pilot', async ({
       </body>
     </html>`)
   await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
-  await page.addScriptTag({
-    path: path.join(extensionDist, 'content/autofill.js'),
-    type: 'module',
-  })
+  await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()

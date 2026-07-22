@@ -373,38 +373,15 @@ mod tests {
     use crate::PasswordEnvelope;
     use crate::PasswordUnlockEntry;
     use crate::secret_types::SecretType;
+    use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
     use crate::vault_event::{
         GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
-    use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
-    use crate::vault_signing::SigningIdentity;
-    use crate::vault_wire::{
-        DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex,
-    };
+    use crate::vault_ids::{DeviceId, SecretId};
+    use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex};
     use crate::{SecretFingerprint, SecretFingerprintAssignment, VaultResult};
     use ed25519_dalek::SigningKey;
-    use rand_core::OsRng;
-
-    fn key() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
-    }
-
-    fn store() -> StoreId {
-        StoreId::parse("store_testtoken11").unwrap()
-    }
-
-    fn actor(signing_key: &SigningKey) -> AuthKeyId {
-        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
-    }
-
-    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
-    }
-
-    fn epoch() -> EventId {
-        EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap()
-    }
 
     fn ts(value: &str) -> IsoTimestamp {
         IsoTimestamp::from_trusted(value.to_owned())
@@ -429,6 +406,47 @@ mod tests {
 
     fn genesis_source_hash() -> Sha256Hex {
         Sha256Hex::from_trusted("deadbeef".repeat(8))
+    }
+
+    fn signed_operation(
+        signing_key: &SigningKey,
+        parents: Vec<EventId>,
+        operation: VaultOperation,
+    ) -> VaultResult<VaultEvent> {
+        VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store(),
+                actor_id: actor(signing_key),
+                actor_signing_public_key: Some(public_key(signing_key)),
+                parents,
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch(),
+                operations: vec![operation],
+            },
+            signing_key,
+        )
+    }
+
+    fn replacement_event(
+        signing_key: &SigningKey,
+        parent: &EventId,
+        new_id: &str,
+    ) -> VaultResult<VaultEvent> {
+        signed_operation(
+            signing_key,
+            vec![parent.clone()],
+            VaultOperation::SecretReplaced {
+                old_id: sid("secret_original1"),
+                new_secret: EncryptedSecretPayload {
+                    id: sid(new_id),
+                    secret_type: SecretType::ApiKey,
+                    ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
+                    identity_fingerprint: None,
+                    fingerprint: None,
+                },
+            },
+        )
     }
 
     const STORE: &str = "store_testtoken11";
@@ -570,31 +588,8 @@ mod tests {
         let base_id = base.id().unwrap();
         graph.insert(base, STORE).unwrap();
 
-        let replace = |new_id: &str| {
-            let body = VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store(),
-                actor_id: actor(&signing_key),
-                actor_signing_public_key: Some(public_key(&signing_key)),
-                parents: vec![base_id.clone()],
-                created_at: ts("2026-06-28T00:00:00Z"),
-                key_epoch: epoch(),
-                operations: vec![VaultOperation::SecretReplaced {
-                    old_id: sid("secret_original1"),
-                    new_secret: EncryptedSecretPayload {
-                        id: sid(new_id),
-                        secret_type: SecretType::ApiKey,
-                        ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
-                        identity_fingerprint: None,
-                        fingerprint: None,
-                    },
-                }],
-            };
-            VaultEvent::sign(body, &signing_key).unwrap()
-        };
-
-        let r1 = replace("secret_newaaaaaaa");
-        let r2 = replace("secret_newbbbbbbb");
+        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa").unwrap();
+        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb").unwrap();
         graph.insert(r1, STORE).unwrap();
         graph.insert(r2, STORE).unwrap();
 
@@ -662,21 +657,8 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
 
-        let signed_op = |parents: Vec<EventId>, op: VaultOperation| -> VaultResult<VaultEvent> {
-            let body = VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store(),
-                actor_id: actor(&signing_key),
-                actor_signing_public_key: Some(public_key(&signing_key)),
-                parents,
-                created_at: ts("2026-06-28T00:00:00Z"),
-                key_epoch: epoch(),
-                operations: vec![op],
-            };
-            VaultEvent::sign(body, &signing_key)
-        };
-
-        let add = signed_op(
+        let add = signed_operation(
+            &signing_key,
             vec![genesis_id],
             VaultOperation::PasswordAdded {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
@@ -695,7 +677,8 @@ mod tests {
             "initial"
         );
 
-        let rotate = signed_op(
+        let rotate = signed_operation(
+            &signing_key,
             vec![add_id],
             VaultOperation::PasswordRotated {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
@@ -712,7 +695,8 @@ mod tests {
             "rotated"
         );
 
-        let remove = signed_op(
+        let remove = signed_operation(
+            &signing_key,
             vec![rotate_id],
             VaultOperation::PasswordRemoved {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
@@ -733,31 +717,8 @@ mod tests {
         let base_id = base.id()?;
         graph.insert(base, STORE)?;
 
-        let signed_replace = |new_id: &str| -> VaultResult<VaultEvent> {
-            let body = VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store(),
-                actor_id: actor(&signing_key),
-                actor_signing_public_key: Some(public_key(&signing_key)),
-                parents: vec![base_id.clone()],
-                created_at: ts("2026-06-28T00:00:00Z"),
-                key_epoch: epoch(),
-                operations: vec![VaultOperation::SecretReplaced {
-                    old_id: sid("secret_original1"),
-                    new_secret: EncryptedSecretPayload {
-                        id: sid(new_id),
-                        secret_type: SecretType::ApiKey,
-                        ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
-                        identity_fingerprint: None,
-                        fingerprint: None,
-                    },
-                }],
-            };
-            VaultEvent::sign(body, &signing_key)
-        };
-
-        let r1 = signed_replace("secret_newaaaaaaa")?;
-        let r2 = signed_replace("secret_newbbbbbbb")?;
+        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
+        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
         graph.insert(r1, STORE)?;
         graph.insert(r2, STORE)?;
 
@@ -856,27 +817,15 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
 
-        let signed_op = |parents: Vec<EventId>, op: VaultOperation| -> VaultResult<VaultEvent> {
-            let body = VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store(),
-                actor_id: actor(&signing_key),
-                actor_signing_public_key: Some(public_key(&signing_key)),
-                parents,
-                created_at: ts("2026-06-28T00:00:00Z"),
-                key_epoch: epoch(),
-                operations: vec![op],
-            };
-            VaultEvent::sign(body, &signing_key)
-        };
-
-        let revoke = signed_op(
+        let revoke = signed_operation(
+            &signing_key,
             vec![genesis_id.clone()],
             VaultOperation::DeviceRevoked {
                 device_id: DeviceId::parse("abcd1234ef567890").unwrap(),
             },
         )?;
-        let rotate = signed_op(
+        let rotate = signed_operation(
+            &signing_key,
             vec![genesis_id],
             VaultOperation::PasswordRotated {
                 entry_id: PasswordEntryId::parse("pwdentry001").unwrap(),

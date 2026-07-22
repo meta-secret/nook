@@ -5,7 +5,6 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::LazyLock;
-use url::Url;
 
 /// Popular authenticator issuer labels mapped to website hosts.
 ///
@@ -55,27 +54,6 @@ static ISSUER_HOSTS: LazyLock<AuthenticatorIssuerHosts> = LazyLock::new(|| {
         .expect("bundled authenticator_issuer_hosts.json must deserialize")
 });
 
-fn hostname_from_raw(raw: &str) -> String {
-    let value = raw.trim();
-    if value.is_empty() {
-        return String::new();
-    }
-
-    Url::parse(value)
-        .or_else(|error| {
-            if value.contains("://") {
-                Err(error)
-            } else {
-                Url::parse(&format!("https://{value}"))
-            }
-        })
-        .ok()
-        .and_then(|url| url.host_str().map(ToOwned::to_owned))
-        .unwrap_or_default()
-        .trim_start_matches("www.")
-        .to_owned()
-}
-
 fn issuer_looks_like_host(issuer: &str) -> bool {
     issuer.contains("://") || issuer.contains('.')
 }
@@ -104,7 +82,7 @@ pub fn mapped_host_for_issuer(issuer: &str) -> Option<&'static str> {
 /// Order: explicit `website_url`, domain-like issuer text, then bundled map.
 #[must_use]
 pub fn resolve_authenticator_website_host(website_url: &str, issuer: &str) -> Option<String> {
-    let from_url = hostname_from_raw(website_url);
+    let from_url = super::secret_view::hostname_from_url(website_url);
     if !from_url.is_empty() {
         return Some(from_url);
     }
@@ -114,7 +92,7 @@ pub fn resolve_authenticator_website_host(website_url: &str, issuer: &str) -> Op
         return None;
     }
     if issuer_looks_like_host(issuer) {
-        let host = hostname_from_raw(issuer);
+        let host = super::secret_view::hostname_from_url(issuer);
         if !host.is_empty() {
             return Some(host);
         }

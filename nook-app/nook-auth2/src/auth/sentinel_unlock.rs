@@ -9,11 +9,12 @@ use super::multi_device::{
     encrypt_for_recipient, generate_id, open_sentinel_share_for_identity,
     reconstruct_sentinel_vault_keys_from_opened,
 };
+use super::sentinel_signing;
 use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     MultiDeviceError, MultiDeviceResult, StoreId, StoredSecretRecord,
 };
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -339,7 +340,7 @@ fn response_signing_bytes(response: &SentinelUnlockResponse) -> MultiDeviceResul
 }
 
 fn signing_public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-    DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().to_bytes()))
+    sentinel_signing::signing_public_key(signing_key)
 }
 
 fn verify_signature(
@@ -347,19 +348,9 @@ fn verify_signature(
     signature: &str,
     bytes: &[u8],
 ) -> MultiDeviceResult<()> {
-    let public: [u8; 32] = hex::decode(public_key.as_str())
-        .ok()
-        .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidSentinelUnlockSignature)?;
-    let signature: [u8; 64] = hex::decode(signature)
-        .ok()
-        .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidSentinelUnlockSignature)?;
-    let verifying_key = VerifyingKey::from_bytes(&public)
-        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockSignature)?;
-    verifying_key
-        .verify(bytes, &Signature::from_bytes(&signature))
-        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockSignature)
+    sentinel_signing::verify_signature(public_key, signature, bytes, || {
+        MultiDeviceError::InvalidSentinelUnlockSignature
+    })
 }
 
 #[cfg(test)]

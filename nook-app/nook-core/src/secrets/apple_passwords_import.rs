@@ -1,12 +1,13 @@
 //! Apple Passwords CSV conversion into Nook's typed plaintext secret model.
 
-use csv::{ReaderBuilder, StringRecord, Trim};
+use csv::StringRecord;
 use thiserror::Error;
 
+use super::import_support::{
+    MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
+    normalized_csv_header, optional_csv_field,
+};
 use crate::{AuthenticatorSecret, LoginSecret, SecretValue};
-
-const MAX_CSV_BYTES: usize = 64 * 1024 * 1024;
-const MAX_RECORDS: usize = 100_000;
 
 #[derive(Debug, Error)]
 pub enum ApplePasswordsImportError {
@@ -37,31 +38,26 @@ struct ApplePasswordColumns {
     otp_auth: Option<usize>,
 }
 
-fn normalized_header(header: &str) -> String {
-    header
-        .trim_start_matches('\u{feff}')
-        .trim()
-        .to_ascii_lowercase()
-        .replace([' ', '_', '-'], "")
-}
-
 fn required_column(
     normalized: &[String],
     name: &'static str,
 ) -> Result<usize, ApplePasswordsImportError> {
     normalized
         .iter()
-        .position(|header| header == &normalized_header(name))
+        .position(|header| header == &normalized_csv_header(name))
         .ok_or(ApplePasswordsImportError::MissingColumn(name))
 }
 
 fn optional_column(normalized: &[String], name: &str) -> Option<usize> {
-    let expected = normalized_header(name);
+    let expected = normalized_csv_header(name);
     normalized.iter().position(|header| header == &expected)
 }
 
 fn columns(headers: &StringRecord) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
-    let normalized = headers.iter().map(normalized_header).collect::<Vec<_>>();
+    let normalized = headers
+        .iter()
+        .map(normalized_csv_header)
+        .collect::<Vec<_>>();
     Ok(ApplePasswordColumns {
         title: required_column(&normalized, "Title")?,
         url: required_column(&normalized, "URL")?,
@@ -70,18 +66,6 @@ fn columns(headers: &StringRecord) -> Result<ApplePasswordColumns, ApplePassword
         notes: optional_column(&normalized, "Notes"),
         otp_auth: optional_column(&normalized, "OTPAuth"),
     })
-}
-
-fn field(record: &StringRecord, index: usize) -> String {
-    record.get(index).unwrap_or_default().trim().to_owned()
-}
-
-fn password_field(record: &StringRecord, index: usize) -> String {
-    record.get(index).unwrap_or_default().to_owned()
-}
-
-fn optional_field(record: &StringRecord, index: Option<usize>) -> String {
-    index.map_or_else(String::new, |index| field(record, index))
 }
 
 fn append_title_metadata(notes: &mut String, title: &str, website_url: &str) {
@@ -99,12 +83,12 @@ fn convert_record(
     record: &StringRecord,
     columns: ApplePasswordColumns,
 ) -> (Vec<SecretValue>, usize) {
-    let title = field(record, columns.title);
-    let url = field(record, columns.url);
-    let username = field(record, columns.username);
-    let password = password_field(record, columns.password);
-    let mut notes = optional_field(record, columns.notes);
-    let otp_auth = optional_field(record, columns.otp_auth);
+    let title = csv_field(record, columns.title);
+    let url = csv_field(record, columns.url);
+    let username = csv_field(record, columns.username);
+    let password = csv_password_field(record, columns.password);
+    let mut notes = optional_csv_field(record, columns.notes);
+    let otp_auth = optional_csv_field(record, columns.otp_auth);
 
     if title.is_empty()
         && url.is_empty()
@@ -157,30 +141,18 @@ pub fn plan_apple_passwords_import(
         return Err(ApplePasswordsImportError::CsvTooLarge);
     }
 
-    let mut reader = ReaderBuilder::new()
-        .flexible(true)
-        .trim(Trim::Headers)
-        .from_reader(csv_text.as_bytes());
+    let mut reader = csv_reader(csv_text);
     let columns = columns(reader.headers()?)?;
-    let mut items = Vec::new();
-    let mut source_count = 0;
-    let mut skipped_unsupported = 0;
-
-    for record in reader.records() {
-        if source_count >= MAX_RECORDS {
-            return Err(ApplePasswordsImportError::TooManyRecords);
-        }
-        let record = record?;
-        source_count += 1;
-        let (mut converted, skipped) = convert_record(&record, columns);
-        items.append(&mut converted);
-        skipped_unsupported += skipped;
-    }
+    let collection = collect_csv_records(
+        &mut reader,
+        ApplePasswordsImportError::TooManyRecords,
+        |record| convert_record(record, columns),
+    )?;
 
     Ok(ApplePasswordsImportPlan {
-        items,
-        source_count,
-        skipped_unsupported,
+        items: collection.items,
+        source_count: collection.source_count,
+        skipped_unsupported: collection.skipped_unsupported,
     })
 }
 

@@ -14,6 +14,21 @@ import {
   ICLOUD_ENVIRONMENT,
 } from '$lib/icloud-oauth-config'
 
+function mockPendingCloudKitSignIn(
+  setUpAuth = vi.fn().mockResolvedValue(undefined),
+) {
+  let resolveSignIn: (value: unknown) => void = () => undefined
+  const signInPromise = new Promise((resolve) => {
+    resolveSignIn = resolve
+  })
+  const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+  vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+    setUpAuth,
+    whenUserSignsIn,
+  })
+  return { resolveSignIn, setUpAuth, whenUserSignsIn }
+}
+
 describe('icloud-oauth', () => {
   it('is configured for production CloudKit on nokey.sh', () => {
     expect(isICloudOAuthConfigured()).toBe(true)
@@ -312,21 +327,13 @@ describe('icloud-oauth', () => {
     })
 
     it('clicks the prepared CloudKit sign-in control without re-running setup', async () => {
-      let resolveSignIn: (value: unknown) => void = () => {}
-      const signInPromise = new Promise((resolve) => {
-        resolveSignIn = resolve
-      })
+      const { resolveSignIn, setUpAuth, whenUserSignsIn } =
+        mockPendingCloudKitSignIn()
       const signInButton = document.querySelector<HTMLButtonElement>(
         '#apple-sign-in-button button',
       )
       const clickSpy = vi.fn()
       signInButton?.addEventListener('click', clickSpy)
-      const setUpAuth = vi.fn().mockResolvedValue(undefined)
-      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
-        setUpAuth,
-        whenUserSignsIn,
-      })
 
       await prepareICloudSignInControl()
       const pending = requestPreparedICloudWebAuthToken()
@@ -349,21 +356,12 @@ describe('icloud-oauth', () => {
     it('clicks the CloudKit-generated Apple auth div', async () => {
       document.body.innerHTML =
         '<div id="apple-sign-in-button"><div class="apple-auth-button">Sign in</div></div><div id="apple-sign-out-button"></div>'
-      let resolveSignIn: (value: unknown) => void = () => {}
-      const signInPromise = new Promise((resolve) => {
-        resolveSignIn = resolve
-      })
+      const { resolveSignIn } = mockPendingCloudKitSignIn()
       const signInControl = document.querySelector<HTMLElement>(
         '#apple-sign-in-button .apple-auth-button',
       )
       const clickSpy = vi.fn()
       signInControl?.addEventListener('click', clickSpy)
-      const setUpAuth = vi.fn().mockResolvedValue(undefined)
-      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
-        setUpAuth,
-        whenUserSignsIn,
-      })
 
       await prepareICloudSignInControl()
       const pending = requestPreparedICloudWebAuthToken()
@@ -665,20 +663,13 @@ describe('icloud-oauth', () => {
     })
 
     it('treats CloudKit auth-required setup as a prepared sign-in control', async () => {
-      let resolveSignIn: (value: unknown) => void = () => {}
-      const signInPromise = new Promise((resolve) => {
-        resolveSignIn = resolve
-      })
       const setUpAuth = vi.fn().mockRejectedValue({
         reason: 'request needs authorization',
         serverErrorCode: 'AUTHENTICATION_REQUIRED',
         status: 421,
       })
-      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
-        setUpAuth,
-        whenUserSignsIn,
-      })
+      const { resolveSignIn, whenUserSignsIn } =
+        mockPendingCloudKitSignIn(setUpAuth)
 
       await expect(prepareICloudSignInControl()).resolves.toBeUndefined()
       const pending = requestPreparedICloudWebAuthToken({
@@ -697,18 +688,11 @@ describe('icloud-oauth', () => {
     })
 
     it('treats opaque CloudKit UNKNOWN_ERROR setup as prepared when the sign-in control exists', async () => {
-      let resolveSignIn: (value: unknown) => void = () => {}
-      const signInPromise = new Promise((resolve) => {
-        resolveSignIn = resolve
-      })
       const setUpAuth = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
-      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
-        setUpAuth,
-        whenUserSignsIn,
-      })
+      const { resolveSignIn, whenUserSignsIn } =
+        mockPendingCloudKitSignIn(setUpAuth)
 
       await expect(prepareICloudSignInControl()).resolves.toBeUndefined()
       const pending = requestPreparedICloudWebAuthToken({

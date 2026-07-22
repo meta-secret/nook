@@ -115,8 +115,12 @@ pub fn open_extension_identity_handoff(
 mod tests {
     use super::*;
 
-    #[test]
-    fn handoff_roundtrips_and_preserves_both_device_keys() -> VaultResult<()> {
+    fn handoff_fixture() -> VaultResult<(
+        DeviceIdentity,
+        SigningIdentity,
+        DeviceIdentity,
+        AgeArmoredCiphertext,
+    )> {
         let extension_identity = DeviceIdentity::generate()?;
         let (_, signing_seed) = SigningIdentity::generate()?;
         let signing = SigningIdentity::from_seed_hex_stored(signing_seed.as_str())?;
@@ -127,6 +131,12 @@ mod tests {
             &recipient.public_key(),
             "nonce-123",
         )?;
+        Ok((extension_identity, signing, recipient, envelope))
+    }
+
+    #[test]
+    fn handoff_roundtrips_and_preserves_both_device_keys() -> VaultResult<()> {
+        let (extension_identity, signing, recipient, envelope) = handoff_fixture()?;
 
         let opened = open_extension_identity_handoff(
             &recipient,
@@ -142,22 +152,16 @@ mod tests {
             opened_identity.public_key(),
             extension_identity.public_key()
         );
-        assert_eq!(opened_signing_seed, signing_seed.as_str());
+        assert_eq!(
+            SigningIdentity::from_seed_hex_stored(opened_signing_seed.as_str())?.public_key(),
+            signing.public_key()
+        );
         Ok(())
     }
 
     #[test]
     fn handoff_rejects_nonce_or_public_key_mismatch() -> VaultResult<()> {
-        let extension_identity = DeviceIdentity::generate()?;
-        let (_, signing_seed) = SigningIdentity::generate()?;
-        let signing = SigningIdentity::from_seed_hex_stored(signing_seed.as_str())?;
-        let recipient = DeviceIdentity::generate()?;
-        let envelope = seal_extension_identity_handoff(
-            &extension_identity,
-            signing_seed.as_str(),
-            &recipient.public_key(),
-            "nonce-123",
-        )?;
+        let (extension_identity, signing, recipient, envelope) = handoff_fixture()?;
 
         assert!(
             open_extension_identity_handoff(

@@ -2,19 +2,15 @@
   import { Gem, HeartHandshake, KeyRound } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-
-  interface ParticipantDevice {
-    name: string
-    publicKey: string
-  }
+  import type { SentinelParticipantDevice } from '../sentinel-genesis'
 
   let { navigate }: ExperimentProps = $props()
-  let name = $state('')
-  let total = $state(3)
-  let threshold = $state(2)
-  let participants = $state<ParticipantDevice[]>([])
   let deviceName = $state('')
   let publicKey = $state('')
+  let name = $state('')
+  let participants = $state<SentinelParticipantDevice[]>([])
+  let threshold = $state(2)
+  let total = $state(3)
   let addError = $state('')
   let created = $state(false)
   const keys = $derived(1 + participants.length)

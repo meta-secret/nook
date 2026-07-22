@@ -9,6 +9,10 @@
   } from '@lucide/svelte'
   import { tick } from 'svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  import {
+    copySentinelRequest,
+    runSentinelDashboardAction,
+  } from '$lib/components/login/sentinel-dashboard-actions'
   import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
 
   type Status =
@@ -164,26 +168,6 @@
     }
   }
 
-  async function finalize() {
-    if (status !== 'ready' || isBusy || actionBusy) return
-    actionBusy = true
-    try {
-      await onFinalize()
-    } finally {
-      actionBusy = false
-    }
-  }
-
-  async function copyRequest() {
-    if (!request) return
-    try {
-      await navigator.clipboard.writeText(request)
-      copied = true
-      setTimeout(() => (copied = false), 1500)
-    } catch {
-      vault.errorMsg = vault.t('login.sentinel_genesis_copy_failed')
-    }
-  }
 </script>
 
 <div
@@ -274,7 +258,18 @@
               <button
                 class="inline-flex items-center gap-2 border border-[#4f7a46] px-4 py-2 text-xs"
                 data-testid="sentinel-genesis-copy-request"
-                onclick={() => void copyRequest()}
+                onclick={() =>
+                  void copySentinelRequest(
+                    request,
+                    () => {
+                      copied = true
+                      setTimeout(() => (copied = false), 1500)
+                    },
+                    () =>
+                      (vault.errorMsg = vault.t(
+                        'login.sentinel_genesis_copy_failed',
+                      )),
+                  )}
               >
                 <Copy class="size-4" />
                 {copied ? vault.t('common.copied') : vault.t('common.copy')}
@@ -363,7 +358,12 @@
                 class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
                 data-testid="sentinel-genesis-finalize"
                 disabled={status !== 'ready' || isBusy || actionBusy}
-                onclick={() => void finalize()}
+                onclick={() =>
+                  void runSentinelDashboardAction(
+                    status === 'ready' && !isBusy && !actionBusy,
+                    (value) => (actionBusy = value),
+                    onFinalize,
+                  )}
               >
                 <KeyRound class="size-4" />
                 {vault.t('login.sentinel_genesis_finalize')}

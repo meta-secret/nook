@@ -17,9 +17,16 @@
   interface Props {
     onBack: () => void
     initialName?: string
+    backLabel?: string
+    backPositionClass?: string
   }
 
-  let { onBack, initialName = '' }: Props = $props()
+  let {
+    onBack,
+    initialName = '',
+    backLabel = 'Auth chooser',
+    backPositionClass = 'left-36',
+  }: Props = $props()
   const seededName = untrack(() => initialName.trim())
   let name = $state(seededName)
   let threshold = $state(2)
@@ -93,11 +100,11 @@
   class="min-h-screen overflow-hidden bg-[#10141a] text-white [background-image:radial-gradient(circle_at_50%_-10%,#53606d_0,transparent_42%),radial-gradient(circle_at_15%_90%,#25303a_0,transparent_36%)]"
 >
   <button
-    class="fixed top-5 left-36 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
+    class={`fixed top-5 ${backPositionClass} z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md`}
     onclick={onBack}
   >
     <ArrowLeft class="size-4" aria-hidden="true" />
-    Auth chooser
+    {backLabel}
   </button>
   <div
     class="pointer-events-none fixed inset-0 opacity-25 [background-image:radial-gradient(#a9b8c5_0.7px,transparent_0.7px)] [background-size:22px_22px]"

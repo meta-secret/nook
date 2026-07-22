@@ -367,38 +367,29 @@ pub fn build_genesis_import_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{actor, public_key, signing_key as test_signing_key};
     use ed25519_dalek::SigningKey;
-    use rand_core::OsRng;
 
-    fn test_signing_key() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
-    }
-
-    fn actor(signing_key: &SigningKey) -> AuthKeyId {
-        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
-    }
-
-    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
+    fn empty_genesis_event(signing_key: &SigningKey) -> VaultEvent {
+        build_genesis_import_event(
+            &crate::test_support::store(),
+            &actor(signing_key),
+            &crate::test_support::epoch(),
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            },
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key,
+        )
+        .unwrap()
     }
 
     #[test]
     fn genesis_event_has_no_parents() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
-        let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11").unwrap(),
-            &actor(&signing_key),
-            &epoch,
-            GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                secrets: vec![],
-                password_entries: vec![],
-            },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            &signing_key,
-        )
-        .unwrap();
+        let event = empty_genesis_event(&signing_key);
         event
             .verify_signature(&signing_key.verifying_key())
             .unwrap();
@@ -408,20 +399,7 @@ mod tests {
     #[test]
     fn schema_one_event_is_rejected() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
-        let mut event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11").unwrap(),
-            &actor(&signing_key),
-            &epoch,
-            GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                secrets: vec![],
-                password_entries: vec![],
-            },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            &signing_key,
-        )
-        .unwrap();
+        let mut event = empty_genesis_event(&signing_key);
         event.body.schema_version = VaultEventSchemaVersion(1);
 
         let err = event
@@ -466,20 +444,7 @@ mod tests {
     #[test]
     fn validate_envelope_rejects_wrong_store() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
-        let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11").unwrap(),
-            &actor(&signing_key),
-            &epoch,
-            GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                secrets: vec![],
-                password_entries: vec![],
-            },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            &signing_key,
-        )
-        .unwrap();
+        let event = empty_genesis_event(&signing_key);
         let wrong_store = StoreId::parse("store_otherid0001").unwrap();
         assert!(event.validate_envelope(&wrong_store).is_err());
     }

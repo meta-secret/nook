@@ -415,3 +415,29 @@ export function assertEnrolledVaultYaml(
     throw new Error('Auth section must not store plaintext age1 public keys')
   }
 }
+
+export async function waitForVaultEventLogSnapshot(
+  getEventFileContents: () => string[],
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options: { timeoutMs: number; intervalMs: number },
+): Promise<VaultYamlSnapshot> {
+  const deadline = Date.now() + options.timeoutMs
+  let lastError = 'remote event log empty'
+
+  while (Date.now() < deadline) {
+    const events = getEventFileContents()
+    if (events.length > 0) {
+      try {
+        const snapshot = parseVaultEventLogSnapshot(events)
+        if (predicate(snapshot)) return snapshot
+        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error.message : 'invalid remote event log'
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, options.intervalMs))
+  }
+
+  throw new Error(`Timed out waiting for remote event log: ${lastError}`)
+}
