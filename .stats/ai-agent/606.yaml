@@ -1,0 +1,119 @@
+schema_version: 2
+source_pr:
+  number: 606
+  url: https://github.com/meta-secret/nook/pull/606
+  title: Fix stale extension vault pairing recovery
+  change_surface: browser_extension_stale_vault_pairing_recovery
+  head_sha: e0ca244a3a5d48b867f83840285e5a71486766c9
+  started_at: 2026-07-22T02:23:30Z
+  opened_at: 2026-07-22T02:32:58Z
+  merged_at: 2026-07-22T02:43:13Z
+  elapsed_seconds: 1183
+  open_to_merge_seconds: 615
+summary:
+  local_execution_count: 6
+  local_check_count: 6
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 189
+  github_actions_run_count: 2
+  github_actions_seconds: 613
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T02:45:00Z
+  head_sha: e0ca244a3a5d48b867f83840285e5a71486766c9
+  by_type:
+    rust: 623
+    preflight: 30
+    web_unit: 233
+    e2e: 197
+  total: 1083
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-22T02:30:38Z
+    finished_at: 2026-07-22T02:32:30Z
+    duration_seconds: 112
+    outcome: passed
+    reason: initial_pre_push_hygiene
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T02:32:31Z
+    finished_at: 2026-07-22T02:32:32Z
+    duration_seconds: 1
+    outcome: passed
+    reason: initial_ui_demo_contract
+  - command: task pr:preflight PR=606
+    category: check
+    started_at: 2026-07-22T02:33:06Z
+    finished_at: 2026-07-22T02:33:14Z
+    duration_seconds: 8
+    outcome: passed
+    reason: initial_pr_policy_and_state_audit
+  - command: task format
+    category: check
+    started_at: 2026-07-22T02:33:20Z
+    finished_at: 2026-07-22T02:34:21Z
+    duration_seconds: 61
+    outcome: passed
+    reason: pre_push_hygiene_after_current_main_merge
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T02:34:22Z
+    finished_at: 2026-07-22T02:34:23Z
+    duration_seconds: 1
+    outcome: passed
+    reason: exact_head_ui_demo_contract
+  - command: task pr:ready PR=606
+    category: check
+    started_at: 2026-07-22T02:42:54Z
+    finished_at: 2026-07-22T02:43:00Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29886114986
+    run_attempt: 1
+    head_sha: 3e447dad1266de3759a92243dd870ecfcc553709
+    trigger: pull_request
+    started_at: 2026-07-22T02:33:01Z
+    finished_at: 2026-07-22T02:34:59Z
+    duration_seconds: 118
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29886179867
+    run_attempt: 1
+    head_sha: abd0133b70777c0f267089b2f093af3f2d950cc9
+    trigger: pull_request
+    started_at: 2026-07-22T02:34:29Z
+    finished_at: 2026-07-22T02:42:44Z
+    duration_seconds: 495
+    conclusion: success
+pr_retriggers:
+  - kind: base_update
+    at: 2026-07-22T02:34:24Z
+    reason: merge_current_main_before_exact_head_validation
+merge_attempts:
+  - at: 2026-07-22T02:43:13Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [603, 602]
+  baseline_quality: comparable
+  baseline_note: Recent browser-extension pairing and identity-recovery PRs using the same PR Verify gate
+  elapsed_seconds_change_percent: -59.0
+  local_execution_seconds_change_percent: -61.9
+  github_actions_seconds_change_percent: -62.7
+  test_inventory_total_change: 1
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The initial PR run was cancelled after two concurrent commits reached main; exact-head policy required one base update and a replacement validation cycle.
+    - Both format executions and UI demo contract checks were required pre-push hygiene for the initial head and the current-main merge head; the replacement PR run passed without a fix cycle.
+  required_actions: []
