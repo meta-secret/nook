@@ -1,7 +1,8 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
-# build and deploy the preview. Full browser regression e2e is excluded; UI-changing PRs run only
-# their dedicated headless demo specs and retain the resulting videos on the PR workflow run.
-# Main runs the full local-provider and extension suites, and nightly runs sync-live.
+# build and deploy the preview. Full browser regression e2e is opt-in through the `ci:full-e2e`
+# label for PRs that repair a Main failure; UI-changing PRs otherwise run only their dedicated
+# headless demo specs and retain the resulting videos on the PR workflow run. Main also runs the
+# full local-provider and extension suites, and nightly runs sync-live.
 # Only nightly failures invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only and agent-statistics-only changes do not need the product pipeline.
@@ -11,7 +12,7 @@ name: PR
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened, labeled, unlabeled, closed]
     paths-ignore:
       - .cortex/**
       - .cursor/**
@@ -770,3 +771,34 @@ jobs:
                 }
               `, { subjectId: pullRequest.id, body }))
             }
+
+  full-e2e:
+    name: Full browser e2e (main fix)
+    if: >-
+      github.event.action != 'closed' &&
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Main-equivalent local-provider and extension e2e
+        run: >-
+          task ci:pr:e2e
+          VITE_BASE=/
+          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          VITE_VAULT_SYNC_INTERVAL_MS=500
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GIT_COMMIT_ID: ${{ github.event.pull_request.head.sha }}
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/

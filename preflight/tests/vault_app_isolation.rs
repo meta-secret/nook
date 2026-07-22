@@ -894,6 +894,10 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     for required in [
         "name: Native Rust verification",
         "name: Verify and preview",
+        "types: [opened, synchronize, reopened, labeled, unlabeled, closed]",
+        "name: Full browser e2e (main fix)",
+        "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
+        "task ci:pr:e2e",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
@@ -904,7 +908,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     ] {
         assert!(
             pr.contains(required),
-            "PR CI must keep native Rust parallel with the combined WASM/web runner: {required}"
+            "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
     let native_job_lookup = pr

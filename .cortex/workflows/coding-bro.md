@@ -28,7 +28,9 @@ Default PR-first loop:
 4. **Preflight and validate on GitHub Actions** — run
    `task pr:preflight PR=<number>`, then monitor the path-applicable
    `PR / Verify and preview` and `Web research / Build and deploy research
-   catalog` workflows. Do **not** run a required local `task check` / `task ci:pr`.
+   catalog` workflows. PRs fixing a failure observed on `main` must have the
+   `ci:full-e2e` label so the `PR` workflow also runs the Main-equivalent browser
+   suite before merge. Do **not** run a required local `task check` / `task ci:pr`.
 5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
    logs for web/e2e failures, fix, `task format`, and push the completed fix; the
    synchronize event re-evaluates the refreshed repository-owned check. This
