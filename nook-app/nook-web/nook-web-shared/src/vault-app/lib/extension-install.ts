@@ -23,9 +23,7 @@ type BrowserExtensionEnvironment = {
   maxTouchPoints: number;
   platform: string;
   userAgent: string;
-  userAgentData?: {
-    mobile: boolean;
-  };
+  userAgentData?: Navigator["userAgentData"] | { mobile?: boolean };
 };
 
 type ExtensionDeploymentMetadata = {
@@ -49,7 +47,14 @@ export function extensionInstallLandingUrl(): string {
 export function browserSupportsExtensionInstallation(
   environment: BrowserExtensionEnvironment = navigator,
 ): boolean {
-  if (environment.userAgentData?.mobile) return false;
+  const userAgentData = environment.userAgentData;
+  if (
+    userAgentData &&
+    "mobile" in userAgentData &&
+    userAgentData.mobile === true
+  ) {
+    return false;
+  }
 
   if (
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(
