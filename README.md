@@ -272,9 +272,10 @@ never enter `nook-web:local`.
 
 Before local Rust compilation, Task idempotently starts a Docker-host-only
 `nook-sccache-redis` container so short-lived compilers can reuse compatible
-crate compiler outputs. GitHub Actions instead creates an authenticated SSH
-tunnel to the persistent Redis service deployed from [`infra/`](infra/), with
-the job-local service retained as the no-secrets fallback. Override local
+crate compiler outputs. GitHub Actions instead reaches the password-protected
+persistent Redis service deployed from [`infra/`](infra/) through Cloudflare
+Access, with the job-local service retained as the no-secrets fallback. Local
+builds need no remote credentials. Override local
 defaults with `SCCACHE_REDIS_PORT`, `SCCACHE_REDIS_MAXMEMORY`, or
 `SCCACHE_REDIS_IMAGE`. Runtime containers receive an explicit 1,048,576
 open-file limit; override with `DOCKER_NOFILE_LIMIT`.
@@ -351,7 +352,7 @@ task pr:review PR=410      # optional idempotent exact-head Codex review request
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
-task infra:deploy           # deploy loopback-only Redis and future OCI registry
+task infra:deploy           # deploy private Redis, Cloudflare Tunnel, and future registry
 task infra:status           # inspect the remote infrastructure stack
 task infra:redis:stats      # remote compiler-cache memory and hit statistics
 ```
@@ -387,10 +388,10 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 
 Rust compilation has a second cache boundary below Docker layers: pinned
 `sccache` clients use Redis to reuse compatible compiler outputs. Local builds
-use one Docker-host-only service; GitHub-hosted runners use the persistent
-server service through SSH. Redis does not cache Cargo downloads or Docker
-layers. The loopback-only OCI registry in [`infra/`](infra/) is deployed for a
-future Docker cache migration but is intentionally unused by CI today. Details:
+use one Docker-host-only service; GitHub-hosted runners use an authenticated
+Cloudflare Access TCP proxy to the server service. Redis does not cache Cargo downloads or Docker layers.
+The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
+Docker cache migration but is intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

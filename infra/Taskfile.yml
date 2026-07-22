@@ -5,13 +5,142 @@ vars:
   INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
 
 tasks:
-  deploy:
-    desc: Deploy the loopback-only Redis cache and future Docker registry.
+  cache:connect:
+    desc: Connect a CI runner to the Access-protected Redis compiler cache.
+    silent: true
     cmds:
-      - >-
-        INFRA_SSH_TARGET="{{.INFRA_SSH_TARGET}}"
-        INFRA_REMOTE_DIR="{{.INFRA_REMOTE_DIR}}"
-        infra/scripts/deploy.sh
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+
+        cloudflared_image="cloudflare/cloudflared:2026.7.2@sha256:4f6655284ab3d252b7f28fedb19fe6c8fc82ee5b1295c20ac74d475e5398a52d"
+        redis_image="redis:8.2.2-alpine@sha256:59b6e694653476de2c992937ebe1c64182af4728e54bb49e9b7a6c26614d8933"
+
+        if [ -z "${CACHE_REDIS_PASSWORD_FILE:-}" ] || [ -z "${CACHE_CLOUDFLARE_CLIENT_ID_FILE:-}" ] || [ -z "${CACHE_CLOUDFLARE_CLIENT_SECRET_FILE:-}" ]; then
+          exit 0
+        fi
+        if [ ! -r "$CACHE_REDIS_PASSWORD_FILE" ] || [ ! -r "$CACHE_CLOUDFLARE_CLIENT_ID_FILE" ] || [ ! -r "$CACHE_CLOUDFLARE_CLIENT_SECRET_FILE" ]; then
+          echo "::error::Persistent Rust cache credential files are unreadable" >&2
+          exit 1
+        fi
+
+        redis_password_file="$CACHE_REDIS_PASSWORD_FILE"
+        cloudflared_binary="$RUNNER_TEMP/nook-cache-cloudflared"
+        cloudflared_log="$RUNNER_TEMP/nook-cache-cloudflared.log"
+        cloudflare_client_id="$(cat "$CACHE_CLOUDFLARE_CLIENT_ID_FILE")"
+        cloudflare_client_secret="$(cat "$CACHE_CLOUDFLARE_CLIENT_SECRET_FILE")"
+
+        bridge_ip="$(docker network inspect bridge | awk -F'"' '/"Gateway":/ { print $4; exit }')"
+        case "$bridge_ip" in
+          ''|*[!0-9.]*)
+            echo "::error::Could not resolve the Docker bridge IPv4 gateway" >&2
+            exit 1
+            ;;
+        esac
+
+        extract_container="$(docker create "$cloudflared_image")"
+        trap 'docker rm -f "$extract_container" >/dev/null 2>&1 || true' EXIT
+        docker cp "$extract_container:/usr/local/bin/cloudflared" "$cloudflared_binary" >/dev/null
+        docker rm -f "$extract_container" >/dev/null
+        trap - EXIT
+        chmod 0700 "$cloudflared_binary"
+
+        TUNNEL_SERVICE_TOKEN_ID="$cloudflare_client_id" \
+        TUNNEL_SERVICE_TOKEN_SECRET="$cloudflare_client_secret" \
+          nohup "$cloudflared_binary" \
+          access tcp \
+          --hostname rust-cache.nokey.sh \
+          --url "$bridge_ip:6380" \
+          --log-level error \
+          --logfile "$cloudflared_log" >/dev/null 2>&1 &
+
+        cache_ready=""
+        for _ in $(seq 1 "${CACHE_CONNECT_ATTEMPTS:-30}"); do
+          if docker run --rm \
+            --add-host "host.docker.internal:$bridge_ip" \
+            --mount "type=bind,src=$redis_password_file,dst=/run/secrets/redis-password,readonly" \
+            "$redis_image" \
+            sh -ec 'export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli -h host.docker.internal -p 6380 ping' \
+            2>/dev/null | grep -qx PONG; then
+            cache_ready=1
+            break
+          fi
+          sleep "${CACHE_CONNECT_DELAY_SECONDS:-1}"
+        done
+
+        if [ -z "$cache_ready" ]; then
+          if [ -r "$cloudflared_log" ]; then
+            while IFS= read -r diagnostic; do
+              diagnostic="${diagnostic//"$cloudflare_client_id"/[REDACTED]}"
+              diagnostic="${diagnostic//"$cloudflare_client_secret"/[REDACTED]}"
+              printf '%s\n' "$diagnostic" >&2
+            done < "$cloudflared_log"
+          fi
+          echo "::error::Persistent Rust cache did not become reachable through Cloudflare Access" >&2
+          exit 1
+        fi
+
+        {
+          echo "SCCACHE_REDIS_MODE=external"
+          echo "SCCACHE_REDIS_HOST_IP=$bridge_ip"
+          echo "SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file"
+        } >> "$GITHUB_ENV"
+        BASH
+
+  deploy:
+    desc: Deploy the private Redis cache, Cloudflare Tunnel, and loopback-only future registry.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+
+        repo_root="$(git rev-parse --show-toplevel)"
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        compose_file="$repo_root/infra/compose.yaml"
+        remote_next="$remote_dir/compose.yaml.next"
+        remote_compose="$remote_dir/compose.yaml"
+        remote_secrets="$remote_dir/secrets"
+
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "infra deploy: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+
+        docker compose -f "$compose_file" config --quiet
+        ssh -o BatchMode=yes "$ssh_target" \
+          "set -eu; \
+           install -d -m 0750 '$remote_dir'; \
+           install -d -m 0700 '$remote_secrets'; \
+           if [ ! -s '$remote_secrets/redis-password' ]; then \
+             umask 077; \
+             openssl rand -hex 32 > '$remote_secrets/redis-password'; \
+           fi; \
+           if [ ! -s '$remote_secrets/cloudflare-tunnel-token' ]; then \
+             echo 'infra deploy: missing Cloudflare tunnel token at $remote_secrets/cloudflare-tunnel-token' >&2; \
+             exit 1; \
+           fi; \
+           chmod 0444 '$remote_secrets/cloudflare-tunnel-token'"
+        scp -q -o BatchMode=yes "$compose_file" "$ssh_target:$remote_next"
+
+        ssh -o BatchMode=yes "$ssh_target" \
+          "set -eu; \
+           docker compose -f '$remote_next' config --quiet; \
+           mv '$remote_next' '$remote_compose'; \
+           docker compose -f '$remote_compose' pull; \
+           docker compose -f '$remote_compose' up -d --remove-orphans --wait"
+
+        ssh -o BatchMode=yes "$ssh_target" \
+          "set -eu; \
+           password=\"\$(cat '$remote_secrets/redis-password')\"; \
+           test \"\$(REDISCLI_AUTH=\"\$password\" docker compose -f '$remote_compose' exec -T -e REDISCLI_AUTH redis redis-cli ping)\" = PONG; \
+           docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx cloudflared; \
+           curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null; \
+           docker compose -f '$remote_compose' ps"
+        BASH
 
   status:
     desc: Show the remote infrastructure service state.
@@ -32,7 +161,9 @@ tasks:
     cmds:
       - >-
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
-        docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T redis redis-cli ping
+        'set -eu;
+        password="$(cat "{{.INFRA_REMOTE_DIR}}/secrets/redis-password")";
+        REDISCLI_AUTH="$password" docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T -e REDISCLI_AUTH redis redis-cli ping'
 
   redis:stats:
     desc: Show remote Redis cache size, memory, hits, misses, and evictions.
@@ -41,9 +172,10 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
         'set -eu;
         compose="{{.INFRA_REMOTE_DIR}}/compose.yaml";
-        docker compose -f "$compose" exec -T redis redis-cli DBSIZE;
-        docker compose -f "$compose" exec -T redis redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
-        docker compose -f "$compose" exec -T redis redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+        password="$(cat "{{.INFRA_REMOTE_DIR}}/secrets/redis-password")";
+        REDISCLI_AUTH="$password" docker compose -f "$compose" exec -T -e REDISCLI_AUTH redis redis-cli DBSIZE;
+        REDISCLI_AUTH="$password" docker compose -f "$compose" exec -T -e REDISCLI_AUTH redis redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
+        REDISCLI_AUTH="$password" docker compose -f "$compose" exec -T -e REDISCLI_AUTH redis redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
 
   registry:check:
     desc: Verify the future loopback-only Docker registry API.

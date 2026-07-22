@@ -51,6 +51,10 @@ variable "SCCACHE_REDIS_HOST_IP" {
   default = ""
 }
 
+variable "SCCACHE_REDIS_PASSWORD_FILE" {
+  default = ""
+}
+
 // Enabled only by the GitHub Actions Docker setup. Keeping the default empty preserves zero-network
 // local builds. Separate scopes are mandatory: Docker's GHA backend overwrites a scope when a
 // different image exports to it, so sharing the default `buildkit` scope loses sibling lineages.
@@ -145,6 +149,9 @@ target "_sccache-network" {
   extra-hosts = {
     "host.docker.internal" = SCCACHE_REDIS_HOST_IP
   }
+  secret = SCCACHE_REDIS_PASSWORD_FILE != "" ? [
+    "id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}",
+  ] : []
 }
 
 // Default: build the nook-web image (source-in-image) that `task` runs.

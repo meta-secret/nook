@@ -38,9 +38,15 @@ vars:
   SCCACHE_REDIS_VOLUME: '{{default "nook-sccache-redis" .SCCACHE_REDIS_VOLUME}}'
   SCCACHE_REDIS_PORT: '{{default "6380" .SCCACHE_REDIS_PORT}}'
   SCCACHE_REDIS_MAXMEMORY: '{{default "8gb" .SCCACHE_REDIS_MAXMEMORY}}'
-  # "local" owns a Redis container on this Docker host. CI selects "external" after creating
-  # an authenticated SSH tunnel to the persistent server cache.
+  # "local" owns a Redis container on this Docker host. CI selects "external" for the
+  # password-protected persistent server cache.
   SCCACHE_REDIS_MODE: '{{default "local" .SCCACHE_REDIS_MODE}}'
+  SCCACHE_REDIS_PASSWORD_FILE: '{{default "" .SCCACHE_REDIS_PASSWORD_FILE}}'
+  SCCACHE_REDIS_PASSWORD_MOUNT:
+    sh: >-
+      if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ]; then
+        printf '%s' '--mount type=bind,src='"$SCCACHE_REDIS_PASSWORD_FILE"',dst=/run/secrets/sccache_redis_password,readonly';
+      fi
   SCCACHE_REDIS_HOST_IP:
     sh: 'DOCKER="{{.DOCKER}}" SCCACHE_REDIS_IMAGE="{{.SCCACHE_REDIS_IMAGE}}" "{{.APP_ROOT}}/docker/resolve-docker-host-ip.sh"'
   GIT_COMMIT_ID:
@@ -99,7 +105,7 @@ tasks:
       - task: build
 
   sccache:ensure:
-    desc: Ensure the persistent Docker-host-only Redis backend for Rust sccache is healthy.
+    desc: Ensure the selected Redis backend for Rust sccache is healthy.
     dir: '{{.REPO_ROOT}}'
     cmds:
       - >-
@@ -111,7 +117,12 @@ tasks:
         port="{{.SCCACHE_REDIS_PORT}}";
         maxmemory="{{.SCCACHE_REDIS_MAXMEMORY}}";
         if [ "$mode" = external ]; then
-          if [ "$({{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" redis-cli -h host.docker.internal -p "$port" ping 2>/dev/null || true)" != PONG ]; then
+          password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
+          if [ -z "$password_file" ] || [ ! -r "$password_file" ]; then
+            echo "task sccache:ensure: external Redis requires a readable SCCACHE_REDIS_PASSWORD_FILE" >&2;
+            exit 1;
+          fi;
+          if [ "$({{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} --mount "type=bind,src=$password_file,dst=/run/secrets/redis-password,readonly" "$image" sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli -h host.docker.internal -p "$1" ping'\'' -- "$port" 2>/dev/null || true)" != PONG ]; then
             echo "task sccache:ensure: external Redis is not reachable through host.docker.internal:$port" >&2;
             exit 1;
           fi;
@@ -183,10 +194,14 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         image="{{.SCCACHE_REDIS_IMAGE}}";
+        password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
+        mount_args="";
+        if [ -n "$password_file" ]; then mount_args="--mount type=bind,src=$password_file,dst=/run/secrets/redis-password,readonly"; fi;
         redis_cli="redis-cli -h host.docker.internal -p {{.SCCACHE_REDIS_PORT}}";
-        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" $redis_cli DBSIZE;
-        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" $redis_cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
-        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" $redis_cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+        redis_command="if [ -r /run/secrets/redis-password ]; then export REDISCLI_AUTH=\"\$(cat /run/secrets/redis-password)\"; fi; exec $redis_cli";
+        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} $mount_args "$image" sh -ec "$redis_command DBSIZE";
+        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} $mount_args "$image" sh -ec "$redis_command INFO memory" | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
+        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} $mount_args "$image" sh -ec "$redis_command INFO stats" | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.

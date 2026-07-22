@@ -71,6 +71,7 @@ tasks:
         --platform linux/amd64
         --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
         -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
+        {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -88,6 +89,7 @@ tasks:
         --platform linux/amd64
         --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
         -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
+        {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -105,6 +107,7 @@ tasks:
         --platform linux/amd64
         --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
         -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
+        {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
@@ -335,6 +338,7 @@ tasks:
         --platform linux/amd64
         --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
         -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
+        {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
@@ -359,6 +363,7 @@ tasks:
         --platform linux/amd64
         --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
         -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
+        {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"

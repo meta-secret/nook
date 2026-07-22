@@ -37,7 +37,7 @@ ARG BINARYEN_VERSION=122
 # the slim web image.
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
-ENV RUSTC_WRAPPER=/usr/local/bin/sccache
+ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
 ENV SCCACHE_REDIS_ENDPOINT=redis://host.docker.internal:${SCCACHE_REDIS_PORT}
 ENV SCCACHE_REDIS_KEY_PREFIX=nook
 # Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the
@@ -85,6 +85,9 @@ RUN curl -fsSL \
     && rm -rf /tmp/sccache.tar.gz \
       "/tmp/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl" \
     && sccache --version
+
+COPY nook-app/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
+RUN chmod 0755 /usr/local/bin/nook-sccache
 
 COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 
