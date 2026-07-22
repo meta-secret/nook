@@ -1,0 +1,207 @@
+schema_version: 2
+source_pr:
+  number: 629
+  url: https://github.com/meta-secret/nook/pull/629
+  title: Hide extension install prompts on mobile browsers
+  change_surface: browser_extension_mobile_install_ui
+  head_sha: 51cc9815d9ceac09dad1ddafa0ce23c1cb1a9570
+  started_at: 2026-07-22T16:53:30Z
+  opened_at: 2026-07-22T17:02:50Z
+  merged_at: 2026-07-22T17:41:55Z
+  elapsed_seconds: 2905
+  open_to_merge_seconds: 2345
+summary:
+  local_execution_count: 13
+  local_check_count: 13
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 279
+  github_actions_run_count: 5
+  github_actions_seconds: 2273
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T17:44:21Z
+  head_sha: 51cc9815d9ceac09dad1ddafa0ce23c1cb1a9570
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 241
+    e2e: 200
+  total: 1101
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-22T17:00:43Z
+    finished_at: 2026-07-22T17:01:47Z
+    duration_seconds: 64
+    outcome: passed
+    reason: initial_pre_push_hygiene
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T17:02:09Z
+    finished_at: 2026-07-22T17:02:10Z
+    duration_seconds: 1
+    outcome: passed
+    reason: initial_ui_demo_contract
+  - command: task pr:preflight PR=629
+    category: check
+    started_at: 2026-07-22T17:03:02Z
+    finished_at: 2026-07-22T17:03:07Z
+    duration_seconds: 5
+    outcome: passed
+    reason: initial_pr_policy_and_state_audit
+  - command: task format
+    category: check
+    started_at: 2026-07-22T17:03:49Z
+    finished_at: 2026-07-22T17:04:50Z
+    duration_seconds: 61
+    outcome: passed
+    reason: pre_push_hygiene_after_mobile_detection_fallback_hardening
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T17:05:04Z
+    finished_at: 2026-07-22T17:05:05Z
+    duration_seconds: 1
+    outcome: passed
+    reason: hardened_head_ui_demo_contract
+  - command: task pr:preflight PR=629
+    category: check
+    started_at: 2026-07-22T17:05:18Z
+    finished_at: 2026-07-22T17:05:22Z
+    duration_seconds: 4
+    outcome: passed
+    reason: hardened_head_pr_state_audit
+  - command: task format
+    category: check
+    started_at: 2026-07-22T17:23:10Z
+    finished_at: 2026-07-22T17:24:10Z
+    duration_seconds: 60
+    outcome: passed
+    reason: pre_push_hygiene_after_navigator_client_hints_type_fix
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T17:24:40Z
+    finished_at: 2026-07-22T17:24:41Z
+    duration_seconds: 1
+    outcome: passed
+    reason: typed_head_ui_demo_contract
+  - command: task pr:preflight PR=629
+    category: check
+    started_at: 2026-07-22T17:24:56Z
+    finished_at: 2026-07-22T17:24:59Z
+    duration_seconds: 3
+    outcome: passed
+    reason: typed_head_pr_state_audit
+  - command: task format
+    category: check
+    started_at: 2026-07-22T17:25:38Z
+    finished_at: 2026-07-22T17:26:39Z
+    duration_seconds: 61
+    outcome: passed
+    reason: pre_push_hygiene_after_android_desktop_mode_regression_test
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T17:26:53Z
+    finished_at: 2026-07-22T17:26:55Z
+    duration_seconds: 2
+    outcome: passed
+    reason: final_head_ui_demo_contract
+  - command: task pr:preflight PR=629
+    category: check
+    started_at: 2026-07-22T17:27:12Z
+    finished_at: 2026-07-22T17:27:20Z
+    duration_seconds: 8
+    outcome: passed
+    reason: resolved_review_and_final_head_state_audit
+  - command: task pr:ready PR=629
+    category: check
+    started_at: 2026-07-22T17:41:36Z
+    finished_at: 2026-07-22T17:41:44Z
+    duration_seconds: 8
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29940674618
+    run_attempt: 1
+    head_sha: 3e3cc5c59fb1debbf8140043b69a0a6c833170a5
+    trigger: pull_request
+    started_at: 2026-07-22T17:02:55Z
+    finished_at: 2026-07-22T17:05:52Z
+    duration_seconds: 177
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29940840524
+    run_attempt: 1
+    head_sha: dad48dd047df1c4d552dc88785653cf89498aa68
+    trigger: pull_request
+    started_at: 2026-07-22T17:05:11Z
+    finished_at: 2026-07-22T17:10:50Z
+    duration_seconds: 339
+    conclusion: failure
+  - workflow: PR
+    run_id: 29940840524
+    run_attempt: 2
+    head_sha: dad48dd047df1c4d552dc88785653cf89498aa68
+    trigger: pull_request
+    started_at: 2026-07-22T17:11:01Z
+    finished_at: 2026-07-22T17:23:00Z
+    duration_seconds: 719
+    conclusion: failure
+  - workflow: PR
+    run_id: 29942220510
+    run_attempt: 1
+    head_sha: 47ea47b911c78c0f9b3b56e79cf0e3818545afb1
+    trigger: pull_request
+    started_at: 2026-07-22T17:24:50Z
+    finished_at: 2026-07-22T17:27:42Z
+    duration_seconds: 172
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29942381852
+    run_attempt: 1
+    head_sha: 03604d2224f66253dc49cdb45cca7419564e6bf2
+    trigger: pull_request
+    started_at: 2026-07-22T17:27:05Z
+    finished_at: 2026-07-22T17:41:31Z
+    duration_seconds: 866
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-22T17:05:02Z
+    reason: harden_client_hints_with_user_agent_and_touch_fallbacks
+  - kind: manual_rerun
+    at: 2026-07-22T17:11:01Z
+    reason: retry_unchanged_head_after_transient_buildkit_builder_failure
+  - kind: head_push
+    at: 2026-07-22T17:24:38Z
+    reason: accept_repository_navigator_client_hints_declaration_after_svelte_check_failure
+  - kind: head_push
+    at: 2026-07-22T17:26:51Z
+    reason: align_regression_coverage_with_android_desktop_site_review_feedback
+merge_attempts:
+  - at: 2026-07-22T17:41:55Z
+    method: squash
+    outcome: success
+    reason: exact_head_readiness_passed
+comparison:
+  baseline_prs: [626, 603]
+  baseline_quality: comparable
+  baseline_note: Recent extension browser-flow and extension setup UI PRs using focused browser coverage and the same PR Verify gate
+  elapsed_seconds_change_percent: 67.9
+  local_execution_seconds_change_percent: -49.1
+  github_actions_seconds_change_percent: 158.0
+  test_inventory_total_change: 14
+  regression: true
+  regression_reasons:
+    - Elapsed time exceeded the comparable median by 1175 seconds after three head-push validation cycles and one manual infrastructure rerun.
+    - GitHub Actions time exceeded the comparable median by 1392 seconds because cancelled and failed attempts are retained alongside the final successful exact-head run.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The unchanged-head rerun was justified by an attempt-one BuildKit builder failure before source validation; attempt two then exposed the independent Navigator declaration mismatch.
+    - The Svelte type failure was a task-specific source defect corrected on the next head, while the final short head cycle aligned the regression fixture with actionable Android desktop-site review feedback.
+    - The measured regression is not actionable as a reusable build or workflow change: the final exact-head run passed with normal lane durations, and no suite duplication or persistent cache regression remained.
+  required_actions: []
