@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
+  browserSupportsExtensionInstallation,
   extensionInstallLandingUrl,
   loadExtensionInstallTarget,
   openExtensionInstallTarget,
   resolveExtensionSetupStatus,
+  shouldOfferExtensionSetup,
 } from '$lib/extension-install'
 
 afterEach(() => {
@@ -38,6 +40,66 @@ function stubExtensionIdentityStatus(status: 'unavailable' | 'locked'): void {
 }
 
 describe('extension install target', () => {
+  test('supports installation in a desktop browser', () => {
+    expect(
+      browserSupportsExtensionInstallation({
+        maxTouchPoints: 0,
+        platform: 'MacIntel',
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140 Safari/537.36',
+        userAgentData: { mobile: false },
+      }),
+    ).toBe(true)
+  })
+
+  test('uses the mobile user agent fallback when client hints report desktop', () => {
+    expect(
+      browserSupportsExtensionInstallation({
+        maxTouchPoints: 5,
+        platform: 'Linux armv8l',
+        userAgent: 'Mozilla/5.0 (Linux; Android 16) Chrome/140 Safari/537.36',
+        userAgentData: { mobile: false },
+      }),
+    ).toBe(false)
+  })
+
+  test.each([
+    {
+      label: 'Android browser',
+      environment: {
+        maxTouchPoints: 5,
+        platform: 'Linux armv8l',
+        userAgent:
+          'Mozilla/5.0 (Linux; Android 16) Chrome/140 Mobile Safari/537.36',
+        userAgentData: { mobile: true },
+      },
+    },
+    {
+      label: 'iPhone browser',
+      environment: {
+        maxTouchPoints: 5,
+        platform: 'iPhone',
+        userAgent:
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) Mobile/15E148 Safari/604.1',
+      },
+    },
+    {
+      label: 'iPadOS browser in desktop mode',
+      environment: {
+        maxTouchPoints: 5,
+        platform: 'MacIntel',
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Version/18.6 Safari/605.1.15',
+      },
+    },
+  ])('does not support installation in an $label', ({ environment }) => {
+    expect(browserSupportsExtensionInstallation(environment)).toBe(false)
+    expect(shouldOfferExtensionSetup('not_installed', environment)).toBe(false)
+    expect(shouldOfferExtensionSetup('installed_unpaired', environment)).toBe(
+      true,
+    )
+  })
+
   test('falls back to the marketing install landing page', async () => {
     vi.stubGlobal(
       'fetch',
