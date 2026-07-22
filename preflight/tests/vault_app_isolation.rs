@@ -212,10 +212,7 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 }
 
 fn assert_vault_runtime_boundary_contract(root: &Path) {
-    let sentinel_config = read(
-        root,
-        "nook-app/nook-web/nook-vault-sentinel/vite.config.ts",
-    );
+    let sentinel_config = read(root, "nook-app/nook-web/nook-vault-sentinel/vite.config.ts");
     assert!(sentinel_config.contains("lib/nook-wasm/nook_wasm"));
     assert!(sentinel_config.contains("__NOOK_WASM_APPLICATION__"));
     assert!(sentinel_config.contains("JSON.stringify(\"sentinel\")"));
