@@ -179,8 +179,8 @@ tasks:
     # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
     # generated WASM package + coverage files to a commit-scoped, invocation-isolated host directory.
     # Phase two consumes that tiny directory to build the web image; builder-wasm is never a
-    # parent/context of nook-web. Do not retry the whole solve here: a failed graph should surface
-    # immediately instead of occupying the delivery runner indefinitely.
+    # parent/context of nook-web. Retry only that immediate final solve once for the known BuildKit
+    # frontend flake; never repeat the multi-minute preparation graph.
     env:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
@@ -195,8 +195,6 @@ tasks:
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
     cmds:
-      # buildx bake can flake when parallel targets load the same Dockerfile (e.g. builder-deps +
-      # builder-debug both use nook-app/nook-core/Dockerfile) — retry before failing CI on a transient parse error.
       - >-
         bash -c 'set -euo pipefail;
         commit_id="${GIT_COMMIT_ID:?task setup requires GIT_COMMIT_ID}";
@@ -222,7 +220,14 @@ tasks:
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
-        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
+        for attempt in 1 2; do
+          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 2 ]; then exit 1; fi;
+          echo "task setup: transient $setup_target Bake failure; retrying final web solve in 2s..." >&2;
+          sleep 2;
+        done'
 
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.

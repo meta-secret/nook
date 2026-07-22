@@ -166,8 +166,9 @@ nightly, and explicitly requested browser e2e also build `web-e2e-base` with Deb
 and its revisioned recording path links to `/usr/bin/ffmpeg`; do not install
 its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
 image layer (about 432 MB compressed) on cold runners.
-The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
-a whole-build retry loop.
+The preparation solve runs once. The small final web-image solve retries once
+after the known immediate BuildKit frontend/Dockerfile-load flake, without
+repeating the multi-minute Rust/WASM and dependency graph.
 
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |

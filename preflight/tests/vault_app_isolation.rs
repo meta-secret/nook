@@ -862,6 +862,14 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
                 .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
         "hosted web delivery must retry the immediate BuildKit frontend flake once"
     );
+    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    assert!(
+        app_tasks.contains("for attempt in 1 2; do")
+            && app_tasks.contains(
+                "task setup: transient $setup_target Bake failure; retrying final web solve in 2s",
+            ),
+        "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
+    );
 
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     for required in [
