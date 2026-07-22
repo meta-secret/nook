@@ -325,7 +325,9 @@ pub use vault_runtime_policy::{
     DEFAULT_VAULT_SYNC_INTERVAL_MS, MIN_VAULT_IDLE_TIMEOUT_MS, MIN_VAULT_SYNC_INTERVAL_MS,
     VaultRuntimePolicy,
 };
-pub use vault_search_catalog::{SecretSearchCatalog, SecretSearchCatalogReconcile};
+pub use vault_search_catalog::{
+    SECRET_SEARCH_CATALOG_BUCKET_COUNT, SecretSearchCatalog, SecretSearchCatalogReconcile,
+};
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, create_sentinel_genesis_public_key_announcement,
     finalize_sentinel_genesis, respond_to_sentinel_genesis_request, sentinel_genesis_operations,

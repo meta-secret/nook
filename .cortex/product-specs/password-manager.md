@@ -110,18 +110,21 @@ keys.
 
 ## 3. Database Schema & File Formats
 
-### A. Ciphertext-backed session and public search catalog
+### A. Ciphertext-backed session and encrypted search catalog
 The WASM session holds encrypted per-record payloads. Full `SecretRecord`
 plaintext exists only for an explicit reveal/copy/edit or while deriving a new
-or changed public catalog row, then it is zeroized.
+or changed catalog row, then it is zeroized.
 
-IndexedDB `secret_search:{store_id}` stores the versioned local
-`SecretListItem` projection used for list/search. Those fields are intentionally
-public; secret values and bodies are excluded. Each row has a vault-keyed HMAC
-bound to its ciphertext digest, so modified cache rows are rebuilt instead of
-trusted. Existing records are migrated once, and later reconciliation decrypts
-only new, changed, or invalid rows. The catalog is local-only and is not
-uploaded to sync providers.
+IndexedDB `secret_search_v2:{store_id}:{bucket}` stores independently
+age-encrypted and authenticated `SecretListItem` buckets. Searchable fields are
+visible only in the unlocked WASM session; secret values and bodies remain
+excluded. Buckets are assigned from opaque secret ids, so adding, changing, or
+deleting an item rewrites one small bucket instead of the full 10,000-item
+catalog. Unlock decrypts all cached buckets once, and later queries scan only
+pre-normalized memory. Every successful vault open unconditionally deletes the
+legacy plaintext `secret_search:{store_id}` key, even if the user never searches.
+The catalog is local-only and is not uploaded to sync
+providers.
 
 ### B. Local Projection Layout (YAML)
 Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `vault:{store_id}`).

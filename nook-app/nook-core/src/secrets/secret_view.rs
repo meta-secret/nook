@@ -500,7 +500,7 @@ impl SecretRecord {
 
 impl SecretListItem {
     /// Lowercase search projection containing only the fields intentionally
-    /// exposed in the public list/search catalog.
+    /// included in the unlocked in-memory list/search catalog.
     #[must_use]
     pub fn normalized_search_text(&self) -> String {
         let mut fields = vec![self.group_key(), self.summary(), self.id.to_string()];
