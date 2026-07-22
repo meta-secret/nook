@@ -1,0 +1,212 @@
+schema_version: 2
+source_pr:
+  number: 608
+  url: https://github.com/meta-secret/nook/pull/608
+  title: Retry transient final web Bake solve
+  change_surface: ci_main_fix_full_e2e_and_extension_stability
+  head_sha: c38e6d057e3ba789614d84b5b2d29384f27917f8
+  started_at: 2026-07-22T02:44:00Z
+  opened_at: 2026-07-22T02:52:26Z
+  merged_at: 2026-07-22T05:19:16Z
+  elapsed_seconds: 9316
+  open_to_merge_seconds: 8810
+summary:
+  local_execution_count: 19
+  local_check_count: 17
+  local_test_count: 2
+  local_combined_count: 0
+  local_execution_seconds: 1109
+  github_actions_run_count: 11
+  github_actions_seconds: 7729
+  pr_retrigger_count: 10
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T05:25:00Z
+  head_sha: c38e6d057e3ba789614d84b5b2d29384f27917f8
+  by_type:
+    rust: 623
+    preflight: 31
+    web_unit: 233
+    e2e: 198
+  total: 1085
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-22T02:49:30Z
+    finished_at: 2026-07-22T02:50:50Z
+    duration_seconds: 80
+    outcome: passed
+    reason: initial_pre_push_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T03:02:30Z
+    finished_at: 2026-07-22T03:03:40Z
+    duration_seconds: 70
+    outcome: passed
+    reason: label_gate_pre_push_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T03:18:55Z
+    finished_at: 2026-07-22T03:20:00Z
+    duration_seconds: 65
+    outcome: passed
+    reason: buildkit_health_review_fix_hygiene
+  - command: bash -n run-with-xvfb.sh and shellcheck
+    category: check
+    started_at: 2026-07-22T03:35:00Z
+    finished_at: 2026-07-22T03:35:03Z
+    duration_seconds: 3
+    outcome: passed
+    reason: focused_xvfb_wrapper_static_validation
+  - command: run-with-xvfb.sh inside nook-web-e2e image
+    category: test
+    started_at: 2026-07-22T03:35:04Z
+    finished_at: 2026-07-22T03:35:12Z
+    duration_seconds: 8
+    outcome: passed
+    reason: focused_xvfb_lifecycle_reproduction
+  - command: task format
+    category: check
+    started_at: 2026-07-22T03:35:13Z
+    finished_at: 2026-07-22T03:36:23Z
+    duration_seconds: 70
+    outcome: passed
+    reason: xvfb_fix_pre_push_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T03:52:55Z
+    finished_at: 2026-07-22T03:54:05Z
+    duration_seconds: 70
+    outcome: passed
+    reason: hosted_worker_serialization_pre_push_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T04:09:45Z
+    finished_at: 2026-07-22T04:10:50Z
+    duration_seconds: 65
+    outcome: passed
+    reason: local_e2e_target_review_fix_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T04:19:50Z
+    finished_at: 2026-07-22T04:21:10Z
+    duration_seconds: 80
+    outcome: passed
+    reason: preview_and_e2e_scope_fix_hygiene
+  - command: cargo test delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches
+    category: test
+    started_at: 2026-07-22T04:23:20Z
+    finished_at: 2026-07-22T04:23:47Z
+    duration_seconds: 27
+    outcome: passed
+    reason: focused_scoped_workflow_invariant
+  - command: task preflight:test
+    category: check
+    started_at: 2026-07-22T04:23:55Z
+    finished_at: 2026-07-22T04:23:58Z
+    duration_seconds: 3
+    outcome: failed
+    reason: detected_preflight_rustfmt_miss
+  - command: task format
+    category: check
+    started_at: 2026-07-22T04:24:10Z
+    finished_at: 2026-07-22T04:25:20Z
+    duration_seconds: 70
+    outcome: passed
+    reason: preflight_format_fix_pre_push_hygiene
+  - command: task preflight:test
+    category: check
+    started_at: 2026-07-22T04:25:25Z
+    finished_at: 2026-07-22T04:26:05Z
+    duration_seconds: 40
+    outcome: passed
+    reason: full_preflight_verification
+  - command: task format
+    category: check
+    started_at: 2026-07-22T04:43:45Z
+    finished_at: 2026-07-22T04:44:55Z
+    duration_seconds: 70
+    outcome: passed
+    reason: current_main_merge_pre_push_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T05:00:05Z
+    finished_at: 2026-07-22T05:01:15Z
+    duration_seconds: 70
+    outcome: passed
+    reason: extension_credential_wait_pre_push_hygiene
+  - command: cargo nextest inventory with login shell
+    category: check
+    started_at: 2026-07-22T05:20:45Z
+    finished_at: 2026-07-22T05:20:46Z
+    duration_seconds: 1
+    outcome: failed
+    reason: login_shell_reset_container_cargo_path
+  - command: cargo nextest list for Rust and preflight inventory
+    category: check
+    started_at: 2026-07-22T05:20:55Z
+    finished_at: 2026-07-22T05:25:36Z
+    duration_seconds: 281
+    outcome: passed
+    reason: post_merge_test_inventory
+  - command: repeated cargo nextest inventory output inspection
+    category: check
+    started_at: 2026-07-22T05:25:45Z
+    finished_at: 2026-07-22T05:26:15Z
+    duration_seconds: 30
+    outcome: cancelled
+    reason: redundant_ephemeral_container_recompile_stopped
+  - command: task pr:ready PR=608
+    category: check
+    started_at: 2026-07-22T05:18:45Z
+    finished_at: 2026-07-22T05:18:51Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - { workflow: PR, run_id: 29886953198, run_attempt: 1, head_sha: 87b61d4609be889b96ca0d53818f9b50ca11bbf2, trigger: pull_request, started_at: 2026-07-22T02:52:29Z, finished_at: 2026-07-22T03:01:30Z, duration_seconds: 541, conclusion: success }
+  - { workflow: PR, run_id: 29887498536, run_attempt: 1, head_sha: 9f968935a20d44acb09505346f78ecfd2370e3c7, trigger: pull_request, started_at: 2026-07-22T03:04:47Z, finished_at: 2026-07-22T03:05:03Z, duration_seconds: 16, conclusion: cancelled }
+  - { workflow: PR, run_id: 29887507119, run_attempt: 1, head_sha: 9f968935a20d44acb09505346f78ecfd2370e3c7, trigger: pull_request, started_at: 2026-07-22T03:04:58Z, finished_at: 2026-07-22T03:18:46Z, duration_seconds: 828, conclusion: success }
+  - { workflow: PR, run_id: 29888214922, run_attempt: 1, head_sha: f65c917e89ac9c48e41446c7422db772a60aa873, trigger: pull_request, started_at: 2026-07-22T03:20:59Z, finished_at: 2026-07-22T03:34:35Z, duration_seconds: 816, conclusion: failure }
+  - { workflow: PR, run_id: 29888952086, run_attempt: 1, head_sha: 115997a0fad0628bd6bbb652c0de1cb244bf90c4, trigger: pull_request, started_at: 2026-07-22T03:38:11Z, finished_at: 2026-07-22T03:52:47Z, duration_seconds: 876, conclusion: failure }
+  - { workflow: PR, run_id: 29889697243, run_attempt: 1, head_sha: 050a510c3b2f9af92548f2ade0b9a518739cd6f3, trigger: pull_request, started_at: 2026-07-22T03:55:31Z, finished_at: 2026-07-22T04:09:36Z, duration_seconds: 845, conclusion: success }
+  - { workflow: PR, run_id: 29890425457, run_attempt: 1, head_sha: a6d5c1b1bd919ed9ed8da54e2e267f4b86a96712, trigger: pull_request, started_at: 2026-07-22T04:11:48Z, finished_at: 2026-07-22T04:22:24Z, duration_seconds: 636, conclusion: cancelled }
+  - { workflow: PR, run_id: 29890864349, run_attempt: 1, head_sha: 73a68bc6affc54eb1113f4a6b78193b95a2dd28e, trigger: pull_request, started_at: 2026-07-22T04:21:58Z, finished_at: 2026-07-22T04:27:55Z, duration_seconds: 357, conclusion: cancelled }
+  - { workflow: PR, run_id: 29891110207, run_attempt: 1, head_sha: a13ebad072c40577fccd1d7df919239b784628c5, trigger: pull_request, started_at: 2026-07-22T04:27:30Z, finished_at: 2026-07-22T04:43:23Z, duration_seconds: 953, conclusion: success }
+  - { workflow: PR, run_id: 29891882432, run_attempt: 1, head_sha: 61287d4771c8c64ff8c4393ee2a08c3963b778a9, trigger: pull_request, started_at: 2026-07-22T04:45:03Z, finished_at: 2026-07-22T04:59:50Z, duration_seconds: 887, conclusion: failure }
+  - { workflow: PR, run_id: 29892647444, run_attempt: 1, head_sha: ea2b839f33c4108a4a243cd7ae7f2116f8fa4ee6, trigger: pull_request, started_at: 2026-07-22T05:02:21Z, finished_at: 2026-07-22T05:18:35Z, duration_seconds: 974, conclusion: success }
+pr_retriggers:
+  - { kind: head_push, at: 2026-07-22T03:04:41Z, reason: add_label_selected_full_e2e_gate }
+  - { kind: label_change, at: 2026-07-22T03:04:47Z, reason: activate_ci_full_e2e_label }
+  - { kind: head_push, at: 2026-07-22T03:20:53Z, reason: health_check_full_e2e_builder }
+  - { kind: head_push, at: 2026-07-22T03:38:04Z, reason: persist_extension_x_server }
+  - { kind: head_push, at: 2026-07-22T03:55:24Z, reason: serialize_hosted_extension_workers }
+  - { kind: head_push, at: 2026-07-22T04:11:42Z, reason: clarify_local_e2e_vault_target }
+  - { kind: head_push, at: 2026-07-22T04:21:55Z, reason: separate_preview_and_e2e_vault_targets }
+  - { kind: head_push, at: 2026-07-22T04:27:25Z, reason: format_scoped_preflight_invariant }
+  - { kind: base_update, at: 2026-07-22T04:44:55Z, reason: merge_current_main_before_exact_head_validation }
+  - { kind: head_push, at: 2026-07-22T05:02:15Z, reason: wait_for_extension_credential_import }
+merge_attempts:
+  - at: 2026-07-22T05:19:16Z
+    method: squash
+    outcome: success
+    reason: exact_head_readiness_passed
+comparison:
+  baseline_prs: [580, 488]
+  baseline_quality: weak
+  baseline_note: No prior PR used the new Main-equivalent label gate; closest CI/process records omitted full browser e2e
+  elapsed_seconds_change_percent: 372.0
+  local_execution_seconds_change_percent: 201.7
+  github_actions_seconds_change_percent: 664.5
+  test_inventory_total_change: 90
+  regression: false
+  regression_reasons:
+    - No comparable labeled full-e2e baseline exists; the longer path was the first validation of the new gate and each failed exact head produced an actionable fix.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Every replacement PR run followed a changed head, label activation, or current-main merge; no unchanged-head full browser suite was rerun.
+    - The new gate exposed the original BuildKit failure path, a disappearing X server, hosted Chromium resource contention, a preview/e2e environment scoping error, and an asynchronous extension credential-import timeout before merge.
+    - One preflight formatting miss and one redundant post-merge inventory compile were caught locally; neither remains on the merged product path.
+  required_actions: []
