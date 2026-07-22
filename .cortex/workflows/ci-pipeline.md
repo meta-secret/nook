@@ -342,14 +342,15 @@ before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
 `cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
 and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
-PR CI uses one explicitly named **Rust/WASM tests, Svelte checks, JS unit tests**
-step. Its single Bake graph runs the `nook-core + nook-auth2` nextest/coverage
-branch, the WASM test/build branch, and web dependency preparation in parallel.
-Do not split Rust into an earlier coverage solve: that serializes the critical
-path and makes a cold Rust cache dominate the whole PR. After verification,
-`task docker:extract:coverage` copies `summary.txt`, `summary.json`, `lcov.info`,
-and `coverage-floor.json` from the already-built image to `coverage/current`.
-That extraction invokes neither BuildKit nor Rust tests.
+PR CI uses independent native Rust and verified-WASM producers. Native Rust runs
+the `nook-core + nook-auth2` nextest/coverage branch and uploads its small coverage
+handoff. The WASM producer runs clippy/build/Node tests once, uploads the generated
+package under a run-stable artifact name, and feeds preview plus optional web and
+extension e2e consumers. `Verify and preview` downloads that WASM package instead
+of compiling Rust, then downloads native coverage after its web build for reporting.
+Do not serialize the producers or move Rust coverage into preview: a cold Rust
+cache must not dominate the web critical path. `task docker:extract:coverage`
+remains a copy-only path that invokes neither BuildKit nor Rust tests.
 
 `task docker:extract:coverage` remains the copy-only path for workflows that
 already have a sealed `nook-web:local` image, including main's commit-keyed
