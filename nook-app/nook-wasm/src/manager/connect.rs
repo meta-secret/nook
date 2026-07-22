@@ -273,6 +273,7 @@ impl NookVaultManager {
             let _ = self.status.tx.send("GITHUB_INIT_SUCCESS".to_owned());
         }
 
+        self.purge_legacy_plaintext_search_catalog().await?;
         let _ = self.status.tx.send("READY".to_owned());
         let records = self.get_records()?;
         tracing::info!(
@@ -463,6 +464,7 @@ impl NookVaultManager {
             self.bootstrap_event_log_genesis().await?;
         }
         self.persist_projection_cache().await?;
+        self.purge_legacy_plaintext_search_catalog().await?;
         let _ = self.status.tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

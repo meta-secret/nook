@@ -322,6 +322,7 @@ impl NookVaultManager {
             let yaml = self.serialize_current_projection_yaml()?;
             save_to_indexed_db(&yaml).await?;
         }
+        self.purge_legacy_plaintext_search_catalog().await?;
         let _ = self.status.tx.send("READY".to_owned());
         NookSecretPage::from_core(self.query_secret_page("", None, 0, page_limit)?)
             .map_err(Into::into)

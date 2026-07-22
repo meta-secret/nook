@@ -121,8 +121,9 @@ visible only in the unlocked WASM session; secret values and bodies remain
 excluded. Buckets are assigned from opaque secret ids, so adding, changing, or
 deleting an item rewrites one small bucket instead of the full 10,000-item
 catalog. Unlock decrypts all cached buckets once, and later queries scan only
-pre-normalized memory. The legacy plaintext `secret_search:{store_id}` key is
-deleted during migration. The catalog is local-only and is not uploaded to sync
+pre-normalized memory. Every successful vault open unconditionally deletes the
+legacy plaintext `secret_search:{store_id}` key, even if the user never searches.
+The catalog is local-only and is not uploaded to sync
 providers.
 
 ### B. Local Projection Layout (YAML)

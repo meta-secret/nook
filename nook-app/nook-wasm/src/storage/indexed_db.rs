@@ -19,8 +19,8 @@
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
 //! - `secret_search_v2:{store_id}:{bucket}` — independently encrypted search
 //!   catalog buckets. Searchable metadata is decrypted only while unlocked.
-//! - `secret_search:{store_id}` — legacy plaintext catalog key, deleted during
-//!   the encrypted-catalog migration.
+//! - `secret_search:{store_id}` — legacy plaintext catalog key, deleted
+//!   unconditionally when that vault opens.
 //! - `sentinel_genesis_share:{store_id}:{device_id}` — a core-verified encrypted
 //!   Sentinel genesis share delivery for this participant. Unlike a draft genesis
 //!   session, this may survive refresh and does not contain plaintext key

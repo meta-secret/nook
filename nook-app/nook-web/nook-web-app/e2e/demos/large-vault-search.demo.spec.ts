@@ -50,6 +50,65 @@ test('search a paginated vault through encrypted metadata', async ({
   })
   await page.waitForTimeout(DEMO_BEAT_MS)
 
+  const legacyCatalogKey = await page.evaluate(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const database = request.result
+          const read = database.transaction('vault', 'readonly')
+          const registry = read.objectStore('vault').get('vault_registry')
+          registry.onerror = () => reject(registry.error)
+          registry.onsuccess = () => {
+            const parsed = JSON.parse(String(registry.result)) as {
+              vaults?: Array<{ store_id?: string }>
+            }
+            const storeId = parsed.vaults?.[0]?.store_id
+            if (!storeId) {
+              reject(
+                new Error('Expected the local vault in the vault registry'),
+              )
+              return
+            }
+            const legacyKey = `secret_search:${storeId}`
+            const write = database.transaction('vault', 'readwrite')
+            const put = write
+              .objectStore('vault')
+              .put('{"metadata":"legacy plaintext"}', legacyKey)
+            put.onerror = () => reject(put.error)
+            write.oncomplete = () => resolve(legacyKey)
+            write.onerror = () => reject(write.error)
+          }
+        }
+      }),
+  )
+
+  await page.reload()
+  await connectLocalVault(page)
+  await page.getByTestId('vault-secrets-tab').click()
+  await expect(page.getByText('Page 1 of 2')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) =>
+          new Promise<boolean>((resolve, reject) => {
+            const request = indexedDB.open('nook_db')
+            request.onerror = () => reject(request.error)
+            request.onsuccess = () => {
+              const read = request.result.transaction('vault', 'readonly')
+              const get = read.objectStore('vault').get(key)
+              get.onerror = () => reject(get.error)
+              get.onsuccess = () => resolve(get.result === undefined)
+            }
+          }),
+        legacyCatalogKey,
+      ),
+    )
+    .toBe(true)
+
   await page.getByTestId('search-secrets').fill('demo-user-59')
   await expect(
     page.getByTestId('secret-row').filter({ hasText: 'demo-user-59' }),

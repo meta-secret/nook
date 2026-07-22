@@ -263,7 +263,7 @@ root/
          → load + decrypt IndexedDB secret_search_v2:{store_id}:{bucket}
          → verify authenticated buckets and reconcile by ciphertext digest
            (decrypt new, changed, or invalid rows only)
-         → encrypt only changed ID-derived buckets; delete the legacy plaintext key
+         → encrypt only changed ID-derived buckets; vault open already deleted the legacy plaintext key
          → nook-core::SecretSearchCatalog::query over normalized in-memory text
          → return the requested metadata page without record decryption
 ```

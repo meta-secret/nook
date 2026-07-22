@@ -294,16 +294,6 @@ async fn load_encrypted_secret_search_catalog(
     store_id: &str,
     crypto: &nook_core::VaultCrypto,
 ) -> Option<nook_core::SecretSearchCatalog> {
-    if let Err(error) =
-        crate::storage::indexed_db::delete_legacy_secret_search_catalog(store_id).await
-    {
-        tracing::warn!(
-            scope = "wasm-search",
-            action = "delete-legacy-catalog",
-            reason = %error,
-            "legacy plaintext search catalog could not be deleted"
-        );
-    }
     match crate::storage::indexed_db::load_secret_search_catalog_buckets(store_id).await {
         Ok(buckets) => restore_secret_search_catalog(buckets, crypto),
         Err(error) => {
@@ -342,6 +332,15 @@ fn encrypt_secret_search_catalog_buckets(
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    pub(in crate::manager) async fn purge_legacy_plaintext_search_catalog(
+        &self,
+    ) -> Result<(), NookError> {
+        if self.vault.store_id.is_empty() {
+            return Ok(());
+        }
+        crate::storage::indexed_db::delete_legacy_secret_search_catalog(&self.vault.store_id).await
+    }
+
     pub(crate) async fn prepare_secret_search_catalog(&mut self) -> Result<(), NookError> {
         if self.vault.store_id.is_empty() {
             return Err(NookError::Database(
