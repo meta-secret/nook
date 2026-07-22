@@ -19,6 +19,15 @@ export type ExtensionSetupStatus =
   | "installed_unpaired"
   | "paired";
 
+type BrowserExtensionEnvironment = {
+  maxTouchPoints: number;
+  platform: string;
+  userAgent: string;
+  userAgentData?: {
+    mobile: boolean;
+  };
+};
+
 type ExtensionDeploymentMetadata = {
   channel: string;
   version: string;
@@ -35,6 +44,38 @@ function marketingSiteBaseUrl(): string {
 
 export function extensionInstallLandingUrl(): string {
   return `${marketingSiteBaseUrl()}/#browser-extension`;
+}
+
+export function browserSupportsExtensionInstallation(
+  environment: BrowserExtensionEnvironment = navigator,
+): boolean {
+  if (environment.userAgentData) {
+    return !environment.userAgentData.mobile;
+  }
+
+  if (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(
+      environment.userAgent,
+    )
+  ) {
+    return false;
+  }
+
+  const isDesktopModeIPad =
+    /Macintosh/i.test(environment.userAgent) &&
+    environment.platform === "MacIntel" &&
+    environment.maxTouchPoints > 1;
+  return !isDesktopModeIPad;
+}
+
+export function shouldOfferExtensionSetup(
+  status: ExtensionSetupStatus,
+  environment: BrowserExtensionEnvironment = navigator,
+): boolean {
+  return (
+    status !== "not_installed" ||
+    browserSupportsExtensionInstallation(environment)
+  );
 }
 
 function isExtensionInstallMethod(

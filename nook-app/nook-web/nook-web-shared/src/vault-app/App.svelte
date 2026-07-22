@@ -52,6 +52,7 @@
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
     resolveExtensionSetupStatus,
+    shouldOfferExtensionSetup,
     type ExtensionSetupStatus,
   } from "$lib/extension-install";
   import type { VaultItemType } from "$lib/nook";
@@ -583,9 +584,12 @@
       extensionSetupStatus = undefined;
       return;
     }
-    extensionSetupStatus = await resolveExtensionSetupStatus(
+    const status = await resolveExtensionSetupStatus(
       vault.activeVaultStoreId,
     );
+    extensionSetupStatus = shouldOfferExtensionSetup(status)
+      ? status
+      : undefined;
   }
 
   async function handleExtensionInstall() {

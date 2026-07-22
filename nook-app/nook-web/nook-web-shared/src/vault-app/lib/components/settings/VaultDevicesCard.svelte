@@ -17,6 +17,7 @@
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
     resolveExtensionSetupStatus,
+    shouldOfferExtensionSetup,
     type ExtensionSetupStatus,
   } from '$lib/extension-install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
@@ -63,9 +64,12 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
-    extensionSetupStatus = await resolveExtensionSetupStatus(
+    const status = await resolveExtensionSetupStatus(
       vault.activeVaultStoreId,
     )
+    extensionSetupStatus = shouldOfferExtensionSetup(status)
+      ? status
+      : undefined
   }
 
   async function handleExtensionInstall() {
@@ -195,7 +199,7 @@
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION}
+  {#if SUPPORTS_EXTENSION && extensionSetupStatus}
     <section
       class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
       data-testid="extension-setup-settings"

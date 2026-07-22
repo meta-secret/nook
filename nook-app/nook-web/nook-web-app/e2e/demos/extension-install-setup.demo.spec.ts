@@ -78,3 +78,34 @@ test('offer browser extension install on vault home and in Devices', async ({
   )
   await demoBeat(page)
 })
+
+test.describe('mobile browser', () => {
+  test.use({
+    hasTouch: true,
+    isMobile: true,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
+    viewport: { width: 390, height: 844 },
+  })
+
+  test('hide browser extension installation on vault home and in Devices', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await demoBeat(page)
+
+    await expect(page.getByTestId('extension-install-setup')).toHaveCount(0)
+    await expect(page.getByTestId('extension-install-setup-cta')).toHaveCount(0)
+    await demoBeat(page)
+
+    await page.getByTestId('vault-settings-tab').click()
+    await expect(page.getByTestId('vault-devices-section')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('extension-setup-settings')).toHaveCount(0)
+    await expect(page.getByTestId('extension-setup-settings-cta')).toHaveCount(
+      0,
+    )
+    await demoBeat(page)
+  })
+})
