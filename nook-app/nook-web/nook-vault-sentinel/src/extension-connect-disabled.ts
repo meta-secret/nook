@@ -41,6 +41,10 @@ export function readInstalledExtensionRuntimeId(): undefined {
   return undefined;
 }
 
+export async function openInstalledExtension(): Promise<boolean> {
+  return false;
+}
+
 export async function discoverPairedExtensionIdentity(
   _vaultStoreId: string,
 ): Promise<PairedExtensionIdentityDiscovery> {

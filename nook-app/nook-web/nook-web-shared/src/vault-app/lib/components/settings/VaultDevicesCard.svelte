@@ -12,6 +12,7 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { SUPPORTS_EXTENSION } from '$lib/app-kind'
+  import { openInstalledExtension } from '$lib/extension-connect'
   import {
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
@@ -55,6 +56,7 @@
     undefined,
   )
   let extensionInstallBusy = $state(false)
+  let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === 'sentinel',
   )
@@ -71,6 +73,16 @@
     try {
       const target = await loadExtensionInstallTarget()
       openExtensionInstallTarget(target)
+    } finally {
+      extensionInstallBusy = false
+    }
+  }
+
+  async function handleExtensionConnect() {
+    extensionInstallBusy = true
+    extensionConnectError = false
+    try {
+      extensionConnectError = !(await openInstalledExtension())
     } finally {
       extensionInstallBusy = false
     }
@@ -211,6 +223,11 @@
         <p class="text-[11px] leading-relaxed text-muted-foreground/80">
           {vault.t('extension_setup.pair_hint')}
         </p>
+        {#if extensionConnectError}
+          <p class="text-xs text-destructive" role="alert">
+            {vault.t('extension_setup.connect_failed')}
+          </p>
+        {/if}
       {/if}
       {#if extensionSetupStatus && extensionSetupStatus !== 'paired'}
         <Button
@@ -224,14 +241,21 @@
             : undefined}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
-          onclick={() => void handleExtensionInstall()}
+          onclick={() =>
+            void (extensionSetupStatus === 'not_installed'
+              ? handleExtensionInstall()
+              : handleExtensionConnect())}
         >
           {#if extensionInstallBusy}
-            {vault.t('extension_setup.loading_install')}
+            {vault.t(
+              extensionSetupStatus === 'not_installed'
+                ? 'extension_setup.loading_install'
+                : 'extension_setup.opening_extension',
+            )}
           {:else if extensionSetupStatus === 'not_installed'}
             {vault.t('extension_setup.install_cta')}
           {:else}
-            {vault.t('extension_setup.open_install_page')}
+            {vault.t('extension_setup.connect_cta')}
           {/if}
         </Button>
       {/if}

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
+  openInstalledExtension,
   requestPairedExtensionUnlock,
 } from '$lib/extension-connect'
 import {
@@ -75,6 +76,42 @@ describe('extension connect route parsing', () => {
         ),
       ),
     ).toBeUndefined()
+  })
+})
+
+describe('installed extension launcher', () => {
+  test('asks the detected extension to open its authenticated pairing UI', async () => {
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-123',
+    )
+    const sendMessage = vi.fn(
+      (
+        extensionId: string,
+        message: unknown,
+        callback: (response: unknown) => void,
+      ) => {
+        expect(extensionId).toBe('extension-123')
+        expect(message).toEqual({ type: 'nook:open-companion-launcher' })
+        callback({ ok: true })
+      },
+    )
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage },
+    })
+
+    await expect(openInstalledExtension()).resolves.toBe(true)
+    expect(sendMessage).toHaveBeenCalledOnce()
+  })
+
+  test('does not attempt to launch an extension that is no longer detected', async () => {
+    const sendMessage = vi.fn()
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage },
+    })
+
+    await expect(openInstalledExtension()).resolves.toBe(false)
+    expect(sendMessage).not.toHaveBeenCalled()
   })
 })
 
