@@ -178,6 +178,8 @@ uses the same bounded BuildKit health/recovery wrapper as Main. Adding
 or removing the label retriggers PR Actions for the current head. Because the
 readiness audit already requires the exact-head `PR` workflow to succeed, a
 labeled PR cannot be ready while this job is queued, red, or cancelled.
+Extension e2e starts an automatically selected Xvfb display, waits for readiness,
+and keeps it from resetting between Playwright retries.
 
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |

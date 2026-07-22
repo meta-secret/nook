@@ -35,8 +35,8 @@ tasks:
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
       - cd "{{.EXTENSION_ROOT}}" && bun test scripts src/lib
-      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
-      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
+      - bash -n "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/run-with-xvfb.sh" "{{.EXTENSION_ROOT}}/scripts/test-e2e.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"
+      - if command -v shellcheck >/dev/null 2>&1; then shellcheck "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh" "{{.EXTENSION_ROOT}}/scripts/run-with-xvfb.sh" "{{.EXTENSION_ROOT}}/scripts/test-e2e.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.sh" "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.sh" "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh" "{{.EXTENSION_ROOT}}/scripts/verify-deployment.sh"; fi
       - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
       - bash "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh"
       - bash "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh"

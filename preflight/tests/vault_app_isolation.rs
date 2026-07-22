@@ -460,6 +460,37 @@ fn focused_playwright_task_runs_only_matching_projects() {
 }
 
 #[test]
+fn extension_e2e_waits_for_a_persistent_x_server() {
+    let root = repository_root();
+    let wrapper = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh",
+    );
+    for required in [
+        "Xvfb -displayfd 3 -screen 0 1280x720x24 -noreset",
+        "if [ -s \"$display_file\" ]",
+        "kill -0 \"$xvfb_pid\"",
+        "Xvfb exited while the browser suite was running",
+    ] {
+        assert!(
+            wrapper.contains(required),
+            "extension e2e Xvfb wrapper missing resilience contract: {required}"
+        );
+    }
+
+    for script in ["test-e2e.sh", "test-hosted-smoke.sh"] {
+        let contents = read(
+            &root,
+            &format!("nook-app/nook-web/nook-web-extension/scripts/{script}"),
+        );
+        assert!(
+            contents.contains("bash scripts/run-with-xvfb.sh"),
+            "{script} must use the readiness-checked Xvfb wrapper"
+        );
+    }
+}
+
+#[test]
 fn main_failures_do_not_trigger_an_ai_repair_agent() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
