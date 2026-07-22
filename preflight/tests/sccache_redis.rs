@@ -145,7 +145,9 @@ fn github_actions_use_the_authenticated_persistent_cache() {
     assert!(!cache_action_main.contains("console."));
     assert!(!cache_action_main.contains("shell: true"));
     assert!(!cache_action_main.contains("process.stdout.write"));
-    assert!(!cache_action_main.contains("spawnSync(\"task\", [\"infra:cache:connect\", redisPassword"));
+    assert!(
+        !cache_action_main.contains("spawnSync(\"task\", [\"infra:cache:connect\", redisPassword")
+    );
 
     let infra_tasks = read("infra/Taskfile.yml");
     let connector = infra_tasks
@@ -180,8 +182,13 @@ fn github_actions_use_the_authenticated_persistent_cache() {
     assert!(!connector.contains("set -x"));
     assert!(!connector.contains("docker logs \"$proxy_container\""));
     assert!(!connector.contains("cat \"$cloudflared_log\""));
-    assert!(connector.contains("diagnostic=\"${diagnostic//\"$cloudflare_client_id\"/[REDACTED]}\""));
-    assert!(connector.contains("diagnostic=\"${diagnostic//\"$cloudflare_client_secret\"/[REDACTED]}\""));
+    assert!(
+        connector.contains("diagnostic=\"${diagnostic//\"$cloudflare_client_id\"/[REDACTED]}\"")
+    );
+    assert!(
+        connector
+            .contains("diagnostic=\"${diagnostic//\"$cloudflare_client_secret\"/[REDACTED]}\"")
+    );
     assert!(!connector.contains("SCCACHE_REDIS_PASSWORD=$CACHE_REDIS_PASSWORD"));
     assert!(!connector.contains("CACHE_REDIS_PASSWORD: ${{"));
     assert!(!connector.contains("--env REDISCLI_AUTH"));
@@ -207,7 +214,11 @@ fn github_actions_use_the_authenticated_persistent_cache() {
         .and_then(|tail| tail.split("        } >> \"$GITHUB_ENV\"").next())
         .expect("cache connector must export only the external-cache routing block");
     assert!(github_environment.contains("SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file"));
-    for secret_value in ["cloudflare_client_id", "cloudflare_client_secret", "redis_password\""] {
+    for secret_value in [
+        "cloudflare_client_id",
+        "cloudflare_client_secret",
+        "redis_password\"",
+    ] {
         assert!(
             !github_environment.contains(secret_value),
             "GITHUB_ENV must contain only credential file paths, never {secret_value}"
@@ -234,23 +245,43 @@ fn github_actions_use_the_authenticated_persistent_cache() {
         }
     }
 
-    for (path, expected_secret_uses) in [
-        (".github/workflows/e2e-nightly.yml", 1),
-        (".github/workflows/main.yml", 1),
+    let main_path = ".github/workflows/main.yml";
+    let main_workflow = read(main_path);
+    let password_count = main_workflow
+        .matches("cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}")
+        .count();
+    let client_id_count = main_workflow
+        .matches("cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}")
+        .count();
+    let client_secret_count = main_workflow
+        .matches(
+            "cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}",
+        )
+        .count();
+    assert_eq!(
+        password_count, 1,
+        "only trusted Docker setup calls in {main_path} may receive the Redis password"
+    );
+    assert_eq!(
+        client_id_count, 1,
+        "only trusted Docker setup calls in {main_path} may receive the Access client ID"
+    );
+    assert_eq!(
+        client_secret_count, 1,
+        "only trusted Docker setup calls in {main_path} may receive the Access client secret"
+    );
+
+    let nightly = read(".github/workflows/e2e-nightly.yml");
+    for secret_input in [
+        "cache-redis-password: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CACHE_REDIS_PASSWORD || '' }}",
+        "cache-cloudflare-client-id: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID || '' }}",
+        "cache-cloudflare-client-secret: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET || '' }}",
     ] {
-        let workflow = read(path);
-        let password_count = workflow
-            .matches("cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}")
-            .count();
-        let client_id_count = workflow
-            .matches("cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}")
-            .count();
-        let client_secret_count = workflow
-            .matches("cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}")
-            .count();
-        assert_eq!(password_count, expected_secret_uses, "only trusted Docker setup calls in {path} may receive the Redis password");
-        assert_eq!(client_id_count, expected_secret_uses, "only trusted Docker setup calls in {path} may receive the Access client ID");
-        assert_eq!(client_secret_count, expected_secret_uses, "only trusted Docker setup calls in {path} may receive the Access client secret");
+        assert_eq!(
+            nightly.matches(secret_input).count(),
+            1,
+            "nightly cache credentials must be limited to the trusted default branch"
+        );
     }
 
     let bake = read("nook-app/docker-bake.hcl");

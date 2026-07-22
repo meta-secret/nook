@@ -19,14 +19,19 @@ fn assert_no_shell_scripts(path: &Path) {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
     {
         let entry = entry.unwrap_or_else(|error| {
-            panic!("failed to inspect an entry under {}: {error}", path.display())
+            panic!(
+                "failed to inspect an entry under {}: {error}",
+                path.display()
+            )
         });
         let entry_path = entry.path();
         if entry_path.is_dir() {
             assert_no_shell_scripts(&entry_path);
         } else {
             assert_ne!(
-                entry_path.extension().and_then(|extension| extension.to_str()),
+                entry_path
+                    .extension()
+                    .and_then(|extension| extension.to_str()),
                 Some("sh"),
                 "infrastructure shell belongs inline in infra/Taskfile.yml, not {}",
                 entry_path.display()
