@@ -181,6 +181,15 @@ test('workflow records completed trusted Main runs without a stats recursion pat
   assert.match(collector, /github\.event\.workflow_run\.event == 'push'/)
   assert.match(collector, /github\.event\.workflow_run\.head_branch == 'main'/)
   assert.match(collector, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
+  assert.match(
+    collector,
+    /runs\/\{run_id\}\/attempts\/\{attempt_number\}'[\s\S]*attempt_number: eventRun\.run_attempt/,
+  )
+  assert.match(
+    collector,
+    /runs\/\{run_id\}\/attempts\/\{attempt_number\}\/jobs'[\s\S]*attempt_number: eventRun\.run_attempt/,
+  )
+  assert.doesNotMatch(collector, /filter: 'latest'/)
   assert.match(collector, /\.stats\/main-build\/\$\{run\.id\}-attempt-\$\{run\.run_attempt\}\.yaml/)
   assert.match(main, /paths-ignore:[\s\S]*- \.stats\/\*\*/)
   assert.match(pullRequest, /paths-ignore:[\s\S]*- \.stats\/\*\*/)
