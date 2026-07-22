@@ -1,0 +1,251 @@
+schema_version: 2
+source_pr:
+  number: 612
+  url: https://github.com/meta-secret/nook/pull/612
+  title: Optimize large-vault secret search
+  change_surface: rust_wasm_web_vault_search_catalog
+  head_sha: b31b46eb4abd7d097d12d794950dc73328f983de
+  started_at: 2026-07-22T04:42:00Z
+  opened_at: 2026-07-22T05:15:31Z
+  merged_at: 2026-07-22T06:10:00Z
+  elapsed_seconds: 5280
+  open_to_merge_seconds: 3269
+summary:
+  local_execution_count: 21
+  local_check_count: 9
+  local_test_count: 3
+  local_combined_count: 9
+  local_execution_seconds: 1571
+  github_actions_run_count: 4
+  github_actions_seconds: 2106
+  pr_retrigger_count: 3
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T06:12:00Z
+  head_sha: b31b46eb4abd7d097d12d794950dc73328f983de
+  by_type:
+    rust: 627
+    preflight: 30
+    web_unit: 233
+    e2e: 199
+  total: 1089
+local_executions:
+  - command: cargo test -p nook-core --test vault_search_catalog
+    category: test
+    started_at: 2026-07-22T04:46:00Z
+    finished_at: 2026-07-22T04:46:40Z
+    duration_seconds: 40
+    outcome: passed
+    reason: focused_search_catalog_behavior
+  - command: cargo check -p nook-wasm --target wasm32-unknown-unknown
+    category: check
+    started_at: 2026-07-22T04:47:00Z
+    finished_at: 2026-07-22T04:47:22Z
+    duration_seconds: 22
+    outcome: passed
+    reason: wasm_target_compile_check
+  - command: cargo test -p nook-wasm --no-run
+    category: test
+    started_at: 2026-07-22T04:47:30Z
+    finished_at: 2026-07-22T04:48:01Z
+    duration_seconds: 31
+    outcome: passed
+    reason: native_wasm_adapter_test_compile
+  - command: task wasm:build:fast
+    category: check
+    started_at: 2026-07-22T04:48:10Z
+    finished_at: 2026-07-22T04:48:38Z
+    duration_seconds: 28
+    outcome: passed
+    reason: generated_wasm_binding_build
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T04:49:00Z
+    finished_at: 2026-07-22T04:50:08Z
+    duration_seconds: 68
+    outcome: failed
+    reason: clippy_single_match_else
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T04:50:20Z
+    finished_at: 2026-07-22T04:51:25Z
+    duration_seconds: 65
+    outcome: failed
+    reason: missing_test_fixture_rp_name
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T04:51:40Z
+    finished_at: 2026-07-22T04:52:59Z
+    duration_seconds: 79
+    outcome: passed
+    reason: initial_pre_push_hygiene
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T04:53:05Z
+    finished_at: 2026-07-22T04:53:06Z
+    duration_seconds: 1
+    outcome: passed
+    reason: precommit_contract_check
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T05:17:00Z
+    finished_at: 2026-07-22T05:17:01Z
+    duration_seconds: 1
+    outcome: failed
+    reason: exact_head_missing_large_vault_demo
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T05:19:55Z
+    finished_at: 2026-07-22T05:21:17Z
+    duration_seconds: 82
+    outcome: passed
+    reason: hygiene_after_adding_ui_demo
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T05:21:20Z
+    finished_at: 2026-07-22T05:21:21Z
+    duration_seconds: 1
+    outcome: passed
+    reason: exact_head_ui_demo_contract
+  - command: task ui:demo DEMO=large-vault-search.demo.spec.ts
+    category: combined
+    started_at: 2026-07-22T05:22:00Z
+    finished_at: 2026-07-22T05:33:30Z
+    duration_seconds: 690
+    outcome: passed
+    reason: cold_browser_image_and_120_item_search_demo
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T05:34:00Z
+    finished_at: 2026-07-22T05:35:23Z
+    duration_seconds: 83
+    outcome: passed
+    reason: hygiene_after_reducing_demo_fixture
+  - command: task ui:demo DEMO=large-vault-search.demo.spec.ts
+    category: combined
+    started_at: 2026-07-22T05:36:00Z
+    finished_at: 2026-07-22T05:39:00Z
+    duration_seconds: 180
+    outcome: passed
+    reason: focused_60_item_search_demo
+  - command: task pr:preflight PR=612
+    category: check
+    started_at: 2026-07-22T05:39:10Z
+    finished_at: 2026-07-22T05:39:18Z
+    duration_seconds: 8
+    outcome: passed
+    reason: initial_pr_policy_and_state_audit
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T05:49:30Z
+    finished_at: 2026-07-22T05:50:52Z
+    duration_seconds: 82
+    outcome: passed
+    reason: hygiene_after_cache_resilience_review_fix
+  - command: task pr:preflight PR=612
+    category: check
+    started_at: 2026-07-22T05:51:00Z
+    finished_at: 2026-07-22T05:51:08Z
+    duration_seconds: 8
+    outcome: passed
+    reason: post_review_pr_policy_audit
+  - command: task pr:ready PR=612
+    category: check
+    started_at: 2026-07-22T05:55:00Z
+    finished_at: 2026-07-22T05:55:08Z
+    duration_seconds: 8
+    outcome: failed
+    reason: unresolved_catalog_integrity_review_thread
+  - command: cargo test -p nook-core --test vault_search_catalog
+    category: test
+    started_at: 2026-07-22T05:55:15Z
+    finished_at: 2026-07-22T05:55:19Z
+    duration_seconds: 4
+    outcome: passed
+    reason: focused_hmac_tamper_rebuild_behavior
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T05:55:25Z
+    finished_at: 2026-07-22T05:56:48Z
+    duration_seconds: 83
+    outcome: passed
+    reason: final_hmac_integrity_hygiene
+  - command: task pr:ready PR=612
+    category: check
+    started_at: 2026-07-22T06:09:20Z
+    finished_at: 2026-07-22T06:09:27Z
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29893281358
+    run_attempt: 1
+    head_sha: 9542b79f5e155f586a4644450498663816ee9b14
+    trigger: pull_request
+    started_at: 2026-07-22T05:15:34Z
+    finished_at: 2026-07-22T05:19:42Z
+    duration_seconds: 248
+    conclusion: failure
+  - workflow: PR
+    run_id: 29894001977
+    run_attempt: 1
+    head_sha: 0b833b778482db52ae33c8ba85f4d3e8d3281fe4
+    trigger: pull_request
+    started_at: 2026-07-22T05:31:07Z
+    finished_at: 2026-07-22T05:37:10Z
+    duration_seconds: 363
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29894269022
+    run_attempt: 1
+    head_sha: 71069aeea69d130795c1964731923698725635cf
+    trigger: pull_request
+    started_at: 2026-07-22T05:36:38Z
+    finished_at: 2026-07-22T05:49:20Z
+    duration_seconds: 762
+    conclusion: success
+  - workflow: PR
+    run_id: 29895248294
+    run_attempt: 1
+    head_sha: b31b46eb4abd7d097d12d794950dc73328f983de
+    trigger: pull_request
+    started_at: 2026-07-22T05:57:16Z
+    finished_at: 2026-07-22T06:09:29Z
+    duration_seconds: 733
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-22T05:31:07Z
+    kind: head_push
+    reason: add_required_large_vault_ui_demo
+  - at: 2026-07-22T05:36:38Z
+    kind: head_push
+    reason: reduce_demo_fixture_after_local_validation
+  - at: 2026-07-22T05:57:16Z
+    kind: head_push
+    reason: authenticate_persisted_catalog_rows_after_security_review
+merge_attempts:
+  - at: 2026-07-22T06:10:00Z
+    method: squash
+    outcome: success
+    reason: remote_merge_succeeded_local_main_checkout_blocked_by_existing_worktree
+comparison:
+  baseline_prs: [606, 609]
+  baseline_quality: weak
+  baseline_note: No recent search-index PR exists; these are the newest browser-flow and shared-web PRs using the same product gate.
+  elapsed_seconds_change_percent: 274.9
+  local_execution_seconds_change_percent: 238.6
+  github_actions_seconds_change_percent: 277.1
+  test_inventory_total_change: 5.5
+  regression: true
+  regression_reasons:
+    - Elapsed, local execution, and GitHub Actions time exceeded the weak baseline median thresholds while the implementation added Rust, WASM, persistence, and a large-vault UI demo.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first remote failure enforced the required UI demo contract; the local precommit contract check ran too early, but the repository workflow already documents the correct post-commit order.
+    - The remaining head pushes validated a smaller stable demo, made cache persistence best-effort after review, and added keyed integrity after security review; no unchanged reruns or manual reruns occurred.
+    - Cold browser-image preparation dominated local demo time, while both focused reruns passed and the final exact-head product gate succeeded.
+    - The duration increase reflects a broader cross-layer gate and reviewer-driven security changes rather than a checked-in build-performance regression, so no separate build-performance change is warranted.
+  required_actions: []
