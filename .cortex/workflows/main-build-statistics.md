@@ -48,7 +48,8 @@ YAML.
 
 The collector creates a branch containing exactly its one generated record,
 opens a stats-only PR, and squash-merges it immediately with the trusted
-`NOOK_GITHUB_PAT` (falling back to `GITHUB_TOKEN` when repository rules allow).
+`NOOK_GITHUB_PAT`. The workflow fails explicitly if that admin-capable secret
+is unavailable instead of leaving an ambiguous, unmerged automation PR.
 Rerunning the collector is idempotent: a valid record already present on `main`
 is accepted without another PR, while a GitHub rerun attempt receives a distinct
 filename.

@@ -135,13 +135,17 @@ jobs:
         if: steps.record.outputs.already-recorded == 'false'
         env:
           BRANCH: ${{ steps.record.outputs.branch }}
-          GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT || github.token }}
+          GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
           RECORD_PATH: ${{ steps.record.outputs.path }}
           SOURCE_RUN_ATTEMPT: ${{ steps.record.outputs.run-attempt }}
           SOURCE_RUN_ID: ${{ steps.record.outputs.run-id }}
           SOURCE_RUN_URL: ${{ steps.record.outputs.run-url }}
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::NOOK_GITHUB_PAT is required to admin-merge Main build statistics"
+            exit 1
+          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git switch -C "$BRANCH"

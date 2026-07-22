@@ -15,7 +15,7 @@ function fixture() {
       name: 'Main',
       workflow_id: 77,
       id: 123456,
-      run_attempt: 2,
+      run_attempt: 1,
       html_url: 'https://github.com/meta-secret/nook/actions/runs/123456',
       event: 'push',
       head_branch: 'main',
@@ -83,6 +83,24 @@ function fixture() {
   }
 }
 
+function shiftFixtureHours(input, hours) {
+  const shifted = structuredClone(input)
+  const shift = (value) => new Date(Date.parse(value) + hours * 60 * 60 * 1000).toISOString()
+  for (const field of ['created_at', 'run_started_at', 'updated_at']) {
+    shifted.run[field] = shift(shifted.run[field])
+  }
+  for (const job of shifted.jobs) {
+    job.started_at = shift(job.started_at)
+    job.completed_at = shift(job.completed_at)
+    for (const step of job.steps) {
+      step.started_at = shift(step.started_at)
+      step.completed_at = shift(step.completed_at)
+    }
+  }
+  shifted.recordedAt = shift(shifted.recordedAt)
+  return shifted
+}
+
 test('builds stable Main timing metrics from completed run jobs and steps', () => {
   const record = buildMainBuildStats(fixture())
 
@@ -125,19 +143,26 @@ test('retains incomplete failed steps with null timing instead of inventing dura
   assert.equal(record.comparison.baseline_quality, 'not_applicable')
 })
 
+test('uses attempt-specific start and job timestamps for rerun wall time', () => {
+  const input = fixture()
+  input.run.run_attempt = 2
+  input.run.created_at = '2026-07-21T10:00:00Z'
+  input.run.run_started_at = '2026-07-22T10:01:00Z'
+
+  const record = buildMainBuildStats(input)
+
+  assert.equal(record.source_run.started_at, '2026-07-22T10:02:00Z')
+  assert.equal(record.summary.queue_seconds, 60)
+  assert.equal(record.summary.execution_seconds, 1080)
+  assert.equal(record.summary.wall_seconds, 1140)
+})
+
 test('flags successful build regressions against the two latest successful attempts', () => {
-  const firstInput = fixture()
+  const firstInput = shiftFixtureHours(fixture(), -2)
   firstInput.run.id = 100001
-  firstInput.run.run_attempt = 1
   const first = buildMainBuildStats(firstInput)
-  const secondInput = fixture()
+  const secondInput = shiftFixtureHours(fixture(), -1)
   secondInput.run.id = 100002
-  secondInput.run.run_attempt = 1
-  secondInput.run.created_at = '2026-07-22T11:00:00Z'
-  secondInput.run.run_started_at = '2026-07-22T11:02:00Z'
-  secondInput.run.updated_at = '2026-07-22T11:21:00Z'
-  secondInput.jobs[0].started_at = '2026-07-22T11:02:00Z'
-  secondInput.jobs[0].completed_at = '2026-07-22T11:20:00Z'
   const second = buildMainBuildStats(secondInput)
   const currentInput = fixture()
   currentInput.run.id = 100003
@@ -159,6 +184,25 @@ test('flags successful build regressions against the two latest successful attem
   ])
   assert.ok(current.comparison.execution_seconds_change_percent > 20)
   assert.ok(current.comparison.build_seconds_change_percent > 20)
+})
+
+test('does not use delayed collector records from the future as baselines', () => {
+  const earlierInput = shiftFixtureHours(fixture(), -1)
+  earlierInput.run.id = 100001
+  const earlier = buildMainBuildStats(earlierInput)
+  const futureInput = shiftFixtureHours(fixture(), 1)
+  futureInput.run.id = 100003
+  const future = buildMainBuildStats(futureInput)
+  const currentInput = fixture()
+  currentInput.run.id = 100002
+
+  const current = buildMainBuildStats({
+    ...currentInput,
+    baselineRecords: [future, earlier],
+  })
+
+  assert.deepEqual(current.comparison.baseline_runs, [{ run_id: 100001, run_attempt: 1 }])
+  assert.equal(current.comparison.baseline_quality, 'weak')
 })
 
 test('rejects records whose summary cannot be derived from detailed jobs', () => {
@@ -190,6 +234,9 @@ test('workflow records completed trusted Main runs without a stats recursion pat
     /runs\/\{run_id\}\/attempts\/\{attempt_number\}\/jobs'[\s\S]*attempt_number: eventRun\.run_attempt/,
   )
   assert.doesNotMatch(collector, /filter: 'latest'/)
+  assert.match(collector, /GH_TOKEN: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)
+  assert.doesNotMatch(collector, /GH_TOKEN:.*github\.token/)
+  assert.match(collector, /NOOK_GITHUB_PAT is required to admin-merge/)
   assert.match(collector, /\.stats\/main-build\/\$\{run\.id\}-attempt-\$\{run\.run_attempt\}\.yaml/)
   assert.match(main, /paths-ignore:[\s\S]*- \.stats\/\*\*/)
   assert.match(pullRequest, /paths-ignore:[\s\S]*- \.stats\/\*\*/)

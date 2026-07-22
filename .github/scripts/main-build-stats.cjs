@@ -138,11 +138,21 @@ function addComparison(record, baselineRecords) {
     }
   }
 
+  const currentCompletedAt = timestampMilliseconds(
+    record.source_run.completed_at,
+    'source_run.completed_at',
+  )
   const baselines = baselineRecords
     .filter(
       (candidate) =>
         candidate.source_run?.workflow_id === record.source_run.workflow_id &&
-        candidate.source_run?.conclusion === 'success',
+        candidate.source_run?.conclusion === 'success' &&
+        !(
+          candidate.source_run?.run_id === record.source_run.run_id &&
+          candidate.source_run?.run_attempt === record.source_run.run_attempt
+        ) &&
+        timestampMilliseconds(candidate.source_run.completed_at, 'baseline.completed_at') <
+          currentCompletedAt,
     )
     .sort(
       (left, right) =>
@@ -211,15 +221,23 @@ function buildMainBuildStats({
       return timestampMilliseconds(left.started_at, 'job.started_at') -
         timestampMilliseconds(right.started_at, 'job.started_at')
     })
-  const startedAt = run.run_started_at ||
-    minimumTimestamp(normalizedJobs.map((job) => job.started_at), run.created_at)
+  const earliestJobStartedAt = minimumTimestamp(
+    normalizedJobs.map((job) => job.started_at),
+    run.run_started_at || run.created_at,
+  )
+  const startedAt = run.run_attempt > 1
+    ? earliestJobStartedAt
+    : run.run_started_at || earliestJobStartedAt
+  const wallStartedAt = run.run_attempt > 1
+    ? run.run_started_at || earliestJobStartedAt
+    : run.created_at
   const completedAt = maximumTimestamp(
     normalizedJobs.map((job) => job.completed_at),
     run.updated_at,
   )
-  const queueSeconds = durationSeconds(run.created_at, startedAt, 'source_run.queue')
+  const queueSeconds = durationSeconds(wallStartedAt, startedAt, 'source_run.queue')
   const executionSeconds = durationSeconds(startedAt, completedAt, 'source_run.execution')
-  const wallSeconds = durationSeconds(run.created_at, completedAt, 'source_run.wall')
+  const wallSeconds = durationSeconds(wallStartedAt, completedAt, 'source_run.wall')
 
   const record = addComparison({
     schema_version: 1,
