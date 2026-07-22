@@ -142,6 +142,9 @@ passwords stay as separate items instead of being overwritten.
   password to open the encrypted local vault directly. A vault created with the
   extension identity prefers that approved identity whenever the extension is
   unlocked.
+- Importing an existing remote vault first reuses its paired extension identity
+  when available. A locked extension opens its own unlock window; without the
+  extension, the website asks for this browser's passkey or PIN before connect.
 - A backup-password session leaves the protected device identity and saved sync
   credentials locked. Authorize with the passkey or PIN when you want remote
   sync to resume.

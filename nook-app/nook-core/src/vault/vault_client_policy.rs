@@ -103,6 +103,15 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
+    pub const fn existing_vault_identity_recovery_required(
+        existing_vault_required: bool,
+        provider_setup_active: bool,
+        device_protection_ready: bool,
+    ) -> bool {
+        existing_vault_required && provider_setup_active && !device_protection_ready
+    }
+
+    #[must_use]
     #[allow(clippy::fn_params_excessive_bools)]
     pub const fn should_show_login_vault_picker(
         authenticated: bool,
@@ -249,6 +258,14 @@ mod tests {
                 blocked.0, blocked.1, blocked.2, blocked.3, blocked.4, blocked.5
             ));
         }
+    }
+
+    #[test]
+    fn existing_vault_import_recovers_identity_before_provider_connect() {
+        assert!(VaultClientPolicy::existing_vault_identity_recovery_required(true, true, false));
+        assert!(!VaultClientPolicy::existing_vault_identity_recovery_required(false, true, false));
+        assert!(!VaultClientPolicy::existing_vault_identity_recovery_required(true, false, false));
+        assert!(!VaultClientPolicy::existing_vault_identity_recovery_required(true, true, true));
     }
 
     #[test]

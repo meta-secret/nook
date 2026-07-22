@@ -256,3 +256,18 @@ export async function syncActiveVaultStoreIdToAuth(
     }),
   );
 }
+
+export async function activateConnectedExistingVault(
+  state: VaultState,
+  storeId: string,
+): Promise<void> {
+  if (!state.manager || !state.isAuthenticated) return;
+  const connectedStoreId = requireManagerVaultStoreId(state.manager);
+  if (connectedStoreId !== storeId) {
+    throw new Error(state.t("errors.vault_selection_failed"));
+  }
+  await setActiveVault(storeId);
+  state.activeVaultStoreId = storeId;
+  await refreshLocalVaultCatalog(state);
+  await syncActiveVaultStoreIdToAuth(state);
+}
