@@ -100,6 +100,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Test Linear UI demo publishing helper
+        run: node --test .github/scripts/linear-ui-demo.test.cjs
+
       - name: Enforce the UI demo contract
         id: ui-demo-contract
         env:
@@ -187,6 +190,7 @@ jobs:
               '',
               `- Result: **${process.env.DEMO_OUTCOME}**`,
               `- Video artifact: [${artifactName}](${runUrl}#artifacts)`,
+              '- Linear archive: publishing from the trusted post-workflow',
               `- Demo spec: \`${process.env.DEMO_SPECS}\``,
               '',
               'The demo runs in headless Chromium. Playwright assertions are authoritative; the video is a review aid for humans and AI.',

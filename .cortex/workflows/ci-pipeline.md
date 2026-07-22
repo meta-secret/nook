@@ -11,8 +11,9 @@ product validation pipeline or trigger the main pipeline after merge.
 
 | Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + video artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins      | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
+| [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, all headless UI demos with a 90-day artifact and the 10 largest recordings added to the merged PR's Linear issue, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No                                        |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -275,9 +276,27 @@ Combine with unconditional `task format` — see
 The `ui-demo` Playwright project runs Chromium headlessly at 1280x720 and always
 records WebM video. Demo-only waits are allowed to hold meaningful before/after
 states long enough for a reviewer to understand them; ordinary regression specs
-must remain full-speed. CI uploads the result for 90 days and maintains a PR
-comment linking to the artifact. Use `task ui:demo` from the repository root or
-`cargo ui-demo` from `nook-app/` to reproduce it locally.
+must remain full-speed. CI keeps the GitHub Actions result for 90 days and, after
+a successful recording, uploads the 10 largest WebMs to Linear's private file storage. A
+deterministic Linear issue in the `nook-ui` project owns all recordings for one
+GitHub PR, with one idempotent comment per head SHA. The PR comment links both
+the Actions fallback and the Linear archive. Merging completes that Linear issue;
+closing without merge cancels it. Linear publication and lifecycle transitions
+are best-effort so an external tracker outage does not invalidate authoritative
+Playwright assertions or block the product gate.
+
+Main runs the complete UI-demo project and retains every resulting WebM in its
+90-day Actions artifact. It adds only the 10 largest recordings to the Linear
+issue for the PR associated with that Main commit, then leaves the issue in
+Done. This keeps the issue reviewable while preserving the full recording set.
+
+The trusted post-workflow and Main workflow require the repository Actions
+secret `LINEAR_API_KEY`; the unmerged `pull_request` workflow never receives it
+or loads secret-consuming code from the PR checkout. Never put that value in
+workflow YAML, logs, comments, artifacts, or agent statistics. The local Linear
+MCP OAuth connection is useful for interactive issue management but is separate
+from this unattended CI credential. Use `task ui:demo` from the repository root
+or `cargo ui-demo` from `nook-app/` to reproduce a recording locally.
 
 Playwright DOM/state assertions decide pass or failure. Humans and multimodal AI
 agents may review the video as supporting evidence, but visual AI review is
