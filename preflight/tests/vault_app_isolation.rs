@@ -938,6 +938,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "types: [opened, synchronize, reopened, labeled, unlabeled, closed]",
         "name: Full browser e2e (main fix)",
         "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
+        "NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/",
         "task ci:pr:e2e",
         "task ci:pr:rust",
         "task ci:pr:wasm",
