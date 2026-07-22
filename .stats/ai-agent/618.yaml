@@ -1,0 +1,192 @@
+schema_version: 2
+source_pr:
+  number: 618
+  url: https://github.com/meta-secret/nook/pull/618
+  title: Encrypt local secret search metadata
+  change_surface: rust_wasm_browser_vault_search_encryption
+  head_sha: db5cf2e0ed44fb1d35afebb52edf46ad3733318c
+  started_at: 2026-07-22T06:17:19Z
+  opened_at: 2026-07-22T06:55:11Z
+  merged_at: 2026-07-22T07:56:29Z
+  elapsed_seconds: 5950
+  open_to_merge_seconds: 3678
+summary:
+  local_execution_count: 11
+  local_check_count: 5
+  local_test_count: 2
+  local_combined_count: 4
+  local_execution_seconds: 302
+  github_actions_run_count: 5
+  github_actions_seconds: 1969
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T08:00:51Z
+  head_sha: db5cf2e0ed44fb1d35afebb52edf46ad3733318c
+  by_type:
+    rust: 627
+    preflight: 31
+    web_unit: 234
+    e2e: 199
+  total: 1091
+local_executions:
+  - command: cargo test -p nook-core --lib vault_search_catalog
+    category: test
+    started_at: 2026-07-22T06:32:00Z
+    finished_at: 2026-07-22T06:32:02Z
+    duration_seconds: 2
+    outcome: passed
+    reason: focused_encrypted_catalog_behavior
+  - command: cargo check -p nook-wasm --target wasm32-unknown-unknown
+    category: check
+    started_at: 2026-07-22T06:32:05Z
+    finished_at: 2026-07-22T06:32:08Z
+    duration_seconds: 3
+    outcome: passed
+    reason: wasm_target_compile_check
+  - command: cargo test -p nook-wasm --no-run
+    category: test
+    started_at: 2026-07-22T06:32:10Z
+    finished_at: 2026-07-22T06:32:15Z
+    duration_seconds: 5
+    outcome: passed
+    reason: native_wasm_adapter_test_compile
+  - command: cargo clippy -p nook-wasm --target wasm32-unknown-unknown -- -D warnings
+    category: check
+    started_at: 2026-07-22T06:32:18Z
+    finished_at: 2026-07-22T06:32:21Z
+    duration_seconds: 3
+    outcome: passed
+    reason: wasm_lint_gate
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T06:33:00Z
+    finished_at: 2026-07-22T06:34:26Z
+    duration_seconds: 86
+    outcome: passed
+    reason: initial_pre_push_hygiene
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T06:34:30Z
+    finished_at: 2026-07-22T06:34:31Z
+    duration_seconds: 1
+    outcome: passed
+    reason: exact_head_ui_demo_contract
+  - command: task format
+    category: combined
+    started_at: 2026-07-22T07:20:00Z
+    finished_at: 2026-07-22T07:21:27Z
+    duration_seconds: 87
+    outcome: passed
+    reason: hygiene_after_legacy_plaintext_purge_fix
+  - command: task ui:demo UI_DEMO_SPECS=e2e/demos/large-vault-search.demo.spec.ts
+    category: combined
+    started_at: 2026-07-22T07:22:00Z
+    finished_at: 2026-07-22T07:22:48Z
+    duration_seconds: 48
+    outcome: failed
+    reason: legacy_fixture_used_non_authoritative_vault_blob_key
+  - command: task ui:demo UI_DEMO_SPECS=e2e/demos/large-vault-search.demo.spec.ts
+    category: combined
+    started_at: 2026-07-22T07:23:30Z
+    finished_at: 2026-07-22T07:24:28Z
+    duration_seconds: 58
+    outcome: passed
+    reason: verify_pre_search_legacy_purge_and_encrypted_rows
+  - command: node_modules/.bin/prettier --check e2e/demos/large-vault-search.demo.spec.ts
+    category: check
+    started_at: 2026-07-22T07:47:30Z
+    finished_at: 2026-07-22T07:47:31Z
+    duration_seconds: 1
+    outcome: passed
+    reason: exact_container_formatter_check_after_ci_failure
+  - command: task pr:ready PR=618
+    category: check
+    started_at: 2026-07-22T07:56:10Z
+    finished_at: 2026-07-22T07:56:18Z
+    duration_seconds: 8
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29898335870
+    run_attempt: 1
+    head_sha: 61f2f39f350cef45214422144ab8d152c61804ee
+    trigger: pull_request
+    started_at: 2026-07-22T06:55:15Z
+    finished_at: 2026-07-22T06:56:20Z
+    duration_seconds: 65
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29898363973
+    run_attempt: 1
+    head_sha: a49c881473ea38d0d7e6f1f74f386b767770439f
+    trigger: pull_request
+    started_at: 2026-07-22T06:55:46Z
+    finished_at: 2026-07-22T07:08:21Z
+    duration_seconds: 755
+    conclusion: success
+  - workflow: PR
+    run_id: 29900788521
+    run_attempt: 1
+    head_sha: cc2e1bcbb60a16e89e41651dd105636947a10703
+    trigger: pull_request
+    started_at: 2026-07-22T07:35:53Z
+    finished_at: 2026-07-22T07:40:59Z
+    duration_seconds: 306
+    conclusion: cancelled
+  - workflow: PR
+    run_id: 29901038634
+    run_attempt: 1
+    head_sha: eaa02e84d4b1f950fa54b160414304b2f55223fb
+    trigger: pull_request
+    started_at: 2026-07-22T07:40:05Z
+    finished_at: 2026-07-22T07:46:54Z
+    duration_seconds: 409
+    conclusion: failure
+  - workflow: PR
+    run_id: 29901568590
+    run_attempt: 1
+    head_sha: db5cf2e0ed44fb1d35afebb52edf46ad3733318c
+    trigger: pull_request
+    started_at: 2026-07-22T07:48:34Z
+    finished_at: 2026-07-22T07:55:48Z
+    duration_seconds: 434
+    conclusion: success
+pr_retriggers:
+  - at: 2026-07-22T06:55:46Z
+    kind: base_update
+    reason: rebase_onto_current_main_before_validation
+  - at: 2026-07-22T07:35:53Z
+    kind: head_push
+    reason: purge_legacy_plaintext_catalog_on_every_successful_vault_open
+  - at: 2026-07-22T07:40:05Z
+    kind: base_update
+    reason: rebase_after_main_advanced
+  - at: 2026-07-22T07:48:34Z
+    kind: head_push
+    reason: apply_exact_prettier_format_required_by_ci
+merge_attempts:
+  - at: 2026-07-22T07:56:29Z
+    method: squash
+    outcome: success
+    reason: remote_merge_succeeded_local_main_checkout_blocked_by_existing_worktree
+comparison:
+  baseline_prs: [612]
+  baseline_quality: comparable
+  baseline_note: PR 612 is the direct large-vault search-catalog predecessor with the same Rust, WASM, browser persistence, demo, and product gates.
+  elapsed_seconds_change_percent: 12.7
+  local_execution_seconds_change_percent: -80.8
+  github_actions_seconds_change_percent: -6.5
+  test_inventory_total_change: 2
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - Two validation cycles were superseded by necessary rebases after main advanced; neither was an unchanged manual rerun.
+    - The security-review head push ensured upgraded vaults purge legacy plaintext metadata on open rather than waiting for the first search.
+    - One remote cycle failed on a missed final Prettier wrap after the demo fixture correction; the existing formatter covers the file, so this was an ordering mistake rather than a repository build-performance defect.
+    - The focused demo first failed because it seeded a non-authoritative legacy fixture key, then passed after using the vault registry and proved deletion before any search.
+  required_actions: []
