@@ -98,10 +98,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
 
       - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=prod

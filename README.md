@@ -272,10 +272,11 @@ never enter `nook-web:local`.
 
 Before local Rust compilation, Task idempotently starts a Docker-host-only
 `nook-sccache-redis` container so short-lived compilers can reuse compatible
-crate compiler outputs. GitHub Actions instead reaches the password-protected
-persistent Redis service deployed from [`infra/`](infra/) through Cloudflare
-Access, with the job-local service retained as the no-secrets fallback. Local
-builds need no remote credentials. Override local
+crate compiler outputs. Trusted default-branch and normal nightly GitHub jobs
+instead reach the password-protected persistent Redis service deployed from
+[`infra/`](infra/) through Cloudflare Access. Pull requests, arbitrary refs,
+dependency-update agents, and AI-authored jobs retain the no-secrets job-local
+fallback. Local builds need no remote credentials. Override local
 defaults with `SCCACHE_REDIS_PORT`, `SCCACHE_REDIS_MAXMEMORY`, or
 `SCCACHE_REDIS_IMAGE`. Runtime containers receive an explicit 1,048,576
 open-file limit; override with `DOCKER_NOFILE_LIMIT`.
@@ -388,8 +389,9 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 
 Rust compilation has a second cache boundary below Docker layers: pinned
 `sccache` clients use Redis to reuse compatible compiler outputs. Local builds
-use one Docker-host-only service; GitHub-hosted runners use an authenticated
-Cloudflare Access TCP proxy to the server service. Redis does not cache Cargo downloads or Docker layers.
+and untrusted GitHub jobs use a Docker-host-only service; trusted default-branch
+and nightly runners use an authenticated Cloudflare Access TCP proxy to the
+server service. Redis does not cache Cargo downloads or Docker layers.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
 Docker cache migration but is intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.

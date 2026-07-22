@@ -46,10 +46,6 @@ jobs:
         uses: actions/checkout@v7
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
       - name: Rust format, clippy, tests, and coverage
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
@@ -73,10 +69,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
 
       - name: WASM clippy, build, and Node tests
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
@@ -119,10 +111,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8
@@ -830,9 +818,6 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
         with:
           cache-write: "false"
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8
@@ -873,10 +858,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8

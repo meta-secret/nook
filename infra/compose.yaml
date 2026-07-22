@@ -7,14 +7,22 @@ services:
       - sh
       - -ec
       - >-
-        exec redis-server
-        --bind 0.0.0.0
-        --protected-mode no
-        --requirepass "$$(cat /run/secrets/redis-password)"
-        --appendonly yes
-        --appendfsync everysec
-        --maxmemory 12gb
-        --maxmemory-policy allkeys-lru
+        password="$$(cat /run/secrets/redis-password)";
+        mkdir -p /run/redis;
+        chown redis:redis /run/redis;
+        chmod 0700 /run/redis;
+        umask 077;
+        printf '%s\n'
+        'bind 0.0.0.0'
+        'protected-mode no'
+        "requirepass $$password"
+        'appendonly yes'
+        'appendfsync everysec'
+        'maxmemory 12gb'
+        'maxmemory-policy allkeys-lru'
+        > /run/redis/redis.conf;
+        chown redis:redis /run/redis/redis.conf;
+        exec /usr/local/bin/docker-entrypoint.sh redis-server /run/redis/redis.conf
     restart: unless-stopped
     ports:
       - 127.0.0.1:6380:6379
@@ -42,6 +50,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:2026.7.2@sha256:4f6655284ab3d252b7f28fedb19fe6c8fc82ee5b1295c20ac74d475e5398a52d
+    user: "1000:1000"
     command:
       - tunnel
       - --no-autoupdate

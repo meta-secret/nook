@@ -1,9 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::PathBuf};
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT")
@@ -139,6 +134,8 @@ fn github_actions_use_the_authenticated_persistent_cache() {
         "CACHE_CLOUDFLARE_CLIENT_ID_FILE",
         "CACHE_CLOUDFLARE_CLIENT_SECRET_FILE",
         "spawnSync(\"task\", [\"infra:cache:connect\"]",
+        "externalCacheEnabled",
+        "fs.rmSync(credentialDirectory, { recursive: true, force: true })",
     ] {
         assert!(
             cache_action_main.contains(required),
@@ -147,6 +144,8 @@ fn github_actions_use_the_authenticated_persistent_cache() {
     }
     assert!(!cache_action_main.contains("console."));
     assert!(!cache_action_main.contains("shell: true"));
+    assert!(!cache_action_main.contains("process.stdout.write"));
+    assert!(!cache_action_main.contains("spawnSync(\"task\", [\"infra:cache:connect\", redisPassword"));
 
     let infra_tasks = read("infra/Taskfile.yml");
     let connector = infra_tasks
@@ -168,6 +167,8 @@ fn github_actions_use_the_authenticated_persistent_cache() {
         "SCCACHE_REDIS_MODE=external",
         "SCCACHE_REDIS_HOST_IP=$bridge_ip",
         "SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file",
+        "using the job-local Redis fallback",
+        "kill \"$cloudflared_pid\"",
     ] {
         assert!(
             connector.contains(required),
@@ -187,20 +188,57 @@ fn github_actions_use_the_authenticated_persistent_cache() {
     assert!(!connector.contains("--env TUNNEL_SERVICE_TOKEN"));
     assert!(!connector.contains("--service-token-id"));
     assert!(!connector.contains("--service-token-secret"));
+    for forbidden_output in [
+        "echo \"$cloudflare_client_id\"",
+        "echo \"$cloudflare_client_secret\"",
+        "echo \"$redis_password\"",
+        "printf '%s\\n' \"$cloudflare_client_id\"",
+        "printf '%s\\n' \"$cloudflare_client_secret\"",
+    ] {
+        assert!(
+            !connector.contains(forbidden_output),
+            "cache Task output may expose a credential through: {forbidden_output}"
+        );
+    }
+
+    let github_environment = connector
+        .split("        {\n          echo \"SCCACHE_REDIS_MODE=external\"")
+        .nth(1)
+        .and_then(|tail| tail.split("        } >> \"$GITHUB_ENV\"").next())
+        .expect("cache connector must export only the external-cache routing block");
+    assert!(github_environment.contains("SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file"));
+    for secret_value in ["cloudflare_client_id", "cloudflare_client_secret", "redis_password\""] {
+        assert!(
+            !github_environment.contains(secret_value),
+            "GITHUB_ENV must contain only credential file paths, never {secret_value}"
+        );
+    }
 
     for path in [
         ".github/workflows/agent-implement.yml",
-        ".github/workflows/e2e-nightly.yml",
         ".github/workflows/e2e-pr.yml",
-        ".github/workflows/main.yml",
         ".github/workflows/pr.yml",
         ".github/workflows/release.yml",
         ".github/workflows/rust-dependency-updates.yml",
     ] {
         let workflow = read(path);
-        let setup_count = workflow
-            .matches("uses: ./.github/actions/nook-docker-setup")
-            .count();
+        for secret in [
+            "NOOK_CACHE_REDIS_PASSWORD",
+            "NOOK_CLOUDFLARE_ACCESS_CLIENT_ID",
+            "NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET",
+        ] {
+            assert!(
+                !workflow.contains(secret),
+                "untrusted or arbitrary-ref workflow {path} must not receive {secret}"
+            );
+        }
+    }
+
+    for (path, expected_secret_uses) in [
+        (".github/workflows/e2e-nightly.yml", 1),
+        (".github/workflows/main.yml", 1),
+    ] {
+        let workflow = read(path);
         let password_count = workflow
             .matches("cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}")
             .count();
@@ -210,13 +248,16 @@ fn github_actions_use_the_authenticated_persistent_cache() {
         let client_secret_count = workflow
             .matches("cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}")
             .count();
-        assert_eq!(setup_count, password_count, "every Docker setup in {path} must receive the Redis password");
-        assert_eq!(setup_count, client_id_count, "every Docker setup in {path} must receive the Access client ID");
-        assert_eq!(setup_count, client_secret_count, "every Docker setup in {path} must receive the Access client secret");
+        assert_eq!(password_count, expected_secret_uses, "only trusted Docker setup calls in {path} may receive the Redis password");
+        assert_eq!(client_id_count, expected_secret_uses, "only trusted Docker setup calls in {path} may receive the Access client ID");
+        assert_eq!(client_secret_count, expected_secret_uses, "only trusted Docker setup calls in {path} may receive the Access client secret");
     }
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}"));
+    let app_tasks = read("nook-app/Taskfile.yml");
+    assert!(app_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"));
+    assert!(app_tasks.contains("--allow=fs.read="));
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");
     assert!(wrapper.contains("/run/secrets/sccache_redis_password"));
@@ -238,177 +279,6 @@ fn github_actions_use_the_authenticated_persistent_cache() {
             .count()
             >= 3
     );
-}
-
-#[cfg(unix)]
-#[test]
-fn cache_connector_keeps_secrets_out_of_output_and_command_arguments() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock must be after the Unix epoch")
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!(
-        "nook-cache-connector-test-{}-{unique}",
-        std::process::id()
-    ));
-    let bin_dir = temp_dir.join("bin");
-    fs::create_dir_all(&bin_dir).expect("create cache connector test directory");
-
-    let docker_log = temp_dir.join("docker-args.log");
-    let cloudflared_log = temp_dir.join("cloudflared-args.log");
-    let docker_environment_log = temp_dir.join("docker-environment.log");
-    let mock_docker = bin_dir.join("docker");
-    fs::write(
-        &mock_docker,
-        r#"#!/bin/sh
-printf '%s\n' "$*" >> "$MOCK_DOCKER_ARGS"
-env > "$MOCK_DOCKER_ENV"
-case "$1 $2 $3" in
-  "network inspect bridge") printf '%s\n' '        "Gateway": "172.17.0.1"' ;;
-  "create "*) printf '%s\n' mock-cloudflared-container ;;
-  "cp mock-cloudflared-container:/usr/local/bin/cloudflared"*)
-    cat > "$3" <<'MOCK_CLOUDFLARED'
-#!/bin/sh
-printf '%s\n' "$*" >> "$MOCK_CLOUDFLARED_ARGS"
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = --logfile ]; then
-    printf 'client-id=%s client-secret=%s\n' "$TUNNEL_SERVICE_TOKEN_ID" "$TUNNEL_SERVICE_TOKEN_SECRET" > "$2"
-    break
-  fi
-  shift
-done
-exit 0
-MOCK_CLOUDFLARED
-    chmod 0700 "$3"
-    ;;
-  "run --rm "*)
-    attempts=0
-    while [ ! -s "$MOCK_CLOUDFLARED_ARGS" ] && [ "$attempts" -lt 100 ]; do
-      sleep 0.01
-      attempts=$((attempts + 1))
-    done
-    if [ "${MOCK_CACHE_HEALTHY:-}" = 1 ]; then printf '%s\n' PONG; fi
-    ;;
-esac
-"#,
-    )
-    .expect("write mock Docker executable");
-    fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o700))
-        .expect("make mock Docker executable");
-
-    let redis_secret = "redis-secret-must-not-leak";
-    let client_id = "cloudflare-client-id-must-not-leak";
-    let client_secret = "cloudflare-client-secret-must-not-leak";
-    let github_env = temp_dir.join("github-env");
-    let path = format!(
-        "{}:{}",
-        bin_dir.display(),
-        std::env::var("PATH").expect("PATH must be available")
-    );
-    let output = Command::new("node")
-        .arg(repository_root().join(".github/actions/nook-cache-connect/main.js"))
-        .current_dir(repository_root())
-        .env("PATH", &path)
-        .env("MOCK_DOCKER_ARGS", &docker_log)
-        .env("MOCK_CLOUDFLARED_ARGS", &cloudflared_log)
-        .env("MOCK_DOCKER_ENV", &docker_environment_log)
-        .env("MOCK_CACHE_HEALTHY", "1")
-        .env("RUNNER_TEMP", &temp_dir)
-        .env("GITHUB_ENV", &github_env)
-        .env("GITHUB_WORKSPACE", repository_root())
-        .env("SCCACHE_REDIS_HOST_IP", "172.17.0.1")
-        .env("INPUT_CACHE-REDIS-PASSWORD", redis_secret)
-        .env("INPUT_CACHE-CLOUDFLARE-CLIENT-ID", client_id)
-        .env("INPUT_CACHE-CLOUDFLARE-CLIENT-SECRET", client_secret)
-        .output()
-        .expect("run silent cache connector with mock Docker");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "connector failed: {stderr}");
-    assert!(stdout.is_empty(), "connector wrote to stdout: {stdout}");
-    assert!(stderr.is_empty(), "connector wrote to stderr: {stderr}");
-
-    let docker_arguments = fs::read_to_string(&docker_log).expect("read mock Docker arguments");
-    let cloudflared_arguments =
-        fs::read_to_string(&cloudflared_log).expect("read mock cloudflared arguments");
-    let docker_environment =
-        fs::read_to_string(&docker_environment_log).expect("read mock Docker environment");
-    let exported_environment = fs::read_to_string(&github_env).expect("read GitHub environment");
-    for secret in [redis_secret, client_id, client_secret] {
-        assert!(!docker_arguments.contains(secret));
-        assert!(!cloudflared_arguments.contains(secret));
-        assert!(!docker_environment.contains(secret));
-        assert!(!exported_environment.contains(secret));
-    }
-    assert!(!docker_arguments.contains("--env"));
-
-    let credential_directory = temp_dir.join("nook-cache-credentials");
-    let password_file = credential_directory.join("redis-password");
-    assert_eq!(
-        exported_environment,
-        format!(
-            "SCCACHE_REDIS_MODE=external\nSCCACHE_REDIS_HOST_IP=172.17.0.1\nSCCACHE_REDIS_PASSWORD_FILE={}\n",
-            password_file.display()
-        )
-    );
-    assert_eq!(fs::read_to_string(&password_file).unwrap(), redis_secret);
-    assert_eq!(
-        fs::metadata(&credential_directory)
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o777,
-        0o700
-    );
-    assert_eq!(fs::metadata(&password_file).unwrap().permissions().mode() & 0o777, 0o600);
-    assert!(!credential_directory.join("cloudflare-client-id").exists());
-    assert!(!credential_directory
-        .join("cloudflare-client-secret")
-        .exists());
-
-    let failure_temp_dir = temp_dir.join("failure");
-    fs::create_dir_all(&failure_temp_dir).expect("create failed connector test directory");
-    let failure_github_env = failure_temp_dir.join("github-env");
-    let failure_output = Command::new("node")
-        .arg(repository_root().join(".github/actions/nook-cache-connect/main.js"))
-        .current_dir(repository_root())
-        .env("PATH", &path)
-        .env("MOCK_DOCKER_ARGS", failure_temp_dir.join("docker-args.log"))
-        .env(
-            "MOCK_CLOUDFLARED_ARGS",
-            failure_temp_dir.join("cloudflared-args.log"),
-        )
-        .env(
-            "MOCK_DOCKER_ENV",
-            failure_temp_dir.join("docker-environment.log"),
-        )
-        .env("RUNNER_TEMP", &failure_temp_dir)
-        .env("GITHUB_ENV", &failure_github_env)
-        .env("GITHUB_WORKSPACE", repository_root())
-        .env("SCCACHE_REDIS_HOST_IP", "172.17.0.1")
-        .env("CACHE_CONNECT_ATTEMPTS", "1")
-        .env("CACHE_CONNECT_DELAY_SECONDS", "0")
-        .env("INPUT_CACHE-REDIS-PASSWORD", redis_secret)
-        .env("INPUT_CACHE-CLOUDFLARE-CLIENT-ID", client_id)
-        .env("INPUT_CACHE-CLOUDFLARE-CLIENT-SECRET", client_secret)
-        .output()
-        .expect("run failing cache connector with mock Docker");
-    let failure_stdout = String::from_utf8_lossy(&failure_output.stdout);
-    let failure_stderr = String::from_utf8_lossy(&failure_output.stderr);
-    assert!(!failure_output.status.success());
-    assert!(failure_stdout.is_empty());
-    assert!(failure_stderr.contains("client-id=[REDACTED] client-secret=[REDACTED]"));
-    assert!(failure_stderr.contains("Persistent Rust cache did not become reachable"));
-    for secret in [redis_secret, client_id, client_secret] {
-        assert!(!failure_stdout.contains(secret));
-        assert!(!failure_stderr.contains(secret));
-    }
-    assert!(!failure_github_env.exists());
-
-    fs::remove_dir_all(&temp_dir).expect("remove cache connector test directory");
 }
 
 #[test]

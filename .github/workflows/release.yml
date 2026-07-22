@@ -51,10 +51,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
-          cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}
-          cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}
 
       - name: Checkout release source
         uses: actions/checkout@v7

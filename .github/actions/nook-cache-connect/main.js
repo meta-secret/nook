@@ -18,8 +18,11 @@ if (!redisPassword || !cloudflareClientId || !cloudflareClientSecret) {
 }
 
 const runnerTemp = process.env.RUNNER_TEMP;
-if (!runnerTemp) {
-  process.stderr.write("::error::RUNNER_TEMP is required for the persistent Rust cache\n");
+const githubEnvironmentPath = process.env.GITHUB_ENV;
+if (!runnerTemp || !githubEnvironmentPath) {
+  process.stderr.write(
+    "::error::RUNNER_TEMP and GITHUB_ENV are required for the persistent Rust cache\n",
+  );
   process.exit(1);
 }
 
@@ -49,6 +52,9 @@ taskEnvironment.CACHE_REDIS_PASSWORD_FILE = redisPasswordFile;
 taskEnvironment.CACHE_CLOUDFLARE_CLIENT_ID_FILE = cloudflareClientIdFile;
 taskEnvironment.CACHE_CLOUDFLARE_CLIENT_SECRET_FILE = cloudflareClientSecretFile;
 
+const githubEnvironmentSize = fs.existsSync(githubEnvironmentPath)
+  ? fs.statSync(githubEnvironmentPath).size
+  : 0;
 const result = spawnSync("task", ["infra:cache:connect"], {
   cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
   env: taskEnvironment,
@@ -57,6 +63,16 @@ const result = spawnSync("task", ["infra:cache:connect"], {
 
 fs.rmSync(cloudflareClientIdFile, { force: true });
 fs.rmSync(cloudflareClientSecretFile, { force: true });
+
+const appendedEnvironment = fs.existsSync(githubEnvironmentPath)
+  ? fs.readFileSync(githubEnvironmentPath).subarray(githubEnvironmentSize).toString("utf8")
+  : "";
+const externalCacheEnabled = appendedEnvironment.includes(
+  `SCCACHE_REDIS_PASSWORD_FILE=${redisPasswordFile}\n`,
+);
+if (!externalCacheEnabled) {
+  fs.rmSync(credentialDirectory, { recursive: true, force: true });
+}
 
 if (result.error) {
   process.stderr.write("::error::Could not start the persistent Rust cache task\n");

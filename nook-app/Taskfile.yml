@@ -47,6 +47,11 @@ vars:
       if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ]; then
         printf '%s' '--mount type=bind,src='"$SCCACHE_REDIS_PASSWORD_FILE"',dst=/run/secrets/sccache_redis_password,readonly';
       fi
+  SCCACHE_REDIS_BAKE_ALLOW:
+    sh: >-
+      if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ]; then
+        printf '%s' '--allow=fs.read='"$SCCACHE_REDIS_PASSWORD_FILE";
+      fi
   SCCACHE_REDIS_HOST_IP:
     sh: 'DOCKER="{{.DOCKER}}" SCCACHE_REDIS_IMAGE="{{.SCCACHE_REDIS_IMAGE}}" "{{.APP_ROOT}}/docker/resolve-docker-host-ip.sh"'
   GIT_COMMIT_ID:
@@ -57,6 +62,7 @@ vars:
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
+    {{.SCCACHE_REDIS_BAKE_ALLOW}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/base.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl

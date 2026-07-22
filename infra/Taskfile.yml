@@ -3,8 +3,145 @@ version: '3'
 vars:
   INFRA_SSH_TARGET: '{{default "debian@188.165.236.156" .INFRA_SSH_TARGET}}'
   INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
+  INFRA_MESH_SSH_TARGET: '{{default "ssh.bynull.link" .INFRA_MESH_SSH_TARGET}}'
+  INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'
+  INFRA_CLOUDFLARE_ACCOUNT_ID: '{{default "8a84df74d5bcf7b212980e6f51979731" .INFRA_CLOUDFLARE_ACCOUNT_ID}}'
 
 tasks:
+  mesh:node:add:
+    desc: Idempotently add a Linux server as a distinct Cloudflare Mesh node.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+
+        ssh_target="{{.INFRA_MESH_SSH_TARGET}}"
+        node_name="{{.INFRA_MESH_NODE_NAME}}"
+        account_id="{{.INFRA_CLOUDFLARE_ACCOUNT_ID}}"
+
+        ssh -n -o BatchMode=yes "$ssh_target" 'set -eu
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = 26.04
+          test "$(uname -m)" = x86_64
+          for command in /usr/bin/apt-get /usr/bin/gpg /usr/bin/tee /usr/bin/warp-cli; do
+            if ! sudo -n -l "$command" >/dev/null 2>&1; then
+              echo "infra mesh: $USER needs passwordless sudo for $command" >&2
+              exit 77
+            fi
+          done
+          if systemctl --type=service --state=running --no-pager --no-legend |
+            grep -Eiq "(tailscale|wireguard|openvpn|dnsmasq|named|bind|unbound)"; then
+            echo "infra mesh: refusing to install alongside another VPN or DNS service" >&2
+            exit 78
+          fi'
+
+        INFRA_MESH_SSH_TARGET="$ssh_target" \
+        INFRA_MESH_NODE_NAME="$node_name" \
+        INFRA_CLOUDFLARE_ACCOUNT_ID="$account_id" \
+          node --input-type=commonjs <<'NODE'
+        "use strict";
+
+        const { execFileSync, spawnSync } = require("node:child_process");
+
+        const sshTarget = process.env.INFRA_MESH_SSH_TARGET;
+        const nodeName = process.env.INFRA_MESH_NODE_NAME;
+        const accountId = process.env.INFRA_CLOUDFLARE_ACCOUNT_ID;
+        const apiRoot = `https://api.cloudflare.com/client/v4/accounts/${accountId}`;
+        const auth = JSON.parse(
+          execFileSync("wrangler", ["auth", "token", "--json"], { encoding: "utf8" }),
+        );
+
+        async function cloudflare(path, options = {}) {
+          const response = await fetch(`${apiRoot}${path}`, {
+            ...options,
+            headers: {
+              Authorization: `Bearer ${auth.token}`,
+              "Content-Type": "application/json",
+              ...options.headers,
+            },
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            throw new Error(
+              `Cloudflare Mesh API request failed (${response.status}): ${JSON.stringify(payload.errors)}`,
+            );
+          }
+          return payload.result;
+        }
+
+        let nodes = await cloudflare("/warp_connector");
+        let node = nodes.find((candidate) => candidate.name === nodeName);
+        let created = false;
+        if (!node) {
+          node = await cloudflare("/warp_connector", {
+            method: "POST",
+            body: JSON.stringify({ name: nodeName, ha: false }),
+          });
+          created = true;
+        }
+
+        let connectorToken = node.token;
+        if (!connectorToken) {
+          const tokenResult = await cloudflare(`/warp_connector/${node.id}/token`);
+          connectorToken = typeof tokenResult === "string" ? tokenResult : tokenResult.token;
+        }
+        if (typeof connectorToken !== "string" || connectorToken.length < 20) {
+          throw new Error("Cloudflare Mesh did not return a usable connector token");
+        }
+
+        const remoteScript = `set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg |
+          sudo -n gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+        . /etc/os-release
+        printf '%s\n' "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $VERSION_CODENAME main" |
+          sudo -n tee /etc/apt/sources.list.d/cloudflare-client.list >/dev/null
+        sudo -n apt-get update -qq
+        sudo -n apt-get install -y -qq cloudflare-warp
+        if ! sudo -n warp-cli registration show >/dev/null 2>&1; then
+          sudo -n warp-cli connector new '${connectorToken.replaceAll("'", "'\\''")}'
+        fi
+        sudo -n warp-cli connect
+        for _ in $(seq 1 30); do
+          if sudo -n warp-cli status 2>/dev/null | grep -q 'Status update: Connected'; then
+            break
+          fi
+          sleep 1
+        done
+        sudo -n warp-cli status
+        ip -brief address | grep CloudflareWARP
+        `;
+
+        const install = spawnSync(
+          "ssh",
+          ["-o", "BatchMode=yes", sshTarget, "bash -s"],
+          { input: remoteScript, encoding: "utf8", stdio: ["pipe", "inherit", "inherit"] },
+        );
+        connectorToken = "";
+        if (install.error || install.status !== 0) {
+          if (created) {
+            await cloudflare(`/warp_connector/${node.id}`, { method: "DELETE" });
+          }
+          throw install.error || new Error(`Mesh node installation failed with status ${install.status}`);
+        }
+
+        const connections = await cloudflare(`/warp_connector/${node.id}/connections`);
+        if (!Array.isArray(connections) || connections.length === 0) {
+          throw new Error("Cloudflare Mesh node installed but has no active connection");
+        }
+        process.stdout.write(`Cloudflare Mesh node ${nodeName} is online\n`);
+        NODE
+        BASH
+
+  mesh:status:
+    desc: Show Cloudflare Mesh status and addresses on a Linux server.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_MESH_SSH_TARGET}}"
+        'sudo -n warp-cli status && ip -brief address | grep CloudflareWARP'
+
   cache:connect:
     desc: Connect a CI runner to the Access-protected Redis compiler cache.
     silent: true
@@ -20,8 +157,8 @@ tasks:
           exit 0
         fi
         if [ ! -r "$CACHE_REDIS_PASSWORD_FILE" ] || [ ! -r "$CACHE_CLOUDFLARE_CLIENT_ID_FILE" ] || [ ! -r "$CACHE_CLOUDFLARE_CLIENT_SECRET_FILE" ]; then
-          echo "::error::Persistent Rust cache credential files are unreadable" >&2
-          exit 1
+          echo "::warning::Persistent Rust cache credential files are unreadable; using the job-local Redis fallback" >&2
+          exit 0
         fi
 
         redis_password_file="$CACHE_REDIS_PASSWORD_FILE"
@@ -53,6 +190,7 @@ tasks:
           --url "$bridge_ip:6380" \
           --log-level error \
           --logfile "$cloudflared_log" >/dev/null 2>&1 &
+        cloudflared_pid=$!
 
         cache_ready=""
         for _ in $(seq 1 "${CACHE_CONNECT_ATTEMPTS:-30}"); do
@@ -69,6 +207,8 @@ tasks:
         done
 
         if [ -z "$cache_ready" ]; then
+          kill "$cloudflared_pid" >/dev/null 2>&1 || true
+          wait "$cloudflared_pid" >/dev/null 2>&1 || true
           if [ -r "$cloudflared_log" ]; then
             while IFS= read -r diagnostic; do
               diagnostic="${diagnostic//"$cloudflare_client_id"/[REDACTED]}"
@@ -76,8 +216,9 @@ tasks:
               printf '%s\n' "$diagnostic" >&2
             done < "$cloudflared_log"
           fi
-          echo "::error::Persistent Rust cache did not become reachable through Cloudflare Access" >&2
-          exit 1
+          rm -f "$cloudflared_binary" "$cloudflared_log"
+          echo "::warning::Persistent Rust cache is unavailable; using the job-local Redis fallback" >&2
+          exit 0
         fi
 
         {
@@ -89,6 +230,7 @@ tasks:
 
   deploy:
     desc: Deploy the private Redis cache, Cloudflare Tunnel, and loopback-only future registry.
+    silent: true
     cmds:
       - |
         bash <<'BASH'
@@ -111,7 +253,7 @@ tasks:
         esac
 
         docker compose -f "$compose_file" config --quiet
-        ssh -o BatchMode=yes "$ssh_target" \
+        ssh -n -o BatchMode=yes "$ssh_target" \
           "set -eu; \
            install -d -m 0750 '$remote_dir'; \
            install -d -m 0700 '$remote_secrets'; \
@@ -123,20 +265,20 @@ tasks:
              echo 'infra deploy: missing Cloudflare tunnel token at $remote_secrets/cloudflare-tunnel-token' >&2; \
              exit 1; \
            fi; \
-           chmod 0444 '$remote_secrets/cloudflare-tunnel-token'"
+           chmod 0600 '$remote_secrets/redis-password'; \
+           chmod 0400 '$remote_secrets/cloudflare-tunnel-token'"
         scp -q -o BatchMode=yes "$compose_file" "$ssh_target:$remote_next"
 
-        ssh -o BatchMode=yes "$ssh_target" \
+        ssh -n -o BatchMode=yes "$ssh_target" \
           "set -eu; \
            docker compose -f '$remote_next' config --quiet; \
            mv '$remote_next' '$remote_compose'; \
            docker compose -f '$remote_compose' pull; \
            docker compose -f '$remote_compose' up -d --remove-orphans --wait"
 
-        ssh -o BatchMode=yes "$ssh_target" \
+        ssh -n -o BatchMode=yes "$ssh_target" \
           "set -eu; \
-           password=\"\$(cat '$remote_secrets/redis-password')\"; \
-           test \"\$(REDISCLI_AUTH=\"\$password\" docker compose -f '$remote_compose' exec -T -e REDISCLI_AUTH redis redis-cli ping)\" = PONG; \
+           test \"\$(docker compose -f '$remote_compose' exec -T redis sh -ec 'export REDISCLI_AUTH=\"\$(cat /run/secrets/redis-password)\"; exec redis-cli ping')\" = PONG; \
            docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx cloudflared; \
            curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null; \
            docker compose -f '$remote_compose' ps"
@@ -158,24 +300,22 @@ tasks:
 
   redis:ping:
     desc: Verify the remote Redis compiler-cache service.
+    silent: true
     cmds:
       - >-
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
-        'set -eu;
-        password="$(cat "{{.INFRA_REMOTE_DIR}}/secrets/redis-password")";
-        REDISCLI_AUTH="$password" docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T -e REDISCLI_AUTH redis redis-cli ping'
+        'docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T redis
+        sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli ping'\'''
 
   redis:stats:
     desc: Show remote Redis cache size, memory, hits, misses, and evictions.
+    silent: true
     cmds:
       - >-
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
         'set -eu;
         compose="{{.INFRA_REMOTE_DIR}}/compose.yaml";
-        password="$(cat "{{.INFRA_REMOTE_DIR}}/secrets/redis-password")";
-        REDISCLI_AUTH="$password" docker compose -f "$compose" exec -T -e REDISCLI_AUTH redis redis-cli DBSIZE;
-        REDISCLI_AUTH="$password" docker compose -f "$compose" exec -T -e REDISCLI_AUTH redis redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
-        REDISCLI_AUTH="$password" docker compose -f "$compose" exec -T -e REDISCLI_AUTH redis redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+        docker compose -f "$compose" exec -T redis sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; redis-cli DBSIZE; redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):"; redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'\'''
 
   registry:check:
     desc: Verify the future loopback-only Docker registry API.

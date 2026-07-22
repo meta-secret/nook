@@ -41,15 +41,18 @@ fn remote_cache_and_registry_are_private_and_persistent() {
     for required in [
         "127.0.0.1:6380:6379",
         "127.0.0.1:5000:5000",
-        "--requirepass",
+        "requirepass $$password",
+        "/run/redis/redis.conf",
+        "docker-entrypoint.sh redis-server /run/redis/redis.conf",
         "/run/secrets/redis-password",
         "file: ./secrets/redis-password",
         "cloudflare/cloudflared:2026.7.2@sha256:",
+        "user: \"1000:1000\"",
         "--token-file",
         "/run/secrets/cloudflare-tunnel-token",
         "file: ./secrets/cloudflare-tunnel-token",
-        "--appendonly",
-        "--maxmemory-policy",
+        "appendonly yes",
+        "maxmemory-policy allkeys-lru",
         "allkeys-lru",
         "redis-data:/data",
         "registry-data:/var/lib/registry",
@@ -61,6 +64,10 @@ fn remote_cache_and_registry_are_private_and_persistent() {
             "remote infrastructure is missing: {required}"
         );
     }
+    assert!(
+        !compose.contains("--requirepass"),
+        "the Redis password must be loaded from a restrictive config, not process argv"
+    );
     assert!(!compose.contains("- 6380:6379") && !compose.contains("- 5000:5000"));
     assert!(
         compose.matches("@sha256:").count() >= 3,
@@ -80,11 +87,14 @@ fn remote_cache_and_registry_are_private_and_persistent() {
         .expect("infra:deploy must be defined inline in infra/Taskfile.yml");
     for required in [
         "docker compose -f \"$compose_file\" config --quiet",
-        "-o BatchMode=yes",
+        "ssh -n -o BatchMode=yes",
         "docker compose -f '$remote_compose' up -d --remove-orphans --wait",
         "openssl rand -hex 32",
+        "chmod 0600 '$remote_secrets/redis-password'",
+        "chmod 0400 '$remote_secrets/cloudflare-tunnel-token'",
         "cloudflare-tunnel-token",
         "grep -qx cloudflared",
+        "cat /run/secrets/redis-password",
         "redis-cli ping",
         "http://127.0.0.1:5000/v2/",
     ] {
@@ -95,4 +105,44 @@ fn remote_cache_and_registry_are_private_and_persistent() {
     }
     assert!(!deploy.contains("sshpass"));
     assert!(!deploy.contains("scripts/"));
+    assert!(!deploy.contains("chmod 0444"));
+    assert!(!infra_tasks.contains("-e REDISCLI_AUTH"));
+    assert!(!infra_tasks.contains("--env REDISCLI_AUTH"));
+
+    assert!(read(".gitignore").contains("/infra/secrets/"));
+    assert!(read(".dockerignore").contains("infra/secrets"));
+
+    let mesh_add = infra_tasks
+        .split("\n  mesh:node:add:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  mesh:status:\n").next())
+        .expect("infra:mesh:node:add must be defined inline in infra/Taskfile.yml");
+    for required in [
+        "silent: true",
+        "ssh -n -o BatchMode=yes",
+        "sudo -n -l",
+        "wrangler\", [\"auth\", \"token\", \"--json\"]",
+        "Authorization: `Bearer ${auth.token}`",
+        "body: JSON.stringify({ name: nodeName, ha: false })",
+        "warp-cli connector new",
+        "warp-cli connect",
+        "CloudflareWARP",
+        "/connections",
+    ] {
+        assert!(
+            mesh_add.contains(required),
+            "Cloudflare Mesh node automation is missing: {required}"
+        );
+    }
+    for forbidden in [
+        "console.log",
+        "process.stdout.write(connectorToken)",
+        "INFRA_MESH_TOKEN",
+        "--header \"Authorization:",
+    ] {
+        assert!(
+            !mesh_add.contains(forbidden),
+            "Cloudflare Mesh node automation may expose credentials through: {forbidden}"
+        );
+    }
 }
