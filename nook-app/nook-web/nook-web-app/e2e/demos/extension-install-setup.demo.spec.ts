@@ -33,8 +33,17 @@ test('offer browser extension install on vault home and in Devices', async ({
     }
     browserGlobal.chrome = {
       runtime: {
-        sendMessage: (_extensionId, _message, callback) => {
-          callback({ ok: false })
+        sendMessage: (_extensionId, message, callback) => {
+          document.documentElement.setAttribute(
+            'data-demo-extension-message',
+            JSON.stringify(message),
+          )
+          const type = (message as { type?: string }).type
+          callback(
+            type === 'nook:open-companion-launcher'
+              ? { ok: true }
+              : { ok: false },
+          )
         },
       },
     }
@@ -46,6 +55,14 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(setupCard).toHaveAttribute('data-status', 'installed_unpaired')
   await expect(page.getByTestId('extension-install-setup-connect')).toHaveText(
     'Connect extension',
+  )
+  await page.getByTestId('extension-install-setup-connect').click()
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-demo-extension-message',
+    JSON.stringify({
+      type: 'nook:open-companion-launcher',
+      payload: { intent: 'pair' },
+    }),
   )
   await demoBeat(page)
 

@@ -321,6 +321,9 @@ requests a new handoff from the unlocked extension, including when the user
 arrived at the normal vault route rather than `/extension-connect`. The website
 discovers the pairing by the local vault store id; the extension returns a
 handoff only when it holds a current grant for that exact vault. The extension
+launcher must also honor an explicit pairing intent from an authenticated vault
+that is not paired: a cached ready record for a different or deleted vault must
+not hide the pairing action or trap the user in an open-vault loop. The extension
 records each issued nonce, vault store id, and public device tuple in
 extension-only `chrome.storage.session`, consumes it before sealing, and returns
 a freshly issued nonce for a later lock/unlock. Only the service worker may

@@ -54,6 +54,8 @@ async function main() {
       i18n,
       isConnected: vaultConnection.isConnected,
       vaultName: vaultConnection.vaultName,
+      pairingRequested:
+        new URLSearchParams(window.location.search).get('intent') === 'pair',
       protectionStatus,
       activeSessionDevice,
     },

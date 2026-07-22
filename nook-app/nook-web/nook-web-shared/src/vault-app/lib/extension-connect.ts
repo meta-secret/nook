@@ -173,6 +173,7 @@ export async function openInstalledExtension(): Promise<boolean> {
 
   const message: OpenCompanionLauncherMessage = {
     type: "nook:open-companion-launcher",
+    payload: { intent: "pair" },
   };
   const response = await sendExtensionMessage(extensionRuntimeId, message);
   return (
