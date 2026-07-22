@@ -4,6 +4,9 @@ export type OpenSimpleVaultMessage = {
 
 export type OpenCompanionLauncherMessage = {
   type: 'nook:open-companion-launcher'
+  payload?: {
+    intent: 'pair'
+  }
 }
 
 export type BeginExtensionPairingMessage = {
@@ -164,8 +167,19 @@ export function isOpenSimpleVaultMessage(
 export function isOpenCompanionLauncherMessage(
   message: unknown,
 ): message is OpenCompanionLauncherMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:open-companion-launcher'
+  ) {
+    return false
+  }
+  if (!('payload' in message)) return true
+  const payload = message.payload
   return (
-    isRuntimeMessage(message) && message.type === 'nook:open-companion-launcher'
+    !!payload &&
+    typeof payload === 'object' &&
+    'intent' in payload &&
+    payload.intent === 'pair'
   )
 }
 

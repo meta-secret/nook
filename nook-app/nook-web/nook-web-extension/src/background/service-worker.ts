@@ -140,11 +140,12 @@ function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
-async function openCompanionLauncher(): Promise<void> {
+async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
   const popupUrl = chrome.runtime.getURL('popup/index.html')
+  const launcherUrl = intent ? `${popupUrl}?intent=${intent}` : popupUrl
   if (chrome.windows?.create) {
     await chrome.windows.create({
-      url: popupUrl,
+      url: launcherUrl,
       type: 'popup',
       width: 440,
       height: 620,
@@ -152,7 +153,7 @@ async function openCompanionLauncher(): Promise<void> {
     })
     return
   }
-  await chrome.tabs.create({ url: popupUrl })
+  await chrome.tabs.create({ url: launcherUrl })
 }
 
 function randomNonce(): string {
@@ -1855,7 +1856,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
     }
-    void openCompanionLauncher()
+    void openCompanionLauncher(message.payload?.intent)
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false, reason: 'launcher-failed' }))
     return true
@@ -1882,7 +1883,7 @@ chrome.runtime.onMessageExternal.addListener(
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
       }
-      void openCompanionLauncher()
+      void openCompanionLauncher(message.payload?.intent)
         .then(() => sendResponse({ ok: true }))
         .catch(() => sendResponse({ ok: false, reason: 'launcher-failed' }))
       return true

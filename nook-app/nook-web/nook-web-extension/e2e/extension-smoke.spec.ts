@@ -758,6 +758,36 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }),
     )
 
+    const openedPairingLauncher = context.waitForEvent('page')
+    expect(
+      await sendExternalMessage(simplePage, extensionId, {
+        type: 'nook:open-companion-launcher',
+        payload: { intent: 'pair' },
+      }),
+    ).toEqual({ ok: true })
+    const pairingLauncher = await openedPairingLauncher
+    await expect(pairingLauncher).toHaveURL(
+      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
+    )
+    await expect(
+      pairingLauncher.getByTestId('extension-companion-home'),
+    ).toBeVisible()
+    await expect(
+      pairingLauncher.getByTestId('companion-vault-status'),
+    ).toHaveAttribute('data-connected', 'false')
+    await expect(
+      pairingLauncher.getByTestId('connect-simple-vault-btn'),
+    ).toBeVisible()
+
+    const reopenedConnectPage = context.waitForEvent('page')
+    await pairingLauncher.getByTestId('connect-simple-vault-btn').click()
+    const reconnectPage = await reopenedConnectPage
+    await expect(reconnectPage).toHaveURL((url) =>
+      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    )
+    await reconnectPage.close()
+    await pairingLauncher.close()
+
     let websiteCredentialId: string | undefined
     if (website) {
       websiteCredentialId = await registerWebsitePasskey(website)

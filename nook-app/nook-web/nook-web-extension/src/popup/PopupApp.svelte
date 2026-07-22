@@ -19,12 +19,14 @@
     i18n,
     isConnected,
     vaultName,
+    pairingRequested = false,
     protectionStatus,
     activeSessionDevice,
   }: {
     i18n: ExtensionI18n
     isConnected: boolean
     vaultName?: string
+    pairingRequested?: boolean
     protectionStatus: ExtensionDeviceProtectionStatus
     activeSessionDevice?: ExtensionDeviceProtectionResult
   } = $props()
@@ -44,6 +46,7 @@
 
   const needsSetup = $derived(status === 'missing' || status === 'plaintext')
   const showCompanionHome = $derived(status === 'unlocked')
+  const showExistingConnection = $derived(isConnected && !pairingRequested)
 
   function errorMessage(caught: unknown, fallbackKey: string): string {
     if (!(caught instanceof Error)) return i18n.t(fallbackKey)
@@ -176,14 +179,14 @@
     />
     <h1>
       {i18n.t(
-        isConnected
+        showExistingConnection
           ? 'extension.companion.ready_title'
           : 'extension.companion.connect_title',
       )}
     </h1>
     <p class="description">
       {i18n.t(
-        isConnected
+        showExistingConnection
           ? 'extension.companion.ready_description'
           : 'extension.companion.connect_description',
       )}
@@ -191,14 +194,14 @@
     <p
       class="vault-connection"
       data-testid="companion-vault-status"
-      data-connected={isConnected ? 'true' : 'false'}
+      data-connected={showExistingConnection ? 'true' : 'false'}
     >
-      {isConnected && vaultName
+      {showExistingConnection && vaultName
         ? i18n.t('extension.companion.ready_vault', { vault: vaultName })
         : i18n.t('extension.companion.not_connected')}
     </p>
 
-    {#if isConnected}
+    {#if showExistingConnection}
       <button
         type="button"
         data-testid="stay-as-companion-btn"
@@ -230,7 +233,7 @@
       {i18n.t('extension.setup.open_simple_vault')}
     </button>
 
-    {#if !isConnected}
+    {#if !showExistingConnection}
       <button
         type="button"
         class="secondary-button"
