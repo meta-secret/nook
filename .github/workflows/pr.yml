@@ -87,10 +87,16 @@ jobs:
 
   verify:
     name: Verify and preview
-    if: github.event.action != 'closed'
+    if: ${{ github.event.action != 'closed' && always() }}
     needs: wasm
     runs-on: ubuntu-latest
     steps:
+      - name: Require successful WASM verification
+        if: needs.wasm.result != 'success'
+        run: |
+          echo "::error::WASM verification completed with ${{ needs.wasm.result }}"
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v7
 

@@ -975,13 +975,16 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     );
     let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
     assert!(
-        verify_job.contains("needs: wasm")
+        verify_job.contains("if: ${{ github.event.action != 'closed' && always() }}")
+            && verify_job.contains("needs: wasm")
+            && verify_job.contains("if: needs.wasm.result != 'success'")
+            && verify_job.contains("WASM verification completed with ${{ needs.wasm.result }}")
             && verify_job.contains("Download verified WASM handoff")
             && !verify_job.contains("task ci:pr:wasm")
             && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
         ),
-        "PR preview must consume verified WASM and target the isolated Simple Vault alias"
+        "PR preview must surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
     );
     let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
     assert!(
