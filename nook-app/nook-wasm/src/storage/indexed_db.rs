@@ -17,8 +17,10 @@
 //! - `device_id` / `device_identity_wrapped` — stable browser device identity
 //!   metadata for passkey-derived identities or PIN-encrypted identity records.
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
-//! - `secret_search:{store_id}` — local plaintext projection of fields that are
-//!   intentionally public for vault list/search (never secret values).
+//! - `secret_search_v2:{store_id}:{bucket}` — independently encrypted search
+//!   catalog buckets. Searchable metadata is decrypted only while unlocked.
+//! - `secret_search:{store_id}` — legacy plaintext catalog key, deleted
+//!   unconditionally when that vault opens.
 //! - `sentinel_genesis_share:{store_id}:{device_id}` — a core-verified encrypted
 //!   Sentinel genesis share delivery for this participant. Unlike a draft genesis
 //!   session, this may survive refresh and does not contain plaintext key
@@ -67,6 +69,10 @@ fn vault_cache_key(cache_ref: &str) -> String {
 
 fn secret_search_key(store_id: &str) -> String {
     format!("secret_search:{store_id}")
+}
+
+fn secret_search_bucket_key(store_id: &str, bucket: u8) -> String {
+    format!("secret_search_v2:{store_id}:{bucket:02}")
 }
 
 fn sentinel_genesis_share_key(store_id: &str, device_id: &str) -> String {
@@ -314,17 +320,81 @@ pub(crate) async fn save_vault_blob(store_id: &str, content: &str) -> Result<(),
     clear_pending_new_local_vault().await
 }
 
-pub(crate) async fn load_secret_search_catalog(
-    store_id: &str,
-) -> Result<Option<String>, NookError> {
-    idb_get_string(&secret_search_key(store_id)).await
+pub(crate) async fn delete_legacy_secret_search_catalog(store_id: &str) -> Result<(), NookError> {
+    idb_delete_key(&secret_search_key(store_id)).await
 }
 
-pub(crate) async fn save_secret_search_catalog(
+pub(crate) async fn load_secret_search_catalog_buckets(
     store_id: &str,
-    catalog_json: &str,
+) -> Result<Vec<(u8, String)>, NookError> {
+    let rexie = open_vault_db().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
+    let mut buckets = Vec::new();
+    for bucket in 0..nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+        let key = secret_search_bucket_key(store_id, bucket);
+        let id_key = serde_wasm_bindgen::to_value(&key)
+            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+        let value = store
+            .get(id_key)
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?;
+        if let Some(value) = value.filter(|value| !value.is_undefined() && !value.is_null()) {
+            let ciphertext = serde_wasm_bindgen::from_value(value)
+                .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
+            buckets.push((bucket, ciphertext));
+        }
+    }
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
+    Ok(buckets)
+}
+
+pub(crate) async fn save_secret_search_catalog_buckets(
+    store_id: &str,
+    writes: &[(u8, Option<String>)],
 ) -> Result<(), NookError> {
-    idb_put_string(&secret_search_key(store_id), catalog_json).await
+    let rexie = open_vault_db().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
+    for (bucket, ciphertext) in writes {
+        if *bucket >= nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+            return Err(NookError::IndexedDb(format!(
+                "Secret search bucket {bucket} is out of range."
+            )));
+        }
+        let key = secret_search_bucket_key(store_id, *bucket);
+        let id_key = serde_wasm_bindgen::to_value(&key)
+            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+        if let Some(ciphertext) = ciphertext {
+            let value = serde_wasm_bindgen::to_value(ciphertext)
+                .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+            store
+                .put(&value, Some(&id_key))
+                .await
+                .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
+        } else {
+            store
+                .delete(id_key)
+                .await
+                .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+        }
+    }
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
+    Ok(())
 }
 
 pub(crate) async fn device_identity_protection_status() -> Result<&'static str, NookError> {

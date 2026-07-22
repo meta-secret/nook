@@ -145,6 +145,7 @@ impl NookVaultManager {
         } = loaded;
         self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
         self.vault.meta = meta;
+        self.purge_legacy_plaintext_search_catalog().await?;
         Ok(self.get_records()?)
     }
 
@@ -466,6 +467,7 @@ impl NookVaultManager {
             self.vault.meta.apply_record(member);
         }
         self.persist_vault_change(Vec::new()).await?;
+        self.purge_legacy_plaintext_search_catalog().await?;
         Ok(self.get_records()?)
     }
 
