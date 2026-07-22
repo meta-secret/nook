@@ -57,10 +57,45 @@ mod tests {
         assert!(manager.sync_outbox.repo_arg.is_empty());
         assert_eq!(manager.vault.vault_name.as_deref(), Some("Local vault"));
     }
+
+    #[wasm_bindgen_test]
+    async fn remote_store_discovery_drops_stale_vault_session_state() {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "store_stale12345".to_owned();
+        manager.vault.vault_name = Some("Stale vault".to_owned());
+
+        let discovered = manager
+            .discover_remote_vault_store_id("local".to_owned(), String::new(), String::new())
+            .await
+            .expect("discover local storage");
+
+        assert!(discovered.is_empty());
+        assert!(manager.vault.store_id.is_empty());
+        assert!(manager.vault.vault_name.is_none());
+    }
 }
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Discover the single vault identity exposed by a staged sync provider
+    /// without requiring or decrypting a device identity. Hosts use this only
+    /// to bind an existing-vault import to an already-paired companion.
+    #[wasm_bindgen(js_name = discoverRemoteVaultStoreId)]
+    pub async fn discover_remote_vault_store_id(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<String, JsError> {
+        self.reset_vault_session();
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        if self.storage.mode != nook_core::StorageMode::Local {
+            self.sync_events_from_current_provider().await?;
+        }
+        Ok(self.vault.store_id.clone())
+    }
+
     /// Return the typed, core-owned connect status for the selected provider.
     pub async fn assess_vault_connect(
         &mut self,

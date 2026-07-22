@@ -288,40 +288,68 @@
   });
 
   async function handleUnlock(skipExtensionDiscovery = false) {
-    if (vault.addProviderOpen && vault.loginSetupType) {
+    const existingVaultImport =
+      vault.loginRequiresExistingVault && vault.loginSetupType !== undefined;
+    const existingVaultImportNeedsIdentity =
+      vault.clientPolicy.existingVaultIdentityRecoveryRequired(
+        vault.loginRequiresExistingVault,
+        vault.loginSetupType !== undefined,
+        vault.deviceProtectionReady,
+      );
+    if (
+      vault.addProviderOpen &&
+      vault.loginSetupType &&
+      !existingVaultImportNeedsIdentity
+    ) {
       await vault.connectStagedProvider();
       return;
     }
-    const activeStoreId = vault.activeVaultStoreId?.trim() ?? "";
+    let activeStoreId = vault.activeVaultStoreId?.trim() ?? "";
+    if (existingVaultImport) {
+      try {
+        activeStoreId = await vault.discoverStagedVaultStoreId();
+        if (!activeStoreId) {
+          vault.errorMsg = vault.t("auth_storage.existing_vault_not_found");
+          return;
+        }
+      } catch (error) {
+        vault.errorMsg =
+          error instanceof Error ? error.message : vault.t("auth_storage.sync_failed");
+        return;
+      }
+    }
     const connectRequest = extensionIdentityRequest;
     if (
       connectRequest?.source === "paired-vault" &&
-      vault.localVaultPresent &&
       connectRequest.vaultStoreId === activeStoreId
     ) {
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         (manager) => adoptExtensionIdentity(manager, connectRequest),
+        { deferInitialization: existingVaultImport },
       );
       if (!adopted) return;
       extensionBackedVaultSession = true;
       await vault.loadDb();
+      if (existingVaultImport && vault.isAuthenticated) {
+        await vault.activateConnectedExistingVault(activeStoreId);
+      }
       return;
     }
     if (
       !skipExtensionDiscovery &&
       SUPPORTS_EXTENSION &&
-      vault.localVaultPresent &&
+      (vault.localVaultPresent || existingVaultImport) &&
       activeStoreId
     ) {
       extensionDiscoveryStoreId = "";
       const discoveryStatus = await resumePairedExtensionVault(activeStoreId);
       if (vault.isAuthenticated) return;
       if (discoveryStatus === "locked") {
-        await requestPairedExtensionUnlock(activeStoreId);
-        return;
+        const requested = await requestPairedExtensionUnlock(activeStoreId);
+        if (requested) return;
       }
     }
-    if (existingVaultNeedsDeviceUnlock) {
+    if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
       const extensionIdentityCanUnlock =
         connectRequest &&
         (connectRequest.source !== "paired-vault" ||
@@ -332,10 +360,14 @@
       if (extensionIdentityCanUnlock) {
         const adopted = await vault.authorizeWithExternalDeviceIdentity(
           (manager) => adoptExtensionIdentity(manager, connectRequest),
+          { deferInitialization: existingVaultImport },
         );
         if (!adopted) return;
         extensionBackedVaultSession = true;
         await vault.loadDb();
+        if (existingVaultImport && vault.isAuthenticated) {
+          await vault.activateConnectedExistingVault(activeStoreId);
+        }
         return;
       }
       pendingExistingVaultUnlock = true;
@@ -346,6 +378,9 @@
     }
     if (vault.loginSetupType) {
       await vault.connectStagedProvider();
+      if (existingVaultImport && vault.isAuthenticated) {
+        await vault.activateConnectedExistingVault(activeStoreId);
+      }
       return;
     }
     await vault.loadDb();
@@ -402,6 +437,7 @@
   const requiresPasskeyFirst = $derived(
     vault.localVaultPresent ||
       vault.localVaults.length > 0 ||
+      vault.loginRequiresExistingVault ||
       urlEnrollmentPending,
   );
   const existingVaultNeedsDeviceUnlock = $derived(
@@ -449,12 +485,14 @@
   async function resumePairedExtensionVault(
     storeId: string,
   ): Promise<"unavailable" | "locked" | "unlocked"> {
+    const discoveringStagedImport =
+      vault.loginRequiresExistingVault && vault.loginSetupType !== undefined;
     extensionDiscoveryStoreId = storeId;
     const discovery = await discoverPairedExtensionIdentity(storeId);
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
-      vault.activeVaultStoreId !== storeId
+      (vault.activeVaultStoreId !== storeId && !discoveringStagedImport)
     ) {
       return discovery.status;
     }
@@ -462,7 +500,7 @@
       window.setTimeout(() => {
         if (
           !vault.isAuthenticated &&
-          vault.activeVaultStoreId === storeId &&
+          (vault.activeVaultStoreId === storeId || discoveringStagedImport) &&
           extensionDiscoveryStoreId === storeId
         ) {
           extensionDiscoveryStoreId = "";
@@ -630,7 +668,8 @@
       vault.isAuthenticated ||
       vault.isInitializing ||
       vault.isVerifying ||
-      !vault.localVaultPresent ||
+      (!vault.localVaultPresent &&
+        !(vault.loginRequiresExistingVault && vault.loginSetupType)) ||
       !storeId ||
       extensionDiscoveryStoreId === storeId
     ) {

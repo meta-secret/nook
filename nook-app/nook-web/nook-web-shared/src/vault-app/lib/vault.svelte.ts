@@ -942,6 +942,7 @@ export class VaultState {
 
   async authorizeWithExternalDeviceIdentity(
     adopt: (manager: NookVaultManager) => Promise<void>,
+    options?: { deferInitialization?: boolean },
   ): Promise<boolean> {
     if (!this.manager) return false;
     const priorDeviceProtectionStatus = this.deviceProtectionStatus;
@@ -950,7 +951,11 @@ export class VaultState {
     this.deviceAuthorizationInProgress = true;
     try {
       await this.enqueueStorage(() => adopt(this.manager!));
-      await this.continueInitializationAfterDeviceUnlock();
+      if (options?.deferInitialization) {
+        await this.initDeviceIdentity({ allowPendingAuthorization: true });
+      } else {
+        await this.continueInitializationAfterDeviceUnlock();
+      }
       this.deviceProtectionStatus = "unlocked";
       vaultLog.info("extension identity adopted", {
         deviceId: this.deviceId,
@@ -1169,6 +1174,10 @@ export class VaultState {
 
   async syncActiveVaultStoreIdToAuth(): Promise<void> {
     return localLoginActions.syncActiveVaultStoreIdToAuth(this);
+  }
+
+  async activateConnectedExistingVault(storeId: string): Promise<void> {
+    return localLoginActions.activateConnectedExistingVault(this, storeId);
   }
 
   beginLoginVaultPicker() {
@@ -1902,6 +1911,10 @@ export class VaultState {
   /** Settings: connect a new sync provider and reconcile with local vault. */
   async connectAndSyncStagedProvider(): Promise<void> {
     return providersActions.connectAndSyncStagedProvider(this);
+  }
+
+  async discoverStagedVaultStoreId(): Promise<string> {
+    return providersActions.discoverStagedVaultStoreId(this);
   }
 
   openSettings(
