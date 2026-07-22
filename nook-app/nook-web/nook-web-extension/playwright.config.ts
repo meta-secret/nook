@@ -7,6 +7,9 @@ export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
   retries: isHostedSmoke ? 0 : isCi ? 2 : 0,
+  // The full smoke owns several headed pages and persistent contexts. Hosted
+  // runners cannot reliably sustain it beside the other extension workers.
+  workers: isCi ? 1 : undefined,
   reporter: isCi ? 'line' : 'list',
   timeout: isHostedSmoke ? 180_000 : isCi ? 90_000 : 60_000,
   expect: {

@@ -311,6 +311,9 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 Agent workflow: run **`task format`** before every push; product gates
 (`check`, lint, tests, coverage, builds, e2e) run on **GitHub Actions**. Local
 Task mirrors below remain available for humans and optional debugging.
+PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label;
+the PR workflow then requires the Main-equivalent local-provider, app-isolation,
+and extension browser suites before merge.
 
 ```sh
 task format                # required local agent action (host-applied)

@@ -460,6 +460,46 @@ fn focused_playwright_task_runs_only_matching_projects() {
 }
 
 #[test]
+fn extension_e2e_waits_for_a_persistent_x_server() {
+    let root = repository_root();
+    let wrapper = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh",
+    );
+    for required in [
+        "Xvfb -displayfd 3 -screen 0 1280x720x24 -noreset",
+        "if [ -s \"$display_file\" ]",
+        "kill -0 \"$xvfb_pid\"",
+        "Xvfb exited while the browser suite was running",
+    ] {
+        assert!(
+            wrapper.contains(required),
+            "extension e2e Xvfb wrapper missing resilience contract: {required}"
+        );
+    }
+
+    for script in ["test-e2e.sh", "test-hosted-smoke.sh"] {
+        let contents = read(
+            &root,
+            &format!("nook-app/nook-web/nook-web-extension/scripts/{script}"),
+        );
+        assert!(
+            contents.contains("bash scripts/run-with-xvfb.sh"),
+            "{script} must use the readiness-checked Xvfb wrapper"
+        );
+    }
+
+    let playwright = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/playwright.config.ts",
+    );
+    assert!(
+        playwright.contains("workers: isCi ? 1 : undefined"),
+        "hosted headed extension tests must not compete for Chromium/Xvfb resources"
+    );
+}
+
+#[test]
 fn main_failures_do_not_trigger_an_ai_repair_agent() {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
@@ -482,6 +522,7 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
     for required in [
         "task: _buildx:healthy",
         "vars: { BUILD_TASK: _ci:pr:host }",
+        "vars: { BUILD_TASK: _ci:pr:e2e:host }",
         "vars: { BUILD_TASK: _ci:main:host }",
     ] {
         assert!(
@@ -862,6 +903,14 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
                 .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
         "hosted web delivery must retry the immediate BuildKit frontend flake once"
     );
+    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    assert!(
+        app_tasks.contains("for attempt in 1 2; do")
+            && app_tasks.contains(
+                "task setup: transient $setup_target Bake failure; retrying final web solve in 2s",
+            ),
+        "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
+    );
 
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     for required in [
@@ -886,6 +935,11 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     for required in [
         "name: Native Rust verification",
         "name: Verify and preview",
+        "types: [opened, synchronize, reopened, labeled, unlabeled, closed]",
+        "name: Full browser e2e (main fix)",
+        "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
+        "NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/",
+        "task ci:pr:e2e",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
@@ -896,9 +950,24 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     ] {
         assert!(
             pr.contains(required),
-            "PR CI must keep native Rust parallel with the combined WASM/web runner: {required}"
+            "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
+    let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
+    assert!(
+        verify_job.contains(
+            "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
+        ),
+        "PR preview artifacts must target the isolated Simple Vault alias"
+    );
+    let full_e2e_job = pr
+        .split_once("  full-e2e:\n")
+        .expect("PR CI must define the label-selected full e2e job")
+        .1;
+    assert!(
+        full_e2e_job.contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
+        "Main-fix browser e2e must explicitly use its runner-local Simple Vault"
+    );
     let native_job_lookup = pr
         .find("native_job=\"$(")
         .expect("PR verification must inspect the latest native job");

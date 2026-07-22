@@ -96,7 +96,12 @@ tasks:
       - bash "{{.REPO_ROOT}}/.github/scripts/with-healthy-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
 
   ci:pr:e2e:
-    desc: Explicit local/manual full stub web Playwright e2e plus extension e2e.
+    desc: Full stub web Playwright e2e plus extension e2e on a health-checked persistent BuildKit daemon.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:e2e:host }
+
+  _ci:pr:e2e:host:
     cmds:
       - task: preflight
       - task: setup

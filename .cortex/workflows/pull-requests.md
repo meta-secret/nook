@@ -174,11 +174,19 @@ independent required checks. Any cancellable live-provider job must also keep
 its external-resource cleanup in a separate `if: always()` step so an
 interrupted test process cannot leak provider state.
 
-### 5.1. E2e (optional local debug; main owns full suite)
+### 5.1. E2e (remote for Main fixes; optional local debug)
 
-PR CI intentionally omits browser e2e; `main.yml` is the automatic full-suite
-gate after merge. Agents must not require full local e2e before merge. If you
-choose a local repro while debugging, use a single spec:
+Normal PR CI omits browser e2e. A PR fixing a failure observed on `main` must
+carry the `ci:full-e2e` label; the PR workflow then runs the Main-equivalent
+local-provider, split-app isolation, and extension browser suites before merge.
+Apply the label before the final readiness audit:
+
+```bash
+gh pr edit <number> --add-label ci:full-e2e
+```
+
+Agents must not require full local e2e before merge. If you choose a local
+repro while debugging, use a single spec:
 
 ```bash
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
@@ -196,7 +204,7 @@ Skip local e2e entirely for isolated Rust-only or docs-only changes.
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
-`pr.yml` runs native Rust on one hosted runner while `PR / Verify and preview` keeps WASM, web verification/build, and deployment on a second runner. Generated WASM stays on that runner instead of being uploaded to a third VM. After the web build, the job downloads the native runner's small coverage artifact for comparison/reporting, then deploys the internal harness plus isolated native Pages aliases for site, Simple, and Sentinel. The isolated site alias is recorded as the successful `github-pages` deployment for ruleset enforcement. The automatic full browser e2e gate runs on main only (`ci:main`).
+`pr.yml` runs native Rust on one hosted runner while `PR / Verify and preview` keeps WASM, web verification/build, and deployment on a second runner. Generated WASM stays on that runner instead of being uploaded to a third VM. After the web build, the job downloads the native runner's small coverage artifact for comparison/reporting, then deploys the internal harness plus isolated native Pages aliases for site, Simple, and Sentinel. The isolated site alias is recorded as the successful `github-pages` deployment for ruleset enforcement. PRs labeled `ci:full-e2e` also run the Main-equivalent browser suite in `Full browser e2e (main fix)`; the overall `PR` workflow cannot succeed until that job succeeds.
 
 **Do not stop after opening the PR.** Wait only for applicable repository-owned
 workflows: `PR`, plus `Web research` when `.github/workflows/web-research.yml` or

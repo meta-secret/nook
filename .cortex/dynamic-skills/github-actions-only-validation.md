@@ -19,6 +19,8 @@ contract when UI-facing paths change.
 
 **Required remotely:** applicable repository-owned GitHub Actions workflows
 (`PR / Verify and preview`, and path-applicable `Web research`).
+For a PR fixing a failure observed on `main`, add `ci:full-e2e`; the same `PR`
+workflow then runs the Main-equivalent full browser suite before merge.
 
 ```bash
 task format
@@ -65,6 +67,7 @@ Does not apply to:
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       locally for merge or handoff.
 - [ ] Treat optional local Task commands as debug-only.
+- [ ] Add `ci:full-e2e` when the PR repairs a Main failure.
 - [ ] Merge only after green applicable Actions checks and `task pr:ready`.
 
 ## Validation

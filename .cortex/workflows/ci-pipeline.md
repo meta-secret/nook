@@ -11,7 +11,7 @@ product validation pipeline or trigger the main pipeline after merge.
 
 | Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync                                | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + video artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + video artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins      | No                                        |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -166,8 +166,21 @@ nightly, and explicitly requested browser e2e also build `web-e2e-base` with Deb
 and its revisioned recording path links to `/usr/bin/ffmpeg`; do not install
 its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
 image layer (about 432 MB compressed) on cold runners.
-The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
-a whole-build retry loop.
+The preparation solve runs once. The small final web-image solve retries once
+after the known immediate BuildKit frontend/Dockerfile-load flake, without
+repeating the multi-minute Rust/WASM and dependency graph.
+
+PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
+That label adds the `Full browser e2e (main fix)` job to the ordinary PR
+workflow and runs `task ci:pr:e2e`, including the full deterministic
+local-provider, split-app isolation, and extension suites before merge. The task
+uses the same bounded BuildKit health/recovery wrapper as Main. Adding
+or removing the label retriggers PR Actions for the current head. Because the
+readiness audit already requires the exact-head `PR` workflow to succeed, a
+labeled PR cannot be ready while this job is queued, red, or cancelled.
+Extension e2e starts an automatically selected Xvfb display, waits for readiness,
+keeps it from resetting between Playwright retries, and uses one hosted worker
+so the persistent-context smoke cannot compete with other headed Chromium tests.
 
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
@@ -357,8 +370,9 @@ browser-free web, and e2e web. PR CI assigns native Rust to one runner and keeps
 WASM plus web verification/build on a second runner. Generated WASM stays local
 to that second runner; native Rust uploads only the small coverage handoff,
 which is downloaded after the web build for reporting. The combined job runs
-without browser e2e, deploys the Cloudflare previews,
-and a successful `github-pages` deployment status for the PR head SHA). The preview deploy reuses that prepared sealed image and
+without browser e2e, deploys the Cloudflare previews, and records a successful
+`github-pages` deployment status for the PR head SHA. A `ci:full-e2e` PR also
+runs the separate Main-equivalent browser job. The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
 `nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
 inputs reuse the exact base commit's main artifact (with a coverage-only build
@@ -582,7 +596,7 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** push after `task format` and let GitHub Actions own product validation; optional local `task ci:pr` / e2e is debug-only, never a merge gate.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs; the full browser regression suites remain on main. Main runs full local-provider and extension **e2e** and leaves failures for manual handling; nightly runs **sync-live** and invokes `ci-fix` on failure.
+5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e** and leaves failures for manual handling. Nightly runs **sync-live** and invokes `ci-fix` on failure.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
