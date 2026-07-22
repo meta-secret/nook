@@ -22,8 +22,8 @@
   metadata-only `NookSecretPage`
 - `decryptSecret` — decrypts exactly one full `NookSecretRecord` for an explicit
   reveal or secret-value copy
-- encrypted search — decrypts candidates one at a time because searchable
-  metadata is inside each encrypted payload; non-matches are zeroized
+- encrypted search catalog — decrypts authenticated ID-derived buckets once per
+  unlocked session, then scans normalized metadata in WASM memory
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`
 
 ## 3a. Browser API boundaries
