@@ -1,0 +1,75 @@
+schema_version: 2
+source_pr:
+  number: 635
+  url: https://github.com/meta-secret/nook/pull/635
+  title: Record completed Main build statistics without recursion
+  change_surface: ci_main_build_statistics_automation
+  head_sha: 1211338c2c5dbe760a9c9ceaaaaac34a0b3dfdda
+  started_at: 2026-07-22T22:14:02Z
+  opened_at: 2026-07-22T22:23:39Z
+  merged_at: 2026-07-22T23:25:23Z
+  elapsed_seconds: 4281
+  open_to_merge_seconds: 3704
+summary:
+  local_execution_count: 10
+  local_check_count: 6
+  local_test_count: 0
+  local_combined_count: 4
+  local_execution_seconds: 182
+  github_actions_run_count: 4
+  github_actions_seconds: 3269
+  pr_retrigger_count: 3
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T23:28:20Z
+  head_sha: 1211338c2c5dbe760a9c9ceaaaaac34a0b3dfdda
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 241
+    e2e: 200
+  total: 1101
+local_executions:
+  - { command: "node collector tests and syntax check plus workflow YAML parse and git diff check", category: combined, started_at: "2026-07-22T22:20:00Z", finished_at: "2026-07-22T22:20:01Z", duration_seconds: 1, outcome: passed, reason: initial_collector_and_recursion_validation }
+  - { command: "task format", category: check, started_at: "2026-07-22T22:21:15Z", finished_at: "2026-07-22T22:22:13Z", duration_seconds: 58, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: "task pr:preflight PR=635", category: check, started_at: "2026-07-22T22:23:52Z", finished_at: "2026-07-22T22:23:59Z", duration_seconds: 7, outcome: passed, reason: initial_pr_policy_and_state_audit }
+  - { command: "node collector tests and syntax check plus workflow YAML parse and git diff check", category: combined, started_at: "2026-07-22T22:36:30Z", finished_at: "2026-07-22T22:36:31Z", duration_seconds: 1, outcome: passed, reason: attempt_specific_api_review_fix_validation }
+  - { command: "task format", category: check, started_at: "2026-07-22T22:37:47Z", finished_at: "2026-07-22T22:38:38Z", duration_seconds: 51, outcome: passed, reason: attempt_specific_review_fix_pre_push_hygiene }
+  - { command: "node collector tests and syntax check plus workflow YAML parse and git diff check", category: combined, started_at: "2026-07-22T23:09:18Z", finished_at: "2026-07-22T23:09:19Z", duration_seconds: 1, outcome: failed, reason: future_baseline_filter_required_fixture_order_update }
+  - { command: "node collector tests and syntax check plus workflow YAML parse and git diff check", category: combined, started_at: "2026-07-22T23:09:40Z", finished_at: "2026-07-22T23:09:41Z", duration_seconds: 1, outcome: passed, reason: pat_baseline_and_rerun_timing_review_fix_validation }
+  - { command: "task format", category: check, started_at: "2026-07-22T23:10:55Z", finished_at: "2026-07-22T23:11:47Z", duration_seconds: 52, outcome: passed, reason: final_review_fix_pre_push_hygiene }
+  - { command: "task pr:ready PR=635", category: check, started_at: "2026-07-22T23:25:02Z", finished_at: "2026-07-22T23:25:11Z", duration_seconds: 9, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: "git diff inventory-bearing trees against PR 633 merged head", category: check, started_at: "2026-07-22T23:27:35Z", finished_at: "2026-07-22T23:27:36Z", duration_seconds: 1, outcome: passed, reason: merged_head_inventory_content_identity_proof }
+github_actions_runs:
+  - { workflow: PR, run_id: 29962695377, run_attempt: 1, head_sha: 5434b48dabe48601a100fccc4fd9d19c76b82562, trigger: pull_request, started_at: "2026-07-22T22:23:42Z", finished_at: "2026-07-22T22:36:01Z", duration_seconds: 739, conclusion: success }
+  - { workflow: PR, run_id: 29963580330, run_attempt: 1, head_sha: b30b392de40a3b04a062ff8b8ea43e72e3c3a6ec, trigger: pull_request, started_at: "2026-07-22T22:38:55Z", finished_at: "2026-07-22T22:55:25Z", duration_seconds: 990, conclusion: cancelled }
+  - { workflow: PR, run_id: 29963580330, run_attempt: 2, head_sha: b30b392de40a3b04a062ff8b8ea43e72e3c3a6ec, trigger: pull_request, started_at: "2026-07-22T22:55:34Z", finished_at: "2026-07-22T23:08:44Z", duration_seconds: 790, conclusion: success }
+  - { workflow: PR, run_id: 29965399805, run_attempt: 1, head_sha: 566c2373acb3aab76042b1d91f66d21fd43fd22b, trigger: pull_request, started_at: "2026-07-22T23:12:24Z", finished_at: "2026-07-22T23:24:54Z", duration_seconds: 750, conclusion: success }
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-22T22:38:51Z", reason: isolate_completed_workflow_attempt_metadata_and_jobs }
+  - { kind: manual_rerun, at: "2026-07-22T22:55:33Z", reason: bounded_retry_after_native_runner_exceeded_recent_successful_duration_by_more_than_three_times }
+  - { kind: head_push, at: "2026-07-22T23:12:20Z", reason: enforce_pat_and_correct_delayed_baselines_and_rerun_timing }
+merge_attempts:
+  - at: 2026-07-22T23:25:23Z
+    method: squash
+    outcome: success
+    reason: exact_head_and_base_readiness_passed; local_branch_cleanup_failed_after_confirmed_merge
+comparison:
+  baseline_prs: [610, 624]
+  baseline_quality: comparable
+  baseline_note: Recent CI and build-workflow automation changes using the same hosted PR gate; PR 610 was broader build-cache work and PR 624 added trusted post-workflow artifact publication.
+  elapsed_seconds_change_percent: -23.6
+  local_execution_seconds_change_percent: -82.5
+  github_actions_seconds_change_percent: 4.2
+  test_inventory_total_change: 8
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - Three replacement validation cycles followed material review fixes for exact-attempt collection, trusted admin publication, delayed-run baselines, and rerun timing; no changed head was validated without a corresponding code or policy change.
+    - One unchanged-head rerun was intentionally bounded after the native leg remained active for more than 20 minutes versus a recent successful range of 1m46s to 5m41s; attempt 2 passed native in 5m50s and no second automatic retry was made.
+    - The cancelled infrastructure outlier consumed 990 hosted seconds, but the final hosted total remained within 4.2 percent of the comparable median and below the performance-regression threshold.
+    - Merged-head inventory was carried forward only after proving the complete nook-app and preflight trees byte-identical to PR 633's measured head; the new collector tests live outside the repository inventory categories.
+  required_actions: []
