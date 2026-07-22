@@ -1,0 +1,200 @@
+schema_version: 2
+source_pr:
+  number: 602
+  url: https://github.com/meta-secret/nook/pull/602
+  title: Fix existing vault identity recovery
+  change_surface: existing_vault_extension_device_identity_recovery
+  head_sha: 953b091291eff03e5402a639f199e2ef0afcebb7
+  started_at: 2026-07-22T01:11:29Z
+  opened_at: 2026-07-22T01:20:21Z
+  merged_at: 2026-07-22T02:26:10Z
+  elapsed_seconds: 4481
+  open_to_merge_seconds: 3949
+summary:
+  local_execution_count: 12
+  local_check_count: 11
+  local_test_count: 1
+  local_combined_count: 0
+  local_execution_seconds: 660
+  github_actions_run_count: 5
+  github_actions_seconds: 2598
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T02:30:22Z
+  head_sha: 953b091291eff03e5402a639f199e2ef0afcebb7
+  by_type:
+    rust: 623
+    preflight: 30
+    web_unit: 232
+    e2e: 197
+  total: 1082
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-22T01:15:55Z
+    finished_at: 2026-07-22T01:19:45Z
+    duration_seconds: 230
+    outcome: passed
+    reason: initial_pre_push_hygiene
+  - command: task pr:preflight PR=602
+    category: check
+    started_at: 2026-07-22T01:20:30Z
+    finished_at: 2026-07-22T01:20:36Z
+    duration_seconds: 6
+    outcome: passed
+    reason: initial_pr_policy_and_state_audit
+  - command: bun run test:ui-demo -- e2e/demos/device-protection.demo.spec.ts
+    category: test
+    started_at: 2026-07-22T01:24:50Z
+    finished_at: 2026-07-22T01:24:51Z
+    duration_seconds: 1
+    outcome: failed
+    reason: host_playwright_binary_not_installed
+  - command: task format
+    category: check
+    started_at: 2026-07-22T01:25:55Z
+    finished_at: 2026-07-22T01:27:22Z
+    duration_seconds: 87
+    outcome: passed
+    reason: after_adding_required_ui_demo
+  - command: task format
+    category: check
+    started_at: 2026-07-22T01:37:28Z
+    finished_at: 2026-07-22T01:38:55Z
+    duration_seconds: 87
+    outcome: passed
+    reason: after_replacing_dev_only_demo_hook_with_ui_flow
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T01:39:00Z
+    finished_at: 2026-07-22T01:39:01Z
+    duration_seconds: 1
+    outcome: passed
+    reason: required_ui_demo_contract
+  - command: task format
+    category: check
+    started_at: 2026-07-22T01:46:43Z
+    finished_at: 2026-07-22T01:48:10Z
+    duration_seconds: 87
+    outcome: passed
+    reason: after_making_missing_vault_demo_assertion_bounded
+  - command: task pr:ready PR=602
+    category: check
+    started_at: 2026-07-22T02:00:35Z
+    finished_at: 2026-07-22T02:00:41Z
+    duration_seconds: 6
+    outcome: failed
+    reason: branch_behind_main_and_six_unresolved_review_threads
+  - command: task format
+    category: check
+    started_at: 2026-07-22T02:08:45Z
+    finished_at: 2026-07-22T02:10:12Z
+    duration_seconds: 87
+    outcome: passed
+    reason: review_feedback_fixes_and_main_merge
+  - command: task format
+    category: check
+    started_at: 2026-07-22T02:12:24Z
+    finished_at: 2026-07-22T02:13:25Z
+    duration_seconds: 61
+    outcome: passed
+    reason: final_timeout_cleanup_hygiene
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T02:13:26Z
+    finished_at: 2026-07-22T02:13:27Z
+    duration_seconds: 1
+    outcome: passed
+    reason: exact_head_ui_demo_contract
+  - command: task pr:ready PR=602
+    category: check
+    started_at: 2026-07-22T02:25:47Z
+    finished_at: 2026-07-22T02:25:53Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29882828611
+    run_attempt: 1
+    head_sha: d1b74d014e486d26899230103746ed610955467f
+    trigger: pull_request
+    started_at: 2026-07-22T01:20:24Z
+    finished_at: 2026-07-22T01:24:34Z
+    duration_seconds: 250
+    conclusion: failure
+  - workflow: PR
+    run_id: 29883162402
+    run_attempt: 1
+    head_sha: e530fed4faff038b0f71463bd46ea34c5cb8a51b
+    trigger: pull_request
+    started_at: 2026-07-22T01:27:57Z
+    finished_at: 2026-07-22T01:36:15Z
+    duration_seconds: 498
+    conclusion: failure
+  - workflow: PR
+    run_id: 29883699446
+    run_attempt: 1
+    head_sha: fb7d2c93407820a9b10a31f4acc02a1a1bb5d264
+    trigger: pull_request
+    started_at: 2026-07-22T01:39:36Z
+    finished_at: 2026-07-22T01:46:37Z
+    duration_seconds: 421
+    conclusion: failure
+  - workflow: PR
+    run_id: 29884101658
+    run_attempt: 1
+    head_sha: b3faf15355ae7ec5e6ca9a1d7ce8dee1d342789d
+    trigger: pull_request
+    started_at: 2026-07-22T01:48:27Z
+    finished_at: 2026-07-22T02:00:23Z
+    duration_seconds: 716
+    conclusion: success
+  - workflow: PR
+    run_id: 29885248672
+    run_attempt: 1
+    head_sha: fbf7675fdc81a5046498acb88c82654ae1713c7d
+    trigger: pull_request
+    started_at: 2026-07-22T02:13:49Z
+    finished_at: 2026-07-22T02:25:42Z
+    duration_seconds: 713
+    conclusion: success
+pr_retriggers:
+  - kind: head_push
+    at: 2026-07-22T01:27:50Z
+    reason: add_required_ui_demo
+  - kind: head_push
+    at: 2026-07-22T01:39:32Z
+    reason: exercise_demo_through_user_visible_ui
+  - kind: head_push
+    at: 2026-07-22T01:48:23Z
+    reason: bound_negative_demo_assertion
+  - kind: head_push
+    at: 2026-07-22T02:13:43Z
+    reason: merge_current_main_and_address_review_feedback
+merge_attempts:
+  - at: 2026-07-22T02:26:10Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [603, 600]
+  baseline_quality: comparable
+  baseline_note: Recent browser-extension and shared web-flow PRs using the same PR Verify gate
+  elapsed_seconds_change_percent: 181.9
+  local_execution_seconds_change_percent: -27.4
+  github_actions_seconds_change_percent: 195.4
+  test_inventory_total_change: 1
+  regression: true
+  regression_reasons:
+    - Four head-push validation cycles made GitHub Actions time and end-to-end elapsed time exceed the comparable baseline threshold.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first push omitted the UI demo required by the repository contract; running the contract before that push would have avoided one remote cycle.
+    - Two subsequent demo-only failures caused full PR reruns; the first used a development-only hook and the second used an unbounded negative assertion.
+    - The final cycle was required after current-main integration and six substantive security/state review fixes, and finished green on the exact reviewed head.
+    - The regression is task-execution-specific rather than a missing build feature: the repository already provides the UI contract, focused demo path, and exact-head readiness gate, so no separate build-performance change is warranted.
+  required_actions: []
