@@ -621,6 +621,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
 
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
+    const extensionId = new URL(popupPage.url()).host
     const simplePage = await openSimpleVaultConnection(context, popupPage)
     const connectUrl = new URL(simplePage.url())
     const extensionDeviceId = connectUrl.searchParams.get('device_id')
@@ -883,17 +884,17 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect
       .poll(
         async () =>
-          fillLoginPage.evaluate(
-            () =>
-              typeof (
-                window as Window & {
-                  __nookLoginSubmitted?: {
-                    email: string
-                    password: string
-                  }
+          fillLoginPage.evaluate(() => {
+            const submittedLogin = (
+              window as Window & {
+                __nookLoginSubmitted?: {
+                  email: string
+                  password: string
                 }
-              ).__nookLoginSubmitted === 'object',
-          ),
+              }
+            ).__nookLoginSubmitted
+            return Boolean(submittedLogin) && typeof submittedLogin === 'object'
+          }),
         { timeout: 20_000 },
       )
       .toBe(true)
