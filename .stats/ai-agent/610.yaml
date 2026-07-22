@@ -1,0 +1,122 @@
+schema_version: 2
+source_pr:
+  number: 610
+  url: https://github.com/meta-secret/nook/pull/610
+  title: Reuse verified WASM and persist hosted Rust caches
+  change_surface: ci_buildkit_rust_wasm_full_e2e
+  head_sha: b770c0c6edfd503cc4599ed5dcf5cd7ff9998d00
+  started_at: 2026-07-22T04:17:13Z
+  opened_at: 2026-07-22T04:28:38Z
+  merged_at: 2026-07-22T06:36:29Z
+  elapsed_seconds: 8356
+  open_to_merge_seconds: 7671
+summary:
+  local_execution_count: 42
+  local_check_count: 26
+  local_test_count: 3
+  local_combined_count: 13
+  local_execution_seconds: 1593
+  github_actions_run_count: 11
+  github_actions_seconds: 5171
+  pr_retrigger_count: 10
+  agent_requested_rerun_count: 2
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T06:49:00Z
+  head_sha: b770c0c6edfd503cc4599ed5dcf5cd7ff9998d00
+  by_type:
+    rust: 627
+    preflight: 31
+    web_unit: 236
+    e2e: 199
+  total: 1093
+local_executions:
+  - { command: docker buildx bake --print prepare and git diff --check, category: check, started_at: 2026-07-22T04:23:26Z, finished_at: 2026-07-22T04:23:27Z, duration_seconds: 1, outcome: passed, reason: initial_buildkit_graph_validation }
+  - { command: task format, category: check, started_at: 2026-07-22T04:23:41Z, finished_at: 2026-07-22T04:24:41Z, duration_seconds: 60, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: git diff --check, category: check, started_at: 2026-07-22T04:28:14Z, finished_at: 2026-07-22T04:28:16Z, duration_seconds: 2, outcome: passed, reason: initial_commit_validation }
+  - { command: cargo test focused source-cache invariant and git diff --check, category: combined, started_at: 2026-07-22T04:47:30Z, finished_at: 2026-07-22T04:47:36Z, duration_seconds: 6, outcome: failed, reason: invariant_expected_old_exporter_count }
+  - { command: cargo test focused source-cache invariant and git diff --check, category: combined, started_at: 2026-07-22T04:48:06Z, finished_at: 2026-07-22T04:48:08Z, duration_seconds: 2, outcome: passed, reason: corrected_source_cache_invariant }
+  - { command: task format, category: check, started_at: 2026-07-22T04:48:17Z, finished_at: 2026-07-22T04:49:21Z, duration_seconds: 64, outcome: passed, reason: artifact_handoff_pre_push_hygiene }
+  - { command: task format, category: check, started_at: 2026-07-22T04:49:54Z, finished_at: 2026-07-22T04:50:59Z, duration_seconds: 65, outcome: passed, reason: post_rebase_pre_push_hygiene }
+  - { command: cargo test --manifest-path preflight/Cargo.toml --test vault_app_isolation, category: test, started_at: 2026-07-22T04:52:09Z, finished_at: 2026-07-22T04:52:18Z, duration_seconds: 9, outcome: passed, reason: workflow_invariant_suite }
+  - { command: cargo test --manifest-path preflight/Cargo.toml, category: test, started_at: 2026-07-22T04:54:43Z, finished_at: 2026-07-22T04:54:50Z, duration_seconds: 7, outcome: passed, reason: full_preflight_verification }
+  - { command: cargo fmt --manifest-path preflight/Cargo.toml and git diff --check, category: check, started_at: 2026-07-22T05:01:09Z, finished_at: 2026-07-22T05:01:10Z, duration_seconds: 1, outcome: passed, reason: split_job_edit_hygiene }
+  - { command: cargo fmt and cargo test --manifest-path preflight/Cargo.toml, category: combined, started_at: 2026-07-22T05:04:02Z, finished_at: 2026-07-22T05:04:11Z, duration_seconds: 9, outcome: passed, reason: split_runner_invariant_verification }
+  - { command: task list and git diff --check and task format, category: combined, started_at: 2026-07-22T05:04:18Z, finished_at: 2026-07-22T05:05:18Z, duration_seconds: 60, outcome: passed, reason: artifact_task_and_hygiene_validation }
+  - { command: actionlint and cargo fmt check and git diff --check, category: check, started_at: 2026-07-22T05:04:56Z, finished_at: 2026-07-22T05:04:58Z, duration_seconds: 2, outcome: passed, reason: workflow_static_validation }
+  - { command: cargo test preflight and task format and git diff --check, category: combined, started_at: 2026-07-22T05:05:18Z, finished_at: 2026-07-22T05:06:26Z, duration_seconds: 68, outcome: passed, reason: full_artifact_topology_validation }
+  - { command: cargo test focused workflow invariants and task format, category: combined, started_at: 2026-07-22T05:05:36Z, finished_at: 2026-07-22T05:05:43Z, duration_seconds: 7, outcome: failed, reason: cargo_filter_accepted_only_one_test_name }
+  - { command: cargo test two focused workflow invariants and task format, category: combined, started_at: 2026-07-22T05:05:48Z, finished_at: 2026-07-22T05:06:58Z, duration_seconds: 70, outcome: passed, reason: corrected_focused_invariant_commands }
+  - { command: cargo test focused artifact invariant and task format, category: combined, started_at: 2026-07-22T05:11:55Z, finished_at: 2026-07-22T05:13:05Z, duration_seconds: 70, outcome: passed, reason: review_fix_validation }
+  - { command: task format and git diff --check, category: check, started_at: 2026-07-22T05:12:39Z, finished_at: 2026-07-22T05:13:39Z, duration_seconds: 60, outcome: passed, reason: amended_commit_hygiene }
+  - { command: cargo test focused cache invariant and task format, category: combined, started_at: 2026-07-22T05:24:29Z, finished_at: 2026-07-22T05:25:39Z, duration_seconds: 70, outcome: passed, reason: separate_runner_review_fix }
+  - { command: cargo test preflight and task format and git diff --check, category: combined, started_at: 2026-07-22T05:28:07Z, finished_at: 2026-07-22T05:29:17Z, duration_seconds: 70, outcome: passed, reason: single_cache_writer_validation }
+  - { command: parallel task format cargo test preflight and git diff --check, category: combined, started_at: 2026-07-22T05:40:23Z, finished_at: 2026-07-22T05:41:33Z, duration_seconds: 70, outcome: failed, reason: concurrent_preflight_temp_directory_collision }
+  - { command: cargo test --manifest-path preflight/Cargo.toml, category: test, started_at: 2026-07-22T05:40:58Z, finished_at: 2026-07-22T05:41:07Z, duration_seconds: 9, outcome: passed, reason: isolated_rerun_after_local_collision }
+  - { command: git diff --check, category: check, started_at: 2026-07-22T05:41:11Z, finished_at: 2026-07-22T05:41:13Z, duration_seconds: 2, outcome: passed, reason: exact_head_push_validation }
+  - { command: task format, category: check, started_at: 2026-07-22T05:51:50Z, finished_at: 2026-07-22T05:52:55Z, duration_seconds: 65, outcome: passed, reason: required_check_failure_guard_hygiene }
+  - { command: cargo test preflight and git diff --check, category: combined, started_at: 2026-07-22T05:52:26Z, finished_at: 2026-07-22T05:52:35Z, duration_seconds: 9, outcome: passed, reason: required_check_failure_guard_validation }
+  - { command: task pr:preflight PR=610, category: check, started_at: 2026-07-22T06:10:51Z, finished_at: 2026-07-22T06:11:01Z, duration_seconds: 10, outcome: failed, reason: detected_new_main_base }
+  - { command: task format, category: check, started_at: 2026-07-22T06:12:49Z, finished_at: 2026-07-22T06:13:54Z, duration_seconds: 65, outcome: passed, reason: documentation_review_fix_hygiene }
+  - { command: cargo test preflight and git diff --check, category: combined, started_at: 2026-07-22T06:13:23Z, finished_at: 2026-07-22T06:13:32Z, duration_seconds: 9, outcome: passed, reason: documentation_review_fix_validation }
+  - { command: task pr:preflight PR=610, category: check, started_at: 2026-07-22T06:25:42Z, finished_at: 2026-07-22T06:25:57Z, duration_seconds: 15, outcome: failed, reason: detected_stats_only_main_advance }
+  - { command: git rebase current main and task format, category: check, started_at: 2026-07-22T06:26:19Z, finished_at: 2026-07-22T06:27:24Z, duration_seconds: 65, outcome: passed, reason: final_base_update_hygiene }
+  - { command: git diff --check, category: check, started_at: 2026-07-22T06:26:56Z, finished_at: 2026-07-22T06:26:58Z, duration_seconds: 2, outcome: passed, reason: final_exact_head_push_validation }
+  - { command: task pr:preflight PR=610 and task pr:ready PR=610, category: check, started_at: 2026-07-22T06:35:52Z, finished_at: 2026-07-22T06:36:15Z, duration_seconds: 23, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest list Rust and preflight inventory, category: check, started_at: 2026-07-22T06:38:05Z, finished_at: 2026-07-22T06:41:20Z, duration_seconds: 195, outcome: failed, reason: preflight_package_not_in_app_workspace }
+  - { command: cargo nextest JSON inventory with wrong JSON key, category: check, started_at: 2026-07-22T06:41:30Z, finished_at: 2026-07-22T06:41:31Z, duration_seconds: 1, outcome: failed, reason: nextest_json_schema_assumption }
+  - { command: cargo nextest JSON inventory from repository root, category: check, started_at: 2026-07-22T06:41:35Z, finished_at: 2026-07-22T06:41:36Z, duration_seconds: 1, outcome: failed, reason: repository_root_has_no_cargo_manifest }
+  - { command: cargo nextest JSON inventory with corrected package name, category: check, started_at: 2026-07-22T06:41:43Z, finished_at: 2026-07-22T06:41:45Z, duration_seconds: 2, outcome: failed, reason: nextest_json_test_binary_key_mismatch }
+  - { command: cargo nextest JSON schema inspection, category: check, started_at: 2026-07-22T06:41:51Z, finished_at: 2026-07-22T06:41:52Z, duration_seconds: 1, outcome: passed, reason: resolve_inventory_output_schema }
+  - { command: cargo nextest JSON Rust and preflight counts, category: check, started_at: 2026-07-22T06:41:57Z, finished_at: 2026-07-22T06:41:58Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory }
+  - { command: bun vitest extension and Playwright inventory, category: check, started_at: 2026-07-22T06:42:40Z, finished_at: 2026-07-22T06:42:42Z, duration_seconds: 2, outcome: failed, reason: web_dependencies_and_generated_wasm_missing }
+  - { command: web and extension Playwright inventory after dependency install, category: check, started_at: 2026-07-22T06:42:59Z, finished_at: 2026-07-22T06:43:07Z, duration_seconds: 8, outcome: failed, reason: generated_wasm_missing_for_app_lists }
+  - { command: task wasm:build:fast, category: check, started_at: 2026-07-22T06:43:16Z, finished_at: 2026-07-22T06:48:27Z, duration_seconds: 311, outcome: passed, reason: generate_merged_head_wasm_for_web_inventory }
+  - { command: bun vitest and Playwright merged-head inventory, category: check, started_at: 2026-07-22T06:48:27Z, finished_at: 2026-07-22T06:48:51Z, duration_seconds: 24, outcome: passed, reason: merged_head_web_inventory }
+github_actions_runs:
+  - { workflow: PR, run_id: 29891161419, run_attempt: 1, head_sha: 2b06cc8b07f970ad96a7c6bb826509208d2d639d, trigger: pull_request, started_at: 2026-07-22T04:28:41Z, finished_at: 2026-07-22T04:35:10Z, duration_seconds: 389, conclusion: success }
+  - { workflow: PR, run_id: 29892142668, run_attempt: 1, head_sha: 8b4ec7140acd08c88fed942183a47a89eeab4714, trigger: pull_request, started_at: 2026-07-22T04:51:06Z, finished_at: 2026-07-22T05:00:35Z, duration_seconds: 569, conclusion: failure }
+  - { workflow: PR, run_id: 29892853425, run_attempt: 1, head_sha: a02392cca3242f80ddf43ae9294458a771e51823, trigger: pull_request, started_at: 2026-07-22T05:06:41Z, finished_at: 2026-07-22T05:12:33Z, duration_seconds: 352, conclusion: failure }
+  - { workflow: PR, run_id: 29893204399, run_attempt: 1, head_sha: 826f28bbe05d205f2841d665011d5b2f1f4b04dd, trigger: pull_request, started_at: 2026-07-22T05:13:59Z, finished_at: 2026-07-22T05:23:19Z, duration_seconds: 560, conclusion: success }
+  - { workflow: PR, run_id: 29893954499, run_attempt: 1, head_sha: 51ec8344c97d3873610f085fad36b6b4df501fc3, trigger: pull_request, started_at: 2026-07-22T05:30:12Z, finished_at: 2026-07-22T05:38:37Z, duration_seconds: 505, conclusion: failure }
+  - { workflow: PR, run_id: 29893954499, run_attempt: 2, head_sha: 51ec8344c97d3873610f085fad36b6b4df501fc3, trigger: pull_request, started_at: 2026-07-22T05:39:55Z, finished_at: 2026-07-22T05:41:46Z, duration_seconds: 111, conclusion: cancelled }
+  - { workflow: PR, run_id: 29894488583, run_attempt: 1, head_sha: a3981ad98f4d70e4926351f6435364646f625dc7, trigger: pull_request, started_at: 2026-07-22T05:41:17Z, finished_at: 2026-07-22T05:49:56Z, duration_seconds: 519, conclusion: success }
+  - { workflow: PR, run_id: 29895034749, run_attempt: 1, head_sha: beefad44e4e60e95ddb2998c8326d3cdeedc0006, trigger: pull_request, started_at: 2026-07-22T05:52:52Z, finished_at: 2026-07-22T06:02:04Z, duration_seconds: 552, conclusion: failure }
+  - { workflow: PR, run_id: 29895034749, run_attempt: 2, head_sha: beefad44e4e60e95ddb2998c8326d3cdeedc0006, trigger: pull_request, started_at: 2026-07-22T06:02:46Z, finished_at: 2026-07-22T06:10:26Z, duration_seconds: 460, conclusion: success }
+  - { workflow: PR, run_id: 29896118615, run_attempt: 1, head_sha: 1a9d79fc1a94f5273182f4e1e64e4481185bb962, trigger: pull_request, started_at: 2026-07-22T06:14:04Z, finished_at: 2026-07-22T06:25:16Z, duration_seconds: 672, conclusion: success }
+  - { workflow: PR, run_id: 29896795717, run_attempt: 1, head_sha: 256a699267b8b29dc650c3e344bacafd6be4bec5, trigger: pull_request, started_at: 2026-07-22T06:27:04Z, finished_at: 2026-07-22T06:35:06Z, duration_seconds: 482, conclusion: success }
+pr_retriggers:
+  - { kind: head_push, at: 2026-07-22T04:51:00Z, reason: rebase_merged_full_e2e_job_and_add_verified_wasm_handoff }
+  - { kind: head_push, at: 2026-07-22T05:06:34Z, reason: split_artifact_backed_browser_and_extension_consumers }
+  - { kind: head_push, at: 2026-07-22T05:13:52Z, reason: preserve_single_e2e_cache_writer }
+  - { kind: head_push, at: 2026-07-22T05:30:05Z, reason: separate_browser_and_extension_host_runners }
+  - { kind: manual_rerun, at: 2026-07-22T05:39:54Z, reason: retry_failed_e2e_jobs_and_verify_run_stable_artifact }
+  - { kind: head_push, at: 2026-07-22T05:41:11Z, reason: current_main_rebase_and_review_fixes }
+  - { kind: head_push, at: 2026-07-22T05:52:45Z, reason: preserve_required_verify_failure_on_wasm_failure }
+  - { kind: manual_rerun, at: 2026-07-22T06:02:45Z, reason: retry_existing_browser_flakes_without_rerunning_wasm_producer }
+  - { kind: base_update, at: 2026-07-22T06:13:56Z, reason: rebase_real_rust_wasm_source_change_from_pr_612 }
+  - { kind: base_update, at: 2026-07-22T06:26:56Z, reason: rebase_stats_only_main_update_from_pr_616 }
+merge_attempts:
+  - at: 2026-07-22T06:36:24Z
+    method: squash
+    outcome: success
+    reason: exact_head_and_base_readiness_passed
+comparison:
+  baseline_prs: [608]
+  baseline_quality: comparable
+  baseline_note: PR 608 is the immediately preceding CI main-fix change that exercised the same labeled full browser and extension e2e gate.
+  elapsed_seconds_change_percent: -10.3
+  local_execution_seconds_change_percent: 43.6
+  github_actions_seconds_change_percent: -33.1
+  test_inventory_total_change: 8
+  regression: true
+  regression_reasons:
+    - Local execution time exceeded the comparable baseline threshold because the required merged-head inventory cold-compiled nextest metadata and generated missing WASM bindings in a fresh worktree; PR elapsed and GitHub Actions time both improved.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Every new PR run id followed a changed head or a current-main rebase; the two unchanged-head reruns were failed-job-only and one proved the run-stable WASM handoff across GitHub run attempts.
+    - The cancelled first rerun overlapped a replacement head push, but it ran for only 111 seconds and did not repeat the successful WASM producer.
+    - Main advanced first with a real Rust/WASM source change and then with a stats-only change; the former correctly rebuilt source layers while the latter stayed warm at 52 seconds for WASM and 98 seconds for native Rust.
+    - The local metric regression is isolated to the mandatory post-merge inventory on a fresh worktree; the exact-head hosted path removed duplicated Cargo work and reduced browser e2e from 15m24s to 7m01s.
+  required_actions: []
