@@ -911,7 +911,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await fillWidget.getByRole('button', { name: 'Continue with Nook' }).click()
     await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
     await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)
-    await fillWidget.getByRole('button', { name: 'Saved login 1' }).click()
+    const savedLogin = fillWidget.getByRole('button', {
+      name: 'Saved login 1',
+    })
+    await expect(savedLogin).toBeVisible({ timeout: 20_000 })
+    await savedLogin.click()
     await expect
       .poll(
         async () =>
@@ -969,7 +973,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
     await expect(otpWidget.getByText('Nook extension e2e')).toHaveCount(0)
     await expect(otpWidget.getByText('alice@nook.test')).toHaveCount(0)
-    await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
+    const savedAuthenticator = otpWidget.getByRole('button', {
+      name: 'Saved 2FA 1',
+    })
+    await expect(savedAuthenticator).toBeVisible({ timeout: 20_000 })
+    await savedAuthenticator.click()
     await expect(otpPage.locator('[autocomplete="one-time-code"]')).toHaveValue(
       /^\d{6}$/,
     )
