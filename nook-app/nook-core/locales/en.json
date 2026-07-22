@@ -328,15 +328,17 @@
     "body": "Nook fills and saves passwords on websites through the browser extension. Install it, then open the toolbar icon and connect it to this vault.",
     "install_cta": "Install extension",
     "pair_title": "Connect the browser extension",
-    "pair_body": "The extension is installed but not connected to this vault yet. Open the Nook toolbar icon, unlock the extension device, then choose Connect to Simple Vault.",
-    "pair_hint": "Pairing starts from the extension — there is no website-only enable step.",
+    "pair_body": "The extension is installed but not connected to this vault yet. Open it here, unlock the extension device, then choose Connect to Simple Vault.",
+    "pair_hint": "Nook will open the installed extension so you can approve the connection.",
     "status_not_installed": "Not installed",
     "status_installed_unpaired": "Installed — not paired",
     "status_paired": "Paired and ready",
     "settings_title": "Browser extension",
     "settings_body": "Use the extension to fill passwords, capture new logins, and keep this browser ready on websites.",
-    "open_install_page": "Open install page",
-    "loading_install": "Preparing install link…"
+    "loading_install": "Preparing install link…",
+    "connect_cta": "Connect extension",
+    "opening_extension": "Opening extension…",
+    "connect_failed": "Nook could not open the extension. Open it from the browser toolbar and choose Connect to Simple Vault."
   },
   "vault": {
     "search_placeholder": "Search secrets...",

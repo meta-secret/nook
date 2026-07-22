@@ -6,6 +6,7 @@ import {
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
+  type OpenCompanionLauncherMessage,
 } from "$web-shared/extension/runtime-messages";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
@@ -164,6 +165,22 @@ function sendExtensionMessage(
       finish(response);
     });
   });
+}
+
+export async function openInstalledExtension(): Promise<boolean> {
+  const extensionRuntimeId = readInstalledExtensionRuntimeId();
+  if (!extensionRuntimeId) return false;
+
+  const message: OpenCompanionLauncherMessage = {
+    type: "nook:open-companion-launcher",
+  };
+  const response = await sendExtensionMessage(extensionRuntimeId, message);
+  return (
+    !!response &&
+    typeof response === "object" &&
+    "ok" in response &&
+    response.ok === true
+  );
 }
 
 async function discoverPairedExtensionIdentityOnce(

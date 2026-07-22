@@ -1877,6 +1877,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
+    if (isOpenCompanionLauncherMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void openCompanionLauncher()
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: false, reason: 'launcher-failed' }))
+      return true
+    }
+
     if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
