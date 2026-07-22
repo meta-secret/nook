@@ -30,6 +30,8 @@ target "builder-wasm-deps" {
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
+// Persist this source-sensitive boundary separately from manifest-only dependencies so hosted
+// runners do not repeat unchanged coverage builds after a non-Rust PR push.
 target "builder-debug" {
   inherits   = ["_sccache-network"]
   context    = "."
@@ -40,7 +42,8 @@ target "builder-debug" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
 }
 
 // Small local-output target for the rare case where a commit-keyed main coverage artifact is
@@ -55,5 +58,5 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_native_source_cache_from
 }

@@ -59,13 +59,44 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  verify:
-    name: Verify and preview
+  wasm:
+    name: WASM verification and artifact
     if: github.event.action != 'closed'
-    # WASM and web stay on one hosted runner so the generated package crosses only a local
-    # scratch boundary. Native Rust remains independent and publishes coverage in parallel.
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: WASM clippy, build, and Node tests
+        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+        env:
+          CI: true
+          WASM_BUILD_MODE: dev
+
+      - name: Upload verified WASM handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  verify:
+    name: Verify and preview
+    if: ${{ github.event.action != 'closed' && always() }}
+    needs: wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful WASM verification
+        if: needs.wasm.result != 'success'
+        run: |
+          echo "::error::WASM verification completed with ${{ needs.wasm.result }}"
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -81,14 +112,14 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      - name: WASM clippy, build, and Node tests
-        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-        env:
-          CI: true
-          WASM_BUILD_MODE: dev
+      - name: Download verified WASM handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
 
-      # The generated WASM package remains on this runner. Coverage reporting consumes the native
-      # job's small artifact later and never blocks the web build on Rust completion.
+      # Coverage reporting consumes the native job's small artifact later and never blocks the web
+      # build on Rust completion. Browser e2e consumes this same verified WASM package in parallel.
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
@@ -777,6 +808,49 @@ jobs:
     if: >-
       github.event.action != 'closed' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    needs: wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+
+      - name: Download verified WASM handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+
+      - name: Local-provider web e2e from verified WASM
+        run: >-
+          task ci:pr:e2e:web:artifacts
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+          VITE_BASE=/
+          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          VITE_VAULT_SYNC_INTERVAL_MS=500
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GIT_COMMIT_ID: ${{ github.event.pull_request.head.sha }}
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+  full-extension-e2e:
+    name: Full extension e2e (main fix)
+    if: >-
+      github.event.action != 'closed' &&
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    needs: wasm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -785,9 +859,16 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      - name: Main-equivalent local-provider and extension e2e
+      - name: Download verified WASM handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+
+      - name: Extension e2e from verified WASM
         run: >-
-          task ci:pr:e2e
+          task ci:pr:e2e:extension:artifacts
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
           VITE_BASE=/
           VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
           VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev

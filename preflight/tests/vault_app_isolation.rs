@@ -847,6 +847,8 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
+        "type=gha,scope=nook-rust-native-source-v1",
+        "type=gha,scope=nook-rust-wasm-source-v1",
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
@@ -868,21 +870,25 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        6,
+        8,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
 
     let rust_bake = read(&root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
         rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
-            && !rust_bake.contains("cache-to   = rust_artifacts_cache_to"),
-        "WASM must branch from cached dependencies without exporting source-heavy snapshots"
+            && rust_bake
+                .matches("cache-to   = rust_wasm_source_cache_to")
+                .count()
+                == 2,
+        "WASM export and joined web artifacts must persist the source-sensitive hosted lineage"
     );
     let core_bake = read(&root, "nook-app/nook-core/docker-bake.hcl");
     assert!(
         core_bake.contains("cache-to   = rust_deps_cache_to")
-            && !core_bake.contains("cache-to   = rust_debug_cache_to"),
-        "only stable Rust dependency layers should be exported"
+            && core_bake.contains("cache-from = rust_native_source_cache_from")
+            && core_bake.contains("cache-to   = rust_native_source_cache_to"),
+        "native dependency and source-sensitive coverage layers need independent hosted caches"
     );
     let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
     assert!(
@@ -934,12 +940,16 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let pr = read(&root, ".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
+        "name: WASM verification and artifact",
         "name: Verify and preview",
         "types: [opened, synchronize, reopened, labeled, unlabeled, closed]",
         "name: Full browser e2e (main fix)",
+        "name: Full extension e2e (main fix)",
         "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
         "NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/",
-        "task ci:pr:e2e",
+        "name: pr-wasm-${{ github.run_id }}",
+        "task ci:pr:e2e:web:artifacts",
+        "task ci:pr:e2e:extension:artifacts",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
@@ -953,20 +963,80 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
             "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
+    let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
+    assert!(
+        wasm_job.contains("task ci:pr:wasm") && wasm_job.contains("Upload verified WASM handoff"),
+        "PR CI must build and upload verified WASM exactly once"
+    );
+    assert_eq!(
+        pr.matches("task ci:pr:wasm").count(),
+        1,
+        "PR CI must not duplicate the verified WASM producer"
+    );
     let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
     assert!(
-        verify_job.contains(
+        verify_job.contains("if: ${{ github.event.action != 'closed' && always() }}")
+            && verify_job.contains("needs: wasm")
+            && verify_job.contains("if: needs.wasm.result != 'success'")
+            && verify_job.contains("WASM verification completed with ${{ needs.wasm.result }}")
+            && verify_job.contains("Download verified WASM handoff")
+            && !verify_job.contains("task ci:pr:wasm")
+            && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
         ),
-        "PR preview artifacts must target the isolated Simple Vault alias"
+        "PR preview must surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
     );
-    let full_e2e_job = pr
-        .split_once("  full-e2e:\n")
-        .expect("PR CI must define the label-selected full e2e job")
+    let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
+    assert!(
+        full_e2e_job.contains("needs: wasm")
+            && full_e2e_job.contains("Download verified WASM handoff")
+            && full_e2e_job.contains("cache-write: \"false\"")
+            && full_e2e_job.contains("task ci:pr:e2e:web:artifacts")
+            && !full_e2e_job.contains("task ci:pr:e2e\n")
+            && !full_e2e_job.contains("task ci:pr:wasm"),
+        "Main-fix web e2e must consume verified WASM without rebuilding Rust"
+    );
+    let extension_e2e_job = pr
+        .split_once("  full-extension-e2e:\n")
+        .expect("PR CI must define the label-selected extension e2e job")
         .1;
     assert!(
-        full_e2e_job.contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
-        "Main-fix browser e2e must explicitly use its runner-local Simple Vault"
+        extension_e2e_job.contains("needs: wasm")
+            && extension_e2e_job.contains("Download verified WASM handoff")
+            && !extension_e2e_job.contains("cache-write: \"false\"")
+            && extension_e2e_job.contains("task ci:pr:e2e:extension:artifacts")
+            && !extension_e2e_job.contains("task ci:pr:e2e\n")
+            && !extension_e2e_job.contains("task ci:pr:wasm")
+            && extension_e2e_job
+                .contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
+        "Main-fix extension e2e must consume verified WASM without rebuilding Rust"
+    );
+    let ci_tasks = read(&root, "nook-app/.task/ci.yml");
+    let artifact_e2e = section(
+        &ci_tasks,
+        "  ci:pr:e2e:web:artifacts:\n",
+        "  ci:pr:e2e:local:\n",
+    );
+    assert!(
+        artifact_e2e.contains("task: docker:ci:web:e2e:build")
+            && artifact_e2e.contains("vars: { TASK: _ci:main:web:e2e-only }")
+            && artifact_e2e.contains("vars: { TASK: _extension:test:e2e }")
+            && !artifact_e2e.contains("task: setup")
+            && !artifact_e2e.contains("task: preflight"),
+        "artifact-backed web and extension e2e must build only their browser images"
+    );
+    let e2e_only = section(
+        &ci_tasks,
+        "  _ci:main:web:e2e-only:\n",
+        "  _ci:nightly:e2e:\n",
+    );
+    assert!(
+        e2e_only.contains("_web:test:e2e:parallel")
+            && e2e_only.contains("_web:test:e2e:isolation")
+            && !e2e_only.contains("internal: true")
+            && !e2e_only.contains("_extension:test:e2e")
+            && !e2e_only.contains("_ci:main:build"),
+        "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
     let native_job_lookup = pr
         .find("native_job=\"$(")
@@ -995,11 +1065,12 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
         "release must initialize Docker from the workflow ref before checking out an older source"
     );
     assert!(
-        !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
+        pr.contains("name: pr-wasm-${{ github.run_id }}")
+            && !pr.contains("name: pr-wasm-${{ github.run_id }}-${{ github.run_attempt }}")
             && !pr
                 .contains("ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}")
             && !pr.contains("needs: [rust, wasm]"),
-        "PR CI must not round-trip WASM through a third runner or key Rust handoffs to a rerun attempt"
+        "split-CI handoffs must remain run-stable for failed-job reruns"
     );
 
     let main = read(&root, ".github/workflows/main.yml");

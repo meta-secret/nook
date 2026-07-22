@@ -14,7 +14,7 @@ target "builder-wasm" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_wasm_source_cache_from
 }
 
 target "_nook-rust-fast-common" {
@@ -36,7 +36,7 @@ target "rust-format-check" {
   contexts = {
     builder-debug = "target:builder-debug"
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_native_source_cache_from
 }
 
 target "wasm-export" {
@@ -51,7 +51,8 @@ target "wasm-export" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_wasm_source_cache_from
+  cache-to   = rust_wasm_source_cache_to
 }
 
 // Small scratch output exported to the host between the parallel prepare phase and slim web build.
@@ -68,7 +69,8 @@ target "web-artifacts" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_wasm_source_cache_from
+  cache-to   = rust_wasm_source_cache_to
 }
 
 // Source-sealed Rust runtime used only by explicit rust/wasm Task commands.
@@ -84,7 +86,7 @@ target "_nook-rust-common" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_wasm_source_cache_from
 }
 
 // Manual browser-wasm test image; Playwright is deliberately absent from the common Rust branch.
@@ -100,5 +102,5 @@ target "_nook-rust-browser-common" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_source_cache_from
+  cache-from = rust_wasm_source_cache_from
 }

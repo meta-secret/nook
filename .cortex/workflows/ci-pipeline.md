@@ -171,10 +171,17 @@ after the known immediate BuildKit frontend/Dockerfile-load flake, without
 repeating the multi-minute Rust/WASM and dependency graph.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
-That label adds the `Full browser e2e (main fix)` job to the ordinary PR
-workflow and runs `task ci:pr:e2e`, including the full deterministic
-local-provider, split-app isolation, and extension suites before merge. The task
-uses the same bounded BuildKit health/recovery wrapper as Main. Adding
+That label adds the `Full browser e2e (main fix)` and `Full extension e2e
+(main fix)` jobs to the ordinary PR workflow. A dedicated producer verifies
+WASM once and uploads only its generated package; preview and both browser jobs
+download that artifact instead of recompiling Rust. The two browser jobs build
+the Chromium image and run deterministic local-provider plus split-app tests
+and extension e2e on separate hosted runners through
+`task ci:pr:e2e:web:artifacts` and
+`task ci:pr:e2e:extension:artifacts`. Both tasks use the same bounded BuildKit
+health/recovery wrapper as Main. The extension consumer owns the shared e2e
+cache export; the longer web consumer restores that cache without spending
+another two minutes uploading identical browser layers. Adding
 or removing the label retriggers PR Actions for the current head. Because the
 readiness audit already requires the exact-head `PR` workflow to succeed, a
 labeled PR cannot be ready while this job is queued, red, or cancelled.
@@ -335,14 +342,15 @@ before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
 `cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
 and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
-PR CI uses one explicitly named **Rust/WASM tests, Svelte checks, JS unit tests**
-step. Its single Bake graph runs the `nook-core + nook-auth2` nextest/coverage
-branch, the WASM test/build branch, and web dependency preparation in parallel.
-Do not split Rust into an earlier coverage solve: that serializes the critical
-path and makes a cold Rust cache dominate the whole PR. After verification,
-`task docker:extract:coverage` copies `summary.txt`, `summary.json`, `lcov.info`,
-and `coverage-floor.json` from the already-built image to `coverage/current`.
-That extraction invokes neither BuildKit nor Rust tests.
+PR CI uses independent native Rust and verified-WASM producers. Native Rust runs
+the `nook-core + nook-auth2` nextest/coverage branch and uploads its small coverage
+handoff. The WASM producer runs clippy/build/Node tests once, uploads the generated
+package under a run-stable artifact name, and feeds preview plus optional web and
+extension e2e consumers. `Verify and preview` downloads that WASM package instead
+of compiling Rust, then downloads native coverage after its web build for reporting.
+Do not serialize the producers or move Rust coverage into preview: a cold Rust
+cache must not dominate the web critical path. `task docker:extract:coverage`
+remains a copy-only path that invokes neither BuildKit nor Rust tests.
 
 `task docker:extract:coverage` remains the copy-only path for workflows that
 already have a sealed `nook-web:local` image, including main's commit-keyed
@@ -365,14 +373,14 @@ as the base comparison because the measured source is unchanged.
 **Delivery CI uses GitHub-hosted runners with remote BuildKit layers.** PR,
 main, and release run on fresh `ubuntu-latest` VMs. The shared Docker setup
 creates a `docker-container` builder, exposes GitHub's cache-service runtime,
-and enables separate v2 scopes for stable Rust dependencies, web dependencies,
-browser-free web, and e2e web. PR CI assigns native Rust to one runner and keeps
-WASM plus web verification/build on a second runner. Generated WASM stays local
-to that second runner; native Rust uploads only the small coverage handoff,
-which is downloaded after the web build for reporting. The combined job runs
-without browser e2e, deploys the Cloudflare previews, and records a successful
-`github-pages` deployment status for the PR head SHA. A `ci:full-e2e` PR also
-runs the separate Main-equivalent browser job. The preview deploy reuses that prepared sealed image and
+and enables separate v2 scopes for stable and source-sensitive Rust/WASM layers,
+web dependencies, browser-free web, and e2e web. PR CI assigns native Rust to
+one runner and verified WASM to another. The small generated WASM package feeds
+parallel preview and optional browser-e2e consumers; native Rust separately
+uploads the coverage handoff downloaded after the web build for reporting. The
+preview job runs without browser e2e, deploys the Cloudflare previews, and
+records a successful `github-pages` deployment status for the PR head SHA. A
+`ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs. The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
 `nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
 inputs reuse the exact base commit's main artifact (with a coverage-only build
@@ -391,7 +399,9 @@ parallel worktrees from replacing each other's review/readiness binaries.
 release use GitHub-hosted runners. Main exports the default-branch cache that
 new PRs can restore under GitHub's cache visibility rules; a PR also updates its
 branch cache for later pushes. Separate scopes prevent parallel image lineages
-from overwriting one another.
+from overwriting one another. Native coverage and WASM source-sensitive layers
+have their own GHA BuildKit scopes in addition to the manifest-only dependency
+scopes, so non-Rust pushes do not repeat unchanged Cargo compilation.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
