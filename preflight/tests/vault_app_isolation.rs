@@ -696,16 +696,18 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     );
 
     assert_eq!(
-        warmup.matches("RUN cargo llvm-cov nextest").count(),
+        warmup
+            .matches(
+                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass",
+            )
+            .count(),
         1,
         "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
         "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass"
     ));
-    assert!(
-        dockerfile.contains("RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2")
-    );
+    assert!(dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2"));
     assert!(
         dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
@@ -893,7 +895,7 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
     let wasm_dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
     assert!(
         wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm")
-            && wasm_dockerfile.contains("RUN touch nook-core/src/i18n.rs")
+            && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification and WASM must run as sibling branches, preserve locale rebuilds, and join only small outputs"
     );

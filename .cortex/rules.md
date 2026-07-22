@@ -121,6 +121,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
 - **Harness Verification:**
   - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. PR CI and local optional mirrors use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
+  - Infrastructure automation must be defined directly in `infra/Taskfile.yml`. Do not add standalone shell scripts anywhere under `infra/`; repository preflight enforces this boundary.
   - Before every push, agents and developers must run **`task format`
     unconditionally**. It formats Rust and JS/TS/Svelte inside sealed Docker
     images **and applies the diff to the host working tree**. Sealed-only

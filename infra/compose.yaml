@@ -1,0 +1,107 @@
+name: nook-infra
+
+services:
+  redis:
+    image: redis:8.2.2-alpine@sha256:59b6e694653476de2c992937ebe1c64182af4728e54bb49e9b7a6c26614d8933
+    command:
+      - sh
+      - -ec
+      - >-
+        password="$$(cat /run/secrets/redis-password)";
+        mkdir -p /run/redis;
+        chown redis:redis /run/redis;
+        chmod 0700 /run/redis;
+        umask 077;
+        printf '%s\n'
+        'bind 0.0.0.0'
+        'protected-mode no'
+        "requirepass $$password"
+        'appendonly yes'
+        'appendfsync everysec'
+        'maxmemory 12gb'
+        'maxmemory-policy allkeys-lru'
+        > /run/redis/redis.conf;
+        chown redis:redis /run/redis/redis.conf;
+        exec /usr/local/bin/docker-entrypoint.sh redis-server /run/redis/redis.conf
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:6380:6379
+    volumes:
+      - redis-data:/data
+    secrets:
+      - redis-password
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "REDISCLI_AUTH=$$(cat /run/secrets/redis-password) redis-cli ping",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 14g
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.7.2@sha256:4f6655284ab3d252b7f28fedb19fe6c8fc82ee5b1295c20ac74d475e5398a52d
+    user: "1000:1000"
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token-file
+      - /run/secrets/cloudflare-tunnel-token
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    secrets:
+      - cloudflare-tunnel-token
+    mem_limit: 256m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  registry:
+    image: registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:5000:5000
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5000
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    volumes:
+      - registry-data:/var/lib/registry
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5000/v2/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 1g
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  redis-data:
+  registry-data:
+
+secrets:
+  redis-password:
+    file: ./secrets/redis-password
+  cloudflare-tunnel-token:
+    file: ./secrets/cloudflare-tunnel-token

@@ -6,6 +6,18 @@ inputs:
     description: Allow this workflow source to update the shared hosted BuildKit cache scopes.
     required: false
     default: "true"
+  cache-redis-password:
+    description: Password for the persistent remote Rust compiler cache.
+    required: false
+    default: ""
+  cache-cloudflare-client-id:
+    description: Cloudflare Access service-token client ID for the persistent cache.
+    required: false
+    default: ""
+  cache-cloudflare-client-secret:
+    description: Cloudflare Access service-token secret for the persistent cache.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -40,6 +52,13 @@ runs:
     - name: Setup Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
+
+    - name: Configure persistent Rust compiler cache
+      uses: ./.github/actions/nook-cache-connect
+      with:
+        cache-redis-password: ${{ inputs.cache-redis-password }}
+        cache-cloudflare-client-id: ${{ inputs.cache-cloudflare-client-id }}
+        cache-cloudflare-client-secret: ${{ inputs.cache-cloudflare-client-secret }}
 
     # Inline `task`/Bake calls do not receive GitHub's cache-service token automatically. This
     # helper exposes ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL as documented by Docker for `type=gha`.

@@ -1,0 +1,20 @@
+name: Connect Nook Rust cache
+description: Materialize cache credentials as runner-local files and invoke the silent infra task.
+
+inputs:
+  cache-redis-password:
+    description: Password for the persistent remote Rust compiler cache.
+    required: false
+    default: ""
+  cache-cloudflare-client-id:
+    description: Cloudflare Access service-token client ID for the persistent cache.
+    required: false
+    default: ""
+  cache-cloudflare-client-secret:
+    description: Cloudflare Access service-token secret for the persistent cache.
+    required: false
+    default: ""
+
+runs:
+  using: node24
+  main: main.js
