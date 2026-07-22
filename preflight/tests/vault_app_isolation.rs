@@ -488,6 +488,15 @@ fn extension_e2e_waits_for_a_persistent_x_server() {
             "{script} must use the readiness-checked Xvfb wrapper"
         );
     }
+
+    let playwright = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/playwright.config.ts",
+    );
+    assert!(
+        playwright.contains("workers: isCi ? 1 : undefined"),
+        "hosted headed extension tests must not compete for Chromium/Xvfb resources"
+    );
 }
 
 #[test]
