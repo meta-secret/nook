@@ -25,12 +25,13 @@ tasks:
           test "$ID" = ubuntu
           test "$VERSION_ID" = 26.04
           test "$(uname -m)" = x86_64
-          for command in /usr/bin/apt-get /usr/bin/gpg /usr/bin/tee /usr/bin/warp-cli; do
-            if ! sudo -n -l "$command" >/dev/null 2>&1; then
-              echo "infra mesh: $USER needs passwordless sudo for $command" >&2
-              exit 77
-            fi
+          for command in /usr/bin/apt-get /usr/bin/tee; do
+            test -x "$command"
           done
+          if ! sudo -n true >/dev/null 2>&1; then
+            echo "infra mesh: $USER needs passwordless sudo" >&2
+            exit 77
+          fi
           if systemctl --type=service --state=running --no-pager --no-legend |
             grep -Eiq "(tailscale|wireguard|openvpn|dnsmasq|named|bind|unbound)"; then
             echo "infra mesh: refusing to install alongside another VPN or DNS service" >&2
@@ -40,10 +41,10 @@ tasks:
         INFRA_MESH_SSH_TARGET="$ssh_target" \
         INFRA_MESH_NODE_NAME="$node_name" \
         INFRA_CLOUDFLARE_ACCOUNT_ID="$account_id" \
-          node --input-type=commonjs <<'NODE'
+          node --input-type=module <<'NODE'
         "use strict";
 
-        const { execFileSync, spawnSync } = require("node:child_process");
+        import { execFileSync, spawnSync } from "node:child_process";
 
         const sshTarget = process.env.INFRA_MESH_SSH_TARGET;
         const nodeName = process.env.INFRA_MESH_NODE_NAME;
@@ -82,17 +83,10 @@ tasks:
           created = true;
         }
 
-        let connectorToken = node.token;
-        if (!connectorToken) {
-          const tokenResult = await cloudflare(`/warp_connector/${node.id}/token`);
-          connectorToken = typeof tokenResult === "string" ? tokenResult : tokenResult.token;
-        }
-        if (typeof connectorToken !== "string" || connectorToken.length < 20) {
-          throw new Error("Cloudflare Mesh did not return a usable connector token");
-        }
-
         const remoteScript = `set -euo pipefail
         export DEBIAN_FRONTEND=noninteractive
+        sudo -n apt-get update -qq
+        sudo -n apt-get install -y -qq ca-certificates curl gpg
         curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg |
           sudo -n gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
         . /etc/os-release
@@ -100,9 +94,100 @@ tasks:
           sudo -n tee /etc/apt/sources.list.d/cloudflare-client.list >/dev/null
         sudo -n apt-get update -qq
         sudo -n apt-get install -y -qq cloudflare-warp
-        if ! sudo -n warp-cli registration show >/dev/null 2>&1; then
-          sudo -n warp-cli connector new '${connectorToken.replaceAll("'", "'\\''")}'
+        `;
+
+        async function requireSuccess(result, operation) {
+          if (!result.error && result.status === 0) return;
+          if (created) {
+            await cloudflare(`/warp_connector/${node.id}`, { method: "DELETE" });
+          }
+          throw result.error || new Error(`${operation} failed with status ${result.status}`);
+        }
+
+        const install = spawnSync(
+          "ssh",
+          ["-o", "BatchMode=yes", sshTarget, "bash -s"],
+          { input: remoteScript, encoding: "utf8", stdio: ["pipe", "inherit", "inherit"] },
+        );
+        await requireSuccess(install, "Mesh node package installation");
+
+        const registration = spawnSync(
+          "ssh",
+          ["-o", "BatchMode=yes", sshTarget, "sudo -n /usr/bin/warp-cli registration show"],
+          { stdio: "ignore" },
+        );
+
+        if (registration.status !== 0) {
+          let connectorToken = node.token;
+          if (!connectorToken) {
+            const tokenResult = await cloudflare(`/warp_connector/${node.id}/token`);
+            connectorToken = typeof tokenResult === "string" ? tokenResult : tokenResult.token;
+          }
+          if (typeof connectorToken !== "string" || connectorToken.length < 20) {
+            throw new Error("Cloudflare Mesh did not return a usable connector token");
+          }
+
+          const enrollmentHelper = String.raw`#!/usr/bin/env bash
+        set -euo pipefail
+
+        if systemctl is-active --quiet auditd; then
+          echo "infra mesh: refusing connector enrollment while auditd is active" >&2
+          exit 79
         fi
+        if command -v auditctl >/dev/null 2>&1 &&
+          auditctl -s 2>/dev/null | grep -Eq '^enabled[[:space:]]+[12]$'; then
+          echo "infra mesh: refusing connector enrollment while kernel auditing is enabled" >&2
+          exit 79
+        fi
+
+        original_hidepid="$(findmnt -n -o OPTIONS /proc | tr ',' '\n' | sed -n 's/^hidepid=//p' | tail -1)"
+        if test -z "$original_hidepid"; then original_hidepid=0; fi
+        restore_proc() {
+          connector_token=
+          mount -o remount,hidepid="$original_hidepid" /proc
+        }
+        trap restore_proc EXIT
+        trap 'exit 130' HUP INT TERM
+        mount -o remount,hidepid=2 /proc
+
+        IFS= read -r connector_token
+        token_length="$(printf '%s' "$connector_token" | wc -c)"
+        test "$token_length" -ge 20
+        /usr/bin/warp-cli connector new "$connector_token"
+        connector_token=
+        `;
+
+          const helperInstall = spawnSync(
+            "ssh",
+            [
+              "-o",
+              "BatchMode=yes",
+              sshTarget,
+              "sudo -n tee /run/nook-warp-enroll >/dev/null && sudo -n chmod 0700 /run/nook-warp-enroll",
+            ],
+            { input: enrollmentHelper, encoding: "utf8", stdio: ["pipe", "inherit", "inherit"] },
+          );
+          await requireSuccess(helperInstall, "Mesh enrollment helper installation");
+
+          const enroll = spawnSync(
+            "ssh",
+            ["-o", "BatchMode=yes", sshTarget, "sudo -n /run/nook-warp-enroll"],
+            {
+              input: `${connectorToken}\n`,
+              encoding: "utf8",
+              stdio: ["pipe", "inherit", "inherit"],
+            },
+          );
+          connectorToken = "";
+          spawnSync(
+            "ssh",
+            ["-o", "BatchMode=yes", sshTarget, "sudo -n rm -f /run/nook-warp-enroll"],
+            { stdio: "ignore" },
+          );
+          await requireSuccess(enroll, "Mesh connector enrollment");
+        }
+
+        const connectScript = `set -euo pipefail
         sudo -n warp-cli connect
         for _ in $(seq 1 30); do
           if sudo -n warp-cli status 2>/dev/null | grep -q 'Status update: Connected'; then
@@ -114,18 +199,12 @@ tasks:
         ip -brief address | grep CloudflareWARP
         `;
 
-        const install = spawnSync(
+        const connect = spawnSync(
           "ssh",
           ["-o", "BatchMode=yes", sshTarget, "bash -s"],
-          { input: remoteScript, encoding: "utf8", stdio: ["pipe", "inherit", "inherit"] },
+          { input: connectScript, encoding: "utf8", stdio: ["pipe", "inherit", "inherit"] },
         );
-        connectorToken = "";
-        if (install.error || install.status !== 0) {
-          if (created) {
-            await cloudflare(`/warp_connector/${node.id}`, { method: "DELETE" });
-          }
-          throw install.error || new Error(`Mesh node installation failed with status ${install.status}`);
-        }
+        await requireSuccess(connect, "Mesh connection");
 
         const connections = await cloudflare(`/warp_connector/${node.id}/connections`);
         if (!Array.isArray(connections) || connections.length === 0) {
