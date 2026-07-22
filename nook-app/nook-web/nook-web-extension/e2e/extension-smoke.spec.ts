@@ -23,6 +23,7 @@ import {
   simpleVaultUrl,
 } from '../src/lib/simple-vault-target'
 import { startMockAuthServer } from './mock-auth'
+import { waitForExtensionPairingReady } from './helpers/extension-approval'
 
 const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
 
@@ -155,6 +156,44 @@ async function getServiceWorker(context: BrowserContext) {
   )
 }
 
+async function launchExtensionContext(userDataDir: string) {
+  await mkdir(userDataDir, { recursive: true })
+  return chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    executablePath: chromiumExecutablePath,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+    ],
+  })
+}
+
+async function setupPasskeyExtensionPopup(
+  context: BrowserContext,
+): Promise<Page> {
+  const worker = await getServiceWorker(context)
+  const extensionId = new URL(worker.url()).host
+  const popupPage = await context.newPage()
+  await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+  await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+  await popupPage.getByTestId('device-protection-setup-btn').click()
+  await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
+  return popupPage
+}
+
+async function openSimpleVaultConnection(
+  context: BrowserContext,
+  popupPage: Page,
+): Promise<Page> {
+  const openedConnectPage = context.waitForEvent('page')
+  await popupPage.getByTestId('connect-simple-vault-btn').click()
+  const simplePage = await openedConnectPage
+  await expect(simplePage).toHaveURL((url) =>
+    belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+  )
+  return simplePage
+}
+
 async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
   return worker.evaluate(
@@ -239,16 +278,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')
-  await mkdir(userDataDir, { recursive: true })
-
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
-    executablePath: chromiumExecutablePath,
-    args: [
-      `--disable-extensions-except=${extensionDir}`,
-      `--load-extension=${extensionDir}`,
-    ],
-  })
+  const context = await launchExtensionContext(userDataDir)
 
   await context.route('**/*', (route) => {
     const url = route.request().url()
@@ -559,39 +589,14 @@ test('creates a passkey from browser-native WASM options after extension messagi
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
 
   const userDataDir = testInfo.outputPath('chromium-profile')
-  await mkdir(userDataDir, { recursive: true })
-
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
-    executablePath: chromiumExecutablePath,
-    args: [
-      `--disable-extensions-except=${extensionDir}`,
-      `--load-extension=${extensionDir}`,
-    ],
-  })
+  const context = await launchExtensionContext(userDataDir)
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
-    const worker = await getServiceWorker(context)
-    const extensionId = new URL(worker.url()).host
-    const popupPage = await context.newPage()
-    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
-
-    await popupPage.getByTestId('device-protection-setup-btn').click()
-    await expect(
-      popupPage.getByTestId('extension-companion-home'),
-    ).toBeVisible()
+    const popupPage = await setupPasskeyExtensionPopup(context)
     await expect(popupPage.getByTestId('open-simple-vault-btn')).toBeVisible()
     await expect(popupPage.getByTestId('stay-as-companion-btn')).toBeVisible()
-
-    const openedConnectPage = context.waitForEvent('page')
-    await popupPage.getByTestId('connect-simple-vault-btn').click()
-    const simplePage = await openedConnectPage
-
-    await expect(simplePage).toHaveURL((url) =>
-      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
-    )
+    await openSimpleVaultConnection(context, popupPage)
   } finally {
     await context.close()
   }
@@ -606,16 +611,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
   const userDataDir =
     process.env.NOOK_EXTENSION_E2E_PROFILE_DIR ||
     testInfo.outputPath('chromium-profile')
-  await mkdir(userDataDir, { recursive: true })
-
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
-    executablePath: chromiumExecutablePath,
-    args: [
-      `--disable-extensions-except=${extensionDir}`,
-      `--load-extension=${extensionDir}`,
-    ],
-  })
+  const context = await launchExtensionContext(userDataDir)
   const loginServer = await startLoginServer()
   const website = isHostedSmoke ? undefined : await context.newPage()
   await website?.goto(`${loginServer.origin}/login`)
@@ -624,21 +620,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
-    const worker = await getServiceWorker(context)
-    const extensionId = new URL(worker.url()).host
-    const popupPage = await context.newPage()
-    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
-    await popupPage.getByTestId('device-protection-setup-btn').click()
-    await expect(
-      popupPage.getByTestId('extension-companion-home'),
-    ).toBeVisible()
-    const openedConnectPage = context.waitForEvent('page')
-    await popupPage.getByTestId('connect-simple-vault-btn').click()
-    const simplePage = await openedConnectPage
-    await expect(simplePage).toHaveURL((url) =>
-      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
-    )
+    const popupPage = await setupPasskeyExtensionPopup(context)
+    const simplePage = await openSimpleVaultConnection(context, popupPage)
     const connectUrl = new URL(simplePage.url())
     const extensionDeviceId = connectUrl.searchParams.get('device_id')
     const extensionDevicePublicKey =
@@ -718,33 +701,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     }
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
-    await expect
-      .poll(
-        async () => {
-          if (
-            await simplePage
-              .getByTestId('extension-connect-approved')
-              .isVisible()
-          ) {
-            return 'approved'
-          }
-          const alerts = await simplePage.getByRole('alert').allTextContents()
-          return alerts.at(-1) ?? 'pending'
-        },
-        { timeout: 15_000 },
-      )
-      .toBe('approved')
-
-    await expect
-      .poll(async () => {
+    await waitForExtensionPairingReady(
+      simplePage,
+      async () => {
         const storage = await readExtensionStorage(context)
         return storage[setupStorageKey]
-      })
-      .toMatchObject({
-        status: 'ready',
-        selectedVaultName: extensionApprovalVaultName,
-        eventCount: expect.any(Number),
-      })
+      },
+      extensionApprovalVaultName,
+    )
     const pairedStorage = await readExtensionStorage(context)
     const pairedGrant = Object.entries(pairedStorage).find(([key]) =>
       key.startsWith('nook:extension-pairing-grant:'),
@@ -921,18 +885,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         async () =>
           fillLoginPage.evaluate(
             () =>
-              (
+              typeof (
                 window as Window & {
                   __nookLoginSubmitted?: {
                     email: string
                     password: string
-                  } | null
+                  }
                 }
-              ).__nookLoginSubmitted,
+              ).__nookLoginSubmitted === 'object',
           ),
         { timeout: 20_000 },
       )
-      .not.toBeNull()
+      .toBe(true)
     const submittedLogin = await fillLoginPage.evaluate(
       () =>
         (
@@ -940,7 +904,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
             __nookLoginSubmitted?: {
               email: string
               password: string
-            } | null
+            }
           }
         ).__nookLoginSubmitted,
     )

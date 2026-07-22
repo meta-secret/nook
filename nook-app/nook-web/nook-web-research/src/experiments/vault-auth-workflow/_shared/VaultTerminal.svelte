@@ -30,9 +30,16 @@
   interface Props {
     onBack: () => void
     initialName?: string
+    backLabel?: string
+    backPositionClass?: string
   }
 
-  let { onBack, initialName = '' }: Props = $props()
+  let {
+    onBack,
+    initialName = '',
+    backLabel = 'Auth chooser',
+    backPositionClass = 'left-36',
+  }: Props = $props()
   const seededName = untrack(() => initialName.trim())
   let step = $state<WizardStep>(seededName ? 'total' : 'name')
   let promptValue = $state('')
@@ -239,11 +246,11 @@
   class="min-h-screen bg-[#090b09] p-4 pt-20 font-mono text-[#b7ff95] sm:p-10 sm:pt-24"
 >
   <button
-    class="fixed top-5 left-36 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
+    class={`fixed top-5 ${backPositionClass} z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md`}
     onclick={onBack}
   >
     <ArrowLeft class="size-4" aria-hidden="true" />
-    Auth chooser
+    {backLabel}
   </button>
   <section
     class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-[#41613b] bg-[#030503] shadow-[0_0_80px_rgb(93_255_103/0.08)]"

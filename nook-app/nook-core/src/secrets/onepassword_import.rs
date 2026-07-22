@@ -238,24 +238,11 @@ fn append_onepassword_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    let metadata = metadata
-        .into_iter()
-        .filter(|(_, value)| !value.trim().is_empty())
-        .collect::<Vec<_>>();
-    if metadata.is_empty() {
-        return;
-    }
-    if !notes.is_empty() {
-        notes.push_str("\n\n");
-    }
-    notes.push_str("## 1Password");
-    notes.push_str("\n- format: 1PUX");
-    for (key, value) in metadata {
-        notes.push_str("\n- ");
-        notes.push_str(&key);
-        notes.push_str(": ");
-        notes.push_str(&value);
-    }
+    super::import_support::append_import_metadata(
+        notes,
+        "1Password",
+        std::iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
+    );
 }
 
 fn normalized_field_name(field: &OnePasswordField) -> String {

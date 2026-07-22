@@ -435,6 +435,7 @@ impl NookVaultManager {
             self.apply_event_projection_to_session().await?;
         }
         self.persist_projection_cache().await?;
+        self.purge_legacy_plaintext_search_catalog().await?;
         self.sentinel_unlock = None;
         Ok(self.get_records()?)
     }

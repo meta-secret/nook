@@ -263,11 +263,11 @@ root/
 
 ```text
 [Svelte] → prepareSecretSearch() on the first non-empty query
-         → load IndexedDB secret_search:{store_id}
-         → verify vault-keyed row tags and reconcile by ciphertext digest
+         → load + decrypt IndexedDB secret_search_v2:{store_id}:{bucket}
+         → verify authenticated buckets and reconcile by ciphertext digest
            (decrypt new, changed, or invalid rows only)
-         → persist public SecretListItem fields; never secret values
-         → nook-core::SecretSearchCatalog::query over normalized public text
+         → encrypt only changed ID-derived buckets; vault open already deleted the legacy plaintext key
+         → nook-core::SecretSearchCatalog::query over normalized in-memory text
          → return the requested metadata page without record decryption
 ```
 
@@ -279,7 +279,7 @@ root/
 | -------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Session (plaintext user secrets)       | Typed `Database` records                                      | WASM memory only                                                                                                                                                               |
 | On-disk user secrets                   | YAML `secrets:` list                                          | Values encrypted with `secrets_key`                                                                                                                                            |
-| Local search catalog                   | Versioned JSON `SecretListItem` projection                    | IndexedDB `secret_search:{store_id}`; intentionally public list/search fields only, integrity-bound to the vault key and encrypted-record digest                               |
+| Local search catalog                   | Age-encrypted, authenticated `SecretListItem` buckets         | IndexedDB `secret_search_v2:{store_id}:{bucket}`; decrypted into WASM memory only while unlocked, with bucket assignment derived from opaque secret ids                         |
 | Logical secret store                   | YAML `store_id`                                               | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md))                                                             |
 | Vault revision                         | YAML `vault_version`                                          | Monotonic counter; incremented on every save ([unified-vault.md](design-docs/unified-vault.md))                                                                                |
 | Active unlock mode                     | YAML `unlock:` tagged union (omitted when keys — the default) | `{type: password, …}` for password-only vaults; device-key vaults use `auth:` (+ optional `password_entries`). See [password-envelope.md](product-specs/password-envelope.md). |

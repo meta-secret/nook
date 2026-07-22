@@ -2,6 +2,10 @@
   import { onMount } from 'svelte'
   import { findMockAuthAccount, MOCK_AUTH_ACCOUNTS } from '../../accounts'
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
+  import {
+    credentialsFromLoginSubmit,
+    resetLoginSubmission,
+  } from '../lib/login-form'
   import { navigate, recordLoginSubmission } from '../lib/navigation'
   import { setPendingTotpSession } from '../lib/session'
 
@@ -11,24 +15,16 @@
 
   let error = $state('')
 
-  onMount(() => {
-    ;(
-      window as Window & {
-        __nookLoginSubmitted?: { email: string; password: string } | null
-      }
-    ).__nookLoginSubmitted = null
-  })
+  onMount(resetLoginSubmission)
 
   function onsubmit(event: SubmitEvent) {
-    event.preventDefault()
-    const form = event.currentTarget
-    if (!(form instanceof HTMLFormElement)) return
-    const username =
-      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? ''
-    const password =
-      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
-    recordLoginSubmission(username, password)
-    const account = findMockAuthAccount(username, password)
+    const credentials = credentialsFromLoginSubmit(event)
+    if (!credentials) return
+    recordLoginSubmission(credentials.username, credentials.password)
+    const account = findMockAuthAccount(
+      credentials.username,
+      credentials.password,
+    )
     if (!account?.totpSecret) {
       error = 'Invalid username or password.'
       return

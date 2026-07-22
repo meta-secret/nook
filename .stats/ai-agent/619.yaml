@@ -1,0 +1,119 @@
+schema_version: 2
+source_pr:
+  number: 619
+  url: https://github.com/meta-secret/nook/pull/619
+  title: Document privileged Cloudflare MCP agent access
+  change_surface: docs_cortex_cloudflare_mcp
+  head_sha: 6cfb4d6ce56716cfb463e3125d11dbadfc868e6b
+  started_at: 2026-07-22T07:10:31Z
+  opened_at: 2026-07-22T07:20:45Z
+  merged_at: 2026-07-22T07:22:07Z
+  elapsed_seconds: 696
+  open_to_merge_seconds: 82
+summary:
+  local_execution_count: 8
+  local_check_count: 8
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 916
+  github_actions_run_count: 0
+  github_actions_seconds: 0
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 2
+test_inventory:
+  measured_at: 2026-07-22T07:29:40Z
+  head_sha: 6cfb4d6ce56716cfb463e3125d11dbadfc868e6b
+  by_type:
+    rust: 627
+    preflight: 31
+    web_unit: 236
+    e2e: 199
+  total: 1093
+local_executions:
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-22T07:11:02Z
+    finished_at: 2026-07-22T07:11:03Z
+    duration_seconds: 1
+    outcome: passed
+    reason: documentation_diff_hygiene
+  - command: task format
+    category: check
+    started_at: 2026-07-22T07:11:14Z
+    finished_at: 2026-07-22T07:20:12Z
+    duration_seconds: 538
+    outcome: passed
+    reason: required_pre_push_hygiene
+  - command: git diff --check
+    category: check
+    started_at: 2026-07-22T07:20:17Z
+    finished_at: 2026-07-22T07:20:18Z
+    duration_seconds: 1
+    outcome: passed
+    reason: precommit_documentation_validation
+  - command: task pr:preflight PR=619
+    category: check
+    started_at: 2026-07-22T07:21:03Z
+    finished_at: 2026-07-22T07:21:11Z
+    duration_seconds: 8
+    outcome: passed
+    reason: initial_policy_and_feedback_snapshot
+  - command: task pr:ready PR=619
+    category: check
+    started_at: 2026-07-22T07:21:26Z
+    finished_at: 2026-07-22T07:21:31Z
+    duration_seconds: 5
+    outcome: passed
+    reason: exact_head_readiness_before_merge
+  - command: task pr:ready PR=619
+    category: check
+    started_at: 2026-07-22T07:21:53Z
+    finished_at: 2026-07-22T07:22:01Z
+    duration_seconds: 8
+    outcome: passed
+    reason: revalidate_exact_head_before_admin_merge
+  - command: cargo nextest list nook-core and nook-auth2 in nook-rust image
+    category: check
+    started_at: 2026-07-22T07:22:59Z
+    finished_at: 2026-07-22T07:28:53Z
+    duration_seconds: 354
+    outcome: passed
+    reason: merged_head_rust_inventory_cold_compile
+  - command: compare latest measured inventory head with merged head
+    category: check
+    started_at: 2026-07-22T07:29:39Z
+    finished_at: 2026-07-22T07:29:40Z
+    duration_seconds: 1
+    outcome: passed
+    reason: confirm_only_cortex_and_stats_changed_since_pr_610_inventory
+github_actions_runs: []
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-22T07:21:41Z
+    method: squash
+    outcome: blocked
+    reason: ruleset_required_deployment_on_path_ignored_cortex_pr
+  - at: 2026-07-22T07:22:07Z
+    method: squash_admin
+    outcome: success
+    reason: exact_head_readiness_passed_with_no_applicable_repository_workflow
+comparison:
+  baseline_prs: [574, 598]
+  baseline_quality: comparable
+  baseline_note: Recent cortex-only process documentation PRs; 574 predates the GitHub-Actions-only local policy and 598 used the current policy.
+  elapsed_seconds_change_percent: -43.3
+  local_execution_seconds_change_percent: 83.8
+  github_actions_seconds_change_percent: -100.0
+  test_inventory_total_change: 47
+  regression: true
+  regression_reasons:
+    - Local execution time exceeded the comparable baseline threshold because a cold worktree made required task format rebuild Rust, WASM, and web images and the post-merge Rust inventory cold-compiled again.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The cortex-only path triggered no repository-owned PR workflow; exact-head readiness passed with no required workflow, and the ruleset required the documented admin merge path.
+    - Required task format took 538 seconds in the cold worktree and dominated pre-push time despite the documentation-only diff.
+    - Post-merge Rust inventory took another 354 seconds in an ephemeral container. Counts were carried forward from PR 610 only after proving that the intervening merged diff changed no test-bearing paths.
+    - The local-time regression is isolated to cold environment and mandatory inventory setup; the implementation PR itself opened and merged in 82 seconds with no redundant workflow retrigger.
+  required_actions: []

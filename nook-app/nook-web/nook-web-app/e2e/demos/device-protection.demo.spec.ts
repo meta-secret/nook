@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
-import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from '../helpers'
+import {
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectEmptyLocalFolderRejected,
+} from '../helpers'
 
 const DEMO_BEAT_MS = 700
 
@@ -102,20 +105,6 @@ test('reject an empty folder before existing-vault recovery', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
-  await page.getByTestId('login-connect-storage-btn').click()
-  await expect(page.getByTestId('login-provider-setup')).toBeVisible()
-  await demoBeat(page)
-
-  await page.getByTestId('provider-option-local-folder').click()
-  await page.getByTestId('login-choose-local-folder-btn').click()
-  await expect(page.getByTestId('login-local-folder-selected')).toHaveText(
-    'Nook Backup',
-  )
-  await page.getByTestId('login-connect-local-folder-btn').click()
-
-  await expect(page.getByTestId('vault-error')).toContainText(
-    'No existing vault was found in this provider',
-  )
-  await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+  await expectEmptyLocalFolderRejected(page, () => demoBeat(page))
   await demoBeat(page)
 })

@@ -12,30 +12,8 @@ import {
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForPersistedAppLog,
+  wipeDeviceIdentity,
 } from './helpers'
-
-async function wipeDeviceIdentity(page: import('@playwright/test').Page) {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db')
-        request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('vault', 'readwrite')
-          const store = tx.objectStore('vault')
-          store.delete('device_id')
-          store.delete('device_identity_wrapped')
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () => reject(tx.error ?? new Error('idb delete failed'))
-        }
-      }),
-  )
-}
 
 test.describe('login unlock flow (local-first)', () => {
   test.beforeEach(async ({ page }) => {

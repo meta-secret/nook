@@ -38,9 +38,9 @@ pub use auth::enrollment::{
     EnrollmentState, PersonalCredentialTransfer, PersonalEnrollmentProvider,
     PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     SharedProviderGrant, TypedEnrollmentProvider, build_enrollment_link,
-    decrypt_enrollment_payload, encrypt_enrollment_payload, normalize_enrollment_code,
-    parse_enrollment_envelope, peek_enrollment_entry_id, peek_enrollment_entry_label,
-    peek_enrollment_issued_at,
+    decrypt_enrollment_payload, encrypt_enrollment_payload, is_plausible_email,
+    normalize_enrollment_code, parse_enrollment_envelope, peek_enrollment_entry_id,
+    peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
@@ -48,29 +48,32 @@ pub use auth::mock_passkey::{
     MockPasskeyError, MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyResult,
     MockPasskeyUserAuthorization, StoredMockPasskey,
 };
-pub use auth::multi_device::{
-    AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelParticipantEntry,
-    SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
-    approve_join_request, assess_connect_access, auth_record, build_members_records,
-    count_sentinel_share_records, create_join_request_record,
-    create_join_request_record_with_signing_key, create_sentinel_root_share_records_for_recipients,
-    create_sentinel_share_records, create_sentinel_share_records_for_recipients, dec_auth_id,
-    dec_auth_id_from_public_key, deny_join_request, device_id_from_public_key, device_is_enrolled,
-    encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys,
-    ensure_self_in_roster, explain_connect_blocked, generate_dec, generate_id,
-    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
-    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record,
-    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
-    is_sentinel_share_stored_record, is_vault_meta_record, join_record_key, list_join_requests,
-    member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
-    open_sentinel_share_for_identity, parse_auth_envelopes, parse_join_request,
-    parse_sentinel_share_envelope, pending_join_for_device, reconstruct_sentinel_vault_keys,
-    reconstruct_sentinel_vault_keys_from_opened, rename_vault_member, replace_member_records,
-    resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
-    revoke_vault_member, roster_add_member, sentinel_share_record_key, user_stored_records,
-    vault_has_multi_device_records,
-};
+pub mod multi_device_api {
+    pub use crate::auth::multi_device::{
+        AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
+        MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelParticipantEntry,
+        SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+        approve_join_request, assess_connect_access, auth_record, build_members_records,
+        count_sentinel_share_records, create_join_request_record,
+        create_join_request_record_with_signing_key,
+        create_sentinel_root_share_records_for_recipients, create_sentinel_share_records,
+        create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
+        deny_join_request, device_id_from_public_key, device_is_enrolled, encrypt_for_recipient,
+        encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys,
+        ensure_self_in_roster, explain_connect_blocked, generate_dec, generate_id,
+        generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
+        genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record,
+        is_join_stored_record, is_members_stored_record, is_reserved_device_label,
+        is_sentinel_share_stored_record, is_vault_meta_record, join_record_key, list_join_requests,
+        member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
+        open_sentinel_share_for_identity, parse_auth_envelopes, parse_join_request,
+        parse_sentinel_share_envelope, pending_join_for_device, reconstruct_sentinel_vault_keys,
+        reconstruct_sentinel_vault_keys_from_opened, rename_vault_member, replace_member_records,
+        resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
+        revoke_vault_member, roster_add_member, sentinel_share_record_key, user_stored_records,
+        vault_has_multi_device_records,
+    };
+}
 pub use auth::password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
     attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,
@@ -111,6 +114,7 @@ pub use ids::{
     normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
     validate_store_id,
 };
+pub use multi_device_api::*;
 pub use records::{SecretType, StoredRecordPayload, StoredSecretRecord};
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,

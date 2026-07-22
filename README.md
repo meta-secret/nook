@@ -74,7 +74,8 @@ configured), you lose the vault. Approve at least two devices.
 | Passkey | Website/RP and account metadata; encrypted ES256 credential |
 | Authenticator | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented settings-page QR and attach reviewed backup codes |
 
-Items are searchable through a browser-local catalog of public list fields.
+Items are searchable through a browser-local encrypted catalog of list fields.
+The catalog is decrypted into WASM memory only while the vault is unlocked.
 Passwords, API keys, note bodies, seed phrases, full card numbers, OTP seeds,
 passkey private keys, backup codes, and file contents are excluded. Secret
 values stay masked until revealed. Authenticator items derive the current
@@ -180,7 +181,7 @@ local command
   → IndexedDB event store
   ↔ set union ↔ GitHub (nook-log/v1/events/…)
   → causal DAG + deterministic projection
-  → encrypted session + local public-metadata search catalog
+  → encrypted session + encrypted local search catalog
   → one-record plaintext exposure on reveal/copy (unlocked only)
 ```
 

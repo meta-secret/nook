@@ -2,10 +2,14 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
+import {
+  EVENT_DIGEST_PATTERN,
+  fulfillEventMetadata,
+  parseEventMultipart,
+} from './event-log-stub'
 
 const DEFAULT_FILE_NAME = 'nook-e2e-file-sync'
 const EVENT_LOG_DIR = path.join('nook-log', 'v1', 'events')
-const EVENT_DIGEST_PATTERN = '[A-Za-z0-9_-]{43}'
 const EVENT_FILE_NAME_PATTERN = new RegExp(`^(${EVENT_DIGEST_PATTERN})\\.yaml$`)
 
 function toPosixPath(value: string) {
@@ -89,32 +93,6 @@ export function createLocalE2eFileSyncVaultStub(
       })
     }
     return entries
-  }
-
-  function parseEventMultipart(
-    body: string,
-  ): { digest: string; content: string } | undefined {
-    const eventId = body.match(
-      new RegExp(`"event_id"\\s*:\\s*"sha256u:(${EVENT_DIGEST_PATTERN})"`),
-    )?.[1]
-    const nameDigest = body.match(
-      new RegExp(`"name"\\s*:\\s*"(${EVENT_DIGEST_PATTERN})\\.yaml"`),
-    )?.[1]
-    const digest = eventId ?? nameDigest
-    if (!digest) return undefined
-    const markers = [
-      '\r\nContent-Type: application/x-yaml\r\n\r\n',
-      '\r\nContent-Type: application/json\r\n\r\n',
-    ]
-    const marker = markers.find((candidate) => body.includes(candidate))
-    if (!marker) return undefined
-    const start = body.indexOf(marker)
-    if (start === -1) return undefined
-    const contentStart = start + marker.length
-    const end = body.indexOf('\r\n--nook_event_boundary--', contentStart)
-    const content =
-      end === -1 ? body.slice(contentStart) : body.slice(contentStart, end)
-    return { digest, content }
   }
 
   return {
@@ -273,15 +251,12 @@ export function createLocalE2eFileSyncVaultStub(
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
-            await route.fulfill({
-              status: 200,
-              contentType: 'application/json',
-              body: JSON.stringify({
-                id: driveFileId,
-                name: `${eventDigest}.yaml`,
-                md5Checksum: `e2e-file-event-md5-${eventDigest}`,
-              }),
-            })
+            await fulfillEventMetadata(
+              route,
+              driveFileId,
+              eventDigest,
+              'e2e-file-event-md5-',
+            )
             return
           }
           if (!vaultFileExists) {

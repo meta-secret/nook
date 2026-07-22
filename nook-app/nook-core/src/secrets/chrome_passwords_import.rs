@@ -1,12 +1,13 @@
 //! Chromium-family password CSV conversion into Nook's typed plaintext model.
 
-use csv::{ReaderBuilder, StringRecord, Trim};
+use csv::StringRecord;
 use thiserror::Error;
 
+use super::import_support::{
+    MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
+    normalized_csv_header, optional_csv_field,
+};
 use crate::{LoginSecret, SecretValue};
-
-const MAX_CSV_BYTES: usize = 64 * 1024 * 1024;
-const MAX_RECORDS: usize = 100_000;
 
 #[derive(Debug, Error)]
 pub enum ChromePasswordsImportError {
@@ -36,14 +37,6 @@ struct ChromePasswordColumns {
     note: Option<usize>,
 }
 
-fn normalized_header(header: &str) -> String {
-    header
-        .trim_start_matches('\u{feff}')
-        .trim()
-        .to_ascii_lowercase()
-        .replace([' ', '_', '-'], "")
-}
-
 fn required_column(
     normalized: &[String],
     name: &'static str,
@@ -52,7 +45,7 @@ fn required_column(
     std::iter::once(name)
         .chain(aliases.iter().copied())
         .find_map(|candidate| {
-            let expected = normalized_header(candidate);
+            let expected = normalized_csv_header(candidate);
             normalized.iter().position(|header| header == &expected)
         })
         .ok_or(ChromePasswordsImportError::MissingColumn(name))
@@ -60,13 +53,16 @@ fn required_column(
 
 fn optional_column(normalized: &[String], names: &[&str]) -> Option<usize> {
     names.iter().find_map(|name| {
-        let expected = normalized_header(name);
+        let expected = normalized_csv_header(name);
         normalized.iter().position(|header| header == &expected)
     })
 }
 
 fn columns(headers: &StringRecord) -> Result<ChromePasswordColumns, ChromePasswordsImportError> {
-    let normalized = headers.iter().map(normalized_header).collect::<Vec<_>>();
+    let normalized = headers
+        .iter()
+        .map(normalized_csv_header)
+        .collect::<Vec<_>>();
     Ok(ChromePasswordColumns {
         name: optional_column(&normalized, &["name", "title"]),
         url: required_column(&normalized, "url", &["website url", "website"])?,
@@ -74,18 +70,6 @@ fn columns(headers: &StringRecord) -> Result<ChromePasswordColumns, ChromePasswo
         password: required_column(&normalized, "password", &["secret"])?,
         note: optional_column(&normalized, &["note", "notes"]),
     })
-}
-
-fn field(record: &StringRecord, index: usize) -> String {
-    record.get(index).unwrap_or_default().trim().to_owned()
-}
-
-fn password_field(record: &StringRecord, index: usize) -> String {
-    record.get(index).unwrap_or_default().to_owned()
-}
-
-fn optional_field(record: &StringRecord, index: Option<usize>) -> String {
-    index.map_or_else(String::new, |index| field(record, index))
 }
 
 fn append_name_metadata(notes: &mut String, name: &str, website_url: &str) {
@@ -100,11 +84,11 @@ fn append_name_metadata(notes: &mut String, name: &str, website_url: &str) {
 }
 
 fn convert_record(record: &StringRecord, columns: ChromePasswordColumns) -> Option<SecretValue> {
-    let name = optional_field(record, columns.name);
-    let url = field(record, columns.url);
-    let username = field(record, columns.username);
-    let password = password_field(record, columns.password);
-    let mut notes = optional_field(record, columns.note);
+    let name = optional_csv_field(record, columns.name);
+    let url = csv_field(record, columns.url);
+    let username = csv_field(record, columns.username);
+    let password = csv_password_field(record, columns.password);
+    let mut notes = optional_csv_field(record, columns.note);
 
     if password.is_empty() {
         return None;
@@ -138,31 +122,21 @@ pub fn plan_chrome_passwords_import(
         return Err(ChromePasswordsImportError::CsvTooLarge);
     }
 
-    let mut reader = ReaderBuilder::new()
-        .flexible(true)
-        .trim(Trim::Headers)
-        .from_reader(csv_text.as_bytes());
+    let mut reader = csv_reader(csv_text);
     let columns = columns(reader.headers()?)?;
-    let mut items = Vec::new();
-    let mut source_count = 0;
-    let mut skipped_unsupported = 0;
-
-    for record in reader.records() {
-        if source_count >= MAX_RECORDS {
-            return Err(ChromePasswordsImportError::TooManyRecords);
-        }
-        let record = record?;
-        source_count += 1;
-        match convert_record(&record, columns) {
-            Some(item) => items.push(item),
-            None => skipped_unsupported += 1,
-        }
-    }
+    let collection = collect_csv_records(
+        &mut reader,
+        ChromePasswordsImportError::TooManyRecords,
+        |record| match convert_record(record, columns) {
+            Some(item) => (vec![item], 0),
+            None => (Vec::new(), 1),
+        },
+    )?;
 
     Ok(ChromePasswordsImportPlan {
-        items,
-        source_count,
-        skipped_unsupported,
+        items: collection.items,
+        source_count: collection.source_count,
+        skipped_unsupported: collection.skipped_unsupported,
     })
 }
 

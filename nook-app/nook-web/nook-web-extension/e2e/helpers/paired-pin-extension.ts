@@ -18,6 +18,7 @@ import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './pin-device'
+import { waitForExtensionPairingReady } from './extension-approval'
 
 /** Local Simple Vault from playwright webServer / test-e2e.sh. */
 const LOCAL_E2E_SIMPLE_VAULT_URL = 'http://127.0.0.1:5174/'
@@ -140,31 +141,14 @@ export async function launchPairedPinExtension(
     await expect(consent).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
   }
   await simplePage.getByTestId('approve-extension-device-btn').click()
-  await expect
-    .poll(
-      async () => {
-        if (
-          await simplePage.getByTestId('extension-connect-approved').isVisible()
-        ) {
-          return 'approved'
-        }
-        const alerts = await simplePage.getByRole('alert').allTextContents()
-        return alerts.at(-1) ?? 'pending'
-      },
-      { timeout: 15_000 },
-    )
-    .toBe('approved')
-
-  await expect
-    .poll(async () => {
+  await waitForExtensionPairingReady(
+    simplePage,
+    async () => {
       const storage = await readExtensionStorage(context)
       return storage[setupStorageKey]
-    })
-    .toMatchObject({
-      status: 'ready',
-      selectedVaultName: vaultName,
-      eventCount: expect.any(Number),
-    })
+    },
+    vaultName,
+  )
 
   await simplePage.getByRole('button', { name: 'Done' }).click()
   await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({

@@ -45,15 +45,21 @@ impl DeviceMode {
     }
 }
 
-impl<'de> Deserialize<'de> for DeviceMode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
-    }
+macro_rules! deserialize_with_parse {
+    ($type:ty) => {
+        impl<'de> Deserialize<'de> for $type {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let value = String::deserialize(deserializer)?;
+                Self::parse(&value).map_err(D::Error::custom)
+            }
+        }
+    };
 }
+
+deserialize_with_parse!(DeviceMode);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
 #[serde(rename_all = "kebab-case")]
@@ -190,15 +196,7 @@ impl VaultType {
     }
 }
 
-impl<'de> Deserialize<'de> for VaultType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
-    }
-}
+deserialize_with_parse!(VaultType);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
 #[serde(rename_all = "kebab-case")]
@@ -211,15 +209,7 @@ pub enum ReplicationType {
     Shared,
 }
 
-impl<'de> Deserialize<'de> for ReplicationType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
-    }
-}
+deserialize_with_parse!(ReplicationType);
 
 impl ReplicationType {
     #[must_use]
@@ -680,18 +670,6 @@ pub enum SharedStorageGrantOutcome {
     },
 }
 
-fn is_plausible_shared_email(value: &str) -> bool {
-    let trimmed = value.trim();
-    let Some((local, domain)) = trimmed.split_once('@') else {
-        return false;
-    };
-    !local.is_empty()
-        && domain.contains('.')
-        && !domain.starts_with('.')
-        && !domain.ends_with('.')
-        && !trimmed.chars().any(char::is_whitespace)
-}
-
 /// Validate a shared-grant request and return the grant ceremony outcome.
 ///
 /// Capability lookup is ceremony-agnostic: providers that cannot share return
@@ -713,7 +691,7 @@ pub fn prepare_shared_storage_grant(
     }
     match request.joiner_identity_kind {
         SharedJoinerIdentityKind::Email => {
-            if !is_plausible_shared_email(identity) {
+            if !nook_auth2::is_plausible_email(identity) {
                 return Err(ValidationError::SharedJoinerIdentityInvalid);
             }
         }

@@ -12,6 +12,31 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+function stubExtensionIdentityStatus(status: 'unavailable' | 'locked'): void {
+  document.documentElement.setAttribute(
+    'data-nook-extension-runtime-id',
+    'extension-1',
+  )
+  vi.stubGlobal('chrome', {
+    runtime: {
+      sendMessage: (
+        _extensionId: string,
+        message: { payload: { requestId: string; vaultStoreId: string } },
+        callback: (response: unknown) => void,
+      ) => {
+        callback({
+          type: 'nook:extension-paired-vault-identity-status',
+          payload: {
+            requestId: message.payload.requestId,
+            vaultStoreId: message.payload.vaultStoreId,
+            status,
+          },
+        })
+      },
+    },
+  })
+}
+
 describe('extension install target', () => {
   test('falls back to the marketing install landing page', async () => {
     vi.stubGlobal(
@@ -82,28 +107,7 @@ describe('extension setup status', () => {
   })
 
   test('reports installed_unpaired when the extension is present but not paired', async () => {
-    document.documentElement.setAttribute(
-      'data-nook-extension-runtime-id',
-      'extension-1',
-    )
-    vi.stubGlobal('chrome', {
-      runtime: {
-        sendMessage: (
-          _extensionId: string,
-          message: { payload: { requestId: string; vaultStoreId: string } },
-          callback: (response: unknown) => void,
-        ) => {
-          callback({
-            type: 'nook:extension-paired-vault-identity-status',
-            payload: {
-              requestId: message.payload.requestId,
-              vaultStoreId: message.payload.vaultStoreId,
-              status: 'unavailable',
-            },
-          })
-        },
-      },
-    })
+    stubExtensionIdentityStatus('unavailable')
 
     await expect(resolveExtensionSetupStatus('store-1')).resolves.toBe(
       'installed_unpaired',
@@ -111,28 +115,7 @@ describe('extension setup status', () => {
   })
 
   test('reports paired when the extension holds a locked grant', async () => {
-    document.documentElement.setAttribute(
-      'data-nook-extension-runtime-id',
-      'extension-1',
-    )
-    vi.stubGlobal('chrome', {
-      runtime: {
-        sendMessage: (
-          _extensionId: string,
-          message: { payload: { requestId: string; vaultStoreId: string } },
-          callback: (response: unknown) => void,
-        ) => {
-          callback({
-            type: 'nook:extension-paired-vault-identity-status',
-            payload: {
-              requestId: message.payload.requestId,
-              vaultStoreId: message.payload.vaultStoreId,
-              status: 'locked',
-            },
-          })
-        },
-      },
-    })
+    stubExtensionIdentityStatus('locked')
 
     await expect(resolveExtensionSetupStatus('store-1')).resolves.toBe('paired')
   })

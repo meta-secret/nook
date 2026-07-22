@@ -50,9 +50,8 @@ pub fn decrypt_encrypted_secret<S: BuildHasher>(
 /// Decrypt only the requested page from a ciphertext-backed vault session.
 ///
 /// Empty queries select the page by sorted id without decrypting records outside
-/// the page. Search decrypts one candidate at a time because searchable metadata
-/// lives inside each encrypted payload, but non-matching records are zeroized
-/// immediately and never retained as a plaintext database.
+/// the page. Non-empty production search uses [`super::SecretSearchCatalog`];
+/// this fallback still zeroizes each decrypted candidate immediately.
 pub fn query_encrypted_secrets<S: BuildHasher>(
     secrets: &HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
     crypto: &VaultCrypto,

@@ -1,7 +1,6 @@
 //! Typed wire strings for vault storage plus compatibility exports for auth/key-access strings.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
+use serde::{Deserialize, Deserializer};
 
 pub use nook_auth2::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
@@ -9,49 +8,8 @@ pub use nook_auth2::{
     Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
 };
 
-macro_rules! transparent_str_newtype {
-    ($name:ident) => {
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub struct $name(String);
-
-        impl $name {
-            #[must_use]
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-
-            #[must_use]
-            pub fn into_inner(mut self) -> String {
-                std::mem::take(&mut self.0)
-            }
-
-            pub fn from_trusted(value: String) -> Self {
-                Self(value)
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.0)
-            }
-        }
-
-        impl AsRef<str> for $name {
-            fn as_ref(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl Serialize for $name {
-            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                serializer.serialize_str(&self.0)
-            }
-        }
-    };
-}
-
-transparent_str_newtype!(StoredVaultYaml);
-transparent_str_newtype!(SecretPayloadYaml);
+nook_auth2::transparent_str_newtype!(StoredVaultYaml);
+nook_auth2::transparent_str_newtype!(SecretPayloadYaml);
 
 impl SecretPayloadYaml {
     pub fn zeroize_plaintext(&mut self) {

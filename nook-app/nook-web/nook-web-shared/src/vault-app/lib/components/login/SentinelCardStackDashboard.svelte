@@ -9,6 +9,10 @@
     ShieldCheck,
   } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  import {
+    copySentinelRequest,
+    runSentinelDashboardAction,
+  } from '$lib/components/login/sentinel-dashboard-actions'
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
   import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
@@ -208,26 +212,6 @@
     }
   }
 
-  async function finalize() {
-    if (status !== 'ready' || isBusy || actionBusy) return
-    actionBusy = true
-    try {
-      await onFinalize()
-    } finally {
-      actionBusy = false
-    }
-  }
-
-  async function copyRequest() {
-    if (!request) return
-    try {
-      await navigator.clipboard.writeText(request)
-      copied = true
-      setTimeout(() => (copied = false), 1500)
-    } catch {
-      vault.errorMsg = vault.t('login.sentinel_genesis_copy_failed')
-    }
-  }
 </script>
 
 <div
@@ -699,7 +683,12 @@
               disabled={status !== 'ready' || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
-              onclick={() => void finalize()}
+              onclick={() =>
+                void runSentinelDashboardAction(
+                  status === 'ready' && !isBusy && !actionBusy,
+                  (value) => (actionBusy = value),
+                  onFinalize,
+                )}
             >
               {#if actionBusy}<RefreshCw
                   class="mr-2 inline size-4 animate-spin"
@@ -883,7 +872,18 @@
                         variant="outline"
                         class="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
                         data-testid="sentinel-genesis-copy-request"
-                        onclick={() => void copyRequest()}
+                        onclick={() =>
+                          void copySentinelRequest(
+                            request,
+                            () => {
+                              copied = true
+                              setTimeout(() => (copied = false), 1500)
+                            },
+                            () =>
+                              (vault.errorMsg = vault.t(
+                                'login.sentinel_genesis_copy_failed',
+                              )),
+                          )}
                       >
                         <Copy class="size-4" />
                         {copied

@@ -477,40 +477,19 @@ impl EventGraph {
 mod tests {
     use super::*;
     use crate::VaultResult;
+    use crate::test_support::{actor, epoch, public_key, signing_key, store};
     use crate::vault_event::{
         GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
-    use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
-    use crate::vault_signing::SigningIdentity;
+    use crate::vault_ids::{DeviceId, SecretId};
     use crate::vault_wire::{
-        AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
-        OpaqueCiphertext, Sha256Hex,
+        AgeArmoredCiphertext, DevicePublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext,
+        Sha256Hex,
     };
     use ed25519_dalek::SigningKey;
-    use rand_core::OsRng;
-
-    fn signing_key() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
-    }
 
     const STORE_STR: &str = "store_testtoken11";
-
-    fn store() -> StoreId {
-        StoreId::parse("store_testtoken11").unwrap()
-    }
-
-    fn actor(signing_key: &SigningKey) -> AuthKeyId {
-        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
-    }
-
-    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
-    }
-
-    fn epoch() -> EventId {
-        EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap()
-    }
 
     fn genesis_source_hash() -> Sha256Hex {
         Sha256Hex::from_trusted("deadbeef".repeat(8))
@@ -574,6 +553,55 @@ mod tests {
             operations: vec![operation],
         };
         VaultEvent::sign(body, signing_key).unwrap()
+    }
+
+    fn graph_with_genesis(signing_key: &SigningKey) -> VaultResult<(EventGraph, EventId)> {
+        let mut graph = EventGraph::new();
+        let genesis = genesis_event(signing_key);
+        let genesis_id = genesis.id()?;
+        graph.insert(genesis, STORE_STR)?;
+        Ok((graph, genesis_id))
+    }
+
+    fn join_approval(
+        signing_key: &SigningKey,
+        device_id: &str,
+        encryption_public_key: &str,
+        label: &str,
+    ) -> VaultOperation {
+        VaultOperation::JoinApproved {
+            device_id: DeviceId::parse(device_id).unwrap(),
+            encryption_public_key: DevicePublicKey::from_trusted(encryption_public_key.to_owned()),
+            signing_public_key: public_key(signing_key),
+            label: MemberLabel::from_trusted(label.to_owned()),
+            secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
+            members_key_ciphertext: AgeArmoredCiphertext::from_trusted("members-key".to_owned()),
+        }
+    }
+
+    fn assert_self_approval_quarantined(
+        graph: &mut EventGraph,
+        parent: EventId,
+        stranger_key: &SigningKey,
+        encryption_public_key: &str,
+    ) -> VaultResult<()> {
+        let event = signed_operation(
+            vec![parent],
+            join_approval(
+                stranger_key,
+                "fedcba9876543210",
+                encryption_public_key,
+                "laptop",
+            ),
+            stranger_key,
+        );
+        let event_id = event.id()?;
+        assert!(matches!(
+            graph.insert(event, STORE_STR)?,
+            EventInsertStatus::Quarantined(_)
+        ));
+        assert!(graph.quarantined().contains_key(&event_id));
+        Ok(())
     }
 
     #[test]
@@ -797,23 +825,11 @@ mod tests {
     fn self_signed_password_join_approval_is_allowed() -> VaultResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
-        let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
-        let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        let (mut graph, genesis_id) = graph_with_genesis(&root_key)?;
 
         let enrol = signed_operation(
             vec![genesis_id],
-            VaultOperation::JoinApproved {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
-                signing_public_key: public_key(&joiner_key),
-                label: MemberLabel::from_trusted("phone".to_owned()),
-                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
-                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
-                    "members-key".to_owned(),
-                ),
-            },
+            join_approval(&joiner_key, "0123456789abcdef", "age-pub", "phone"),
             &joiner_key,
         );
         let enrol_id = enrol.id()?;
@@ -828,23 +844,11 @@ mod tests {
     fn join_approval_authorizes_future_joiner_events() -> VaultResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
-        let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
-        let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        let (mut graph, genesis_id) = graph_with_genesis(&root_key)?;
 
         let approval = signed_operation(
             vec![genesis_id],
-            VaultOperation::JoinApproved {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
-                signing_public_key: public_key(&joiner_key),
-                label: MemberLabel::from_trusted("phone".to_owned()),
-                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
-                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
-                    "members-key".to_owned(),
-                ),
-            },
+            join_approval(&joiner_key, "0123456789abcdef", "age-pub", "phone"),
             &root_key,
         );
         let approval_id = approval.id()?;
@@ -991,26 +995,12 @@ mod tests {
         let sentinel_enrol_id = sentinel_enrol.id()?;
         graph.insert(sentinel_enrol, STORE_STR)?;
 
-        let self_approve = signed_operation(
-            vec![sentinel_enrol_id],
-            VaultOperation::JoinApproved {
-                device_id: DeviceId::parse("fedcba9876543210").unwrap(),
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub-2".to_owned()),
-                signing_public_key: public_key(&stranger_key),
-                label: MemberLabel::from_trusted("laptop".to_owned()),
-                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
-                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
-                    "members-key".to_owned(),
-                ),
-            },
+        assert_self_approval_quarantined(
+            &mut graph,
+            sentinel_enrol_id,
             &stranger_key,
-        );
-        let self_approve_id = self_approve.id()?;
-        assert!(matches!(
-            graph.insert(self_approve, STORE_STR)?,
-            EventInsertStatus::Quarantined(_)
-        ));
-        assert!(graph.quarantined().contains_key(&self_approve_id));
+            "age-pub-2",
+        )?;
         Ok(())
     }
 
@@ -1040,26 +1030,7 @@ mod tests {
         let shares_id = shares.id()?;
         graph.insert(shares, STORE_STR)?;
 
-        let self_approve = signed_operation(
-            vec![shares_id],
-            VaultOperation::JoinApproved {
-                device_id: DeviceId::parse("fedcba9876543210").unwrap(),
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
-                signing_public_key: public_key(&stranger_key),
-                label: MemberLabel::from_trusted("laptop".to_owned()),
-                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
-                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
-                    "members-key".to_owned(),
-                ),
-            },
-            &stranger_key,
-        );
-        let self_approve_id = self_approve.id()?;
-        assert!(matches!(
-            graph.insert(self_approve, STORE_STR)?,
-            EventInsertStatus::Quarantined(_)
-        ));
-        assert!(graph.quarantined().contains_key(&self_approve_id));
+        assert_self_approval_quarantined(&mut graph, shares_id, &stranger_key, "age-pub")?;
         Ok(())
     }
 
@@ -1089,26 +1060,12 @@ mod tests {
             EventInsertStatus::Applied
         );
 
-        let self_approve = signed_operation(
-            vec![sentinel_genesis_id],
-            VaultOperation::JoinApproved {
-                device_id: DeviceId::parse("fedcba9876543210").unwrap(),
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub-2".to_owned()),
-                signing_public_key: public_key(&stranger_key),
-                label: MemberLabel::from_trusted("laptop".to_owned()),
-                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
-                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
-                    "members-key".to_owned(),
-                ),
-            },
+        assert_self_approval_quarantined(
+            &mut graph,
+            sentinel_genesis_id,
             &stranger_key,
-        );
-        let self_approve_id = self_approve.id()?;
-        assert!(matches!(
-            graph.insert(self_approve, STORE_STR)?,
-            EventInsertStatus::Quarantined(_)
-        ));
-        assert!(graph.quarantined().contains_key(&self_approve_id));
+            "age-pub-2",
+        )?;
         Ok(())
     }
 }

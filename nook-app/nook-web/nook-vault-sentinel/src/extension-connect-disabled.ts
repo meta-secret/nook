@@ -1,34 +1,20 @@
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
 import type { NookVaultManager } from "$app-wasm";
+import type {
+  ExtensionConnectRequestFor,
+  PairedExtensionIdentityDiscoveryFor,
+} from "$web-shared/extension/extension-connect-types";
 
 export type ExtensionConnectScope =
   | "vault-access"
   | "password-filling"
   | "sync-provider-credentials";
 
-type ExtensionIdentityRequestBase = {
-  deviceId: string;
-  devicePublicKey: string;
-  deviceSigningPublicKey: string;
-  extensionRuntimeId: string;
-  deviceLabel: string;
-  nonce: string;
-  scopes: ExtensionConnectScope[];
-};
-
 export type ExtensionConnectRequest =
-  | (ExtensionIdentityRequestBase & {
-      source: "extension-connect";
-    })
-  | (ExtensionIdentityRequestBase & {
-      source: "paired-vault";
-      vaultStoreId: string;
-    });
-
+  ExtensionConnectRequestFor<ExtensionConnectScope>;
 export type PairedExtensionIdentityDiscovery =
-  | { status: "unavailable" | "locked" }
-  | { status: "unlocked"; request: ExtensionConnectRequest };
+  PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
 export const isExtensionConnectPath: (pathname: string) => boolean = () =>
   false;

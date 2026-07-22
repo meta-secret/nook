@@ -9,12 +9,13 @@ use super::multi_device::{
     create_sentinel_root_share_records_for_recipients, dec_auth_id_from_public_key,
     device_id_from_public_key, generate_id,
 };
+use super::sentinel_signing;
 use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
     MultiDeviceResult, StoreId, StoredSecretRecord,
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -645,7 +646,7 @@ fn delivery_signing_bytes(delivery: &SentinelGenesisShareDelivery) -> MultiDevic
 }
 
 fn signing_public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-    DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().to_bytes()))
+    sentinel_signing::signing_public_key(signing_key)
 }
 
 fn verify_signature(
@@ -653,19 +654,9 @@ fn verify_signature(
     signature: &str,
     bytes: &[u8],
 ) -> MultiDeviceResult<()> {
-    let public: [u8; 32] = hex::decode(public_key.as_str())
-        .ok()
-        .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidSentinelGenesisSignature)?;
-    let signature: [u8; 64] = hex::decode(signature)
-        .ok()
-        .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidSentinelGenesisSignature)?;
-    let verifying_key = VerifyingKey::from_bytes(&public)
-        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisSignature)?;
-    verifying_key
-        .verify(bytes, &Signature::from_bytes(&signature))
-        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisSignature)
+    sentinel_signing::verify_signature(public_key, signature, bytes, || {
+        MultiDeviceError::InvalidSentinelGenesisSignature
+    })
 }
 
 fn participant_fingerprint(

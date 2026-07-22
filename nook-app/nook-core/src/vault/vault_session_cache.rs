@@ -31,33 +31,11 @@ pub fn hydrate_keys_from_projection_yaml(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        VaultResult, VaultUnlock, generate_store_id, generate_vault_keys, genesis_auth_record,
-        genesis_members_records, serialize_stored_yaml_with_unlock,
-    };
+    use crate::{VaultResult, VaultUnlock};
 
     #[test]
     fn hydrate_keys_from_genesis_projection_yaml() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
-        let identity = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
-        )?);
-        let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock(
-            &records,
-            &VaultUnlock::Keys,
-            &[],
-            Some(store_id.as_str()),
-            None,
-        )?;
+        let (keys, identity, yaml) = crate::test_support::simple_genesis_projection()?;
         let (secrets_key, members_key) =
             hydrate_keys_from_projection_yaml(yaml.as_str(), &identity)?;
         assert_eq!(secrets_key, keys.secrets_key.as_str());

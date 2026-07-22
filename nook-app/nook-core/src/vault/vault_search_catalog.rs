@@ -1,8 +1,9 @@
-//! Local plaintext projection of fields intentionally exposed for list/search.
+//! Unlocked in-memory projection used for fast list/search.
 //!
-//! Canonical secret payloads remain encrypted. This derived catalog contains
-//! only [`SecretListItem`] data, is reconciled by ciphertext digest, and lets a
-//! 10,000-item search avoid decrypting or parsing every record.
+//! Canonical secret payloads remain encrypted. This derived catalog contains only
+//! [`SecretListItem`] data while the vault is unlocked. Persistence is split into
+//! independently encrypted buckets by the WASM adapter, so a 10,000-item search
+//! avoids per-query decryption without exposing searchable metadata at rest.
 
 use super::vault_session::decrypt_encrypted_secret;
 use crate::errors::{SessionError, VaultResult};
@@ -17,8 +18,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::hash::BuildHasher;
 
 const SEARCH_CATALOG_VERSION: u8 = 2;
+const SEARCH_CATALOG_BUCKET_VERSION: u8 = 1;
 const PAYLOAD_DIGEST_BYTES: usize = 16;
 const SEARCH_CATALOG_INTEGRITY_DOMAIN: &[u8] = b"nook/secret-search-catalog/v1\0";
+pub const SECRET_SEARCH_CATALOG_BUCKET_COUNT: u8 = 64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SecretSearchCatalogEntry {
@@ -71,17 +74,30 @@ pub struct SecretSearchCatalog {
     entries: BTreeMap<SecretId, SecretSearchCatalogEntry>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SecretSearchCatalogBucket {
+    version: u8,
+    bucket: u8,
+    entries: BTreeMap<SecretId, SecretSearchCatalogEntry>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SecretSearchCatalogReconcile {
     pub added: usize,
     pub updated: usize,
     pub removed: usize,
+    changed_bucket_mask: u64,
 }
 
 impl SecretSearchCatalogReconcile {
     #[must_use]
     pub fn changed(self) -> bool {
         self.added > 0 || self.updated > 0 || self.removed > 0
+    }
+
+    pub fn changed_buckets(self) -> impl Iterator<Item = u8> {
+        (0..SECRET_SEARCH_CATALOG_BUCKET_COUNT)
+            .filter(move |bucket| self.changed_bucket_mask & (1_u64 << bucket) != 0)
     }
 }
 
@@ -95,31 +111,65 @@ impl Default for SecretSearchCatalog {
 }
 
 impl SecretSearchCatalog {
-    pub fn from_json(json: &str) -> VaultResult<Self> {
-        let mut catalog: Self = serde_json::from_str(json)
-            .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
-        if catalog.version != SEARCH_CATALOG_VERSION {
+    /// Restore one authenticated plaintext bucket after the adapter decrypts it.
+    pub fn restore_bucket_json(&mut self, expected_bucket: u8, json: &str) -> VaultResult<()> {
+        if expected_bucket >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
             return Err(SessionError::SearchCatalogInvalid(format!(
-                "unsupported version {}",
-                catalog.version
+                "bucket {expected_bucket} is out of range"
             ))
             .into());
         }
-        for (id, entry) in &mut catalog.entries {
-            if &entry.item.id != id {
+        let mut bucket: SecretSearchCatalogBucket = serde_json::from_str(json)
+            .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
+        if bucket.version != SEARCH_CATALOG_BUCKET_VERSION || bucket.bucket != expected_bucket {
+            return Err(SessionError::SearchCatalogInvalid(
+                "catalog bucket header does not match its storage key".to_owned(),
+            )
+            .into());
+        }
+        for (id, entry) in &mut bucket.entries {
+            if &entry.item.id != id || search_catalog_bucket(id) != expected_bucket {
                 return Err(SessionError::SearchCatalogInvalid(
-                    "catalog key does not match item id".to_owned(),
+                    "catalog entry does not belong to its encrypted bucket".to_owned(),
+                )
+                .into());
+            }
+            if self.entries.contains_key(id) {
+                return Err(SessionError::SearchCatalogInvalid(
+                    "catalog contains a duplicate secret id".to_owned(),
                 )
                 .into());
             }
             entry.restore_search_text();
         }
-        Ok(catalog)
+        self.entries.append(&mut bucket.entries);
+        Ok(())
     }
 
-    pub fn to_json(&self) -> VaultResult<String> {
-        serde_json::to_string(self)
-            .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()).into())
+    /// Serialize one bucket for immediate encryption by the persistence adapter.
+    pub fn bucket_json(&self, bucket: u8) -> VaultResult<Option<String>> {
+        if bucket >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+            return Err(SessionError::SearchCatalogInvalid(format!(
+                "bucket {bucket} is out of range"
+            ))
+            .into());
+        }
+        let entries = self
+            .entries
+            .iter()
+            .filter(|(id, _)| search_catalog_bucket(id) == bucket)
+            .map(|(id, entry)| (id.clone(), entry.clone()))
+            .collect::<BTreeMap<_, _>>();
+        if entries.is_empty() {
+            return Ok(None);
+        }
+        serde_json::to_string(&SecretSearchCatalogBucket {
+            version: SEARCH_CATALOG_BUCKET_VERSION,
+            bucket,
+            entries,
+        })
+        .map(Some)
+        .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()).into())
     }
 
     /// Reuse unchanged public rows and decrypt only new or changed ciphertexts.
@@ -137,6 +187,9 @@ impl SecretSearchCatalog {
                 .count(),
             ..SecretSearchCatalogReconcile::default()
         };
+        for id in self.entries.keys().filter(|id| !secrets.contains_key(*id)) {
+            outcome.changed_bucket_mask |= bucket_mask(id);
+        }
         let mut next = BTreeMap::new();
         for (id, (secret_type, payload)) in secrets {
             let digest = payload_digest(payload.as_str());
@@ -154,6 +207,7 @@ impl SecretSearchCatalog {
             } else {
                 outcome.added += 1;
             }
+            outcome.changed_bucket_mask |= bucket_mask(id);
             let mut record = decrypt_encrypted_secret(secrets, crypto, id)?;
             let item = record.list_item();
             record.zeroize_plaintext();
@@ -193,6 +247,14 @@ impl SecretSearchCatalog {
             limit,
         }
     }
+}
+
+fn search_catalog_bucket(id: &SecretId) -> u8 {
+    Sha256::digest(id.as_str().as_bytes())[0] % SECRET_SEARCH_CATALOG_BUCKET_COUNT
+}
+
+fn bucket_mask(id: &SecretId) -> u64 {
+    1_u64 << search_catalog_bucket(id)
 }
 
 fn payload_digest(payload: &str) -> [u8; PAYLOAD_DIGEST_BYTES] {
@@ -265,18 +327,27 @@ mod tests {
     }
 
     #[test]
-    fn catalog_json_is_plaintext_but_excludes_secret_values() -> VaultResult<()> {
+    fn encrypted_bucket_hides_searchable_metadata_and_secret_values() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut catalog = SecretSearchCatalog::default();
         let item = login_item(1, "visible-user");
+        let bucket = search_catalog_bucket(&item.id);
         catalog.entries.insert(
             item.id.clone(),
-            SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &integrity_key()),
+            SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key),
         );
 
-        let json = catalog.to_json()?;
+        let json = catalog.bucket_json(bucket)?.expect("bucket is non-empty");
         assert!(json.contains("visible-user"));
         assert!(!json.contains("never-catalogued"));
-        let restored = SecretSearchCatalog::from_json(&json)?;
+        let ciphertext = crypto.encrypt_value(&json)?;
+        assert!(!ciphertext.as_str().contains("visible-user"));
+        assert!(!ciphertext.as_str().contains("never-catalogued"));
+
+        let plaintext = crypto.decrypt_value(&ciphertext)?;
+        let mut restored = SecretSearchCatalog::default();
+        restored.restore_bucket_json(bucket, plaintext.as_str())?;
         assert_eq!(restored.query("visible-user", None, 0, 50).total, 1);
         Ok(())
     }
@@ -308,14 +379,9 @@ mod tests {
         }
 
         let mut catalog = SecretSearchCatalog::default();
-        assert_eq!(
-            catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?,
-            SecretSearchCatalogReconcile {
-                added: 3,
-                updated: 0,
-                removed: 0,
-            }
-        );
+        let initial = catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
+        assert_eq!((initial.added, initial.updated, initial.removed), (3, 0, 0));
+        assert!(initial.changed_buckets().next().is_some());
         assert_eq!(
             catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?,
             SecretSearchCatalogReconcile::default()
@@ -329,19 +395,17 @@ mod tests {
             notes: String::new(),
         });
         secrets.insert(
-            changed_id,
+            changed_id.clone(),
             (
                 SecretType::Login,
                 StoredRecordPayload::from_age_armored(crypto.encrypt_value(changed.to_yaml()?)?),
             ),
         );
+        let changed = catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
+        assert_eq!((changed.added, changed.updated, changed.removed), (0, 1, 0));
         assert_eq!(
-            catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?,
-            SecretSearchCatalogReconcile {
-                added: 0,
-                updated: 1,
-                removed: 0,
-            }
+            changed.changed_buckets().collect::<Vec<_>>(),
+            vec![search_catalog_bucket(&changed_id)]
         );
         assert_eq!(catalog.query("changed-user", None, 0, 50).total, 1);
         assert_eq!(catalog.query("changed-password", None, 0, 50).total, 0);
@@ -364,7 +428,7 @@ mod tests {
         };
         let ciphertext = crypto.encrypt_value(record.data.to_yaml()?)?;
         let secrets = HashMap::from([(
-            record.id,
+            record.id.clone(),
             (
                 SecretType::Login,
                 StoredRecordPayload::from_age_armored(ciphertext),
@@ -373,16 +437,15 @@ mod tests {
         let mut catalog = SecretSearchCatalog::default();
         catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
 
-        let tampered_json = catalog.to_json()?.replace("trusted-user", "forged-user");
-        let mut tampered = SecretSearchCatalog::from_json(&tampered_json)?;
-        assert_eq!(
-            tampered.reconcile(&secrets, &crypto, &keys.secrets_key)?,
-            SecretSearchCatalogReconcile {
-                added: 0,
-                updated: 1,
-                removed: 0,
-            }
-        );
+        let bucket = search_catalog_bucket(&record.id);
+        let tampered_json = catalog
+            .bucket_json(bucket)?
+            .expect("catalog bucket exists")
+            .replace("trusted-user", "forged-user");
+        let mut tampered = SecretSearchCatalog::default();
+        tampered.restore_bucket_json(bucket, &tampered_json)?;
+        let outcome = tampered.reconcile(&secrets, &crypto, &keys.secrets_key)?;
+        assert_eq!((outcome.added, outcome.updated, outcome.removed), (0, 1, 0));
         assert_eq!(tampered.query("forged-user", None, 0, 50).total, 0);
         assert_eq!(tampered.query("trusted-user", None, 0, 50).total, 1);
         Ok(())

@@ -14,6 +14,7 @@ import {
   assertJoinPendingYaml,
   joinCountFromYaml,
   parseVaultEventLogSnapshot,
+  waitForVaultEventLogSnapshot,
   parseVaultYamlSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
@@ -579,29 +580,10 @@ export async function waitForSyncRemoteVaultState(
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
-  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
-  const intervalMs = options?.intervalMs ?? 100
-  const deadline = Date.now() + timeoutMs
-  let lastError = 'remote event log empty'
-
-  while (Date.now() < deadline) {
-    const events = remote.getEventFileContents()
-    if (events.length > 0) {
-      try {
-        const snapshot = parseVaultEventLogSnapshot(events)
-        if (predicate(snapshot)) {
-          return snapshot
-        }
-        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
-      } catch (error) {
-        lastError =
-          error instanceof Error ? error.message : 'invalid remote event log'
-      }
-    }
-    await sleep(intervalMs)
-  }
-
-  throw new Error(`Timed out waiting for remote event log: ${lastError}`)
+  return waitForVaultEventLogSnapshot(remote.getEventFileContents, predicate, {
+    timeoutMs: options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    intervalMs: options?.intervalMs ?? 100,
+  })
 }
 
 async function flushRemoteEventsToSyncProviders(page: Page) {
@@ -920,6 +902,25 @@ async function setupGoogleDriveProvider(page: Page, fileName: string) {
   await waitForGoogleOAuthSignedIn(page)
 }
 
+function installGoogleTokenClient(token: string) {
+  window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: (config: {
+          callback: (response: {
+            access_token: string
+            expires_in: number
+          }) => void
+        }) => ({
+          requestAccessToken: () => {
+            config.callback({ access_token: token, expires_in: 3600 })
+          },
+        }),
+      },
+    },
+  }
+}
+
 /** Mock Google Identity Services token client for e2e (call before navigation). */
 export async function installGoogleOAuthMock(
   page: Page,
@@ -927,27 +928,7 @@ export async function installGoogleOAuthMock(
 ) {
   const gisMockBody = `window.google=window.google||{};window.google.accounts=window.google.accounts||{};window.google.accounts.oauth2={initTokenClient:function(config){return{requestAccessToken:function(){config.callback({access_token:${JSON.stringify(accessToken)},expires_in:3600})}}}};`
 
-  await page.addInitScript((token: string) => {
-    window.google = {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            callback: (response: {
-              access_token: string
-              expires_in: number
-            }) => void
-          }) => ({
-            requestAccessToken: () => {
-              config.callback({
-                access_token: token,
-                expires_in: 3600,
-              })
-            },
-          }),
-        },
-      },
-    }
-  }, accessToken)
+  await page.addInitScript(installGoogleTokenClient, accessToken)
   await page.route('https://accounts.google.com/gsi/client', async (route) => {
     await route.fulfill({
       status: 200,
@@ -967,27 +948,7 @@ export async function installGoogleOAuthMock(
       })
     },
   )
-  await page.evaluate((token: string) => {
-    window.google = {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            callback: (response: {
-              access_token: string
-              expires_in: number
-            }) => void
-          }) => ({
-            requestAccessToken: () => {
-              config.callback({
-                access_token: token,
-                expires_in: 3600,
-              })
-            },
-          }),
-        },
-      },
-    }
-  }, accessToken)
+  await page.evaluate(installGoogleTokenClient, accessToken)
 }
 
 export async function waitForVaultUnlocked(
@@ -1014,6 +975,48 @@ export async function waitForVaultUnlocked(
       { cause: error },
     )
   }
+}
+
+export async function wipeDeviceIdentity(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () =>
+          reject(request.error ?? new Error('idb open failed'))
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('vault', 'readwrite')
+          const store = tx.objectStore('vault')
+          store.delete('device_id')
+          store.delete('device_identity_wrapped')
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error ?? new Error('idb delete failed'))
+        }
+      }),
+  )
+}
+
+export async function expectEmptyLocalFolderRejected(
+  page: Page,
+  afterSetup: () => Promise<void> = async () => undefined,
+): Promise<void> {
+  await page.getByTestId('login-connect-storage-btn').click()
+  await expect(page.getByTestId('login-provider-setup')).toBeVisible()
+  await afterSetup()
+  await page.getByTestId('provider-option-local-folder').click()
+  await page.getByTestId('login-choose-local-folder-btn').click()
+  await expect(page.getByTestId('login-local-folder-selected')).toHaveText(
+    'Nook Backup',
+  )
+  await page.getByTestId('login-connect-local-folder-btn').click()
+  await expect(page.getByTestId('vault-error')).toContainText(
+    'No existing vault was found in this provider',
+  )
+  await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
 }
 
 export async function connectGithubVault(
@@ -2401,6 +2404,106 @@ export async function removeE2eDummyGithubSyncProvider(page: Page) {
   await page.evaluate(() => undefined)
 }
 
+type SeededAuthProvider = {
+  id: string
+  type: string
+  label: string
+  githubRepo?: string
+  githubPat?: string
+  oauthFile?: {
+    preset: string
+    accessToken: string
+    fileName: string
+    accountEmail?: string
+    folderId?: string
+  }
+  storeId?: string
+  createdAt?: string
+}
+
+async function appendAuthProviders(
+  page: Page,
+  providers: SeededAuthProvider[],
+  vaultStoreId?: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ providers: additions, vaultStoreId: fallbackStoreId }) =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_auth', 1)
+        request.onerror = () =>
+          reject(request.error ?? new Error('idb open failed'))
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('auth', 'readwrite')
+          const store = tx.objectStore('auth')
+          const getRequest = store.get('providers')
+          getRequest.onerror = () =>
+            reject(getRequest.error ?? new Error('idb read failed'))
+          getRequest.onsuccess = () => {
+            const snapshot = (getRequest.result as
+              | {
+                  providers: SeededAuthProvider[]
+                  activeVaultStoreId?: string
+                }
+              | undefined) ?? { providers: [] }
+            const activeStoreId =
+              snapshot.activeVaultStoreId?.trim() || fallbackStoreId
+            snapshot.providers.push(
+              ...additions.map((provider) => ({
+                ...provider,
+                storeId:
+                  provider.type === 'oauth-file'
+                    ? activeStoreId
+                    : provider.storeId,
+                createdAt: new Date().toISOString(),
+              })),
+            )
+            const putRequest = store.put(snapshot, 'providers')
+            putRequest.onerror = () =>
+              reject(putRequest.error ?? new Error('idb write failed'))
+          }
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+        }
+      }),
+    { providers, vaultStoreId },
+  )
+}
+
+async function waitForAuthProviderIds(
+  page: Page,
+  expectedIds: string[],
+): Promise<void> {
+  await page.waitForFunction(
+    (ids) =>
+      new Promise<boolean>((resolve) => {
+        const request = indexedDB.open('nook_auth', 1)
+        request.onerror = () => resolve(false)
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('auth', 'readonly')
+          const getRequest = tx.objectStore('auth').get('providers')
+          getRequest.onerror = () => resolve(false)
+          getRequest.onsuccess = () => {
+            const snapshot = getRequest.result as
+              | { providers?: Array<{ id: string }> }
+              | undefined
+            const storedIds = new Set(
+              snapshot?.providers?.map((provider) => provider.id) ?? [],
+            )
+            resolve(ids.every((id) => storedIds.has(id)))
+          }
+          tx.oncomplete = () => db.close()
+        }
+      }),
+    expectedIds,
+    { timeout: UI_TIMEOUT_MS },
+  )
+}
+
 /**
  * Add extra GitHub providers to the saved auth snapshot for onboarding UI tests.
  */
@@ -2413,82 +2516,13 @@ export async function seedExtraGithubProviders(
     githubPat: string
   }>,
 ) {
-  await page.evaluate((providers) => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('nook_auth', 1)
-      request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('auth', 'readwrite')
-        const store = tx.objectStore('auth')
-        const getReq = store.get('providers')
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          const existing = getReq.result as
-            | {
-                providers: Array<{
-                  id: string
-                  type: string
-                  label: string
-                  githubRepo?: string
-                  githubPat?: string
-                  createdAt: string
-                }>
-              }
-            | undefined
-          const snapshot = existing ?? { providers: [] }
-          for (const provider of providers) {
-            snapshot.providers.push({
-              id: provider.id,
-              type: 'github',
-              label: provider.label,
-              githubRepo: provider.githubRepo,
-              githubPat: provider.githubPat,
-              createdAt: new Date().toISOString(),
-            })
-          }
-          const putReq = store.put(snapshot, 'providers')
-          putReq.onerror = () =>
-            reject(putReq.error ?? new Error('idb write failed'))
-          putReq.onsuccess = () => undefined
-        }
-        tx.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-      }
-    })
-  }, extras)
-
-  await page.waitForFunction(
-    (expectedIds) => {
-      return new Promise<boolean>((resolve) => {
-        const request = indexedDB.open('nook_auth', 1)
-        request.onerror = () => resolve(false)
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('auth', 'readonly')
-          const store = tx.objectStore('auth')
-          const getReq = store.get('providers')
-          getReq.onerror = () => resolve(false)
-          getReq.onsuccess = () => {
-            const snapshot = getReq.result as
-              | {
-                  providers?: Array<{ id: string; type: string }>
-                }
-              | undefined
-            const ids = new Set(snapshot?.providers?.map((p) => p.id) ?? [])
-            resolve(expectedIds.every((id) => ids.has(id)))
-          }
-          tx.oncomplete = () => db.close()
-        }
-      })
-    },
-    extras.map((p) => p.id),
-    { timeout: UI_TIMEOUT_MS },
+  await appendAuthProviders(
+    page,
+    extras.map((provider) => ({ ...provider, type: 'github' })),
+  )
+  await waitForAuthProviderIds(
+    page,
+    extras.map((provider) => provider.id),
   )
 }
 
@@ -2509,100 +2543,25 @@ export async function seedExtraOauthFileProviders(
   const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
   const storeIdFromVault = vaultYaml.match(/^store_id:\s*(\S+)/m)?.[1]
 
-  await page.evaluate(
-    ({ providers, storeIdFromVault: vaultStoreId }) => {
-      return new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_auth', 1)
-        request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('auth', 'readwrite')
-          const store = tx.objectStore('auth')
-          const getReq = store.get('providers')
-          getReq.onerror = () =>
-            reject(getReq.error ?? new Error('idb read failed'))
-          getReq.onsuccess = () => {
-            const existing = getReq.result as
-              | {
-                  providers: Array<{
-                    id: string
-                    type: string
-                    label: string
-                    oauthFile?: {
-                      preset: string
-                      accessToken: string
-                      fileName: string
-                      accountEmail?: string
-                      folderId?: string
-                    }
-                    storeId?: string
-                    createdAt: string
-                  }>
-                  activeVaultStoreId?: string
-                }
-              | undefined
-            const snapshot = existing ?? { providers: [] }
-            const storeId =
-              snapshot.activeVaultStoreId?.trim() || vaultStoreId || undefined
-            for (const provider of providers) {
-              snapshot.providers.push({
-                id: provider.id,
-                type: 'oauth-file',
-                label: provider.label,
-                oauthFile: {
-                  preset: 'google-drive',
-                  accessToken: provider.accessToken,
-                  fileName: provider.fileName,
-                  accountEmail: provider.accountEmail,
-                  folderId: provider.folderId,
-                },
-                storeId,
-                createdAt: new Date().toISOString(),
-              })
-            }
-            const putReq = store.put(snapshot, 'providers')
-            putReq.onerror = () =>
-              reject(putReq.error ?? new Error('idb write failed'))
-            putReq.onsuccess = () => undefined
-          }
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-        }
-      })
-    },
-    { providers: extras, storeIdFromVault },
+  await appendAuthProviders(
+    page,
+    extras.map((provider) => ({
+      id: provider.id,
+      type: 'oauth-file',
+      label: provider.label,
+      oauthFile: {
+        preset: 'google-drive',
+        accessToken: provider.accessToken,
+        fileName: provider.fileName,
+        accountEmail: provider.accountEmail,
+        folderId: provider.folderId,
+      },
+    })),
+    storeIdFromVault,
   )
-
-  await page.waitForFunction(
-    (expectedIds) => {
-      return new Promise<boolean>((resolve) => {
-        const request = indexedDB.open('nook_auth', 1)
-        request.onerror = () => resolve(false)
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('auth', 'readonly')
-          const store = tx.objectStore('auth')
-          const getReq = store.get('providers')
-          getReq.onerror = () => resolve(false)
-          getReq.onsuccess = () => {
-            const snapshot = getReq.result as
-              | {
-                  providers?: Array<{ id: string; type: string }>
-                }
-              | undefined
-            const ids = new Set(snapshot?.providers?.map((p) => p.id) ?? [])
-            resolve(expectedIds.every((id) => ids.has(id)))
-          }
-          tx.oncomplete = () => db.close()
-        }
-      })
-    },
-    extras.map((p) => p.id),
-    { timeout: UI_TIMEOUT_MS },
+  await waitForAuthProviderIds(
+    page,
+    extras.map((provider) => provider.id),
   )
 }
 

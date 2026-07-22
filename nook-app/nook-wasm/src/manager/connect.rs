@@ -132,32 +132,9 @@ impl NookVaultManager {
             .await?;
 
         if content.trim().is_empty() {
-            if self.storage.mode != nook_core::StorageMode::Local {
-                self.sync_events_from_current_provider().await?;
-                if !self.vault.store_id.is_empty() && self.event_log_has_events().await? {
-                    let status =
-                        nook_core::VaultAccessStatus::from(nook_core::assess_connect_access(
-                            &self.stored_records_snapshot(),
-                            &identity,
-                        ));
-                    let _ = self
-                        .status
-                        .tx
-                        .send(format!("ASSESS_{}_{}", self.storage.mode, status));
-                    return Ok(status);
-                }
-            }
             self.vault.password_entries.clear();
             self.vault.unlock = nook_core::VaultUnlock::Keys;
             self.vault.last_synced_content.clear();
-            if remote_content_missing && self.storage.mode != nook_core::StorageMode::Local {
-                if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
-                    && !cached.trim().is_empty()
-                {
-                    return Ok(nook_core::VaultAccessStatus::RemoteMissingLocalCache);
-                }
-                return Ok(nook_core::VaultAccessStatus::RemoteMissing);
-            }
             return Ok(nook_core::VaultAccessStatus::NewVault);
         }
 
@@ -273,6 +250,7 @@ impl NookVaultManager {
             let _ = self.status.tx.send("GITHUB_INIT_SUCCESS".to_owned());
         }
 
+        self.purge_legacy_plaintext_search_catalog().await?;
         let _ = self.status.tx.send("READY".to_owned());
         let records = self.get_records()?;
         tracing::info!(
@@ -463,6 +441,7 @@ impl NookVaultManager {
             self.bootstrap_event_log_genesis().await?;
         }
         self.persist_projection_cache().await?;
+        self.purge_legacy_plaintext_search_catalog().await?;
         let _ = self.status.tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

@@ -461,13 +461,7 @@ function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   const body = document.createElement('div')
   body.className = 'body'
 
-  const mark = document.createElement('img')
-  mark.className = 'mark'
-  mark.src = chrome.runtime.getURL('icons/nook.png')
-  mark.alt = ''
-  mark.setAttribute('aria-hidden', 'true')
-  mark.width = 52
-  mark.height = 52
+  const mark = createWidgetMark('mark', 52)
 
   const title = document.createElement('h1')
   title.textContent = translatedMessage(
@@ -1577,30 +1571,40 @@ function enrollmentCopy(hints: EnrollmentPageHints): WorkflowCopy {
   }
 }
 
-function renderEnrollmentWidget(
-  hints: EnrollmentPageHints,
-  vaultConnection: PilotVaultConnection,
-): void {
-  if (dismissed) {
-    removeWidget()
-    return
-  }
-  const workflowKey = [
-    'enrollment',
-    hints.qr ? 'qr' : '',
-    hints.backupCodes ? 'backup' : '',
-    vaultConnection.connected ? 'connected' : 'disconnected',
-    vaultConnection.vaultName ?? '',
-  ].join(':')
-  if (widgetHost && renderedWorkflowKey === workflowKey) {
-    return
-  }
-  if (widgetHost) removeWidget()
+interface WidgetShell {
+  host: HTMLElement
+  panel: HTMLDivElement
+  toolbar: HTMLDivElement
+  body: HTMLDivElement
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  openVaultButton: HTMLButtonElement
+  collapseButton: HTMLButtonElement
+  collapsedLaunch: HTMLButtonElement
+}
 
+function createWidgetMark(className: string, size: number): HTMLImageElement {
+  const mark = document.createElement('img')
+  mark.className = className
+  mark.src = chrome.runtime.getURL('icons/nook.png')
+  mark.alt = ''
+  mark.setAttribute('aria-hidden', 'true')
+  mark.width = size
+  mark.height = size
+  return mark
+}
+
+function createWidgetShell(
+  copy: WorkflowCopy,
+  vaultConnection: PilotVaultConnection,
+  currentStep: number,
+  totalSteps: number,
+): WidgetShell {
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
   host.setAttribute('aria-label', translatedMessage('widgetPilotLabel'))
-  const shadow = host.attachShadow({ mode: 'open' })
 
   const panel = document.createElement('div')
   panel.className = 'panel'
@@ -1612,7 +1616,7 @@ function renderEnrollmentWidget(
 
   const step = document.createElement('p')
   step.className = 'step-label'
-  step.textContent = progressLabel(1, 1)
+  step.textContent = progressLabel(currentStep, totalSteps)
 
   const collapseButton = document.createElement('button')
   collapseButton.type = 'button'
@@ -1629,22 +1633,14 @@ function renderEnrollmentWidget(
     dismissed = true
     removeWidget()
   })
-
   toolbar.append(step, collapseButton, dismissButton)
 
   const body = document.createElement('div')
   body.className = 'body'
 
-  const mark = document.createElement('img')
-  mark.className = 'mark'
-  mark.src = chrome.runtime.getURL('icons/nook.png')
-  mark.alt = ''
-  mark.setAttribute('aria-hidden', 'true')
-  mark.width = 52
-  mark.height = 52
+  const mark = createWidgetMark('mark', 52)
 
   const title = document.createElement('h1')
-  const copy = enrollmentCopy(hints)
   title.textContent = translatedMessage(copy.titleKey)
 
   const site = document.createElement('p')
@@ -1664,12 +1660,10 @@ function renderEnrollmentWidget(
   const continueButton = document.createElement('button')
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
-  continueButton.hidden = true
 
   const openVaultButton = document.createElement('button')
   openVaultButton.type = 'button'
   openVaultButton.className = 'secondary-button'
-  openVaultButton.hidden = true
   openVaultButton.setAttribute(
     'aria-label',
     translatedMessage('widgetOpenVault'),
@@ -1694,21 +1688,37 @@ function renderEnrollmentWidget(
   collapsedLaunch.className = 'collapsed-launch'
   collapsedLaunch.setAttribute(
     'aria-label',
-    `${translatedMessage('widgetExpand')}: ${progressLabel(1, 1)}`,
+    `${translatedMessage('widgetExpand')}: ${progressLabel(currentStep, totalSteps)}`,
   )
   collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
 
-  const collapsedMark = document.createElement('img')
-  collapsedMark.className = 'collapsed-mark'
-  collapsedMark.src = chrome.runtime.getURL('icons/nook.png')
-  collapsedMark.alt = ''
-  collapsedMark.width = 40
-  collapsedMark.height = 40
+  const collapsedMark = createWidgetMark('collapsed-mark', 40)
   const collapsedProgress = document.createElement('span')
   collapsedProgress.className = 'collapsed-progress'
-  collapsedProgress.textContent = '1/1'
+  collapsedProgress.textContent = `${currentStep}/${totalSteps}`
   collapsedLaunch.append(collapsedMark, collapsedProgress)
 
+  return {
+    host,
+    panel,
+    toolbar,
+    body,
+    step,
+    title,
+    description,
+    continueButton,
+    openVaultButton,
+    collapseButton,
+    collapsedLaunch,
+  }
+}
+
+function mountWidgetShell(
+  shell: WidgetShell,
+  workflowKey: string,
+  workflowRoot: PasswordFormObservation | undefined,
+): void {
+  const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {
     panel.classList.toggle('is-collapsed', widgetCollapsed)
     collapseButton.hidden = widgetCollapsed
@@ -1735,13 +1745,12 @@ function renderEnrollmentWidget(
 
   const style = document.createElement('style')
   style.textContent = WIDGET_PANEL_STYLES
-
   panel.append(toolbar, body, collapsedLaunch)
-  shadow.append(style, panel)
+  host.attachShadow({ mode: 'open' }).append(style, panel)
   document.documentElement.append(host)
   widgetHost = host
   renderedWorkflowKey = workflowKey
-  renderedWorkflowRoot = undefined
+  renderedWorkflowRoot = workflowRoot
 
   attachPointerDrag(host, toolbar)
   attachPointerDrag(host, collapsedLaunch, {
@@ -1754,6 +1763,34 @@ function renderEnrollmentWidget(
   if (widgetPosition) {
     applyWidgetPosition(host, widgetPosition)
   }
+}
+
+function renderEnrollmentWidget(
+  hints: EnrollmentPageHints,
+  vaultConnection: PilotVaultConnection,
+): void {
+  if (dismissed) {
+    removeWidget()
+    return
+  }
+  const workflowKey = [
+    'enrollment',
+    hints.qr ? 'qr' : '',
+    hints.backupCodes ? 'backup' : '',
+    vaultConnection.connected ? 'connected' : 'disconnected',
+    vaultConnection.vaultName ?? '',
+  ].join(':')
+  if (widgetHost && renderedWorkflowKey === workflowKey) {
+    return
+  }
+  if (widgetHost) removeWidget()
+
+  const shell = createWidgetShell(enrollmentCopy(hints), vaultConnection, 1, 1)
+  const { body, step, title, description, continueButton, openVaultButton } =
+    shell
+  continueButton.hidden = true
+  openVaultButton.hidden = true
+  mountWidgetShell(shell, workflowKey, undefined)
 
   renderEnrollmentActions(
     buildEnrollmentFlowHost(
@@ -1800,73 +1837,14 @@ function renderWidget(
   }
   if (widgetHost) removeWidget()
 
-  const host = document.createElement('aside')
-  host.id = WIDGET_HOST_ID
-  host.setAttribute('aria-label', translatedMessage('widgetPilotLabel'))
-  const shadow = host.attachShadow({ mode: 'open' })
-
-  const panel = document.createElement('div')
-  panel.className = 'panel'
-  panel.setAttribute('data-testid', 'nook-auth-gate')
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'toolbar'
-  toolbar.setAttribute('data-testid', 'nook-auth-gate-drag')
-
-  const step = document.createElement('p')
-  step.className = 'step-label'
-  step.textContent = progressLabel(snapshot.currentStep, snapshot.totalSteps)
-
-  const collapseButton = document.createElement('button')
-  collapseButton.type = 'button'
-  collapseButton.className = 'icon-button collapse-button'
-  collapseButton.textContent = '▾'
-  collapseButton.setAttribute('aria-label', translatedMessage('widgetCollapse'))
-
-  const dismissButton = document.createElement('button')
-  dismissButton.type = 'button'
-  dismissButton.className = 'icon-button dismiss-button'
-  dismissButton.textContent = '×'
-  dismissButton.setAttribute('aria-label', translatedMessage('widgetDismiss'))
-  dismissButton.addEventListener('click', () => {
-    dismissed = true
-    removeWidget()
-  })
-
-  toolbar.append(step, collapseButton, dismissButton)
-
-  const body = document.createElement('div')
-  body.className = 'body'
-
-  const mark = document.createElement('img')
-  mark.className = 'mark'
-  mark.src = chrome.runtime.getURL('icons/nook.png')
-  mark.alt = ''
-  mark.setAttribute('aria-hidden', 'true')
-  mark.width = 52
-  mark.height = 52
-
-  const title = document.createElement('h1')
-  const copy = workflowCopy(snapshot.kind)
-  title.textContent = translatedMessage(copy.titleKey)
-
-  const site = document.createElement('p')
-  site.className = 'site-context'
-  site.textContent = location.hostname
-
-  const vaultStatus = document.createElement('p')
-  vaultStatus.className = 'vault-status'
-  vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
-  vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
-  vaultStatus.textContent = vaultConnectionLabel(vaultConnection)
-
-  const description = document.createElement('p')
-  description.className = 'description'
-  description.textContent = translatedMessage(copy.descriptionKey)
-
-  const continueButton = document.createElement('button')
-  continueButton.type = 'button'
-  continueButton.className = 'primary-button'
+  const shell = createWidgetShell(
+    workflowCopy(snapshot.kind),
+    vaultConnection,
+    snapshot.currentStep,
+    snapshot.totalSteps,
+  )
+  const { body, step, title, description, continueButton, openVaultButton } =
+    shell
   const canContinueWithNook =
     snapshot.action === 'continue-with-nook' ||
     snapshot.action === 'fill-totp' ||
@@ -1890,18 +1868,6 @@ function renderWidget(
     translatedMessage(continueMessageKey),
   )
   continueButton.textContent = translatedMessage(continueMessageKey)
-
-  const openVaultButton = document.createElement('button')
-  openVaultButton.type = 'button'
-  openVaultButton.className = 'secondary-button'
-  openVaultButton.setAttribute(
-    'aria-label',
-    translatedMessage('widgetOpenVault'),
-  )
-  openVaultButton.textContent = translatedMessage('widgetOpenVault')
-  openVaultButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
-  })
 
   continueButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
@@ -1957,83 +1923,8 @@ function renderWidget(
     removeWidget()
   })
 
-  body.append(
-    mark,
-    site,
-    vaultStatus,
-    title,
-    description,
-    continueButton,
-    openVaultButton,
-    takeOverButton,
-  )
-
-  const collapsedLaunch = document.createElement('button')
-  collapsedLaunch.type = 'button'
-  collapsedLaunch.className = 'collapsed-launch'
-  collapsedLaunch.setAttribute('aria-label', translatedMessage('widgetExpand'))
-  collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
-  collapsedLaunch.setAttribute(
-    'aria-label',
-    `${translatedMessage('widgetExpand')}: ${progressLabel(snapshot.currentStep, snapshot.totalSteps)}`,
-  )
-
-  const collapsedMark = document.createElement('img')
-  collapsedMark.className = 'collapsed-mark'
-  collapsedMark.src = chrome.runtime.getURL('icons/nook.png')
-  collapsedMark.alt = ''
-  collapsedMark.width = 40
-  collapsedMark.height = 40
-  const collapsedProgress = document.createElement('span')
-  collapsedProgress.className = 'collapsed-progress'
-  collapsedProgress.textContent = `${snapshot.currentStep}/${snapshot.totalSteps}`
-  collapsedLaunch.append(collapsedMark, collapsedProgress)
-
-  const applyCollapsedState = (): void => {
-    panel.classList.toggle('is-collapsed', widgetCollapsed)
-    collapseButton.hidden = widgetCollapsed
-    toolbar.hidden = widgetCollapsed
-    body.hidden = widgetCollapsed
-    collapsedLaunch.hidden = !widgetCollapsed
-    host.setAttribute('aria-expanded', widgetCollapsed ? 'false' : 'true')
-    requestAnimationFrame(() => {
-      if (!widgetPosition) return
-      widgetPosition = clampWidgetPosition(
-        widgetPosition.left,
-        widgetPosition.top,
-        host.offsetWidth,
-        host.offsetHeight,
-      )
-      applyWidgetPosition(host, widgetPosition)
-    })
-  }
-
-  collapseButton.addEventListener('click', () => {
-    widgetCollapsed = true
-    applyCollapsedState()
-  })
-
-  const style = document.createElement('style')
-  style.textContent = WIDGET_PANEL_STYLES
-
-  panel.append(toolbar, body, collapsedLaunch)
-  shadow.append(style, panel)
-  document.documentElement.append(host)
-  widgetHost = host
-  renderedWorkflowKey = workflowKey
-  renderedWorkflowRoot = workflow
-
-  attachPointerDrag(host, toolbar)
-  attachPointerDrag(host, collapsedLaunch, {
-    onTap: () => {
-      widgetCollapsed = false
-      applyCollapsedState()
-    },
-  })
-  applyCollapsedState()
-  if (widgetPosition) {
-    applyWidgetPosition(host, widgetPosition)
-  }
+  body.append(takeOverButton)
+  mountWidgetShell(shell, workflowKey, workflow)
 
   const enrollmentHints = detectEnrollmentHints()
   if (enrollmentHints.qr || enrollmentHints.backupCodes) {
