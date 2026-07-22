@@ -1,0 +1,53 @@
+version: '3'
+
+vars:
+  INFRA_SSH_TARGET: '{{default "debian@188.165.236.156" .INFRA_SSH_TARGET}}'
+  INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
+
+tasks:
+  deploy:
+    desc: Deploy the loopback-only Redis cache and future Docker registry.
+    cmds:
+      - >-
+        INFRA_SSH_TARGET="{{.INFRA_SSH_TARGET}}"
+        INFRA_REMOTE_DIR="{{.INFRA_REMOTE_DIR}}"
+        infra/scripts/deploy.sh
+
+  status:
+    desc: Show the remote infrastructure service state.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" ps
+
+  logs:
+    desc: Show recent remote infrastructure logs.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" logs --tail=100
+
+  redis:ping:
+    desc: Verify the remote Redis compiler-cache service.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T redis redis-cli ping
+
+  redis:stats:
+    desc: Show remote Redis cache size, memory, hits, misses, and evictions.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        'set -eu;
+        compose="{{.INFRA_REMOTE_DIR}}/compose.yaml";
+        docker compose -f "$compose" exec -T redis redis-cli DBSIZE;
+        docker compose -f "$compose" exec -T redis redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
+        docker compose -f "$compose" exec -T redis redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+
+  registry:check:
+    desc: Verify the future loopback-only Docker registry API.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        curl --fail --silent --show-error http://127.0.0.1:5000/v2/

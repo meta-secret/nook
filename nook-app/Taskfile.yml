@@ -38,6 +38,9 @@ vars:
   SCCACHE_REDIS_VOLUME: '{{default "nook-sccache-redis" .SCCACHE_REDIS_VOLUME}}'
   SCCACHE_REDIS_PORT: '{{default "6380" .SCCACHE_REDIS_PORT}}'
   SCCACHE_REDIS_MAXMEMORY: '{{default "8gb" .SCCACHE_REDIS_MAXMEMORY}}'
+  # "local" owns a Redis container on this Docker host. CI selects "external" after creating
+  # an authenticated SSH tunnel to the persistent server cache.
+  SCCACHE_REDIS_MODE: '{{default "local" .SCCACHE_REDIS_MODE}}'
   SCCACHE_REDIS_HOST_IP:
     sh: 'DOCKER="{{.DOCKER}}" SCCACHE_REDIS_IMAGE="{{.SCCACHE_REDIS_IMAGE}}" "{{.APP_ROOT}}/docker/resolve-docker-host-ip.sh"'
   GIT_COMMIT_ID:
@@ -101,11 +104,24 @@ tasks:
     cmds:
       - >-
         bash -c 'set -euo pipefail;
+        mode="{{.SCCACHE_REDIS_MODE}}";
         name="{{.SCCACHE_REDIS_CONTAINER}}";
         image="{{.SCCACHE_REDIS_IMAGE}}";
         volume="{{.SCCACHE_REDIS_VOLUME}}";
         port="{{.SCCACHE_REDIS_PORT}}";
         maxmemory="{{.SCCACHE_REDIS_MAXMEMORY}}";
+        if [ "$mode" = external ]; then
+          if [ "$({{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" redis-cli -h host.docker.internal -p "$port" ping 2>/dev/null || true)" != PONG ]; then
+            echo "task sccache:ensure: external Redis is not reachable through host.docker.internal:$port" >&2;
+            exit 1;
+          fi;
+          echo "task sccache:ensure: external Redis is healthy through host.docker.internal:$port";
+          exit 0;
+        fi;
+        if [ "$mode" != local ]; then
+          echo "task sccache:ensure: unsupported SCCACHE_REDIS_MODE=$mode" >&2;
+          exit 2;
+        fi;
         if [ "$(uname -s)" = Darwin ]; then
           bind_ip=127.0.0.1;
         else
@@ -166,10 +182,11 @@ tasks:
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        name="{{.SCCACHE_REDIS_CONTAINER}}";
-        {{.DOCKER}} exec "$name" redis-cli DBSIZE;
-        {{.DOCKER}} exec "$name" redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
-        {{.DOCKER}} exec "$name" redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+        image="{{.SCCACHE_REDIS_IMAGE}}";
+        redis_cli="redis-cli -h host.docker.internal -p {{.SCCACHE_REDIS_PORT}}";
+        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" $redis_cli DBSIZE;
+        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" $redis_cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
+        {{.DOCKER}} run --rm --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}} "$image" $redis_cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.

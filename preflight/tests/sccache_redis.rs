@@ -15,6 +15,9 @@ fn read(path: &str) -> String {
 fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [
+        "SCCACHE_REDIS_MODE",
+        "if [ \"$mode\" = external ]",
+        "external Redis is healthy through host.docker.internal:$port",
         "if [ \"$(uname -s)\" = Darwin ]",
         "bind_ip=127.0.0.1",
         "network inspect bridge",
@@ -86,6 +89,55 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
         assert!(
             resolver.contains(required),
             "Docker host resolver is missing: {required}"
+        );
+    }
+}
+
+#[test]
+fn github_actions_tunnels_to_the_persistent_cache_safely() {
+    let action = read(".github/actions/nook-docker-setup/action.yml");
+    for required in [
+        "cache-ssh-private-key",
+        "StrictHostKeyChecking=yes",
+        "UserKnownHostsFile=\"$known_hosts\"",
+        "ExitOnForwardFailure=yes",
+        "-L \"$bridge_ip:6380:127.0.0.1:6380\"",
+        "SCCACHE_REDIS_MODE=external",
+        "SCCACHE_REDIS_HOST_IP=$bridge_ip",
+    ] {
+        assert!(
+            action.contains(required),
+            "GitHub Actions cache tunnel is missing: {required}"
+        );
+    }
+    assert!(
+        !action.contains("ssh-keyscan"),
+        "the workflow must use the committed verified host key"
+    );
+
+    let known_hosts = read(".github/actions/nook-docker-setup/known_hosts");
+    assert!(known_hosts.contains("188.165.236.156 ssh-ed25519 "));
+    assert_eq!(known_hosts.lines().count(), 1);
+
+    for path in [
+        ".github/workflows/agent-implement.yml",
+        ".github/workflows/e2e-nightly.yml",
+        ".github/workflows/e2e-pr.yml",
+        ".github/workflows/main.yml",
+        ".github/workflows/pr.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/rust-dependency-updates.yml",
+    ] {
+        let workflow = read(path);
+        let setup_count = workflow
+            .matches("uses: ./.github/actions/nook-docker-setup")
+            .count();
+        let key_count = workflow
+            .matches("cache-ssh-private-key: ${{ secrets.NOOK_CACHE_SSH_PRIVATE_KEY }}")
+            .count();
+        assert_eq!(
+            setup_count, key_count,
+            "every Docker setup in {path} must receive the cache key"
         );
     }
 }

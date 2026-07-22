@@ -51,6 +51,8 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-ssh-private-key: ${{ secrets.NOOK_CACHE_SSH_PRIVATE_KEY }}
 
       - name: Checkout release source
         uses: actions/checkout@v7

@@ -65,6 +65,8 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-ssh-private-key: ${{ secrets.NOOK_CACHE_SSH_PRIVATE_KEY }}
 
       - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=prod

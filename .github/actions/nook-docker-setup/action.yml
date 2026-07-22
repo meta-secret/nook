@@ -6,6 +6,10 @@ inputs:
     description: Allow this workflow source to update the shared hosted BuildKit cache scopes.
     required: false
     default: "true"
+  cache-ssh-private-key:
+    description: Dedicated SSH private key for the persistent remote Rust compiler cache.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -40,6 +44,61 @@ runs:
     - name: Setup Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
+
+    - name: Connect persistent Rust compiler cache
+      shell: bash
+      env:
+        CACHE_SSH_PRIVATE_KEY: ${{ inputs.cache-ssh-private-key }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$CACHE_SSH_PRIVATE_KEY" ]; then
+          echo "Persistent Rust cache key is unavailable; using the job-local Redis fallback"
+          exit 0
+        fi
+
+        bridge_ip="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
+        case "$bridge_ip" in
+          ''|*[!0-9.]*)
+            echo "::error::Could not resolve the Docker bridge IPv4 gateway"
+            exit 1
+            ;;
+        esac
+
+        key_file="$RUNNER_TEMP/nook-cache-ssh-key"
+        known_hosts="$GITHUB_ACTION_PATH/known_hosts"
+        umask 077
+        printf '%s\n' "$CACHE_SSH_PRIVATE_KEY" > "$key_file"
+
+        ssh -fNT \
+          -o BatchMode=yes \
+          -o ExitOnForwardFailure=yes \
+          -o IdentitiesOnly=yes \
+          -o LogLevel=ERROR \
+          -o ServerAliveInterval=30 \
+          -o ServerAliveCountMax=3 \
+          -o StrictHostKeyChecking=yes \
+          -o UserKnownHostsFile="$known_hosts" \
+          -i "$key_file" \
+          -L "$bridge_ip:6380:127.0.0.1:6380" \
+          debian@188.165.236.156
+
+        healthy=false
+        for _ in $(seq 1 15); do
+          if [ "$(docker run --rm --add-host "host.docker.internal:$bridge_ip" redis:8.2.2-alpine redis-cli -h host.docker.internal -p 6380 ping 2>/dev/null || true)" = PONG ]; then
+            healthy=true
+            break
+          fi
+          sleep 1
+        done
+        if [ "$healthy" != true ]; then
+          echo "::error::Persistent Rust cache tunnel did not become healthy"
+          exit 1
+        fi
+
+        echo "SCCACHE_REDIS_MODE=external" >> "$GITHUB_ENV"
+        echo "SCCACHE_REDIS_HOST_IP=$bridge_ip" >> "$GITHUB_ENV"
+        echo "Persistent Rust cache is available through the authenticated SSH tunnel"
 
     # Inline `task`/Bake calls do not receive GitHub's cache-service token automatically. This
     # helper exposes ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL as documented by Docker for `type=gha`.

@@ -46,6 +46,8 @@ jobs:
         uses: actions/checkout@v7
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-ssh-private-key: ${{ secrets.NOOK_CACHE_SSH_PRIVATE_KEY }}
       - name: Rust format, clippy, tests, and coverage
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
@@ -111,6 +113,8 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-ssh-private-key: ${{ secrets.NOOK_CACHE_SSH_PRIVATE_KEY }}
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8
@@ -818,6 +822,7 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
         with:
           cache-write: "false"
+          cache-ssh-private-key: ${{ secrets.NOOK_CACHE_SSH_PRIVATE_KEY }}
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8

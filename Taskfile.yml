@@ -16,3 +16,6 @@ includes:
   ai-debug:
     taskfile: .task/ai-debug.yml
     flatten: true
+  infra:
+    taskfile: infra/Taskfile.yml
+    dir: .
