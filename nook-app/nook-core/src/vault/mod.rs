@@ -15,6 +15,7 @@ pub(crate) mod vault_format;
 pub(crate) mod vault_ids;
 pub(crate) mod vault_projection;
 pub(crate) mod vault_runtime_policy;
+pub(crate) mod vault_search_catalog;
 pub(crate) mod vault_security;
 pub(crate) mod vault_sentinel_genesis;
 pub(crate) mod vault_sentinel_onboarding;

@@ -32,8 +32,8 @@ pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
     vault_epoch, vault_event, vault_event_builder, vault_event_graph, vault_event_session,
     vault_event_store, vault_format, vault_ids, vault_projection, vault_runtime_policy,
-    vault_security, vault_sentinel_genesis, vault_sentinel_onboarding, vault_sentinel_unlock,
-    vault_session, vault_session_cache, vault_wire,
+    vault_search_catalog, vault_security, vault_sentinel_genesis, vault_sentinel_onboarding,
+    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
 pub use apple_passwords_import::{
@@ -323,6 +323,7 @@ pub use vault_runtime_policy::{
     DEFAULT_VAULT_SYNC_INTERVAL_MS, MIN_VAULT_IDLE_TIMEOUT_MS, MIN_VAULT_SYNC_INTERVAL_MS,
     VaultRuntimePolicy,
 };
+pub use vault_search_catalog::{SecretSearchCatalog, SecretSearchCatalogReconcile};
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, create_sentinel_genesis_public_key_announcement,
     finalize_sentinel_genesis, respond_to_sentinel_genesis_request, sentinel_genesis_operations,

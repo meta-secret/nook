@@ -110,13 +110,18 @@ keys.
 
 ## 3. Database Schema & File Formats
 
-### A. In-Memory Plaintext Layout (typed Database session)
-The WASM session holds a typed Rust `Database` of plaintext `SecretRecord`
-values. It is never represented as a serialized text format inside the app
-session.
+### A. Ciphertext-backed session and public search catalog
+The WASM session holds encrypted per-record payloads. Full `SecretRecord`
+plaintext exists only for an explicit reveal/copy/edit or while deriving a new
+or changed public catalog row, then it is zeroized.
 
-- **Sorting:** `Database::list()` returns records sorted lexicographically by id.
-- **Scope:** In-memory only — never written to GitHub or IndexedDB as plaintext.
+IndexedDB `secret_search:{store_id}` stores the versioned local
+`SecretListItem` projection used for list/search. Those fields are intentionally
+public; secret values and bodies are excluded. Each row has a vault-keyed HMAC
+bound to its ciphertext digest, so modified cache rows are rebuilt instead of
+trusted. Existing records are migrated once, and later reconciliation decrypts
+only new, changed, or invalid rows. The catalog is local-only and is not
+uploaded to sync providers.
 
 ### B. Local Projection Layout (YAML)
 Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `vault:{store_id}`).

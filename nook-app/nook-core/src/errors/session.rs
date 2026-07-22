@@ -16,6 +16,12 @@ pub enum SessionError {
     #[error("Secret {id} already exists.")]
     SecretAlreadyExists { id: crate::SecretId },
 
+    #[error("Secret search catalog serialization failed: {0}")]
+    SearchCatalogSerialize(String),
+
+    #[error("Secret search catalog is invalid: {0}")]
+    SearchCatalogInvalid(String),
+
     #[error(transparent)]
     Validation(#[from] ValidationError),
 

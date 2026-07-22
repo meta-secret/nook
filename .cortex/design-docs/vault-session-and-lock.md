@@ -207,11 +207,16 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 
 - Lock must clear WASM session state — never rely on hiding UI alone.
 - The unlocked WASM session retains encrypted record payloads, not a plaintext
-  `Database`. List access briefly decrypts at most 50 records to derive
-  metadata-only rows, then zeroizes the full records before returning to
-  Svelte. Search does the same one candidate at a time because searchable
-  metadata is encrypted. Reveal and secret copy decrypt exactly one full
-  record; hide, action completion, page/search replacement, and lock free it.
+  `Database`. A local `secret_search:{store_id}` catalog stores only the fields
+  intentionally exposed in list/search (site, username/account, titles, issuer,
+  expiry, masked card/file metadata, and ids/types). It never contains
+  passwords, API keys, note bodies, seeds, full card numbers, OTP seeds,
+  passkey private keys, backup codes, or file contents. Existing vaults build
+  it once; each cached row has a vault-keyed integrity tag bound to its
+  ciphertext digest. Later unlocks decrypt only new, changed, or invalid rows.
+  Search scans authenticated pre-normalized catalog text and does not decrypt
+  vault records. Reveal and secret copy decrypt exactly one full record;
+  hide, action completion, page/search replacement, and lock free it.
 - The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey or PIN authorization again depending on the stored wrapper.
 - Sync provider tokens in `nook_auth` remain after lock — they are storage credentials, not vault keys.
 - Vault authentication/authorization belongs to `nook-auth2`; sync provider replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.

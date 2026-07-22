@@ -102,6 +102,11 @@ struct VaultSessionState {
     vault_version: u64,
     /// Grouped architecture modes persisted in vault YAML.
     architecture: nook_core::VaultArchitecture,
+    /// Local plaintext projection of fields intentionally public in list/search.
+    search_catalog: Option<nook_core::SecretSearchCatalog>,
+    search_catalog_store_id: String,
+    search_catalog_dirty: bool,
+    search_catalog_needs_persist: bool,
 }
 
 impl Default for VaultSessionState {
@@ -118,6 +123,10 @@ impl Default for VaultSessionState {
             vault_name: None,
             vault_version: 0,
             architecture: nook_core::VaultArchitecture::default(),
+            search_catalog: None,
+            search_catalog_store_id: String::new(),
+            search_catalog_dirty: true,
+            search_catalog_needs_persist: false,
         }
     }
 }
@@ -138,6 +147,14 @@ impl VaultSessionState {
         self.vault_name = None;
         self.vault_version = 0;
         self.architecture = architecture;
+        self.search_catalog = None;
+        self.search_catalog_store_id.clear();
+        self.search_catalog_dirty = true;
+        self.search_catalog_needs_persist = false;
+    }
+
+    fn mark_search_catalog_dirty(&mut self) {
+        self.search_catalog_dirty = true;
     }
 }
 
@@ -248,6 +265,101 @@ impl Drop for NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    pub(crate) async fn prepare_secret_search_catalog(&mut self) -> Result<(), NookError> {
+        if self.vault.store_id.is_empty() {
+            return Err(NookError::Database(
+                "Vault store id is unavailable for search.".to_owned(),
+            ));
+        }
+        let store_id = self.vault.store_id.clone();
+        if self.vault.search_catalog_store_id != store_id || self.vault.search_catalog.is_none() {
+            let cached =
+                match crate::storage::indexed_db::load_secret_search_catalog(&store_id).await {
+                    Ok(cached) => cached,
+                    Err(error) => {
+                        tracing::warn!(
+                            scope = "wasm-search",
+                            action = "load-catalog",
+                            reason = %error,
+                            "local secret search catalog is unavailable; rebuilding in memory"
+                        );
+                        None
+                    }
+                };
+            let restored =
+                cached
+                    .as_deref()
+                    .and_then(
+                        |json| match nook_core::SecretSearchCatalog::from_json(json) {
+                            Ok(catalog) => Some(catalog),
+                            Err(error) => {
+                                tracing::warn!(
+                                    scope = "wasm-search",
+                                    action = "discard-catalog",
+                                    reason = %error,
+                                    "discarding an invalid local secret search catalog"
+                                );
+                                None
+                            }
+                        },
+                    );
+            self.vault.search_catalog = if let Some(catalog) = restored {
+                Some(catalog)
+            } else {
+                self.vault.search_catalog_needs_persist = true;
+                Some(nook_core::SecretSearchCatalog::default())
+            };
+            self.vault.search_catalog_store_id.clone_from(&store_id);
+            self.vault.search_catalog_dirty = true;
+        }
+
+        if self.vault.search_catalog_dirty {
+            let crypto =
+                self.vault.crypto.as_ref().ok_or_else(|| {
+                    NookError::Encryption("Vault crypto not initialized.".to_owned())
+                })?;
+            let integrity_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+            let outcome = self
+                .vault
+                .search_catalog
+                .as_mut()
+                .expect("search catalog was initialized above")
+                .reconcile(&self.vault.meta.secrets, crypto, &integrity_key)?;
+            self.vault.search_catalog_dirty = false;
+            self.vault.search_catalog_needs_persist |= outcome.changed();
+            tracing::info!(
+                scope = "wasm-search",
+                action = "reconcile-catalog",
+                added = outcome.added,
+                updated = outcome.updated,
+                removed = outcome.removed,
+                count = self.vault.meta.secrets.len(),
+                "public secret search catalog reconciled"
+            );
+        }
+
+        if self.vault.search_catalog_needs_persist {
+            let json = self
+                .vault
+                .search_catalog
+                .as_ref()
+                .expect("search catalog was initialized above")
+                .to_json()?;
+            if let Err(error) =
+                crate::storage::indexed_db::save_secret_search_catalog(&store_id, &json).await
+            {
+                tracing::warn!(
+                    scope = "wasm-search",
+                    action = "save-catalog",
+                    reason = %error,
+                    "local secret search catalog could not be cached; continuing in memory"
+                );
+            }
+            self.vault.search_catalog_needs_persist = false;
+        }
+        Ok(())
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -442,13 +554,21 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let offset = usize::try_from(offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(limit).unwrap_or(nook_core::DEFAULT_SECRET_PAGE_SIZE);
+        if !self.vault.search_catalog_dirty
+            && self.vault.search_catalog_store_id == self.vault.store_id
+            && let Some(catalog) = self.vault.search_catalog.as_ref()
+        {
+            return Ok(catalog.query(query, secret_type_filter, offset, limit));
+        }
         Ok(nook_core::query_encrypted_secrets(
             &self.vault.meta.secrets,
             crypto,
             query,
             secret_type_filter,
-            usize::try_from(offset).unwrap_or(usize::MAX),
-            usize::try_from(limit).unwrap_or(nook_core::DEFAULT_SECRET_PAGE_SIZE),
+            offset,
+            limit,
         )?)
     }
 
