@@ -1,0 +1,100 @@
+schema_version: 2
+source_pr:
+  number: 603
+  url: https://github.com/meta-secret/nook/pull/603
+  title: Connect an installed browser extension from Simple Vault
+  change_surface: browser_extension_pairing_launcher_ui
+  head_sha: b4809e0ef23b8da1fcb8d09e064b69ff59c872b4
+  started_at: 2026-07-22T01:16:37Z
+  opened_at: 2026-07-22T01:25:52Z
+  merged_at: 2026-07-22T01:38:03Z
+  elapsed_seconds: 1286
+  open_to_merge_seconds: 731
+summary:
+  local_execution_count: 5
+  local_check_count: 5
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 331
+  github_actions_run_count: 1
+  github_actions_seconds: 692
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T01:38:27Z
+  head_sha: b4809e0ef23b8da1fcb8d09e064b69ff59c872b4
+  by_type:
+    rust: 623
+    preflight: 31
+    web_unit: 232
+    e2e: 196
+  total: 1082
+local_executions:
+  - command: task format
+    category: check
+    started_at: 2026-07-22T01:20:04Z
+    finished_at: 2026-07-22T01:23:54Z
+    duration_seconds: 230
+    outcome: failed
+    reason: sentinel_extension_connect_alias_missing_new_launcher_export
+  - command: task format
+    category: check
+    started_at: 2026-07-22T01:24:02Z
+    finished_at: 2026-07-22T01:25:29Z
+    duration_seconds: 87
+    outcome: passed
+    reason: pre_push_hygiene_after_sentinel_denial_shim
+  - command: .github/scripts/ui-demo-contract.sh origin/main
+    category: check
+    started_at: 2026-07-22T01:25:31Z
+    finished_at: 2026-07-22T01:25:33Z
+    duration_seconds: 2
+    outcome: passed
+    reason: pre_push_ui_demo_contract
+  - command: task pr:preflight PR=603
+    category: check
+    started_at: 2026-07-22T01:25:58Z
+    finished_at: 2026-07-22T01:26:04Z
+    duration_seconds: 6
+    outcome: passed
+    reason: initial_pr_policy_and_state_audit
+  - command: task pr:ready PR=603
+    category: check
+    started_at: 2026-07-22T01:37:29Z
+    finished_at: 2026-07-22T01:37:35Z
+    duration_seconds: 6
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 29883075462
+    run_attempt: 1
+    head_sha: 5a0580f06f1bd88f182909819cb6e662cf022ff2
+    trigger: pull_request
+    started_at: 2026-07-22T01:25:55Z
+    finished_at: 2026-07-22T01:37:27Z
+    duration_seconds: 692
+    conclusion: success
+pr_retriggers: []
+merge_attempts:
+  - at: 2026-07-22T01:38:03Z
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [600, 587]
+  baseline_quality: comparable
+  baseline_note: Recent browser-extension behavior PRs with shared web UI and the same PR Verify gate
+  elapsed_seconds_change_percent: -23.1
+  local_execution_seconds_change_percent: -75.6
+  github_actions_seconds_change_percent: -21.4
+  test_inventory_total_change: 8
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first task format found a missing Sentinel denial export for the new shared launcher API; it was fixed before the first push, so no remote validation cycle was wasted.
+    - The single PR run spent 163 seconds exporting fallback base coverage because no reusable base artifact was available; this remained below the regression threshold against comparable extension PRs.
+  required_actions: []
