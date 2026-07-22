@@ -1904,6 +1904,10 @@ export class VaultState {
     return providersActions.connectAndSyncStagedProvider(this);
   }
 
+  async discoverStagedVaultStoreId(): Promise<string> {
+    return providersActions.discoverStagedVaultStoreId(this);
+  }
+
   openSettings(
     section: "storage" | "onboard" | "admin" = "storage",
     accordion: "devices" | "language" | "danger" = "devices",

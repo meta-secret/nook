@@ -1230,6 +1230,21 @@ impl NookVaultClientPolicy {
         )
     }
 
+    #[wasm_bindgen(js_name = existingVaultIdentityRecoveryRequired)]
+    #[must_use]
+    pub fn existing_vault_identity_recovery_required(
+        &self,
+        existing_vault_required: bool,
+        provider_setup_active: bool,
+        device_protection_ready: bool,
+    ) -> bool {
+        nook_core::VaultClientPolicy::existing_vault_identity_recovery_required(
+            existing_vault_required,
+            provider_setup_active,
+            device_protection_ready,
+        )
+    }
+
     #[wasm_bindgen(js_name = shouldShowLoginVaultPicker)]
     #[must_use]
     #[allow(clippy::too_many_arguments)]

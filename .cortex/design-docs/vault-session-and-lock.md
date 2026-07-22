@@ -122,6 +122,15 @@ passkey recovery action.
   wrapped device identity or its sealed sync-provider credentials.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Sentinel starts the pre-vault reverse-onboarding ceremony in [sentinel-genesis.md](sentinel-genesis.md).
 
+Existing-vault import must recover an authorized device identity before it
+attempts `connect`. The provider preflight may discover the remote `store_id`
+from signed encrypted events without decrypting the vault. Simple Vault uses
+that identifier to ask an already-paired extension for its memory-only identity;
+a locked extension owns and displays its unlock window. Only when no paired
+extension is available does the website present its own passkey/PIN device gate.
+The flow must never call provider connect first and surface the internal
+`authorization_required` error to the user.
+
 The login vault surface presents **Open existing**, **Create new**, and **Import**
 as mutually exclusive workflows rather than consecutive sections. With local
 vaults, Open existing is the default: choose a vault first, then authorize its

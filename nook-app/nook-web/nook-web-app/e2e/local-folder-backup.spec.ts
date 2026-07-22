@@ -248,6 +248,31 @@ async function connectLocalFolderProviderFromSettings(page: Page) {
 }
 
 test.describe('local folder backup provider', () => {
+  test('requests device identity before importing into an empty browser', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await installPasskeyMock(page)
+    await installLocalFolderPickerMock(page)
+    await page.goto('/app/')
+
+    await page.getByTestId('login-connect-storage-btn').click()
+    await page.getByTestId('provider-option-local-folder').click()
+    await page.getByTestId('login-choose-local-folder-btn').click()
+    await expect(page.getByTestId('login-local-folder-selected')).toHaveText(
+      'Nook Backup',
+    )
+    await page.getByTestId('login-connect-local-folder-btn').click()
+
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
+    await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-error')).not.toContainText(
+      "Authorize before using this browser's device key.",
+    )
+  })
+
   test('explains the AI-debug browser directory-picker boundary', async ({
     page,
   }) => {

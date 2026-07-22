@@ -61,6 +61,24 @@ mod tests {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Discover the single vault identity exposed by a staged sync provider
+    /// without requiring or decrypting a device identity. Hosts use this only
+    /// to bind an existing-vault import to an already-paired companion.
+    #[wasm_bindgen(js_name = discoverRemoteVaultStoreId)]
+    pub async fn discover_remote_vault_store_id(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<String, JsError> {
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        if self.storage.mode != nook_core::StorageMode::Local {
+            self.sync_events_from_current_provider().await?;
+        }
+        Ok(self.vault.store_id.clone())
+    }
+
     /// Return the typed, core-owned connect status for the selected provider.
     pub async fn assess_vault_connect(
         &mut self,

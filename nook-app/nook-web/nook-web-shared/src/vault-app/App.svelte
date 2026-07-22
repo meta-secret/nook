@@ -286,15 +286,34 @@
   });
 
   async function handleUnlock(skipExtensionDiscovery = false) {
-    if (vault.addProviderOpen && vault.loginSetupType) {
+    const existingVaultImportNeedsIdentity =
+      vault.clientPolicy.existingVaultIdentityRecoveryRequired(
+        vault.loginRequiresExistingVault,
+        vault.loginSetupType !== undefined,
+        vault.deviceProtectionReady,
+      );
+    if (
+      vault.addProviderOpen &&
+      vault.loginSetupType &&
+      !existingVaultImportNeedsIdentity
+    ) {
       await vault.connectStagedProvider();
       return;
     }
-    const activeStoreId = vault.activeVaultStoreId?.trim() ?? "";
+    let activeStoreId = vault.activeVaultStoreId?.trim() ?? "";
+    if (existingVaultImportNeedsIdentity) {
+      try {
+        activeStoreId = await vault.discoverStagedVaultStoreId();
+        if (activeStoreId) vault.activeVaultStoreId = activeStoreId;
+      } catch (error) {
+        vault.errorMsg =
+          error instanceof Error ? error.message : vault.t("auth_storage.sync_failed");
+        return;
+      }
+    }
     const connectRequest = extensionIdentityRequest;
     if (
       connectRequest?.source === "paired-vault" &&
-      vault.localVaultPresent &&
       connectRequest.vaultStoreId === activeStoreId
     ) {
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
@@ -308,7 +327,7 @@
     if (
       !skipExtensionDiscovery &&
       SUPPORTS_EXTENSION &&
-      vault.localVaultPresent &&
+      (vault.localVaultPresent || existingVaultImportNeedsIdentity) &&
       activeStoreId
     ) {
       extensionDiscoveryStoreId = "";
@@ -319,7 +338,7 @@
         return;
       }
     }
-    if (existingVaultNeedsDeviceUnlock) {
+    if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
       const extensionIdentityCanUnlock =
         connectRequest &&
         (connectRequest.source !== "paired-vault" ||
@@ -400,6 +419,7 @@
   const requiresPasskeyFirst = $derived(
     vault.localVaultPresent ||
       vault.localVaults.length > 0 ||
+      vault.loginRequiresExistingVault ||
       urlEnrollmentPending,
   );
   const existingVaultNeedsDeviceUnlock = $derived(
@@ -618,7 +638,8 @@
       vault.isAuthenticated ||
       vault.isInitializing ||
       vault.isVerifying ||
-      !vault.localVaultPresent ||
+      (!vault.localVaultPresent &&
+        !(vault.loginRequiresExistingVault && vault.loginSetupType)) ||
       !storeId ||
       extensionDiscoveryStoreId === storeId
     ) {

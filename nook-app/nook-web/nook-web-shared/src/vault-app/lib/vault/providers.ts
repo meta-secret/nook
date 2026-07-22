@@ -444,6 +444,31 @@ export async function connectStagedProvider(state: VaultState): Promise<void> {
   await state.loadDb();
 }
 
+export async function discoverStagedVaultStoreId(
+  state: VaultState,
+): Promise<string> {
+  if (!state.manager || !state.loginSetupType) return "";
+  if (state.loginSetupType === "local-folder") {
+    const handleId = state.localFolder?.handleId?.trim() ?? "";
+    if (!handleId) return "";
+    await state.enqueueStorage(() =>
+      state.manager!.syncLocalFolderProvider(handleId),
+    );
+    return state.manager.vaultStoreId.trim();
+  }
+  const [storageMode, accessToken, remoteRef] =
+    state.stagedRemoteStorageArgs() ?? state.wasmStorageArgs();
+  return (
+    await state.enqueueStorage(() =>
+      state.manager!.discoverRemoteVaultStoreId(
+        storageMode,
+        accessToken,
+        remoteRef,
+      ),
+    )
+  ).trim();
+}
+
 export async function connectAndSyncStagedProvider(
   state: VaultState,
 ): Promise<void> {
