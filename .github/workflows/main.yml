@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: main
@@ -40,6 +41,9 @@ env:
   CI_MAIN_SENTINEL_URL: https://sentinel.dev.nokey.sh
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
+  LINEAR_UI_DEMO_LABEL_ID: 3d5eaced-687d-4d93-a046-92f5008f584d
+  LINEAR_UI_DEMO_PROJECT_ID: 07e407b4-3dca-4caa-8c1f-479b6b065503
+  LINEAR_UI_DEMO_TEAM_ID: fb81b5b7-ce24-447e-8673-63ec37c64983
 
 jobs:
   ci:
@@ -52,6 +56,7 @@ jobs:
     permissions:
       contents: read
       deployments: write
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -75,6 +80,80 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+
+      - name: Record all headless UI demos
+        id: record-ui-demo
+        env:
+          UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
+        run: task ui:demo:ci UI_DEMO_OUTPUT_DIR="$UI_DEMO_OUTPUT_DIR"
+
+      - name: Upload complete Main UI demo artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-demo-main-${{ github.sha }}
+          path: ${{ runner.temp }}/nook-ui-demo
+          retention-days: 90
+          if-no-files-found: warn
+          overwrite: true
+
+      - name: Publish largest Main UI demos to the merged PR issue
+        if: steps.record-ui-demo.outcome == 'success'
+        continue-on-error: true
+        uses: actions/github-script@v9
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
+        with:
+          retries: 3
+          script: |
+            if (!process.env.LINEAR_API_KEY) {
+              core.warning('LINEAR_API_KEY is unavailable; keeping the GitHub Actions artifact only')
+              return
+            }
+
+            const pulls = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              ...context.repo,
+              commit_sha: context.sha,
+            })
+            const pullRequest =
+              pulls.data.find((candidate) => candidate.merge_commit_sha === context.sha) ??
+              pulls.data.find((candidate) => candidate.merged_at)
+            if (!pullRequest) {
+              core.warning('No merged pull request is associated with this Main commit')
+              return
+            }
+
+            const { syncUiDemoIssue, transitionUiDemoIssue } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+            )
+            const config = {
+              labelId: process.env.LINEAR_UI_DEMO_LABEL_ID,
+              projectId: process.env.LINEAR_UI_DEMO_PROJECT_ID,
+              repository: `${context.repo.owner}/${context.repo.repo}`,
+              teamId: process.env.LINEAR_UI_DEMO_TEAM_ID,
+            }
+            const issue = await syncUiDemoIssue({
+              apiKey: process.env.LINEAR_API_KEY,
+              config,
+              demoDir: process.env.UI_DEMO_OUTPUT_DIR,
+              maxVideos: 10,
+              pullRequest: {
+                headSha: context.sha,
+                number: pullRequest.number,
+                runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                specs: 'all UI demo specs on Main',
+                title: pullRequest.title,
+                url: pullRequest.html_url,
+              },
+            })
+            await transitionUiDemoIssue({
+              apiKey: process.env.LINEAR_API_KEY,
+              config,
+              merged: true,
+              prNumber: pullRequest.number,
+            })
+            core.info(`Published Main UI demos to ${issue.identifier}: ${issue.url}`)
 
       - name: Deploy isolated development applications to Cloudflare Pages
         id: deploy-dev

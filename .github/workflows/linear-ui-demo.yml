@@ -1,0 +1,182 @@
+# Linear publication is intentionally isolated from pull_request workflows. This workflow is
+# loaded from the trusted default branch before it receives LINEAR_API_KEY; unmerged PR code can
+# produce WebM artifacts, but it cannot execute while the credential is present.
+
+name: Linear UI demos
+
+on:
+  workflow_run:
+    workflows: [PR]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  LINEAR_UI_DEMO_LABEL_ID: 3d5eaced-687d-4d93-a046-92f5008f584d
+  LINEAR_UI_DEMO_PROJECT_ID: 07e407b4-3dca-4caa-8c1f-479b6b065503
+  LINEAR_UI_DEMO_TEAM_ID: fb81b5b7-ce24-447e-8673-63ec37c64983
+
+jobs:
+  publish:
+    name: Publish trusted PR UI demos
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Locate the PR UI demo artifact
+        id: artifact
+        uses: actions/github-script@v9
+        with:
+          retries: 3
+          script: |
+            const run = context.payload.workflow_run
+            const pullRequest = run.pull_requests[0]
+            if (!pullRequest) {
+              core.warning('The completed PR workflow has no associated pull request')
+              core.setOutput('found', 'false')
+              return
+            }
+
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              { ...context.repo, run_id: run.id, per_page: 100 },
+            )
+            const expectedName = `ui-demo-pr-${pullRequest.number}-${run.head_sha}`
+            const artifact = artifacts.find(
+              (candidate) => candidate.name === expectedName && !candidate.expired,
+            )
+            core.setOutput('found', artifact ? 'true' : 'false')
+            core.setOutput('head-sha', run.head_sha)
+            core.setOutput('pr-number', pullRequest.number)
+            core.setOutput('run-url', run.html_url)
+            if (artifact) {
+              core.setOutput('artifact-id', artifact.id)
+              core.setOutput('artifact-name', artifact.name)
+            } else {
+              core.info(`No UI demo artifact named ${expectedName}; no Linear issue is needed`)
+            }
+
+      - name: Checkout the trusted publisher
+        if: steps.artifact.outputs.found == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Download UI demo videos
+        if: steps.artifact.outputs.found == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.artifact.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/nook-ui-demo
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Publish the 10 largest videos to Linear
+        if: steps.artifact.outputs.found == 'true'
+        continue-on-error: true
+        uses: actions/github-script@v9
+        env:
+          HEAD_SHA: ${{ steps.artifact.outputs.head-sha }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PR_NUMBER: ${{ steps.artifact.outputs.pr-number }}
+          RUN_URL: ${{ steps.artifact.outputs.run-url }}
+          UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
+        with:
+          retries: 3
+          script: |
+            if (!process.env.LINEAR_API_KEY) {
+              core.warning('LINEAR_API_KEY is unavailable; keeping the GitHub Actions artifact only')
+              return
+            }
+
+            const pullRequest = (
+              await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: Number(process.env.PR_NUMBER),
+              })
+            ).data
+            const { syncUiDemoIssue } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+            )
+            const issue = await syncUiDemoIssue({
+              apiKey: process.env.LINEAR_API_KEY,
+              config: {
+                labelId: process.env.LINEAR_UI_DEMO_LABEL_ID,
+                projectId: process.env.LINEAR_UI_DEMO_PROJECT_ID,
+                repository: `${context.repo.owner}/${context.repo.repo}`,
+                teamId: process.env.LINEAR_UI_DEMO_TEAM_ID,
+              },
+              demoDir: process.env.UI_DEMO_OUTPUT_DIR,
+              maxVideos: 10,
+              pullRequest: {
+                headSha: process.env.HEAD_SHA,
+                number: pullRequest.number,
+                runUrl: process.env.RUN_URL,
+                specs: 'changed UI demo specs',
+                title: pullRequest.title,
+                url: pullRequest.html_url,
+              },
+            })
+
+            const marker = '<!-- nook-ui-demo -->'
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo,
+              issue_number: pullRequest.number,
+              per_page: 100,
+            })
+            const existing = comments.find((comment) => comment.body?.includes(marker))
+            if (existing) {
+              const body = existing.body.replace(
+                /^- Linear archive:.*$/m,
+                `- Linear archive: [${issue.identifier}](${issue.url})`,
+              )
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existing.id,
+                body,
+              })
+            }
+
+  close:
+    name: Complete or cancel trusted PR UI demo issue
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the trusted publisher
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Complete or cancel the Linear issue
+        continue-on-error: true
+        uses: actions/github-script@v9
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        with:
+          retries: 3
+          script: |
+            if (!process.env.LINEAR_API_KEY) {
+              core.warning('LINEAR_API_KEY is unavailable; the Linear UI demo issue was not transitioned')
+              return
+            }
+
+            const { transitionUiDemoIssue } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+            )
+            const issue = await transitionUiDemoIssue({
+              apiKey: process.env.LINEAR_API_KEY,
+              config: {
+                repository: `${context.repo.owner}/${context.repo.repo}`,
+                teamId: process.env.LINEAR_UI_DEMO_TEAM_ID,
+              },
+              merged: context.payload.pull_request.merged,
+              prNumber: context.payload.pull_request.number,
+            })
+            if (!issue) core.info('This pull request has no Linear UI demo issue')
