@@ -3,12 +3,15 @@
 #[path = "event_log_harness.rs"]
 mod harness;
 
-use harness::{EventLogDevice, ProviderBuckets, push_device_outbox, union_device_from_providers};
+use harness::{
+    EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, pull_provider_into_device,
+    push_device_outbox, request_join, union_device_from_providers,
+    write_all_device_events_to_provider,
+};
 use nook_core::{
-    AppendEventInput, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventError,
-    EventId, IsoTimestamp, JoinRequest, MemberLabel, OpaqueCiphertext, SecretId, SecretType,
-    SecretValue, SecureNoteSecret, StoreId, VaultOperation, VaultResult, build_signed_event,
-    encrypted_secret_from_armored,
+    AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
+    SecretId, SecretType, SecretValue, SecureNoteSecret, StoreId, VaultOperation, VaultResult,
+    build_signed_event, encrypted_secret_from_armored,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -24,54 +27,12 @@ fn event_id_set(device: &EventLogDevice) -> BTreeSet<String> {
         .collect()
 }
 
-fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>> {
-    let graph = device.session.store.load_graph(device.store_id())?;
-    Ok(device
-        .project()?
-        .live_secrets(&graph)
-        .keys()
-        .cloned()
-        .collect())
-}
-
 fn provider_event_id_set(provider: &nook_core::LocalEventStore) -> BTreeSet<String> {
     provider
         .event_ids()
         .into_iter()
         .map(|id| id.as_str().to_owned())
         .collect()
-}
-
-fn write_all_device_events_to_provider(
-    device: &EventLogDevice,
-    providers: &mut ProviderBuckets,
-    provider: &str,
-) -> VaultResult<()> {
-    let bucket = providers
-        .get_mut(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
-    for (id, bytes) in device.remote_events() {
-        if bucket.get_bytes(&id).is_none() {
-            bucket.put_event(id, bytes);
-        }
-    }
-    Ok(())
-}
-
-fn pull_provider_into_device(
-    device: &mut EventLogDevice,
-    providers: &ProviderBuckets,
-    provider: &str,
-) -> VaultResult<()> {
-    let bucket = providers
-        .get(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
-    let events = bucket
-        .event_ids()
-        .into_iter()
-        .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.to_vec())))
-        .collect::<Vec<_>>();
-    device.session.union_remote(&events)
 }
 
 fn expect_provider_event_sets_equal(
@@ -119,34 +80,40 @@ fn append_secure_note(
     }])
 }
 
-fn request_join(device: &mut EventLogDevice, joiner: &DeviceIdentity) -> VaultResult<JoinRequest> {
-    let join = JoinRequest {
-        device_id: joiner.device_id().clone(),
-        public_key: joiner.public_key(),
-        signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
-        requested_at: TS.to_owned(),
-    };
-    device.append_signed(vec![VaultOperation::JoinRequested {
-        device_id: joiner.device_id().clone(),
-        encryption_public_key: joiner.public_key(),
-        signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
-        label: MemberLabel::from_trusted("device 2".to_owned()),
-    }])?;
-    Ok(join)
-}
-
-fn approve_join(device: &mut EventLogDevice, join: &JoinRequest) -> VaultResult<()> {
-    let secrets_key_ciphertext = device.crypto.encrypt_value(&device.secrets_key)?;
-    let members_key_ciphertext = device.crypto.encrypt_value(&device.members_key)?;
-    device.append_signed(vec![VaultOperation::JoinApproved {
-        device_id: join.device_id.clone(),
-        encryption_public_key: join.public_key.clone(),
-        signing_public_key: join.signing_public_key.clone(),
-        label: MemberLabel::from_trusted("device 2".to_owned()),
-        secrets_key_ciphertext,
-        members_key_ciphertext,
-    }])?;
-    Ok(())
+fn child_event_with_genesis(
+    device: &EventLogDevice,
+    secret_id: &str,
+    ciphertext: &str,
+) -> VaultResult<(EventId, Vec<u8>, EventId, Vec<u8>)> {
+    let genesis_head = EventId::parse(&device.session.heads[0])?;
+    let genesis_bytes = device
+        .session
+        .store
+        .get_bytes(&genesis_head)
+        .ok_or(EventError::MissingGenesisBytes)?
+        .to_vec();
+    let store_id = StoreId::parse(device.store_id())?;
+    let actor_id = device.actor_id()?;
+    let key_epoch = EventId::parse(&device.session.key_epoch)?;
+    let created_at = IsoTimestamp::from_trusted(TS.to_owned());
+    let (event, child_bytes) = build_signed_event(AppendEventInput {
+        store_id: &store_id,
+        actor_id: &actor_id,
+        signing_identity: &device.session.signing,
+        parents: vec![genesis_head.clone()],
+        key_epoch: &key_epoch,
+        created_at: &created_at,
+        operations: vec![VaultOperation::SecretCreated {
+            secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record(secret_id),
+                secret_type: SecretType::ApiKey,
+                ciphertext: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
+                identity_fingerprint: None,
+                fingerprint: None,
+            },
+        }],
+    })?;
+    Ok((genesis_head, genesis_bytes, event.id()?, child_bytes))
 }
 
 #[test]
@@ -187,10 +154,10 @@ fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()>
     let mut device2 = EventLogDevice::replica_of(&device1)?;
     pull_provider_into_device(&mut device2, &providers, "common-vault")?;
     let device2_identity = device2.identity.clone();
-    let join = request_join(&mut device2, &device2_identity)?;
+    let join = request_join(&mut device2, &device2_identity, "device 2")?;
     write_all_device_events_to_provider(&device2, &mut providers, "common-vault")?;
     pull_provider_into_device(&mut device1, &providers, "common-vault")?;
-    approve_join(&mut device1, &join)?;
+    approve_join(&mut device1, &join, "device 2")?;
     write_all_device_events_to_provider(&device1, &mut providers, "common-vault")?;
     pull_provider_into_device(&mut device2, &providers, "common-vault")?;
 
@@ -414,37 +381,8 @@ fn causal_join_observes_all_heads_and_collapses_branch_vector() -> VaultResult<(
 #[test]
 fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
     let device = EventLogDevice::genesis("main")?;
-    let genesis_head = nook_core::EventId::parse(&device.session.heads[0])?;
-    let genesis_bytes = device
-        .session
-        .store
-        .get_bytes(&genesis_head)
-        .ok_or(EventError::MissingGenesisBytes)?
-        .to_vec();
-
-    let child_ops = vec![VaultOperation::SecretCreated {
-        secret: EncryptedSecretPayload {
-            id: SecretId::from_vault_record("secret_outoforder1"),
-            secret_type: SecretType::ApiKey,
-            ciphertext: OpaqueCiphertext::from_trusted("cipher-child".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
-        },
-    }];
-    let store_id = StoreId::parse(device.store_id())?;
-    let actor_id = device.actor_id()?;
-    let key_epoch = EventId::parse(&device.session.key_epoch)?;
-    let created_at = IsoTimestamp::from_trusted(TS.to_owned());
-    let (event, child_bytes) = build_signed_event(AppendEventInput {
-        store_id: &store_id,
-        actor_id: &actor_id,
-        signing_identity: &device.session.signing,
-        parents: vec![genesis_head.clone()],
-        key_epoch: &key_epoch,
-        created_at: &created_at,
-        operations: child_ops,
-    })?;
-    let child_id = event.id()?;
+    let (genesis_head, genesis_bytes, child_id, child_bytes) =
+        child_event_with_genesis(&device, "secret_outoforder1", "cipher-child")?;
 
     let mut store = nook_core::LocalEventStore::new();
     store.put_event(child_id.clone(), child_bytes);
@@ -461,36 +399,8 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
 #[test]
 fn pending_child_from_one_provider_applies_after_parent_arrives_from_another() -> VaultResult<()> {
     let device = EventLogDevice::genesis("main")?;
-    let genesis_head = EventId::parse(&device.session.heads[0])?;
-    let genesis_bytes = device
-        .session
-        .store
-        .get_bytes(&genesis_head)
-        .ok_or(EventError::MissingGenesisBytes)?
-        .to_vec();
-
-    let store_id = StoreId::parse(device.store_id())?;
-    let actor_id = device.actor_id()?;
-    let key_epoch = EventId::parse(&device.session.key_epoch)?;
-    let created_at = IsoTimestamp::from_trusted(TS.to_owned());
-    let (event, child_bytes) = build_signed_event(AppendEventInput {
-        store_id: &store_id,
-        actor_id: &actor_id,
-        signing_identity: &device.session.signing,
-        parents: vec![genesis_head.clone()],
-        key_epoch: &key_epoch,
-        created_at: &created_at,
-        operations: vec![VaultOperation::SecretCreated {
-            secret: EncryptedSecretPayload {
-                id: SecretId::from_vault_record("secret_splitparent"),
-                secret_type: SecretType::ApiKey,
-                ciphertext: OpaqueCiphertext::from_trusted("cipher-split".to_owned()),
-                identity_fingerprint: None,
-                fingerprint: None,
-            },
-        }],
-    })?;
-    let child_id = event.id()?;
+    let (genesis_head, genesis_bytes, child_id, child_bytes) =
+        child_event_with_genesis(&device, "secret_splitparent", "cipher-split")?;
 
     let github_events = vec![(child_id, child_bytes)];
     let drive_events = vec![(genesis_head, genesis_bytes)];

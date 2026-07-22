@@ -8,60 +8,20 @@
 #[path = "event_log_harness.rs"]
 mod harness;
 
-use harness::{EventLogDevice, ProviderBuckets};
+use harness::{
+    EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, pull_provider_into_device,
+    request_join, write_all_device_events_to_provider,
+};
 use nook_core::{
-    DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventError, JoinRequest,
-    MemberLabel, OpaqueCiphertext, SecretId, SecretType, VaultOperation, VaultResult,
+    EncryptedSecretPayload, EventError, OpaqueCiphertext, SecretId, SecretType, VaultOperation,
+    VaultResult,
 };
 use std::collections::{BTreeSet, HashMap};
 
-const TS: &str = "2026-06-28T00:00:00Z";
 const VAULT_A: &str = "vault-a";
 const VAULT_A_DEVICE_B: &str = "vault-a-device-b";
 const LOGIN_SITE: &str = "https://login-a-1.example.com";
 const LOGIN_USER: &str = "alice";
-
-fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>> {
-    let graph = device.session.store.load_graph(device.store_id())?;
-    Ok(device
-        .project()?
-        .live_secrets(&graph)
-        .keys()
-        .cloned()
-        .collect())
-}
-
-fn write_all_device_events_to_provider(
-    device: &EventLogDevice,
-    providers: &mut ProviderBuckets,
-    provider: &str,
-) -> VaultResult<()> {
-    let bucket = providers
-        .get_mut(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
-    for (id, bytes) in device.remote_events() {
-        if bucket.get_bytes(&id).is_none() {
-            bucket.put_event(id, bytes);
-        }
-    }
-    Ok(())
-}
-
-fn pull_provider_into_device(
-    device: &mut EventLogDevice,
-    providers: &ProviderBuckets,
-    provider: &str,
-) -> VaultResult<()> {
-    let bucket = providers
-        .get(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
-    let events = bucket
-        .event_ids()
-        .into_iter()
-        .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.to_vec())))
-        .collect::<Vec<_>>();
-    device.session.union_remote(&events)
-}
 
 fn clear_provider(providers: &mut ProviderBuckets, provider: &str) -> VaultResult<()> {
     let bucket = providers
@@ -77,36 +37,6 @@ fn provider_event_count(providers: &ProviderBuckets, provider: &str) -> VaultRes
         .ok_or(EventError::MissingProviderBucket)?
         .event_ids()
         .len())
-}
-
-fn request_join(device: &mut EventLogDevice, joiner: &DeviceIdentity) -> VaultResult<JoinRequest> {
-    let join = JoinRequest {
-        device_id: joiner.device_id().clone(),
-        public_key: joiner.public_key(),
-        signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
-        requested_at: TS.to_owned(),
-    };
-    device.append_signed(vec![VaultOperation::JoinRequested {
-        device_id: joiner.device_id().clone(),
-        encryption_public_key: joiner.public_key(),
-        signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
-        label: MemberLabel::from_trusted("device-b".to_owned()),
-    }])?;
-    Ok(join)
-}
-
-fn approve_join(device: &mut EventLogDevice, join: &JoinRequest) -> VaultResult<()> {
-    let secrets_key_ciphertext = device.crypto.encrypt_value(&device.secrets_key)?;
-    let members_key_ciphertext = device.crypto.encrypt_value(&device.members_key)?;
-    device.append_signed(vec![VaultOperation::JoinApproved {
-        device_id: join.device_id.clone(),
-        encryption_public_key: join.public_key.clone(),
-        signing_public_key: join.signing_public_key.clone(),
-        label: MemberLabel::from_trusted("device-b".to_owned()),
-        secrets_key_ciphertext,
-        members_key_ciphertext,
-    }])?;
-    Ok(())
 }
 
 /// Device-a creates vault-a, device-b joins through the shared file provider.
@@ -126,17 +56,25 @@ fn enrolled_pair_with_file_providers()
     let mut device_b = EventLogDevice::replica_of(&device_a)?;
     pull_provider_into_device(&mut device_b, &providers, VAULT_A)?;
     let device_b_identity = device_b.identity.clone();
-    let join = request_join(&mut device_b, &device_b_identity)?;
+    let join = request_join(&mut device_b, &device_b_identity, "device-b")?;
     write_all_device_events_to_provider(&device_b, &mut providers, VAULT_A)?;
     write_all_device_events_to_provider(&device_b, &mut providers, VAULT_A_DEVICE_B)?;
 
     pull_provider_into_device(&mut device_a, &providers, VAULT_A)?;
-    approve_join(&mut device_a, &join)?;
+    approve_join(&mut device_a, &join, "device-b")?;
     write_all_device_events_to_provider(&device_a, &mut providers, VAULT_A)?;
     pull_provider_into_device(&mut device_b, &providers, VAULT_A)?;
     write_all_device_events_to_provider(&device_b, &mut providers, VAULT_A_DEVICE_B)?;
 
     Ok((device_a, device_b, providers))
+}
+
+fn disconnected_pair_with_shared_head()
+-> VaultResult<(EventLogDevice, EventLogDevice, ProviderBuckets, String)> {
+    let (device_a, device_b, mut providers) = enrolled_pair_with_file_providers()?;
+    let shared_head = device_a.session.heads[0].clone();
+    clear_provider(&mut providers, VAULT_A)?;
+    Ok((device_a, device_b, providers, shared_head))
 }
 
 #[test]
@@ -259,10 +197,8 @@ fn reconnect_keeps_identical_password_duplicates_as_separate_records() -> VaultR
 
 #[test]
 fn reconnect_after_mixed_offline_edits_converges_without_losing_either_branch() -> VaultResult<()> {
-    let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
-    let shared_head = device_a.session.heads[0].clone();
-
-    clear_provider(&mut providers, VAULT_A)?;
+    let (mut device_a, mut device_b, mut providers, shared_head) =
+        disconnected_pair_with_shared_head()?;
 
     device_a.session.heads = vec![shared_head.clone()];
     device_a.append_login(
@@ -319,10 +255,8 @@ fn reconnect_after_mixed_offline_edits_converges_without_losing_either_branch() 
 
 #[test]
 fn device_b_local_backup_alone_cannot_heal_cleared_shared_vault() -> VaultResult<()> {
-    let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
-    let shared_head = device_a.session.heads[0].clone();
-
-    clear_provider(&mut providers, VAULT_A)?;
+    let (mut device_a, mut device_b, mut providers, shared_head) =
+        disconnected_pair_with_shared_head()?;
     device_a.session.heads = vec![shared_head.clone()];
     device_a.append_login(
         "secret_logina1aaaa",

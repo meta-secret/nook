@@ -8,6 +8,10 @@ import {
   type ExtensionPairedVaultUnlockRequestMessage,
   type OpenCompanionLauncherMessage,
 } from "$web-shared/extension/runtime-messages";
+import type {
+  ExtensionConnectRequestFor,
+  PairedExtensionIdentityDiscoveryFor,
+} from "$web-shared/extension/extension-connect-types";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -17,28 +21,10 @@ export type ExtensionConnectScope =
   | "passkey-management"
   | "sync-provider-credentials";
 
-type ExtensionIdentityRequestBase = {
-  deviceId: string;
-  devicePublicKey: string;
-  deviceSigningPublicKey: string;
-  extensionRuntimeId: string;
-  deviceLabel: string;
-  nonce: string;
-  scopes: ExtensionConnectScope[];
-};
-
 export type ExtensionConnectRequest =
-  | (ExtensionIdentityRequestBase & {
-      source: "extension-connect";
-    })
-  | (ExtensionIdentityRequestBase & {
-      source: "paired-vault";
-      vaultStoreId: string;
-    });
-
+  ExtensionConnectRequestFor<ExtensionConnectScope>;
 export type PairedExtensionIdentityDiscovery =
-  | { status: "unavailable" | "locked" }
-  | { status: "unlocked"; request: ExtensionConnectRequest };
+  PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
 const validScopes = new Set<ExtensionConnectScope>([
   "vault-access",

@@ -571,16 +571,25 @@ pub fn unwrap_device_identity_with_pin(
     let nonce = decode_fixed::<AES_GCM_NONCE_LEN>("nonce", &record.nonce)?;
     let ciphertext = decode_field("ciphertext", &record.ciphertext)?;
     let key = derive_pin_wrapping_key(pin, &salt, record.iterations)?;
+    let aad = build_pin_aad(&salt, &nonce, record.iterations);
+    decrypt_device_identity(&key, nonce, &ciphertext, &aad)
+}
+
+fn decrypt_device_identity(
+    key: &Zeroizing<[u8; 32]>,
+    nonce: [u8; AES_GCM_NONCE_LEN],
+    ciphertext: &[u8],
+    aad: &[u8],
+) -> DeviceKeyProtectionResult<DeviceIdentitySecret> {
     let cipher = Aes256Gcm::new_from_slice(key.as_ref())
         .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
-    let aad = build_pin_aad(&salt, &nonce, record.iterations);
     let plaintext = Zeroizing::new(
         cipher
             .decrypt(
                 &Array(nonce),
                 Payload {
-                    msg: &ciphertext,
-                    aad: &aad,
+                    msg: ciphertext,
+                    aad,
                 },
             )
             .map_err(|_| DeviceKeyProtectionError::Decrypt)?,
@@ -612,23 +621,8 @@ fn unwrap_passkey_wrapped_device_identity(
     let nonce = decode_fixed::<AES_GCM_NONCE_LEN>("nonce", &record.nonce)?;
     let ciphertext = decode_field("ciphertext", &record.ciphertext)?;
     let key = derive_passkey_wrapping_key(prf_output, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(key.as_ref())
-        .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
     let aad = build_passkey_wrapped_aad(record);
-    let plaintext = Zeroizing::new(
-        cipher
-            .decrypt(
-                &Array(nonce),
-                Payload {
-                    msg: &ciphertext,
-                    aad: &aad,
-                },
-            )
-            .map_err(|_| DeviceKeyProtectionError::Decrypt)?,
-    );
-    let text = std::str::from_utf8(plaintext.as_ref())
-        .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
-    DeviceIdentitySecret::parse(text).map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)
+    decrypt_device_identity(&key, nonce, &ciphertext, &aad)
 }
 
 pub fn serialize_wrapped_device_identity(

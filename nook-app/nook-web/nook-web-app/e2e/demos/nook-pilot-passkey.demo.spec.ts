@@ -1,27 +1,15 @@
 import { expect, test } from '../fixtures'
-import type { Page } from '@playwright/test'
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
-
-const DEMO_BEAT_MS = 900
-const demoDir = path.dirname(fileURLToPath(import.meta.url))
-const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
-
-async function demoBeat(page: Page) {
-  await page.waitForTimeout(DEMO_BEAT_MS)
-}
+import {
+  demoBeat,
+  injectPilotAutofill,
+  loadPilotMessages,
+} from './pilot-demo-helpers'
+import { installDemoChromeStub } from './static-chrome-stub'
 
 test('propose Create passkey through Nook Pilot without silent ceremony', async ({
   page,
 }) => {
-  const messages = JSON.parse(
-    await readFile(
-      path.join(extensionDist, '_locales/en/messages.json'),
-      'utf8',
-    ),
-  ) as Record<string, ChromeMessage>
+  const messages = await loadPilotMessages()
   const stubArgs = {
     localizedMessages: messages,
     passkeyPilotFlow: true,
@@ -85,10 +73,7 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
       })
   })
   await page.evaluate(installDemoChromeStub, stubArgs)
-  await page.addScriptTag({
-    path: path.join(extensionDist, 'content/autofill.js'),
-    type: 'module',
-  })
+  await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
   await expect(

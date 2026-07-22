@@ -265,8 +265,8 @@ mod tests {
     }
     use crate::{
         DeviceMode, ReplicationType, SentinelPolicy, VaultResult, generate_store_id,
-        generate_vault_keys, genesis_auth_record, genesis_members_records, load_sentinel_vault,
-        serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_name_architecture,
+        generate_vault_keys, genesis_auth_record, load_sentinel_vault,
+        serialize_stored_yaml_with_unlock_name_architecture,
     };
 
     #[test]
@@ -296,26 +296,7 @@ mod tests {
 
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
-        let identity = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
-        )?);
-        let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock(
-            &records,
-            &VaultUnlock::Keys,
-            &[],
-            Some(store_id.as_str()),
-            None,
-        )?;
+        let (keys, identity, yaml) = crate::test_support::simple_genesis_projection()?;
         assert!(!content_requires_genesis(yaml.as_str(), false)?);
         assert_eq!(
             access_status_for_vault_content(yaml.as_str(), &identity)?,

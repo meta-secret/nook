@@ -10,6 +10,8 @@ mod errors;
 mod i18n;
 mod secrets;
 mod sync;
+#[cfg(test)]
+mod test_support;
 mod vault;
 
 pub(crate) use auth::{

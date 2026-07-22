@@ -123,6 +123,33 @@ impl NookVaultManager {
         }
         Ok(DecryptedPasskeys { rows: passkeys })
     }
+
+    fn encrypt_passkey_secret(
+        &self,
+        id: &nook_core::SecretId,
+        passkey: &nook_core::PasskeySecret,
+    ) -> Result<nook_core::EncryptedSecretPayload, NookError> {
+        let mut value = nook_core::SecretValue::Passkey(passkey.clone());
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key);
+        let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key);
+        let mut yaml = value.to_yaml()?;
+        let ciphertext = self
+            .vault
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
+            .encrypt_value(yaml.as_str())?;
+        yaml.zeroize_plaintext();
+        value.zeroize_plaintext();
+        Ok(nook_core::encrypted_secret_from_armored(
+            id,
+            nook_core::SecretType::Passkey,
+            ciphertext.as_str(),
+            Some(identity_fingerprint),
+            Some(fingerprint),
+        ))
+    }
 }
 
 #[wasm_bindgen]
@@ -185,19 +212,7 @@ impl NookVaultManager {
         let mut result = nook_core::create_website_passkey(&request, &existing_values)
             .map_err(|error| passkey_error(&error))?;
         let id = nook_core::generate_secret_id()?;
-        let mut value = nook_core::SecretValue::Passkey(result.credential.clone());
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key);
-        let mut yaml = value.to_yaml()?;
-        let ciphertext = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-            .encrypt_value(yaml.as_str())?;
-        yaml.zeroize_plaintext();
-        value.zeroize_plaintext();
+        let encrypted = self.encrypt_passkey_secret(&id, &result.credential)?;
         let response = NookPasskeyRegistration::new(
             result.credential.credential_id.clone(),
             result.client_data_json,
@@ -205,13 +220,7 @@ impl NookVaultManager {
         );
         result.credential.zeroize_plaintext();
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
-            secret: nook_core::encrypted_secret_from_armored(
-                &id,
-                nook_core::SecretType::Passkey,
-                ciphertext.as_str(),
-                Some(identity_fingerprint),
-                Some(fingerprint),
-            ),
+            secret: encrypted,
         }])
         .await?;
         Ok(response)
@@ -250,19 +259,7 @@ impl NookVaultManager {
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
         let new_id = nook_core::generate_secret_id()?;
-        let mut value = nook_core::SecretValue::Passkey(result.updated_credential.clone());
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key);
-        let mut yaml = value.to_yaml()?;
-        let ciphertext = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-            .encrypt_value(yaml.as_str())?;
-        yaml.zeroize_plaintext();
-        value.zeroize_plaintext();
+        let encrypted = self.encrypt_passkey_secret(&new_id, &result.updated_credential)?;
         result.updated_credential.zeroize_plaintext();
         let response = NookPasskeyAssertion::new(
             result.credential_id,
@@ -273,13 +270,7 @@ impl NookVaultManager {
         );
         let mut operations = vec![nook_core::VaultOperation::SecretReplaced {
             old_id,
-            new_secret: nook_core::encrypted_secret_from_armored(
-                &new_id,
-                nook_core::SecretType::Passkey,
-                ciphertext.as_str(),
-                Some(identity_fingerprint),
-                Some(fingerprint),
-            ),
+            new_secret: encrypted,
         }];
         operations.extend(
             duplicate_ids

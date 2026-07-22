@@ -2,6 +2,10 @@
   import { onMount } from 'svelte'
   import { MOCK_AUTH_ACCOUNTS } from '../../accounts'
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
+  import {
+    credentialsFromLoginSubmit,
+    resetLoginSubmission,
+  } from '../lib/login-form'
   import { completePlainLogin } from '../lib/plain-login'
 
   const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
@@ -10,23 +14,15 @@
 
   let error = $state('')
 
-  onMount(() => {
-    ;(
-      window as Window & {
-        __nookLoginSubmitted?: { email: string; password: string } | null
-      }
-    ).__nookLoginSubmitted = null
-  })
+  onMount(resetLoginSubmission)
 
   function onsubmit(event: SubmitEvent) {
-    event.preventDefault()
-    const form = event.currentTarget
-    if (!(form instanceof HTMLFormElement)) return
-    const username =
-      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? ''
-    const password =
-      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
-    if (completePlainLogin(username, password) === 'invalid') {
+    const credentials = credentialsFromLoginSubmit(event)
+    if (
+      credentials &&
+      completePlainLogin(credentials.username, credentials.password) ===
+        'invalid'
+    ) {
       error = 'Invalid username or password.'
     }
   }

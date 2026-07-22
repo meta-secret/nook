@@ -26,6 +26,23 @@ const legacyAuthenticator = {
   backupCodes: ['recovery-one', 'recovery-two'],
 } as unknown as NookSecretRecord
 
+function renderLegacyAuthenticatorEditor() {
+  const onReplaceSecret = vi
+    .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
+    .mockResolvedValue(undefined)
+  const view = render(AddSecretForm, {
+    vault,
+    isSaving: false,
+    onAddSecret: vi.fn(async () => undefined),
+    onReplaceSecret,
+    onGeneratePassword: vi.fn(() => ''),
+    onCancel: vi.fn(),
+    initialItem: legacyAuthenticator,
+    selectedType: 'authenticator',
+  })
+  return { onReplaceSecret, view }
+}
+
 describe('AddSecretForm file attachment picker', () => {
   test('shows the file attachment type in the item picker', async () => {
     const view = render(AddSecretForm, {
@@ -45,19 +62,7 @@ describe('AddSecretForm file attachment picker', () => {
 
 describe('AddSecretForm authenticator editing', () => {
   test('preserves hidden settings when only setup-key formatting changes', async () => {
-    const onReplaceSecret = vi
-      .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
-      .mockResolvedValue(undefined)
-    const view = render(AddSecretForm, {
-      vault,
-      isSaving: false,
-      onAddSecret: vi.fn(async () => undefined),
-      onReplaceSecret,
-      onGeneratePassword: vi.fn(() => ''),
-      onCancel: vi.fn(),
-      initialItem: legacyAuthenticator,
-      selectedType: 'authenticator',
-    })
+    const { onReplaceSecret, view } = renderLegacyAuthenticatorEditor()
 
     const setupKey = await view.findByTestId('authenticator-secret')
     await fireEvent.input(setupKey, {
@@ -76,19 +81,7 @@ describe('AddSecretForm authenticator editing', () => {
   })
 
   test('resets hidden protocol settings and recovery codes when the setup key changes', async () => {
-    const onReplaceSecret = vi
-      .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
-      .mockResolvedValue(undefined)
-    const view = render(AddSecretForm, {
-      vault,
-      isSaving: false,
-      onAddSecret: vi.fn(async () => undefined),
-      onReplaceSecret,
-      onGeneratePassword: vi.fn(() => ''),
-      onCancel: vi.fn(),
-      initialItem: legacyAuthenticator,
-      selectedType: 'authenticator',
-    })
+    const { onReplaceSecret, view } = renderLegacyAuthenticatorEditor()
 
     const setupKey = await view.findByTestId('authenticator-secret')
     await fireEvent.input(setupKey, {

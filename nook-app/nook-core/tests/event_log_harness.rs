@@ -4,12 +4,12 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_core::{
-    AuthKeyId, Database, DeviceIdentity, EventId, LocalEventStore, LoginSecret, SecretId,
-    SecretType, SecretValue, SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys,
-    VaultOperation, VaultProjection, VaultResult, VaultUnlock, encrypted_secret_from_armored,
-    generate_store_id, generate_vault_keys, genesis_auth_record, genesis_members_records,
-    hydrate_keys_from_projection_yaml, secret_fingerprint, secret_identity_fingerprint,
-    serialize_stored_yaml_with_unlock,
+    AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EventError, EventId, JoinRequest,
+    LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue, SigningIdentity,
+    VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
+    VaultUnlock, encrypted_secret_from_armored, generate_store_id, generate_vault_keys,
+    genesis_auth_record, genesis_members_records, hydrate_keys_from_projection_yaml,
+    secret_fingerprint, secret_identity_fingerprint, serialize_stored_yaml_with_unlock,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -245,6 +245,87 @@ fn genesis_yaml(
 
 /// Remote provider bucket keyed by provider id.
 pub type ProviderBuckets = HashMap<String, LocalEventStore>;
+
+pub fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>> {
+    let graph = device.session.store.load_graph(device.store_id())?;
+    Ok(device
+        .project()?
+        .live_secrets(&graph)
+        .keys()
+        .cloned()
+        .collect())
+}
+
+pub fn write_all_device_events_to_provider(
+    device: &EventLogDevice,
+    providers: &mut ProviderBuckets,
+    provider: &str,
+) -> VaultResult<()> {
+    let bucket = providers
+        .get_mut(provider)
+        .ok_or(EventError::MissingProviderBucket)?;
+    for (id, bytes) in device.remote_events() {
+        if bucket.get_bytes(&id).is_none() {
+            bucket.put_event(id, bytes);
+        }
+    }
+    Ok(())
+}
+
+pub fn pull_provider_into_device(
+    device: &mut EventLogDevice,
+    providers: &ProviderBuckets,
+    provider: &str,
+) -> VaultResult<()> {
+    let bucket = providers
+        .get(provider)
+        .ok_or(EventError::MissingProviderBucket)?;
+    let events = bucket
+        .event_ids()
+        .into_iter()
+        .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.to_vec())))
+        .collect::<Vec<_>>();
+    device.session.union_remote(&events)
+}
+
+pub fn request_join(
+    device: &mut EventLogDevice,
+    joiner: &DeviceIdentity,
+    label: &str,
+) -> VaultResult<JoinRequest> {
+    let signing_public_key = DeviceSigningPublicKey::from_trusted(String::new());
+    let join = JoinRequest {
+        device_id: joiner.device_id().clone(),
+        public_key: joiner.public_key(),
+        signing_public_key: signing_public_key.clone(),
+        requested_at: TS.to_owned(),
+    };
+    device.append_signed(vec![VaultOperation::JoinRequested {
+        device_id: join.device_id.clone(),
+        encryption_public_key: join.public_key.clone(),
+        signing_public_key,
+        label: MemberLabel::from_trusted(label.to_owned()),
+    }])?;
+    Ok(join)
+}
+
+pub fn approve_join(
+    device: &mut EventLogDevice,
+    join: &JoinRequest,
+    label: &str,
+) -> VaultResult<()> {
+    let secrets_key_ciphertext = device.crypto.encrypt_value(&device.secrets_key)?;
+    let members_key_ciphertext = device.crypto.encrypt_value(&device.members_key)?;
+    device.append_signed(vec![VaultOperation::JoinApproved {
+        device_id: join.device_id.clone(),
+        encryption_public_key: join.public_key.clone(),
+        signing_public_key: join.signing_public_key.clone(),
+        label: MemberLabel::from_trusted(label.to_owned()),
+        secrets_key_ciphertext,
+        members_key_ciphertext,
+    }])?;
+    Ok(())
+}
 
 pub fn push_device_outbox(
     device: &mut EventLogDevice,

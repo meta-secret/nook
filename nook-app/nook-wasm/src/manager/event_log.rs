@@ -60,6 +60,14 @@ pub(in crate::manager) struct ExtensionEventLogImportStatus {
     pub access_granted: bool,
 }
 
+struct PreparedEpochRotation {
+    records_snapshot: Vec<nook_core::StoredSecretRecord>,
+    old_members_key: nook_core::SymmetricKey,
+    new_keys: nook_core::VaultKeys,
+    secrets: Vec<nook_core::EncryptedSecretPayload>,
+    members_checkpoint_hash: nook_core::Sha256Hex,
+}
+
 impl NookVaultManager {
     pub(in crate::manager) async fn live_secret_dedup_state(
         &self,
@@ -524,21 +532,8 @@ impl NookVaultManager {
         }
 
         let mut local = load_local_event_store(&self.vault.store_id).await?;
-        let heads =
-            union_remote_events_and_heads(&mut local, &remote_events, &self.vault.store_id)?;
-        for (event_id, bytes) in &remote_events {
-            save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes).await?;
-        }
-
-        self.event_log.heads = heads.clone();
-        save_heads(&self.vault.store_id, &heads).await?;
-        let graph = local.load_graph(&self.vault.store_id)?;
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-        self.ensure_sentinel_architecture_from_shares()?;
-        if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
-            self.apply_event_projection_to_session().await?;
-            self.persist_projection_cache().await?;
-        }
+        self.persist_merged_remote_events(&mut local, &remote_events, false)
+            .await?;
         // Locked sentinel sessions keep share/join meta in memory for ceremony
         // without rewriting a keyless projection cache.
         Ok(())
@@ -560,6 +555,49 @@ impl NookVaultManager {
             });
         }
         Ok(records)
+    }
+
+    async fn persist_merged_remote_events(
+        &mut self,
+        local: &mut nook_core::LocalEventStore,
+        remote_events: &[(EventId, Vec<u8>)],
+        persist_locked_projection: bool,
+    ) -> Result<(), NookError> {
+        let heads = union_remote_events_and_heads(local, remote_events, &self.vault.store_id)?;
+        for (event_id, bytes) in remote_events {
+            save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes).await?;
+        }
+        self.event_log.heads = heads.clone();
+        save_heads(&self.vault.store_id, &heads).await?;
+        let graph = local.load_graph(&self.vault.store_id)?;
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_sentinel_architecture_from_shares()?;
+        let unlocked =
+            self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok();
+        if unlocked {
+            self.apply_event_projection_to_session().await?;
+        }
+        if unlocked || persist_locked_projection {
+            self.persist_projection_cache().await?;
+        }
+        Ok(())
+    }
+
+    async fn read_external_local_folder_records(
+        handle_id: &str,
+    ) -> Result<Vec<ExternalEventLogRecord>, NookError> {
+        read_local_folder_event_files(handle_id)
+            .await?
+            .into_iter()
+            .map(|file| {
+                Self::parse_event_log_storage_record(&file.event_id, &file.path, &file.content).map(
+                    |record| ExternalEventLogRecord {
+                        event_id: record.event_id,
+                        event: record.event,
+                    },
+                )
+            })
+            .collect()
     }
 
     pub(in crate::manager) async fn export_event_log_records(
@@ -634,21 +672,8 @@ impl NookVaultManager {
 
         if !self.vault.store_id.is_empty() {
             let mut local = load_local_event_store(&self.vault.store_id).await?;
-            let heads =
-                union_remote_events_and_heads(&mut local, &remote_events, &self.vault.store_id)?;
-            for (event_id, bytes) in &remote_events {
-                save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes).await?;
-            }
-
-            self.event_log.heads = heads.clone();
-            save_heads(&self.vault.store_id, &heads).await?;
-            let graph = local.load_graph(&self.vault.store_id)?;
-            nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-            self.ensure_sentinel_architecture_from_shares()?;
-            if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
-                self.apply_event_projection_to_session().await?;
-            }
-            self.persist_projection_cache().await?;
+            self.persist_merged_remote_events(&mut local, &remote_events, true)
+                .await?;
         }
 
         self.export_event_log_records().await
@@ -733,18 +758,7 @@ impl NookVaultManager {
         &mut self,
         handle_id: &str,
     ) -> Result<String, NookError> {
-        let remote_records = read_local_folder_event_files(handle_id)
-            .await?
-            .into_iter()
-            .map(|file| {
-                Self::parse_event_log_storage_record(&file.event_id, &file.path, &file.content).map(
-                    |record| ExternalEventLogRecord {
-                        event_id: record.event_id,
-                        event: record.event,
-                    },
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let remote_records = Self::read_external_local_folder_records(handle_id).await?;
         let remote_event_ids = remote_records
             .iter()
             .map(|record| record.event_id.clone())
@@ -1049,26 +1063,15 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub(in crate::manager) async fn rotate_security_epoch(
-        &mut self,
-        trigger: VaultOperation,
-    ) -> Result<(), NookError> {
-        self.activate_event_log_mode().await?;
-        self.append_vault_operations(vec![trigger]).await?;
-        let new_epoch = self.event_log.heads.last().cloned().ok_or_else(|| {
-            NookError::Database("Security epoch rotation did not produce an event head.".to_owned())
-        })?;
-        self.event_log.key_epoch = new_epoch.clone();
-        save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await?;
-
+    fn prepare_security_epoch_rotation(&self) -> Result<PreparedEpochRotation, NookError> {
         let old_secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let old_members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
         let records_snapshot = self.stored_records_snapshot();
-        let user_records: Vec<nook_core::StoredSecretRecord> = records_snapshot
+        let user_records = records_snapshot
             .iter()
             .filter(|record| !nook_core::is_vault_meta_record(record))
             .cloned()
-            .collect();
+            .collect::<Vec<_>>();
         let (new_keys, secrets) =
             nook_core::rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
         let members_checkpoint_hash = members_checkpoint_hash_from_roster(
@@ -1076,9 +1079,37 @@ impl NookVaultManager {
             &old_members_key,
             &new_keys.members_key,
         )?;
-        self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
-        self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
-        for payload in &secrets {
+        Ok(PreparedEpochRotation {
+            records_snapshot,
+            old_members_key,
+            new_keys,
+            secrets,
+            members_checkpoint_hash,
+        })
+    }
+
+    async fn adopt_latest_security_epoch(&mut self) -> Result<(), NookError> {
+        let new_epoch = self.event_log.heads.last().cloned().ok_or_else(|| {
+            NookError::Database("Security epoch rotation did not produce an event head.".to_owned())
+        })?;
+        self.event_log.key_epoch = new_epoch;
+        save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await
+    }
+
+    async fn commit_security_epoch_rotation(
+        &mut self,
+        prepared: PreparedEpochRotation,
+    ) -> Result<(), NookError> {
+        self.apply_vault_keys(
+            prepared.new_keys.secrets_key.as_str(),
+            prepared.new_keys.members_key.as_str(),
+        )?;
+        self.rewrap_device_meta_for_epoch(
+            &prepared.records_snapshot,
+            &prepared.old_members_key,
+            &prepared.new_keys,
+        )?;
+        for payload in &prepared.secrets {
             self.vault.meta.secrets.insert(
                 payload.id.clone(),
                 (
@@ -1090,11 +1121,21 @@ impl NookVaultManager {
             );
         }
         self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
-            secrets,
-            members_checkpoint_hash,
+            secrets: prepared.secrets,
+            members_checkpoint_hash: prepared.members_checkpoint_hash,
         }])
-        .await?;
-        Ok(())
+        .await
+    }
+
+    pub(in crate::manager) async fn rotate_security_epoch(
+        &mut self,
+        trigger: VaultOperation,
+    ) -> Result<(), NookError> {
+        self.activate_event_log_mode().await?;
+        self.append_vault_operations(vec![trigger]).await?;
+        self.adopt_latest_security_epoch().await?;
+        let prepared = self.prepare_security_epoch_rotation()?;
+        self.commit_security_epoch_rotation(prepared).await
     }
 
     pub(in crate::manager) async fn rotate_password_security_epoch(
@@ -1105,53 +1146,20 @@ impl NookVaultManager {
     ) -> Result<nook_core::PasswordEnvelope, NookError> {
         self.activate_event_log_mode().await?;
 
-        let old_secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let old_members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-        let records_snapshot = self.stored_records_snapshot();
-        let user_records: Vec<nook_core::StoredSecretRecord> = records_snapshot
-            .iter()
-            .filter(|record| !nook_core::is_vault_meta_record(record))
-            .cloned()
-            .collect();
-        let (new_keys, secrets) =
-            nook_core::rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
-        let envelope =
-            nook_core::attach_password_envelope_with_work_factor(&new_keys, password, work_factor)?;
+        let prepared = self.prepare_security_epoch_rotation()?;
+        let envelope = nook_core::attach_password_envelope_with_work_factor(
+            &prepared.new_keys,
+            password,
+            work_factor,
+        )?;
 
         self.append_vault_operations(vec![VaultOperation::PasswordRotated {
             entry_id,
             envelope: envelope.clone(),
         }])
         .await?;
-        let new_epoch = self.event_log.heads.last().cloned().ok_or_else(|| {
-            NookError::Database("Security epoch rotation did not produce an event head.".to_owned())
-        })?;
-        self.event_log.key_epoch = new_epoch.clone();
-        save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await?;
-
-        let members_checkpoint_hash = members_checkpoint_hash_from_roster(
-            &records_snapshot,
-            &old_members_key,
-            &new_keys.members_key,
-        )?;
-        self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
-        self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
-        for payload in &secrets {
-            self.vault.meta.secrets.insert(
-                payload.id.clone(),
-                (
-                    payload.secret_type,
-                    nook_core::StoredRecordPayload::from_trusted(
-                        payload.ciphertext.as_str().to_owned(),
-                    ),
-                ),
-            );
-        }
-        self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
-            secrets,
-            members_checkpoint_hash,
-        }])
-        .await?;
+        self.adopt_latest_security_epoch().await?;
+        self.commit_security_epoch_rotation(prepared).await?;
         Ok(envelope)
     }
 
@@ -1229,18 +1237,7 @@ impl NookVaultManager {
         handle_id: &str,
     ) -> Result<String, JsError> {
         self.reset_vault_session();
-        let remote_records = read_local_folder_event_files(handle_id)
-            .await?
-            .into_iter()
-            .map(|file| {
-                Self::parse_event_log_storage_record(&file.event_id, &file.path, &file.content).map(
-                    |record| ExternalEventLogRecord {
-                        event_id: record.event_id,
-                        event: record.event,
-                    },
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let remote_records = Self::read_external_local_folder_records(handle_id).await?;
         let _ = self.sync_external_event_log_records(remote_records).await?;
         if self.vault.store_id.trim().is_empty() {
             return Err(NookError::Database(

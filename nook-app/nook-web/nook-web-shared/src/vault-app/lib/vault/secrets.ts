@@ -222,16 +222,51 @@ function editBlockedMessage(state: VaultState): string {
     : state.t("auth_storage.sync_blocked_edits");
 }
 
-export async function handleAddSecret(
+type VaultManager = NonNullable<VaultState["manager"]>;
+
+async function runPasswordManagerImport(
   state: VaultState,
-  id: string,
-  type: VaultItemType,
-  data: string,
-) {
-  if (!state.manager) return;
+  importFromManager: (manager: VaultManager) => Promise<NookImportResult>,
+  sourceName: string,
+  successKey: string,
+  failureKey: string,
+): Promise<NookImportResult> {
+  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  try {
+    const result = await state.enqueueStorage(() =>
+      importFromManager(state.manager!),
+    );
+    await state.runFanOutSyncAfterLocalSave();
+    await state.refreshSecretsFromSession();
+    log.info(`${sourceName} import completed`, {
+      imported: result.imported,
+      skippedUnsupported: result.skippedUnsupported,
+      skippedDuplicates: result.skippedDuplicates,
+    });
+    state.showSuccess(state.t(successKey, { count: String(result.imported) }));
+    return result;
+  } catch (error: unknown) {
+    state.errorMsg = state.t(failureKey, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    state.isSaving = false;
+  }
+}
+
+async function prepareSecretMutation(state: VaultState): Promise<boolean> {
+  if (!state.manager) return false;
   if (state.editsBlocked) {
     state.errorMsg = editBlockedMessage(state);
-    return;
+    return false;
   }
   state.errorMsg = "";
   state.dismissSuccess();
@@ -239,6 +274,16 @@ export async function handleAddSecret(
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
+  return true;
+}
+
+export async function handleAddSecret(
+  state: VaultState,
+  id: string,
+  type: VaultItemType,
+  data: string,
+) {
+  if (!(await prepareSecretMutation(state))) return;
   try {
     await state.enqueueStorage(async () => {
       const rawRecords = (await state.raceStorageTimeout(
@@ -265,273 +310,91 @@ export async function handleBitwardenImport(
   json: string,
   password: string,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importBitwardenJson(json, password),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("Bitwarden import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.bitwarden_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("bitwarden_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importBitwardenJson(json, password),
+    "Bitwarden",
+    "toasts.bitwarden_imported",
+    "bitwarden_import.failed",
+  );
 }
 
 export async function handleLastPassImport(
   state: VaultState,
   csv: string,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importLastPassCsv(csv),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("LastPass import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.lastpass_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("lastpass_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importLastPassCsv(csv),
+    "LastPass",
+    "toasts.lastpass_imported",
+    "lastpass_import.failed",
+  );
 }
 
 export async function handleOnePasswordImport(
   state: VaultState,
   archive: Uint8Array,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importOnePasswordPux(archive),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("1Password import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.onepassword_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("onepassword_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importOnePasswordPux(archive),
+    "1Password",
+    "toasts.onepassword_imported",
+    "onepassword_import.failed",
+  );
 }
 
 export async function handleApplePasswordsImport(
   state: VaultState,
   csv: string,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importApplePasswordsCsv(csv),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("Apple Passwords import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.apple_passwords_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("apple_passwords_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importApplePasswordsCsv(csv),
+    "Apple Passwords",
+    "toasts.apple_passwords_imported",
+    "apple_passwords_import.failed",
+  );
 }
 
 export async function handleChromePasswordsImport(
   state: VaultState,
   csv: string,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importChromePasswordsCsv(csv),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("Chrome passwords import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.chrome_passwords_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("chrome_passwords_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importChromePasswordsCsv(csv),
+    "Chrome passwords",
+    "toasts.chrome_passwords_imported",
+    "chrome_passwords_import.failed",
+  );
 }
 
 export async function handleGoogleAuthenticatorImport(
   state: VaultState,
   migrationUris: string[],
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importGoogleAuthenticatorMigration(migrationUris),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("Google Authenticator import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.google_authenticator_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("google_authenticator_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importGoogleAuthenticatorMigration(migrationUris),
+    "Google Authenticator",
+    "toasts.google_authenticator_imported",
+    "google_authenticator_import.failed",
+  );
 }
 
 export async function handleProtonPassImport(
   state: VaultState,
   exportBytes: Uint8Array,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.manager!.importProtonPass(exportBytes),
-    );
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info("Proton Pass import completed", {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(
-      state.t("toasts.proton_pass_imported", {
-        count: String(result.imported),
-      }),
-    );
-    return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t("proton_pass_import.failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importProtonPass(exportBytes),
+    "Proton Pass",
+    "toasts.proton_pass_imported",
+    "proton_pass_import.failed",
+  );
 }
 
 export async function handleDeleteSecret(state: VaultState, id: string) {
@@ -587,17 +450,7 @@ export async function handleReplaceSecret(
   type: VaultItemType,
   data: string,
 ) {
-  if (!state.manager) return;
-  if (state.editsBlocked) {
-    state.errorMsg = editBlockedMessage(state);
-    return;
-  }
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
+  if (!(await prepareSecretMutation(state))) return;
   try {
     const newId = generateSecretId();
     await state.enqueueStorage(async () => {

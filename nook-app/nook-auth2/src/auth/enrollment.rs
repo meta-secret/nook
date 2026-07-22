@@ -626,7 +626,8 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
     }
 }
 
-fn is_plausible_email(value: &str) -> bool {
+#[must_use]
+pub fn is_plausible_email(value: &str) -> bool {
     let trimmed = value.trim();
     let Some((local, domain)) = trimmed.split_once('@') else {
         return false;

@@ -1588,6 +1588,17 @@ mod tests {
         replace_member_records(records, member_records);
     }
 
+    fn sentinel_share_fixture() -> (VaultKeys, [DeviceIdentity; 3], Vec<StoredSecretRecord>) {
+        let keys = generate_vault_keys().unwrap();
+        let identities = [
+            DeviceIdentity::generate().unwrap(),
+            DeviceIdentity::generate().unwrap(),
+            DeviceIdentity::generate().unwrap(),
+        ];
+        let records = create_sentinel_share_records(&keys, &identities, 2).unwrap();
+        (keys, identities, records)
+    }
+
     #[test]
     fn genesis_device_can_decrypt_vault_keys() {
         let keys = generate_vault_keys().unwrap();
@@ -1696,16 +1707,7 @@ mod tests {
 
     #[test]
     fn sentinel_threshold_shares_reconstruct_keys_without_full_device_envelopes() {
-        let keys = generate_vault_keys().unwrap();
-        let first = DeviceIdentity::generate().unwrap();
-        let second = DeviceIdentity::generate().unwrap();
-        let third = DeviceIdentity::generate().unwrap();
-        let records = create_sentinel_share_records(
-            &keys,
-            &[first.clone(), second.clone(), third.clone()],
-            2,
-        )
-        .unwrap();
+        let (keys, [first, second, third], records) = sentinel_share_fixture();
 
         assert_eq!(records.len(), 3);
         assert!(records.iter().all(is_sentinel_share_stored_record));
@@ -1723,16 +1725,7 @@ mod tests {
 
     #[test]
     fn opened_sentinel_shares_reconstruct_without_peer_identities() {
-        let keys = generate_vault_keys().unwrap();
-        let first = DeviceIdentity::generate().unwrap();
-        let second = DeviceIdentity::generate().unwrap();
-        let third = DeviceIdentity::generate().unwrap();
-        let records = create_sentinel_share_records(
-            &keys,
-            &[first.clone(), second.clone(), third.clone()],
-            2,
-        )
-        .unwrap();
+        let (keys, [first, second, third], records) = sentinel_share_fixture();
 
         let opened_first = open_sentinel_share_for_identity(&records, &first).unwrap();
         let opened_second = open_sentinel_share_for_identity(&records, &second).unwrap();

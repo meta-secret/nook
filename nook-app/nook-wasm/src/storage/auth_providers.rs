@@ -190,21 +190,13 @@ mod wasm_idb_tests {
 
     fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
         AuthProvidersSnapshotData {
-            providers: vec![StorageProviderData {
-                id: "gh-wasm".to_owned(),
-                provider_type: "github".to_owned(),
-                label: "GitHub".to_owned(),
-                github_pat: Some(pat.to_owned()),
-                github_repo: Some("nook".to_owned()),
-                oauth_file: None,
-                local_folder: None,
-                store_id: None,
-                last_synced_version: None,
-                last_synced_at: None,
-                last_sync_revision: None,
-                last_common_content_hash: None,
-                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-            }],
+            providers: vec![StorageProviderData::github(
+                "gh-wasm",
+                "GitHub",
+                pat,
+                "nook",
+                "2026-06-24T00:00:00.000Z",
+            )],
             active_vault_store_id: None,
         }
     }

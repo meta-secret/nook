@@ -1,74 +1,31 @@
 <script lang="ts">
   import { Check, Fingerprint, Shield } from '@lucide/svelte'
-  import ScenarioBar, {
-    type Presence,
-  } from '../../nook-auth/_shared/ScenarioBar.svelte'
+  import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
   import type { SentinelUi } from './KeyLaterAuth.svelte'
+  import {
+    VaultAuthWorkflowState,
+    type Presence,
+  } from './vault-auth-workflow-state.svelte'
 
   interface Props {
     onSentinel: (ui: SentinelUi, vaultName: string) => void
   }
 
   let { onSentinel }: Props = $props()
-  let presence = $state<Presence>('empty')
-  let step = $state(0)
-  let path = $state<'undecided' | 'simple' | 'sentinel'>('undecided')
   let vaultName = $state('')
-
-  const emptySteps = $derived(
-    path === 'simple'
-      ? ['Name vault', 'Choose Simple or Sentinel', 'Create locally']
-      : path === 'sentinel'
-        ? [
-            'Name vault',
-            'Choose Simple or Sentinel',
-            'Choose Sentinel interface',
-            'Initialize this device (passkey)',
-          ]
-        : ['Name vault', 'Choose Simple or Sentinel', 'Create or configure'],
-  )
-  const existingSteps = [
-    'Unlock existing vault',
-    'Confirm vault identity',
-    'Unlock with passkey',
-  ]
-  const steps = $derived(presence === 'empty' ? emptySteps : existingSteps)
-
-  function setPresence(next: Presence) {
-    presence = next
-    step = 0
-    path = 'undecided'
+  const workflow = new VaultAuthWorkflowState()
+  const steps = $derived(workflow.steps)
+  const path = $derived(workflow.path)
+  const step = $derived(workflow.step)
+  const presence = $derived(workflow.presence)
+  const setPresence = (next: Presence) => {
+    workflow.setPresence(next)
     vaultName = ''
   }
-
-  function continueAfterName() {
-    if (!vaultName.trim()) return
-    step = 1
-  }
-
-  function chooseSimple() {
-    path = 'simple'
-    step = 2
-  }
-
-  function chooseSentinel() {
-    path = 'sentinel'
-    step = 2
-  }
-
-  function goBack() {
-    if (presence === 'empty' && step === 1) {
-      path = 'undecided'
-      step = 0
-      return
-    }
-    if (presence === 'empty' && step === 2) {
-      path = 'undecided'
-      step = 1
-      return
-    }
-    if (step > 0) step -= 1
-  }
+  const chooseSentinel = () => workflow.choose('sentinel')
+  const chooseSimple = () => workflow.choose('simple')
+  const continueAfterName = () => workflow.continueAfterName(vaultName)
+  const goBack = () => workflow.goBack()
 </script>
 
 <div class="min-h-screen bg-white text-black">
@@ -206,7 +163,7 @@
                 {:else if presence === 'existing' && index === step && step === 0}
                   <button
                     class="mt-3 rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
-                    onclick={() => (step = 1)}
+                    onclick={() => (workflow.step = 1)}
                   >
                     Continue to unlock
                   </button>

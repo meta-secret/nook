@@ -1,58 +1,22 @@
-import { copyFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
-import { defineConfig, type Plugin } from "vitest/config";
-import { vaultAppHeaders } from "../nook-web-shared/src/vault-app/security-headers";
+import { defineConfig } from "vitest/config";
+import {
+  vaultAppAliases,
+  vaultSpaPlugin,
+} from "../nook-web-shared/vite-config";
 
 const sentinelAppUrl =
   process.env.VITE_SENTINEL_APP_URL?.trim() || "https://sentinel.nokey.sh";
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
 
-const spaPaths = new Set(["/app-logs", "/logs", "/privacy", "/terms"]);
-
-function sentinelSpa(): Plugin {
-  return {
-    name: "sentinel-vault-spa",
-    configureServer(server) {
-      server.middlewares.use((request, response, next) => {
-        const pathname =
-          request.url?.split(/[?#]/, 1)[0]?.replace(/\/$/, "") || "/";
-        if (pathname === "/extension-connect") {
-          response.statusCode = 404;
-          response.end("Not Found");
-          return;
-        }
-        if (spaPaths.has(pathname)) request.url = "/index.html";
-        next();
-      });
-    },
-    configurePreviewServer(server) {
-      server.middlewares.use((request, response, next) => {
-        const pathname =
-          request.url?.split(/[?#]/, 1)[0]?.replace(/\/$/, "") || "/";
-        if (pathname === "/extension-connect") {
-          response.statusCode = 404;
-          response.end("Not Found");
-          return;
-        }
-        if (spaPaths.has(pathname)) request.url = "/index.html";
-        next();
-      });
-    },
-    writeBundle() {
-      const outDir = join(process.cwd(), "dist");
-      const shell = join(outDir, "index.html");
-      copyFileSync(shell, join(outDir, "404.html"));
-      for (const alias of ["app-logs", "logs"]) {
-        copyFileSync(shell, join(outDir, `${alias}.html`));
-      }
-      writeFileSync(join(outDir, "_headers"), vaultAppHeaders());
-      writeFileSync(join(outDir, "robots.txt"), "User-agent: *\nDisallow: /\n");
-    },
-  };
-}
+const sentinelSpa = vaultSpaPlugin({
+  name: "sentinel-vault-spa",
+  spaPaths: ["/app-logs", "/logs", "/privacy", "/terms"],
+  deniedPaths: ["/extension-connect"],
+  outputAliases: ["app-logs", "logs"],
+});
 
 export default defineConfig({
   base: "./",
@@ -63,7 +27,7 @@ export default defineConfig({
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
   },
   publicDir: new URL("../nook-web-app/public", import.meta.url).pathname,
-  plugins: [tailwindcss(), svelte(), sentinelSpa()],
+  plugins: [tailwindcss(), svelte(), sentinelSpa],
   resolve: {
     alias: {
       "$lib/extension-connect": new URL(
@@ -74,18 +38,7 @@ export default defineConfig({
         "./src/ExtensionConnectDisabled.svelte",
         import.meta.url,
       ).pathname,
-      $lib: new URL("../nook-web-shared/src/vault-app/lib", import.meta.url)
-        .pathname,
-      "$vault-shared": new URL(
-        "../nook-web-shared/src/vault-app",
-        import.meta.url,
-      ).pathname,
-      "$web-shared": new URL("../nook-web-shared/src", import.meta.url)
-        .pathname,
-      "$app-wasm": new URL(
-        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
-        import.meta.url,
-      ).pathname,
+      ...vaultAppAliases(),
     },
   },
   server: { fs: { allow: [".."] } },

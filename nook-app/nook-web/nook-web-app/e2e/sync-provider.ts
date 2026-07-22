@@ -6,7 +6,7 @@ import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 import { createLocalE2eICloudVaultStub } from './icloud-stub'
 import { createE2eRemoteName } from './sync-stub'
 import {
-  parseVaultEventLogSnapshot,
+  waitForVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
 
@@ -216,33 +216,14 @@ export async function waitForSyncRemoteState(
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
-  const timeoutMs = options?.timeoutMs ?? 30_000
-  const intervalMs = options?.intervalMs ?? 100
-  const deadline = Date.now() + timeoutMs
-  let lastError = 'remote event log empty'
-
-  while (Date.now() < deadline) {
-    const events = target.stub?.getEventFileContents() ?? []
-    if (events.length > 0) {
-      try {
-        const snapshot = parseVaultEventLogSnapshot(events)
-        if (predicate(snapshot)) {
-          return snapshot
-        }
-        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
-      } catch (error) {
-        lastError =
-          error instanceof Error ? error.message : 'invalid remote event log'
-      }
-    }
-    await sleep(intervalMs)
-  }
-
-  throw new Error(`Timed out waiting for remote event log: ${lastError}`)
-}
-
-async function sleep(ms: number) {
-  await new Promise((resolve) => setTimeout(resolve, ms))
+  return waitForVaultEventLogSnapshot(
+    () => target.stub?.getEventFileContents() ?? [],
+    predicate,
+    {
+      timeoutMs: options?.timeoutMs ?? 30_000,
+      intervalMs: options?.intervalMs ?? 100,
+    },
+  )
 }
 
 export async function connectSyncVault(page: Page, target: SyncE2eTarget) {

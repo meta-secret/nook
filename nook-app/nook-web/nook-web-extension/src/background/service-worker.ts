@@ -582,6 +582,82 @@ async function passwordPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
   )
 }
 
+async function availableWebsiteGrants(
+  origin: string,
+  sender: chrome.runtime.MessageSender,
+  forbiddenReason: string,
+): Promise<
+  | { grants: StoredExtensionPairingGrant[] }
+  | { response: Record<string, unknown> }
+> {
+  if (!isAuthorizedWebsiteSender(sender, origin)) {
+    return { response: { ok: false, reason: forbiddenReason } }
+  }
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { response: { ok: true, status: 'unavailable', accounts: [] } }
+  }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (!isUnlockedSessionStatus(status)) {
+    openCompanionLauncher()
+    return { response: { ok: true, status: 'locked', accounts: [] } }
+  }
+  return { grants }
+}
+
+function isUnlockedSessionStatus(status: unknown): boolean {
+  return Boolean(
+    status &&
+    typeof status === 'object' &&
+    'status' in status &&
+    status.status === 'unlocked',
+  )
+}
+
+function sessionResponseAccounts(response: unknown): unknown[] {
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('ok' in response) ||
+    response.ok !== true ||
+    !('accounts' in response) ||
+    !Array.isArray(response.accounts)
+  ) {
+    return []
+  }
+  return response.accounts
+}
+
+async function authorizedWebsiteGrant(
+  origin: string,
+  vaultStoreId: string,
+  sender: chrome.runtime.MessageSender,
+  reasons: { forbidden: string; missing: string; locked: string },
+): Promise<
+  | { grant: StoredExtensionPairingGrant }
+  | { response: { ok: false; reason: string } }
+> {
+  if (!isAuthorizedWebsiteSender(sender, origin)) {
+    return { response: { ok: false, reason: reasons.forbidden } }
+  }
+  const grant = (await passwordPairingGrants()).find(
+    (candidate) => candidate.vaultStoreId === vaultStoreId,
+  )
+  if (!grant) return { response: { ok: false, reason: reasons.missing } }
+  await ensureExtensionSessionDocument()
+  const status = await sendSessionMessage({
+    type: 'nook:extension-session-status',
+  })
+  if (!isUnlockedSessionStatus(status)) {
+    openCompanionLauncher()
+    return { response: { ok: false, reason: reasons.locked } }
+  }
+  return { grant }
+}
+
 async function websiteLoginOptions(
   message: {
     payload: {
@@ -590,44 +666,20 @@ async function websiteLoginOptions(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    return { ok: false, reason: 'login-forbidden-origin' }
-  }
-  const grants = await passwordPairingGrants()
-  if (grants.length === 0) {
-    return { ok: true, status: 'unavailable', accounts: [] }
-  }
-  await ensureExtensionSessionDocument()
-  const status = await sendSessionMessage({
-    type: 'nook:extension-session-status',
-  })
-  if (
-    !status ||
-    typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
-  ) {
-    openCompanionLauncher()
-    return { ok: true, status: 'locked', accounts: [] }
-  }
+  const access = await availableWebsiteGrants(
+    message.payload.origin,
+    sender,
+    'login-forbidden-origin',
+  )
+  if ('response' in access) return access.response
 
   const accounts: WebsiteLoginAccountOption[] = []
-  for (const grant of grants) {
+  for (const grant of access.grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-logins',
       payload: { ...grant, origin: message.payload.origin },
     })
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('accounts' in response) ||
-      !Array.isArray(response.accounts)
-    ) {
-      continue
-    }
-    for (const account of response.accounts) {
+    for (const account of sessionResponseAccounts(response)) {
       if (
         !account ||
         typeof account !== 'object' ||
@@ -888,30 +940,21 @@ async function websiteLoginFill(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    return { ok: false, reason: 'login-forbidden-origin' }
-  }
-  const grant = (await passwordPairingGrants()).find(
-    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  const access = await authorizedWebsiteGrant(
+    message.payload.origin,
+    message.payload.vaultStoreId,
+    sender,
+    {
+      forbidden: 'login-forbidden-origin',
+      missing: 'login-vault-not-granted',
+      locked: 'login-locked',
+    },
   )
-  if (!grant) return { ok: false, reason: 'login-vault-not-granted' }
-  await ensureExtensionSessionDocument()
-  const status = await sendSessionMessage({
-    type: 'nook:extension-session-status',
-  })
-  if (
-    !status ||
-    typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
-  ) {
-    openCompanionLauncher()
-    return { ok: false, reason: 'login-locked' }
-  }
+  if ('response' in access) return access.response
   return sendSessionMessage({
     type: 'nook:extension-session-reveal-login',
     payload: {
-      ...grant,
+      ...access.grant,
       origin: message.payload.origin,
       secretId: message.payload.secretId,
     },
@@ -922,44 +965,20 @@ async function websiteAuthenticatorOptions(
   message: { payload: { origin: string } },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    return { ok: false, reason: 'authenticator-forbidden-origin' }
-  }
-  const grants = await passwordPairingGrants()
-  if (grants.length === 0) {
-    return { ok: true, status: 'unavailable', accounts: [] }
-  }
-  await ensureExtensionSessionDocument()
-  const status = await sendSessionMessage({
-    type: 'nook:extension-session-status',
-  })
-  if (
-    !status ||
-    typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
-  ) {
-    openCompanionLauncher()
-    return { ok: true, status: 'locked', accounts: [] }
-  }
+  const access = await availableWebsiteGrants(
+    message.payload.origin,
+    sender,
+    'authenticator-forbidden-origin',
+  )
+  if ('response' in access) return access.response
 
   const accounts: WebsiteAuthenticatorOption[] = []
-  for (const grant of grants) {
+  for (const grant of access.grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-authenticators',
       payload: grant,
     })
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('accounts' in response) ||
-      !Array.isArray(response.accounts)
-    ) {
-      continue
-    }
-    for (const account of response.accounts) {
+    for (const account of sessionResponseAccounts(response)) {
       if (
         !account ||
         typeof account !== 'object' ||
@@ -990,29 +1009,20 @@ async function websiteAuthenticatorFill(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    return { ok: false, reason: 'authenticator-forbidden-origin' }
-  }
-  const grant = (await passwordPairingGrants()).find(
-    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  const access = await authorizedWebsiteGrant(
+    message.payload.origin,
+    message.payload.vaultStoreId,
+    sender,
+    {
+      forbidden: 'authenticator-forbidden-origin',
+      missing: 'authenticator-vault-not-granted',
+      locked: 'authenticator-locked',
+    },
   )
-  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
-  await ensureExtensionSessionDocument()
-  const status = await sendSessionMessage({
-    type: 'nook:extension-session-status',
-  })
-  if (
-    !status ||
-    typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
-  ) {
-    openCompanionLauncher()
-    return { ok: false, reason: 'authenticator-locked' }
-  }
+  if ('response' in access) return access.response
   return sendSessionMessage({
     type: 'nook:extension-session-authenticator-code',
-    payload: { ...grant, secretId: message.payload.secretId },
+    payload: { ...access.grant, secretId: message.payload.secretId },
   })
 }
 
@@ -1162,28 +1172,22 @@ async function websiteAuthenticatorEnrollConfirm(
   ) {
     return { ok: false, reason: 'authenticator-stage-missing' }
   }
-  const grant = (await passwordPairingGrants()).find(
-    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  const access = await authorizedWebsiteGrant(
+    message.payload.origin,
+    message.payload.vaultStoreId,
+    sender,
+    {
+      forbidden: 'authenticator-forbidden-origin',
+      missing: 'authenticator-vault-not-granted',
+      locked: 'authenticator-locked',
+    },
   )
-  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
-  await ensureExtensionSessionDocument()
-  const status = await sendSessionMessage({
-    type: 'nook:extension-session-status',
-  })
-  if (
-    !status ||
-    typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
-  ) {
-    openCompanionLauncher()
-    return { ok: false, reason: 'authenticator-locked' }
-  }
+  if ('response' in access) return access.response
   try {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-authenticator-enroll-confirm',
       payload: {
-        ...grant,
+        ...access.grant,
         otpauthUri: staged.otpauthUri,
         origin: message.payload.origin,
       },
@@ -1245,30 +1249,21 @@ async function websiteAuthenticatorBackupAttach(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    return { ok: false, reason: 'authenticator-forbidden-origin' }
-  }
-  const grant = (await passwordPairingGrants()).find(
-    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
+  const access = await authorizedWebsiteGrant(
+    message.payload.origin,
+    message.payload.vaultStoreId,
+    sender,
+    {
+      forbidden: 'authenticator-forbidden-origin',
+      missing: 'authenticator-vault-not-granted',
+      locked: 'authenticator-locked',
+    },
   )
-  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
-  await ensureExtensionSessionDocument()
-  const status = await sendSessionMessage({
-    type: 'nook:extension-session-status',
-  })
-  if (
-    !status ||
-    typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
-  ) {
-    openCompanionLauncher()
-    return { ok: false, reason: 'authenticator-locked' }
-  }
+  if ('response' in access) return access.response
   return sendSessionMessage({
     type: 'nook:extension-session-authenticator-backup-attach',
     payload: {
-      ...grant,
+      ...access.grant,
       secretId: message.payload.secretId,
       codes: message.payload.codes,
       mode: message.payload.mode,
