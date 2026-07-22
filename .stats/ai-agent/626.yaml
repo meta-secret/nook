@@ -1,0 +1,68 @@
+schema_version: 2
+source_pr:
+  number: 626
+  url: https://github.com/meta-secret/nook/pull/626
+  title: Fix extension smoke readiness
+  change_surface: extension_browser_smoke_test
+  head_sha: 40146dc96c1fc3ff473f4e8d5e4eb60b2d6062fe
+  started_at: 2026-07-22T09:54:00Z
+  opened_at: 2026-07-22T10:14:33Z
+  merged_at: 2026-07-22T10:30:15Z
+  elapsed_seconds: 2175
+  open_to_merge_seconds: 942
+summary:
+  local_execution_count: 8
+  local_check_count: 4
+  local_test_count: 3
+  local_combined_count: 1
+  local_execution_seconds: 765
+  github_actions_run_count: 2
+  github_actions_seconds: 1070
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T10:31:30Z
+  head_sha: 40146dc96c1fc3ff473f4e8d5e4eb60b2d6062fe
+  by_type:
+    rust: 627
+    preflight: 31
+    web_unit: 236
+    e2e: 199
+  total: 1093
+local_executions:
+  - { command: git history and focused source inspection, category: check, started_at: 2026-07-22T09:54:10Z, finished_at: 2026-07-22T09:54:11Z, duration_seconds: 1, outcome: passed, reason: identify_extension_id_regression }
+  - { command: task extension:test:e2e, category: test, started_at: 2026-07-22T09:59:40Z, finished_at: 2026-07-22T10:09:17Z, duration_seconds: 577, outcome: failed, reason: reproduced_missing_id_then_exposed_null_readiness_regression_and_unrelated_existing_flake }
+  - { command: task format, category: check, started_at: 2026-07-22T10:10:20Z, finished_at: 2026-07-22T10:11:13Z, duration_seconds: 53, outcome: passed, reason: pre_push_hygiene }
+  - { command: task setup SETUP_TARGET=nook-web-e2e, category: check, started_at: 2026-07-22T10:11:40Z, finished_at: 2026-07-22T10:12:42Z, duration_seconds: 62, outcome: passed, reason: refresh_focused_browser_image }
+  - { command: focused Docker extension Playwright with login shell, category: test, started_at: 2026-07-22T10:12:50Z, finished_at: 2026-07-22T10:12:51Z, duration_seconds: 1, outcome: failed, reason: login_shell_removed_container_bun_path }
+  - { command: focused Docker extension Playwright passkey-backed flow, category: test, started_at: 2026-07-22T10:13:05Z, finished_at: 2026-07-22T10:14:09Z, duration_seconds: 64, outcome: passed, reason: exact_main_failure_regression_proof }
+  - { command: task extension:check:fast plus diff validation, category: combined, started_at: 2026-07-22T10:14:12Z, finished_at: 2026-07-22T10:14:13Z, duration_seconds: 1, outcome: passed, reason: extension_unit_manifest_launcher_and_patch_validation }
+  - { command: task pr:ready PR=626, category: check, started_at: 2026-07-22T10:29:48Z, finished_at: 2026-07-22T10:29:54Z, duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 29911156213, run_attempt: 1, head_sha: 84a758580345f202ccc65f20f9fdd0e75548565e, trigger: pull_request, started_at: 2026-07-22T10:14:36Z, finished_at: 2026-07-22T10:21:38Z, duration_seconds: 422, conclusion: cancelled }
+  - { workflow: PR, run_id: 29911428417, run_attempt: 1, head_sha: 84a758580345f202ccc65f20f9fdd0e75548565e, trigger: pull_request, started_at: 2026-07-22T10:18:51Z, finished_at: 2026-07-22T10:29:39Z, duration_seconds: 648, conclusion: success }
+pr_retriggers:
+  - { kind: label_change, at: 2026-07-22T10:18:51Z, reason: add_required_ci_full_e2e_gate_for_main_failure_fix }
+merge_attempts:
+  - at: 2026-07-22T10:30:11Z
+    method: squash
+    outcome: success
+    reason: exact_head_and_main_equivalent_e2e_readiness_passed
+comparison:
+  baseline_prs: [522, 603]
+  baseline_quality: comparable
+  baseline_note: Recent extension browser-flow PRs with focused local debugging and hosted browser validation; PR 522 predates schema-2 inventory.
+  elapsed_seconds_change_percent: 1.1
+  local_execution_seconds_change_percent: -40.1
+  github_actions_seconds_change_percent: 0.6
+  test_inventory_total_change: null
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The initial full local extension suite established both deterministic regressions in the same smoke flow; the final validation was then narrowed to the affected test before the hosted full-e2e gate.
+    - The ci:full-e2e label materially changed the validation gate and required a replacement workflow run; the obsolete same-head run was cancelled within the allowed same-PR scope and no unchanged product workflow was manually rerun.
+    - One one-second Docker invocation used a login shell that removed Bun from PATH; it was corrected immediately without rebuilding the image.
+  required_actions: []
