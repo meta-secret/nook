@@ -1,0 +1,92 @@
+schema_version: 2
+source_pr:
+  number: 624
+  url: https://github.com/meta-secret/nook/pull/624
+  title: Archive Playwright UI demos in Linear
+  change_surface: ci_playwright_linear_artifact_publication
+  head_sha: 88260f5db98c4150925768794c90fa9b4ac73dd9
+  started_at: 2026-07-22T08:55:00Z
+  opened_at: 2026-07-22T09:15:00Z
+  merged_at: 2026-07-22T09:42:25Z
+  elapsed_seconds: 2845
+  open_to_merge_seconds: 1645
+summary:
+  local_execution_count: 27
+  local_check_count: 18
+  local_test_count: 2
+  local_combined_count: 7
+  local_execution_seconds: 482
+  github_actions_run_count: 3
+  github_actions_seconds: 1104
+  pr_retrigger_count: 2
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-22T09:49:30Z
+  head_sha: 88260f5db98c4150925768794c90fa9b4ac73dd9
+  by_type:
+    rust: 627
+    preflight: 31
+    web_unit: 236
+    e2e: 199
+  total: 1093
+local_executions:
+  - { command: node helper tests and syntax check plus git diff --check, category: combined, started_at: 2026-07-22T09:07:37Z, finished_at: 2026-07-22T09:07:38Z, duration_seconds: 1, outcome: passed, reason: initial_helper_validation }
+  - { command: redacted Linear upload helper end-to-end test, category: test, started_at: 2026-07-22T09:08:20Z, finished_at: 2026-07-22T09:08:24Z, duration_seconds: 4, outcome: passed, reason: private_webm_upload_and_embed_proof }
+  - { command: redacted Linear archive verification, category: check, started_at: 2026-07-22T09:09:00Z, finished_at: 2026-07-22T09:09:01Z, duration_seconds: 1, outcome: failed, reason: initial_javascript_regex_syntax_error }
+  - { command: redacted Linear archive verification retry, category: check, started_at: 2026-07-22T09:09:05Z, finished_at: 2026-07-22T09:09:06Z, duration_seconds: 1, outcome: passed, reason: verified_done_project_label_comment_and_eight_embeds }
+  - { command: node helper tests plus git diff --check, category: combined, started_at: 2026-07-22T09:10:23Z, finished_at: 2026-07-22T09:10:24Z, duration_seconds: 1, outcome: passed, reason: focused_helper_regression_suite }
+  - { command: task format, category: check, started_at: 2026-07-22T09:11:46Z, finished_at: 2026-07-22T09:12:49Z, duration_seconds: 63, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: node helper tests and syntax check plus workflow YAML parse, category: combined, started_at: 2026-07-22T09:13:05Z, finished_at: 2026-07-22T09:13:06Z, duration_seconds: 1, outcome: passed, reason: initial_exact_head_validation }
+  - { command: node top-ten selection tests and workflow YAML parse, category: combined, started_at: 2026-07-22T09:23:15Z, finished_at: 2026-07-22T09:23:16Z, duration_seconds: 1, outcome: passed, reason: user_requested_main_catalog_extension }
+  - { command: task format, category: check, started_at: 2026-07-22T09:24:54Z, finished_at: 2026-07-22T09:26:04Z, duration_seconds: 70, outcome: passed, reason: main_demo_extension_pre_push_hygiene }
+  - { command: node helper tests and syntax check plus workflow YAML parse, category: combined, started_at: 2026-07-22T09:26:05Z, finished_at: 2026-07-22T09:26:06Z, duration_seconds: 1, outcome: passed, reason: top_ten_exact_head_validation }
+  - { command: task pr:ready PR=624, category: check, started_at: 2026-07-22T09:30:50Z, finished_at: 2026-07-22T09:30:58Z, duration_seconds: 8, outcome: failed, reason: detected_unresolved_trusted_ref_security_review }
+  - { command: node security invariant tests and workflow YAML parse, category: combined, started_at: 2026-07-22T09:32:05Z, finished_at: 2026-07-22T09:32:06Z, duration_seconds: 1, outcome: passed, reason: trusted_post_workflow_fix_validation }
+  - { command: task format, category: check, started_at: 2026-07-22T09:32:58Z, finished_at: 2026-07-22T09:34:14Z, duration_seconds: 76, outcome: passed, reason: trusted_workflow_pre_push_hygiene }
+  - { command: node helper and credential-boundary tests plus workflow YAML parse, category: combined, started_at: 2026-07-22T09:34:15Z, finished_at: 2026-07-22T09:34:16Z, duration_seconds: 1, outcome: passed, reason: final_security_exact_head_validation }
+  - { command: task pr:ready PR=624, category: check, started_at: 2026-07-22T09:41:58Z, finished_at: 2026-07-22T09:42:04Z, duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest JSON Rust inventory with incorrect jq shape, category: check, started_at: 2026-07-22T09:43:16Z, finished_at: 2026-07-22T09:43:40Z, duration_seconds: 24, outcome: failed, reason: nextest_json_top_level_shape_assumption }
+  - { command: cargo nextest JSON Rust inventory with suppressed diagnostic, category: check, started_at: 2026-07-22T09:43:45Z, finished_at: 2026-07-22T09:44:12Z, duration_seconds: 27, outcome: failed, reason: inventory_probe_did_not_emit_count }
+  - { command: cargo nextest JSON Rust inventory, category: check, started_at: 2026-07-22T09:44:16Z, finished_at: 2026-07-22T09:44:17Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory }
+  - { command: cargo nextest JSON preflight inventory, category: check, started_at: 2026-07-22T09:44:20Z, finished_at: 2026-07-22T09:44:24Z, duration_seconds: 4, outcome: passed, reason: merged_head_preflight_inventory }
+  - { command: vitest inventory before dependency setup, category: check, started_at: 2026-07-22T09:44:28Z, finished_at: 2026-07-22T09:44:29Z, duration_seconds: 1, outcome: failed, reason: host_dependencies_absent }
+  - { command: bun install frozen lockfile for inventory, category: check, started_at: 2026-07-22T09:44:33Z, finished_at: 2026-07-22T09:44:35Z, duration_seconds: 2, outcome: passed, reason: prepare_merged_head_web_inventory }
+  - { command: vitest inventory before generated WASM, category: check, started_at: 2026-07-22T09:44:40Z, finished_at: 2026-07-22T09:44:43Z, duration_seconds: 3, outcome: failed, reason: merged_head_wasm_bindings_absent }
+  - { command: task wasm:build:fast, category: check, started_at: 2026-07-22T09:45:45Z, finished_at: 2026-07-22T09:48:35Z, duration_seconds: 170, outcome: passed, reason: generate_merged_head_wasm_for_web_inventory }
+  - { command: vitest JSON inventory, category: check, started_at: 2026-07-22T09:48:40Z, finished_at: 2026-07-22T09:48:50Z, duration_seconds: 10, outcome: passed, reason: merged_head_app_unit_inventory }
+  - { command: bun extension unit tests, category: test, started_at: 2026-07-22T09:48:54Z, finished_at: 2026-07-22T09:48:55Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_unit_inventory }
+  - { command: Playwright app inventory, category: check, started_at: 2026-07-22T09:49:00Z, finished_at: 2026-07-22T09:49:02Z, duration_seconds: 2, outcome: passed, reason: merged_head_app_e2e_inventory }
+  - { command: Playwright extension inventory, category: check, started_at: 2026-07-22T09:49:05Z, finished_at: 2026-07-22T09:49:06Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_e2e_inventory }
+github_actions_runs:
+  - { workflow: PR, run_id: 29907211451, run_attempt: 1, head_sha: 924a99131a23ff6cf076d7517cb33e4569dc8edf, trigger: pull_request, started_at: 2026-07-22T09:15:03Z, finished_at: 2026-07-22T09:22:04Z, duration_seconds: 421, conclusion: success }
+  - { workflow: PR, run_id: 29907951237, run_attempt: 1, head_sha: 966c7fd9280134994c48b0d57766cf394c5f36cb, trigger: pull_request, started_at: 2026-07-22T09:26:16Z, finished_at: 2026-07-22T09:30:19Z, duration_seconds: 243, conclusion: success }
+  - { workflow: PR, run_id: 29908514175, run_attempt: 1, head_sha: 4c02de801839ba6d2383afd97e4a8f4a2be5e453, trigger: pull_request, started_at: 2026-07-22T09:34:36Z, finished_at: 2026-07-22T09:41:56Z, duration_seconds: 440, conclusion: success }
+pr_retriggers:
+  - { kind: head_push, at: 2026-07-22T09:26:10Z, reason: add_user_requested_main_demo_catalog_and_top_ten_size_selection }
+  - { kind: head_push, at: 2026-07-22T09:34:30Z, reason: isolate_secret_consumption_in_trusted_default_branch_workflow }
+merge_attempts:
+  - at: 2026-07-22T09:42:21Z
+    method: squash
+    outcome: success
+    reason: exact_head_and_base_readiness_passed
+comparison:
+  baseline_prs: [580, 598]
+  baseline_quality: comparable
+  baseline_note: Recent CI and validation-policy changes using the standard PR gate; neither required the user-requested post-open Main expansion or a security-boundary review fix.
+  elapsed_seconds_change_percent: 229.1
+  local_execution_seconds_change_percent: 598.6
+  github_actions_seconds_change_percent: 186.0
+  test_inventory_total_change: 59
+  regression: true
+  regression_reasons:
+    - Elapsed and hosted validation time exceeded the comparable baseline after the open PR was intentionally expanded to run the complete Main demo catalog and then revised to isolate the Linear credential behind a trusted default-branch workflow.
+    - Local time exceeded the baseline primarily because the mandatory merged-head inventory generated absent WASM bindings and cold-listed native tests; the product validation path remained GitHub Actions-only.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Both replacement PR cycles followed material changes: the first implemented the requested Main/top-ten policy and the second fixed a P1 credential-boundary review finding; no unchanged head was rerun.
+    - Three format executions followed the initial implementation and the two material revisions, as required before each push.
+    - Two early nextest JSON probes spent 51 seconds resolving the inventory output shape, but the compilation cache was reused and no product workflow or repeated full suite was added.
+    - The remaining local inventory cost came from required merged-head enumeration in a fresh host dependency state, not from a checked-in CI regression.
+  required_actions: []
