@@ -78,8 +78,9 @@ jobs:
               }
             }
 
-            const pullRequest = run.pull_requests?.[0]
+            const pullRequest = context.payload.workflow_run?.pull_requests?.[0]
             if (
+              context.payload.workflow_run?.id !== runId ||
               !pullRequest ||
               !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
               !/^[0-9a-f]{40}$/.test(pullRequest.head?.sha || '') ||

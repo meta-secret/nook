@@ -81,7 +81,7 @@ jobs:
                 run.head_branch === context.payload.repository.default_branch &&
                 run.status === 'completed' &&
                 run.conclusion === 'success' &&
-                ['workflow_run', 'workflow_dispatch'].includes(run.event)
+                run.event === 'workflow_run'
               ) {
                 core.setOutput('found', 'true')
                 core.setOutput('artifact-id', String(artifact.id))
@@ -181,7 +181,7 @@ jobs:
                 run.head_branch === context.payload.repository.default_branch &&
                 run.status === 'completed' &&
                 run.conclusion === 'success' &&
-                ['workflow_run', 'workflow_dispatch'].includes(run.event)
+                run.event === 'workflow_run'
               ) {
                 core.setOutput('found', 'true')
                 core.setOutput('artifact-id', String(artifact.id))
