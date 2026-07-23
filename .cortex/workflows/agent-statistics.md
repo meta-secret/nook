@@ -46,10 +46,8 @@ including time spent waiting for CI or review when the agent owns that wait.
   and must not be awaited or included merely because the merge triggered it.
 - **Cache telemetry:** for every measured Actions job that publishes a
   `cache-telemetry-*` artifact, record whether sccache used the persistent remote
-  Redis service or the fresh job-local fallback, compiler cache hits and misses,
-  and BuildKit cached/completed target-record steps. A job-local Redis cache can
-  reuse compiler outputs later in the same job but cannot persist them across
-  runners or workflow runs.
+  Redis service or direct compilation without sccache, compiler cache hits and
+  misses, and BuildKit cached/completed target-record steps.
 - **PR retriggers:** count every new repository-owned validation cycle after
   the first. Distinguish `head_push`, `manual_rerun`, `base_update`, and
   `reopen`. A GitHub `run_attempt` greater than one is a manual rerun; a new run
@@ -170,7 +168,7 @@ cache_telemetry:
   totals:
     job_count: 2
     remote_backend_job_count: 0
-    local_fallback_job_count: 2
+    direct_compile_job_count: 2
     sccache_compile_requests: 240
     sccache_cache_hits: 150
     sccache_cache_misses: 80
@@ -183,7 +181,7 @@ cache_telemetry:
       run_id: 123456789
       run_attempt: 1
       job: rust
-      cache_backend: local_fallback
+      cache_backend: direct_compile
       cache_backend_reason: credentials_unavailable
       cache_backend_persistent: false
       sccache:
@@ -202,7 +200,7 @@ cache_telemetry:
       run_id: 123456789
       run_attempt: 1
       job: verify
-      cache_backend: local_fallback
+      cache_backend: direct_compile
       cache_backend_reason: credentials_unavailable
       cache_backend_persistent: false
       sccache:
@@ -290,7 +288,7 @@ it. The assessment must also inspect:
 - avoidable merge attempts before readiness or base freshness;
 - cache misses, duplicated builds, repeated dependency setup, and slow steps
   that dominate otherwise comparable runs.
-- unexpected `local_fallback` use in a trusted workflow that should have the
+- unexpected `direct_compile` use in a trusted workflow that should have the
   persistent cache credentials, while recognizing that untrusted pull-request
   jobs must not receive those secrets.
 

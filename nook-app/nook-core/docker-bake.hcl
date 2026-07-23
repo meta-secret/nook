@@ -4,7 +4,7 @@
 
 // Rust dependency cache (cargo-chef cook + fetch). Base for both native and wasm builders.
 target "builder-deps" {
-  inherits   = ["_sccache-network"]
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "builder-deps"
@@ -17,7 +17,7 @@ target "builder-deps" {
 }
 
 target "builder-wasm-deps" {
-  inherits   = ["_sccache-network"]
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "builder-wasm-deps"
@@ -35,7 +35,7 @@ target "builder-wasm-deps" {
 // Persist this source-sensitive boundary separately from manifest-only dependencies so hosted
 // runners do not repeat unchanged coverage builds after a non-Rust PR push.
 target "builder-debug" {
-  inherits   = ["_sccache-network"]
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "builder-debug"
@@ -51,7 +51,7 @@ target "builder-debug" {
 // Small local-output target for the rare case where a commit-keyed main coverage artifact is
 // unavailable. It reuses builder-debug's cached Rust layers without exporting the full app image.
 target "coverage-export" {
-  inherits   = ["_sccache-network"]
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-core/Dockerfile"
   target     = "coverage-export"

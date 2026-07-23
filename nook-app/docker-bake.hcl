@@ -43,16 +43,12 @@ variable "WASM_BUILD_MODE" {
   default = "dev"
 }
 
-variable "SCCACHE_REDIS_PORT" {
-  default = "6380"
-}
-
-variable "SCCACHE_REDIS_HOST_IP" {
-  default = ""
+variable "SCCACHE_REDIS_ENDPOINT" {
+  default = "rediss://redis-ovh-borg-1.bynull.link:6380"
 }
 
 variable "SCCACHE_REDIS_MODE" {
-  default = "local"
+  default = "external"
 }
 
 variable "SCCACHE_REDIS_PASSWORD_FILE" {
@@ -254,13 +250,10 @@ web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-target "_sccache-network" {
+target "_sccache" {
   args = {
-    SCCACHE_REDIS_MODE = SCCACHE_REDIS_MODE
-    SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
-  }
-  extra-hosts = {
-    "host.docker.internal" = SCCACHE_REDIS_HOST_IP
+    SCCACHE_REDIS_MODE     = SCCACHE_REDIS_MODE
+    SCCACHE_REDIS_ENDPOINT = SCCACHE_REDIS_ENDPOINT
   }
   secret = SCCACHE_REDIS_PASSWORD_FILE != "" ? [
     "id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}",

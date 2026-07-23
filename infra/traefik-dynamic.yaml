@@ -1,0 +1,15 @@
+tcp:
+  routers:
+    redis:
+      entryPoints:
+        - redis
+      rule: HostSNI(`redis-ovh-borg-1.bynull.link`)
+      service: redis
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    redis:
+      loadBalancer:
+        servers:
+          - address: redis:6379

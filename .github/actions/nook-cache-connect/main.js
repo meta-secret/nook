@@ -2,16 +2,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 
-const inputNames = [
-  "INPUT_CACHE-REDIS-PASSWORD",
-  "INPUT_CACHE-CLOUDFLARE-CLIENT-ID",
-  "INPUT_CACHE-CLOUDFLARE-CLIENT-SECRET",
-];
-const [redisPassword, cloudflareClientId, cloudflareClientSecret] = inputNames.map(
-  (name) => process.env[name] || "",
-);
+const inputName = "INPUT_CACHE-REDIS-PASSWORD";
+const redisPassword = process.env[inputName] || "";
 
 const githubEnvironmentPath = process.env.GITHUB_ENV;
 if (!githubEnvironmentPath) {
@@ -21,19 +14,17 @@ if (!githubEnvironmentPath) {
   process.exit(1);
 }
 
-const credentialsAvailable =
-  Boolean(redisPassword) && Boolean(cloudflareClientId) && Boolean(cloudflareClientSecret);
 fs.appendFileSync(
   githubEnvironmentPath,
   [
-    "NOOK_SCCACHE_BACKEND=local_fallback",
+    "NOOK_SCCACHE_BACKEND=direct_compile",
     `NOOK_SCCACHE_BACKEND_REASON=${
-      credentialsAvailable ? "persistent_connection_unavailable" : "credentials_unavailable"
+      redisPassword ? "persistent_credential_available" : "credentials_unavailable"
     }`,
     "",
   ].join("\n"),
 );
-if (!credentialsAvailable) {
+if (!redisPassword) {
   process.exit(0);
 }
 
@@ -57,55 +48,14 @@ function writeCredential(filename, value) {
 }
 
 const redisPasswordFile = writeCredential("redis-password", redisPassword);
-const cloudflareClientIdFile = writeCredential("cloudflare-client-id", cloudflareClientId);
-const cloudflareClientSecretFile = writeCredential(
-  "cloudflare-client-secret",
-  cloudflareClientSecret,
+delete process.env[inputName];
+fs.appendFileSync(
+  githubEnvironmentPath,
+  [
+    "SCCACHE_REDIS_MODE=external",
+    `SCCACHE_REDIS_PASSWORD_FILE=${redisPasswordFile}`,
+    "NOOK_SCCACHE_BACKEND=remote",
+    "NOOK_SCCACHE_BACKEND_REASON=persistent_tls_service",
+    "",
+  ].join("\n"),
 );
-
-const taskEnvironment = { ...process.env };
-for (const inputName of inputNames) {
-  delete taskEnvironment[inputName];
-}
-taskEnvironment.CACHE_REDIS_PASSWORD_FILE = redisPasswordFile;
-taskEnvironment.CACHE_CLOUDFLARE_CLIENT_ID_FILE = cloudflareClientIdFile;
-taskEnvironment.CACHE_CLOUDFLARE_CLIENT_SECRET_FILE = cloudflareClientSecretFile;
-
-const githubEnvironmentSize = fs.existsSync(githubEnvironmentPath)
-  ? fs.statSync(githubEnvironmentPath).size
-  : 0;
-const result = spawnSync("task", ["infra:cache:connect"], {
-  cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
-  env: taskEnvironment,
-  stdio: "inherit",
-});
-
-fs.rmSync(cloudflareClientIdFile, { force: true });
-fs.rmSync(cloudflareClientSecretFile, { force: true });
-
-const appendedEnvironment = fs.existsSync(githubEnvironmentPath)
-  ? fs.readFileSync(githubEnvironmentPath).subarray(githubEnvironmentSize).toString("utf8")
-  : "";
-const externalCacheEnabled = appendedEnvironment.includes(
-  `SCCACHE_REDIS_PASSWORD_FILE=${redisPasswordFile}\n`,
-);
-if (!externalCacheEnabled) {
-  fs.rmSync(credentialDirectory, { recursive: true, force: true });
-} else {
-  fs.appendFileSync(
-    githubEnvironmentPath,
-    [
-      "NOOK_SCCACHE_BACKEND=remote",
-      "NOOK_SCCACHE_BACKEND_REASON=persistent_service",
-      "",
-    ].join("\n"),
-  );
-}
-
-if (result.error) {
-  process.stderr.write("::error::Could not start the persistent Rust cache task\n");
-  process.exit(1);
-}
-if (result.status !== 0) {
-  process.exit(result.status || 1);
-}

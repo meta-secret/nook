@@ -1011,22 +1011,26 @@ fn assert_pr_workflow_contract(root: &Path) {
         "steps.trusted-wasm.outputs.found != 'true'",
         "'nook-app/nook-wasm/**'",
         "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
-        "git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
         "attempt $attempt/360",
+        "coverage/current/tools/nook-preflight coverage-inputs",
+        "--repository \"$GITHUB_WORKSPACE\"",
+        "--base \"$BASE_SHA\"",
+        "--head \"$HEAD_SHA\"",
+        "--github-output \"$GITHUB_OUTPUT\"",
+        "coverage/current/tools/nook-preflight validate-coverage-artifact",
+        "coverage/current/tools/nook-preflight coverage-report",
     ] {
         assert!(
             pr.contains(required),
             "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
-    assert_eq!(
-        pr.matches("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --")
-            .count(),
-        2,
-        "coverage input detection must use the explicit event snapshots' merge-base diff, never a moving synthetic merge or a two-dot snapshot diff"
+    assert!(
+        !pr.contains("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --"),
+        "coverage input detection belongs in the typed Rust reporter, not workflow shell"
     );
     let native_job = section(&pr, "  rust:\n", "  wasm:\n");
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
@@ -1154,6 +1158,35 @@ fn assert_pr_workflow_contract(root: &Path) {
                 .contains("ARTIFACT_NAME: pr-rust-${{ github.run_id }}-${{ github.run_attempt }}")
             && !pr.contains("needs: [rust, wasm]"),
         "split-CI handoffs must remain run-stable for failed-job reruns"
+    );
+    assert!(
+        !verify_job.contains("read_lines_percent")
+            && !verify_job.contains("awk ")
+            && !verify_job.contains("| wc -l")
+            && !verify_job.contains("jq -e --arg commit_sha"),
+        "PR coverage reporting must consume structured JSON through the Rust preflight reporter"
+    );
+    assert_preflight_reporter_contract(root);
+}
+
+fn assert_preflight_reporter_contract(root: &Path) {
+    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    assert!(
+        ci_tasks.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
+        "native PR CI must export the preflight reporter with its coverage artifact"
+    );
+    let preflight_dockerfile = read(root, "preflight/Dockerfile");
+    assert!(
+        preflight_dockerfile.contains("FROM rust:1.96-bookworm AS build")
+            && preflight_dockerfile.contains("FROM scratch AS cli-export")
+            && preflight_dockerfile.contains("target/debug/nook-preflight /nook-preflight"),
+        "the preflight reporter must share the tested Debian build graph and export as a stripped CI tool"
+    );
+    let preflight_tasks = read(root, "preflight/Taskfile.yml");
+    assert!(
+        preflight_tasks.contains("preflight:export:")
+            && preflight_tasks.contains("--target cli-export"),
+        "preflight must expose its reporter through an explicit export task"
     );
 }
 

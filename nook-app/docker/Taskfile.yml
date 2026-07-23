@@ -10,7 +10,6 @@ tasks:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
-      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_SITE_URL: '{{.VITE_SITE_URL}}'
       VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
@@ -27,7 +26,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -69,8 +67,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
@@ -87,8 +83,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
@@ -105,8 +99,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
@@ -124,7 +116,6 @@ tasks:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
     env:
-      SCCACHE_REDIS_HOST_IP: '{{.SCCACHE_REDIS_HOST_IP}}'
       VITE_BASE: '{{.VITE_BASE}}'
       NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
       NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
@@ -143,7 +134,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -189,7 +179,6 @@ tasks:
         --platform linux/amd64
         {{.DOCKER_RUN_LIMITS}}
         --ipc=host
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         -e CI=1
         -e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
         -e NOOK_UI_DEMO_OUTPUT_DIR=/ui-demo-results
@@ -258,7 +247,7 @@ tasks:
         esac;
         rm -rf "$out_dir";
         mkdir -p "$out_dir";
-        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
 
   docker:ci:rust:export:
     desc: Run native Rust formatting/coverage on one CI runner and export only coverage artifacts.
@@ -271,7 +260,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build/tests on a separate CI runner and export only the generated package.
@@ -284,7 +273,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
 
   docker:ci:web:build:
     desc: Build the sealed web image from the same-runner CI WASM artifact.
@@ -299,7 +288,7 @@ tasks:
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
         for attempt in 1 2; do
-          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web; then
+          if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web; then
             exit 0;
           fi;
           if [ "$attempt" -eq 2 ]; then exit 1; fi;
@@ -320,7 +309,7 @@ tasks:
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
         for attempt in 1 2; do
-          if env SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}" WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e; then
+          if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e; then
             exit 0;
           fi;
           if [ "$attempt" -eq 2 ]; then exit 1; fi;
@@ -336,8 +325,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
@@ -361,8 +348,6 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
-        --add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}
-        -e SCCACHE_REDIS_HOST_IP="{{.SCCACHE_REDIS_HOST_IP}}"
         {{.SCCACHE_REDIS_PASSWORD_MOUNT}}
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook

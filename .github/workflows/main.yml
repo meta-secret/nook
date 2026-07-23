@@ -64,6 +64,8 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
 
       - name: Preflight, check, build, and e2e
         run: >-

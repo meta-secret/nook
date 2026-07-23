@@ -466,6 +466,8 @@ jobs:
                   --name "$ARTIFACT_NAME" \
                   --dir coverage/current
                 test -s coverage/current/summary.json
+                chmod +x coverage/current/tools/nook-preflight
+                test -x coverage/current/tools/nook-preflight
                 exit 0
               fi
               if [ -z "$native_job_id" ]; then
@@ -749,41 +751,11 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "$BASE_SHA" "$HEAD_SHA" --no-tags --prune --depth=1000
-          changed_count="$(
-            git diff --name-only "$BASE_SHA...$HEAD_SHA" -- \
-              nook-app/.cargo \
-              nook-app/Cargo.lock \
-              nook-app/Cargo.toml \
-              nook-app/docker-bake.hcl \
-              'nook-app/docker/*.Dockerfile' \
-              'nook-app/docker/*docker-bake*.hcl' \
-              nook-app/nook-auth2 \
-              nook-app/nook-core \
-              | wc -l \
-              | tr -d ' '
-          )"
-          source_changed_count="$(
-            git diff --name-only "$BASE_SHA...$HEAD_SHA" -- \
-              nook-app/.cargo \
-              nook-app/Cargo.lock \
-              nook-app/Cargo.toml \
-              nook-app/nook-auth2 \
-              nook-app/nook-core \
-              ':(exclude)nook-app/nook-core/Dockerfile' \
-              ':(exclude)nook-app/nook-core/docker-bake.hcl' \
-              | wc -l \
-              | tr -d ' '
-          )"
-          if [ "$changed_count" -gt 0 ]; then
-            echo "rust_coverage_inputs_changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "rust_coverage_inputs_changed=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ "$source_changed_count" -gt 0 ]; then
-            echo "base_coverage_required=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "base_coverage_required=false" >> "$GITHUB_OUTPUT"
-          fi
+          coverage/current/tools/nook-preflight coverage-inputs \
+            --repository "$GITHUB_WORKSPACE" \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Resolve base coverage artifact
         if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
@@ -836,21 +808,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          valid=false
-          if [ -s coverage/base/manifest.json ] \
-            && jq -e --arg commit_sha "$BASE_SHA" \
-              '.schema_version == 1 and .commit_sha == $commit_sha' \
-              coverage/base/manifest.json >/dev/null \
-            && test -s coverage/base/summary.txt \
-            && test -s coverage/base/summary.json \
-            && test -s coverage/base/lcov.info \
-            && test -s coverage/base/coverage-floor.json; then
-            valid=true
-          else
-            echo "::warning::Base coverage artifact is unavailable or invalid; using coverage-only fallback"
-            rm -rf coverage/base
-          fi
-          echo "valid=$valid" >> "$GITHUB_OUTPUT"
+          coverage/current/tools/nook-preflight validate-coverage-artifact \
+            --directory coverage/base \
+            --commit "$BASE_SHA" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Export base nook-core/auth coverage fallback
         if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
@@ -861,6 +822,7 @@ jobs:
           if [ "${{ steps.base-coverage-artifact.outputs.valid }}" = "true" ]; then
             exit 0
           fi
+          rm -rf coverage/base
           git worktree prune
           rm -rf ../nook-base-coverage
           git worktree add --detach ../nook-base-coverage "$BASE_SHA"
@@ -902,41 +864,12 @@ jobs:
         id: coverage
         run: |
           set -euo pipefail
-          read_lines_percent() {
-            awk '/^TOTAL[[:space:]]/ { gsub("%", "", $10); print $10; found=1 } END { if (!found) exit 1 }' "$1"
-          }
-          current="$(read_lines_percent coverage/current/summary.txt)"
-          base="$(read_lines_percent coverage/base/summary.txt)"
-          floor="$(awk -F: '/"lines_percent"/ { gsub(/[, ]/, "", $2); print $2; exit }' coverage/current/coverage-floor.json)"
-          delta="$(awk -v current="$current" -v base="$base" 'BEGIN { printf "%+.2f", current - base }')"
-          if awk -v current="$current" -v floor="$floor" 'BEGIN { exit current + 0 >= floor + 0 ? 0 : 1 }'; then
-            status="passed"
-          else
-            status="failed"
-          fi
-
-          {
-            echo "current=$current"
-            echo "base=$base"
-            echo "delta=$delta"
-            echo "floor=$floor"
-            echo "status=$status"
-          } >> "$GITHUB_OUTPUT"
-
-          mkdir -p coverage
-          {
-            echo "### nook-core + nook-auth2 coverage"
-            echo
-            echo "| Metric | Lines |"
-            echo "| --- | ---: |"
-            echo "| PR branch | ${current}% |"
-            echo "| Base branch | ${base}% |"
-            echo "| Delta | ${delta}% |"
-            echo "| Required floor | ${floor}% |"
-            echo
-            echo "Artifact: \`nook-core-coverage\`"
-          } > coverage/nook-core-summary.md
-          cat coverage/nook-core-summary.md >> "$GITHUB_STEP_SUMMARY"
+          coverage/current/tools/nook-preflight coverage-report \
+            --current coverage/current \
+            --base coverage/base \
+            --github-output "$GITHUB_OUTPUT" \
+            --github-summary "$GITHUB_STEP_SUMMARY" \
+            --markdown coverage/nook-core-summary.md
 
       - name: Upload nook-core/auth coverage artifact
         uses: actions/upload-artifact@v7

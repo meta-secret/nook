@@ -156,8 +156,8 @@ function cacheTelemetrySummary(cacheTelemetry, run) {
       remote_backend_job_count: jobs.filter(
         (job) => job.cache_backend.kind === 'remote',
       ).length,
-      local_fallback_job_count: jobs.filter(
-        (job) => job.cache_backend.kind === 'local_fallback',
+      direct_compile_job_count: jobs.filter(
+        (job) => job.cache_backend.kind === 'direct_compile',
       ).length,
       sccache_compile_requests: total('sccache', 'compile_requests'),
       sccache_cache_hits: sccacheHits,
@@ -425,7 +425,7 @@ function validateMainBuildStats(record, expected = {}) {
     for (const field of [
       'job_count',
       'remote_backend_job_count',
-      'local_fallback_job_count',
+      'direct_compile_job_count',
       'sccache_compile_requests',
       'sccache_cache_hits',
       'sccache_cache_misses',
