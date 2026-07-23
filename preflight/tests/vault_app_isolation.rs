@@ -1022,9 +1022,6 @@ fn assert_pr_workflow_contract(root: &Path) {
         "github.event.workflow_run.conclusion == 'success'",
         "workflowPath !== '.github/workflows/pr.yml'",
         "run.path?.replace(/@[^@]+$/, '')",
-        "github.rest.repos.listPullRequestsAssociatedWithCommit",
-        "candidate.head?.sha === run.head_sha",
-        "matchingPullRequests.length !== 1",
         "ref: ${{ steps.source.outputs.base-sha }}",
         "git merge-tree --write-tree HEAD \"$HEAD_SHA\"",
         "git read-tree --reset -u \"$merge_tree\"",
@@ -1041,6 +1038,11 @@ fn assert_pr_workflow_contract(root: &Path) {
             "trusted validation promotion is missing: {required}"
         );
     }
+    assert!(
+        !trusted_handoff.contains("workflow_dispatch")
+            && !trusted_handoff.contains("listPullRequestsAssociatedWithCommit"),
+        "trusted validation promotion must require the immutable workflow-run PR snapshot"
+    );
     assert_eq!(
         pr.matches("task ci:pr:wasm").count(),
         1,

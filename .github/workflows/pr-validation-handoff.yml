@@ -12,37 +12,28 @@ on:
   workflow_run:
     workflows: [PR]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: Successful PR workflow run to promote
-        required: true
-        type: string
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: pr-validation-handoff-${{ github.event.workflow_run.id || inputs.run_id }}
+  group: pr-validation-handoff-${{ github.event.workflow_run.id }}
   cancel-in-progress: false
 
 jobs:
   promote:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'pull_request' &&
-        github.event.workflow_run.repository.full_name == github.repository
-      )
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.repository.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Verify source PR workflow
         id: source
         uses: actions/github-script@v9
         env:
-          REQUESTED_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          REQUESTED_RUN_ID: ${{ github.event.workflow_run.id }}
         with:
           retries: 3
           script: |
@@ -87,31 +78,7 @@ jobs:
               }
             }
 
-            let pullRequest = run.pull_requests?.[0]
-            if (!pullRequest) {
-              const associatedPullRequests = await github.paginate(
-                github.rest.repos.listPullRequestsAssociatedWithCommit,
-                {
-                  ...context.repo,
-                  commit_sha: run.head_sha,
-                  per_page: 100,
-                },
-              )
-              const matchingPullRequests = associatedPullRequests.filter(
-                (candidate) =>
-                  candidate.head?.sha === run.head_sha &&
-                  candidate.head?.ref === run.head_branch &&
-                  candidate.base?.repo?.full_name ===
-                    `${context.repo.owner}/${context.repo.repo}`,
-              )
-              if (matchingPullRequests.length !== 1) {
-                core.setFailed(
-                  `Run ${runId} has ${matchingPullRequests.length} matching associated pull requests`,
-                )
-                return
-              }
-              pullRequest = matchingPullRequests[0]
-            }
+            const pullRequest = run.pull_requests?.[0]
             if (
               !pullRequest ||
               !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
