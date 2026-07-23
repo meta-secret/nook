@@ -94,7 +94,7 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(loginPage.getByTestId('mock-auth-otp-input')).toHaveValue(
         /^\d{6}$/,
       )
-      await expect(authenticatorPicker).toBeClosed()
+      await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
 
       await loginPage.getByRole('button', { name: 'Submit' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
