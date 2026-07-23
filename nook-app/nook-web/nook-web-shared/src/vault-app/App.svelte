@@ -392,6 +392,10 @@
 
   async function handlePasswordUnlock(entryId: string, password: string) {
     await vault.unlockWithPassword(entryId, password);
+    if (vault.isAuthenticated) {
+      pendingExistingVaultImport = undefined;
+      vault.existingVaultRecoverySummary = undefined;
+    }
   }
 
   async function handleSettingsReconnect() {
@@ -529,10 +533,32 @@
     vault.githubRepo = pending.githubRepo;
     vault.oauthFile = pending.oauthFile;
     vault.localFolder = pending.localFolder;
+    const recoverySummary = vault.existingVaultRecoverySummary;
     await vault.connectStagedProvider();
     if (vault.isAuthenticated) {
       await vault.activateConnectedExistingVault(pending.storeId);
       pendingExistingVaultImport = undefined;
+      vault.existingVaultRecoverySummary = undefined;
+      return;
+    }
+    if (vault.loginPasswordPrompt) {
+      if (recoverySummary?.passwordEntries.length) {
+        vault.passwordEntries = recoverySummary.passwordEntries;
+        vault.selectedPasswordEntryId =
+          recoverySummary.passwordEntries.length === 1
+            ? recoverySummary.passwordEntries[0]!.id
+            : undefined;
+      }
+      pendingExistingVaultImport = undefined;
+      vault.existingVaultRecoverySummary = undefined;
+      return;
+    }
+    if (
+      vault.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
+      vault.sentinelCeremonyPrompt
+    ) {
+      pendingExistingVaultImport = undefined;
+      vault.existingVaultRecoverySummary = undefined;
     }
   }
 
@@ -1035,6 +1061,7 @@
                   if (showExistingVaultPasskeyOverlay) {
                     pendingExistingVaultUnlock = false;
                     pendingExistingVaultImport = undefined;
+                    vault.existingVaultRecoverySummary = undefined;
                     return;
                   }
                   if (showEnrollmentPasskeyOverlay) {

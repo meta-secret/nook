@@ -151,6 +151,20 @@ test.describe('local folder backup provider', () => {
     await expect(
       page.getByTestId('existing-vault-password-status'),
     ).toContainText('Emergency recovery')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: {
+                  passwordEntries: Array<{ label: string }>
+                }
+              }
+            ).__nookVault?.passwordEntries.map((entry) => entry.label) ?? [],
+        ),
+      )
+      .toContain('Emergency recovery')
     await expect(page.locator('body')).not.toContainText(
       "Authorize before using this browser's device key.",
     )
@@ -180,6 +194,20 @@ test.describe('local folder backup provider', () => {
     await expect(
       page.getByTestId('secret-row').filter({ hasText: sourceSecretKey }),
     ).toBeVisible()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: {
+                  existingVaultRecoverySummary?: unknown
+                }
+              }
+            ).__nookVault?.existingVaultRecoverySummary,
+        ),
+      )
+      .toBeUndefined()
   })
 
   test('explains the AI-debug browser directory-picker boundary', async ({
