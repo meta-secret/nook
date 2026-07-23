@@ -374,7 +374,9 @@
             {vault}
             vaultEntry={activeLoginVault}
             hasMultipleVaults={vault.hasMultipleLocalVaults}
-            passwordEntries={vault.passwordEntries}
+            passwordEntries={vault.passwordEntries.length > 0
+              ? vault.passwordEntries
+              : (vault.existingVaultRecoverySummary?.passwordEntries ?? [])}
             bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
             {isVerifying}
             {isInitializing}
