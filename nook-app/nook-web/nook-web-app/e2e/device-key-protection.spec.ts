@@ -248,10 +248,10 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
+    ).toBeVisible()
     await expect(
       page.getByTestId('sentinel-genesis-authentication-instructions'),
-    ).toContainText('Open the authentication URL')
+    ).toContainText('Paste the signed response')
     const invitationLink = await page
       .getByTestId('sentinel-genesis-request-output')
       .inputValue()
@@ -274,7 +274,9 @@ test.describe('passkey device-key protection', () => {
       invitationLink,
       'Sentinel participant one',
     )
-    await page.goto(participantOne.responseLink)
+    await page
+      .getByTestId('sentinel-genesis-response-input')
+      .fill(participantOne.responseLink)
     await expect(
       page.getByTestId('sentinel-genesis-authentication-ready'),
     ).toContainText('Authentication response received')

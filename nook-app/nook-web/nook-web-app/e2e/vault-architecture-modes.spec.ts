@@ -425,10 +425,10 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
+    ).toBeVisible()
     await expect(
       page.getByTestId('sentinel-genesis-authentication-instructions'),
-    ).toContainText('Open the authentication URL')
+    ).toContainText('Paste the signed response')
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
