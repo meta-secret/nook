@@ -182,6 +182,7 @@ async function discoverPairedExtensionIdentityOnce(
     payload: {
       requestId: discoveryRequestId,
       vaultStoreId,
+      expiresAt: Date.now() + EXTENSION_MESSAGE_TIMEOUT_MS,
     },
   };
 

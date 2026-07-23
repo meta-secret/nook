@@ -11,6 +11,10 @@ import {
   SessionOperationQueue,
   type SessionOperationPriority,
 } from '../lib/session-operation-queue'
+import {
+  scrubProviderCredentials,
+  stageProviderCredentials,
+} from '../lib/provider-credential-staging'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
@@ -924,10 +928,55 @@ function enqueueSensitiveSessionMessage(
   )
 }
 
+function enqueueVaultImportMessage(
+  message: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): Promise<unknown> {
+  const stagedProviders = stageProviderCredentials(payload.providers)
+  if (!stagedProviders)
+    return sessionOperations.enqueue(() => handleMessage(message))
+  payload.providers = []
+  let pendingPayload: Record<string, unknown> | undefined = {
+    ...payload,
+    providers: stagedProviders,
+  }
+  const clearPending = () => {
+    if (!pendingPayload) return
+    scrubProviderCredentials(pendingPayload.providers)
+    pendingPayload = undefined
+  }
+  return sessionOperations.enqueue(
+    async () => {
+      const operationPayload = pendingPayload
+      pendingPayload = undefined
+      if (!operationPayload) {
+        throw new Error('Extension session request expired.')
+      }
+      try {
+        return await handleMessage({ ...message, payload: operationPayload })
+      } finally {
+        scrubProviderCredentials(operationPayload.providers)
+        operationPayload.providers = []
+      }
+    },
+    {
+      priority: 'interactive',
+      expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+      onExpire: clearPending,
+    },
+  )
+}
+
 function enqueueSessionMessage(message: unknown): Promise<unknown> {
   const type = messageType(message)
   if (!type) return Promise.resolve(undefined)
   const payload = messagePayload(message)
+  if (type === 'nook:extension-session-import-vault') {
+    return enqueueVaultImportMessage(
+      message as Record<string, unknown>,
+      payload,
+    )
+  }
   const requestedExpiry = requestedQueueExpiry(payload)
   const priority = requestedExpiry
     ? payload.queuePriority === 'interactive'

@@ -469,6 +469,7 @@ async function discoverPairedVaultIdentity(
     await ensureExtensionSessionDocument()
     const statusResponse = (await sendSessionMessage({
       type: 'nook:extension-session-status',
+      payload: { queueExpiresAt: message.payload.expiresAt },
     })) as ExtensionSessionStatusResponse
     if (statusResponse.status !== 'unlocked') {
       return {
@@ -1645,6 +1646,7 @@ async function websitePasskeyOptions(
       requestId: string
       ceremony: WebsitePasskeyCeremony
       requestJson: string
+      expiresAt: number
     }
   },
   sender: chrome.runtime.MessageSender,
@@ -1662,6 +1664,7 @@ async function websitePasskeyOptions(
   await ensureExtensionSessionDocument()
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt: message.payload.expiresAt },
   })
   if (
     !status ||
@@ -1685,7 +1688,12 @@ async function websitePasskeyOptions(
   for (const grant of grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-passkeys',
-      payload: { ...grant, rpId: context.rpId, origin: context.origin },
+      payload: {
+        ...grant,
+        rpId: context.rpId,
+        origin: context.origin,
+        queueExpiresAt: message.payload.expiresAt,
+      },
     })
     if (
       response &&
