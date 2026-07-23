@@ -48,7 +48,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   let stagedOffer: StagedSaveOffer | undefined
   let enrollStaged = false
   const runtimeListeners: Array<
-    (message: unknown, sender: { id: string }) => boolean
+    (
+      message: unknown,
+      sender: { id: string },
+      sendResponse: RuntimeCallback,
+    ) => boolean
   > = []
 
   const responseFor = (message: RuntimeMessage): unknown => {
@@ -74,6 +78,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               },
             },
             { id: 'demo-extension' },
+            () => {},
           ),
         )
       }, 1_200)
