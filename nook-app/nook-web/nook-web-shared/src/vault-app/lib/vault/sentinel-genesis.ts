@@ -229,6 +229,7 @@ export async function acceptShareDelivery(
     await state.enqueueStorage(() =>
       state.manager!.acceptSentinelGenesisShareDelivery(payload.trim()),
     );
+    await state.listSentinelStoredDeliveries();
     state.showSuccess(state.t("login.sentinel_genesis_receive_share_success"));
   } catch (error) {
     state.errorMsg =
