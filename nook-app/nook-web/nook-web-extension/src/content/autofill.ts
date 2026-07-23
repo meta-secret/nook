@@ -174,6 +174,7 @@ type AuthenticatorOptionsResponse = {
   ok?: boolean
   status?: 'ready' | 'locked' | 'unavailable'
   requestId?: string
+  expiresAt?: number
 }
 
 type AuthenticatorFillResponse = {
@@ -188,6 +189,7 @@ type PendingAuthenticatorPicker = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  timeoutId: number
 }
 
 let pendingAuthenticatorPicker: PendingAuthenticatorPicker | undefined
@@ -1187,7 +1189,7 @@ async function continueWithAuthenticator(
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
 ): Promise<void> {
-  if (busy) return
+  if (busy || pendingAuthenticatorPicker) return
   busy = true
   continueButton.disabled = true
   setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
@@ -1235,7 +1237,11 @@ async function continueWithAuthenticator(
       return
     }
 
-    if (!response.requestId) {
+    if (
+      !response.requestId ||
+      typeof response.expiresAt !== 'number' ||
+      response.expiresAt <= Date.now()
+    ) {
       setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
@@ -1245,6 +1251,27 @@ async function continueWithAuthenticator(
       )
       return
     }
+    const requestId = response.requestId
+    const timeoutId = window.setTimeout(
+      () => {
+        if (pendingAuthenticatorPicker?.requestId !== requestId) return
+        const pending = pendingAuthenticatorPicker
+        pendingAuthenticatorPicker = undefined
+        setStatus(
+          pending.description,
+          pending.continueButton,
+          translatedMessage('widgetAuthenticatorFillFailed'),
+          true,
+        )
+        if (
+          pending.continueButton.isConnected &&
+          !pending.continueButton.hidden
+        ) {
+          pending.continueButton.disabled = false
+        }
+      },
+      Math.max(0, response.expiresAt - Date.now()),
+    )
     pendingAuthenticatorPicker = {
       requestId: response.requestId,
       workflow,
@@ -1252,6 +1279,7 @@ async function continueWithAuthenticator(
       title,
       description,
       continueButton,
+      timeoutId,
     }
     setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
     setStatus(
@@ -1262,7 +1290,11 @@ async function continueWithAuthenticator(
     )
   } finally {
     busy = false
-    if (continueButton.isConnected && !continueButton.hidden) {
+    if (
+      !pendingAuthenticatorPicker &&
+      continueButton.isConnected &&
+      !continueButton.hidden
+    ) {
       continueButton.disabled = false
     }
   }
@@ -1279,6 +1311,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   const pending = pendingAuthenticatorPicker
   pendingAuthenticatorPicker = undefined
+  window.clearTimeout(pending.timeoutId)
   sendResponse({ ok: true })
   busy = true
   pending.continueButton.disabled = true
