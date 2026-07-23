@@ -386,13 +386,11 @@ Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 GitHub Actions runs PR, main, and release validation on `ubuntu-latest`; each
 fresh VM restores distinct BuildKit v2 cache scopes. Main refreshes the
-default-branch cache that new PRs may restore. Native and WASM producer jobs
-read only that complete Main lineage and never export PR-local Rust caches; this
-prevents a partial source cache from shadowing reusable dependency layers. The
-WASM producer restores its dependency boundary from Main's complete native
-dependency export, which contains the same shared ancestor graph. Other PR
-jobs retain isolated generations addressed by PR number, workflow job, the
-`nook-app` Git tree, and `.dockerignore`.
+default-branch cache that new PRs may restore. Every PR job reads only that
+complete Main lineage and never exports PR-local caches, preventing short-lived
+branch generations from exhausting the repository cache quota. The WASM
+producer restores Main's dedicated, complete WASM dependency boundary so it
+does not compete with the larger native dependency lineage.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and

@@ -278,7 +278,8 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          require-e2e-cache: ${{ steps.ui-demo-contract.outputs.required }}
+          cache-write: "false"
+          main-cache-only: "true"
 
       # Checkout, contract tests, and Docker setup run in parallel with the producer jobs. Only the
       # first step that consumes WASM waits, and it accepts the stable artifact name only after this
@@ -1029,6 +1030,7 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
         with:
           cache-write: "false"
+          main-cache-only: "true"
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8
@@ -1073,6 +1075,9 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8

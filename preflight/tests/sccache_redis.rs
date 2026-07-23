@@ -328,28 +328,17 @@ fn assert_delivery_cache_scope_contract() {
     let setup = read(".github/actions/nook-docker-setup/action.yml");
     assert!(setup.contains("cache-telemetry.cjs start"));
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
-    assert!(setup.contains("job_scope=\"$(printf '%s' \"$GITHUB_JOB\""));
-    assert!(setup.contains("full-e2e|full-extension-e2e)"));
-    assert!(setup.contains("job_scope=e2e"));
-    assert!(setup.contains("app_tree=\"$(git rev-parse HEAD:nook-app)\""));
-    assert!(setup.contains("dockerignore_blob=\"$(git hash-object .dockerignore)\""));
-    assert!(setup.contains("scope_suffix=\"-pr-$pr_number-$job_scope-$cache_generation\""));
-    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
-    assert!(setup.contains("repos/$GITHUB_REPOSITORY/actions/caches"));
-    assert!(setup.contains("cache_total_count()"));
-    assert!(setup.contains("Unable to probe hosted BuildKit cache key"));
-    assert!(setup.contains("require-e2e-cache"));
-    assert!(setup.contains("required_scopes=\"$required_scopes nook-web-e2e-v1\""));
-    assert!(setup.contains("e2e)"));
-    assert!(setup.contains("required_scopes=\"nook-web-deps-v1 nook-web-e2e-v1\""));
-    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
-    assert!(setup.contains("candidate_suffixes=\"$("));
-    assert!(setup.contains("seed_scope_suffix=\"$candidate_suffix\""));
-    assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX=$seed_scope_suffix"));
+    assert!(setup.contains("if [[ \"$pr_number\" =~ ^[0-9]+$ ]]"));
+    assert!(setup.contains("Pull-request jobs are forced to restore Main's cache read-only"));
+    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX="));
+    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED="));
+    assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX="));
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
-    assert!(setup.contains("[ -n \"$fallback_enabled\" ]"));
+    assert!(setup.contains("[ -z \"$read_only\" ]"));
     assert!(setup.contains("main-cache-only"));
     assert!(setup.contains("main-cache-only requires cache-write=false"));
+    assert!(!setup.contains("cache_total_count()"));
+    assert!(!setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -393,8 +382,8 @@ fn assert_delivery_cache_scope_contract() {
         .expect("native source target must follow WASM dependencies")
         .0;
     assert!(
-        wasm_dependencies.contains("cache-from = rust_deps_cache_from"),
-        "WASM dependencies must restore Main's complete native dependency ancestor"
+        wasm_dependencies.contains("cache-from = rust_wasm_deps_cache_from"),
+        "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
     );
 }
 

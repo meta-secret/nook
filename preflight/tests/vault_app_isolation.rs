@@ -1092,6 +1092,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         full_e2e_job.contains("needs: wasm")
             && full_e2e_job.contains("Download verified WASM handoff")
             && full_e2e_job.contains("cache-write: \"false\"")
+            && full_e2e_job.contains("main-cache-only: \"true\"")
             && full_e2e_job.contains("task ci:pr:e2e:web:artifacts")
             && !full_e2e_job.contains("task ci:pr:e2e\n")
             && !full_e2e_job.contains("task ci:pr:wasm"),
@@ -1104,7 +1105,8 @@ fn assert_pr_workflow_contract(root: &Path) {
     assert!(
         extension_e2e_job.contains("needs: wasm")
             && extension_e2e_job.contains("Download verified WASM handoff")
-            && !extension_e2e_job.contains("cache-write: \"false\"")
+            && extension_e2e_job.contains("cache-write: \"false\"")
+            && extension_e2e_job.contains("main-cache-only: \"true\"")
             && extension_e2e_job.contains("task ci:pr:e2e:extension:artifacts")
             && !extension_e2e_job.contains("task ci:pr:e2e\n")
             && !extension_e2e_job.contains("task ci:pr:wasm")

@@ -22,11 +22,6 @@ inputs:
     description: Cloudflare Access service-token secret for the persistent cache.
     required: false
     default: ""
-  require-e2e-cache:
-    description: Require the browser-image cache lineage for this job.
-    required: false
-    default: "false"
-
 runs:
   using: composite
   steps:
@@ -75,149 +70,34 @@ runs:
 
     - name: Select hosted BuildKit cache
       shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
 
-        cache_total_count() {
-          local key="$1"
-          local count
-          if ! count="$(
-            gh api --method GET "repos/$GITHUB_REPOSITORY/actions/caches" \
-              -f key="$key" \
-              -f ref="$GITHUB_REF" \
-              -f per_page=1 \
-              --jq '.total_count'
-          )"; then
-            echo "::warning::Unable to probe hosted BuildKit cache key $key" >&2
-            return 1
-          fi
-          if [[ ! "$count" =~ ^[0-9]+$ ]]; then
-            echo "::warning::Hosted BuildKit cache probe returned a non-numeric count for $key" >&2
-            return 1
-          fi
-          printf '%s' "$count"
-        }
-
         pr_number="${{ github.event.pull_request.number }}"
-        job_scope="$(printf '%s' "$GITHUB_JOB" | tr '[:upper:]_' '[:lower:]-' | tr -cd 'a-z0-9-')"
-        if [ -z "$job_scope" ]; then
-          echo "Unable to derive a stable BuildKit cache owner from GITHUB_JOB" >&2
-          exit 1
-        fi
-        case "$job_scope" in
-          full-e2e|full-extension-e2e)
-            job_scope=e2e
-            ;;
-        esac
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
-        if [ "${{ inputs.main-cache-only }}" = "true" ]; then
+
+        read_only=""
+        if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
+          read_only=1
+          if [ "${{ inputs.cache-write }}" != "false" ]; then
+            echo "::warning::Pull-request jobs are forced to restore Main's cache read-only"
+          fi
+        elif [ "${{ inputs.main-cache-only }}" = "true" ]; then
           if [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "main-cache-only requires cache-write=false" >&2
             exit 1
           fi
-          echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
-          exit 0
+          read_only=1
         fi
+
+        echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         cache_write_enabled=""
-        if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
-          app_tree="$(git rev-parse HEAD:nook-app)"
-          dockerignore_blob="$(git hash-object .dockerignore)"
-          cache_generation="$(
-            printf '%s\n%s\n' "$app_tree" "$dockerignore_blob" \
-              | sha256sum \
-              | cut -c1-12
-          )"
-          scope_suffix="-pr-$pr_number-$job_scope-$cache_generation"
-          echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
-
-          case "$job_scope" in
-            rust)
-              required_scopes="nook-rust-base-v1 nook-rust-deps-v2 nook-rust-native-source-v2"
-              ;;
-            wasm)
-              required_scopes="nook-rust-base-v1 nook-rust-wasm-deps-v1 nook-rust-wasm-source-v2"
-              ;;
-            verify)
-              required_scopes="nook-web-deps-v1 nook-web-v1"
-              if [ "${{ inputs.require-e2e-cache }}" = "true" ]; then
-                required_scopes="$required_scopes nook-web-e2e-v1"
-              fi
-              ;;
-            e2e)
-              required_scopes="nook-web-deps-v1 nook-web-e2e-v1"
-              ;;
-            *)
-              required_scopes=""
-              ;;
-          esac
-
-          fallback_enabled=1
-          if [ -n "$required_scopes" ]; then
-            fallback_enabled=""
-            for scope in $required_scopes; do
-              if ! cache_count="$(cache_total_count "index-$scope$scope_suffix")" \
-                || [ "$cache_count" -eq 0 ]; then
-                fallback_enabled=1
-                break
-              fi
-            done
-          fi
-          echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
-
-          seed_scope_suffix=""
-          if [ -n "$fallback_enabled" ] && [ -n "$required_scopes" ]; then
-            first_scope="${required_scopes%% *}"
-            if ! candidate_suffixes="$(
-              gh api --method GET "repos/$GITHUB_REPOSITORY/actions/caches" \
-                -f key="index-$first_scope-pr-$pr_number-$job_scope" \
-                -f ref="$GITHUB_REF" \
-                -f per_page=100 \
-                --jq '.actions_caches[].key' \
-                | sed -E "s|^index-$first_scope(.*)-1-[^#]+#[0-9]+$|\\1|" \
-                | awk '!seen[$0]++'
-            )"; then
-              echo "::warning::Unable to discover a completed BuildKit cache generation; using the default-branch fallback"
-              candidate_suffixes=""
-            fi
-            while IFS= read -r candidate_suffix; do
-              if [ -z "$candidate_suffix" ] \
-                || [ "$candidate_suffix" = "$scope_suffix" ] \
-                || [[ ! "$candidate_suffix" =~ ^-pr-$pr_number-$job_scope(-[0-9a-f]{12})?$ ]]; then
-                continue
-              fi
-              candidate_complete=1
-              for scope in $required_scopes; do
-                if ! cache_count="$(cache_total_count "index-$scope$candidate_suffix")" \
-                  || [ "$cache_count" -eq 0 ]; then
-                  candidate_complete=""
-                  break
-                fi
-              done
-              if [ -n "$candidate_complete" ]; then
-                seed_scope_suffix="$candidate_suffix"
-                break
-              fi
-            done <<< "$candidate_suffixes"
-          fi
-          echo "GHA_CACHE_SEED_SCOPE_SUFFIX=$seed_scope_suffix" >> "$GITHUB_ENV"
-
-          if [ "${{ inputs.cache-write }}" = "true" ] && [ -n "$fallback_enabled" ]; then
-            cache_write_enabled=1
-          fi
-        else
-          echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-          if [ "${{ inputs.cache-write }}" = "true" ]; then
-            cache_write_enabled=1
-          fi
+        if [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
+          cache_write_enabled=1
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
 
