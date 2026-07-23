@@ -144,6 +144,7 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('device-protection-gate')).toBeVisible()
     const recoverySummary = page.getByTestId('existing-vault-recovery-summary')
     await expect(recoverySummary).toBeVisible()
+    await expect(page.getByTestId('existing-vault-passkey-hints')).toBeVisible()
     await expect(recoverySummary).toContainText(`device ${passkeyDeviceHint}`)
     await expect(
       page.getByTestId('existing-vault-password-status'),
