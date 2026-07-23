@@ -86,6 +86,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         ok: true,
         status: 'ready',
         requestId: 'demo-authenticator-picker',
+        expiresAt: Date.now() + 5 * 60 * 1_000,
       }
     }
     if (passkeyPilotFlow) {
