@@ -139,7 +139,9 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "$HEAD_SHA" --no-tags
-          git merge --no-commit --no-ff "$HEAD_SHA"
+          merge_tree="$(git merge-tree --write-tree HEAD "$HEAD_SHA")"
+          [[ "$merge_tree" =~ ^[0-9a-f]{40}$ ]]
+          git read-tree --reset -u "$merge_tree"
 
       - name: Derive exact validation keys
         id: keys
