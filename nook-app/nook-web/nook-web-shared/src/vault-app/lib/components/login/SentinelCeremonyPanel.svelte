@@ -10,10 +10,12 @@
     vault,
     isVerifying,
     isInitializing,
+    onUnlocked,
   }: {
     vault: VaultState
     isVerifying: boolean
     isInitializing: boolean
+    onUnlocked?: () => void | Promise<void>
   } = $props()
 
   let actionBusy = $state(false)
@@ -57,7 +59,12 @@
 
   async function finalizeUnlock() {
     if (!session.ready) return
-    await runAction(() => vault.finalizeSentinelUnlock())
+    await runAction(async () => {
+      await vault.finalizeSentinelUnlock()
+      if (vault.isAuthenticated) {
+        await onUnlocked?.()
+      }
+    })
   }
 
   async function copyRequest(value: string) {

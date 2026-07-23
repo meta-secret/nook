@@ -115,7 +115,11 @@ pub(crate) fn credential_id(credential: &PublicKeyCredential) -> Result<Vec<u8>,
 
 pub(crate) fn passkey_label_with_device_id(passkey_label: &str, device_id: &str) -> String {
     let label = normalized_passkey_label(passkey_label);
-    format!("{label} - device {}", short_text_id(device_id))
+    let device_id = nook_core::DeviceId::parse(device_id).map_or_else(
+        |_| device_id.trim().to_owned(),
+        |id| nook_core::recovery_device_id_hint(&id),
+    );
+    format!("{label} - device {device_id}")
 }
 
 pub(crate) fn assertion_user_handle(credential: &PublicKeyCredential) -> Result<Vec<u8>, JsError> {
@@ -511,24 +515,6 @@ fn short_byte_id(bytes: &[u8]) -> String {
         let _ = write!(&mut output, "{byte:02x}");
     }
     output
-}
-
-fn short_text_id(value: &str) -> String {
-    const PREFIX_LEN: usize = 6;
-    const SUFFIX_LEN: usize = 4;
-
-    let trimmed = value.trim();
-    let chars = trimmed.chars().collect::<Vec<_>>();
-    if chars.len() <= PREFIX_LEN + SUFFIX_LEN + 3 {
-        return trimmed.to_owned();
-    }
-
-    let prefix = chars.iter().take(PREFIX_LEN).collect::<String>();
-    let suffix = chars
-        .iter()
-        .skip(chars.len() - SUFFIX_LEN)
-        .collect::<String>();
-    format!("{prefix}...{suffix}")
 }
 
 fn request_options_struct(

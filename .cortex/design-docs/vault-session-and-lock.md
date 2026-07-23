@@ -135,6 +135,13 @@ Discovery is a bounded busy operation, and a missing `store_id` rejects an empty
 or incorrect provider before device authorization. The discovered identifier
 remains staged: it must not replace the active local vault until that exact
 provider vault connects successfully.
+The same preflight projects only safe recovery metadata from signed events:
+active device labels/IDs (matching the `device …` suffix written into Nook
+passkey display names), backup-password labels, and whether Sentinel quorum is
+required. Device authorization may reload sealed provider state, so the exact
+staged provider credentials or local-folder handle must remain in memory and
+the successful ceremony must resume that staged import without asking the user
+to choose the provider again.
 The flow must never call provider connect first and surface the internal
 `authorization_required` error to the user.
 
