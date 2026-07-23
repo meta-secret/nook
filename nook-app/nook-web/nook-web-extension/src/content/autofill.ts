@@ -17,7 +17,10 @@ import {
   isExtensionReadySetupState,
   setupStorageKey,
 } from '../background/pairing-grants'
-import { isWebsiteAuthenticatorSelectedMessage } from '../lib/authenticator-picker-messages'
+import {
+  isWebsiteAuthenticatorCanceledMessage,
+  isWebsiteAuthenticatorSelectedMessage,
+} from '../lib/authenticator-picker-messages'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import {
   compactProgressState,
@@ -1301,6 +1304,27 @@ async function continueWithAuthenticator(
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (
+    sender.id === chrome.runtime.id &&
+    isWebsiteAuthenticatorCanceledMessage(message) &&
+    message.payload.origin === location.origin &&
+    message.payload.requestId === pendingAuthenticatorPicker?.requestId
+  ) {
+    const pending = pendingAuthenticatorPicker
+    pendingAuthenticatorPicker = undefined
+    window.clearTimeout(pending.timeoutId)
+    setStatus(
+      pending.description,
+      pending.continueButton,
+      translatedMessage('widgetAuthenticatorPickerCanceled'),
+      true,
+    )
+    if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
+      pending.continueButton.disabled = false
+    }
+    sendResponse({ ok: true })
+    return false
+  }
   if (
     sender.id !== chrome.runtime.id ||
     !isWebsiteAuthenticatorSelectedMessage(message) ||

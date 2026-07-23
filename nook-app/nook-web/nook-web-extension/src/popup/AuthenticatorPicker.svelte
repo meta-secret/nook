@@ -20,6 +20,7 @@
   let error = $state('')
   let searchInput = $state<HTMLInputElement>()
   let querySequence = 0
+  let completed = false
 
   function sendRuntimeMessage<T>(message: unknown): Promise<T | undefined> {
     return new Promise((resolve) => {
@@ -67,6 +68,7 @@
       },
     })
     if (response?.ok) {
+      completed = true
       window.close()
       return
     }
@@ -80,6 +82,16 @@
 
   onMount(() => {
     searchInput?.focus()
+    const cancelPendingPicker = () => {
+      if (completed) return
+      completed = true
+      chrome.runtime.sendMessage({
+        type: 'nook:authenticator-picker-cancel',
+        payload: { requestId },
+      })
+    }
+    window.addEventListener('pagehide', cancelPendingPicker)
+    return () => window.removeEventListener('pagehide', cancelPendingPicker)
   })
 </script>
 
