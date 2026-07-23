@@ -33,6 +33,47 @@ function importResult(): NookImportResult {
 }
 
 describe('LastPass import panel', () => {
+  test('shows progress and locks the file input until import finishes', async () => {
+    let finishImport: ((result: NookImportResult) => void) | undefined =
+      undefined
+    const onImport = vi.fn(
+      async () =>
+        new Promise<NookImportResult>((resolve) => {
+          finishImport = resolve
+        }),
+    )
+    const view = render(LastPassImportPanel, {
+      vault,
+      isSaving: false,
+      onImport,
+    })
+    const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
+    const submit = view.getByTestId(
+      'lastpass-import-submit',
+    ) as HTMLButtonElement
+    await fireEvent.change(input, {
+      target: {
+        files: [new File(['url,username,password\n'], 'lastpass.csv')],
+      },
+    })
+
+    await fireEvent.click(submit)
+    await waitFor(() => {
+      expect(
+        view.getByTestId('lastpass-import-panel-progress'),
+      ).toHaveTextContent('common.import_progress_title')
+    })
+    expect(input.disabled).toBe(true)
+    expect(submit.disabled).toBe(true)
+
+    finishImport?.(importResult())
+    await waitFor(() => {
+      expect(
+        view.queryByTestId('lastpass-import-panel-progress'),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   test('enables submission after file selection and renders the result', async () => {
     const onImport = vi.fn(async () => importResult())
     const view = render(LastPassImportPanel, {

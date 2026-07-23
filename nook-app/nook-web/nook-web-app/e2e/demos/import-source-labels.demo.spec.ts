@@ -30,5 +30,26 @@ test('browse concise password import source labels', async ({ page }) => {
     await expect(toggle).not.toContainText('Import from')
   }
 
+  const bitwardenItems = Array.from({ length: 1_300 }, (_, index) => ({
+    type: 1,
+    name: `Demo login ${index}`,
+    login: {
+      username: `demo-user-${index}`,
+      password: `demo-password-${index}`,
+      uris: [{ uri: `https://demo-${index}.example` }],
+      fido2Credentials: [],
+    },
+  }))
+  await page.getByTestId('bitwarden-import-section').getByRole('button').click()
+  await page.getByTestId('bitwarden-json-file').setInputFiles({
+    name: 'bitwarden_demo_export.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(
+      JSON.stringify({ encrypted: false, folders: [], items: bitwardenItems }),
+    ),
+  })
+  await page.getByTestId('bitwarden-import-submit').click()
+  await expect(page.getByTestId('bitwarden-import-progress')).toBeVisible()
+
   await page.waitForTimeout(DEMO_BEAT_MS)
 })

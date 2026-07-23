@@ -4,6 +4,7 @@
   import type { NookImportResult } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
+  import ImportProgress from '$lib/components/ImportProgress.svelte'
 
   let {
     vault,
@@ -26,6 +27,8 @@
   let result = $state<NookImportResult | undefined>(undefined)
   let error = $state('')
   let password = $state('')
+  let isImporting = $state(false)
+  const busy = $derived(isImporting || isSaving)
 
   function selectFile(event: Event) {
     selectedFile = (event.currentTarget as HTMLInputElement).files?.[0]
@@ -34,14 +37,17 @@
   }
 
   async function importFile() {
-    if (!selectedFile || isSaving) return
+    if (!selectedFile || busy) return
     error = ''
     result = undefined
+    isImporting = true
     try {
       result = await onImport(await selectedFile.text(), password)
       password = ''
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause)
+    } finally {
+      isImporting = false
     }
   }
 </script>
@@ -90,6 +96,7 @@
           type="file"
           accept="application/json,.json"
           data-testid="bitwarden-json-file"
+          disabled={busy}
           onchange={selectFile}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
         />
@@ -101,6 +108,7 @@
           type="password"
           autocomplete="off"
           data-testid="bitwarden-export-password"
+          disabled={busy}
           bind:value={password}
           placeholder={vault.t('bitwarden_import.password_placeholder')}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
@@ -116,14 +124,18 @@
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={!selectedFile || isSaving}
+        disabled={!selectedFile || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
-        {isSaving
+        {busy
           ? vault.t('bitwarden_import.importing')
           : vault.t('bitwarden_import.import')}
       </Button>
+
+      {#if isImporting}
+        <ImportProgress vault={vault} testId="bitwarden-import-progress" />
+      {/if}
 
       {#if error}
         <p class="text-sm text-destructive" data-testid="bitwarden-import-error">

@@ -2,6 +2,7 @@
   import { Archive, FileSpreadsheet, Upload } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
+  import ImportProgress from '$lib/components/ImportProgress.svelte'
   import type { NookImportResult } from '$lib/nook'
   import {
     importBinaryFile,
@@ -30,6 +31,8 @@
   let selectedFile = $state<File | undefined>(undefined)
   let result = $state<NookImportResult | undefined>(undefined)
   let error = $state('')
+  let isImporting = $state(false)
+  const busy = $derived(isImporting || props.isSaving)
 
   const messageKey = (suffix: string): string =>
     `${props.translationPrefix}.${suffix}`
@@ -41,19 +44,27 @@
   }
 
   async function importFile() {
-    if (props.format === 'text') {
-      ;({ result, error } = await importTextFile(
+    if (!selectedFile || busy) return
+    result = undefined
+    error = ''
+    isImporting = true
+    try {
+      if (props.format === 'text') {
+        ;({ result, error } = await importTextFile(
+          selectedFile,
+          false,
+          props.onImport,
+        ))
+        return
+      }
+      ;({ result, error } = await importBinaryFile(
         selectedFile,
-        props.isSaving,
+        false,
         props.onImport,
       ))
-      return
+    } finally {
+      isImporting = false
     }
-    ;({ result, error } = await importBinaryFile(
-      selectedFile,
-      props.isSaving,
-      props.onImport,
-    ))
   }
 </script>
 
@@ -93,6 +104,7 @@
           type="file"
           accept={props.accept}
           data-testid={props.fileTestId}
+          disabled={busy}
           onchange={selectFile}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
         />
@@ -104,14 +116,21 @@
 
       <Button
         data-testid={props.submitTestId}
-        disabled={!selectedFile || props.isSaving}
+        disabled={!selectedFile || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
-        {props.isSaving
+        {busy
           ? props.vault.t(messageKey('importing'))
           : props.vault.t(messageKey('import'))}
       </Button>
+
+      {#if isImporting}
+        <ImportProgress
+          vault={props.vault}
+          testId={`${props.panelTestId}-progress`}
+        />
+      {/if}
 
       {#if error}
         <p class="text-sm text-destructive" data-testid={props.errorTestId}>

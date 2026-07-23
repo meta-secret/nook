@@ -1330,6 +1330,10 @@ test.describe('local vault', () => {
     })
     const started = Date.now()
     await page.getByTestId('bitwarden-import-submit').click()
+    await expect(page.getByTestId('bitwarden-import-progress')).toContainText(
+      'Import in progress',
+    )
+    await expect(page.getByTestId('bitwarden-json-file')).toBeDisabled()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       'Imported 1300 items',
       { timeout: 30_000 },
