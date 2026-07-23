@@ -191,16 +191,16 @@ or manual fallback to mutable PR metadata. A later PR skips a producer only
 after resolving an exact artifact by ID and verifying that its successful
 workflow run used this trusted default-branch promotion workflow. PR-writable
 caches never bypass required validation, and repository invariant preflight
-still runs on every PR head. On a producer miss, preflight and native validation
-run concurrently. The preview job also starts independently, does checkout,
-contract tests, and Docker setup in parallel with both producers, and polls the
-current run attempt before downloading the stable WASM artifact. Changed inputs
-must execute and complete the full workflow before a new handoff can be
-promoted. If promotion cannot prove its provenance, consumers treat the
-artifact as a miss and run the producers. The required-job budget is four to
-five minutes for exact handoff hits and ordinary source-changing PRs. Measure it
-from the first required job start through the last required job completion;
-report GitHub-hosted runner queue time separately.
+still runs on every PR head. On a native producer miss, preflight must finish
+before the native application Docker solve begins. The preview job starts
+independently, does checkout, contract tests, and Docker setup in parallel with
+both producers, and polls the current run attempt before downloading the stable
+WASM artifact. Changed inputs must execute and complete the full workflow before
+a new handoff can be promoted. If promotion cannot prove its provenance,
+consumers treat the artifact as a miss and run the producers. The required-job
+budget is four to five minutes for exact handoff hits and ordinary
+source-changing PRs. Measure it from the first required job start through the
+last required job completion; report GitHub-hosted runner queue time separately.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
