@@ -264,17 +264,18 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     const deliverySelect = deviceB.getByTestId(
       'sentinel-unlock-delivery-select',
     )
-    await deliverySelect.click()
-    await deviceB
-      .getByTestId(`sentinel-unlock-delivery-${memberStoreId}`)
-      .click()
-    await expect(deliverySelect).toContainText(memberStoreId)
     await deviceB
       .getByTestId('sentinel-unlock-participant-request-input')
       .fill(unlockRequest)
     const createUnlockResponse = deviceB.getByTestId(
       'sentinel-unlock-create-response-btn',
     )
+    await expect(createUnlockResponse).toBeDisabled()
+    await deliverySelect.click()
+    await deviceB
+      .getByTestId(`sentinel-unlock-delivery-${memberStoreId}`)
+      .click()
+    await expect(deliverySelect).toContainText(memberStoreId)
     await expect(createUnlockResponse).toBeEnabled()
     await createUnlockResponse.click()
     const opaqueResponseOutput = deviceB.getByTestId(
