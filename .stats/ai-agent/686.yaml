@@ -1,0 +1,101 @@
+schema_version: 3
+source_pr:
+  number: 686
+  url: https://github.com/meta-secret/nook/pull/686
+  title: Simplify preflight reporting and Redis cache access
+  change_surface: ci_preflight_remote_cache_infrastructure
+  head_sha: 2de8bdba1ac87bb590cafea898298c3e442f6505
+  started_at: "2026-07-23T17:26:22Z"
+  opened_at: "2026-07-23T18:36:05Z"
+  merged_at: "2026-07-23T20:39:22Z"
+  elapsed_seconds: 11580
+  open_to_merge_seconds: 7397
+summary:
+  local_execution_count: 7
+  local_check_count: 3
+  local_test_count: 0
+  local_combined_count: 4
+  local_execution_seconds: 4420
+  github_actions_run_count: 5
+  github_actions_seconds: 4899
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: "2026-07-23T20:45:00Z"
+  head_sha: 2de8bdba1ac87bb590cafea898298c3e442f6505
+  by_type:
+    rust: 630
+    preflight: 39
+    web_unit: 251
+    e2e: 200
+  total: 1120
+local_executions:
+  - { command: "task setup", category: combined, started_at: "2026-07-23T17:26:22Z", finished_at: "2026-07-23T17:56:14Z", duration_seconds: 1792, outcome: passed, reason: cold_builder_full_build_and_remote_cache_population_proof }
+  - { command: "task setup", category: combined, started_at: "2026-07-23T17:56:36Z", finished_at: "2026-07-23T18:11:15Z", duration_seconds: 879, outcome: passed, reason: clean_builder_remote_cache_hit_proof }
+  - { command: "cargo fmt --manifest-path preflight/Cargo.toml -- --check; cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings; cargo test --manifest-path preflight/Cargo.toml --locked; docker compose -f infra/compose.yaml config --quiet; git diff --check", category: combined, started_at: "2026-07-23T18:12:00Z", finished_at: "2026-07-23T18:12:10Z", duration_seconds: 10, outcome: passed, reason: focused_preflight_and_infrastructure_validation }
+  - { command: "task format", category: check, started_at: "2026-07-23T18:12:20Z", finished_at: "2026-07-23T18:30:20Z", duration_seconds: 1080, outcome: passed, reason: initial_full_local_build_before_pr_validation }
+  - { command: "cargo fmt --manifest-path preflight/Cargo.toml -- --check; cargo clippy --manifest-path preflight/Cargo.toml --locked --all-targets -- -D warnings; cargo test --manifest-path preflight/Cargo.toml --locked; docker compose -f infra/compose.yaml config --quiet; git diff --check", category: combined, started_at: "2026-07-23T20:11:40Z", finished_at: "2026-07-23T20:11:50Z", duration_seconds: 10, outcome: passed, reason: cache_fallback_and_firewall_review_fix_validation }
+  - { command: "task format", category: check, started_at: "2026-07-23T20:11:55Z", finished_at: "2026-07-23T20:22:41Z", duration_seconds: 646, outcome: passed, reason: final_full_local_build_with_remote_cache_hits }
+  - { command: "task pr:ready PR=686", category: check, started_at: "2026-07-23T20:38:52Z", finished_at: "2026-07-23T20:38:55Z", duration_seconds: 3, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 30034418368, run_attempt: 1, head_sha: ae0840af40080ae1710deba19ccb59d4efa17068, trigger: pull_request, started_at: "2026-07-23T18:36:09Z", finished_at: "2026-07-23T18:55:59Z", duration_seconds: 1190, conclusion: success }
+  - { workflow: PR, run_id: 30036366825, run_attempt: 1, head_sha: 6bf1a832e8f06847cd5752561c1dbfbc377460b3, trigger: pull_request, started_at: "2026-07-23T19:03:06Z", finished_at: "2026-07-23T19:14:18Z", duration_seconds: 672, conclusion: success }
+  - { workflow: PR, run_id: 30037750160, run_attempt: 1, head_sha: 10b901ea8595bc9713572f6e1f4bcba5adf64bef, trigger: pull_request, started_at: "2026-07-23T19:23:19Z", finished_at: "2026-07-23T19:41:20Z", duration_seconds: 1081, conclusion: success }
+  - { workflow: PR, run_id: 30039297355, run_attempt: 1, head_sha: ff4c00da417a7965e7eab91d295b4fb9956bea66, trigger: pull_request, started_at: "2026-07-23T19:45:47Z", finished_at: "2026-07-23T20:03:19Z", duration_seconds: 1052, conclusion: success }
+  - { workflow: PR, run_id: 30041888001, run_attempt: 1, head_sha: 2de8bdba1ac87bb590cafea898298c3e442f6505, trigger: pull_request, started_at: "2026-07-23T20:23:33Z", finished_at: "2026-07-23T20:38:37Z", duration_seconds: 904, conclusion: success }
+cache_telemetry:
+  totals:
+    job_count: 15
+    remote_backend_job_count: 0
+    direct_compile_job_count: 15
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 2661
+    buildkit_cached_steps: 447
+    buildkit_cache_hit_rate_percent: 16.8
+  jobs:
+    - { workflow: PR, run_id: 30034418368, run_attempt: 1, job: rust, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 340, cached_steps: 30, cache_hit_rate_percent: 8.82, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30034418368, run_attempt: 1, job: verify, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 67, cached_steps: 21, cache_hit_rate_percent: 31.34, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30034418368, run_attempt: 1, job: wasm, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 143, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30036366825, run_attempt: 1, job: rust, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 345, cached_steps: 208, cache_hit_rate_percent: 60.29, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30036366825, run_attempt: 1, job: verify, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 69, cached_steps: 20, cache_hit_rate_percent: 28.99, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30036366825, run_attempt: 1, job: wasm, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 146, cached_steps: 42, cache_hit_rate_percent: 28.77, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30037750160, run_attempt: 1, job: rust, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 317, cached_steps: 21, cache_hit_rate_percent: 6.62, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30037750160, run_attempt: 1, job: verify, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 63, cached_steps: 21, cache_hit_rate_percent: 33.33, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30037750160, run_attempt: 1, job: wasm, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 137, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30039297355, run_attempt: 1, job: rust, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 317, cached_steps: 21, cache_hit_rate_percent: 6.62, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30039297355, run_attempt: 1, job: verify, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 63, cached_steps: 21, cache_hit_rate_percent: 33.33, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30039297355, run_attempt: 1, job: wasm, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 137, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30041888001, run_attempt: 1, job: rust, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 317, cached_steps: 21, cache_hit_rate_percent: 6.62, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30041888001, run_attempt: 1, job: verify, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 63, cached_steps: 21, cache_hit_rate_percent: 33.33, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30041888001, run_attempt: 1, job: wasm, cache_backend: direct_compile, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 137, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-23T19:03:06Z", reason: address_preflight_cache_and_secret_boundary_review }
+  - { kind: head_push, at: "2026-07-23T19:23:19Z", reason: harden_validation_handoffs_and_cache_fallback }
+  - { kind: base_update, at: "2026-07-23T19:45:47Z", reason: integrate_latest_main_stats_commit_and_revalidate_exact_head }
+  - { kind: head_push, at: "2026-07-23T20:23:33Z", reason: make_cache_outages_nonfatal_and_preserve_firewall_ingress }
+merge_attempts:
+  - { at: "2026-07-23T20:39:22Z", method: squash, outcome: success, reason: exact_head_ci_review_and_base_readiness_passed }
+comparison:
+  baseline_prs: [633, 673]
+  baseline_quality: comparable
+  baseline_note: PR 633 changed standalone preflight policy and PR 673 changed and measured the PR validation pipeline; together they cover the Rust preflight and CI/cache surfaces in PR 686.
+  elapsed_seconds_change_percent: 178.3
+  local_execution_seconds_change_percent: 94.7
+  github_actions_seconds_change_percent: 224.0
+  test_inventory_total_change: 17
+  regression: true
+  regression_reasons:
+    - The migration required two clean-builder local proofs, including one intentional cold cache population and one independent cache-hit build.
+    - Four review or base-update pushes each required a fresh exact-head PR workflow, including two deliberate Rust-base invalidations.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first clean builder populated 1766 Redis compiler objects in 29m52s; the independent second builder then served 1765 hits with zero misses or cache errors in 14m39s.
+    - Untrusted pull_request jobs correctly compiled without the Redis credential, while trusted local builds exercised the persistent public TLS endpoint.
+    - The five hosted cycles corresponded to distinct reviewed heads or a required base update; there was no unchanged manual rerun.
+    - The final workflow removes shell coverage parsing, Docker-host routing, and tunnel setup, so the observed one-time migration cost does not support another build-performance change.
+  required_actions: []
