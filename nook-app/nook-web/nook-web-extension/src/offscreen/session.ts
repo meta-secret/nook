@@ -36,6 +36,7 @@ type ExtensionVaultGrant = {
 let initPromise: Promise<unknown> | undefined
 let manager: NookVaultManager | undefined
 let sessionTimer: ReturnType<typeof setTimeout> | undefined
+let sessionOperationQueue: Promise<void> = Promise.resolve()
 
 const LOGIN_SAVE_OFFER_TTL_MS = 2 * 60 * 1000
 
@@ -51,6 +52,15 @@ type PendingLoginSaveOffer = {
 }
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
+
+function enqueueSessionOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = sessionOperationQueue.then(operation)
+  sessionOperationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
+}
 
 function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
   if (!offer) return
@@ -117,12 +127,14 @@ async function deviceResult(
 function armSessionExpiry(): void {
   if (sessionTimer) clearTimeout(sessionTimer)
   sessionTimer = setTimeout(() => {
-    const activeManager = manager
-    manager = undefined
     sessionTimer = undefined
-    activeManager?.lockDeviceIdentity()
-    activeManager?.free()
-    chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
+    void enqueueSessionOperation(async () => {
+      const activeManager = manager
+      manager = undefined
+      activeManager?.lockDeviceIdentity()
+      activeManager?.free()
+      chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
+    })
   }, SESSION_DURATION_MS)
 }
 
@@ -814,7 +826,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   ) {
     return false
   }
-  void handleMessage(message)
+  void enqueueSessionOperation(() => handleMessage(message))
     .then((response) => sendResponse(response))
     .catch((error: unknown) =>
       sendResponse({
