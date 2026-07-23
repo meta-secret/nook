@@ -21,7 +21,9 @@
     "copy": "Copy",
     "copied": "Copied",
     "dismiss_success": "Dismiss success message",
-    "dismiss_error": "Dismiss error message"
+    "dismiss_error": "Dismiss error message",
+    "import_progress_title": "Import in progress",
+    "import_progress_description": "Nook is reading, encrypting, and saving your items. Keep this page open."
   },
   "session": {
     "lock_desc": "Clear decrypted secrets from memory and return to the login screen. Your encrypted vault and sync providers stay on this device.",
