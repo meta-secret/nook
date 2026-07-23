@@ -103,6 +103,8 @@ type PendingAuthenticatorPicker = {
   expiresAt: number
 }
 const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
+const AUTHENTICATOR_PICKER_STORAGE_PREFIX =
+  'nook.extension.authenticator-picker.'
 const pendingAuthenticatorPickers = new Map<
   string,
   PendingAuthenticatorPicker
@@ -648,12 +650,72 @@ function sessionResponseAccounts(response: unknown): unknown[] {
   return response.accounts
 }
 
-function purgeExpiredAuthenticatorPickers(now = Date.now()): void {
-  for (const [requestId, request] of pendingAuthenticatorPickers) {
-    if (request.expiresAt <= now) {
-      pendingAuthenticatorPickers.delete(requestId)
+function authenticatorPickerStorageKey(requestId: string): string {
+  return `${AUTHENTICATOR_PICKER_STORAGE_PREFIX}${requestId}`
+}
+
+function isPendingAuthenticatorPicker(
+  value: unknown,
+): value is PendingAuthenticatorPicker {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'requestId' in value &&
+    typeof value.requestId === 'string' &&
+    'origin' in value &&
+    typeof value.origin === 'string' &&
+    'tabId' in value &&
+    typeof value.tabId === 'number' &&
+    Number.isInteger(value.tabId) &&
+    value.tabId >= 0 &&
+    'allowedVaultStoreIds' in value &&
+    Array.isArray(value.allowedVaultStoreIds) &&
+    value.allowedVaultStoreIds.every(
+      (vaultStoreId) =>
+        typeof vaultStoreId === 'string' && vaultStoreId.length > 0,
+    ) &&
+    'expiresAt' in value &&
+    typeof value.expiresAt === 'number' &&
+    Number.isFinite(value.expiresAt)
+  )
+}
+
+async function storeAuthenticatorPicker(
+  request: PendingAuthenticatorPicker,
+): Promise<void> {
+  pendingAuthenticatorPickers.set(request.requestId, request)
+  await setSessionStorage({
+    [authenticatorPickerStorageKey(request.requestId)]: request,
+  })
+}
+
+async function removeAuthenticatorPicker(requestId: string): Promise<void> {
+  pendingAuthenticatorPickers.delete(requestId)
+  await removeSessionStorage(authenticatorPickerStorageKey(requestId))
+}
+
+async function loadAuthenticatorPicker(
+  requestId: string,
+): Promise<PendingAuthenticatorPicker | undefined> {
+  let request = pendingAuthenticatorPickers.get(requestId)
+  if (!request) {
+    const key = authenticatorPickerStorageKey(requestId)
+    const stored = (await getSessionStorage(key))[key]
+    if (
+      !isPendingAuthenticatorPicker(stored) ||
+      stored.requestId !== requestId
+    ) {
+      if (stored !== undefined) await removeSessionStorage(key)
+      return undefined
     }
+    request = stored
+    pendingAuthenticatorPickers.set(requestId, request)
   }
+  if (request.expiresAt <= Date.now()) {
+    await removeAuthenticatorPicker(requestId)
+    return undefined
+  }
+  return request
 }
 
 function isAuthenticatorPickerSender(
@@ -1065,15 +1127,15 @@ async function openWebsiteAuthenticatorPicker(
     return { ok: false, reason: 'authenticator-picker-tab-missing' }
   }
 
-  purgeExpiredAuthenticatorPickers()
   const requestId = randomNonce()
-  pendingAuthenticatorPickers.set(requestId, {
+  const request = {
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + AUTHENTICATOR_PICKER_TTL_MS,
-  })
+  }
+  await storeAuthenticatorPicker(request)
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'authenticator-picker')
   pickerUrl.searchParams.set('request', requestId)
@@ -1090,10 +1152,10 @@ async function openWebsiteAuthenticatorPicker(
       await chrome.tabs.create({ url: pickerUrl.toString() })
     }
   } catch {
-    pendingAuthenticatorPickers.delete(requestId)
+    await removeAuthenticatorPicker(requestId)
     return { ok: false, reason: 'authenticator-picker-open-failed' }
   }
-  return { ok: true, status: 'ready', requestId }
+  return { ok: true, status: 'ready', requestId, expiresAt: request.expiresAt }
 }
 
 async function queryAuthenticatorPicker(
@@ -1103,8 +1165,7 @@ async function queryAuthenticatorPicker(
   if (!isAuthenticatorPickerSender(sender)) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
-  purgeExpiredAuthenticatorPickers()
-  const request = pendingAuthenticatorPickers.get(message.payload.requestId)
+  const request = await loadAuthenticatorPicker(message.payload.requestId)
   if (!request) {
     return { ok: false, reason: 'authenticator-picker-expired' }
   }
@@ -1128,8 +1189,7 @@ async function selectAuthenticatorPicker(
   if (!isAuthenticatorPickerSender(sender)) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
-  purgeExpiredAuthenticatorPickers()
-  const request = pendingAuthenticatorPickers.get(message.payload.requestId)
+  const request = await loadAuthenticatorPicker(message.payload.requestId)
   if (!request) {
     return { ok: false, reason: 'authenticator-picker-expired' }
   }
@@ -1160,7 +1220,7 @@ async function selectAuthenticatorPicker(
   } catch {
     return { ok: false, reason: 'authenticator-picker-page-unavailable' }
   }
-  pendingAuthenticatorPickers.delete(request.requestId)
+  await removeAuthenticatorPicker(request.requestId)
   return { ok: true }
 }
 
