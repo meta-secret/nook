@@ -14,6 +14,7 @@ import {
 } from './helpers'
 import {
   installLocalFolderPickerMock,
+  localFolderPickerInvocationCount,
   localFolderSnapshot,
   setLocalFolderSnapshot,
   type LocalFolderRecord,
@@ -102,7 +103,7 @@ test.describe('local folder backup provider', () => {
     await expectEmptyLocalFolderRejected(page)
   })
 
-  test('shows recovery choices and imports an existing folder on the first attempt', async ({
+  test('keeps the chosen folder staged through passkey authorization', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -138,6 +139,7 @@ test.describe('local folder backup provider', () => {
     await page.getByTestId('login-connect-storage-btn').click()
     await page.getByTestId('provider-option-local-folder').click()
     await page.getByTestId('login-choose-local-folder-btn').click()
+    await expect.poll(() => localFolderPickerInvocationCount(page)).toBe(1)
     await page.getByTestId('login-connect-local-folder-btn').click()
 
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
@@ -161,6 +163,7 @@ test.describe('local folder backup provider', () => {
       timeout: 30_000,
     })
     await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
+    await expect.poll(() => localFolderPickerInvocationCount(page)).toBe(1)
     await expect(
       page.getByTestId('secret-row').filter({ hasText: sourceSecretKey }),
     ).toBeVisible()
