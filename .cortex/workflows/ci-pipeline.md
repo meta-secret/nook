@@ -405,6 +405,9 @@ handoff. The WASM producer runs clippy/build/Node tests once, uploads the genera
 package under a run-stable artifact name, and feeds preview plus optional web and
 extension e2e consumers. `Verify and preview` downloads that WASM package instead
 of compiling Rust, then downloads native coverage after its web build for reporting.
+On a failed-job rerun, each consumer accepts the existing exact-head run artifact
+before looking for a producer in the current attempt; absence of both fails
+immediately instead of polling for a job GitHub did not reschedule.
 Do not serialize the producers or move Rust coverage into preview: a cold Rust
 cache must not dominate the web critical path. `task docker:extract:coverage`
 remains a copy-only path that invokes neither BuildKit nor Rust tests.

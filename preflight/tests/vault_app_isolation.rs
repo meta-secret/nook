@@ -1127,6 +1127,18 @@ fn assert_pr_workflow_contract(root: &Path) {
 fn assert_artifact_backed_e2e_contract(root: &Path) {
     let pr = read(root, ".github/workflows/pr.yml");
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
+    assert!(
+        rust_host
+            .find("task: preflight")
+            .expect("native PR validation must run repository preflight")
+            < rust_host
+                .find("task: docker:ci:rust:export")
+                .expect("native PR validation must run the app solve")
+            && rust_host.contains("cmds:")
+            && !rust_host.contains("deps:"),
+        "repository preflight must finish before the native app Docker solve begins"
+    );
     let artifact_e2e = section(
         &ci_tasks,
         "  ci:pr:e2e:web:artifacts:\n",
@@ -1158,15 +1170,31 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
         "      - name: Download Rust coverage handoff\n",
         "      - name: Deploy unified internal test harness\n",
     );
-    let native_job_lookup = rust_handoff
-        .find("native_job=\"$(")
-        .expect("PR verification must inspect the latest native job");
     let artifact_lookup = rust_handoff
         .find("actions/runs/$GITHUB_RUN_ID/artifacts")
         .expect("PR verification must inspect the Rust handoff artifact");
+    let native_job_lookup = rust_handoff
+        .find("native_job=\"$(")
+        .expect("PR verification must inspect the current native job when no artifact exists");
     assert!(
-        native_job_lookup < artifact_lookup,
-        "PR verification must prove the latest native attempt succeeded before accepting a run-stable artifact"
+        artifact_lookup < native_job_lookup
+            && rust_handoff.contains("This failed-job rerun has no native producer"),
+        "PR verification must accept an exact-head artifact before requiring a producer in a failed-job rerun"
+    );
+    let wasm_handoff = section(
+        &pr,
+        "      - name: Wait for verified WASM handoff\n",
+        "      - name: Svelte checks, JS unit tests, lint, and preview build",
+    );
+    assert!(
+        wasm_handoff
+            .find("actions/runs/$GITHUB_RUN_ID/artifacts")
+            .expect("PR verification must inspect the WASM handoff artifact")
+            < wasm_handoff.find("wasm_job=\"$(").expect(
+                "PR verification must inspect the current WASM job when no artifact exists"
+            )
+            && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
+        "PR verification must reuse exact-head WASM from a successful earlier attempt"
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(
