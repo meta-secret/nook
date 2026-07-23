@@ -5,9 +5,14 @@
 
   import type { VaultState } from '$lib/vault.svelte'
 
+  type PasswordEntrySummary = Pick<
+    NookPasswordEntrySummary,
+    'id' | 'label' | 'createdAt'
+  >
+
   let {
     vault,
-    passwordEntries = [] as NookPasswordEntrySummary[],
+    passwordEntries = [] as PasswordEntrySummary[],
     selectedPasswordEntryId = $bindable(undefined as string | undefined),
     isVerifying,
     isInitializing,
@@ -18,7 +23,7 @@
     onConsumeLoginPasswordPrompt,
   }: {
     vault: VaultState
-    passwordEntries?: NookPasswordEntrySummary[]
+    passwordEntries?: PasswordEntrySummary[]
     selectedPasswordEntryId?: string | undefined
     isVerifying: boolean
     isInitializing: boolean

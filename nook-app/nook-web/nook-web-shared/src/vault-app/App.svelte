@@ -543,14 +543,12 @@
     }
     if (vault.loginPasswordPrompt) {
       if (recoverySummary?.passwordEntries.length) {
-        vault.passwordEntries = recoverySummary.passwordEntries;
         vault.selectedPasswordEntryId =
           recoverySummary.passwordEntries.length === 1
             ? recoverySummary.passwordEntries[0]!.id
             : undefined;
       }
       pendingExistingVaultImport = undefined;
-      vault.existingVaultRecoverySummary = undefined;
       return;
     }
     if (

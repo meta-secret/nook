@@ -12,11 +12,16 @@
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
+  type PasswordEntrySummary = Pick<
+    NookPasswordEntrySummary,
+    'id' | 'label' | 'createdAt'
+  >
+
   let {
     vault,
     vaultEntry = undefined as NookLocalVaultEntry | undefined,
     hasMultipleVaults = false,
-    passwordEntries = [] as NookPasswordEntrySummary[],
+    passwordEntries = [] as PasswordEntrySummary[],
     selectedPasswordEntryId = $bindable(undefined as string | undefined),
     isVerifying,
     isInitializing,
@@ -30,7 +35,7 @@
     vault: VaultState
     vaultEntry?: NookLocalVaultEntry | undefined
     hasMultipleVaults?: boolean
-    passwordEntries?: NookPasswordEntrySummary[]
+    passwordEntries?: PasswordEntrySummary[]
     selectedPasswordEntryId?: string | undefined
     isVerifying: boolean
     isInitializing: boolean
