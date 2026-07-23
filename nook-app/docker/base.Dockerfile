@@ -42,6 +42,7 @@ ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
 ENV NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}
 ENV SCCACHE_REDIS_ENDPOINT=${SCCACHE_REDIS_ENDPOINT}
 ENV SCCACHE_REDIS_KEY_PREFIX=nook
+ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
 # Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the
 # short-lived local sccache daemons isolated even while their Redis storage is shared.
 ENV SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock

@@ -192,6 +192,7 @@ fn assert_rust_build_cache_boundary() {
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
     assert!(rust_base.contains("NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}"));
+    assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
 
     assert!(bake.contains("SCCACHE_REDIS_MODE") && bake.contains("= SCCACHE_REDIS_MODE"));
     assert!(app_tasks.contains("--set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'"));

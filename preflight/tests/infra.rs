@@ -109,6 +109,7 @@ fn assert_remote_compose_contract() {
         "chain forward",
         "policy drop",
         "ct state established,related accept",
+        "tcp dport { 22, 443, 6380 } accept",
         "iifname \"docker0\" accept",
         "iifname \"br-*\" accept",
         "oifname \"docker0\" accept",
