@@ -744,6 +744,11 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
     }
 
     let ci = read(&root, "nook-app/.task/ci.yml");
+    let web_host = section(&ci, "  _ci:pr:web:host:\n", "\n  ci:pr:ui-demo:");
+    assert!(
+        web_host.contains("task: docker:ci:web:build") && !web_host.contains("task: docker:task"),
+        "hosted PR web verification must run inside the CI image build instead of serializing a second container"
+    );
     let verify = section(&ci, "  _ci:pr:parallel:\n", "\n  _ci:main:build:");
     assert!(
         !verify.contains("_web:build:parallel"),
@@ -917,11 +922,14 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     );
     let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
     assert!(
-        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm")
+        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-build")
+            && wasm_dockerfile.contains("FROM builder-wasm-build AS builder-wasm")
+            && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification and WASM must run as sibling branches, preserve locale rebuilds, and join only small outputs"
     );
+    assert_parallel_web_pipeline(root);
     let web_bake = read(root, "nook-app/docker/toolchain.docker-bake.hcl");
     assert!(
         web_bake.contains("cache-to   = web_deps_cache_to"),
@@ -930,9 +938,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("for attempt in 1 2; do")
+            && docker_tasks.contains("nook-web-ci")
+            && docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\"")
             && docker_tasks
                 .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
-        "hosted web delivery must retry the immediate BuildKit frontend flake once"
+        "hosted web delivery must run validation once before retrying only the immediate BuildKit frontend flake"
     );
     let app_tasks = read(root, "nook-app/Taskfile.yml");
     assert!(
@@ -953,6 +963,17 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     assert!(
         main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
         "Main must use the preparation group that publishes complete dependency and source cache scopes"
+    );
+}
+
+fn assert_parallel_web_pipeline(root: &Path) {
+    let web_dockerfile = read(root, "nook-app/nook-web/nook-web-app/Dockerfile");
+    assert!(
+        web_dockerfile.contains("FROM nook-web-source AS nook-web-verify")
+            && web_dockerfile.contains("FROM nook-web-source AS nook-web-build")
+            && web_dockerfile.contains("FROM nook-web-build AS nook-web-ci")
+            && web_dockerfile.contains("COPY --from=nook-web-verify /opt/nook/web-verified"),
+        "hosted PR web checks and production builds must be sibling stages joined by the CI target"
     );
 }
 
@@ -1018,7 +1039,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
-        "attempt $attempt/360",
+        "attempt $attempt/180",
         "coverage/current/tools/nook-preflight coverage-inputs",
         "--repository \"$GITHUB_WORKSPACE\"",
         "--base \"$BASE_SHA\"",
@@ -1040,11 +1061,13 @@ fn assert_pr_workflow_contract(root: &Path) {
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
+            && wasm_job.contains("task ci:wasm:node-test")
             && wasm_job.contains("steps.trusted-wasm.outputs.found != 'true'")
-            && wasm_job.contains("Upload verified WASM handoff")
+            && wasm_job.contains("Upload built WASM handoff")
+            && wasm_job.contains("nook-run-attempt")
             && wasm_job.contains("cache-write: \"false\"")
             && wasm_job.contains("main-cache-only: \"true\""),
-        "PR CI must restore or build and upload verified WASM exactly once"
+        "PR CI must restore or build WASM once, publish the exact attempt, and finish Node tests"
     );
     assert!(
         native_job.contains("cache-write: \"false\"")
@@ -1120,12 +1143,21 @@ fn assert_pr_workflow_contract(root: &Path) {
     assert!(
         verify_job.contains("if: github.event.action != 'closed'")
             && !verify_job.contains("needs: wasm")
-            && verify_job.contains("name: Wait for verified WASM handoff")
+            && verify_job.contains("name: Wait for built WASM handoff")
             && verify_job.contains("WASM verification completed with $wasm_conclusion")
             && verify_job.contains(
                 "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
             )
-            && verify_job.contains("attempt $attempt/360")
+            && verify_job.contains(
+                "[ \"$artifact_attempt\" = \"$GITHUB_RUN_ATTEMPT\" ]",
+            )
+            && verify_job.contains("jobs?filter=all&per_page=100")
+            && verify_job.contains("| .run_attempt")
+            && verify_job.contains("grep -Fxq \"$artifact_attempt\"")
+            && verify_job.contains("WASM artifact attempt $artifact_attempt did not complete successfully")
+            && verify_job.contains("name: Require WASM producer success before preview")
+            && verify_job.contains("attempt $attempt/180")
+            && verify_job.contains("sleep 10")
             && !verify_job.contains("task ci:pr:wasm")
             && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
@@ -1258,7 +1290,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
     );
     let wasm_handoff = section(
         &pr,
-        "      - name: Wait for verified WASM handoff\n",
+        "      - name: Wait for built WASM handoff\n",
         "      - name: Svelte checks, JS unit tests, lint, and preview build",
     );
     assert!(
@@ -1269,8 +1301,9 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
                 .find("actions/runs/$GITHUB_RUN_ID/artifacts")
                 .expect("PR verification must inspect the WASM handoff artifact")
             && wasm_handoff.contains("[ -z \"$wasm_job_id\" ]")
+            && wasm_handoff.contains("nook-run-attempt")
             && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
-        "PR verification must wait for a current WASM producer and reuse prior output only when it is absent"
+        "PR verification must consume only the current producer attempt and reuse prior output only when it is absent"
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(

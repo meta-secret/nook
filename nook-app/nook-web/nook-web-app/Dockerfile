@@ -7,7 +7,7 @@
 # `task setup` first exports web-artifacts to a temporary host directory while web-deps builds in
 # parallel. Bake then injects web-base, web-deps, and that small host directory as named contexts.
 
-FROM web-base AS nook-web
+FROM web-base AS nook-web-source
 
 # Production Vite base path (GitHub Pages / Cloudflare use "/").
 ARG VITE_BASE=/
@@ -58,10 +58,20 @@ RUN git init -q \
     && git add -A \
     && git commit -q -m "nook-web source snapshot" >/dev/null
 
+# CI verification and production builds are sibling stages. The CI-only final target joins their
+# results, so lint/check/tests run in parallel with the builds without weakening either gate.
+FROM nook-web-source AS nook-web-verify
+
+RUN CI=1 task _ci:pr \
+    && install -d /opt/nook \
+    && touch /opt/nook/web-verified
+
 # Build the production web dist and browser extension at image time so both artifacts are present in
 # every container. The Cloudflare preview deploy and GitHub Pages extraction read
 # nook-app/nook-web/nook-web-app/dist; the extension bundle can be extracted from
 # nook-app/nook-web/nook-web-extension/dist for manual browser loading.
+FROM nook-web-source AS nook-web-build
+
 RUN cd nook-app/nook-web/nook-web-app \
     && VITE_BASE="${VITE_BASE}" \
     VITE_SITE_URL="${VITE_SITE_URL}" \
@@ -80,6 +90,14 @@ RUN cd nook-app/nook-web/nook-web-extension \
     NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
     NOOK_EXTENSION_SITE_URL="${NOOK_EXTENSION_SITE_URL}" \
     bun run package:deployment
+
+FROM nook-web-build AS nook-web
+
+# Hosted PR CI selects this target. Copying the marker creates an explicit BuildKit dependency on
+# the sibling verification stage while preserving the same sealed runtime image and build outputs.
+FROM nook-web-build AS nook-web-ci
+
+COPY --from=nook-web-verify /opt/nook/web-verified /opt/nook/web-verified
 
 # No ENTRYPOINT: the image is sealed (source + web deps + generated WASM baked in), so `docker run`
 # invokes the task command directly (e.g. `docker run <img> task check`).

@@ -5,7 +5,7 @@
 //   nook-app/nook-core/docker-bake.hcl          -> builder-deps, builder-debug
 //   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
 //   nook-app/docker/toolchain.docker-bake.hcl   -> web-deps
-//   nook-app/nook-web/nook-web-app/docker-bake.hcl -> _nook-web-common (slim web image)
+//   nook-app/nook-web/nook-web-app/docker-bake.hcl -> slim web runtime and CI targets
 // Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
 // PREPARE PHASE: rust-base -> builder-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
@@ -303,6 +303,16 @@ group "ci-rust" {
 // _nook-web-common lives in nook-app/nook-web/nook-web-app/docker-bake.hcl.
 target "nook-web" {
   inherits = ["_nook-web-common"]
+  tags     = [DOCKER_IMAGE]
+  output   = ["type=docker"]
+  cache-from = web_cache_from
+  cache-to   = web_cache_to
+}
+
+// PR CI joins production builds with the sibling lint/check/test stage, allowing BuildKit to run
+// both branches in parallel while loading the same sealed image and deployable artifacts.
+target "nook-web-ci" {
+  inherits = ["_nook-web-ci-common"]
   tags     = [DOCKER_IMAGE]
   output   = ["type=docker"]
   cache-from = web_cache_from

@@ -51,10 +51,9 @@ variable "WEB_ARTIFACTS_CONTEXT" {
   default = "."
 }
 
-target "_nook-web-common" {
+target "_nook-web-base" {
   context    = "."
   dockerfile = "nook-app/nook-web/nook-web-app/Dockerfile"
-  target     = "nook-web"
   platforms  = ["linux/amd64"]
   args = {
     VITE_BASE               = VITE_BASE
@@ -73,4 +72,14 @@ target "_nook-web-common" {
     web-deps      = "target:web-deps"
     web-artifacts = WEB_ARTIFACTS_CONTEXT
   }
+}
+
+target "_nook-web-common" {
+  inherits = ["_nook-web-base"]
+  target   = "nook-web"
+}
+
+target "_nook-web-ci-common" {
+  inherits = ["_nook-web-base"]
+  target   = "nook-web-ci"
 }

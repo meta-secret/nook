@@ -231,14 +231,19 @@ jobs:
             test -s "$dir/$file"
           done
 
-      - name: WASM clippy, build, and Node tests
+      - name: WASM clippy and build
         if: steps.trusted-wasm.outputs.found != 'true'
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
           CI: true
           WASM_BUILD_MODE: dev
 
-      - name: Upload verified WASM handoff
+      - name: Stamp WASM handoff attempt
+        run: echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
+
+      # The exact package can feed the independent web gate as soon as clippy/build succeeds.
+      # Node tests continue on this producer and remain a required job conclusion.
+      - name: Upload built WASM handoff
         uses: actions/upload-artifact@v7
         with:
           name: pr-wasm-${{ github.run_id }}
@@ -246,6 +251,13 @@ jobs:
           retention-days: 1
           if-no-files-found: error
           overwrite: true
+
+      - name: WASM Node tests
+        if: steps.trusted-wasm.outputs.found != 'true'
+        run: task ci:wasm:node-test
+        env:
+          CI: true
+          WASM_BUILD_MODE: dev
 
       - name: Preserve cache telemetry
         if: always()
@@ -284,15 +296,15 @@ jobs:
           main-cache-only: "true"
 
       # Checkout, contract tests, and Docker setup run in parallel with the producer jobs. Only the
-      # first step that consumes WASM waits, and it accepts the stable artifact name only after this
-      # run attempt's producer has completed successfully.
-      - name: Wait for verified WASM handoff
+      # first step that consumes WASM waits. A current producer's attempt marker prevents a failed-job
+      # rerun from consuming an older run-stable artifact before the producer overwrites it.
+      - name: Wait for built WASM handoff
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARTIFACT_NAME: pr-wasm-${{ github.run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 360); do
+          for attempt in $(seq 1 180); do
             wasm_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
@@ -300,6 +312,13 @@ jobs:
             wasm_job_id="$(jq -r '.id // empty' <<< "$wasm_job")"
             wasm_status="$(jq -r '.status // "queued"' <<< "$wasm_job")"
             wasm_conclusion="$(jq -r '.conclusion // ""' <<< "$wasm_job")"
+            successful_wasm_attempts=""
+            if [ -z "$wasm_job_id" ]; then
+              successful_wasm_attempts="$(
+                gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all&per_page=100" \
+                  --jq '.jobs[] | select(.name == "WASM verification and artifact" and .conclusion == "success") | .run_attempt'
+              )"
+            fi
             if [ -n "$wasm_job_id" ] \
               && [ "$wasm_status" = "completed" ] \
               && [ "$wasm_conclusion" != "success" ]; then
@@ -307,33 +326,38 @@ jobs:
               exit 1
             fi
 
-            # A failed-job rerun may omit the already-successful producer. Reuse the run-stable,
-            # exact-head artifact only when there is no current producer, or after it succeeds.
-            if [ -z "$wasm_job_id" ] \
-              || { [ "$wasm_status" = "completed" ] && [ "$wasm_conclusion" = "success" ]; }; then
-              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-                --paginate \
-                --jq '.artifacts[].name' \
-                | grep -Fxq "$ARTIFACT_NAME"; then
-                destination="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
-                rm -rf "$destination"
-                mkdir -p "$destination"
-                gh run download "$GITHUB_RUN_ID" \
-                  --name "$ARTIFACT_NAME" \
-                  --dir "$destination"
-                test -s "$destination/nook_wasm.js"
-                exit 0
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              --paginate \
+              --jq '.artifacts[].name' \
+              | grep -Fxq "$ARTIFACT_NAME"; then
+              destination="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
+              candidate="${destination}.candidate"
+              rm -rf "$candidate"
+              mkdir -p "$candidate"
+              if gh run download "$GITHUB_RUN_ID" \
+                --name "$ARTIFACT_NAME" \
+                --dir "$candidate"; then
+                artifact_attempt="$(cat "$candidate/nook-run-attempt" 2>/dev/null || true)"
+                if { [ -n "$wasm_job_id" ] && [ "$artifact_attempt" = "$GITHUB_RUN_ATTEMPT" ]; } \
+                  || { [ -z "$wasm_job_id" ] && [ -n "$artifact_attempt" ] \
+                    && grep -Fxq "$artifact_attempt" <<< "$successful_wasm_attempts"; }; then
+                  test -s "$candidate/nook_wasm.js"
+                  rm -rf "$destination"
+                  mv "$candidate" "$destination"
+                  exit 0
+                fi
               fi
-              if [ -z "$wasm_job_id" ]; then
-                echo "::error::This failed-job rerun has no WASM producer and the run-stable artifact is unavailable"
-                exit 1
-              fi
+              rm -rf "$candidate"
+            fi
+            if [ -z "$wasm_job_id" ]; then
+              echo "::error::This failed-job rerun has no WASM producer and the run-stable artifact is unavailable"
+              exit 1
             fi
 
-            echo "Waiting for verified WASM artifact (attempt $attempt/360; wasm=$wasm_status${wasm_conclusion:+/$wasm_conclusion})"
-            sleep 5
+            echo "Waiting for current-attempt WASM artifact (attempt $attempt/180; wasm=$wasm_status${wasm_conclusion:+/$wasm_conclusion})"
+            sleep 10
           done
-          echo "::error::Verified WASM artifact was not published within 30 minutes"
+          echo "::error::Current-attempt WASM artifact was not published within 30 minutes"
           exit 1
 
       # Coverage reporting consumes the native job's small artifact later and never blocks the web
@@ -439,7 +463,7 @@ jobs:
           ARTIFACT_NAME: pr-rust-${{ github.run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 360); do
+          for attempt in $(seq 1 180); do
             native_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "Native Rust verification")] | first // {}'
@@ -478,10 +502,52 @@ jobs:
               fi
             fi
 
-            echo "Waiting for native coverage artifact (attempt $attempt/360; native=$native_status${native_conclusion:+/$native_conclusion})"
-            sleep 5
+            echo "Waiting for native coverage artifact (attempt $attempt/180; native=$native_status${native_conclusion:+/$native_conclusion})"
+            sleep 10
           done
           echo "::error::Native Rust coverage artifact was not published within 30 minutes"
+          exit 1
+
+      - name: Require WASM producer success before preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          artifact_attempt="$(
+            cat "${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
+          )"
+          test -n "$artifact_attempt"
+          for attempt in $(seq 1 180); do
+            wasm_job="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+                --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
+            )"
+            wasm_job_id="$(jq -r '.id // empty' <<< "$wasm_job")"
+            wasm_status="$(jq -r '.status // "queued"' <<< "$wasm_job")"
+            wasm_conclusion="$(jq -r '.conclusion // ""' <<< "$wasm_job")"
+            # A failed-job rerun may omit the producer, but the built artifact alone is not proof
+            # that its later Node tests passed. Require a successful producer from an earlier
+            # attempt before allowing deployment.
+            if [ -z "$wasm_job_id" ]; then
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all&per_page=100" \
+                --jq '.jobs[] | select(.name == "WASM verification and artifact" and .conclusion == "success") | .run_attempt' \
+                | grep -Fxq "$artifact_attempt"; then
+                exit 0
+              fi
+              echo "::error::WASM artifact attempt $artifact_attempt did not complete successfully"
+              exit 1
+            fi
+            if [ "$wasm_status" = "completed" ]; then
+              if [ "$wasm_conclusion" = "success" ]; then
+                exit 0
+              fi
+              echo "::error::WASM verification completed with $wasm_conclusion"
+              exit 1
+            fi
+            echo "Waiting to gate preview on WASM Node tests (attempt $attempt/180; wasm=$wasm_status)"
+            sleep 10
+          done
+          echo "::error::WASM verification did not complete within 30 minutes"
           exit 1
 
       - name: Deploy unified internal test harness
@@ -545,7 +611,7 @@ jobs:
           headers="$(mktemp)"
           trap 'rm -f "$body" "$headers"' EXIT
           verified=false
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 60); do
             site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
             retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
             site_ok=false
@@ -584,8 +650,8 @@ jobs:
               verified=true
               break
             fi
-            echo "Waiting for isolated aliases (attempt $attempt/24; site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
-            sleep 5
+            echo "Waiting for isolated aliases (attempt $attempt/60; site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
+            sleep 2
           done
           if [ "$verified" != true ]; then
             echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
@@ -593,7 +659,7 @@ jobs:
           fi
           extension_verified=false
           last_extension_output=''
-          for attempt in $(seq 1 12); do
+          for attempt in $(seq 1 30); do
             set +e
             last_extension_output="$(
               EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
@@ -612,8 +678,8 @@ jobs:
               extension_verified=true
               break
             fi
-            echo "Waiting for exact-head extension metadata (attempt $attempt/12)"
-            sleep 5
+            echo "Waiting for exact-head extension metadata (attempt $attempt/30)"
+            sleep 2
           done
           if [ "$extension_verified" != true ]; then
             printf '%s\n' "$last_extension_output" >&2
