@@ -658,6 +658,7 @@ jobs:
             nook-app/docker-bake.hcl \
             nook-app/docker/base.docker-bake.hcl \
             nook-app/docker/base.Dockerfile \
+            nook-app/docker/sccache-report.sh \
             nook-app/nook-core/Dockerfile \
             nook-app/nook-core/docker-bake.hcl \
             nook-app/nook-wasm/docker-bake.hcl \
