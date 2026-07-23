@@ -180,12 +180,14 @@ workflow itself. PR workflows upload only same-run artifacts. After the entire
 run succeeds, default-branch-only `pr-validation-handoff.yml` verifies the
 source workflow and all required jobs, recreates the validated base/head merge
 tree, validates the artifact shapes, adds provenance, and republishes immutable
-trusted artifacts. A later PR skips a
-producer only after resolving an exact artifact by ID and verifying that its
-successful workflow run used this trusted default-branch promotion workflow.
-PR-writable caches never bypass required validation, and repository invariant
-preflight still runs on every PR head. Changed inputs must execute and complete
-the full workflow before a new handoff can be promoted.
+trusted artifacts. Promotion requires the immutable PR snapshot attached to the
+completed workflow-run event; there is no post-merge or manual fallback to
+mutable PR metadata. A later PR skips a producer only after resolving an exact
+artifact by ID and verifying that its successful workflow run used this trusted
+default-branch promotion workflow. PR-writable caches never bypass required
+validation, and repository invariant preflight still runs on every PR head.
+Changed inputs must execute and complete the full workflow before a new handoff
+can be promoted.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen

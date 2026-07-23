@@ -413,11 +413,12 @@ the complete PR workflow succeeds, default-branch-only
 `pr-validation-handoff.yml` verifies the source run and required jobs, validates
 both artifact shapes, recreates the validated base/head merge tree, adds
 provenance, and republishes them under exact hashes of their Rust, toolchain,
-Docker, Task, and workflow inputs. Later PRs accept
-only those trusted promoted artifacts by ID; PR-writable caches can never bypass
-validation. Repository invariant preflight still runs on every head, and an
-exact trusted handoff skips only Rust/WASM validation already completed for
-identical inputs.
+Docker, Task, and workflow inputs. Promotion requires the immutable PR snapshot
+on the completed workflow-run event; post-merge and manual fallbacks are not
+accepted. Later PRs accept only those trusted promoted artifacts by ID;
+PR-writable caches can never bypass validation. Repository invariant preflight
+still runs on every head, and an exact trusted handoff skips only Rust/WASM
+validation already completed for identical inputs.
 For unchanged Rust validation inputs, the steady-state PR workflow budget is
 four to five minutes; an exact handoff miss executes validation and is promoted
 only after the whole workflow succeeds.
