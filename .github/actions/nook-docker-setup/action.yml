@@ -69,11 +69,16 @@ runs:
       shell: bash
       run: |
         pr_number="${{ github.event.pull_request.number }}"
+        job_scope="$(printf '%s' "$GITHUB_JOB" | tr '[:upper:]_' '[:lower:]-' | tr -cd 'a-z0-9-')"
+        if [ -z "$job_scope" ]; then
+          echo "Unable to derive a stable BuildKit cache owner from GITHUB_JOB" >&2
+          exit 1
+        fi
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
         if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
-          echo "GHA_CACHE_SCOPE_SUFFIX=-pr-$pr_number" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_SCOPE_SUFFIX=-pr-$pr_number-$job_scope" >> "$GITHUB_ENV"
         else
           echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         fi

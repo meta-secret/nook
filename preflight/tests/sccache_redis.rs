@@ -366,7 +366,8 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
     let setup = read(".github/actions/nook-docker-setup/action.yml");
     assert!(setup.contains("cache-telemetry.cjs start"));
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
-    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=-pr-$pr_number"));
+    assert!(setup.contains("job_scope=\"$(printf '%s' \"$GITHUB_JOB\""));
+    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=-pr-$pr_number-$job_scope"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -379,7 +380,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
     ] {
         assert!(
             bake.contains(scope),
-            "delivery cache must isolate mutable PR scope: {scope}"
+            "delivery cache must isolate mutable PR and job scope: {scope}"
         );
     }
 
