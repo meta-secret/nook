@@ -100,12 +100,15 @@ Device protection mode is chosen only here; vault creation reuses the persisted
 device choice and must not render another device-protection selector.
 
 When no local passkey-protected device record exists, `DeviceProtectionGate`
-shows new-passkey setup as the primary form and a small **Use existing passkey**
-alternative. That alternative launches discoverable-passkey recovery immediately;
-it must not open a second confirmation widget. When `device_identity_wrapped`
-already identifies passkey protection, the gate is a retry/recovery surface
-after a failed or cancelled direct authorization; it shows authorization only
-and never renders passkey creation.
+shows **Authenticate** as the primary action. It launches discoverable-passkey
+recovery immediately and must not open a second confirmation widget. Passkey
+creation is an explicit secondary choice; device mode and label controls remain
+hidden until the user chooses it. A failed or cancelled authentication must not
+auto-create a credential because WebAuthn does not reliably distinguish no
+matching passkey from cancellation, timeout, or authenticator refusal. When
+`device_identity_wrapped` already identifies passkey protection, the gate is a
+retry/recovery surface after a failed or cancelled direct authorization; it
+shows authorization only and never renders passkey creation.
 
 When the gate is embedded in `PasskeyAuthOverlay`, the overlay owns the single
 visible border, radius, and elevation. The embedded gate stays flat so the setup

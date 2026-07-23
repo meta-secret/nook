@@ -176,6 +176,22 @@ button:disabled {
   background: var(--secondary);
 }
 
+.alternative-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-self: center;
+  gap: 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--secondary-foreground);
+  padding: 6px 10px;
+}
+
+.alternative-button:hover:not(:disabled) {
+  background: var(--secondary);
+}
+
 .divider {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
