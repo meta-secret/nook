@@ -54,7 +54,10 @@
     if (caught.message.includes('PASSKEY_CEREMONY_NOT_ALLOWED')) {
       return i18n.t(fallbackKey)
     }
-    if (caught.message.includes('EXTENSION_SESSION_REQUEST_EXPIRED')) {
+    if (
+      caught.message.includes('EXTENSION_SESSION_REQUEST_EXPIRED') ||
+      caught.message.includes('EXTENSION_SESSION_LOCKED')
+    ) {
       return i18n.t('extension.setup.session_busy_retry')
     }
     return caught.message

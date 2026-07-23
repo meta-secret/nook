@@ -18,6 +18,7 @@ import {
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
+const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
 
 type DeviceResult = {
   deviceId: string
@@ -138,7 +139,7 @@ function scheduleSessionExpiry(generation: number): void {
     sessionDeadlineAt = 0
     sessionGeneration += 1
     manager = undefined
-    sessionOperations.close(new Error('Extension device identity is locked.'))
+    sessionOperations.close(new Error(SESSION_LOCKED_ERROR))
     chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
   }, SESSION_DURATION_MS)
 }
@@ -156,7 +157,7 @@ function renewSessionExpiry(generation: number): void {
     sessionDeadlineAt === 0 ||
     Date.now() >= sessionDeadlineAt
   ) {
-    throw new Error('Extension device identity is locked.')
+    throw new Error(SESSION_LOCKED_ERROR)
   }
   scheduleSessionExpiry(generation)
 }
@@ -362,7 +363,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
       if (status !== 'unlocked') {
-        throw new Error('Extension device identity is locked.')
+        throw new Error(SESSION_LOCKED_ERROR)
       }
       const device = await deviceResult(activeManager)
       if (
@@ -871,6 +872,8 @@ function sessionMessagePriority(type: string): SessionOperationPriority {
     case 'nook:extension-session-authenticator-backup-attach':
     case 'nook:extension-session-register-passkey':
     case 'nook:extension-session-assert-passkey':
+    case 'nook:extension-session-begin-passkey-setup':
+    case 'nook:extension-session-unlock-options':
     case 'nook:extension-session-unlock-passkey':
     case 'nook:extension-session-unlock-pin':
       return 'interactive'
