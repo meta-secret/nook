@@ -87,7 +87,31 @@ jobs:
               }
             }
 
-            const pullRequest = run.pull_requests?.[0]
+            let pullRequest = run.pull_requests?.[0]
+            if (!pullRequest) {
+              const associatedPullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  ...context.repo,
+                  commit_sha: run.head_sha,
+                  per_page: 100,
+                },
+              )
+              const matchingPullRequests = associatedPullRequests.filter(
+                (candidate) =>
+                  candidate.head?.sha === run.head_sha &&
+                  candidate.head?.ref === run.head_branch &&
+                  candidate.base?.repo?.full_name ===
+                    `${context.repo.owner}/${context.repo.repo}`,
+              )
+              if (matchingPullRequests.length !== 1) {
+                core.setFailed(
+                  `Run ${runId} has ${matchingPullRequests.length} matching associated pull requests`,
+                )
+                return
+              }
+              pullRequest = matchingPullRequests[0]
+            }
             if (
               !pullRequest ||
               !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
