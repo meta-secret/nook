@@ -178,8 +178,9 @@ handoffs by exact input hash. Their keys cover Rust sources and manifests,
 toolchain and Docker definitions, Task entry points, Docker setup, and the PR
 workflow itself. PR workflows upload only same-run artifacts. After the entire
 run succeeds, default-branch-only `pr-validation-handoff.yml` verifies the
-source workflow and all required jobs, validates the artifact shapes, adds
-provenance, and republishes immutable trusted artifacts. A later PR skips a
+source workflow and all required jobs, recreates the validated base/head merge
+tree, validates the artifact shapes, adds provenance, and republishes immutable
+trusted artifacts. A later PR skips a
 producer only after resolving an exact artifact by ID and verifying that its
 successful workflow run used this trusted default-branch promotion workflow.
 PR-writable caches never bypass required validation, and repository invariant

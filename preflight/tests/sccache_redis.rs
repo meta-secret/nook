@@ -332,6 +332,8 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("Unable to probe hosted BuildKit cache key"));
     assert!(setup.contains("require-e2e-cache"));
     assert!(setup.contains("required_scopes=\"$required_scopes nook-web-e2e-v1\""));
+    assert!(setup.contains("e2e)"));
+    assert!(setup.contains("required_scopes=\"nook-web-deps-v1 nook-web-e2e-v1\""));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(setup.contains("candidate_suffixes=\"$("));
     assert!(setup.contains("seed_scope_suffix=\"$candidate_suffix\""));

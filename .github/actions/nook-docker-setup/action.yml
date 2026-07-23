@@ -135,6 +135,9 @@ runs:
                 required_scopes="$required_scopes nook-web-e2e-v1"
               fi
               ;;
+            e2e)
+              required_scopes="nook-web-deps-v1 nook-web-e2e-v1"
+              ;;
             *)
               required_scopes=""
               ;;

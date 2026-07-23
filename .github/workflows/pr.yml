@@ -74,9 +74,10 @@ jobs:
                 ...context.repo,
                 run_id: artifact.workflow_run.id,
               })
+              const workflowPath = run.path?.replace(/@[^@]+$/, '')
               if (
                 run.name === 'PR validation handoff' &&
-                run.path === '.github/workflows/pr-validation-handoff.yml' &&
+                workflowPath === '.github/workflows/pr-validation-handoff.yml' &&
                 run.head_branch === context.payload.repository.default_branch &&
                 run.status === 'completed' &&
                 run.conclusion === 'success' &&
@@ -173,9 +174,10 @@ jobs:
                 ...context.repo,
                 run_id: artifact.workflow_run.id,
               })
+              const workflowPath = run.path?.replace(/@[^@]+$/, '')
               if (
                 run.name === 'PR validation handoff' &&
-                run.path === '.github/workflows/pr-validation-handoff.yml' &&
+                workflowPath === '.github/workflows/pr-validation-handoff.yml' &&
                 run.head_branch === context.payload.repository.default_branch &&
                 run.status === 'completed' &&
                 run.conclusion === 'success' &&
