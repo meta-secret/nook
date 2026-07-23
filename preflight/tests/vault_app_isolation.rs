@@ -945,7 +945,8 @@ fn assert_docker_setup_contract(root: &Path) {
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
-        "GHA_CACHE_WRITE_ENABLED=1",
+        "cache_write_enabled=1",
+        "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
     ] {
         assert!(
             setup.contains(required),

@@ -79,8 +79,16 @@ runs:
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
+        cache_write_enabled=""
         if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
-          scope_suffix="-pr-$pr_number-$job_scope"
+          app_tree="$(git rev-parse HEAD:nook-app)"
+          dockerignore_blob="$(git hash-object .dockerignore)"
+          cache_generation="$(
+            printf '%s\n%s\n' "$app_tree" "$dockerignore_blob" \
+              | sha256sum \
+              | cut -c1-12
+          )"
+          scope_suffix="-pr-$pr_number-$job_scope-$cache_generation"
           echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
 
           case "$job_scope" in
@@ -116,15 +124,17 @@ runs:
             done
           fi
           echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
+          if [ "${{ inputs.cache-write }}" = "true" ] && [ -n "$fallback_enabled" ]; then
+            cache_write_enabled=1
+          fi
         else
           echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
           echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+          if [ "${{ inputs.cache-write }}" = "true" ]; then
+            cache_write_enabled=1
+          fi
         fi
-        if [ "${{ inputs.cache-write }}" = "true" ]; then
-          echo "GHA_CACHE_WRITE_ENABLED=1" >> "$GITHUB_ENV"
-        else
-          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
-        fi
+        echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
 
     - name: Set CI environment
       shell: bash

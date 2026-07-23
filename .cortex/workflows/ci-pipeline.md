@@ -160,12 +160,13 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use
 GitHub-hosted `ubuntu-latest`, so concurrent work scales across the repository's
 hosted-runner allowance instead of queueing on one Docker host. Delivery builds
 restore distinct GitHub Actions BuildKit cache scopes; main refreshes the
-default-branch scopes that new PRs may access. PR writes are isolated by both PR
-number and workflow job, so the native, WASM, and verify exporters cannot
-replace one another's overlapping Rust cache lineage. A job reads Main fallback
-scopes only while one of its own required cache indices is missing; subsequent
-pushes read the private lineage alone so equivalent records from another
-exporter cannot invalidate its children. The self-hosted `nook` label is
+default-branch scopes that new PRs may access. PR generations are isolated by
+PR number, workflow job, the `nook-app` Git tree, and `.dockerignore`, so the
+native, WASM, and verify exporters cannot replace one another's overlapping
+Rust cache lineage. A generation reads Main fallback scopes and writes its
+private lineage only while one of its required cache indices is missing.
+Subsequent pushes read that immutable private lineage alone, so equivalent
+records from another exporter cannot invalidate its children. The self-hosted `nook` label is
 reserved for runner cleanup while that machine remains registered.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
@@ -427,12 +428,12 @@ parallel worktrees from replacing each other's review/readiness binaries.
 
 **Delivery jobs are ephemeral but cache-aware.** PR verification, main, and
 release use GitHub-hosted runners. Main exports the default-branch cache that
-new PRs can restore under GitHub's cache visibility rules. Every PR writes only
-to scopes suffixed with its PR number and reads those before the shared Main
-fallback. This prevents concurrent PR and Main jobs from replacing one
-another's mutable manifests while still letting the first PR run reuse merged
-layers. Separate scopes prevent parallel image lineages from overwriting one
-another. Native coverage and WASM source-sensitive layers
+new PRs can restore under GitHub's cache visibility rules. Every PR uses scopes
+suffixed with its PR number, job owner, and app-tree generation. A missing
+generation seeds from Main and writes its private manifests once; a complete
+generation is read-only. This prevents concurrent PR and Main jobs, and later
+reruns of the same job, from replacing parent records beneath cached children.
+Native coverage and WASM source-sensitive layers
 have their own GHA BuildKit scopes in addition to the manifest-only dependency
 scopes, so non-Rust pushes do not repeat unchanged Cargo compilation.
 Delivery Docker builds use the job-local Redis-backed sccache and carry no

@@ -315,10 +315,14 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("cache-telemetry.cjs start"));
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
     assert!(setup.contains("job_scope=\"$(printf '%s' \"$GITHUB_JOB\""));
-    assert!(setup.contains("scope_suffix=\"-pr-$pr_number-$job_scope\""));
+    assert!(setup.contains("app_tree=\"$(git rev-parse HEAD:nook-app)\""));
+    assert!(setup.contains("dockerignore_blob=\"$(git hash-object .dockerignore)\""));
+    assert!(setup.contains("scope_suffix=\"-pr-$pr_number-$job_scope-$cache_generation\""));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("repos/$GITHUB_REPOSITORY/actions/caches"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
+    assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
+    assert!(setup.contains("[ -n \"$fallback_enabled\" ]"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -333,7 +337,7 @@ fn assert_delivery_cache_scope_contract() {
     ] {
         assert!(
             bake.contains(scope),
-            "delivery cache must isolate mutable PR and job scope: {scope}"
+            "delivery cache must isolate immutable PR job generations: {scope}"
         );
     }
 }

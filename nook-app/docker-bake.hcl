@@ -68,11 +68,11 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-// Pull requests append a stable per-PR, per-job suffix. The job owner is required because the
-// native, WASM, and verify jobs all solve overlapping Rust targets on separate builders; allowing
-// them to publish the same mutable scope makes a later exporter replace an earlier job's lineage.
-// Main keeps the empty suffix as the shared fallback that lets a new PR reuse merged layers before
-// it has populated its own job-owned scope.
+// Pull requests append a per-PR, per-job, app-tree generation suffix. The job owner is required
+// because native, WASM, and verify solve overlapping Rust targets on separate builders. The
+// generation makes a completed PR lineage immutable: its first solve may seed from Main and
+// export, while later solves only read it. Main keeps the empty suffix as the fallback for a new
+// generation.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
