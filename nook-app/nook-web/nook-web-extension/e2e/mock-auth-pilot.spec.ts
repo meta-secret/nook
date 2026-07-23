@@ -84,11 +84,17 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
         timeout: 15_000,
       })
+      const authenticatorPickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
+      const authenticatorPicker = await authenticatorPickerPromise
+      await authenticatorPicker.waitForURL(/intent=authenticator-picker/)
+      await authenticatorPicker
+        .getByRole('button', { name: /Mock Auth/ })
+        .click()
       await expect(loginPage.getByTestId('mock-auth-otp-input')).toHaveValue(
         /^\d{6}$/,
       )
+      await expect(authenticatorPicker).toBeClosed()
 
       await loginPage.getByRole('button', { name: 'Submit' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(

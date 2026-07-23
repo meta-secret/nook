@@ -1268,7 +1268,7 @@ async function continueWithAuthenticator(
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
     sender.id !== chrome.runtime.id ||
     !isWebsiteAuthenticatorSelectedMessage(message) ||
@@ -1279,6 +1279,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   }
   const pending = pendingAuthenticatorPicker
   pendingAuthenticatorPicker = undefined
+  sendResponse({ ok: true })
   busy = true
   pending.continueButton.disabled = true
   void fillAuthenticatorCode(
@@ -1946,18 +1947,22 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const enrollmentHints = detectEnrollmentHints()
+  const workflowForms = summarizeAuthenticationWorkflowForms().slice(
+    0,
+    MAX_WORKFLOW_OBSERVATIONS,
+  )
   // Setup material starts an enrollment ceremony. Recovery hints remain part
-  // of an active OTP challenge so Rust can keep code fill as the primary action.
-  if (enrollmentHints.qr) {
+  // of an active OTP challenge so Rust can keep code fill as the primary action,
+  // while a direct backup-code-only page still exposes the save ceremony.
+  if (
+    enrollmentHints.qr ||
+    (enrollmentHints.backupCodes && workflowForms.length === 0)
+  ) {
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanSequence) return
     renderEnrollmentWidget(enrollmentHints, vaultConnection)
     return
   }
-  const workflowForms = summarizeAuthenticationWorkflowForms().slice(
-    0,
-    MAX_WORKFLOW_OBSERVATIONS,
-  )
   if (workflowForms.length === 0) {
     removeWidget()
     return
