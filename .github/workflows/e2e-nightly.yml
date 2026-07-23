@@ -41,10 +41,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-redis-password: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CACHE_REDIS_PASSWORD || '' }}
-          cache-cloudflare-client-id: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID || '' }}
-          cache-cloudflare-client-secret: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET || '' }}
 
       - name: Prepare, build, and run live e2e
         run: task ci:nightly:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000 WASM_BUILD_MODE=prod

@@ -1,0 +1,109 @@
+schema_version: 3
+source_pr:
+  number: 670
+  url: https://github.com/meta-secret/nook/pull/670
+  title: Serialize extension vault session operations
+  change_surface: rust_wasm_browser_extension_session_security
+  head_sha: a7bc2bf79d88e4b0cfcf71e3bc8f663c79fe8f07
+  started_at: 2026-07-23T11:00:00Z
+  opened_at: 2026-07-23T11:05:27Z
+  merged_at: 2026-07-23T16:11:08Z
+  elapsed_seconds: 18668
+  open_to_merge_seconds: 18341
+summary:
+  local_execution_count: 8
+  local_check_count: 6
+  local_test_count: 1
+  local_combined_count: 1
+  local_execution_seconds: 388
+  github_actions_run_count: 17
+  github_actions_seconds: 13021
+  pr_retrigger_count: 16
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T16:12:00Z
+  head_sha: a7bc2bf79d88e4b0cfcf71e3bc8f663c79fe8f07
+  by_type:
+    rust: 628
+    preflight: 34
+    web_unit: 251
+    e2e: 199
+  total: 1112
+local_executions:
+  - { command: "task format", category: check, started_at: "2026-07-23T15:27:00Z", finished_at: "2026-07-23T15:29:00Z", duration_seconds: 120, outcome: passed, reason: extension_review_hygiene }
+  - { command: "bun run check", category: combined, started_at: "2026-07-23T15:29:00Z", finished_at: "2026-07-23T15:29:09Z", duration_seconds: 9, outcome: passed, reason: focused_extension_lint_unit_and_type_validation }
+  - { command: "task preflight:test", category: test, started_at: "2026-07-23T15:36:00Z", finished_at: "2026-07-23T15:36:34Z", duration_seconds: 34, outcome: passed, reason: typed_wasm_boundary_regression_proof }
+  - { command: "task format", category: check, started_at: "2026-07-23T15:36:40Z", finished_at: "2026-07-23T15:40:10Z", duration_seconds: 210, outcome: passed, reason: final_rust_wasm_and_web_hygiene }
+  - { command: "bun run format", category: check, started_at: "2026-07-23T15:58:55Z", finished_at: "2026-07-23T15:59:02Z", duration_seconds: 7, outcome: passed, reason: final_extension_review_hygiene }
+  - { command: "bun run check", category: check, started_at: "2026-07-23T15:59:02Z", finished_at: "2026-07-23T15:59:10Z", duration_seconds: 8, outcome: passed, reason: final_extension_lint_unit_and_type_validation }
+  - { command: "git diff --check", category: check, started_at: "2026-07-23T15:59:10Z", finished_at: "2026-07-23T15:59:10Z", duration_seconds: 0, outcome: passed, reason: final_whitespace_validation }
+  - { command: "task pr:ready PR=670", category: check, started_at: "2026-07-23T16:10:40Z", finished_at: "2026-07-23T16:10:40Z", duration_seconds: 0, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 30001811173, run_attempt: 1, head_sha: b036399a2adab174de39a0efd6a0f2205451da2f, trigger: pull_request, started_at: "2026-07-23T11:05:31Z", finished_at: "2026-07-23T11:05:54Z", duration_seconds: 23, conclusion: cancelled }
+  - { workflow: PR, run_id: 30001817917, run_attempt: 1, head_sha: b036399a2adab174de39a0efd6a0f2205451da2f, trigger: pull_request, started_at: "2026-07-23T11:05:36Z", finished_at: "2026-07-23T11:18:25Z", duration_seconds: 769, conclusion: cancelled }
+  - { workflow: PR, run_id: 30002595715, run_attempt: 1, head_sha: 4fd65a0141d1ee3833847f53cce170fa52778a1a, trigger: pull_request, started_at: "2026-07-23T11:17:55Z", finished_at: "2026-07-23T11:34:22Z", duration_seconds: 987, conclusion: success }
+  - { workflow: PR, run_id: 30004377865, run_attempt: 1, head_sha: 8d5e6f05c691e198ae46b086e2a96bc27e382c78, trigger: pull_request, started_at: "2026-07-23T11:46:10Z", finished_at: "2026-07-23T12:02:54Z", duration_seconds: 1004, conclusion: success }
+  - { workflow: PR, run_id: 30005801363, run_attempt: 1, head_sha: eb4c8b98d0faae71440d539a973b2bd4d644e94f, trigger: pull_request, started_at: "2026-07-23T12:08:24Z", finished_at: "2026-07-23T12:25:25Z", duration_seconds: 1021, conclusion: failure }
+  - { workflow: PR, run_id: 30007082445, run_attempt: 1, head_sha: 97abe47ad173d8587dd0a5e6fe9da6d4ff266f06, trigger: pull_request, started_at: "2026-07-23T12:27:52Z", finished_at: "2026-07-23T12:48:11Z", duration_seconds: 1219, conclusion: cancelled }
+  - { workflow: PR, run_id: 30008138362, run_attempt: 1, head_sha: d1d67a2d047e3f0da728e7cccd7e169d6f3791f1, trigger: pull_request, started_at: "2026-07-23T12:43:26Z", finished_at: "2026-07-23T13:05:13Z", duration_seconds: 1307, conclusion: success }
+  - { workflow: PR, run_id: 30010508370, run_attempt: 1, head_sha: 0d26868b9448df96fc226f95cdf98f17bc561780, trigger: pull_request, started_at: "2026-07-23T13:16:39Z", finished_at: "2026-07-23T13:17:16Z", duration_seconds: 37, conclusion: cancelled }
+  - { workflow: PR, run_id: 30010526968, run_attempt: 1, head_sha: de7757f445fc28272db8f0013c0343f4056a87be, trigger: pull_request, started_at: "2026-07-23T13:16:54Z", finished_at: "2026-07-23T13:34:08Z", duration_seconds: 1034, conclusion: failure }
+  - { workflow: PR, run_id: 30011949709, run_attempt: 1, head_sha: a0792b87c31a73c54d0989f51783bceacab1d4b2, trigger: pull_request, started_at: "2026-07-23T13:36:30Z", finished_at: "2026-07-23T14:01:19Z", duration_seconds: 1489, conclusion: success }
+  - { workflow: PR, run_id: 30018122277, run_attempt: 1, head_sha: 27332ca8fe30d49c74c3ccb418a9423b918fb0b4, trigger: pull_request, started_at: "2026-07-23T14:55:44Z", finished_at: "2026-07-23T15:14:59Z", duration_seconds: 1155, conclusion: success }
+  - { workflow: PR, run_id: 30020431717, run_attempt: 1, head_sha: 433ca1e7f8902b997354678a675123d402463d76, trigger: pull_request, started_at: "2026-07-23T15:24:58Z", finished_at: "2026-07-23T15:34:22Z", duration_seconds: 564, conclusion: cancelled }
+  - { workflow: PR, run_id: 30020755577, run_attempt: 1, head_sha: c52f25ea23bc528c242882400afc08bdb4f7c110, trigger: pull_request, started_at: "2026-07-23T15:29:08Z", finished_at: "2026-07-23T15:29:35Z", duration_seconds: 27, conclusion: cancelled }
+  - { workflow: PR, run_id: 30020787767, run_attempt: 1, head_sha: 66d9882d7a9652981e19bc4211232d7d0b5051d0, trigger: pull_request, started_at: "2026-07-23T15:29:34Z", finished_at: "2026-07-23T15:41:51Z", duration_seconds: 737, conclusion: cancelled }
+  - { workflow: PR, run_id: 30021665455, run_attempt: 1, head_sha: 3e3a5f68eba1a7ac584be19451580122ba6593a2, trigger: pull_request, started_at: "2026-07-23T15:40:57Z", finished_at: "2026-07-23T15:58:52Z", duration_seconds: 1075, conclusion: success }
+  - { workflow: PR, run_id: 30023218551, run_attempt: 1, head_sha: 873e21b4058a9d774760acc3f4a6aa53681f0e05, trigger: pull_request, started_at: "2026-07-23T16:01:16Z", finished_at: "2026-07-23T16:02:09Z", duration_seconds: 53, conclusion: cancelled }
+  - { workflow: PR, run_id: 30023251248, run_attempt: 1, head_sha: 6006fdd8217700fccae60e1573b756f684e50892, trigger: pull_request, started_at: "2026-07-23T16:01:41Z", finished_at: "2026-07-23T16:10:21Z", duration_seconds: 520, conclusion: success }
+cache_telemetry:
+  totals:
+    job_count: 0
+    remote_backend_job_count: 0
+    local_fallback_job_count: 0
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: null
+    buildkit_completed_steps: 0
+    buildkit_cached_steps: 0
+    buildkit_cache_hit_rate_percent: null
+  jobs: []
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-23T11:05:36Z", reason: initial_duplicate_dispatch }
+  - { kind: head_push, at: "2026-07-23T11:17:55Z", reason: serialize_extension_session_operations }
+  - { kind: head_push, at: "2026-07-23T11:46:10Z", reason: review_lifecycle_corrections }
+  - { kind: head_push, at: "2026-07-23T12:08:24Z", reason: lock_helper_response_correction }
+  - { kind: head_push, at: "2026-07-23T12:27:52Z", reason: extension_sender_boundary_correction }
+  - { kind: head_push, at: "2026-07-23T12:43:26Z", reason: extension_session_review_corrections }
+  - { kind: head_push, at: "2026-07-23T13:16:39Z", reason: overlapping_head_dispatch }
+  - { kind: head_push, at: "2026-07-23T13:16:54Z", reason: typed_decision_correction }
+  - { kind: head_push, at: "2026-07-23T13:36:30Z", reason: extension_session_timeout_correction }
+  - { kind: head_push, at: "2026-07-23T14:55:44Z", reason: bound_discovery_and_import_credentials }
+  - { kind: head_push, at: "2026-07-23T15:24:58Z", reason: active_webauthn_cancellation }
+  - { kind: head_push, at: "2026-07-23T15:29:08Z", reason: initial_unlock_queue_bounds }
+  - { kind: base_update, at: "2026-07-23T15:29:34Z", reason: current_main_integration }
+  - { kind: head_push, at: "2026-07-23T15:40:57Z", reason: typed_wasm_boundary_fix }
+  - { kind: head_push, at: "2026-07-23T16:01:16Z", reason: final_secret_lifetime_review_fixes }
+  - { kind: base_update, at: "2026-07-23T16:01:41Z", reason: final_current_main_integration }
+merge_attempts:
+  - { at: "2026-07-23T16:11:08Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [665, 673]
+  baseline_quality: comparable
+  baseline_note: PR 665 changed extension authentication and PR 673 measured the same validation pipeline.
+  elapsed_seconds_change_percent: 23.5
+  local_execution_seconds_change_percent: -81.6
+  github_actions_seconds_change_percent: 36.8
+  test_inventory_total_change: 6
+  regression: true
+  regression_reasons:
+    - Repeated security and lifecycle review corrections required fresh exact-head validation cycles.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Early implementations left several session operations unbounded and retained sensitive values longer than required; all findings were corrected before merge.
+    - Superseded exact-head runs were cancelled when newer review fixes or base updates made their results inapplicable.
+    - Final validation reused trusted Rust and WASM handoffs and completed in nine minutes.
+  required_actions: [ ]

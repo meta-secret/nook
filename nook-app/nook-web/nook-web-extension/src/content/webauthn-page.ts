@@ -215,6 +215,7 @@ async function extensionCeremony(
         requestId: id,
         ceremony,
         request,
+        expiresAt: Date.now() + timeout,
       },
       location.origin,
     )

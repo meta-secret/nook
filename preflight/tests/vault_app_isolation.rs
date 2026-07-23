@@ -945,7 +945,8 @@ fn assert_docker_setup_contract(root: &Path) {
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
-        "GHA_CACHE_WRITE_ENABLED=1",
+        "cache_write_enabled=1",
+        "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
     ] {
         assert!(
             setup.contains(required),
@@ -972,9 +973,21 @@ fn assert_pr_workflow_contract(root: &Path) {
         "name: pr-wasm-${{ github.run_id }}",
         "task ci:pr:e2e:web:artifacts",
         "task ci:pr:e2e:extension:artifacts",
+        "task preflight",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
+        "name: Locate trusted native handoff",
+        "name: Locate trusted WASM handoff",
+        "nook-trusted-native-validation-v2-",
+        "nook-trusted-wasm-validation-v2-",
+        "run.name === 'PR validation handoff'",
+        "workflowPath === '.github/workflows/pr-validation-handoff.yml'",
+        "steps.trusted-native.outputs.found != 'true'",
+        "steps.trusted-wasm.outputs.found != 'true'",
+        "'nook-app/nook-wasm/**'",
+        "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+        "git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
@@ -985,10 +998,62 @@ fn assert_pr_workflow_contract(root: &Path) {
             "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
+    assert_eq!(
+        pr.matches("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --")
+            .count(),
+        2,
+        "coverage input detection must use the explicit event snapshots' merge-base diff, never a moving synthetic merge or a two-dot snapshot diff"
+    );
+    let native_job = section(&pr, "  rust:\n", "  wasm:\n");
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
-        wasm_job.contains("task ci:pr:wasm") && wasm_job.contains("Upload verified WASM handoff"),
-        "PR CI must build and upload verified WASM exactly once"
+        wasm_job.contains("task ci:pr:wasm")
+            && wasm_job.contains("steps.trusted-wasm.outputs.found != 'true'")
+            && wasm_job.contains("Upload verified WASM handoff"),
+        "PR CI must restore or build and upload verified WASM exactly once"
+    );
+    assert!(
+        !pr.contains("actions/cache/"),
+        "PR-writable caches must never bypass required validation"
+    );
+
+    let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
+    for required in [
+        "name: PR validation handoff",
+        "github.event.workflow_run.conclusion == 'success'",
+        "workflowPath !== '.github/workflows/pr.yml'",
+        "run.path?.replace(/@[^@]+$/, '')",
+        "ref: ${{ steps.source.outputs.base-sha }}",
+        "git merge-tree --write-tree HEAD \"$HEAD_SHA\"",
+        "git read-tree --reset -u \"$merge_tree\"",
+        "'Native Rust verification'",
+        "'WASM verification and artifact'",
+        "'Verify and preview'",
+        "producer_jobs_verified: true",
+        "nook-validation-manifest.json",
+        "nook-trusted-native-validation-v2-",
+        "nook-trusted-wasm-validation-v2-",
+    ] {
+        assert!(
+            trusted_handoff.contains(required),
+            "trusted validation promotion is missing: {required}"
+        );
+    }
+    assert!(
+        !trusted_handoff.contains("workflow_dispatch")
+            && !trusted_handoff.contains("listPullRequestsAssociatedWithCommit"),
+        "trusted validation promotion must require the immutable workflow-run PR snapshot"
+    );
+    assert!(
+        trusted_handoff.contains("context.payload.workflow_run?.pull_requests?.[0]"),
+        "trusted validation promotion must derive PR provenance from the immutable workflow-run event snapshot"
+    );
+    assert!(
+        native_job.contains("run.event === 'workflow_run'")
+            && wasm_job.contains("run.event === 'workflow_run'")
+            && !native_job.contains("workflow_dispatch")
+            && !wasm_job.contains("workflow_dispatch"),
+        "trusted handoff consumers must accept only automatic workflow-run promotions"
     );
     assert_eq!(
         pr.matches("task ci:pr:wasm").count(),

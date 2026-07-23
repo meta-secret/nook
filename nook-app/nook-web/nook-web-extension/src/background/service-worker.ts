@@ -70,6 +70,7 @@ import {
   type WebsiteLoginSaveOfferView,
 } from '../lib/login-save-messages'
 import {
+  isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
   parsedWebsitePasskeyRequest,
@@ -77,9 +78,15 @@ import {
 } from '../lib/webauthn-messages'
 import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
 import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
+import {
+  scrubProviderCredentials,
+  stageProviderCredentials,
+} from '../lib/provider-credential-staging'
 
 const extensionSessionDocument = 'offscreen/session.html'
+const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 let extensionSessionDocumentCreation: Promise<void> | undefined
+let extensionSessionDocumentClosure: Promise<void> | undefined
 type PendingIdentityHandoff =
   | {
       kind: 'pairing'
@@ -112,6 +119,7 @@ const pendingAuthenticatorPickers = new Map<
 >()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
+  await extensionSessionDocumentClosure
   extensionSessionDocumentCreation ??= chrome.offscreen
     .createDocument({
       url: extensionSessionDocument,
@@ -134,6 +142,18 @@ async function ensureExtensionSessionDocument(): Promise<void> {
   return extensionSessionDocumentCreation
 }
 
+function closeExtensionSessionDocument(): Promise<void> {
+  extensionSessionDocumentCreation = undefined
+  if (extensionSessionDocumentClosure) return extensionSessionDocumentClosure
+  const closure = chrome.offscreen.closeDocument().finally(() => {
+    if (extensionSessionDocumentClosure === closure) {
+      extensionSessionDocumentClosure = undefined
+    }
+  })
+  extensionSessionDocumentClosure = closure
+  return closure
+}
+
 function isExtensionSessionExpiryMessage(
   message: unknown,
 ): message is { type: 'nook:extension-session-expired' } {
@@ -142,6 +162,17 @@ function isExtensionSessionExpiryMessage(
     typeof message === 'object' &&
     'type' in message &&
     message.type === 'nook:extension-session-expired'
+  )
+}
+
+function isExtensionSessionLockMessage(
+  message: unknown,
+): message is { type: 'nook:extension-session-lock' } {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:extension-session-lock'
   )
 }
 
@@ -443,6 +474,7 @@ async function discoverPairedVaultIdentity(
     await ensureExtensionSessionDocument()
     const statusResponse = (await sendSessionMessage({
       type: 'nook:extension-session-status',
+      payload: { queueExpiresAt: message.payload.expiresAt },
     })) as ExtensionSessionStatusResponse
     if (statusResponse.status !== 'unlocked') {
       return {
@@ -504,8 +536,10 @@ async function requestPairedVaultUnlock(
   }
 
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const statusResponse = (await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })) as ExtensionSessionStatusResponse
   if (statusResponse.status !== 'unlocked') {
     await openCompanionLauncher()
@@ -618,8 +652,10 @@ async function availableWebsiteGrants(
     return { response: { ok: true, status: 'unavailable', accounts: [] } }
   }
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncher()
@@ -786,8 +822,10 @@ async function authorizedWebsiteGrant(
   )
   if (!grant) return { response: { ok: false, reason: reasons.missing } }
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncher()
@@ -855,18 +893,22 @@ async function websiteLoginSaveOffer(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
+  let pendingPassword = message.payload.password
+  message.payload.password = ''
   if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    message.payload.password = ''
+    pendingPassword = ''
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    message.payload.password = ''
+    pendingPassword = ''
     return { ok: true, status: 'unavailable' }
   }
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (
     !status ||
@@ -874,7 +916,7 @@ async function websiteLoginSaveOffer(
     !('status' in status) ||
     status.status !== 'unlocked'
   ) {
-    message.payload.password = ''
+    pendingPassword = ''
     openCompanionLauncher()
     return { ok: true, status: 'locked' }
   }
@@ -887,10 +929,10 @@ async function websiteLoginSaveOffer(
       ...grant,
       origin: message.payload.origin,
       username: message.payload.username,
-      password: message.payload.password,
+      password: pendingPassword,
     },
   })
-  message.payload.password = ''
+  pendingPassword = ''
   if (
     !response ||
     typeof response !== 'object' ||
@@ -1509,26 +1551,35 @@ async function websiteAuthenticatorBackupAttach(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  const access = await authorizedWebsiteGrant(
-    message.payload.origin,
-    message.payload.vaultStoreId,
-    sender,
-    {
-      forbidden: 'authenticator-forbidden-origin',
-      missing: 'authenticator-vault-not-granted',
-      locked: 'authenticator-locked',
-    },
-  )
-  if ('response' in access) return access.response
-  return sendSessionMessage({
-    type: 'nook:extension-session-authenticator-backup-attach',
-    payload: {
-      ...access.grant,
-      secretId: message.payload.secretId,
-      codes: message.payload.codes,
-      mode: message.payload.mode,
-    },
-  })
+  const codes = [...message.payload.codes]
+  message.payload.codes.fill('')
+  message.payload.codes = []
+  try {
+    const access = await authorizedWebsiteGrant(
+      message.payload.origin,
+      message.payload.vaultStoreId,
+      sender,
+      {
+        forbidden: 'authenticator-forbidden-origin',
+        missing: 'authenticator-vault-not-granted',
+        locked: 'authenticator-locked',
+      },
+    )
+    if ('response' in access) return access.response
+    const pending = sendSessionMessage({
+      type: 'nook:extension-session-authenticator-backup-attach',
+      payload: {
+        ...access.grant,
+        secretId: message.payload.secretId,
+        codes,
+        mode: message.payload.mode,
+      },
+    })
+    codes.fill('')
+    return await pending
+  } finally {
+    codes.fill('')
+  }
 }
 
 function passkeyRequestKey(
@@ -1542,6 +1593,7 @@ const PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS = 1500
 
 async function matchingPasskeyAccountCountForOrigin(
   origin: string,
+  queueExpiresAt: number,
 ): Promise<number> {
   let hostname: string
   try {
@@ -1559,6 +1611,7 @@ async function matchingPasskeyAccountCountForOrigin(
   }
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt },
   })
   if (
     !status ||
@@ -1572,7 +1625,7 @@ async function matchingPasskeyAccountCountForOrigin(
   for (const grant of grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-passkeys',
-      payload: { ...grant, rpId: hostname, origin },
+      payload: { ...grant, rpId: hostname, origin, queueExpiresAt },
     })
     if (
       response &&
@@ -1592,9 +1645,10 @@ async function matchingPasskeyAccountCountForOrigin(
 async function matchingPasskeyAccountCountForOriginSafe(
   origin: string,
 ): Promise<number> {
+  const queueExpiresAt = Date.now() + PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS
   try {
     return await Promise.race([
-      matchingPasskeyAccountCountForOrigin(origin),
+      matchingPasskeyAccountCountForOrigin(origin, queueExpiresAt),
       new Promise<number>((resolve) => {
         setTimeout(() => resolve(0), PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS)
       }),
@@ -1610,6 +1664,7 @@ async function websitePasskeyOptions(
       requestId: string
       ceremony: WebsitePasskeyCeremony
       requestJson: string
+      expiresAt: number
     }
   },
   sender: chrome.runtime.MessageSender,
@@ -1627,6 +1682,7 @@ async function websitePasskeyOptions(
   await ensureExtensionSessionDocument()
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt: message.payload.expiresAt },
   })
   if (
     !status ||
@@ -1650,7 +1706,12 @@ async function websitePasskeyOptions(
   for (const grant of grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-passkeys',
-      payload: { ...grant, rpId: context.rpId, origin: context.origin },
+      payload: {
+        ...grant,
+        rpId: context.rpId,
+        origin: context.origin,
+        queueExpiresAt: message.payload.expiresAt,
+      },
     })
     if (
       response &&
@@ -1678,6 +1739,7 @@ async function performWebsitePasskey(
       requestId: string
       ceremony: WebsitePasskeyCeremony
       requestJson: string
+      expiresAt: number
       vaultStoreId: string
       credentialId?: string
     }
@@ -1712,12 +1774,31 @@ async function performWebsitePasskey(
           : 'nook:extension-session-assert-passkey',
       payload: {
         ...grant,
+        requestId: message.payload.requestId,
         requestJson: JSON.stringify(context.request),
+        queueExpiresAt: message.payload.expiresAt,
+        queuePriority: 'interactive',
       },
     })
   } finally {
     pendingWebsitePasskeyRequests.delete(key)
   }
+}
+
+async function cancelWebsitePasskey(
+  message: Parameters<typeof isWebsitePasskeyCancelMessage>[0] & {
+    payload: { requestId: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<{ ok: true }> {
+  const key = passkeyRequestKey(sender, message.payload.requestId)
+  if (!pendingWebsitePasskeyRequests.has(key)) return { ok: true }
+  await ensureExtensionSessionDocument()
+  await sendSessionMessage({
+    type: 'nook:extension-session-cancel-passkey',
+    payload: { requestId: message.payload.requestId },
+  })
+  return { ok: true }
 }
 
 function removeLocalStorage(keys: string[]): Promise<void> {
@@ -1745,28 +1826,37 @@ async function importApprovedPairing(
       extensionPairingGrantStorageItems(message.payload, imported),
     )
     await ensureExtensionSessionDocument()
-    const sessionImport = await sendSessionMessage({
-      type: 'nook:extension-session-import-vault',
-      payload: {
-        vaultStoreId: message.payload.vaultStoreId,
-        deviceId: message.payload.deviceId,
-        devicePublicKey: message.payload.devicePublicKey,
-        deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
-        eventLogRecords: message.eventLogRecords,
-        providers: message.payload.providers,
-      },
-    })
-    if (
-      !sessionImport ||
-      typeof sessionImport !== 'object' ||
-      !('ok' in sessionImport) ||
-      sessionImport.ok !== true
-    ) {
-      await removeLocalStorage([
-        pairingGrantStorageKey(message.payload.vaultStoreId),
-        setupStorageKey,
-      ])
-      return { ok: false, reason: 'extension-vault-import-failed' }
+    const providers =
+      stageProviderCredentials(message.payload.providers) ??
+      message.payload.providers
+    try {
+      const pending = sendSessionMessage({
+        type: 'nook:extension-session-import-vault',
+        payload: {
+          vaultStoreId: message.payload.vaultStoreId,
+          deviceId: message.payload.deviceId,
+          devicePublicKey: message.payload.devicePublicKey,
+          deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
+          eventLogRecords: message.eventLogRecords,
+          providers,
+        },
+      })
+      scrubProviderCredentials(providers)
+      const sessionImport = await pending
+      if (
+        !sessionImport ||
+        typeof sessionImport !== 'object' ||
+        !('ok' in sessionImport) ||
+        sessionImport.ok !== true
+      ) {
+        await removeLocalStorage([
+          pairingGrantStorageKey(message.payload.vaultStoreId),
+          setupStorageKey,
+        ])
+        return { ok: false, reason: 'extension-vault-import-failed' }
+      }
+    } finally {
+      scrubProviderCredentials(providers)
     }
     return { ok: true, eventCount: imported.eventCount }
   } catch {
@@ -1954,6 +2044,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (isWebsitePasskeyCancelMessage(message)) {
+    void cancelWebsitePasskey(message, sender)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: 'passkey-cancel-failed' }))
+    return true
+  }
+
   if (isWebsiteLoginOptionsMessage(message)) {
     void websiteLoginOptions(message, sender)
       .then(sendResponse)
@@ -2098,6 +2195,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (isExtensionSessionLockMessage(message)) {
+    const extensionSender =
+      sender.id === chrome.runtime.id &&
+      (sender.url === undefined ||
+        sender.url.startsWith(chrome.runtime.getURL('')))
+    if (!extensionSender) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void closeExtensionSessionDocument()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false, reason: 'session-lock-failed' }))
+    return true
+  }
+
   if (isExtensionSessionExpiryMessage(message)) {
     if (
       sender.id !== chrome.runtime.id ||
@@ -2106,8 +2218,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
     }
-    extensionSessionDocumentCreation = undefined
-    void chrome.offscreen.closeDocument().then(() => sendResponse({ ok: true }))
+    void closeExtensionSessionDocument().then(() => sendResponse({ ok: true }))
     return true
   }
 
