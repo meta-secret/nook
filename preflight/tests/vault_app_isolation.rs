@@ -1009,8 +1009,10 @@ fn assert_pr_workflow_contract(root: &Path) {
         "workflowPath === '.github/workflows/pr-validation-handoff.yml'",
         "steps.trusted-native.outputs.found != 'true'",
         "steps.trusted-wasm.outputs.found != 'true'",
+        "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
         "'nook-app/nook-wasm/**'",
+        "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
@@ -1072,7 +1074,9 @@ fn assert_pr_workflow_contract(root: &Path) {
         "nook-validation-manifest.json",
         "nook-trusted-native-validation-v2-",
         "nook-trusted-wasm-validation-v2-",
+        "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
+        "chmod +x \"$native/tools/nook-preflight\"",
         "test -x \"$native/tools/nook-preflight\"",
     ] {
         assert!(

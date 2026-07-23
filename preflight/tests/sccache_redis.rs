@@ -19,6 +19,7 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
         "rediss://redis-ovh-borg-1.bynull.link:6380",
         ".nook/cache/redis-password",
         "no Redis credential; compiling without sccache",
+        "direct TLS Redis is unavailable; compiling without remote sccache",
         "direct TLS Redis is healthy",
         "SCCACHE_REDIS_TLS_SERVER_NAME",
         "redis-cli --sni",

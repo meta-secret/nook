@@ -132,8 +132,8 @@ tasks:
           exit 0;
         fi;
         if [ "$({{.DOCKER}} run --rm --mount "type=bind,src=$password_file,dst=/run/secrets/redis-password,readonly" "$image" sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli --sni "$2" -u "$1" ping'\'' -- "{{.SCCACHE_REDIS_ENDPOINT}}" "{{.SCCACHE_REDIS_TLS_SERVER_NAME}}" 2>/dev/null || true)" != PONG ]; then
-          echo "task sccache:ensure: direct TLS Redis is unavailable" >&2;
-          exit 1;
+          echo "task sccache:ensure: direct TLS Redis is unavailable; compiling without remote sccache" >&2;
+          exit 0;
         fi;
         echo "task sccache:ensure: direct TLS Redis is healthy"'
 
