@@ -420,7 +420,8 @@ artifact as a cache miss and run the producers. Later PRs accept only trusted
 promoted artifacts by ID;
 PR-writable caches can never bypass validation. Repository invariant preflight
 still runs on every head, and an exact trusted handoff skips only Rust/WASM
-validation already completed for identical inputs.
+validation already completed for identical inputs. The handoff remains reusable
+across PR commits while those exact validation inputs stay unchanged.
 For unchanged Rust validation inputs, the steady-state PR workflow budget is
 four to five minutes; an exact handoff miss executes validation and is promoted
 only after the whole workflow succeeds.
