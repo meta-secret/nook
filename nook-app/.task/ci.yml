@@ -14,6 +14,7 @@ tasks:
         vars: { BUILD_TASK: _ci:pr:rust:host }
 
   _ci:pr:rust:host:
+    # Repository invariants must reject forbidden Dockerfile/cache changes before app setup begins.
     cmds:
       - task: preflight
       - task: docker:ci:rust:export

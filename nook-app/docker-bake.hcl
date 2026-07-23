@@ -72,24 +72,18 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-// Pull requests append a per-PR, per-job, app-tree generation suffix. The job owner is required
-// because native, WASM, and verify solve overlapping Rust targets on separate builders. The
-// generation makes a completed PR lineage immutable: its first solve may seed from Main and
-// export, while later solves only read it. Main keeps the empty suffix as the fallback for a new
-// generation.
+// Retained for local/manual compatibility. Hosted delivery keeps this empty: Main owns the shared
+// scopes, while every other workflow restores them read-only.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// A PR uses Main only while one of its job-owned cache indices is absent. Once the lineage exists,
-// mixing mutable Main records back into the solve can select an equivalent base result from a
-// different exporter and invalidate every child layer.
+// Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
   default = ""
 }
 
-// A missing content-addressed generation may seed from the newest completed read-only generation
-// owned by the same PR/job. New PRs leave this empty and seed from Main.
+// Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
   default = ""
 }
@@ -155,52 +149,52 @@ rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 ] : []
 
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
-  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
-  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
@@ -282,6 +276,20 @@ group "default" {
 // Bun dependency preparation. The second phase builds nook-web from the host artifact directory.
 group "prepare" {
   targets = ["rust-format-check", "web-artifacts", "web-deps"]
+}
+
+// Main is the sole hosted-cache writer. Selecting dependency and native-source targets as explicit
+// cache-only outputs is required: cache exporters attached to named build contexts are not run
+// merely because another target consumed them.
+group "prepare-and-publish-cache" {
+  targets = [
+    "rust-format-check",
+    "web-artifacts",
+    "web-deps",
+    "builder-wasm-deps",
+    "builder-deps",
+    "builder-debug",
+  ]
 }
 
 // Formatting must be able to build source-sealed images before the host applies the emitted diff.

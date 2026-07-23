@@ -25,6 +25,8 @@ target "builder-wasm-deps" {
   contexts = {
     rust-base = "target:rust-base"
   }
+  // Main owns this complete WASM dependency lineage. Pull requests restore it read-only, avoiding
+  // both dependency rebuilds and competition with the larger native dependency cache.
   cache-from = rust_wasm_deps_cache_from
   cache-to   = rust_wasm_deps_cache_to
 }

@@ -386,15 +386,13 @@ Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 GitHub Actions runs PR, main, and release validation on `ubuntu-latest`; each
 fresh VM restores distinct BuildKit v2 cache scopes. Main refreshes the
-default-branch cache that new PRs may restore. Each PR cache generation is
-addressed by PR number, workflow job, the `nook-app` Git tree, and
-`.dockerignore`. Its first solve may seed from Main and exports only to that
-private generation. Once its required cache indices exist, later pushes and
-reruns read the generation without rewriting it or mixing mutable exporters.
-Job ownership also prevents the native, WASM, and verify jobs from replacing
-one another's overlapping Rust cache lineage. A missing generation may seed
-from the newest complete generation owned by the same PR/job, read-only, before
-falling back to Main; BuildKit then rebuilds only inputs that actually changed.
+default-branch cache that new PRs may restore. Every PR job reads only that
+complete Main lineage and never exports PR-local caches, preventing short-lived
+branch generations from exhausting the repository cache quota. The WASM
+producer restores Main's dedicated, complete WASM dependency boundary so it
+does not compete with the larger native dependency lineage. Main explicitly
+publishes the native source target as well as both dependency targets; merely
+consuming those targets as BuildKit contexts does not run their cache exporters.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
@@ -422,9 +420,11 @@ PR-writable caches can never bypass validation. Repository invariant preflight
 still runs on every head, and an exact trusted handoff skips only Rust/WASM
 validation already completed for identical inputs. The handoff remains reusable
 across PR commits while those exact validation inputs stay unchanged.
-For unchanged Rust validation inputs, the steady-state PR workflow budget is
-four to five minutes; an exact handoff miss executes validation and is promoted
-only after the whole workflow succeeds.
+The required PR workflow budget is four to five minutes for both exact handoff
+hits and ordinary source-changing validation. On a handoff miss, native and
+WASM validation execute against Main's dependency cache while preview setup
+runs concurrently and waits only at the first WASM-consuming step. A successful
+run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future

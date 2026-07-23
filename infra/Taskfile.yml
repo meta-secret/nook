@@ -246,7 +246,7 @@ tasks:
         cloudflare_client_id="$(cat "$CACHE_CLOUDFLARE_CLIENT_ID_FILE")"
         cloudflare_client_secret="$(cat "$CACHE_CLOUDFLARE_CLIENT_SECRET_FILE")"
 
-        bridge_ip="$(docker network inspect bridge | awk -F'"' '/"Gateway":/ { print $4; exit }')"
+        bridge_ip="$(docker network inspect bridge | awk -F'"' '/"Gateway":/ && !found { print $4; found=1 }')"
         case "$bridge_ip" in
           ''|*[!0-9.]*)
             echo "::error::Could not resolve the Docker bridge IPv4 gateway" >&2

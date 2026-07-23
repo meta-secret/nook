@@ -865,8 +865,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
-        "type=gha,scope=nook-rust-native-source-v1",
-        "type=gha,scope=nook-rust-wasm-source-v1",
+        "type=gha,scope=nook-rust-native-source-v2",
+        "type=gha,scope=nook-rust-wasm-source-v2",
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
@@ -890,6 +890,13 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
         8,
         "every hosted cache exporter must honor the read-only workflow mode"
+    );
+    assert!(
+        bake.contains("group \"prepare-and-publish-cache\"")
+            && bake.contains("\"builder-wasm-deps\",")
+            && bake.contains("\"builder-deps\",")
+            && bake.contains("\"builder-debug\","),
+        "Main preparation must select dependency and native-source targets so their dedicated cache exporters run"
     );
 
     let rust_bake = read(root, "nook-app/nook-wasm/docker-bake.hcl");
@@ -935,6 +942,18 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             ),
         "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
     );
+    assert!(
+        app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")
+            && app_tasks.contains("--set \"builder-deps.output=type=cacheonly\"")
+            && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
+        "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
+    );
+
+    let main = read(root, ".github/workflows/main.yml");
+    assert!(
+        main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
+        "Main must use the preparation group that publishes complete dependency and source cache scopes"
+    );
 }
 
 fn assert_docker_setup_contract(root: &Path) {
@@ -947,6 +966,11 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "cache_write_enabled=1",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
+        "event_name=\"${{ github.event_name }}\"",
+        "git_ref=\"${{ github.ref }}\"",
+        "[ \"$event_name\" != \"push\" ] || [ \"$git_ref\" != \"refs/heads/main\" ]",
+        "main-cache-only",
+        "main-cache-only requires cache-write=false",
     ] {
         assert!(
             setup.contains(required),
@@ -1009,8 +1033,17 @@ fn assert_pr_workflow_contract(root: &Path) {
     assert!(
         wasm_job.contains("task ci:pr:wasm")
             && wasm_job.contains("steps.trusted-wasm.outputs.found != 'true'")
-            && wasm_job.contains("Upload verified WASM handoff"),
+            && wasm_job.contains("Upload verified WASM handoff")
+            && wasm_job.contains("cache-write: \"false\"")
+            && wasm_job.contains("main-cache-only: \"true\""),
         "PR CI must restore or build and upload verified WASM exactly once"
+    );
+    assert!(
+        native_job.contains("cache-write: \"false\"")
+            && native_job.contains("main-cache-only: \"true\"")
+            && native_job.contains("if: steps.trusted-native.outputs.found == 'true'")
+            && native_job.contains("task preflight"),
+        "native PR validation must read Main cache only and run explicit preflight only for an exact handoff"
     );
     assert!(
         !pr.contains("actions/cache/"),
@@ -1049,6 +1082,17 @@ fn assert_pr_workflow_contract(root: &Path) {
         "trusted validation promotion must derive PR provenance from the immutable workflow-run event snapshot"
     );
     assert!(
+        trusted_handoff.contains("filter: 'all'")
+            && !trusted_handoff.contains("filter: 'latest'")
+            && trusted_handoff.contains("const currentAttempt = run.run_attempt")
+            && trusted_handoff.contains("!hasSuccessfulJob('Native Rust verification', true)",)
+            && trusted_handoff
+                .contains("!hasSuccessfulJob('WASM verification and artifact', true)",)
+            && trusted_handoff.contains("!hasSuccessfulJob('Verify and preview', false)")
+            && trusted_handoff.contains("candidate.run_attempt < currentAttempt"),
+        "trusted validation promotion must accept successful producers omitted from a failed-job rerun while requiring the current consumer attempt"
+    );
+    assert!(
         native_job.contains("run.event === 'workflow_run'")
             && wasm_job.contains("run.event === 'workflow_run'")
             && !native_job.contains("workflow_dispatch")
@@ -1062,22 +1106,26 @@ fn assert_pr_workflow_contract(root: &Path) {
     );
     let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
     assert!(
-        verify_job.contains("if: ${{ github.event.action != 'closed' && always() }}")
-            && verify_job.contains("needs: wasm")
-            && verify_job.contains("if: needs.wasm.result != 'success'")
-            && verify_job.contains("WASM verification completed with ${{ needs.wasm.result }}")
-            && verify_job.contains("Download verified WASM handoff")
+        verify_job.contains("if: github.event.action != 'closed'")
+            && !verify_job.contains("needs: wasm")
+            && verify_job.contains("name: Wait for verified WASM handoff")
+            && verify_job.contains("WASM verification completed with $wasm_conclusion")
+            && verify_job.contains(
+                "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
+            )
+            && verify_job.contains("attempt $attempt/360")
             && !verify_job.contains("task ci:pr:wasm")
             && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
         ),
-        "PR preview must surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
+        "PR preview must prepare in parallel, surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
     );
     let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
     assert!(
         full_e2e_job.contains("needs: wasm")
             && full_e2e_job.contains("Download verified WASM handoff")
             && full_e2e_job.contains("cache-write: \"false\"")
+            && full_e2e_job.contains("main-cache-only: \"true\"")
             && full_e2e_job.contains("task ci:pr:e2e:web:artifacts")
             && !full_e2e_job.contains("task ci:pr:e2e\n")
             && !full_e2e_job.contains("task ci:pr:wasm"),
@@ -1090,7 +1138,8 @@ fn assert_pr_workflow_contract(root: &Path) {
     assert!(
         extension_e2e_job.contains("needs: wasm")
             && extension_e2e_job.contains("Download verified WASM handoff")
-            && !extension_e2e_job.contains("cache-write: \"false\"")
+            && extension_e2e_job.contains("cache-write: \"false\"")
+            && extension_e2e_job.contains("main-cache-only: \"true\"")
             && extension_e2e_job.contains("task ci:pr:e2e:extension:artifacts")
             && !extension_e2e_job.contains("task ci:pr:e2e\n")
             && !extension_e2e_job.contains("task ci:pr:wasm")
@@ -1111,6 +1160,18 @@ fn assert_pr_workflow_contract(root: &Path) {
 fn assert_artifact_backed_e2e_contract(root: &Path) {
     let pr = read(root, ".github/workflows/pr.yml");
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
+    assert!(
+        rust_host
+            .find("task: preflight")
+            .expect("native PR validation must run repository preflight")
+            < rust_host
+                .find("task: docker:ci:rust:export")
+                .expect("native PR validation must run the app solve")
+            && rust_host.contains("cmds:")
+            && !rust_host.contains("deps:"),
+        "repository preflight must finish before the native app Docker solve begins"
+    );
     let artifact_e2e = section(
         &ci_tasks,
         "  ci:pr:e2e:web:artifacts:\n",
@@ -1137,15 +1198,38 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    let native_job_lookup = pr
-        .find("native_job=\"$(")
-        .expect("PR verification must inspect the latest native job");
-    let artifact_lookup = pr
+    let rust_handoff = section(
+        &pr,
+        "      - name: Download Rust coverage handoff\n",
+        "      - name: Deploy unified internal test harness\n",
+    );
+    let artifact_lookup = rust_handoff
         .find("actions/runs/$GITHUB_RUN_ID/artifacts")
         .expect("PR verification must inspect the Rust handoff artifact");
+    let native_job_lookup = rust_handoff
+        .find("native_job=\"$(")
+        .expect("PR verification must inspect the current native job when no artifact exists");
     assert!(
-        native_job_lookup < artifact_lookup,
-        "PR verification must prove the latest native attempt succeeded before accepting a run-stable artifact"
+        native_job_lookup < artifact_lookup
+            && rust_handoff.contains("[ -z \"$native_job_id\" ]")
+            && rust_handoff.contains("This failed-job rerun has no native producer"),
+        "PR verification must prefer a current producer and fall back only when a failed-job rerun omits it"
+    );
+    let wasm_handoff = section(
+        &pr,
+        "      - name: Wait for verified WASM handoff\n",
+        "      - name: Svelte checks, JS unit tests, lint, and preview build",
+    );
+    assert!(
+        wasm_handoff
+            .find("wasm_job=\"$(")
+            .expect("PR verification must inspect the current WASM job")
+            < wasm_handoff
+                .find("actions/runs/$GITHUB_RUN_ID/artifacts")
+                .expect("PR verification must inspect the WASM handoff artifact")
+            && wasm_handoff.contains("[ -z \"$wasm_job_id\" ]")
+            && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
+        "PR verification must wait for a current WASM producer and reuse prior output only when it is absent"
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(
