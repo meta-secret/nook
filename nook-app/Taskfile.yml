@@ -46,13 +46,15 @@ vars:
       fi
   SCCACHE_REDIS_PASSWORD_MOUNT:
     sh: >-
-      if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ]; then
-        printf '%s' '--mount type=bind,src='"$SCCACHE_REDIS_PASSWORD_FILE"',dst=/run/secrets/sccache_redis_password,readonly';
+      password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
+      if [ -n "$password_file" ]; then
+        printf '%s' '--mount type=bind,src='"$password_file"',dst=/run/secrets/sccache_redis_password,readonly';
       fi
   SCCACHE_REDIS_BAKE_ALLOW:
     sh: >-
-      if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ]; then
-        printf '%s' '--allow=fs.read='"$SCCACHE_REDIS_PASSWORD_FILE";
+      password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
+      if [ -n "$password_file" ]; then
+        printf '%s' '--allow=fs.read='"$password_file";
       fi
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'

@@ -53,7 +53,7 @@ jobs:
       - name: Derive native validation key
         id: native-key
         run: |
-          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted native handoff
         id: trusted-native
@@ -119,6 +119,7 @@ jobs:
           for file in summary.txt summary.json lcov.info coverage-floor.json; do
             test -s "$dir/$file"
           done
+          test -x "$dir/tools/nook-preflight"
 
       # A producer miss runs preflight inside task ci:pr:rust. Exact trusted handoffs still need
       # repository invariants checked on this PR head, but must not run the same Docker build twice.

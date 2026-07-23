@@ -37,6 +37,17 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
         !app_tasks.contains("print $4; exit") && !app_tasks.contains("print $2; exit"),
         "pipefail-safe Docker inspection must consume complete output instead of SIGPIPEing the producer"
     );
+    assert!(
+        app_tasks
+            .matches("password_file=\"{{.SCCACHE_REDIS_PASSWORD_FILE}}\"")
+            .count()
+            >= 2,
+        "Bake permission and mount arguments must use the resolved Task credential path"
+    );
+    assert!(
+        read(".dockerignore").lines().any(|line| line == ".nook"),
+        "ignored local credentials must never enter a Docker build context"
+    );
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"SCCACHE_REDIS_ENDPOINT\""));
@@ -152,6 +163,16 @@ fn assert_workflows_scope_cache_credentials() {
         assert!(workflow.contains("NOOK_CACHE_REDIS_PASSWORD"));
         assert!(!workflow.contains("NOOK_CLOUDFLARE_ACCESS"));
     }
+
+    let nightly = read(".github/workflows/e2e-nightly.yml");
+    let nightly_fix = nightly
+        .split_once("\n  ci-fix:\n")
+        .expect("nightly workflow must define its AI fix job")
+        .1;
+    assert!(
+        !nightly_fix.contains("NOOK_CACHE_REDIS_PASSWORD"),
+        "agent-authored nightly repair builds must not receive shared cache credentials"
+    );
 }
 
 fn assert_rust_build_cache_boundary() {

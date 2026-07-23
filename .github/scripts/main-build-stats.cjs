@@ -1,4 +1,5 @@
 const fs = require('node:fs')
+const { isDeepStrictEqual } = require('node:util')
 const { validateTelemetryRecord } = require('./cache-telemetry.cjs')
 
 const BUILD_STEP = 'Preflight, check, build, and e2e'
@@ -470,7 +471,7 @@ function validateMainBuildStats(record, expected = {}) {
       })),
       { id: source.run_id, run_attempt: source.run_attempt },
     )
-    if (JSON.stringify(expected.totals) !== JSON.stringify(totals)) {
+    if (!isDeepStrictEqual(expected.totals, totals)) {
       throw new Error('cache_telemetry.totals mismatch')
     }
   }
@@ -523,8 +524,29 @@ function serializeMainBuildStats(record) {
   return `${JSON.stringify(record, null, 2)}\n`
 }
 
+function normalizeLegacyMainBuildStats(record) {
+  const normalized = structuredClone(record)
+  if (normalized.schema_version < 2 || !normalized.cache_telemetry) return normalized
+
+  const totals = normalized.cache_telemetry.totals
+  if (
+    totals &&
+    totals.direct_compile_job_count === undefined &&
+    totals.local_fallback_job_count !== undefined
+  ) {
+    totals.direct_compile_job_count = totals.local_fallback_job_count
+    delete totals.local_fallback_job_count
+  }
+  for (const job of normalized.cache_telemetry.jobs ?? []) {
+    if (job.cache_backend?.kind === 'local_fallback') {
+      job.cache_backend.kind = 'direct_compile'
+    }
+  }
+  return normalized
+}
+
 function validateFile(path, expected = {}) {
-  const record = JSON.parse(fs.readFileSync(path, 'utf8'))
+  const record = normalizeLegacyMainBuildStats(JSON.parse(fs.readFileSync(path, 'utf8')))
   validateMainBuildStats(record, expected)
   return record
 }
@@ -548,6 +570,7 @@ module.exports = {
   BUILD_STEP,
   addComparison,
   buildMainBuildStats,
+  normalizeLegacyMainBuildStats,
   serializeMainBuildStats,
   validateFile,
   validateMainBuildStats,

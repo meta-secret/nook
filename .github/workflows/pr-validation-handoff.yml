@@ -151,7 +151,7 @@ jobs:
         id: keys
         run: |
           {
-            echo "native=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}"
+            echo "native=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}"
             echo "wasm=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}"
           } >> "$GITHUB_OUTPUT"
 
@@ -188,6 +188,7 @@ jobs:
           for file in summary.txt summary.json lcov.info coverage-floor.json; do
             test -s "$native/$file"
           done
+          test -x "$native/tools/nook-preflight"
           jq -e '.data[0].totals.lines.percent >= 0' "$native/summary.json" >/dev/null
 
           for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts; do
