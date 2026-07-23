@@ -1509,6 +1509,7 @@
       "step_label": "2FA через Nook",
       "title": "Выберите код 2FA",
       "description": "Найдите любой аутентификатор в разблокированном сейфе. Показаны только элементы 2FA.",
+      "destination": "Код будет вставлен на сайте {origin}.",
       "search_label": "Поиск элементов 2FA",
       "search_placeholder": "Сервис или аккаунт",
       "filter_label": "Только 2FA",
