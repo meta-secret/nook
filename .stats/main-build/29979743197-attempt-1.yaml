@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-23T05:04:45.245Z",
+  "source_run": {
+    "workflow_name": "Main",
+    "workflow_id": 302951406,
+    "run_id": 29979743197,
+    "run_attempt": 1,
+    "url": "https://github.com/meta-secret/nook/actions/runs/29979743197",
+    "event": "push",
+    "head_branch": "main",
+    "head_sha": "9ec9c63edf559373ec49db96ad1a077684d4bed4",
+    "conclusion": "success",
+    "created_at": "2026-07-23T04:31:06Z",
+    "started_at": "2026-07-23T04:31:06Z",
+    "completed_at": "2026-07-23T05:04:32Z"
+  },
+  "source_pull_requests": [
+    {
+      "number": 647,
+      "url": "https://github.com/meta-secret/nook/pull/647",
+      "title": "Move Rust cache to OVH borg-1"
+    }
+  ],
+  "summary": {
+    "queue_seconds": 0,
+    "execution_seconds": 2006,
+    "wall_seconds": 2006,
+    "job_count": 1,
+    "step_count": 15,
+    "build_seconds": 1787,
+    "deployment_seconds": 38,
+    "coverage_seconds": 1
+  },
+  "jobs": [
+    {
+      "id": 89118901977,
+      "name": "Check, build, e2e, and deploy dev",
+      "status": "completed",
+      "conclusion": "success",
+      "runner_name": "GitHub Actions 1000003610",
+      "runner_group_name": "GitHub Actions",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "started_at": "2026-07-23T04:31:09Z",
+      "completed_at": "2026-07-23T05:04:32Z",
+      "duration_seconds": 2003,
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T04:31:10Z",
+          "completed_at": "2026-07-23T04:31:11Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 2,
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T04:31:11Z",
+          "completed_at": "2026-07-23T04:31:12Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 3,
+          "name": "Docker setup",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T04:31:12Z",
+          "completed_at": "2026-07-23T04:32:07Z",
+          "duration_seconds": 55
+        },
+        {
+          "number": 4,
+          "name": "Preflight, check, build, and e2e",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T04:32:07Z",
+          "completed_at": "2026-07-23T05:01:54Z",
+          "duration_seconds": 1787
+        },
+        {
+          "number": 5,
+          "name": "Record all headless UI demos",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:01:54Z",
+          "completed_at": "2026-07-23T05:03:40Z",
+          "duration_seconds": 106
+        },
+        {
+          "number": 6,
+          "name": "Upload complete Main UI demo artifact",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:03:40Z",
+          "completed_at": "2026-07-23T05:03:42Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 7,
+          "name": "Publish largest Main UI demos to the merged PR issue",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:03:42Z",
+          "completed_at": "2026-07-23T05:03:44Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 8,
+          "name": "Deploy isolated development applications to Cloudflare Pages",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:03:44Z",
+          "completed_at": "2026-07-23T05:04:17Z",
+          "duration_seconds": 33
+        },
+        {
+          "number": 9,
+          "name": "Configure and verify isolated development domains",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:17Z",
+          "completed_at": "2026-07-23T05:04:21Z",
+          "duration_seconds": 4
+        },
+        {
+          "number": 10,
+          "name": "Record development deployment",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:21Z",
+          "completed_at": "2026-07-23T05:04:22Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 11,
+          "name": "Export commit-keyed nook-core/auth coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:22Z",
+          "completed_at": "2026-07-23T05:04:22Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 12,
+          "name": "Upload commit-keyed nook-core/auth coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:22Z",
+          "completed_at": "2026-07-23T05:04:23Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 23,
+          "name": "Post Docker setup",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:23Z",
+          "completed_at": "2026-07-23T05:04:30Z",
+          "duration_seconds": 7
+        },
+        {
+          "number": 24,
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:30Z",
+          "completed_at": "2026-07-23T05:04:30Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 25,
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T05:04:30Z",
+          "completed_at": "2026-07-23T05:04:30Z",
+          "duration_seconds": 0
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "baseline_runs": [
+      {
+        "run_id": 29976905241,
+        "run_attempt": 1
+      },
+      {
+        "run_id": 29973391895,
+        "run_attempt": 1
+      }
+    ],
+    "baseline_quality": "comparable",
+    "baseline_note": "Two most recent successful Main attempts from the same workflow",
+    "wall_seconds_change_percent": 25.8,
+    "execution_seconds_change_percent": 25.8,
+    "build_seconds_change_percent": 30.5,
+    "regression": true,
+    "regression_reasons": [
+      "wall_seconds_exceeded_baseline_threshold",
+      "execution_seconds_exceeded_baseline_threshold",
+      "build_seconds_exceeded_baseline_threshold"
+    ]
+  }
+}
