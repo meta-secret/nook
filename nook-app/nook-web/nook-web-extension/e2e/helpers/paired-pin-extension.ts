@@ -249,16 +249,35 @@ export async function lockExtensionSession(
         (response) => resolve(response ?? {}),
       )
     })
-    return new Promise<{ ok?: boolean; error?: string }>((resolve) => {
+    const activeSessionRequests = Array.from(
+      { length: 24 },
+      () =>
+        new Promise<void>((resolve) => {
+          globalThis.chrome.runtime.sendMessage(
+            { type: 'nook:extension-session-status' },
+            () => {
+              void globalThis.chrome.runtime.lastError
+              resolve()
+            },
+          )
+        }),
+    )
+    const lockResult = await new Promise<{
+      ok?: boolean
+      error?: string
+      reason?: string
+    }>((resolve) => {
       globalThis.chrome.runtime.sendMessage(
         { type: 'nook:extension-session-lock' },
         (response) => resolve(response ?? { ok: false, error: 'no-response' }),
       )
     })
+    await Promise.all(activeSessionRequests)
+    return lockResult
   })
   if (result?.ok !== true) {
     throw new Error(
-      `Failed to lock extension session: ${result?.error ?? 'unknown'}`,
+      `Failed to lock extension session: ${result?.error ?? result?.reason ?? 'unknown'}`,
     )
   }
   // Offscreen teardown is async after the lock ack.

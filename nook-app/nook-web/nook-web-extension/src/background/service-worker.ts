@@ -80,6 +80,7 @@ import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-
 
 const extensionSessionDocument = 'offscreen/session.html'
 let extensionSessionDocumentCreation: Promise<void> | undefined
+let extensionSessionDocumentClosure: Promise<void> | undefined
 type PendingIdentityHandoff =
   | {
       kind: 'pairing'
@@ -112,6 +113,7 @@ const pendingAuthenticatorPickers = new Map<
 >()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
+  await extensionSessionDocumentClosure
   extensionSessionDocumentCreation ??= chrome.offscreen
     .createDocument({
       url: extensionSessionDocument,
@@ -134,6 +136,18 @@ async function ensureExtensionSessionDocument(): Promise<void> {
   return extensionSessionDocumentCreation
 }
 
+function closeExtensionSessionDocument(): Promise<void> {
+  extensionSessionDocumentCreation = undefined
+  if (extensionSessionDocumentClosure) return extensionSessionDocumentClosure
+  const closure = chrome.offscreen.closeDocument().finally(() => {
+    if (extensionSessionDocumentClosure === closure) {
+      extensionSessionDocumentClosure = undefined
+    }
+  })
+  extensionSessionDocumentClosure = closure
+  return closure
+}
+
 function isExtensionSessionExpiryMessage(
   message: unknown,
 ): message is { type: 'nook:extension-session-expired' } {
@@ -142,6 +156,17 @@ function isExtensionSessionExpiryMessage(
     typeof message === 'object' &&
     'type' in message &&
     message.type === 'nook:extension-session-expired'
+  )
+}
+
+function isExtensionSessionLockMessage(
+  message: unknown,
+): message is { type: 'nook:extension-session-lock' } {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:extension-session-lock'
   )
 }
 
@@ -2101,6 +2126,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (isExtensionSessionLockMessage(message)) {
+    const extensionSender =
+      sender.id === chrome.runtime.id &&
+      sender.tab === undefined &&
+      (sender.url === undefined ||
+        sender.url.startsWith(chrome.runtime.getURL('')))
+    if (!extensionSender) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void closeExtensionSessionDocument()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false, reason: 'session-lock-failed' }))
+    return true
+  }
+
   if (isExtensionSessionExpiryMessage(message)) {
     if (
       sender.id !== chrome.runtime.id ||
@@ -2109,8 +2150,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
     }
-    extensionSessionDocumentCreation = undefined
-    void chrome.offscreen.closeDocument().then(() => sendResponse({ ok: true }))
+    void closeExtensionSessionDocument().then(() => sendResponse({ ok: true }))
     return true
   }
 
