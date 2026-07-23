@@ -189,7 +189,7 @@ test.describe('Browser 2FA enrollment', () => {
       await expect(
         otpPage.locator('[autocomplete="one-time-code"]'),
       ).toHaveValue(/^\d{6}$/)
-      await expect(authenticatorPicker).toBeClosed()
+      await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
     } finally {
       await paired.context.close()
       await mockAuth.close()

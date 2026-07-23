@@ -972,7 +972,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(otpPage.locator('[autocomplete="one-time-code"]')).toHaveValue(
       /^\d{6}$/,
     )
-    await expect(authenticatorPicker).toBeClosed()
+    await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
     await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
     await expect(
       otpWidget.getByText(
