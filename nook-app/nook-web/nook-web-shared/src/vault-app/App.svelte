@@ -469,6 +469,7 @@
   );
   type PendingExistingVaultImport = {
     storeId: string;
+    previousActiveStoreId: string | undefined;
     setupType: StorageProviderType;
     githubPat: string;
     githubRepo: string;
@@ -500,6 +501,7 @@
     if (!setupType) return;
     pendingExistingVaultImport = {
       storeId,
+      previousActiveStoreId: vault.activeVaultStoreId,
       setupType,
       githubPat: vault.githubPat,
       githubRepo: vault.githubRepo,
@@ -529,6 +531,8 @@
       if (vault.activeVaultStoreId !== pending.storeId) {
         throw new Error(vault.t("errors.vault_selection_failed"));
       }
+    } else {
+      await vault.prepareExistingVaultImportSlot();
     }
     vault.loginRequiresExistingVault = true;
     vault.loginSetupType = pending.setupType;
@@ -558,9 +562,27 @@
       vault.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
       vault.sentinelCeremonyPrompt
     ) {
-      pendingExistingVaultImport = undefined;
-      vault.existingVaultRecoverySummary = undefined;
+      return;
     }
+  }
+
+  async function finishExistingVaultImport(): Promise<void> {
+    const pending = pendingExistingVaultImport;
+    if (!pending || !vault.isAuthenticated) return;
+    await vault.activateConnectedExistingVault(pending.storeId);
+    pendingExistingVaultImport = undefined;
+    vault.existingVaultRecoverySummary = undefined;
+  }
+
+  async function leaveExistingVaultImport(): Promise<void> {
+    const previousStoreId =
+      pendingExistingVaultImport?.previousActiveStoreId?.trim() ?? "";
+    pendingExistingVaultImport = undefined;
+    vault.existingVaultRecoverySummary = undefined;
+    if (previousStoreId) {
+      await vault.selectVaultForUnlock(previousStoreId);
+    }
+    vault.beginLoginVaultPicker();
   }
 
   async function handleUseEnrollmentCode(code: string, password: string) {
@@ -1032,6 +1054,8 @@
                 {sentinelOnboardingPackage}
                 onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
                 onUnlockWithPassword={handlePasswordUnlock}
+                onSwitchVault={leaveExistingVaultImport}
+                onSentinelUnlocked={finishExistingVaultImport}
                 onCreateDeviceVault={handleCreateDeviceVault}
                 onStartSentinelGenesis={handleStartSentinelGenesis}
                 onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}

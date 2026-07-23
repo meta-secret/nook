@@ -49,6 +49,8 @@
     onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
+    onSwitchVault,
+    onSentinelUnlocked,
     onCreateDeviceVault,
     onStartSentinelGenesis,
     onCreateSentinelGenesisPublicKeyAnnouncement,
@@ -89,6 +91,8 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
+    onSwitchVault?: () => void | Promise<void>
+    onSentinelUnlocked?: () => void | Promise<void>
     onCreateDeviceVault?: (label: string) => void | Promise<void>
     onStartSentinelGenesis?: (
       args: StartSentinelGenesisArgs,
@@ -355,7 +359,12 @@
 
       <CardContent class="px-6 pb-5 pt-4 sm:pb-6">
         {#if showSentinelCeremony && !showVaultPicker}
-          <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
+          <SentinelCeremonyPanel
+            {vault}
+            {isVerifying}
+            {isInitializing}
+            onUnlocked={onSentinelUnlocked}
+          />
         {:else if showVaultPicker && onCreateDeviceVault}
           <LoginVaultPicker
             {vault}
@@ -383,7 +392,12 @@
             {isUnlocking}
             {onUnlock}
             {onUnlockWithPassword}
-            onSwitchVault={() => vault.beginLoginVaultPicker()}
+            onSwitchVault={() => {
+              if (onSwitchVault) {
+                return onSwitchVault()
+              }
+              vault.beginLoginVaultPicker()
+            }}
             onCreateAnotherVault={onCreateDeviceVault}
             onImportFromSync={() => {
               vault.beginExistingVaultOpen()

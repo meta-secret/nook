@@ -1172,6 +1172,10 @@ export class VaultState {
     return localLoginActions.selectVaultForUnlock(this, storeId);
   }
 
+  async prepareExistingVaultImportSlot(): Promise<void> {
+    return localLoginActions.prepareExistingVaultImportSlot(this);
+  }
+
   async reloadProvidersForActiveVault(): Promise<void> {
     const snapshot = await this.enqueueStorage(() =>
       this.manager!.loadAuthProviders(),
