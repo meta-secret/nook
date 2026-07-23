@@ -1004,7 +1004,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         2,
         "coverage input detection must use the explicit event snapshots' merge-base diff, never a moving synthetic merge or a two-dot snapshot diff"
     );
-    let native_job = section(&pr, "  native:\n", "  wasm:\n");
+    let native_job = section(&pr, "  rust:\n", "  wasm:\n");
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
