@@ -46,9 +46,12 @@ test('Sentinel creation invites participants instead of standalone join', async 
     .fill('Sentinel response demo')
   await page.getByTestId('sentinel-onboarding-continue-policy').click()
   await page.getByTestId('sentinel-onboarding-continue-devices').click()
-  await expect(
-    page.getByTestId('sentinel-genesis-response-input'),
-  ).toBeVisible()
+  const responseInput = page.getByTestId('sentinel-genesis-response-input')
+  await expect(responseInput).toBeVisible()
+  await expect(responseInput).toHaveAttribute(
+    'placeholder',
+    'Paste signed authentication response or its URL',
+  )
   await expect(
     page.getByTestId('sentinel-genesis-authentication-instructions'),
   ).toContainText('Paste the signed response')

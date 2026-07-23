@@ -1,0 +1,152 @@
+schema_version: 3
+source_pr:
+  number: 657
+  url: https://github.com/meta-secret/nook/pull/657
+  title: "test(sentinel): cover complete onboarding flow"
+  change_surface: shared_web_sentinel_onboarding_browser_flow
+  head_sha: 0faf55b129329aceef1e254e762ba3c62108c0dc
+  started_at: 2026-07-23T07:08:46Z
+  opened_at: 2026-07-23T07:14:45Z
+  merged_at: 2026-07-23T08:24:56Z
+  elapsed_seconds: 4570
+  open_to_merge_seconds: 4211
+summary:
+  local_execution_count: 13
+  local_check_count: 9
+  local_test_count: 0
+  local_combined_count: 4
+  local_execution_seconds: 831
+  github_actions_run_count: 7
+  github_actions_seconds: 4567
+  pr_retrigger_count: 6
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T08:29:00Z
+  head_sha: 0faf55b129329aceef1e254e762ba3c62108c0dc
+  by_type:
+    rust: 627
+    preflight: 34
+    web_unit: 242
+    e2e: 199
+  total: 1102
+local_executions:
+  - { command: task format, category: check, started_at: "2026-07-23T07:11:00Z", finished_at: "2026-07-23T07:12:20Z", duration_seconds: 80, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: "E2E_SPEC=e2e/sentinel-unlock-ceremony.spec.ts task web:test:e2e:file", category: combined, started_at: "2026-07-23T07:15:00Z", finished_at: "2026-07-23T07:18:00Z", duration_seconds: 180, outcome: failed, reason: focused_flow_exposed_required_explicit_participant_vault_choice }
+  - { command: task format, category: check, started_at: "2026-07-23T07:18:00Z", finished_at: "2026-07-23T07:19:20Z", duration_seconds: 80, outcome: passed, reason: format_explicit_vault_choice_fix }
+  - { command: "E2E_SPEC=e2e/sentinel-unlock-ceremony.spec.ts task web:test:e2e:file", category: combined, started_at: "2026-07-23T07:19:40Z", finished_at: "2026-07-23T07:21:40Z", duration_seconds: 120, outcome: passed, reason: focused_complete_sentinel_journey_proof }
+  - { command: task format, category: check, started_at: "2026-07-23T07:26:00Z", finished_at: "2026-07-23T07:27:30Z", duration_seconds: 90, outcome: passed, reason: current_main_and_explicit_selection_assertion_hygiene }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T07:29:10Z", finished_at: "2026-07-23T07:29:11Z", duration_seconds: 1, outcome: passed, reason: precommit_snapshot_reported_no_committed_demo_change }
+  - { command: task format, category: check, started_at: "2026-07-23T07:31:00Z", finished_at: "2026-07-23T07:32:45Z", duration_seconds: 105, outcome: passed, reason: final_pre_push_hygiene_with_demo_assertion }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T07:32:58Z", finished_at: "2026-07-23T07:32:59Z", duration_seconds: 1, outcome: passed, reason: final_exact_head_ui_demo_contract }
+  - { command: "UI_DEMO_SPECS=nook-app/nook-web/nook-web-app/e2e/demos/sentinel-invitation.demo.spec.ts task ui:demo", category: combined, started_at: "2026-07-23T07:33:00Z", finished_at: "2026-07-23T07:34:25Z", duration_seconds: 85, outcome: passed, reason: focused_participant_response_field_demo }
+  - { command: "E2E_SPEC=e2e/sentinel-unlock-ceremony.spec.ts task web:test:e2e:file", category: combined, started_at: "2026-07-23T07:34:35Z", finished_at: "2026-07-23T07:35:45Z", duration_seconds: 70, outcome: passed, reason: final_exact_head_complete_sentinel_journey }
+  - { command: "task pr:ready PR=657", category: check, started_at: "2026-07-23T08:12:05Z", finished_at: "2026-07-23T08:12:13Z", duration_seconds: 8, outcome: failed, reason: workflow_finalization_and_feedback_audit_pending }
+  - { command: "task pr:ready PR=657", category: check, started_at: "2026-07-23T08:13:05Z", finished_at: "2026-07-23T08:13:13Z", duration_seconds: 8, outcome: failed, reason: successful_checks_waiting_for_run_level_finalization }
+  - { command: "task pr:ready PR=657", category: check, started_at: "2026-07-23T08:24:30Z", finished_at: "2026-07-23T08:24:33Z", duration_seconds: 3, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 29987784898, run_attempt: 1, head_sha: 8f5da3ed864d143345dc61ea6f789e735bd96904, trigger: pull_request, started_at: "2026-07-23T07:17:27Z", finished_at: "2026-07-23T07:34:28Z", duration_seconds: 1021, conclusion: cancelled }
+  - { workflow: PR, run_id: 29988427223, run_attempt: 1, head_sha: 073873d6cb12b8f498c52439a6f0bf7740a2f043, trigger: pull_request, started_at: "2026-07-23T07:30:23Z", finished_at: "2026-07-23T07:40:51Z", duration_seconds: 628, conclusion: cancelled }
+  - { workflow: PR, run_id: 29988705126, run_attempt: 1, head_sha: 073873d6cb12b8f498c52439a6f0bf7740a2f043, trigger: pull_request, started_at: "2026-07-23T07:35:54Z", finished_at: "2026-07-23T07:35:57Z", duration_seconds: 3, conclusion: cancelled }
+  - { workflow: PR, run_id: 29988706515, run_attempt: 1, head_sha: 073873d6cb12b8f498c52439a6f0bf7740a2f043, trigger: pull_request, started_at: "2026-07-23T07:35:55Z", finished_at: "2026-07-23T07:36:45Z", duration_seconds: 50, conclusion: cancelled }
+  - { workflow: PR, run_id: 29988750234, run_attempt: 1, head_sha: 63bacb32889d348673b2ffd9f0f981d168df85b2, trigger: pull_request, started_at: "2026-07-23T07:36:49Z", finished_at: "2026-07-23T07:37:05Z", duration_seconds: 16, conclusion: cancelled }
+  - { workflow: PR, run_id: 29988761316, run_attempt: 1, head_sha: 63bacb32889d348673b2ffd9f0f981d168df85b2, trigger: pull_request, started_at: "2026-07-23T07:37:03Z", finished_at: "2026-07-23T07:37:35Z", duration_seconds: 32, conclusion: cancelled }
+  - { workflow: PR, run_id: 29988770325, run_attempt: 1, head_sha: 63bacb32889d348673b2ffd9f0f981d168df85b2, trigger: pull_request, started_at: "2026-07-23T07:37:14Z", finished_at: "2026-07-23T08:24:11Z", duration_seconds: 2817, conclusion: success }
+cache_telemetry:
+  totals:
+    job_count: 5
+    remote_backend_job_count: 0
+    local_fallback_job_count: 5
+    sccache_compile_requests: 4019
+    sccache_cache_hits: 0
+    sccache_cache_misses: 3345
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 731
+    buildkit_cached_steps: 221
+    buildkit_cache_hit_rate_percent: 30.23
+  jobs:
+    - workflow: PR
+      run_id: 29987784898
+      run_attempt: 1
+      job: wasm
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29987784898
+      run_attempt: 1
+      job: verify
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }
+      buildkit: { completed_steps: 0, cached_steps: 0, cache_hit_rate_percent: null, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29988770325
+      run_attempt: 1
+      job: rust
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 2131, cache_hits: 0, cache_misses: 1763, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 305, cached_steps: 84, cache_hit_rate_percent: 27.54, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29988770325
+      run_attempt: 1
+      job: wasm
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29988770325
+      run_attempt: 1
+      job: verify
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }
+      buildkit: { completed_steps: 146, cached_steps: 53, cache_hit_rate_percent: 36.3, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-23T07:30:23Z", reason: add_explicit_participant_vault_selection_assertion_after_focused_failure }
+  - { kind: reopen, at: "2026-07-23T07:35:54Z", reason: refresh_pr_after_github_retained_superseded_head_metadata }
+  - { kind: reopen, at: "2026-07-23T07:35:55Z", reason: first_pr_reopen_still_dispatched_against_superseded_head }
+  - { kind: reopen, at: "2026-07-23T07:36:49Z", reason: second_pr_state_refresh_after_head_ref_reconciled }
+  - { kind: reopen, at: "2026-07-23T07:37:03Z", reason: superseded_current_head_dispatch_during_concurrency_reconciliation }
+  - { kind: reopen, at: "2026-07-23T07:37:14Z", reason: final_current_head_validation_after_pr_metadata_reconciliation }
+merge_attempts:
+  - { at: "2026-07-23T08:24:56Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [650]
+  baseline_quality: comparable
+  baseline_note: PR 650 changed the same shared Sentinel participant onboarding UI and exercised the same Rust, WASM, demo, preview, and focused browser-flow gates.
+  elapsed_seconds_change_percent: -49.3
+  local_execution_seconds_change_percent: -40.7
+  github_actions_seconds_change_percent: -26.8
+  test_inventory_total_change: -1
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first focused browser run exposed the intentional explicit participant-vault choice before response generation; the fix and final proof remained scoped to one Sentinel spec rather than replaying a full browser suite.
+    - The UI demo contract caught the required participant-response demo evidence before the final head, and both local and CI demo runs passed.
+    - GitHub retained superseded pull-request head metadata after the final branch push, causing two bounded close/reopen refreshes and several short cancelled workflow records; repository refs, exact-head local proof, and the readiness gate prevented stale validation from being accepted.
+    - The successful workflow's five checks finished by 08:11:36Z, while GitHub did not finalize the aggregate run until 08:24:11Z; this external status delay added 755 seconds without an actionable repository failure.
+    - The superseded 29988427223 run was cancelled before publishing cache telemetry; all five telemetry artifacts that were published across the initial and final runs are represented.
+    - Untrusted pull-request jobs correctly used credential-free local fallback; the 0 percent compiler-cache hit rate is expected without exposing persistent Redis credentials.
+    - Despite the metadata and finalization delays, elapsed time, local execution time, and Actions time were all more than 20 percent faster than the directly comparable PR 650 baseline.
+  required_actions: []
