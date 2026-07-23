@@ -427,6 +427,10 @@ branch cache for later pushes. Separate scopes prevent parallel image lineages
 from overwriting one another. Native coverage and WASM source-sensitive layers
 have their own GHA BuildKit scopes in addition to the manifest-only dependency
 scopes, so non-Rust pushes do not repeat unchanged Cargo compilation.
+The shared WASM dependency warm-up bypasses sccache and carries no secret mount:
+trusted Main and no-secret PR jobs must generate the same BuildKit cache key on
+the latency-critical lane. Native dependency and source-sensitive layers retain
+Redis-backed sccache for fast cold recovery.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.

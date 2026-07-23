@@ -31,11 +31,11 @@ COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 # wasm deps via cargo-chef (the wasm build in nook-app/nook-wasm/Dockerfile reuses these). Separate RUNs so
-# each cooks into its own cache layer.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json
+# each cooks into its own cache layer. Keep every manifest-only layer independent of sccache and
+# credential mounts: trusted Main and no-secret PR jobs must resolve the same BuildKit cache key.
+# Source-sensitive stages below still use Redis-backed sccache when their Docker layer misses.
+RUN RUSTC_WRAPPER= cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
+RUN RUSTC_WRAPPER= cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json
 RUN cargo fetch --locked
 
 # WASM jobs stop at this lightweight boundary instead of compiling native nextest/coverage deps.
@@ -45,8 +45,7 @@ RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
 RUN echo '' > nook-auth2/src/lib.rs
 RUN echo '' > nook-core/src/lib.rs
 RUN echo '' > nook-wasm/src/lib.rs
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm
+RUN RUSTC_WRAPPER= cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm
 
 # Native verification extends the WASM dependency boundary with native and coverage profiles.
 FROM builder-wasm-deps AS builder-deps

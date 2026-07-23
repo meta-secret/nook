@@ -318,11 +318,24 @@ fn assert_rust_builds_mount_cache_credentials() {
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
 
     let secret_mount = "--mount=type=secret,id=sccache_redis_password";
+    let core_dockerfile = read("nook-app/nook-core/Dockerfile");
+    let (wasm_dependency_layers, native_and_source_layers) = core_dockerfile
+        .split_once("# Native verification extends the WASM dependency boundary")
+        .expect("the core Dockerfile must separate WASM and native dependency layers");
     assert!(
-        read("nook-app/nook-core/Dockerfile")
-            .matches(secret_mount)
-            .count()
-            >= 12
+        !wasm_dependency_layers.contains(secret_mount),
+        "WASM dependency layers must share one BuildKit key across trusted and no-secret CI"
+    );
+    assert_eq!(
+        wasm_dependency_layers
+            .matches("RUN RUSTC_WRAPPER= cargo")
+            .count(),
+        3,
+        "WASM dependency compiles must bypass sccache so they need no credential mount"
+    );
+    assert!(
+        native_and_source_layers.matches(secret_mount).count() >= 9,
+        "native dependency and source-sensitive compiles must retain authenticated sccache access"
     );
     assert!(
         read("nook-app/nook-wasm/Dockerfile")
