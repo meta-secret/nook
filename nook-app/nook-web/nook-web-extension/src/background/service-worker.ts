@@ -1229,12 +1229,15 @@ async function cancelAuthenticatorPicker(
   message: { payload: { requestId: string } },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  if (!isAuthenticatorPickerSender(sender)) {
-    return { ok: false, reason: 'authenticator-picker-forbidden' }
-  }
   const request = await loadAuthenticatorPicker(message.payload.requestId)
   if (!request) {
     return { ok: true }
+  }
+  if (
+    !isAuthenticatorPickerSender(sender) &&
+    !isAuthorizedWebsiteSender(sender, request.origin)
+  ) {
+    return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
   await removeAuthenticatorPicker(request.requestId)
   try {
