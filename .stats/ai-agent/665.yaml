@@ -1,0 +1,145 @@
+schema_version: 3
+source_pr:
+  number: 665
+  url: https://github.com/meta-secret/nook/pull/665
+  title: "feat(extension): add searchable 2FA picker"
+  change_surface: rust_wasm_browser_extension_authenticator_picker
+  head_sha: 3e2e0fba0a5c389cbae3d64ca7f62119e9fdadf5
+  started_at: 2026-07-23T02:54:06Z
+  opened_at: 2026-07-23T09:05:33Z
+  merged_at: 2026-07-23T09:23:39Z
+  elapsed_seconds: 23373
+  open_to_merge_seconds: 1086
+summary:
+  local_execution_count: 5
+  local_check_count: 5
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 125
+  github_actions_run_count: 21
+  github_actions_seconds: 17068
+  pr_retrigger_count: 20
+  agent_requested_rerun_count: 2
+  merge_attempt_count: 2
+test_inventory:
+  measured_at: 2026-07-23T09:29:31Z
+  head_sha: 3e2e0fba0a5c389cbae3d64ca7f62119e9fdadf5
+  by_type:
+    rust: 628
+    preflight: 34
+    web_unit: 245
+    e2e: 199
+  total: 1106
+local_executions:
+  - { command: "task format", category: check, started_at: "2026-07-23T08:41:30Z", finished_at: "2026-07-23T08:43:00Z", duration_seconds: 90, outcome: passed, reason: final_rebased_head_hygiene_after_picker_lifecycle_review }
+  - { command: "task extension:check", category: check, started_at: "2026-07-23T08:43:05Z", finished_at: "2026-07-23T08:43:29Z", duration_seconds: 24, outcome: passed, reason: focused_extension_unit_type_and_launcher_validation }
+  - { command: "git diff --check", category: check, started_at: "2026-07-23T08:43:30Z", finished_at: "2026-07-23T08:43:30Z", duration_seconds: 0, outcome: passed, reason: final_patch_whitespace_validation }
+  - { command: "task pr:ready PR=663", category: check, started_at: "2026-07-23T09:04:55Z", finished_at: "2026-07-23T09:05:01Z", duration_seconds: 6, outcome: failed, reason: readiness_detected_one_new_main_stats_commit }
+  - { command: "task pr:ready PR=665", category: check, started_at: "2026-07-23T09:22:58Z", finished_at: "2026-07-23T09:23:03Z", duration_seconds: 5, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 29976430195, run_attempt: 1, head_sha: f4a4fd3f894847181e5fe89ebe153856ca613e87, trigger: pull_request, started_at: "2026-07-23T03:13:08Z", finished_at: "2026-07-23T03:30:39Z", duration_seconds: 1051, conclusion: success }
+  - { workflow: PR, run_id: 29977477555, run_attempt: 1, head_sha: 24bf5dc0bb317f12365acc6d64eb445ff715d7dd, trigger: pull_request, started_at: "2026-07-23T03:37:41Z", finished_at: "2026-07-23T03:38:59Z", duration_seconds: 78, conclusion: cancelled }
+  - { workflow: PR, run_id: 29977505106, run_attempt: 1, head_sha: caf099a2a7941f3d561cb10e5ca2cf0e887bc8ea, trigger: pull_request, started_at: "2026-07-23T03:38:22Z", finished_at: "2026-07-23T03:53:23Z", duration_seconds: 901, conclusion: failure }
+  - { workflow: PR, run_id: 29978253022, run_attempt: 1, head_sha: 313f36d857bc4c3e74e44c7a9ef1fbe8def0a26c, trigger: pull_request, started_at: "2026-07-23T03:56:12Z", finished_at: "2026-07-23T04:18:42Z", duration_seconds: 1350, conclusion: success }
+  - { workflow: PR, run_id: 29980070137, run_attempt: 1, head_sha: 9806f4e93c880da6f8dc06ee366ab5141609ff7b, trigger: pull_request, started_at: "2026-07-23T04:38:47Z", finished_at: "2026-07-23T04:51:56Z", duration_seconds: 789, conclusion: failure }
+  - { workflow: PR, run_id: 29980982304, run_attempt: 1, head_sha: 04d62d7c3a9bd556e9d05f5d7804ab158ab88f20, trigger: pull_request, started_at: "2026-07-23T05:00:16Z", finished_at: "2026-07-23T05:14:27Z", duration_seconds: 851, conclusion: success }
+  - { workflow: PR, run_id: 29982248636, run_attempt: 1, head_sha: 772f5913b4c41c526b14332289700063b9fd4cd2, trigger: pull_request, started_at: "2026-07-23T05:28:40Z", finished_at: "2026-07-23T05:40:16Z", duration_seconds: 696, conclusion: failure }
+  - { workflow: PR, run_id: 29982248636, run_attempt: 2, head_sha: 772f5913b4c41c526b14332289700063b9fd4cd2, trigger: pull_request, started_at: "2026-07-23T05:40:46Z", finished_at: "2026-07-23T05:49:25Z", duration_seconds: 519, conclusion: success }
+  - { workflow: PR, run_id: 29983249176, run_attempt: 1, head_sha: d793e975f51d0da4de60c417ce97a087153b2b74, trigger: pull_request, started_at: "2026-07-23T05:50:32Z", finished_at: "2026-07-23T06:29:08Z", duration_seconds: 2316, conclusion: success }
+  - { workflow: PR, run_id: 29985240094, run_attempt: 1, head_sha: 01291ee59fab40bfc13bd1cc47f12046ceaa6a8b, trigger: pull_request, started_at: "2026-07-23T06:30:17Z", finished_at: "2026-07-23T06:48:40Z", duration_seconds: 1103, conclusion: success }
+  - { workflow: PR, run_id: 29986670555, run_attempt: 1, head_sha: 6cdef010ca3004946c3c5e03d87f483209774e7f, trigger: pull_request, started_at: "2026-07-23T06:56:53Z", finished_at: "2026-07-23T07:14:30Z", duration_seconds: 1057, conclusion: success }
+  - { workflow: PR, run_id: 29988093849, run_attempt: 1, head_sha: ee2b0b3d70489b0ea406c656d2c32b0d7ade601b, trigger: pull_request, started_at: "2026-07-23T07:23:34Z", finished_at: "2026-07-23T07:57:03Z", duration_seconds: 2009, conclusion: success }
+  - { workflow: PR, run_id: 29990300506, run_attempt: 1, head_sha: ee2b0b3d70489b0ea406c656d2c32b0d7ade601b, trigger: pull_request, started_at: "2026-07-23T08:08:11Z", finished_at: "2026-07-23T08:08:12Z", duration_seconds: 1, conclusion: skipped }
+  - { workflow: PR, run_id: 29990302453, run_attempt: 1, head_sha: 66fee41281a84ae985f5794f886b370c94d3fbf1, trigger: pull_request, started_at: "2026-07-23T08:08:13Z", finished_at: "2026-07-23T08:08:50Z", duration_seconds: 37, conclusion: cancelled }
+  - { workflow: PR, run_id: 29990302453, run_attempt: 2, head_sha: 66fee41281a84ae985f5794f886b370c94d3fbf1, trigger: pull_request, started_at: "2026-07-23T08:09:30Z", finished_at: "2026-07-23T08:39:59Z", duration_seconds: 1829, conclusion: success }
+  - { workflow: PR, run_id: 29990310254, run_attempt: 1, head_sha: ee2b0b3d70489b0ea406c656d2c32b0d7ade601b, trigger: pull_request, started_at: "2026-07-23T08:08:24Z", finished_at: "2026-07-23T08:14:45Z", duration_seconds: 381, conclusion: cancelled }
+  - { workflow: PR, run_id: 29992176803, run_attempt: 1, head_sha: 66fee41281a84ae985f5794f886b370c94d3fbf1, trigger: pull_request, started_at: "2026-07-23T08:45:15Z", finished_at: "2026-07-23T08:45:17Z", duration_seconds: 2, conclusion: skipped }
+  - { workflow: PR, run_id: 29992254515, run_attempt: 1, head_sha: 21dc76c7bbb5cab9e4b72e4c2f5b8ac72f45d946, trigger: pull_request, started_at: "2026-07-23T08:46:10Z", finished_at: "2026-07-23T09:03:48Z", duration_seconds: 1058, conclusion: success }
+  - { workflow: PR, run_id: 29993836760, run_attempt: 1, head_sha: 21dc76c7bbb5cab9e4b72e4c2f5b8ac72f45d946, trigger: pull_request, started_at: "2026-07-23T09:05:33Z", finished_at: "2026-07-23T09:05:34Z", duration_seconds: 1, conclusion: skipped }
+  - { workflow: PR, run_id: 29993840847, run_attempt: 1, head_sha: 6cc17d043ed9d3dfd35614029881e85c4d57fabe, trigger: pull_request, started_at: "2026-07-23T09:05:36Z", finished_at: "2026-07-23T09:22:53Z", duration_seconds: 1037, conclusion: success }
+  - { workflow: PR, run_id: 29995129131, run_attempt: 1, head_sha: 6cc17d043ed9d3dfd35614029881e85c4d57fabe, trigger: pull_request, started_at: "2026-07-23T09:23:42Z", finished_at: "2026-07-23T09:23:44Z", duration_seconds: 2, conclusion: skipped }
+cache_telemetry:
+  totals:
+    job_count: 23
+    remote_backend_job_count: 0
+    local_fallback_job_count: 23
+    sccache_compile_requests: 14371
+    sccache_cache_hits: 0
+    sccache_cache_misses: 11524
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 5192
+    buildkit_cached_steps: 2523
+    buildkit_cache_hit_rate_percent: 48.59
+  jobs:
+    - { workflow: PR, run_id: 29983249176, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 2132, cache_hits: 0, cache_misses: 1764, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 64, cache_hit_rate_percent: 20.98, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29983249176, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 2131, cache_hits: 0, cache_misses: 1762, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 311, cached_steps: 87, cache_hit_rate_percent: 27.97, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29983249176, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29985240094, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 52, cache_hits: 0, cache_misses: 2, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 210, cache_hit_rate_percent: 68.85, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29985240094, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 52, cache_hits: 0, cache_misses: 2, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 294, cached_steps: 158, cache_hit_rate_percent: 53.74, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29985240094, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29986670555, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 161, cache_hits: 0, cache_misses: 90, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 192, cache_hit_rate_percent: 62.95, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29986670555, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 52, cache_hits: 0, cache_misses: 2, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 294, cached_steps: 155, cache_hit_rate_percent: 52.72, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29986670555, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29988093849, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 161, cache_hits: 0, cache_misses: 90, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 192, cache_hit_rate_percent: 62.95, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29988093849, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 2131, cache_hits: 0, cache_misses: 1762, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 294, cached_steps: 99, cache_hit_rate_percent: 33.67, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29988093849, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29990302453, run_attempt: 2, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 161, cache_hits: 0, cache_misses: 90, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 192, cache_hit_rate_percent: 62.95, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29990302453, run_attempt: 2, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 465, cache_hits: 0, cache_misses: 329, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 294, cached_steps: 158, cache_hit_rate_percent: 53.74, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29990302453, run_attempt: 2, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29990310254, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 2, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29990310254, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 0, cached_steps: 0, cache_hit_rate_percent: null, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29992254515, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 52, cache_hits: 0, cache_misses: 2, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 210, cache_hit_rate_percent: 68.85, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29992254515, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 294, cached_steps: 162, cache_hit_rate_percent: 55.1, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29992254515, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29993840847, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 161, cache_hits: 0, cache_misses: 90, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 305, cached_steps: 192, cache_hit_rate_percent: 62.95, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29993840847, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 52, cache_hits: 0, cache_misses: 2, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 294, cached_steps: 158, cache_hit_rate_percent: 53.74, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29993840847, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-23T03:37:41Z", reason: preserve_existing_site_mapped_and_backup_code_flows_after_review }
+  - { kind: head_push, at: "2026-07-23T03:38:22Z", reason: refresh_current_head_after_overlapping_push_dispatch }
+  - { kind: head_push, at: "2026-07-23T03:56:12Z", reason: acknowledge_picker_selection_in_ui_demo_runtime }
+  - { kind: head_push, at: "2026-07-23T04:38:47Z", reason: bind_picker_requests_to_origin_tab_and_expiry }
+  - { kind: head_push, at: "2026-07-23T05:00:16Z", reason: add_missing_picker_expiry_to_demo_stub }
+  - { kind: head_push, at: "2026-07-23T05:28:40Z", reason: cancel_picker_when_popup_closes }
+  - { kind: manual_rerun, at: "2026-07-23T05:40:46Z", reason: unchanged_head_retry_after_late_bun_exit_130 }
+  - { kind: head_push, at: "2026-07-23T05:50:32Z", reason: persist_pending_picker_across_service_worker_restart }
+  - { kind: head_push, at: "2026-07-23T06:30:17Z", reason: cancel_pending_picker_on_explicit_dismissal }
+  - { kind: head_push, at: "2026-07-23T06:56:53Z", reason: revoke_picker_during_workflow_takeover }
+  - { kind: head_push, at: "2026-07-23T07:23:34Z", reason: cancel_late_picker_open_race }
+  - { kind: reopen, at: "2026-07-23T08:08:11Z", reason: stale_pr_head_metadata_refresh_dispatched_superseded_head }
+  - { kind: reopen, at: "2026-07-23T08:08:13Z", reason: exact_head_validation_after_pr_metadata_refresh }
+  - { kind: manual_rerun, at: "2026-07-23T08:09:30Z", reason: correct_head_run_was_cancelled_by_out_of_order_stale_dispatch }
+  - { kind: reopen, at: "2026-07-23T08:08:24Z", reason: out_of_order_superseded_head_dispatch_cancelled_manually }
+  - { kind: head_push, at: "2026-07-23T08:45:15Z", reason: revoke_scan_removed_picker_and_require_content_acknowledgement }
+  - { kind: base_update, at: "2026-07-23T08:46:10Z", reason: validate_rebased_exact_head_on_replacement_pr_663 }
+  - { kind: reopen, at: "2026-07-23T09:05:33Z", reason: github_pinned_pr_663_to_pre_rebase_head_and_required_replacement }
+  - { kind: base_update, at: "2026-07-23T09:05:36Z", reason: validate_final_head_after_main_stats_commit_664 }
+  - { kind: reopen, at: "2026-07-23T09:23:42Z", reason: post_merge_pull_request_dispatch_was_automatically_skipped }
+merge_attempts:
+  - { at: "2026-07-23T09:23:39Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed_remote_merge_local_branch_cleanup_failed }
+  - { at: "2026-07-23T09:23:44Z", method: squash, outcome: failed, reason: confirmation_command_found_pull_request_already_merged }
+comparison:
+  baseline_prs: [638, 640]
+  baseline_quality: comparable
+  baseline_note: PRs 638 and 640 changed browser-extension authentication UI and exercised the same Rust, WASM, extension, demo, preview, and readiness gates.
+  elapsed_seconds_change_percent: 837.0
+  local_execution_seconds_change_percent: -38.1
+  github_actions_seconds_change_percent: 732.6
+  test_inventory_total_change: 5
+  regression: true
+  regression_reasons:
+    - Elapsed time and aggregate Actions time exceeded the comparable baseline median by more than 20 percent and 60 seconds because ten reviewed lifecycle corrections each required a fresh exact-head validation cycle.
+    - GitHub repeatedly retained superseded pull-request head metadata after force-push rebases, requiring replacement PRs 663 and 665 plus repeated unchanged product validation.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The initial implementation omitted several picker lifecycle boundaries later identified by review, including expiry, service-worker restart persistence, close and dismissal cancellation, takeover cancellation, late-open cancellation, scan removal, and explicit content-script acknowledgement; each correction was made on the source PR before merge.
+    - Run 29980070137 failed because the demo runtime omitted the required expiresAt field; the following head corrected the fixture rather than weakening the production request contract.
+    - Run 29982248636 attempt 1 ended with a late Bun exit 130; its unchanged-head attempt 2 passed, documenting an infrastructure retry rather than a product-code change.
+    - GitHub pinned PRs 645 and 663 to superseded force-pushed heads and refused to reopen them, so exact-head replacement PRs and out-of-order cancelled or skipped runs were required to preserve readiness guarantees.
+    - Main advanced through unrelated stats records during validation; the final base update changed no product behavior but the repository readiness gate correctly required a fresh exact-head run.
+    - Several successful runs exported cold base coverage because no matching base artifact was available, materially increasing Actions time without exposing a persistent workflow defect.
+    - Cache telemetry became available only after the collector landed during this task; all 23 artifacts published by applicable runs were recorded, while earlier runs published none.
+    - All untrusted pull-request jobs correctly used credential-free local fallback; the 0 percent compiler-cache hit rate does not justify exposing persistent Redis credentials to untrusted code.
+    - No separate build-performance change is required: the actionable product lifecycle defects were fixed in PR 665, while the remaining excess was caused by bounded infrastructure retries, base freshness, and GitHub pull-request metadata behavior outside repository control.
+  required_actions: []

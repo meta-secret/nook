@@ -51,7 +51,7 @@ async function listExtensionAuthenticators(
         globalThis.chrome.runtime.sendMessage(
           {
             type: 'nook:extension-session-list-authenticators',
-            payload: grant,
+            payload: { ...grant, query: '' },
           },
           resolve,
         )
@@ -179,11 +179,17 @@ test.describe('Browser 2FA enrollment', () => {
       const otpPage = await paired.context.newPage()
       await otpPage.goto(`${mockAuth.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
+      const authenticatorPickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      await otpWidget.getByRole('button', { name: 'Saved 2FA 1' }).click()
+      const authenticatorPicker = await authenticatorPickerPromise
+      await authenticatorPicker.waitForURL(/intent=authenticator-picker/)
+      await authenticatorPicker
+        .getByRole('button', { name: /Mock Auth/ })
+        .click()
       await expect(
         otpPage.locator('[autocomplete="one-time-code"]'),
       ).toHaveValue(/^\d{6}$/)
+      await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
     } finally {
       await paired.context.close()
       await mockAuth.close()
