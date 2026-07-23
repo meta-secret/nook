@@ -15,7 +15,7 @@ WORKDIR /meta-secret/nook
 # builder-debug from the shared manifest-keyed dependency image, so hosted BuildKit can run WASM
 # and native coverage concurrently instead of serializing both source-sensitive branches.
 
-FROM builder-wasm-deps AS builder-wasm
+FROM builder-wasm-deps AS builder-wasm-build
 
 ARG WASM_BUILD_MODE=dev
 
@@ -56,13 +56,15 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
          && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 ) \
     && nook-sccache-report wasm-build
 
+FROM builder-wasm-build AS builder-wasm
+
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     wasm-pack test --node nook-wasm \
     && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export
 
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+COPY --from=builder-wasm-build /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
 
 # Formatting is an independent validation leaf so `task format` can still load nook-rust and fix
 # unformatted source. Normal `task setup` includes this target in its parallel prepare group.

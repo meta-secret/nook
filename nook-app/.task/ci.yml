@@ -23,7 +23,7 @@ tasks:
           PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'
 
   ci:pr:wasm:
-    desc: WASM clippy, build, and Node tests for the split hosted PR pipeline.
+    desc: WASM clippy and build for the split hosted PR pipeline.
     cmds:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:pr:wasm:host }
@@ -31,6 +31,16 @@ tasks:
   _ci:pr:wasm:host:
     cmds:
       - task: docker:ci:wasm:export
+
+  ci:wasm:node-test:
+    desc: Finish the split hosted WASM gate while the exact package feeds web verification.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:wasm:node-test:host }
+
+  _ci:wasm:node-test:host:
+    cmds:
+      - task: docker:ci:wasm:node-test
 
   ci:pr:web:
     desc: Build and verify web/extension code from downloaded split-CI artifacts.
@@ -41,8 +51,6 @@ tasks:
   _ci:pr:web:host:
     cmds:
       - task: docker:ci:web:build
-      - task: docker:task
-        vars: { TASK: _ci:pr }
 
   ci:pr:ui-demo:
     desc: Build the PR Chromium image and record selected UI demo videos.

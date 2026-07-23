@@ -278,9 +278,10 @@ deployed from [`infra/`](infra/) directly over verified TLS at
 `rediss://redis-ovh-borg-1.bynull.link:6380`. Run
 `task infra:redis:credential:sync` once to create the ignored mode-`0600`
 `.nook/cache/redis-password` file. Without that file, local and untrusted CI
-builds compile normally without sccache. Trusted Main and nightly jobs receive
-the Redis password; pull requests, arbitrary refs, dependency-update agents,
-and AI-authored jobs do not. Override the endpoint with
+builds compile normally without sccache. Hosted Main, nightly, pull-request,
+arbitrary-ref, dependency-update, and AI-authored jobs do not receive the
+password; keeping Main's cache publisher secret-free makes its BuildKit layers
+reusable by PRs. Override the endpoint with
 `SCCACHE_REDIS_ENDPOINT`. Runtime containers receive an explicit 1,048,576
 open-file limit; override it with `DOCKER_NOFILE_LIMIT`.
 

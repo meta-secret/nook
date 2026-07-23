@@ -263,7 +263,7 @@ tasks:
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
 
   docker:ci:wasm:export:
-    desc: Run WASM clippy/build/tests on a separate CI runner and export only the generated package.
+    desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
     deps: [sccache:ensure]
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/wasm" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
@@ -274,6 +274,16 @@ tasks:
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
+
+  docker:ci:wasm:node-test:
+    desc: Run WASM Node tests after the exact generated package is available to parallel consumers.
+    deps: [sccache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "builder-wasm.output=type=cacheonly"
+        builder-wasm
 
   docker:ci:web:build:
     desc: Build the sealed web image from the same-runner CI WASM artifact.
@@ -287,8 +297,9 @@ tasks:
         test -s "$artifacts/nook-wasm/nook_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
+        WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "nook-web-ci.target=nook-web-verify" --set "nook-web-ci.output=type=cacheonly" nook-web-ci;
         for attempt in 1 2; do
-          if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web; then
+          if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-ci; then
             exit 0;
           fi;
           if [ "$attempt" -eq 2 ]; then exit 1; fi;

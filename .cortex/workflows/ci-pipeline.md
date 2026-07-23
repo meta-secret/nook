@@ -406,16 +406,23 @@ before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
 `cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
 and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
-PR CI uses independent native Rust and verified-WASM producers. Native Rust runs
-the `nook-core + nook-auth2` nextest/coverage branch and uploads its small coverage
-handoff. The WASM producer runs clippy/build/Node tests once, uploads the generated
-package under a run-stable artifact name, and feeds preview plus optional web and
-extension e2e consumers. `Verify and preview` downloads that WASM package instead
-of compiling Rust, then downloads native coverage after its web build for reporting.
+PR CI uses independent native Rust and WASM producers. Native Rust runs the
+`nook-core + nook-auth2` nextest/coverage branch and uploads its small coverage
+handoff. The WASM producer runs clippy/build once, uploads the generated package
+under a run-stable artifact name, and then continues with required Node tests.
+`Verify and preview` can begin browser-free web validation from that built handoff
+while Node tests run, but it must observe a successful producer before deploying.
+Optional web and extension e2e consumers retain `needs: wasm` and therefore receive
+only a fully verified handoff. Preview then downloads native coverage after its web
+build for reporting instead of compiling Rust.
 On a rerun, each consumer first checks for its producer in the current attempt
 and waits when present. A failed-job rerun that omits an already-successful
-producer may reuse the existing exact-head run artifact; absence of both fails
-immediately instead of polling for a job GitHub did not reschedule.
+producer may reuse the existing exact-head run artifact, but a built artifact from
+a producer that later failed Node tests is rejected: the artifact's stamped run
+attempt must match the successful producer attempt exactly. Absence of both a
+current producer and a matching successful attempt fails immediately instead of
+polling for a job GitHub did not reschedule. GitHub job and artifact polling uses
+a ten-second interval so a cold build remains below the `GITHUB_TOKEN` REST budget.
 Do not serialize the producers or move Rust coverage into preview: a cold Rust
 cache must not dominate the web critical path. `task docker:extract:coverage`
 remains a copy-only path that invokes neither BuildKit nor Rust tests.
@@ -448,10 +455,12 @@ main, and release run on fresh `ubuntu-latest` VMs. The shared Docker setup
 creates a `docker-container` builder, exposes GitHub's cache-service runtime,
 and enables separate v2 scopes for stable and source-sensitive Rust/WASM layers,
 web dependencies, browser-free web, and e2e web. PR CI assigns native Rust to
-one runner and verified WASM to another. The small generated WASM package feeds
-parallel preview and optional browser-e2e consumers; native Rust separately
-uploads the coverage handoff downloaded after the web build for reporting. The
-preview job runs without browser e2e, deploys the Cloudflare previews, and
+one runner and WASM to another. The small generated WASM package feeds parallel
+browser-free preview validation as soon as clippy/build finishes; required Node
+tests continue on the producer, and preview deployment is blocked until that
+producer succeeds. Optional browser-e2e consumers wait for the fully verified
+producer. Native Rust separately uploads the coverage handoff downloaded after
+the web build for reporting. The preview job runs without browser e2e, deploys the Cloudflare previews, and
 records a successful `github-pages` deployment status for the PR head SHA. A
 `ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs. The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
@@ -476,11 +485,11 @@ branch-local cache generations unnecessary. Native coverage and WASM
 source-sensitive layers have separate v2
 GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
 non-Rust pushes do not repeat unchanged Cargo compilation.
-Trusted Main and nightly Docker builds mount the password for the direct TLS
-Redis sccache as an optional BuildKit secret. Pull-request heads, arbitrary
-refs, dependency-update jobs, and agent-authored code never receive it and
-compile normally. The cache is a performance optimization and never a
-correctness input.
+Hosted Main, nightly, and PR Docker builds all omit the direct TLS Redis
+credential. This makes Main's exported compiler vertices reusable by the
+secret-free PR solve; a secret-backed Main vertex would force every PR to
+recompile the dependency graph. The Redis cache remains an optional authorized
+local optimization and never a correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
