@@ -1,0 +1,75 @@
+schema_version: 2
+source_pr:
+  number: 647
+  url: https://github.com/meta-secret/nook/pull/647
+  title: Move Rust cache to OVH borg-1
+  change_surface: ci_infra_cloudflare_redis_sccache_migration
+  head_sha: 83c162180746fa9f9ff0a61cec2d83fb7ad7574a
+  started_at: 2026-07-23T03:45:00Z
+  opened_at: 2026-07-23T03:55:40Z
+  merged_at: 2026-07-23T04:31:04Z
+  elapsed_seconds: 2764
+  open_to_merge_seconds: 2124
+summary:
+  local_execution_count: 15
+  local_check_count: 14
+  local_test_count: 1
+  local_combined_count: 0
+  local_execution_seconds: 518
+  github_actions_run_count: 3
+  github_actions_seconds: 1729
+  pr_retrigger_count: 2
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T04:40:44Z
+  head_sha: 83c162180746fa9f9ff0a61cec2d83fb7ad7574a
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 242
+    e2e: 200
+  total: 1102
+local_executions:
+  - { command: redacted old and new Redis host inventory and health checks, category: check, started_at: 2026-07-23T03:45:00Z, finished_at: 2026-07-23T03:45:30Z, duration_seconds: 30, outcome: passed, reason: establish_migration_source_and_destination_state }
+  - { command: compose config and authenticated borg-1 Redis health validation, category: check, started_at: 2026-07-23T03:51:30Z, finished_at: 2026-07-23T03:52:00Z, duration_seconds: 30, outcome: passed, reason: validate_fresh_loopback_only_destination_cache }
+  - { command: task format, category: check, started_at: 2026-07-23T03:52:05Z, finished_at: 2026-07-23T03:53:05Z, duration_seconds: 60, outcome: passed, reason: initial_infrastructure_migration_hygiene }
+  - { command: task format, category: check, started_at: 2026-07-23T03:53:20Z, finished_at: 2026-07-23T03:54:20Z, duration_seconds: 60, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: task pr:ready PR=647, category: check, started_at: 2026-07-23T04:11:00Z, finished_at: 2026-07-23T04:11:06Z, duration_seconds: 6, outcome: failed, reason: detected_current_main_base_and_unresolved_review_threads }
+  - { command: task format, category: check, started_at: 2026-07-23T04:12:30Z, finished_at: 2026-07-23T04:13:50Z, duration_seconds: 80, outcome: passed, reason: connector_ownership_and_ssh_user_review_fix_hygiene }
+  - { command: task preflight:test, category: test, started_at: 2026-07-23T04:13:51Z, finished_at: 2026-07-23T04:14:21Z, duration_seconds: 30, outcome: passed, reason: full_infrastructure_contract_verification }
+  - { command: git diff --check, category: check, started_at: 2026-07-23T04:14:22Z, finished_at: 2026-07-23T04:14:23Z, duration_seconds: 1, outcome: passed, reason: exact_head_patch_hygiene }
+  - { command: compose config and remote Redis plus cloudflared deployment validation, category: check, started_at: 2026-07-23T04:14:25Z, finished_at: 2026-07-23T04:14:45Z, duration_seconds: 20, outcome: passed, reason: repository_managed_destination_runtime_validation }
+  - { command: task pr:ready PR=647, category: check, started_at: 2026-07-23T04:29:45Z, finished_at: 2026-07-23T04:29:51Z, duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest Rust inventory compile and JSON shape check, category: check, started_at: 2026-07-23T04:35:30Z, finished_at: 2026-07-23T04:38:04Z, duration_seconds: 154, outcome: passed, reason: merged_head_native_inventory_preparation }
+  - { command: cargo nextest Rust and preflight inventory counts, category: check, started_at: 2026-07-23T04:38:05Z, finished_at: 2026-07-23T04:38:12Z, duration_seconds: 7, outcome: passed, reason: merged_head_native_and_preflight_inventory }
+  - { command: cargo nextest nook-core and nook-auth2 inventory count, category: check, started_at: 2026-07-23T04:38:15Z, finished_at: 2026-07-23T04:38:42Z, duration_seconds: 27, outcome: passed, reason: exclude_wasm_browser_tests_from_native_rust_inventory }
+  - { command: merged-head web and extension test-surface comparison, category: check, started_at: 2026-07-23T04:40:43Z, finished_at: 2026-07-23T04:40:44Z, duration_seconds: 1, outcome: passed, reason: confirm_web_unit_and_e2e_inventory_unchanged_from_current_base }
+  - { command: redacted old Redis stop and rollback-preserving destination health validation, category: check, started_at: 2026-07-23T04:44:30Z, finished_at: 2026-07-23T04:44:36Z, duration_seconds: 6, outcome: passed, reason: complete_live_cache_cutover_and_verify_recoverable_old_runtime }
+github_actions_runs:
+  - { workflow: PR, run_id: 29978234212, run_attempt: 1, head_sha: 5c0f8eb30632c6be05c539f3d3a643936cf23949, trigger: pull_request, started_at: 2026-07-23T03:55:43Z, finished_at: 2026-07-23T03:58:06Z, duration_seconds: 143, conclusion: failure }
+  - { workflow: PR, run_id: 29978234212, run_attempt: 2, head_sha: 5c0f8eb30632c6be05c539f3d3a643936cf23949, trigger: pull_request, started_at: 2026-07-23T03:58:12Z, finished_at: 2026-07-23T04:10:58Z, duration_seconds: 766, conclusion: success }
+  - { workflow: PR, run_id: 29979119134, run_attempt: 1, head_sha: 83c162180746fa9f9ff0a61cec2d83fb7ad7574a, trigger: pull_request, started_at: 2026-07-23T04:15:59Z, finished_at: 2026-07-23T04:29:39Z, duration_seconds: 820, conclusion: success }
+pr_retriggers:
+  - { kind: manual_rerun, at: 2026-07-23T03:58:12Z, reason: retry_transient_buildkit_wasm_export_setup_failure_on_unchanged_head }
+  - { kind: base_update, at: 2026-07-23T04:15:53Z, reason: incorporate_current_main_and_resolve_connector_ownership_and_ssh_user_review_findings }
+merge_attempts:
+  - { at: 2026-07-23T04:31:04Z, method: squash, outcome: success, reason: exact_head_and_base_readiness_passed_remote_merge_completed_before_local_worktree_checkout_error }
+comparison:
+  baseline_prs: [615]
+  baseline_quality: comparable
+  baseline_note: PR 615 introduced the same Cloudflare Access protected Redis sccache path and exercised the same hosted Rust, WASM, and preview gates.
+  elapsed_seconds_change_percent: -87.3
+  local_execution_seconds_change_percent: -51.5
+  github_actions_seconds_change_percent: -76.0
+  test_inventory_total_change: 7
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The only unchanged-head rerun followed a transient BuildKit wasm-export setup failure before product compilation and passed without changing the implementation.
+    - The replacement exact head combined required current-main alignment with two substantive review fixes, then passed every product lane.
+    - The destination started with an empty disposable compiler cache by design; no application data migration or cache-copy cycle was required.
+    - Cold merged-head native inventory compilation was required for the statistics record and did not alter the product path.
+  required_actions: []
