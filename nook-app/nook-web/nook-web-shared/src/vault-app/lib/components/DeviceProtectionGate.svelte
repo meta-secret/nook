@@ -16,6 +16,7 @@
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
+  let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
 
   const needsSetup = $derived(
     vault.deviceProtectionStatus === 'missing' ||
@@ -122,63 +123,106 @@
           : vault.t('device_protection.pin_setup_action')}
       </Button>
     {:else if needsSetup}
-      <div class="space-y-4" data-testid="device-protection-create-workflow">
-        <DeviceModeSelect
-          {vault}
-          id="device-protection-mode"
-          disabled={vault.isVerifying}
-        />
-
-        <div class="space-y-2">
-          <label
-            class="block text-sm font-medium"
-            for="device-protection-label"
-          >
-            {vault.t('device_protection.passkey_label')}
-          </label>
-          <input
-            id="device-protection-label"
-            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-            type="text"
-            autocomplete="off"
-            placeholder={vault.t('device_protection.passkey_label_placeholder')}
-            bind:value={passkeyLabel}
+      {#if setupWorkflow === 'authenticate'}
+        <div
+          class="space-y-4"
+          data-testid="device-protection-authenticate-workflow"
+        >
+          <p class="text-center text-sm text-muted-foreground">
+            {vault.t('device_protection.existing_passkey_hint')}
+          </p>
+          <Button
+            class="w-full"
             disabled={vault.isVerifying}
-            data-testid="device-protection-label-input"
+            data-testid="device-protection-use-existing-choice"
+            onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+          >
+            <KeyRound class="size-4" />
+            {vault.isVerifying
+              ? vault.t('device_protection.authorizing')
+              : vault.t('device_protection.existing_passkey_action')}
+          </Button>
+          <div class="flex items-center gap-3 pt-1">
+            <div class="h-px flex-1 bg-border"></div>
+            <span class="text-xs text-muted-foreground">
+              {vault.t('device_protection.new_passkey_alternative')}
+            </span>
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
+          <Button
+            class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+            variant="ghost"
+            size="sm"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-create-new-choice"
+            onclick={() => {
+              setupWorkflow = 'create'
+              vault.dismissError()
+            }}
+          >
+            <KeyRound class="size-4" />
+            {vault.t('device_protection.new_passkey_alternative_action')}
+          </Button>
+        </div>
+      {:else}
+        <div class="space-y-4" data-testid="device-protection-create-workflow">
+          <DeviceModeSelect
+            {vault}
+            id="device-protection-mode"
+            disabled={vault.isVerifying}
           />
+
+          <div class="space-y-2">
+            <label
+              class="block text-sm font-medium"
+              for="device-protection-label"
+            >
+              {vault.t('device_protection.passkey_label')}
+            </label>
+            <input
+              id="device-protection-label"
+              class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              type="text"
+              autocomplete="off"
+              placeholder={vault.t('device_protection.passkey_label_placeholder')}
+              bind:value={passkeyLabel}
+              disabled={vault.isVerifying}
+              data-testid="device-protection-label-input"
+            />
+          </div>
+          <Button
+            class="w-full"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-setup-btn"
+            onclick={() =>
+              vault.setupDeviceProtection(passkeyLabel, vault.draftDeviceMode)}
+          >
+            {vault.isVerifying
+              ? vault.t('device_protection.authorizing')
+              : vault.t('device_protection.setup_action')}
+          </Button>
+          <div class="flex items-center gap-3 pt-1">
+            <div class="h-px flex-1 bg-border"></div>
+            <span class="text-xs text-muted-foreground">
+              {vault.t('device_protection.existing_passkey_alternative')}
+            </span>
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
+          <Button
+            class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+            variant="ghost"
+            size="sm"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-use-existing-choice"
+            onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+          >
+            <KeyRound class="size-4" />
+            {vault.isVerifying
+              ? vault.t('device_protection.authorizing')
+              : vault.t('device_protection.existing_passkey_action')}
+          </Button>
         </div>
-        <Button
-          class="w-full"
-          disabled={vault.isVerifying}
-          data-testid="device-protection-setup-btn"
-          onclick={() =>
-            vault.setupDeviceProtection(passkeyLabel, vault.draftDeviceMode)}
-        >
-          {vault.isVerifying
-            ? vault.t('device_protection.authorizing')
-            : vault.t('device_protection.setup_action')}
-        </Button>
-        <div class="flex items-center gap-3 pt-1">
-          <div class="h-px flex-1 bg-border"></div>
-          <span class="text-xs text-muted-foreground">
-            {vault.t('device_protection.existing_passkey_alternative')}
-          </span>
-          <div class="h-px flex-1 bg-border"></div>
-        </div>
-        <Button
-          class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
-          variant="ghost"
-          size="sm"
-          disabled={vault.isVerifying}
-          data-testid="device-protection-use-existing-choice"
-          onclick={() => vault.recoverDeviceProtectionWithPasskey()}
-        >
-          <KeyRound class="size-4" />
-          {vault.isVerifying
-            ? vault.t('device_protection.authorizing')
-            : vault.t('device_protection.existing_passkey_alternative_action')}
-        </Button>
-      </div>
+      {/if}
     {:else if vault.deviceProtectionStatus === 'pin'}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">

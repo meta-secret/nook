@@ -30,10 +30,17 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('device-protection-setup-btn')).toBeVisible()
   await expect(
     page.getByTestId('device-protection-use-existing-choice'),
-  ).toHaveText('Use existing passkey')
+  ).toHaveText('Authenticate')
+  await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
+  await expect(
+    page.getByTestId('device-protection-create-new-choice'),
+  ).toHaveText('Create passkey')
+  await demoBeat(page)
+
+  await page.getByTestId('device-protection-create-new-choice').click()
+  await expect(page.getByTestId('device-protection-setup-btn')).toBeVisible()
   await demoBeat(page)
 
   await page.getByTestId('device-protection-setup-btn').click()

@@ -40,6 +40,7 @@
   let error = $state('')
   let passkeyLabel = $state('')
   let deviceMode = $state<ExtensionDeviceMode>('standard')
+  let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
   let pin = $state('')
   let pinConfirm = $state('')
   let pendingDevice = $state<ExtensionDeviceProtectionResult | undefined>()
@@ -313,6 +314,39 @@
           ? i18n.t('device_protection.authorizing')
           : i18n.t('device_protection.pin_setup_action')}
       </button>
+    {:else if needsSetup && setupWorkflow === 'authenticate'}
+      <p class="field-hint">
+        {i18n.t('device_protection.existing_passkey_hint')}
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        data-testid="device-protection-use-existing-choice"
+        onclick={useExistingPasskey}
+      >
+        {busy
+          ? i18n.t('device_protection.authorizing')
+          : i18n.t('device_protection.existing_passkey_action')}
+      </button>
+
+      <div class="divider">
+        <span></span>
+        <small>{i18n.t('device_protection.new_passkey_alternative')}</small>
+        <span></span>
+      </div>
+      <button
+        type="button"
+        class="alternative-button"
+        disabled={busy}
+        data-testid="device-protection-create-new-choice"
+        onclick={() => {
+          setupWorkflow = 'create'
+          error = ''
+        }}
+      >
+        <KeyRound size={17} />
+        {i18n.t('device_protection.new_passkey_alternative_action')}
+      </button>
     {:else if needsSetup}
       <div class="field-group">
         <label for="device-protection-mode">
@@ -373,12 +407,13 @@
       </div>
       <button
         type="button"
-        class="secondary-button"
+        class="alternative-button"
         disabled={busy}
         data-testid="device-protection-use-existing-choice"
         onclick={useExistingPasskey}
       >
-        {i18n.t('device_protection.existing_passkey_alternative_action')}
+        <KeyRound size={17} />
+        {i18n.t('device_protection.existing_passkey_action')}
       </button>
     {:else if status === 'pin'}
       <div class="field-group">
