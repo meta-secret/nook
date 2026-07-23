@@ -3,6 +3,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
+  import ExistingVaultRecoverySummary from '$lib/components/ExistingVaultRecoverySummary.svelte'
   import {
     Card,
     CardContent,
@@ -75,6 +76,8 @@
   </CardHeader>
 
   <CardContent class="space-y-3">
+    <ExistingVaultRecoverySummary {vault} />
+
     {#if vault.deviceProtectionStatus === 'pin-setup'}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">

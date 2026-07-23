@@ -144,6 +144,14 @@ export type StartSentinelGenesisArgs = {
   threshold: number;
 };
 
+export type ExistingVaultRecoverySummary = {
+  storeId: string;
+  vaultName: string;
+  devices: Array<{ deviceId: string; label: string; passkeyHint: string }>;
+  passwordEntries: Array<{ id: string; label: string; createdAt: string }>;
+  requiresSentinelQuorum: boolean;
+};
+
 function storageArgsTuple(
   args: NookStorageConnectArgs,
 ): [string, string, string] {
@@ -209,6 +217,9 @@ export class VaultState {
   localLoginPrepared = $state(false);
   loginSetupType = $state<StorageProviderType | undefined>(undefined);
   loginRequiresExistingVault = $state(false);
+  existingVaultRecoverySummary = $state<
+    ExistingVaultRecoverySummary | undefined
+  >(undefined);
   addProviderOpen = $state(false);
 
   storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE);
