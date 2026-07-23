@@ -162,8 +162,11 @@ hosted-runner allowance instead of queueing on one Docker host. Delivery builds
 restore distinct GitHub Actions BuildKit cache scopes; main refreshes the
 default-branch scopes that new PRs may access. PR writes are isolated by both PR
 number and workflow job, so the native, WASM, and verify exporters cannot
-replace one another's overlapping Rust cache lineage. The self-hosted `nook`
-label is reserved for runner cleanup while that machine remains registered.
+replace one another's overlapping Rust cache lineage. A job reads Main fallback
+scopes only while one of its own required cache indices is missing; subsequent
+pushes read the private lineage alone so equivalent records from another
+exporter cannot invalidate its children. The self-hosted `nook` label is
+reserved for runner cleanup while that machine remains registered.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen

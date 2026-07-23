@@ -367,10 +367,15 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
     assert!(setup.contains("cache-telemetry.cjs start"));
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
     assert!(setup.contains("job_scope=\"$(printf '%s' \"$GITHUB_JOB\""));
-    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=-pr-$pr_number-$job_scope"));
+    assert!(setup.contains("scope_suffix=\"-pr-$pr_number-$job_scope\""));
+    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
+    assert!(setup.contains("repos/$GITHUB_REPOSITORY/actions/caches"));
+    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
+    assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
+    assert!(bake.contains("GHA_CACHE_FALLBACK_ENABLED != \"\""));
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",

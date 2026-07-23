@@ -385,7 +385,9 @@ default-branch cache that new PRs may restore. Each PR writes only to
 PR-number-and-job-suffixed scopes, reads those before the Main fallback, and
 therefore keeps later pushes and reruns stable while other delivery jobs build.
 Job ownership also prevents the native, WASM, and verify exporters from
-replacing one another's overlapping Rust cache lineage.
+replacing one another's overlapping Rust cache lineage. Main fallback scopes
+seed only a missing job lineage; once its required cache indices exist, later
+pushes restore that private lineage without mixing mutable exporters.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
