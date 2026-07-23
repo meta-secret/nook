@@ -825,13 +825,19 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const emptyOtpPage = await context.newPage()
     await emptyOtpPage.goto(`${loginServer.origin}/otp`)
     const emptyOtpWidget = emptyOtpPage.locator('#nook-auth-widget')
+    const emptyAuthenticatorPickerPromise = context.waitForEvent('page')
     await emptyOtpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
+    const emptyAuthenticatorPicker = await emptyAuthenticatorPickerPromise
+    await emptyAuthenticatorPicker.waitForURL(/intent=authenticator-picker/)
     await expect(
-      emptyOtpWidget.getByText('There is no 2FA code saved in your vault yet.'),
+      emptyAuthenticatorPicker.getByRole('heading', {
+        name: 'Choose a 2FA code',
+      }),
     ).toBeVisible()
     await expect(
-      emptyOtpWidget.getByRole('button', { name: 'Add 2FA in vault' }),
+      emptyAuthenticatorPicker.getByText('No matching 2FA items.'),
     ).toBeVisible()
+    await emptyAuthenticatorPicker.close()
     await emptyOtpPage.close()
 
     await reopenedVaultPage.getByTestId('add-secret-btn').click()
