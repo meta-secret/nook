@@ -8,7 +8,7 @@ target "rust-base" {
   target     = "rust-base"
   platforms  = ["linux/amd64"]
   args = {
-    SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
+    SCCACHE_REDIS_ENDPOINT = SCCACHE_REDIS_ENDPOINT
   }
   cache-from = rust_base_cache_from
   cache-to   = rust_base_cache_to

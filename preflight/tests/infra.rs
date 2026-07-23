@@ -42,7 +42,7 @@ fn assert_no_shell_scripts(path: &Path) {
 }
 
 #[test]
-fn remote_cache_and_registry_are_private_and_persistent() {
+fn remote_cache_is_public_over_tls_and_registry_remains_private() {
     assert_remote_compose_contract();
     assert_infrastructure_deploy_contract();
     assert_mesh_node_contract();
@@ -51,7 +51,8 @@ fn remote_cache_and_registry_are_private_and_persistent() {
 fn assert_remote_compose_contract() {
     let compose = read("infra/compose.yaml");
     for required in [
-        "127.0.0.1:6380:6379",
+        "6380:6380",
+        "443:443",
         "127.0.0.1:5000:5000",
         "requirepass $$password",
         "/run/redis/redis.conf",
@@ -63,10 +64,10 @@ fn assert_remote_compose_contract() {
         "allkeys-lru",
         "redis-data:/data",
         "registry-data:/var/lib/registry",
-        "cloudflare/cloudflared:2026.7.2@sha256:",
-        "file: ./secrets/cloudflare-tunnel-token",
-        "network_mode: host",
-        "--token-file",
+        "traefik:v3.7.1@sha256:",
+        "--certificatesResolvers.letsencrypt.acme.tlsChallenge=true",
+        "./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro",
+        "traefik-data:/data",
         "restart: unless-stopped",
         "no-new-privileges:true",
     ] {
@@ -79,7 +80,7 @@ fn assert_remote_compose_contract() {
         !compose.contains("--requirepass"),
         "the Redis password must be loaded from a restrictive config, not process argv"
     );
-    assert!(!compose.contains("- 6380:6379") && !compose.contains("- 5000:5000"));
+    assert!(!compose.contains("6380:6379") && !compose.contains("- 5000:5000"));
     assert!(
         compose.matches("@sha256:").count() >= 3,
         "infrastructure service images must be digest pinned"
@@ -89,6 +90,38 @@ fn assert_remote_compose_contract() {
     assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
 
     assert_no_shell_scripts(&repository_root().join("infra"));
+
+    let traefik = read("infra/traefik-dynamic.yaml");
+    for required in [
+        "HostSNI(`redis-ovh-borg-1.bynull.link`)",
+        "certResolver: letsencrypt",
+        "address: redis:6379",
+    ] {
+        assert!(
+            traefik.contains(required),
+            "Traefik Redis TLS routing is missing: {required}"
+        );
+    }
+
+    let nftables = read("infra/nftables.conf");
+    for required in [
+        "chain input",
+        "chain forward",
+        "policy drop",
+        "ct state established,related accept",
+        "tcp dport { 22, 443, 6380 } accept",
+        "iifname \"docker0\" accept",
+        "iifname \"br-*\" accept",
+        "oifname \"docker0\" accept",
+        "oifname \"br-*\" accept",
+        "chain output",
+        "policy accept",
+    ] {
+        assert!(
+            nftables.contains(required),
+            "host firewall must preserve default-drop filtering and Docker forwarding: {required}"
+        );
+    }
 }
 
 fn assert_infrastructure_deploy_contract() {
@@ -110,10 +143,10 @@ fn assert_infrastructure_deploy_contract() {
         "docker compose -f '$remote_compose' up -d --remove-orphans --wait",
         "openssl rand -hex 32",
         "chmod 0600 '$remote_secrets/redis-password'",
-        "chmod 0400 '$remote_secrets/cloudflare-tunnel-token'",
+        "traefik-dynamic.yaml.next",
         "cat /run/secrets/redis-password",
         "redis-cli ping",
-        "grep -qx cloudflared",
+        "grep -qx traefik",
         "http://127.0.0.1:5000/v2/",
     ] {
         assert!(
@@ -126,7 +159,14 @@ fn assert_infrastructure_deploy_contract() {
     assert!(!deploy.contains("chmod 0444"));
     assert!(!infra_tasks.contains("-e REDISCLI_AUTH"));
     assert!(!infra_tasks.contains("--env REDISCLI_AUTH"));
-    assert!(deploy.contains("missing Cloudflare tunnel token"));
+    assert!(!deploy.contains("cloudflare"));
+
+    let sync = infra_tasks
+        .split("\n  redis:credential:sync:\n")
+        .nth(1)
+        .expect("infra must provide local Redis credential synchronization");
+    assert!(sync.contains(".nook/cache/redis-password"));
+    assert!(sync.contains("chmod 0600"));
 
     assert!(read(".gitignore").contains("/infra/secrets/"));
     assert!(read(".dockerignore").contains("infra/secrets"));

@@ -1,4 +1,5 @@
 .git
+.nook
 **/target
 **/node_modules
 **/dist

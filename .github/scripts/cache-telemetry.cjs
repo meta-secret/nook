@@ -206,7 +206,7 @@ function readHistoryEvents(ref) {
 }
 
 function cacheBackendFromEnvironment(environment = process.env) {
-  const kind = environment.NOOK_SCCACHE_BACKEND === 'remote' ? 'remote' : 'local_fallback'
+  const kind = environment.NOOK_SCCACHE_BACKEND === 'remote' ? 'remote' : 'direct_compile'
   return {
     kind,
     persistent: kind === 'remote',
@@ -247,7 +247,7 @@ function validateTelemetryRecord(record, expected = {}) {
       `telemetry attempt ${record.github.run_attempt} does not match expected attempt ${expected.runAttempt}`,
     )
   }
-  if (!['remote', 'local_fallback'].includes(record.cache_backend?.kind)) {
+  if (!['remote', 'direct_compile'].includes(record.cache_backend?.kind)) {
     throw new Error('telemetry cache_backend.kind is invalid')
   }
   if (typeof record.cache_backend.persistent !== 'boolean') {

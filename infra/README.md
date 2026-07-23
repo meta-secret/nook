@@ -2,50 +2,42 @@
 
 This directory owns the small stateful Docker stack used by Nook builds:
 
-- Redis on server loopback port `6380`, protected by a generated 256-bit
+- Redis on the internal Compose network, protected by a generated 256-bit
   password, with AOF persistence and a 12 GiB LRU ceiling.
-- A repository-managed Cloudflare Tunnel connector publishes Redis as
-  `redis-ovh-borg-1.bynull.link` without opening a server firewall port.
-  Cloudflare Access admits only the GitHub Actions service token, and Redis
-  still requires its own password. The connector uses host networking so the
-  remotely managed `tcp://localhost:6380` ingress reaches loopback Redis.
+- Traefik publishes native Redis TLS at
+  `rediss://redis-ovh-borg-1.bynull.link:6380`, obtains and renews its
+  certificate through ACME on port `443`, and forwards only to internal Redis.
 - An OCI Distribution registry on server loopback port `5000`, with persistent
   storage. It is deployed for future Docker/BuildKit caching but is not yet used
   by CI.
 
-Redis and the registry remain loopback-only on the server. Do not publish the
-registry until it has an explicit TLS and authentication design.
+Redis is public only through TLS termination and password authentication. The
+registry remains loopback-only; do not publish it until it has an explicit TLS
+and authentication design.
 
 Deploy and inspect the stack from the repository root:
 
 ```sh
 task infra:deploy
 task infra:status
+task infra:redis:credential:sync
 task infra:redis:stats
 task infra:registry:check
 ```
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
 remote deployment directory. The default target is
-`debian@ssh-ovh-borg-1.bynull.link`. The server must already contain the
-Cloudflare tunnel token at `secrets/cloudflare-tunnel-token`; deployment
-deliberately does not copy that credential from the repository. The containing
-`secrets/` directory is mode `0700`; the token file is read-only so the
-non-root `cloudflared` container, which runs as the deployment user's UID, can
-consume the Compose bind-mounted secret without making it group- or
-world-readable.
+`debian@ssh-ovh-borg-1.bynull.link`. Deployment creates the Redis password when
+needed and never copies it into the repository. The containing `secrets/`
+directory is mode `0700`; the password file is mode `0600`.
 
-Node-to-node connectivity is a separate Cloudflare Mesh concern: each Linux
-server joins as a headless Cloudflare One Client and receives a private Mesh IP.
-GitHub Actions does not join that long-lived node network; it reaches Redis
-through the narrowly scoped Access TCP application described above.
+Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
+by the Redis cache.
 
-Only trusted default-branch and normal nightly jobs receive the Redis and
-Cloudflare Access secrets. Pull-request heads, arbitrary release refs,
-dependency-update agents, and AI-authored jobs use the job-local Redis fallback;
-otherwise code under review could read and exfiltrate the shared credentials.
-An unavailable remote cache is also a performance-only failure and falls back
-locally without failing the build.
+Only trusted default-branch and normal nightly jobs receive the Redis password.
+Pull-request heads, arbitrary release refs, dependency-update agents, and
+AI-authored jobs compile without sccache; otherwise code under review could
+read, poison, or exfiltrate the shared cache.
 
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 

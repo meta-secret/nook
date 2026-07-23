@@ -273,19 +273,16 @@ commit-scoped host directory, then builds a web-only image. Concurrent builds
 cannot consume each other's handoff; Rust `target/` and the compiler toolchain
 never enter `nook-web:local`.
 
-Before local Rust compilation, Task idempotently starts a Docker-host-only
-`nook-sccache-redis` container so short-lived compilers can reuse compatible
-crate compiler outputs. Delivery workflows use the same no-secret job-local
-service. The password-protected persistent Redis service deployed from
-[`infra/`](infra/) through Cloudflare Access remains available to explicit
-trusted operations: runtime Rust containers mount its credential, while
-secret-free image-build compiler steps bypass remote sccache so their BuildKit
-vertices remain reusable. Pull requests, arbitrary refs, dependency-update
-agents, and AI-authored jobs never receive that credential. Local builds need
-no remote credentials. Override local
-defaults with `SCCACHE_REDIS_PORT`, `SCCACHE_REDIS_MAXMEMORY`, or
-`SCCACHE_REDIS_IMAGE`. Runtime containers receive an explicit 1,048,576
-open-file limit; override with `DOCKER_NOFILE_LIMIT`.
+Rust compilation can use the persistent password-protected Redis service
+deployed from [`infra/`](infra/) directly over verified TLS at
+`rediss://redis-ovh-borg-1.bynull.link:6380`. Run
+`task infra:redis:credential:sync` once to create the ignored mode-`0600`
+`.nook/cache/redis-password` file. Without that file, local and untrusted CI
+builds compile normally without sccache. Trusted Main and nightly jobs receive
+the Redis password; pull requests, arbitrary refs, dependency-update agents,
+and AI-authored jobs do not. Override the endpoint with
+`SCCACHE_REDIS_ENDPOINT`. Runtime containers receive an explicit 1,048,576
+open-file limit; override it with `DOCKER_NOFILE_LIMIT`.
 
 macOS has no inotify; Docker workloads use the inotify implementation in Docker
 Desktop's Linux VM. Reapply after Docker Desktop restarts:
@@ -399,13 +396,10 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 `task wasm:*` commands load a separate source-sealed Rust image on demand.
 
 Rust compilation has a second cache boundary below Docker layers: pinned
-`sccache` clients use Redis to reuse compatible source-sensitive compiler
-outputs. Delivery CI always uses a job-local Docker-host-only Redis service and
-never mounts remote-cache credentials into Rust build steps, so Main and pull
-requests restore identical BuildKit dependency and source layers. Local builds
-use the same Docker-host-only service. The authenticated Cloudflare Access path
-to the server cache remains available for explicit trusted operations, outside
-delivery builds. Redis does not cache Cargo downloads or Docker layers.
+`sccache` clients use the direct TLS Redis endpoint to reuse compatible
+source-sensitive compiler outputs whenever a credential is available. A
+secret-free build bypasses sccache. Redis does not cache Cargo downloads or
+Docker layers.
 PR CI also uploads the small native coverage and generated WASM handoffs. After
 the complete PR workflow succeeds, default-branch-only
 `pr-validation-handoff.yml` verifies the source run and required jobs, validates

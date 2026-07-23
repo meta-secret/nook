@@ -13,95 +13,78 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
+fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [
-        "SCCACHE_REDIS_MODE",
-        "if [ \"$mode\" = external ]",
-        "external Redis is healthy through host.docker.internal:$port",
-        "if [ \"$(uname -s)\" = Darwin ]",
-        "bind_ip=127.0.0.1",
-        "network inspect bridge",
-        "--publish \"$bind_ip:$port:6379\"",
-        "--add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}",
-        "resolve-docker-host-ip.sh",
-        "--set '*.args.SCCACHE_REDIS_PORT={{.SCCACHE_REDIS_PORT}}'",
+        "rediss://redis-ovh-borg-1.bynull.link:6380",
+        ".nook/cache/redis-password",
+        "no Redis credential; compiling without sccache",
+        "direct TLS Redis is unavailable; compiling without remote sccache",
+        "direct TLS Redis is healthy",
+        "SCCACHE_REDIS_TLS_SERVER_NAME",
+        "redis-cli --sni",
+        "--set '*.args.SCCACHE_REDIS_ENDPOINT={{.SCCACHE_REDIS_ENDPOINT}}'",
     ] {
         assert!(
             app_tasks.contains(required),
-            "sccache Redis lifecycle is missing portable routing: {required}"
+            "direct sccache Redis configuration is missing: {required}"
         );
     }
     assert!(
-        !app_tasks.contains("--publish \"0.0.0.0:"),
-        "the compiler cache must never publish Redis on every host interface"
-    );
-    assert!(
-        !app_tasks.contains("| jq"),
-        "sccache bootstrap must not add jq to the host prerequisites"
+        app_tasks.contains("SCCACHE_REDIS_PASSWORD_FILE: '{{.SCCACHE_REDIS_PASSWORD_FILE}}'"),
+        "Task must export the resolved credential path for Bake's HCL secret source"
     );
     assert!(
         !app_tasks.contains("print $4; exit") && !app_tasks.contains("print $2; exit"),
         "pipefail-safe Docker inspection must consume complete output instead of SIGPIPEing the producer"
     );
+    assert!(
+        app_tasks
+            .matches("password_file=\"{{.SCCACHE_REDIS_PASSWORD_FILE}}\"")
+            .count()
+            >= 2,
+        "Bake permission and mount arguments must use the resolved Task credential path"
+    );
+    assert!(
+        read(".dockerignore").lines().any(|line| line == ".nook"),
+        "ignored local credentials must never enter a Docker build context"
+    );
 
     let bake = read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("variable \"SCCACHE_REDIS_HOST_IP\""));
-    assert!(bake.contains("variable \"SCCACHE_REDIS_HOST_IP\" {\n  default = \"\""));
-    assert!(bake.contains("\"host.docker.internal\" = SCCACHE_REDIS_HOST_IP"));
+    assert!(bake.contains("variable \"SCCACHE_REDIS_ENDPOINT\""));
+    assert!(bake.contains("target \"_sccache\""));
+    assert!(!bake.contains("extra-hosts"));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(
-        rust_base
-            .contains("SCCACHE_REDIS_ENDPOINT=redis://host.docker.internal:${SCCACHE_REDIS_PORT}")
+        rust_base.contains("ARG SCCACHE_REDIS_ENDPOINT=rediss://redis-ovh-borg-1.bynull.link:6380")
     );
+    assert!(rust_base.contains("ENV SCCACHE_REDIS_ENDPOINT=${SCCACHE_REDIS_ENDPOINT}"));
     assert!(rust_base.contains("SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock"));
-
-    let docker_tasks = read("nook-app/docker/Taskfile.yml");
-    assert!(
-        docker_tasks
-            .matches("--add-host host.docker.internal:{{.SCCACHE_REDIS_HOST_IP}}")
-            .count()
-            >= 5,
-        "every Rust-capable runtime path must resolve the shared Redis endpoint"
-    );
-    assert!(
-        docker_tasks
-            .matches("-e SCCACHE_REDIS_HOST_IP=\"{{.SCCACHE_REDIS_HOST_IP}}\"")
-            .count()
-            >= 7,
-        "runtime containers must inherit the resolved address without needing Docker"
-    );
 
     for path in [
         "nook-app/Taskfile.yml",
         "nook-app/docker/Taskfile.yml",
         "nook-app/docker-bake.hcl",
+        "nook-app/docker/base.Dockerfile",
     ] {
-        let forbidden_gateway_token = ["host", "gateway"].join("-");
         assert!(
-            !read(path).contains(&forbidden_gateway_token),
-            "{path} must use the resolved numeric Docker host address"
+            !read(path).contains("host.docker.internal")
+                && !read(path).contains("SCCACHE_REDIS_HOST_IP"),
+            "{path} must not route Redis through the Docker host"
         );
     }
 
-    let resolver = read("nook-app/docker/resolve-docker-host-ip.sh");
-    for required in [
-        "ping -4 -c 1 host.docker.internal",
-        "network inspect bridge",
-        "*[!0-9.]*",
-    ] {
-        assert!(
-            resolver.contains(required),
-            "Docker host resolver is missing: {required}"
-        );
-    }
+    assert!(
+        !repository_root()
+            .join("nook-app/docker/resolve-docker-host-ip.sh")
+            .exists()
+    );
 }
 
 #[test]
 fn github_actions_keep_remote_credentials_out_of_delivery_builds() {
     assert_cache_actions_use_credential_files();
-    assert_cache_connector_redacts_credentials();
     assert_workflows_scope_cache_credentials();
     assert_rust_build_cache_boundary();
 }
@@ -110,8 +93,6 @@ fn assert_cache_actions_use_credential_files() {
     let action = read(".github/actions/nook-docker-setup/action.yml");
     for required in [
         "cache-redis-password",
-        "cache-cloudflare-client-id",
-        "cache-cloudflare-client-secret",
         "uses: ./.github/actions/nook-cache-connect",
     ] {
         assert!(
@@ -119,10 +100,8 @@ fn assert_cache_actions_use_credential_files() {
             "GitHub Actions cache configuration is missing: {required}"
         );
     }
-    assert!(
-        !action.contains("ssh -fNT") && !action.contains("CACHE_SSH_PRIVATE_KEY"),
-        "routine Rust jobs must use Cloudflare Access instead of installing an SSH tunnel"
-    );
+    assert!(!action.contains("cloudflare-client"));
+    assert!(!action.contains("ssh -fNT") && !action.contains("CACHE_SSH_PRIVATE_KEY"));
     let cache_step = action
         .split("    - name: Configure persistent Rust compiler cache\n")
         .nth(1)
@@ -137,20 +116,16 @@ fn assert_cache_actions_use_credential_files() {
 
     let cache_action = read(".github/actions/nook-cache-connect/action.yml");
     assert!(cache_action.contains("using: node24"));
+    assert!(!cache_action.contains("cloudflare"));
     let cache_action_main = read(".github/actions/nook-cache-connect/main.js");
     for required in [
         "mode: 0o700",
         "mode: 0o600",
-        "delete taskEnvironment[inputName]",
-        "CACHE_REDIS_PASSWORD_FILE",
-        "CACHE_CLOUDFLARE_CLIENT_ID_FILE",
-        "CACHE_CLOUDFLARE_CLIENT_SECRET_FILE",
-        "spawnSync(\"task\", [\"infra:cache:connect\"]",
-        "externalCacheEnabled",
-        "fs.rmSync(credentialDirectory, { recursive: true, force: true })",
-        "NOOK_SCCACHE_BACKEND=local_fallback",
+        "delete process.env[inputName]",
+        "SCCACHE_REDIS_PASSWORD_FILE",
+        "NOOK_SCCACHE_BACKEND=direct_compile",
         "NOOK_SCCACHE_BACKEND=remote",
-        "NOOK_SCCACHE_BACKEND_REASON=persistent_service",
+        "NOOK_SCCACHE_BACKEND_REASON=persistent_tls_service",
     ] {
         assert!(
             cache_action_main.contains(required),
@@ -160,97 +135,8 @@ fn assert_cache_actions_use_credential_files() {
     assert!(!cache_action_main.contains("console."));
     assert!(!cache_action_main.contains("shell: true"));
     assert!(!cache_action_main.contains("process.stdout.write"));
-    assert!(
-        !cache_action_main.contains("spawnSync(\"task\", [\"infra:cache:connect\", redisPassword")
-    );
-}
-
-fn assert_cache_connector_redacts_credentials() {
-    let infra_tasks = read("infra/Taskfile.yml");
-    let connector = infra_tasks
-        .split("\n  cache:connect:\n")
-        .nth(1)
-        .expect("infra Taskfile must contain the cache connector")
-        .split("\n  deploy:\n")
-        .next()
-        .expect("infra Taskfile must contain the cache connector before deploy");
-    for required in [
-        "cloudflare/cloudflared:2026.7.2@sha256:",
-        "access tcp",
-        "--hostname redis-ovh-borg-1.bynull.link",
-        "CACHE_REDIS_PASSWORD_FILE",
-        "CACHE_CLOUDFLARE_CLIENT_ID_FILE",
-        "CACHE_CLOUDFLARE_CLIENT_SECRET_FILE",
-        "TUNNEL_SERVICE_TOKEN_ID",
-        "TUNNEL_SERVICE_TOKEN_SECRET",
-        "SCCACHE_REDIS_MODE=external",
-        "SCCACHE_REDIS_HOST_IP=$bridge_ip",
-        "SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file",
-        "using the job-local Redis fallback",
-        "kill \"$cloudflared_pid\"",
-        "cleanup_cloudflared_extract",
-        "fallback_from_cloudflared_extract",
-        "if ! extract_container=\"$(docker create",
-        "if ! docker cp",
-        "if ! chmod 0700 \"$cloudflared_binary\"",
-        "Persistent Rust cache proxy setup failed; using the job-local Redis fallback",
-    ] {
-        assert!(
-            connector.contains(required),
-            "GitHub Actions cache connector is missing: {required}"
-        );
-    }
-    assert!(!connector.contains("188.165.236.156"));
-    assert!(connector.contains("silent: true"));
-    assert!(!connector.contains("set -x"));
-    assert!(!connector.contains("docker logs \"$proxy_container\""));
-    assert!(!connector.contains("cat \"$cloudflared_log\""));
-    assert!(
-        connector.contains("diagnostic=\"${diagnostic//\"$cloudflare_client_id\"/[REDACTED]}\"")
-    );
-    assert!(
-        connector
-            .contains("diagnostic=\"${diagnostic//\"$cloudflare_client_secret\"/[REDACTED]}\"")
-    );
-    assert!(!connector.contains("SCCACHE_REDIS_PASSWORD=$CACHE_REDIS_PASSWORD"));
-    assert!(!connector.contains("CACHE_REDIS_PASSWORD: ${{"));
-    assert!(!connector.contains("--env REDISCLI_AUTH"));
-    assert!(!connector.contains("--env TUNNEL_SERVICE_TOKEN"));
-    assert!(!connector.contains("--service-token-id"));
-    assert!(!connector.contains("--service-token-secret"));
-    assert!(
-        !connector.contains("print $4; exit"),
-        "pipefail-safe bridge discovery must not stop Docker inspection early"
-    );
-    for forbidden_output in [
-        "echo \"$cloudflare_client_id\"",
-        "echo \"$cloudflare_client_secret\"",
-        "echo \"$redis_password\"",
-        "printf '%s\\n' \"$cloudflare_client_id\"",
-        "printf '%s\\n' \"$cloudflare_client_secret\"",
-    ] {
-        assert!(
-            !connector.contains(forbidden_output),
-            "cache Task output may expose a credential through: {forbidden_output}"
-        );
-    }
-
-    let github_environment = connector
-        .split("        {\n          echo \"SCCACHE_REDIS_MODE=external\"")
-        .nth(1)
-        .and_then(|tail| tail.split("        } >> \"$GITHUB_ENV\"").next())
-        .expect("cache connector must export only the external-cache routing block");
-    assert!(github_environment.contains("SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file"));
-    for secret_value in [
-        "cloudflare_client_id",
-        "cloudflare_client_secret",
-        "redis_password\"",
-    ] {
-        assert!(
-            !github_environment.contains(secret_value),
-            "GITHUB_ENV must contain only credential file paths, never {secret_value}"
-        );
-    }
+    assert!(!cache_action_main.contains("spawnSync"));
+    assert!(!cache_action_main.contains("cloudflare"));
 }
 
 fn assert_workflows_scope_cache_credentials() {
@@ -262,11 +148,7 @@ fn assert_workflows_scope_cache_credentials() {
         ".github/workflows/rust-dependency-updates.yml",
     ] {
         let workflow = read(path);
-        for secret in [
-            "NOOK_CACHE_REDIS_PASSWORD",
-            "NOOK_CLOUDFLARE_ACCESS_CLIENT_ID",
-            "NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET",
-        ] {
+        for secret in ["NOOK_CACHE_REDIS_PASSWORD", "NOOK_CLOUDFLARE_ACCESS"] {
             assert!(
                 !workflow.contains(secret),
                 "untrusted or arbitrary-ref workflow {path} must not receive {secret}"
@@ -279,17 +161,19 @@ fn assert_workflows_scope_cache_credentials() {
         ".github/workflows/e2e-nightly.yml",
     ] {
         let workflow = read(path);
-        for secret in [
-            "NOOK_CACHE_REDIS_PASSWORD",
-            "NOOK_CLOUDFLARE_ACCESS_CLIENT_ID",
-            "NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET",
-        ] {
-            assert!(
-                !workflow.contains(secret),
-                "delivery workflow {path} must use the job-local cache and stable BuildKit keys"
-            );
-        }
+        assert!(workflow.contains("NOOK_CACHE_REDIS_PASSWORD"));
+        assert!(!workflow.contains("NOOK_CLOUDFLARE_ACCESS"));
     }
+
+    let nightly = read(".github/workflows/e2e-nightly.yml");
+    let nightly_fix = nightly
+        .split_once("\n  ci-fix:\n")
+        .expect("nightly workflow must define its AI fix job")
+        .1;
+    assert!(
+        !nightly_fix.contains("NOOK_CACHE_REDIS_PASSWORD"),
+        "agent-authored nightly repair builds must not receive shared cache credentials"
+    );
 }
 
 fn assert_rust_build_cache_boundary() {
@@ -308,19 +192,23 @@ fn assert_rust_build_cache_boundary() {
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
     assert!(rust_base.contains("NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}"));
+    assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
 
-    assert!(bake.contains("SCCACHE_REDIS_MODE = SCCACHE_REDIS_MODE"));
+    assert!(bake.contains("SCCACHE_REDIS_MODE") && bake.contains("= SCCACHE_REDIS_MODE"));
     assert!(app_tasks.contains("--set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'"));
 
     let secret_mount = "--mount=type=secret,id=sccache_redis_password";
     let core_dockerfile = read("nook-app/nook-core/Dockerfile");
     assert!(
-        !core_dockerfile.contains(secret_mount),
-        "Rust dependency and source layers must remain reusable across Main and PR jobs"
+        core_dockerfile.matches(secret_mount).count() >= 12,
+        "every native Rust compiler layer must receive the optional cache credential"
     );
     assert!(
-        !read("nook-app/nook-wasm/Dockerfile").contains(secret_mount),
-        "WASM source layers must remain reusable across Main and PR jobs"
+        read("nook-app/nook-wasm/Dockerfile")
+            .matches(secret_mount)
+            .count()
+            >= 3,
+        "every WASM compiler layer must receive the optional cache credential"
     );
 }
 
@@ -478,7 +366,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
 }
 
 #[test]
-fn rust_build_targets_inherit_the_sccache_host_mapping() {
+fn rust_build_targets_inherit_the_sccache_configuration() {
     for (path, targets) in [
         (
             "nook-app/nook-core/docker-bake.hcl",
@@ -506,8 +394,8 @@ fn rust_build_targets_inherit_the_sccache_host_mapping() {
                 .unwrap_or_else(|| panic!("unterminated target {target} in {path}"))
                 .0;
             assert!(
-                body.contains("inherits") && body.contains("_sccache-network"),
-                "{target} must inherit the sccache host mapping"
+                body.contains("inherits") && body.contains("_sccache"),
+                "{target} must inherit the sccache configuration"
             );
         }
     }

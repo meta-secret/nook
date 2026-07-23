@@ -124,7 +124,7 @@ test('reports the selected persistent or fallback Redis backend without credenti
     { kind: 'remote', persistent: true, reason: 'persistent_service' },
   )
   assert.deepEqual(cacheBackendFromEnvironment({}), {
-    kind: 'local_fallback',
+    kind: 'direct_compile',
     persistent: false,
     reason: 'credentials_unavailable',
   })

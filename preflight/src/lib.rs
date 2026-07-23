@@ -1,3 +1,5 @@
+pub mod coverage;
+
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -603,7 +605,12 @@ fn is_dockerfile(name: &std::ffi::OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        sync::atomic::{AtomicU64, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn reports_only_cache_mounts_in_dockerfiles() {
@@ -802,7 +809,10 @@ export function configuredCapability(): NookProviderReplicationCapability {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("nook-preflight-{unique}"));
+        let process_id = std::process::id();
+        let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("nook-preflight-{process_id}-{unique}-{sequence}"));
         fs::create_dir(&path).unwrap();
         path
     }

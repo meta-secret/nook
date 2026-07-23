@@ -221,115 +221,8 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_MESH_SSH_TARGET}}"
         'sudo -n warp-cli status && ip -brief address | grep CloudflareWARP'
 
-  cache:connect:
-    desc: Connect a CI runner to the Access-protected Redis compiler cache.
-    silent: true
-    cmds:
-      - |
-        bash <<'BASH'
-        set -euo pipefail
-
-        cloudflared_image="cloudflare/cloudflared:2026.7.2@sha256:4f6655284ab3d252b7f28fedb19fe6c8fc82ee5b1295c20ac74d475e5398a52d"
-        redis_image="redis:8.2.2-alpine@sha256:59b6e694653476de2c992937ebe1c64182af4728e54bb49e9b7a6c26614d8933"
-
-        if [ -z "${CACHE_REDIS_PASSWORD_FILE:-}" ] || [ -z "${CACHE_CLOUDFLARE_CLIENT_ID_FILE:-}" ] || [ -z "${CACHE_CLOUDFLARE_CLIENT_SECRET_FILE:-}" ]; then
-          exit 0
-        fi
-        if [ ! -r "$CACHE_REDIS_PASSWORD_FILE" ] || [ ! -r "$CACHE_CLOUDFLARE_CLIENT_ID_FILE" ] || [ ! -r "$CACHE_CLOUDFLARE_CLIENT_SECRET_FILE" ]; then
-          echo "::warning::Persistent Rust cache credential files are unreadable; using the job-local Redis fallback" >&2
-          exit 0
-        fi
-
-        redis_password_file="$CACHE_REDIS_PASSWORD_FILE"
-        cloudflared_binary="$RUNNER_TEMP/nook-cache-cloudflared"
-        cloudflared_log="$RUNNER_TEMP/nook-cache-cloudflared.log"
-        cloudflare_client_id="$(cat "$CACHE_CLOUDFLARE_CLIENT_ID_FILE")"
-        cloudflare_client_secret="$(cat "$CACHE_CLOUDFLARE_CLIENT_SECRET_FILE")"
-
-        bridge_ip="$(docker network inspect bridge | awk -F'"' '/"Gateway":/ && !found { print $4; found=1 }')"
-        case "$bridge_ip" in
-          ''|*[!0-9.]*)
-            echo "::error::Could not resolve the Docker bridge IPv4 gateway" >&2
-            exit 1
-            ;;
-        esac
-
-        extract_container=""
-        cleanup_cloudflared_extract() {
-          if [ -n "$extract_container" ]; then
-            docker rm -f "$extract_container" >/dev/null 2>&1 || true
-          fi
-          rm -f "$cloudflared_binary" "$cloudflared_log"
-        }
-        fallback_from_cloudflared_extract() {
-          cleanup_cloudflared_extract
-          trap - EXIT
-          echo "::warning::Persistent Rust cache proxy setup failed; using the job-local Redis fallback" >&2
-          exit 0
-        }
-
-        if ! extract_container="$(docker create "$cloudflared_image" 2>/dev/null)"; then
-          fallback_from_cloudflared_extract
-        fi
-        trap cleanup_cloudflared_extract EXIT
-        if ! docker cp "$extract_container:/usr/local/bin/cloudflared" "$cloudflared_binary" >/dev/null 2>&1; then
-          fallback_from_cloudflared_extract
-        fi
-        if ! chmod 0700 "$cloudflared_binary"; then
-          fallback_from_cloudflared_extract
-        fi
-        docker rm -f "$extract_container" >/dev/null 2>&1 || true
-        extract_container=""
-        trap - EXIT
-
-        TUNNEL_SERVICE_TOKEN_ID="$cloudflare_client_id" \
-        TUNNEL_SERVICE_TOKEN_SECRET="$cloudflare_client_secret" \
-          nohup "$cloudflared_binary" \
-          access tcp \
-          --hostname redis-ovh-borg-1.bynull.link \
-          --url "$bridge_ip:6380" \
-          --log-level error \
-          --logfile "$cloudflared_log" >/dev/null 2>&1 &
-        cloudflared_pid=$!
-
-        cache_ready=""
-        for _ in $(seq 1 "${CACHE_CONNECT_ATTEMPTS:-30}"); do
-          if docker run --rm \
-            --add-host "host.docker.internal:$bridge_ip" \
-            --mount "type=bind,src=$redis_password_file,dst=/run/secrets/redis-password,readonly" \
-            "$redis_image" \
-            sh -ec 'export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli -h host.docker.internal -p 6380 ping' \
-            2>/dev/null | grep -qx PONG; then
-            cache_ready=1
-            break
-          fi
-          sleep "${CACHE_CONNECT_DELAY_SECONDS:-1}"
-        done
-
-        if [ -z "$cache_ready" ]; then
-          kill "$cloudflared_pid" >/dev/null 2>&1 || true
-          wait "$cloudflared_pid" >/dev/null 2>&1 || true
-          if [ -r "$cloudflared_log" ]; then
-            while IFS= read -r diagnostic; do
-              diagnostic="${diagnostic//"$cloudflare_client_id"/[REDACTED]}"
-              diagnostic="${diagnostic//"$cloudflare_client_secret"/[REDACTED]}"
-              printf '%s\n' "$diagnostic" >&2
-            done < "$cloudflared_log"
-          fi
-          rm -f "$cloudflared_binary" "$cloudflared_log"
-          echo "::warning::Persistent Rust cache is unavailable; using the job-local Redis fallback" >&2
-          exit 0
-        fi
-
-        {
-          echo "SCCACHE_REDIS_MODE=external"
-          echo "SCCACHE_REDIS_HOST_IP=$bridge_ip"
-          echo "SCCACHE_REDIS_PASSWORD_FILE=$redis_password_file"
-        } >> "$GITHUB_ENV"
-        BASH
-
   deploy:
-    desc: Deploy the private Redis cache, Cloudflare Tunnel, and loopback-only future registry.
+    desc: Deploy the public TLS Redis cache and loopback-only future registry.
     silent: true
     cmds:
       - |
@@ -340,8 +233,11 @@ tasks:
         ssh_target="{{.INFRA_SSH_TARGET}}"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         compose_file="$repo_root/infra/compose.yaml"
+        traefik_file="$repo_root/infra/traefik-dynamic.yaml"
         remote_next="$remote_dir/compose.yaml.next"
         remote_compose="$remote_dir/compose.yaml"
+        remote_traefik_next="$remote_dir/traefik-dynamic.yaml.next"
+        remote_traefik="$remote_dir/traefik-dynamic.yaml"
         remote_secrets="$remote_dir/secrets"
 
         case "$remote_dir" in
@@ -361,17 +257,14 @@ tasks:
              umask 077; \
              openssl rand -hex 32 > '$remote_secrets/redis-password'; \
            fi; \
-           if [ ! -s '$remote_secrets/cloudflare-tunnel-token' ]; then \
-             echo 'infra deploy: missing Cloudflare tunnel token at $remote_secrets/cloudflare-tunnel-token' >&2; \
-             exit 1; \
-           fi; \
-           chmod 0600 '$remote_secrets/redis-password'; \
-           chmod 0400 '$remote_secrets/cloudflare-tunnel-token'"
+           chmod 0600 '$remote_secrets/redis-password'"
         scp -q -o BatchMode=yes "$compose_file" "$ssh_target:$remote_next"
+        scp -q -o BatchMode=yes "$traefik_file" "$ssh_target:$remote_traefik_next"
 
         ssh -n -o BatchMode=yes "$ssh_target" \
           "set -eu; \
            docker compose -f '$remote_next' config --quiet; \
+           mv '$remote_traefik_next' '$remote_traefik'; \
            mv '$remote_next' '$remote_compose'; \
            docker compose -f '$remote_compose' pull; \
            docker compose -f '$remote_compose' up -d --remove-orphans --wait"
@@ -379,7 +272,7 @@ tasks:
         ssh -n -o BatchMode=yes "$ssh_target" \
           "set -eu; \
            test \"\$(docker compose -f '$remote_compose' exec -T redis sh -ec 'export REDISCLI_AUTH=\"\$(cat /run/secrets/redis-password)\"; exec redis-cli ping')\" = PONG; \
-           docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx cloudflared; \
+           docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx traefik; \
            curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null; \
            docker compose -f '$remote_compose' ps"
         BASH
@@ -406,6 +299,25 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
         'docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T redis
         sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli ping'\'''
+
+  redis:credential:sync:
+    desc: Copy the remote Redis password into the ignored local cache credential file.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        credential_dir="$repo_root/.nook/cache"
+        credential_file="$credential_dir/redis-password"
+        install -d -m 0700 "$credential_dir"
+        umask 077
+        ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "cat '{{.INFRA_REMOTE_DIR}}/secrets/redis-password'" > "$credential_file"
+        test -s "$credential_file"
+        chmod 0600 "$credential_file"
+        echo "Redis credential synchronized to .nook/cache/redis-password"
+        BASH
 
   redis:stats:
     desc: Show remote Redis cache size, memory, hits, misses, and evictions.

@@ -18,3 +18,18 @@ tasks:
         --target test
         --output type=cacheonly
         .
+
+  preflight:export:
+    desc: Export the static Rust preflight reporter for downstream CI jobs.
+    dir: '{{.ROOT_DIR}}'
+    requires:
+      vars: [PREFLIGHT_OUTPUT_DIR]
+    cmds:
+      - >-
+        docker buildx build
+        --builder "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
+        --platform linux/amd64
+        --file preflight/Dockerfile
+        --target cli-export
+        --output type=local,dest="{{.PREFLIGHT_OUTPUT_DIR}}"
+        .

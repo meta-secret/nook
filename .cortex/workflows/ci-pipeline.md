@@ -476,24 +476,17 @@ branch-local cache generations unnecessary. Native coverage and WASM
 source-sensitive layers have separate v2
 GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
 non-Rust pushes do not repeat unchanged Cargo compilation.
-Delivery Docker builds use the job-local Redis-backed sccache and carry no
-credential mounts. Trusted Main and no-secret PR jobs must generate identical
-BuildKit keys for dependency and source layers; secret-mounted compiler steps
-are forbidden because they make fresh hosted builders rebuild the Rust graph
-instead of restoring Main's exported layers. The authenticated remote compiler
-cache remains available to explicit trusted runtime operations: those
-containers mount the credential, while image-build compilation in external
-mode bypasses sccache when the credential is absent.
+Trusted Main and nightly Docker builds mount the password for the direct TLS
+Redis sccache as an optional BuildKit secret. Pull-request heads, arbitrary
+refs, dependency-update jobs, and agent-authored code never receive it and
+compile normally. The cache is a performance optimization and never a
+correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
-`task setup` also ensures a Docker-host-only Redis-backed `sccache` service is
-running. On an ephemeral hosted VM it starts empty; restored BuildKit layers are
-the cross-run cache. It does not replace cargo-chef or change the build result
-when empty. Linux publishes Redis only on the Docker
-bridge gateway; Docker Desktop publishes only on host loopback. A shared
-resolver passes the concrete Docker-host IPv4 address to both Bake and runtime
-containers, independent of the selected BuildKit driver.
+`task setup` verifies the direct TLS Redis endpoint when a credential file is
+available. Without one, the wrapper bypasses sccache. It does not replace
+cargo-chef or change the build result when unavailable to a secret-free job.
 Scheduled/manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
 Main deploys `dist/site`, Simple, and Sentinel independently to
@@ -572,10 +565,9 @@ only removes dangling images while `docker system df` includes tagged images
 that no container uses in its reclaimable estimate. That estimate can exceed
 the image-store total because shared image layers are counted for each image; it
 is not a physical-byte reclamation guarantee.
-The running `nook-sccache-redis` service and its attached AOF volume are retained
-by that prune. Redis bounds itself with `SCCACHE_REDIS_MAXMEMORY` (8 GiB by
-default) and `allkeys-lru`, so compiler-cache growth is controlled independently
-of BuildKit cleanup.
+The compiler cache is remote and is unaffected by runner pruning. Server Redis
+uses a 12 GiB `allkeys-lru` ceiling, so compiler-cache growth is controlled
+independently of BuildKit cleanup.
 
 ### CI verification — always check app logs
 

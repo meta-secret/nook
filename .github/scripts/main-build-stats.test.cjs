@@ -5,6 +5,7 @@ const test = require('node:test')
 
 const {
   buildMainBuildStats,
+  normalizeLegacyMainBuildStats,
   serializeMainBuildStats,
   validateMainBuildStats,
 } = require('./main-build-stats.cjs')
@@ -182,6 +183,50 @@ test('marks cache telemetry unavailable instead of inventing hit rates', () => {
   assert.deepEqual(record.cache_telemetry.collection.warnings, [
     'cache_telemetry_artifact_unavailable',
   ])
+})
+
+test('normalizes legacy schema-2 direct-compile telemetry', () => {
+  const record = buildMainBuildStats(fixture())
+  record.cache_telemetry.totals.local_fallback_job_count =
+    record.cache_telemetry.totals.direct_compile_job_count
+  delete record.cache_telemetry.totals.direct_compile_job_count
+  record.cache_telemetry.jobs = [
+    {
+      job: 'ci',
+      cache_backend: {
+        kind: 'local_fallback',
+        persistent: false,
+        reason: 'credentials_unavailable',
+      },
+      sccache: {
+        report_count: 0,
+        compile_requests: 0,
+        requests_executed: 0,
+        cache_hits: 0,
+        cache_misses: 0,
+        cache_errors: 0,
+        cache_writes: 0,
+        hit_rate_percent: null,
+      },
+      buildkit: {
+        build_record_count: 0,
+        completed_steps: 0,
+        cached_steps: 0,
+        cache_hit_rate_percent: null,
+        measurement: 'buildx_target_record_steps',
+      },
+      collection: { complete: true, warnings: [] },
+    },
+  ]
+  record.cache_telemetry.totals.job_count = 1
+  record.cache_telemetry.totals.local_fallback_job_count = 1
+
+  const normalized = normalizeLegacyMainBuildStats(record)
+
+  assert.equal(normalized.cache_telemetry.totals.direct_compile_job_count, 1)
+  assert.equal(normalized.cache_telemetry.totals.local_fallback_job_count, undefined)
+  assert.equal(normalized.cache_telemetry.jobs[0].cache_backend.kind, 'direct_compile')
+  validateMainBuildStats(normalized)
 })
 
 test('retains incomplete failed steps with null timing instead of inventing duration', () => {

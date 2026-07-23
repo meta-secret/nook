@@ -24,8 +24,6 @@ services:
         chown redis:redis /run/redis/redis.conf;
         exec /usr/local/bin/docker-entrypoint.sh redis-server /run/redis/redis.conf
     restart: unless-stopped
-    ports:
-      - 127.0.0.1:6380:6379
     volumes:
       - redis-data:/data
     secrets:
@@ -48,22 +46,27 @@ services:
         max-size: 10m
         max-file: "3"
 
-  cloudflared:
-    image: cloudflare/cloudflared:2026.7.2@sha256:4f6655284ab3d252b7f28fedb19fe6c8fc82ee5b1295c20ac74d475e5398a52d
-    user: "1000:1000"
+  traefik:
+    image: traefik:v3.7.1@sha256:6b9cbca6fac42ab0075f5437d8dc1685cfd188626d8d515839ea94f8b6271c42
     command:
-      - tunnel
-      - --no-autoupdate
-      - run
-      - --token-file
-      - /run/secrets/cloudflare-tunnel-token
+      - --entryPoints.redis.address=:6380
+      - --entryPoints.websecure.address=:443
+      - --providers.file.filename=/etc/traefik/dynamic.yaml
+      - --providers.file.watch=true
+      - --certificatesResolvers.letsencrypt.acme.email=admin@bynull.link
+      - --certificatesResolvers.letsencrypt.acme.storage=/data/acme.json
+      - --certificatesResolvers.letsencrypt.acme.tlsChallenge=true
+      - --accesslog=true
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - 443:443
+      - 6380:6380
+    volumes:
+      - ./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+      - traefik-data:/data
     depends_on:
       redis:
         condition: service_healthy
-    secrets:
-      - cloudflare-tunnel-token
     mem_limit: 256m
     pids_limit: 128
     security_opt:
@@ -99,10 +102,9 @@ services:
 
 volumes:
   redis-data:
+  traefik-data:
   registry-data:
 
 secrets:
   redis-password:
     file: ./secrets/redis-password
-  cloudflare-tunnel-token:
-    file: ./secrets/cloudflare-tunnel-token
