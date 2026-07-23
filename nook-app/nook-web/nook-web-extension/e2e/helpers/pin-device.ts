@@ -37,7 +37,6 @@ export async function ensurePinProtectedPopup(
   await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible({
     timeout: 45_000,
   })
-  await popupPage.getByTestId('device-protection-create-new-choice').click()
   await popupPage.getByTestId('device-protection-setup-btn').click()
   await expect(
     popupPage.getByTestId('device-protection-pin-input'),

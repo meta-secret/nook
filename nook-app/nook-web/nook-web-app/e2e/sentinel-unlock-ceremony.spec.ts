@@ -78,9 +78,6 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       )
       .toBe(true)
     if (await passkeyOverlay.isVisible()) {
-      await deviceA
-        .getByTestId('device-protection-create-new-choice')
-        .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
       const setupBtn = deviceA.getByTestId('device-protection-setup-btn')
       await expect(setupBtn).toBeEnabled({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -126,9 +123,6 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       await expect(participantPasskeyOverlay).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      await participantDevice
-        .getByTestId('device-protection-create-new-choice')
-        .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
       const participantSetupButton = participantDevice.getByTestId(
         'device-protection-setup-btn',
       )

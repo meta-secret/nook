@@ -205,10 +205,6 @@ export async function createLocalVaultOnLogin(
     )
     .toBe(true)
   if (await passkeyOverlay.isVisible()) {
-    const createChoice = page.getByTestId('device-protection-create-new-choice')
-    if (await createChoice.isVisible()) {
-      await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    }
     const setupBtn = page.getByTestId('device-protection-setup-btn')
     const unlockBtn = page.getByTestId('device-protection-unlock-btn')
     if (await setupBtn.isVisible()) {
