@@ -74,17 +74,20 @@ runs:
         set -euo pipefail
 
         pr_number="${{ github.event.pull_request.number }}"
+        event_name="${{ github.event_name }}"
+        git_ref="${{ github.ref }}"
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
 
         read_only=""
-        if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
+        if [ "$event_name" != "push" ] || [ "$git_ref" != "refs/heads/main" ]; then
           read_only=1
-          if [ "${{ inputs.cache-write }}" != "false" ]; then
+          if [[ "$pr_number" =~ ^[0-9]+$ ]] && [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "::warning::Pull-request jobs are forced to restore Main's cache read-only"
           fi
-        elif [ "${{ inputs.main-cache-only }}" = "true" ]; then
+        fi
+        if [ "${{ inputs.main-cache-only }}" = "true" ]; then
           if [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "main-cache-only requires cache-write=false" >&2
             exit 1

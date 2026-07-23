@@ -73,6 +73,7 @@ jobs:
           VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
           VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
           VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
+          PREPARE_GROUP=prepare-and-publish-cache
           WASM_BUILD_MODE=dev
         env:
           CI: true

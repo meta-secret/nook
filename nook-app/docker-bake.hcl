@@ -72,24 +72,18 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-// Pull requests append a per-PR, per-job, app-tree generation suffix. The job owner is required
-// because native, WASM, and verify solve overlapping Rust targets on separate builders. The
-// generation makes a completed PR lineage immutable: its first solve may seed from Main and
-// export, while later solves only read it. Main keeps the empty suffix as the fallback for a new
-// generation.
+// Retained for local/manual compatibility. Hosted delivery keeps this empty: Main owns the shared
+// scopes, while every other workflow restores them read-only.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// A PR uses Main only while one of its job-owned cache indices is absent. Once the lineage exists,
-// mixing mutable Main records back into the solve can select an equivalent base result from a
-// different exporter and invalidate every child layer.
+// Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
   default = ""
 }
 
-// A missing content-addressed generation may seed from the newest completed read-only generation
-// owned by the same PR/job. New PRs leave this empty and seed from Main.
+// Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
   default = ""
 }
@@ -282,6 +276,19 @@ group "default" {
 // Bun dependency preparation. The second phase builds nook-web from the host artifact directory.
 group "prepare" {
   targets = ["rust-format-check", "web-artifacts", "web-deps"]
+}
+
+// Main is the sole hosted-cache writer. Selecting the dependency targets as explicit cache-only
+// outputs is required: cache exporters attached to named build contexts are not run merely because
+// a source target consumed them.
+group "prepare-and-publish-cache" {
+  targets = [
+    "rust-format-check",
+    "web-artifacts",
+    "web-deps",
+    "builder-wasm-deps",
+    "builder-deps",
+  ]
 }
 
 // Formatting must be able to build source-sealed images before the host applies the emitted diff.

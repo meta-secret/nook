@@ -891,6 +891,12 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         8,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
+    assert!(
+        bake.contains("group \"prepare-and-publish-cache\"")
+            && bake.contains("\"builder-wasm-deps\",")
+            && bake.contains("\"builder-deps\","),
+        "Main preparation must select both dependency targets so their dedicated cache exporters run"
+    );
 
     let rust_bake = read(root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
@@ -935,6 +941,17 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             ),
         "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
     );
+    assert!(
+        app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")
+            && app_tasks.contains("--set \"builder-deps.output=type=cacheonly\""),
+        "selected dependency-cache publishers must be explicit cache-only Bake outputs"
+    );
+
+    let main = read(root, ".github/workflows/main.yml");
+    assert!(
+        main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
+        "Main must use the preparation group that publishes complete dependency cache scopes"
+    );
 }
 
 fn assert_docker_setup_contract(root: &Path) {
@@ -947,6 +964,9 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "cache_write_enabled=1",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
+        "event_name=\"${{ github.event_name }}\"",
+        "git_ref=\"${{ github.ref }}\"",
+        "[ \"$event_name\" != \"push\" ] || [ \"$git_ref\" != \"refs/heads/main\" ]",
         "main-cache-only",
         "main-cache-only requires cache-write=false",
     ] {
