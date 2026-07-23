@@ -166,14 +166,14 @@ trusted Main lineage and disables cache export. Exact-input handoffs own
 repeat-run acceleration, so PR jobs do not need mutable branch-local cache
 generations. The WASM dependency target reads Main's dedicated, complete WASM
 dependency export instead of competing with the larger native dependency
-lineage. Main's preparation selects both dependency targets as explicit
-cache-only outputs; consuming them as named build contexts is not sufficient to
-run their dedicated exporters. Only a `push` event on `refs/heads/main` may
-write the shared scopes. Release, nightly, agent, manual, and PR workflows are
-read-only. Keeping Main as the sole hosted-cache writer also prevents
-short-lived lineages from exhausting the repository cache quota. The
-self-hosted `nook` label is reserved for runner cleanup while that machine
-remains registered.
+lineage. Main's preparation selects both dependency targets and the native
+source target as explicit cache-only outputs; consuming them as named build
+contexts is not sufficient to run their dedicated exporters. Only a `push`
+event on `refs/heads/main` may write the shared scopes. Release, nightly, agent,
+manual, and PR workflows are read-only. Keeping Main as the sole hosted-cache
+writer also prevents short-lived lineages from exhausting the repository cache
+quota. The self-hosted `nook` label is reserved for runner cleanup while that
+machine remains registered.
 
 The split native and WASM producers additionally restore small validated
 handoffs by exact input hash. Their keys cover Rust sources and manifests,

@@ -390,7 +390,9 @@ default-branch cache that new PRs may restore. Every PR job reads only that
 complete Main lineage and never exports PR-local caches, preventing short-lived
 branch generations from exhausting the repository cache quota. The WASM
 producer restores Main's dedicated, complete WASM dependency boundary so it
-does not compete with the larger native dependency lineage.
+does not compete with the larger native dependency lineage. Main explicitly
+publishes the native source target as well as both dependency targets; merely
+consuming those targets as BuildKit contexts does not run their cache exporters.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and

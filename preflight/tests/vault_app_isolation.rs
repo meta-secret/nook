@@ -894,8 +894,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     assert!(
         bake.contains("group \"prepare-and-publish-cache\"")
             && bake.contains("\"builder-wasm-deps\",")
-            && bake.contains("\"builder-deps\","),
-        "Main preparation must select both dependency targets so their dedicated cache exporters run"
+            && bake.contains("\"builder-deps\",")
+            && bake.contains("\"builder-debug\","),
+        "Main preparation must select dependency and native-source targets so their dedicated cache exporters run"
     );
 
     let rust_bake = read(root, "nook-app/nook-wasm/docker-bake.hcl");
@@ -943,14 +944,15 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     );
     assert!(
         app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")
-            && app_tasks.contains("--set \"builder-deps.output=type=cacheonly\""),
-        "selected dependency-cache publishers must be explicit cache-only Bake outputs"
+            && app_tasks.contains("--set \"builder-deps.output=type=cacheonly\"")
+            && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
+        "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
 
     let main = read(root, ".github/workflows/main.yml");
     assert!(
         main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
-        "Main must use the preparation group that publishes complete dependency cache scopes"
+        "Main must use the preparation group that publishes complete dependency and source cache scopes"
     );
 }
 

@@ -278,9 +278,9 @@ group "prepare" {
   targets = ["rust-format-check", "web-artifacts", "web-deps"]
 }
 
-// Main is the sole hosted-cache writer. Selecting the dependency targets as explicit cache-only
-// outputs is required: cache exporters attached to named build contexts are not run merely because
-// a source target consumed them.
+// Main is the sole hosted-cache writer. Selecting dependency and native-source targets as explicit
+// cache-only outputs is required: cache exporters attached to named build contexts are not run
+// merely because another target consumed them.
 group "prepare-and-publish-cache" {
   targets = [
     "rust-format-check",
@@ -288,6 +288,7 @@ group "prepare-and-publish-cache" {
     "web-deps",
     "builder-wasm-deps",
     "builder-deps",
+    "builder-debug",
   ]
 }
 
