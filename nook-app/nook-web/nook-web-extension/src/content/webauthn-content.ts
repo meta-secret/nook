@@ -1,6 +1,7 @@
 export {}
 
 import type {
+  WebsitePasskeyCancelMessage,
   WebsitePasskeyCeremony,
   WebsitePasskeyOptionsMessage,
   WebsitePasskeyPerformMessage,
@@ -201,6 +202,10 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return
   if (message.type === 'cancel') {
     removePrompt(message.requestId)
+    void runtimeMessage({
+      type: 'nook:website-passkey-cancel',
+      payload: { requestId: message.requestId },
+    } satisfies WebsitePasskeyCancelMessage).catch(() => undefined)
     return
   }
   if (

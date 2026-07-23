@@ -70,6 +70,7 @@ import {
   type WebsiteLoginSaveOfferView,
 } from '../lib/login-save-messages'
 import {
+  isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
   parsedWebsitePasskeyRequest,
@@ -647,8 +648,10 @@ async function availableWebsiteGrants(
     return { response: { ok: true, status: 'unavailable', accounts: [] } }
   }
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncher()
@@ -815,8 +818,10 @@ async function authorizedWebsiteGrant(
   )
   if (!grant) return { response: { ok: false, reason: reasons.missing } }
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncher()
@@ -1542,26 +1547,33 @@ async function websiteAuthenticatorBackupAttach(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  const access = await authorizedWebsiteGrant(
-    message.payload.origin,
-    message.payload.vaultStoreId,
-    sender,
-    {
-      forbidden: 'authenticator-forbidden-origin',
-      missing: 'authenticator-vault-not-granted',
-      locked: 'authenticator-locked',
-    },
-  )
-  if ('response' in access) return access.response
-  return sendSessionMessage({
-    type: 'nook:extension-session-authenticator-backup-attach',
-    payload: {
-      ...access.grant,
-      secretId: message.payload.secretId,
-      codes: message.payload.codes,
-      mode: message.payload.mode,
-    },
-  })
+  const codes = [...message.payload.codes]
+  message.payload.codes.fill('')
+  message.payload.codes = []
+  try {
+    const access = await authorizedWebsiteGrant(
+      message.payload.origin,
+      message.payload.vaultStoreId,
+      sender,
+      {
+        forbidden: 'authenticator-forbidden-origin',
+        missing: 'authenticator-vault-not-granted',
+        locked: 'authenticator-locked',
+      },
+    )
+    if ('response' in access) return access.response
+    return await sendSessionMessage({
+      type: 'nook:extension-session-authenticator-backup-attach',
+      payload: {
+        ...access.grant,
+        secretId: message.payload.secretId,
+        codes,
+        mode: message.payload.mode,
+      },
+    })
+  } finally {
+    codes.fill('')
+  }
 }
 
 function passkeyRequestKey(
@@ -1756,6 +1768,7 @@ async function performWebsitePasskey(
           : 'nook:extension-session-assert-passkey',
       payload: {
         ...grant,
+        requestId: message.payload.requestId,
         requestJson: JSON.stringify(context.request),
         queueExpiresAt: message.payload.expiresAt,
         queuePriority: 'interactive',
@@ -1764,6 +1777,22 @@ async function performWebsitePasskey(
   } finally {
     pendingWebsitePasskeyRequests.delete(key)
   }
+}
+
+async function cancelWebsitePasskey(
+  message: Parameters<typeof isWebsitePasskeyCancelMessage>[0] & {
+    payload: { requestId: string }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<{ ok: true }> {
+  const key = passkeyRequestKey(sender, message.payload.requestId)
+  if (!pendingWebsitePasskeyRequests.has(key)) return { ok: true }
+  await ensureExtensionSessionDocument()
+  await sendSessionMessage({
+    type: 'nook:extension-session-cancel-passkey',
+    payload: { requestId: message.payload.requestId },
+  })
+  return { ok: true }
 }
 
 function removeLocalStorage(keys: string[]): Promise<void> {
@@ -1997,6 +2026,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(() =>
         sendResponse({ ok: false, reason: 'passkey-ceremony-failed' }),
       )
+    return true
+  }
+
+  if (isWebsitePasskeyCancelMessage(message)) {
+    void cancelWebsitePasskey(message, sender)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: 'passkey-cancel-failed' }))
     return true
   }
 

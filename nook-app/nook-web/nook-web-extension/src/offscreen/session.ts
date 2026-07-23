@@ -63,6 +63,7 @@ type PendingLoginSaveOffer = {
 }
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
+const canceledWebsitePasskeyRequests = new Set<string>()
 const sessionOperations = new SessionOperationQueue()
 
 function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
@@ -743,19 +744,24 @@ async function handleMessage(message: unknown): Promise<unknown> {
       if (offer.vaultStoreId !== grant.vaultStoreId) {
         throw new Error('Login save offer does not match the vault grant.')
       }
+      clearTimeout(offer.expiryTimer)
+      pendingLoginSaveOffers.delete(offer.offerId)
+      const committedOffer = { ...offer }
+      offer.username = ''
+      offer.password = ''
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
       try {
         await activeManager.commitWebsiteLoginSave(
-          offer.origin,
-          offer.username,
-          offer.password,
-          offer.replaceSecretId ?? '',
+          committedOffer.origin,
+          committedOffer.username,
+          committedOffer.password,
+          committedOffer.replaceSecretId ?? '',
         )
         await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
-        return { ok: true, decision: offer.decision }
+        return { ok: true, decision: committedOffer.decision }
       } finally {
-        clearLoginSaveOffer(offer)
+        clearLoginSaveOffer(committedOffer)
       }
     }
     case 'nook:extension-session-dismiss-login-save': {
@@ -768,53 +774,85 @@ async function handleMessage(message: unknown): Promise<unknown> {
       clearLoginSaveOffer(pendingLoginSaveOffers.get(payload.offerId))
       return { ok: true }
     }
+    case 'nook:extension-session-cancel-passkey': {
+      const payload = messagePayload(message)
+      if (typeof payload.requestId !== 'string') {
+        throw new Error(
+          'Extension session received an invalid passkey cancellation.',
+        )
+      }
+      canceledWebsitePasskeyRequests.add(payload.requestId)
+      return { ok: true }
+    }
     case 'nook:extension-session-register-passkey': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
-      if (typeof payload.requestJson !== 'string') {
+      if (
+        typeof payload.requestId !== 'string' ||
+        typeof payload.requestJson !== 'string' ||
+        typeof payload.queueExpiresAt !== 'number'
+      ) {
         throw new Error('Extension session received an invalid registration.')
       }
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
-      const registration = await activeManager.registerWebsitePasskey(
-        payload.requestJson,
-      )
       try {
-        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
-        return {
-          ok: true,
-          credentialId: registration.credentialId,
-          clientDataJSON: registration.clientDataJSON,
-          attestationObject: registration.attestationObject,
-          transports: registration.transports,
+        const registration = await activeManager.registerWebsitePasskey(
+          payload.requestJson,
+          () =>
+            Date.now() < (payload.queueExpiresAt as number) &&
+            !canceledWebsitePasskeyRequests.has(payload.requestId as string),
+        )
+        try {
+          await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+          return {
+            ok: true,
+            credentialId: registration.credentialId,
+            clientDataJSON: registration.clientDataJSON,
+            attestationObject: registration.attestationObject,
+            transports: registration.transports,
+          }
+        } finally {
+          registration.free()
         }
       } finally {
-        registration.free()
+        canceledWebsitePasskeyRequests.delete(payload.requestId)
       }
     }
     case 'nook:extension-session-assert-passkey': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
-      if (typeof payload.requestJson !== 'string') {
+      if (
+        typeof payload.requestId !== 'string' ||
+        typeof payload.requestJson !== 'string' ||
+        typeof payload.queueExpiresAt !== 'number'
+      ) {
         throw new Error('Extension session received an invalid assertion.')
       }
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
-      const assertion = await activeManager.assertWebsitePasskey(
-        payload.requestJson,
-      )
       try {
-        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
-        return {
-          ok: true,
-          credentialId: assertion.credentialId,
-          clientDataJSON: assertion.clientDataJSON,
-          authenticatorData: assertion.authenticatorData,
-          signature: assertion.signature,
-          userHandle: assertion.userHandle,
+        const assertion = await activeManager.assertWebsitePasskey(
+          payload.requestJson,
+          () =>
+            Date.now() < (payload.queueExpiresAt as number) &&
+            !canceledWebsitePasskeyRequests.has(payload.requestId as string),
+        )
+        try {
+          await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+          return {
+            ok: true,
+            credentialId: assertion.credentialId,
+            clientDataJSON: assertion.clientDataJSON,
+            authenticatorData: assertion.authenticatorData,
+            signature: assertion.signature,
+            userHandle: assertion.userHandle,
+          }
+        } finally {
+          assertion.free()
         }
       } finally {
-        assertion.free()
+        canceledWebsitePasskeyRequests.delete(payload.requestId)
       }
     }
     default:
@@ -994,7 +1032,7 @@ function enqueueSessionMessage(message: unknown): Promise<unknown> {
 
   const expiresAt =
     requestedExpiry ??
-    (type === 'nook:extension-session-seal-identity-handoff'
+    (priority === 'interactive'
       ? Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS
       : undefined)
   return sessionOperations.enqueue(() => handleMessage(message), {
@@ -1006,7 +1044,8 @@ function enqueueSessionMessage(message: unknown): Promise<unknown> {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (messageType(message) === 'nook:extension-session-lock') return false
   const serviceWorkerOnly =
-    messageType(message) === 'nook:extension-session-seal-identity-handoff'
+    messageType(message) === 'nook:extension-session-seal-identity-handoff' ||
+    messageType(message) === 'nook:extension-session-cancel-passkey'
   const serviceWorkerSender =
     sender.tab === undefined &&
     (sender.url === undefined ||
@@ -1019,6 +1058,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false
   }
   if (messageType(message) === 'nook:extension-session-dismiss-login-save') {
+    void handleMessage(message)
+      .then((response) => sendResponse(response))
+      .catch((error: unknown) =>
+        sendResponse({
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Extension session failed.',
+        }),
+      )
+    return true
+  }
+  if (messageType(message) === 'nook:extension-session-cancel-passkey') {
     void handleMessage(message)
       .then((response) => sendResponse(response))
       .catch((error: unknown) =>

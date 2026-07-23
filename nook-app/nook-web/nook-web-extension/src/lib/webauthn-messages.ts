@@ -18,6 +18,13 @@ export type WebsitePasskeyPerformMessage = {
   }
 }
 
+export type WebsitePasskeyCancelMessage = {
+  type: 'nook:website-passkey-cancel'
+  payload: {
+    requestId: string
+  }
+}
+
 function validBase(message: unknown): message is {
   payload: WebsitePasskeyOptionsMessage['payload']
 } {
@@ -68,6 +75,24 @@ export function isWebsitePasskeyPerformMessage(
     (!('credentialId' in message.payload) ||
       message.payload.credentialId === undefined ||
       typeof message.payload.credentialId === 'string')
+  )
+}
+
+export function isWebsitePasskeyCancelMessage(
+  message: unknown,
+): message is WebsitePasskeyCancelMessage {
+  return Boolean(
+    message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:website-passkey-cancel' &&
+    'payload' in message &&
+    message.payload &&
+    typeof message.payload === 'object' &&
+    'requestId' in message.payload &&
+    typeof message.payload.requestId === 'string' &&
+    message.payload.requestId.length >= 16 &&
+    message.payload.requestId.length <= 128,
   )
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
   parsedWebsitePasskeyRequest,
@@ -28,6 +29,12 @@ describe('website passkey runtime messages', () => {
       isWebsitePasskeyPerformMessage({
         type: 'nook:website-passkey-perform',
         payload: { ...payload, vaultStoreId: 'store_test' },
+      }),
+    ).toBe(true)
+    expect(
+      isWebsitePasskeyCancelMessage({
+        type: 'nook:website-passkey-cancel',
+        payload: { requestId: payload.requestId },
       }),
     ).toBe(true)
   })
