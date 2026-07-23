@@ -1229,6 +1229,10 @@ mod tests {
         let debug = format!("{item:?}");
         assert!(!debug.contains("JBSWY"));
         assert!(!debug.contains("backup-one"));
+        assert!(record.matches_search("example"));
+        assert!(record.matches_search("ALICE@EXAMPLE.COM"));
+        assert!(!record.matches_search("JBSWY3DPEHPK3PXP"));
+        assert!(!record.matches_search("backup-one"));
     }
 
     #[test]

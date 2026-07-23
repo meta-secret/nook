@@ -214,7 +214,7 @@ const fn classify_enrollment_workflow(
             5,
         ));
     }
-    if observation.backup_codes_hint {
+    if observation.backup_codes_hint && observation.one_time_code_field_count == 0 {
         return Some(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
             AuthenticationWorkflowStage::Recovery,
@@ -503,6 +503,19 @@ mod tests {
         assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!((code.current_step, code.total_steps), (2, 3));
+    }
+
+    #[test]
+    fn backup_code_link_does_not_hide_an_active_totp_challenge() {
+        let code = AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            backup_codes_hint: true,
+            ..observation()
+        };
+        let code = classify_authentication_workflow(code).unwrap();
+        assert_eq!(code.kind, AuthenticationWorkflowKind::TotpChallenge);
+        assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
+        assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
     }
 
     #[test]
