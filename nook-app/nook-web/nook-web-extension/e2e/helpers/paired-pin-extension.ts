@@ -242,43 +242,51 @@ export async function lockExtensionSession(
   context: BrowserContext,
 ): Promise<void> {
   const worker = await getServiceWorker(context)
-  const result = await worker.evaluate(async () => {
-    await new Promise<{ ok?: boolean }>((resolve) => {
-      globalThis.chrome.runtime.sendMessage(
-        { type: 'nook:ensure-extension-session-runtime' },
-        (response) => resolve(response ?? {}),
+  const extensionId = new URL(worker.url()).host
+  const popupPage = await context.newPage()
+  try {
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    const result = await popupPage.evaluate(async () => {
+      await new Promise<{ ok?: boolean }>((resolve) => {
+        globalThis.chrome.runtime.sendMessage(
+          { type: 'nook:ensure-extension-session-runtime' },
+          (response) => resolve(response ?? {}),
+        )
+      })
+      const activeSessionRequests = Array.from(
+        { length: 24 },
+        () =>
+          new Promise<void>((resolve) => {
+            globalThis.chrome.runtime.sendMessage(
+              { type: 'nook:extension-session-status' },
+              () => {
+                void globalThis.chrome.runtime.lastError
+                resolve()
+              },
+            )
+          }),
       )
+      const lockResult = await new Promise<{
+        ok?: boolean
+        error?: string
+        reason?: string
+      }>((resolve) => {
+        globalThis.chrome.runtime.sendMessage(
+          { type: 'nook:extension-session-lock' },
+          (response) =>
+            resolve(response ?? { ok: false, error: 'no-response' }),
+        )
+      })
+      await Promise.all(activeSessionRequests)
+      return lockResult
     })
-    const activeSessionRequests = Array.from(
-      { length: 24 },
-      () =>
-        new Promise<void>((resolve) => {
-          globalThis.chrome.runtime.sendMessage(
-            { type: 'nook:extension-session-status' },
-            () => {
-              void globalThis.chrome.runtime.lastError
-              resolve()
-            },
-          )
-        }),
-    )
-    const lockResult = await new Promise<{
-      ok?: boolean
-      error?: string
-      reason?: string
-    }>((resolve) => {
-      globalThis.chrome.runtime.sendMessage(
-        { type: 'nook:extension-session-lock' },
-        (response) => resolve(response ?? { ok: false, error: 'no-response' }),
+    if (result?.ok !== true) {
+      throw new Error(
+        `Failed to lock extension session: ${result?.error ?? result?.reason ?? 'unknown'}`,
       )
-    })
-    await Promise.all(activeSessionRequests)
-    return lockResult
-  })
-  if (result?.ok !== true) {
-    throw new Error(
-      `Failed to lock extension session: ${result?.error ?? result?.reason ?? 'unknown'}`,
-    )
+    }
+  } finally {
+    await popupPage.close()
   }
   // Offscreen teardown is async after the lock ack.
   await new Promise((resolve) => setTimeout(resolve, 500))
