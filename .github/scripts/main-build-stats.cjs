@@ -1,4 +1,5 @@
 const fs = require('node:fs')
+const { validateTelemetryRecord } = require('./cache-telemetry.cjs')
 
 const BUILD_STEP = 'Preflight, check, build, and e2e'
 const DEPLOYMENT_STEPS = new Set([
@@ -121,6 +122,66 @@ function metricComparison(current, baselines) {
   }
 }
 
+function cacheTelemetrySummary(cacheTelemetry, run) {
+  const jobs = cacheTelemetry
+    .map((record) =>
+      validateTelemetryRecord(record, {
+        runId: run.id,
+        runAttempt: run.run_attempt,
+      }),
+    )
+    .map((record) => ({
+      job: record.github.job,
+      cache_backend: record.cache_backend,
+      sccache: record.sccache,
+      buildkit: record.buildkit,
+      collection: record.collection,
+    }))
+    .sort((left, right) => left.job.localeCompare(right.job))
+
+  const total = (section, field) =>
+    jobs.reduce((sum, job) => sum + job[section][field], 0)
+  const sccacheHits = total('sccache', 'cache_hits')
+  const sccacheMisses = total('sccache', 'cache_misses')
+  const buildkitCompleted = total('buildkit', 'completed_steps')
+  const buildkitCached = total('buildkit', 'cached_steps')
+  const warnings =
+    jobs.length === 0
+      ? ['cache_telemetry_artifact_unavailable']
+      : jobs.flatMap((job) => job.collection.warnings)
+
+  return {
+    totals: {
+      job_count: jobs.length,
+      remote_backend_job_count: jobs.filter(
+        (job) => job.cache_backend.kind === 'remote',
+      ).length,
+      local_fallback_job_count: jobs.filter(
+        (job) => job.cache_backend.kind === 'local_fallback',
+      ).length,
+      sccache_compile_requests: total('sccache', 'compile_requests'),
+      sccache_cache_hits: sccacheHits,
+      sccache_cache_misses: sccacheMisses,
+      sccache_hit_rate_percent:
+        sccacheHits + sccacheMisses === 0
+          ? null
+          : Math.round((sccacheHits / (sccacheHits + sccacheMisses)) * 10_000) /
+            100,
+      buildkit_completed_steps: buildkitCompleted,
+      buildkit_cached_steps: buildkitCached,
+      buildkit_cache_hit_rate_percent:
+        buildkitCompleted === 0
+          ? null
+          : Math.round((buildkitCached / buildkitCompleted) * 10_000) / 100,
+    },
+    jobs,
+    collection: {
+      complete: jobs.length > 0 && jobs.every((job) => job.collection.complete),
+      warnings,
+    },
+  }
+}
+
 function addComparison(record, baselineRecords) {
   if (record.source_run.conclusion !== 'success') {
     return {
@@ -207,6 +268,7 @@ function buildMainBuildStats({
   jobs,
   sourcePullRequests = [],
   baselineRecords = [],
+  cacheTelemetry = [],
   recordedAt,
 }) {
   if (run.name !== 'Main') throw new Error(`expected Main workflow, got ${run.name}`)
@@ -240,7 +302,7 @@ function buildMainBuildStats({
   const wallSeconds = durationSeconds(wallStartedAt, completedAt, 'source_run.wall')
 
   const record = addComparison({
-    schema_version: 1,
+    schema_version: 2,
     recorded_at: requireString(recordedAt, 'recorded_at'),
     source_run: {
       workflow_name: 'Main',
@@ -273,6 +335,7 @@ function buildMainBuildStats({
       ),
       coverage_seconds: sumNamedStepSeconds(normalizedJobs, (name) => COVERAGE_STEPS.has(name)),
     },
+    cache_telemetry: cacheTelemetrySummary(cacheTelemetry, run),
     jobs: normalizedJobs,
   }, baselineRecords)
 
@@ -282,7 +345,9 @@ function buildMainBuildStats({
 
 function validateMainBuildStats(record, expected = {}) {
   if (!record || typeof record !== 'object') throw new Error('record must be an object')
-  if (record.schema_version !== 1) throw new Error('schema_version must be 1')
+  if (![1, 2].includes(record.schema_version)) {
+    throw new Error('schema_version must be 1 or 2')
+  }
   timestampMilliseconds(record.recorded_at, 'recorded_at')
 
   const source = record.source_run
@@ -338,6 +403,77 @@ function validateMainBuildStats(record, expected = {}) {
   if (summary.job_count !== record.jobs.length) throw new Error('summary.job_count mismatch')
   const stepCount = record.jobs.reduce((total, job) => total + job.steps.length, 0)
   if (summary.step_count !== stepCount) throw new Error('summary.step_count mismatch')
+
+  if (record.schema_version >= 2) {
+    const telemetry = record.cache_telemetry
+    if (!telemetry || typeof telemetry !== 'object') {
+      throw new Error('cache_telemetry is required')
+    }
+    if (!Array.isArray(telemetry.jobs)) {
+      throw new Error('cache_telemetry.jobs must be an array')
+    }
+    if (!telemetry.collection || typeof telemetry.collection.complete !== 'boolean') {
+      throw new Error('cache_telemetry.collection is required')
+    }
+    if (!Array.isArray(telemetry.collection.warnings)) {
+      throw new Error('cache_telemetry.collection.warnings must be an array')
+    }
+    const totals = telemetry.totals
+    if (!totals || typeof totals !== 'object') {
+      throw new Error('cache_telemetry.totals is required')
+    }
+    for (const field of [
+      'job_count',
+      'remote_backend_job_count',
+      'local_fallback_job_count',
+      'sccache_compile_requests',
+      'sccache_cache_hits',
+      'sccache_cache_misses',
+      'buildkit_completed_steps',
+      'buildkit_cached_steps',
+    ]) {
+      requireInteger(totals[field], `cache_telemetry.totals.${field}`)
+    }
+    if (totals.job_count !== telemetry.jobs.length) {
+      throw new Error('cache_telemetry.totals.job_count mismatch')
+    }
+    for (const job of telemetry.jobs) {
+      requireString(job.job, 'cache_telemetry.job.job')
+      validateTelemetryRecord(
+        {
+          schema_version: 1,
+          github: {
+            run_id: String(source.run_id),
+            run_attempt: source.run_attempt,
+            job: job.job,
+          },
+          cache_backend: job.cache_backend,
+          sccache: job.sccache,
+          buildkit: job.buildkit,
+          collection: job.collection,
+        },
+        { runId: source.run_id, runAttempt: source.run_attempt },
+      )
+    }
+    const expected = cacheTelemetrySummary(
+      telemetry.jobs.map((job) => ({
+        schema_version: 1,
+        github: {
+          run_id: String(source.run_id),
+          run_attempt: source.run_attempt,
+          job: job.job,
+        },
+        cache_backend: job.cache_backend,
+        sccache: job.sccache,
+        buildkit: job.buildkit,
+        collection: job.collection,
+      })),
+      { id: source.run_id, run_attempt: source.run_attempt },
+    )
+    if (JSON.stringify(expected.totals) !== JSON.stringify(totals)) {
+      throw new Error('cache_telemetry.totals mismatch')
+    }
+  }
 
   const comparison = record.comparison
   if (!comparison || typeof comparison !== 'object') throw new Error('comparison is required')

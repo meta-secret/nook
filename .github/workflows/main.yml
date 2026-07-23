@@ -465,3 +465,7 @@ jobs:
           path: coverage/main
           retention-days: 90
           if-no-files-found: error
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry

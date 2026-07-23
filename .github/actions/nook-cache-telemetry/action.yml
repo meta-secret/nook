@@ -1,0 +1,29 @@
+name: Collect Nook cache telemetry
+description: Record the selected sccache backend plus sccache and BuildKit cache hit rates.
+
+runs:
+  using: composite
+  steps:
+    - name: Collect cache telemetry
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -euo pipefail
+        baseline="${NOOK_CACHE_TELEMETRY_BASELINE:-$RUNNER_TEMP/nook-cache-telemetry-baseline.json}"
+        if [ ! -f "$baseline" ]; then
+          node .github/scripts/cache-telemetry.cjs start --output "$baseline"
+        fi
+        output="$RUNNER_TEMP/nook-cache-telemetry/$GITHUB_JOB.json"
+        node .github/scripts/cache-telemetry.cjs collect \
+          --baseline "$baseline" \
+          --output "$output"
+
+    - name: Upload cache telemetry
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+        path: ${{ runner.temp }}/nook-cache-telemetry/${{ github.job }}.json
+        retention-days: 30
+        if-no-files-found: error
+        overwrite: true

@@ -44,6 +44,12 @@ including time spent waiting for CI or review when the agent owns that wait.
   including run id, run attempt, head SHA, trigger, timestamps, duration, and
   conclusion. The post-merge Main run is outside the implementation PR lifecycle
   and must not be awaited or included merely because the merge triggered it.
+- **Cache telemetry:** for every measured Actions job that publishes a
+  `cache-telemetry-*` artifact, record whether sccache used the persistent remote
+  Redis service or the fresh job-local fallback, compiler cache hits and misses,
+  and BuildKit cached/completed target-record steps. A job-local Redis cache can
+  reuse compiler outputs later in the same job but cannot persist them across
+  runners or workflow runs.
 - **PR retriggers:** count every new repository-owned validation cycle after
   the first. Distinguish `head_push`, `manual_rerun`, `base_update`, and
   `reopen`. A GitHub `run_attempt` greater than one is a manual rerun; a new run
@@ -104,12 +110,13 @@ bunx playwright test --list
 
 ## YAML contract
 
-Files must be valid YAML, use schema version `2`, and follow this shape. Empty
+Files must be valid YAML, use schema version `3`, and follow this shape. Empty
 lists are explicit; required fields must not be omitted. Historical records with
-`schema_version: 1` remain valid baselines; they simply lack `test_inventory`.
+schema versions `1` and `2` remain valid baselines; they simply lack later
+inventory or cache-telemetry fields.
 
 ```yaml
-schema_version: 2
+schema_version: 3
 source_pr:
   number: 481
   url: https://github.com/meta-secret/nook/pull/481
@@ -159,6 +166,57 @@ github_actions_runs:
     finished_at: 2026-07-18T18:45:30Z
     duration_seconds: 1200
     conclusion: success
+cache_telemetry:
+  totals:
+    job_count: 2
+    remote_backend_job_count: 0
+    local_fallback_job_count: 2
+    sccache_compile_requests: 240
+    sccache_cache_hits: 150
+    sccache_cache_misses: 80
+    sccache_hit_rate_percent: 65.22
+    buildkit_completed_steps: 180
+    buildkit_cached_steps: 126
+    buildkit_cache_hit_rate_percent: 70.0
+  jobs:
+    - workflow: PR
+      run_id: 123456789
+      run_attempt: 1
+      job: rust
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 240
+        cache_hits: 150
+        cache_misses: 80
+        hit_rate_percent: 65.22
+      buildkit:
+        completed_steps: 120
+        cached_steps: 78
+        cache_hit_rate_percent: 65.0
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 123456789
+      run_attempt: 1
+      job: verify
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 0
+        cache_hits: 0
+        cache_misses: 0
+        hit_rate_percent: null
+      buildkit:
+        completed_steps: 60
+        cached_steps: 48
+        cache_hit_rate_percent: 80.0
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
 pr_retriggers: []
 merge_attempts:
   - at: 2026-07-18T18:55:00Z
@@ -193,6 +251,24 @@ compare the current value with the median of the selected baseline records; use
 When a baseline lacks `test_inventory`, set `test_inventory_total_change` to
 `null` and note the incomplete baseline in `baseline_note`.
 
+Download cache artifacts for each recorded Actions attempt before writing the
+stats YAML:
+
+```bash
+gh run download <run-id> \
+  --pattern 'cache-telemetry-<run-id>-<run-attempt>-*' \
+  --dir <out-of-tree-scratch-directory>
+```
+
+Flatten the artifact summaries into `cache_telemetry.jobs`, then derive
+`cache_telemetry.totals` by summing counters and recomputing percentages from
+the summed numerators and denominators. Never average job percentages. The
+sccache denominator is `cache_hits + cache_misses`; a job with no executed
+cacheable compiler requests uses `null`. BuildKit's metric is explicitly
+`buildx_target_record_steps`: Bake target records can share dependency
+vertices, so it is a target-step reuse rate, not a byte count or a unique-layer
+count. Keep incomplete telemetry with its warnings instead of inventing zeros.
+
 ## Comparison and required action
 
 Choose the newest one or two records with a similar change surface and gate set
@@ -214,6 +290,9 @@ it. The assessment must also inspect:
 - avoidable merge attempts before readiness or base freshness;
 - cache misses, duplicated builds, repeated dependency setup, and slow steps
   that dominate otherwise comparable runs.
+- unexpected `local_fallback` use in a trusted workflow that should have the
+  persistent cache credentials, while recognizing that untrusted pull-request
+  jobs must not receive those secrets.
 
 If a regression or waste is actionable, `waste_assessment.required_actions`
 must name the concrete build/workflow change and the agent must open a separate
