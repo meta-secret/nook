@@ -1,0 +1,147 @@
+schema_version: 3
+source_pr:
+  number: 653
+  url: https://github.com/meta-secret/nook/pull/653
+  title: Collect sccache and BuildKit cache hit telemetry
+  change_surface: ci_cache_telemetry
+  head_sha: 6b4e0d09d0472dbe6d1f75f266fa691337c0a14e
+  started_at: 2026-07-23T04:29:35Z
+  opened_at: 2026-07-23T05:27:49Z
+  merged_at: 2026-07-23T05:48:42Z
+  elapsed_seconds: 4747
+  open_to_merge_seconds: 1253
+summary:
+  local_execution_count: 18
+  local_check_count: 12
+  local_test_count: 0
+  local_combined_count: 6
+  local_execution_seconds: 3067
+  github_actions_run_count: 1
+  github_actions_seconds: 1197
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T05:52:00Z
+  head_sha: 6b4e0d09d0472dbe6d1f75f266fa691337c0a14e
+  by_type:
+    rust: 627
+    preflight: 34
+    web_unit: 242
+    e2e: 200
+  total: 1103
+local_executions:
+  - { command: focused cache telemetry Node tests plus shell syntax and patch hygiene, category: combined, started_at: "2026-07-23T04:31:00Z", finished_at: "2026-07-23T04:31:01Z", duration_seconds: 1, outcome: passed, reason: initial_helper_and_workflow_validation }
+  - { command: task format, category: check, started_at: "2026-07-23T04:33:21Z", finished_at: "2026-07-23T05:11:32Z", duration_seconds: 2291, outcome: passed, reason: cold_initial_repository_hygiene_and_build_validation }
+  - { command: task format, category: check, started_at: "2026-07-23T05:11:40Z", finished_at: "2026-07-23T05:13:54Z", duration_seconds: 134, outcome: passed, reason: non_gating_workflow_finalizer_hygiene }
+  - { command: focused telemetry Node tests and preflight contract test, category: combined, started_at: "2026-07-23T05:13:55Z", finished_at: "2026-07-23T05:14:02Z", duration_seconds: 7, outcome: passed, reason: telemetry_parser_and_workflow_contract_validation }
+  - { command: live cached Buildx collector proof, category: check, started_at: "2026-07-23T05:14:20Z", finished_at: "2026-07-23T05:14:31Z", duration_seconds: 11, outcome: failed, reason: exposed_fully_qualified_buildx_history_reference_in_live_output }
+  - { command: task format, category: check, started_at: "2026-07-23T05:15:25Z", finished_at: "2026-07-23T05:16:47Z", duration_seconds: 82, outcome: passed, reason: buildx_history_reference_normalization_hygiene }
+  - { command: focused Node tests plus live collector proof, category: combined, started_at: "2026-07-23T05:16:48Z", finished_at: "2026-07-23T05:16:52Z", duration_seconds: 4, outcome: failed, reason: exposed_rawjson_progress_on_stderr_in_live_buildx_output }
+  - { command: task format, category: check, started_at: "2026-07-23T05:17:25Z", finished_at: "2026-07-23T05:19:01Z", duration_seconds: 96, outcome: passed, reason: buildx_rawjson_stream_compatibility_hygiene }
+  - { command: focused Node tests plus cold history parser proof, category: combined, started_at: "2026-07-23T05:19:02Z", finished_at: "2026-07-23T05:19:05Z", duration_seconds: 3, outcome: passed, reason: validate_stdout_and_stderr_buildx_progress_parsing }
+  - { command: task format, category: check, started_at: "2026-07-23T05:20:20Z", finished_at: "2026-07-23T05:23:05Z", duration_seconds: 165, outcome: passed, reason: baseline_warning_and_validation_order_hygiene }
+  - { command: focused exact-head telemetry tests and preflight contract, category: combined, started_at: "2026-07-23T05:23:06Z", finished_at: "2026-07-23T05:23:08Z", duration_seconds: 2, outcome: passed, reason: pre_rebase_exact_head_validation }
+  - { command: task format, category: check, started_at: "2026-07-23T05:24:15Z", finished_at: "2026-07-23T05:27:25Z", duration_seconds: 190, outcome: passed, reason: current_main_rebase_exact_head_hygiene }
+  - { command: focused telemetry Node tests and preflight contract, category: combined, started_at: "2026-07-23T05:27:26Z", finished_at: "2026-07-23T05:27:28Z", duration_seconds: 2, outcome: passed, reason: final_prepush_exact_head_validation }
+  - { command: "task pr:ready PR=653", category: check, started_at: "2026-07-23T05:48:20Z", finished_at: "2026-07-23T05:48:22Z", duration_seconds: 2, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest Rust inventory compile with incorrect JSON selector, category: check, started_at: "2026-07-23T05:50:30Z", finished_at: "2026-07-23T05:51:44Z", duration_seconds: 74, outcome: failed, reason: inventory_output_used_test_count_keys_instead_of_array_entries }
+  - { command: cargo nextest inventory JSON schema inspection, category: check, started_at: "2026-07-23T05:51:45Z", finished_at: "2026-07-23T05:51:46Z", duration_seconds: 1, outcome: passed, reason: identify_exact_test_count_field }
+  - { command: cargo nextest native and preflight inventory counts, category: check, started_at: "2026-07-23T05:51:47Z", finished_at: "2026-07-23T05:51:48Z", duration_seconds: 1, outcome: passed, reason: merged_head_native_and_preflight_inventory }
+  - { command: merged-head web and e2e test-surface comparison, category: check, started_at: "2026-07-23T05:51:49Z", finished_at: "2026-07-23T05:51:50Z", duration_seconds: 1, outcome: passed, reason: confirm_unchanged_web_test_inventory_from_current_comparable_baseline }
+github_actions_runs:
+  - { workflow: PR, run_id: 29982213123, run_attempt: 1, head_sha: 6b4e0d09d0472dbe6d1f75f266fa691337c0a14e, trigger: pull_request, started_at: "2026-07-23T05:27:53Z", finished_at: "2026-07-23T05:47:50Z", duration_seconds: 1197, conclusion: success }
+cache_telemetry:
+  totals:
+    job_count: 3
+    remote_backend_job_count: 0
+    local_fallback_job_count: 3
+    sccache_compile_requests: 3075
+    sccache_cache_hits: 0
+    sccache_cache_misses: 2554
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 510
+    buildkit_cached_steps: 115
+    buildkit_cache_hit_rate_percent: 22.55
+  jobs:
+    - workflow: PR
+      run_id: 29982213123
+      run_attempt: 1
+      job: rust
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 2131
+        cache_hits: 0
+        cache_misses: 1763
+        hit_rate_percent: 0.0
+      buildkit:
+        completed_steps: 305
+        cached_steps: 64
+        cache_hit_rate_percent: 20.98
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29982213123
+      run_attempt: 1
+      job: wasm
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 944
+        cache_hits: 0
+        cache_misses: 791
+        hit_rate_percent: 0.0
+      buildkit:
+        completed_steps: 140
+        cached_steps: 30
+        cache_hit_rate_percent: 21.43
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29982213123
+      run_attempt: 1
+      job: verify
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 0
+        cache_hits: 0
+        cache_misses: 0
+        hit_rate_percent: null
+      buildkit:
+        completed_steps: 65
+        cached_steps: 21
+        cache_hit_rate_percent: 32.31
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+pr_retriggers: []
+merge_attempts:
+  - { at: "2026-07-23T05:48:42Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed_remote_merge_completed_before_local_worktree_checkout_error }
+comparison:
+  baseline_prs: [647]
+  baseline_quality: comparable
+  baseline_note: PR 647 changed the same hosted Rust and WASM cache infrastructure and exercised the same PR workflow gates immediately before this telemetry change.
+  elapsed_seconds_change_percent: 71.7
+  local_execution_seconds_change_percent: 492.1
+  github_actions_seconds_change_percent: -30.8
+  test_inventory_total_change: 1
+  regression: true
+  regression_reasons:
+    - End-to-end elapsed time exceeded the comparable baseline by 71.7 percent because live Buildx compatibility fixes required repeated local validation.
+    - Local execution time exceeded the comparable baseline by 492.1 percent, dominated by a cold repository-wide format build; the successful GitHub Actions run was 30.8 percent faster.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The live collector proofs exposed fully qualified Buildx history references and rawjson progress on stderr, two production interfaces that fixture-only tests did not reveal.
+    - The local regression is non-actionable for product CI because it came from the one-time cold repository format graph and compatibility proofs needed to make the new collector correct; the hosted workflow itself finished 30.8 percent faster than the comparable baseline.
+    - The PR completed with one successful Actions run, no reruns, no base-triggered retries, and one successful squash merge attempt.
+    - All three untrusted PR jobs correctly selected the credential-free local fallback, quantifying 2554 compiler-cache misses without exposing the persistent Redis credentials.
+    - BuildKit reused 115 of 510 completed target-record steps; this is step reuse rather than byte or unique-layer size because Buildx does not expose a stable portable byte-volume metric for this workflow.
+  required_actions: []
