@@ -1460,6 +1460,7 @@
       "open_simple_vault": "Open Simple Vault",
       "pairing_failed": "Pairing failed",
       "passkey_setup_failed": "Passkey setup failed before the extension could pair.",
+      "session_busy_retry": "The extension is busy. Try again.",
       "reset_setup": "Reset setup",
       "locked_title": "Extension locked",
       "locked_description": "This extension is paired as a durable Nook device. Unlock with a passkey before vaults, sync providers, or filling actions are available.",

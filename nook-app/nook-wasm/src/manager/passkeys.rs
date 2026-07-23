@@ -37,6 +37,18 @@ fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
     JsError::new(code)
 }
 
+fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
+    let receiver = js_sys::Object::new();
+    let active = ceremony_active
+        .call0(&receiver)
+        .map_err(|_| JsError::new("passkey-ceremony-expired"))?;
+    if active.as_bool() == Some(true) {
+        Ok(())
+    } else {
+        Err(JsError::new("passkey-ceremony-expired"))
+    }
+}
+
 impl NookVaultManager {
     async fn open_extension_passkey_vault(
         &mut self,
@@ -196,7 +208,9 @@ impl NookVaultManager {
     pub async fn register_website_passkey(
         &mut self,
         request_json: &str,
+        ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyRegistration, JsError> {
+        ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         let request: nook_core::PasskeyRegistrationRequest = serde_json::from_str(request_json)
@@ -219,6 +233,7 @@ impl NookVaultManager {
             result.attestation_object,
         );
         result.credential.zeroize_plaintext();
+        ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
             secret: encrypted,
         }])
@@ -230,7 +245,9 @@ impl NookVaultManager {
     pub async fn assert_website_passkey(
         &mut self,
         request_json: &str,
+        ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyAssertion, JsError> {
+        ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         let request: nook_core::WebsitePasskeyAssertionRequest = serde_json::from_str(request_json)
@@ -277,6 +294,7 @@ impl NookVaultManager {
                 .into_iter()
                 .map(|secret_id| nook_core::VaultOperation::SecretDeleted { secret_id }),
         );
+        ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(operations).await?;
         Ok(response)
     }

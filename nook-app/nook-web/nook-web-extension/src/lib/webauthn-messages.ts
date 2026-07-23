@@ -6,6 +6,7 @@ export type WebsitePasskeyOptionsMessage = {
     requestId: string
     ceremony: WebsitePasskeyCeremony
     requestJson: string
+    expiresAt: number
   }
 }
 
@@ -14,6 +15,13 @@ export type WebsitePasskeyPerformMessage = {
   payload: WebsitePasskeyOptionsMessage['payload'] & {
     vaultStoreId: string
     credentialId?: string
+  }
+}
+
+export type WebsitePasskeyCancelMessage = {
+  type: 'nook:website-passkey-cancel'
+  payload: {
+    requestId: string
   }
 }
 
@@ -36,7 +44,11 @@ function validBase(message: unknown): message is {
     'requestJson' in payload &&
     typeof payload.requestJson === 'string' &&
     payload.requestJson.length > 0 &&
-    payload.requestJson.length <= 65_536
+    payload.requestJson.length <= 65_536 &&
+    'expiresAt' in payload &&
+    typeof payload.expiresAt === 'number' &&
+    Number.isFinite(payload.expiresAt) &&
+    payload.expiresAt > Date.now()
   )
 }
 
@@ -63,6 +75,24 @@ export function isWebsitePasskeyPerformMessage(
     (!('credentialId' in message.payload) ||
       message.payload.credentialId === undefined ||
       typeof message.payload.credentialId === 'string')
+  )
+}
+
+export function isWebsitePasskeyCancelMessage(
+  message: unknown,
+): message is WebsitePasskeyCancelMessage {
+  return Boolean(
+    message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'nook:website-passkey-cancel' &&
+    'payload' in message &&
+    message.payload &&
+    typeof message.payload === 'object' &&
+    'requestId' in message.payload &&
+    typeof message.payload.requestId === 'string' &&
+    message.payload.requestId.length >= 16 &&
+    message.payload.requestId.length <= 128,
   )
 }
 

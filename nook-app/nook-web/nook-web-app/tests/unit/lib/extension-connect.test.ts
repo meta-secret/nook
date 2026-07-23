@@ -334,9 +334,20 @@ describe('extension-owned pairing start', () => {
         payload: {
           requestId: 'request-1',
           vaultStoreId: 'store-1',
+          expiresAt: Date.now() + 5_000,
         },
       }),
     ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityDiscoveryMessage({
+        type: 'nook:extension-paired-vault-identity-discovery',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-1',
+          expiresAt: Date.now() - 1,
+        },
+      }),
+    ).toBe(false)
     expect(
       isExtensionPairedVaultUnlockRequestMessage({
         type: 'nook:extension-paired-vault-unlock-request',
