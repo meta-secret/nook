@@ -1,0 +1,86 @@
+schema_version: 2
+source_pr:
+  number: 644
+  url: https://github.com/meta-secret/nook/pull/644
+  title: Show progress while importing passwords
+  change_surface: web_password_import_progress_ui
+  head_sha: e2edb6c57c5c92aef0c4c81445f267e15a5d5878
+  started_at: 2026-07-23T02:37:47Z
+  opened_at: 2026-07-23T02:51:25Z
+  merged_at: 2026-07-23T03:24:11Z
+  elapsed_seconds: 2784
+  open_to_merge_seconds: 1966
+summary:
+  local_execution_count: 24
+  local_check_count: 22
+  local_test_count: 1
+  local_combined_count: 1
+  local_execution_seconds: 405
+  github_actions_run_count: 3
+  github_actions_seconds: 1783
+  pr_retrigger_count: 2
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 2
+test_inventory:
+  measured_at: 2026-07-23T03:30:12Z
+  head_sha: e2edb6c57c5c92aef0c4c81445f267e15a5d5878
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 242
+    e2e: 200
+  total: 1102
+local_executions:
+  - { command: task format, category: check, started_at: 2026-07-23T02:43:20Z, finished_at: 2026-07-23T02:44:15Z, duration_seconds: 55, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: task web:dev:fast, category: combined, started_at: 2026-07-23T02:44:30Z, finished_at: 2026-07-23T02:45:00Z, duration_seconds: 30, outcome: failed, reason: worktree_git_pointer_unavailable_inside_container }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: 2026-07-23T02:45:10Z, finished_at: 2026-07-23T02:45:11Z, duration_seconds: 1, outcome: failed, reason: precommit_tree_did_not_include_ui_changes }
+  - { command: task format, category: check, started_at: 2026-07-23T02:47:10Z, finished_at: 2026-07-23T02:48:05Z, duration_seconds: 55, outcome: passed, reason: import_progress_unit_test_pre_push_hygiene }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: 2026-07-23T02:51:12Z, finished_at: 2026-07-23T02:51:13Z, duration_seconds: 1, outcome: passed, reason: initial_exact_head_ui_demo_contract }
+  - { command: task format, category: check, started_at: 2026-07-23T03:03:15Z, finished_at: 2026-07-23T03:04:10Z, duration_seconds: 55, outcome: passed, reason: native_unit_assertion_fix_pre_push_hygiene }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: 2026-07-23T03:04:26Z, finished_at: 2026-07-23T03:04:27Z, duration_seconds: 1, outcome: passed, reason: replacement_head_ui_demo_contract }
+  - { command: task pr:ready PR=644, category: check, started_at: 2026-07-23T03:23:37Z, finished_at: 2026-07-23T03:23:43Z, duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest Rust inventory JSON shape probe, category: check, started_at: 2026-07-23T03:25:15Z, finished_at: 2026-07-23T03:26:45Z, duration_seconds: 90, outcome: passed, reason: merged_head_rust_inventory_compile_and_shape }
+  - { command: cargo nextest Rust inventory count, category: check, started_at: 2026-07-23T03:26:46Z, finished_at: 2026-07-23T03:26:47Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory }
+  - { command: cargo nextest preflight inventory with wrong package name, category: check, started_at: 2026-07-23T03:26:46Z, finished_at: 2026-07-23T03:26:47Z, duration_seconds: 1, outcome: failed, reason: preflight_crate_is_named_nook_preflight }
+  - { command: cargo nextest preflight inventory count, category: check, started_at: 2026-07-23T03:26:50Z, finished_at: 2026-07-23T03:26:56Z, duration_seconds: 6, outcome: passed, reason: merged_head_preflight_inventory }
+  - { command: bunx vitest inventory before host install, category: check, started_at: 2026-07-23T03:27:00Z, finished_at: 2026-07-23T03:27:02Z, duration_seconds: 2, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: bun extension JUnit inventory, category: test, started_at: 2026-07-23T03:27:00Z, finished_at: 2026-07-23T03:27:02Z, duration_seconds: 2, outcome: passed, reason: merged_head_extension_unit_inventory }
+  - { command: Playwright app inventory before host install, category: check, started_at: 2026-07-23T03:27:00Z, finished_at: 2026-07-23T03:27:02Z, duration_seconds: 2, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: Playwright extension inventory before host install, category: check, started_at: 2026-07-23T03:27:00Z, finished_at: 2026-07-23T03:27:02Z, duration_seconds: 2, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: bun install --frozen-lockfile, category: check, started_at: 2026-07-23T03:27:10Z, finished_at: 2026-07-23T03:27:11Z, duration_seconds: 1, outcome: passed, reason: prepare_merged_head_web_inventory }
+  - { command: bunx vitest inventory before generated WASM, category: check, started_at: 2026-07-23T03:27:15Z, finished_at: 2026-07-23T03:27:19Z, duration_seconds: 4, outcome: failed, reason: merged_head_wasm_bindings_absent }
+  - { command: Playwright app inventory before generated WASM, category: check, started_at: 2026-07-23T03:27:15Z, finished_at: 2026-07-23T03:27:19Z, duration_seconds: 4, outcome: failed, reason: merged_head_wasm_bindings_absent }
+  - { command: Playwright extension inventory, category: check, started_at: 2026-07-23T03:27:15Z, finished_at: 2026-07-23T03:27:19Z, duration_seconds: 4, outcome: passed, reason: merged_head_extension_e2e_inventory_probe }
+  - { command: task wasm:build:fast, category: check, started_at: 2026-07-23T03:28:00Z, finished_at: 2026-07-23T03:29:03Z, duration_seconds: 63, outcome: passed, reason: generate_merged_head_wasm_for_web_inventory }
+  - { command: bunx vitest list, category: check, started_at: 2026-07-23T03:29:30Z, finished_at: 2026-07-23T03:29:41Z, duration_seconds: 11, outcome: passed, reason: merged_head_app_unit_inventory }
+  - { command: Playwright app inventory, category: check, started_at: 2026-07-23T03:29:30Z, finished_at: 2026-07-23T03:29:34Z, duration_seconds: 4, outcome: passed, reason: merged_head_app_e2e_inventory }
+  - { command: Playwright extension inventory, category: check, started_at: 2026-07-23T03:29:30Z, finished_at: 2026-07-23T03:29:34Z, duration_seconds: 4, outcome: passed, reason: merged_head_extension_e2e_inventory }
+github_actions_runs:
+  - { workflow: PR, run_id: 29975457060, run_attempt: 1, head_sha: dc6af0195bcedc09c52424afb15c9cf2424bf5f0, trigger: pull_request, started_at: 2026-07-23T02:51:29Z, finished_at: 2026-07-23T03:02:40Z, duration_seconds: 671, conclusion: failure }
+  - { workflow: PR, run_id: 29976034320, run_attempt: 1, head_sha: 350796b8d5cd8afbf9129e8ecb23aa8c21d22833, trigger: pull_request, started_at: 2026-07-23T03:04:32Z, finished_at: 2026-07-23T03:07:42Z, duration_seconds: 190, conclusion: failure }
+  - { workflow: PR, run_id: 29976034320, run_attempt: 2, head_sha: 350796b8d5cd8afbf9129e8ecb23aa8c21d22833, trigger: pull_request, started_at: 2026-07-23T03:08:00Z, finished_at: 2026-07-23T03:23:22Z, duration_seconds: 922, conclusion: success }
+pr_retriggers:
+  - { kind: head_push, at: 2026-07-23T03:04:29Z, reason: replace_non_native_unit_assertions_after_initial_hosted_failure }
+  - { kind: manual_rerun, at: 2026-07-23T03:08:00Z, reason: retry_transient_buildkit_wasm_export_setup_failure_on_unchanged_head }
+merge_attempts:
+  - { at: 2026-07-23T03:24:11Z, method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+  - { at: 2026-07-23T03:24:30Z, method: squash, outcome: failed, reason: verification_command_found_pull_request_already_merged }
+comparison:
+  baseline_prs: [638, 640]
+  baseline_quality: comparable
+  baseline_note: Recent web UI changes using the same hosted WASM, headless demo, preview, and merged-head inventory gates.
+  elapsed_seconds_change_percent: 11.6
+  local_execution_seconds_change_percent: 100.5
+  github_actions_seconds_change_percent: -13.0
+  test_inventory_total_change: 1
+  regression: true
+  regression_reasons:
+    - Local execution time exceeded the comparable median by 203 seconds because the merged-head inventory cold-compiled Rust and regenerated absent WASM bindings after the implementation lifecycle.
+waste_assessment:
+  wasteful: false
+  findings:
+    - The initial hosted failure was isolated to non-native DOM assertion typings; the replacement head changed only the affected unit test and then passed every product lane.
+    - The unchanged-head rerun followed a 25-second BuildKit wasm-export setup failure before product compilation; the retry passed the same WASM head and all downstream validation.
+    - Three format executions followed material implementation or test changes, and the headless demo proved progress during a 1,300-item import.
+    - Cold merged-head Rust and WASM inventory generation caused the measured local regression but did not change repository build configuration or expose an actionable persistent cache defect.
+  required_actions: []
