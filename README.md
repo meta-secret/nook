@@ -411,6 +411,8 @@ Repository invariant preflight still runs on every head; an exact handoff hit
 skips only Rust/WASM validation already completed for those identical inputs.
 For unchanged Rust validation inputs, the steady-state PR workflow budget is
 four to five minutes; an exact cache miss seeds its handoff once.
+Measure that budget from the first required job start through the last required
+job completion, with GitHub-hosted runner queue time reported separately.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
 Docker cache migration but is intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
