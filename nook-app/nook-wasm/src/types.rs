@@ -1740,7 +1740,15 @@ impl NookVaultRecoveryOptions {
                     passkey_hint: device.passkey_hint,
                 })
                 .collect(),
-            password_entries: password_entries_to_vec(&options.password_entries),
+            password_entries: options
+                .password_entries
+                .into_iter()
+                .map(|entry| NookPasswordEntrySummary {
+                    id: entry.id,
+                    label: entry.label,
+                    created_at: entry.created_at,
+                })
+                .collect(),
             requires_sentinel_quorum: options.requires_sentinel_quorum,
         }
     }

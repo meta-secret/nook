@@ -5,9 +5,7 @@
 //! labels a person needs to choose a recovery path. It never exposes an
 //! envelope, credential id, private key, or decrypted vault value.
 
-use crate::{
-    DeviceId, EventGraph, PasswordUnlockEntry, VaultOperation, VaultResult, project_vault,
-};
+use crate::{DeviceId, EventGraph, VaultOperation, VaultResult, project_vault};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,9 +16,16 @@ pub struct VaultRecoveryDevice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VaultRecoveryPassword {
+    pub id: String,
+    pub label: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultRecoveryOptions {
     pub devices: Vec<VaultRecoveryDevice>,
-    pub password_entries: Vec<PasswordUnlockEntry>,
+    pub password_entries: Vec<VaultRecoveryPassword>,
     pub requires_sentinel_quorum: bool,
 }
 
@@ -77,7 +82,15 @@ pub fn vault_recovery_options(
                 label,
             })
             .collect(),
-        password_entries: projection.password_entries,
+        password_entries: projection
+            .password_entries
+            .into_iter()
+            .map(|entry| VaultRecoveryPassword {
+                id: entry.id,
+                label: entry.label,
+                created_at: entry.created_at,
+            })
+            .collect(),
         requires_sentinel_quorum,
     })
 }
@@ -233,7 +246,14 @@ mod tests {
                 passkey_hint: recovery_device_id_hint(second.device_id()),
             }]
         );
-        assert_eq!(options.password_entries, vec![password]);
+        assert_eq!(
+            options.password_entries,
+            vec![VaultRecoveryPassword {
+                id: password.id,
+                label: password.label,
+                created_at: password.created_at,
+            }]
+        );
         assert!(!options.requires_sentinel_quorum);
     }
 
