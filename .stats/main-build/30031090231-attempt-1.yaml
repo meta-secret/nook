@@ -1,0 +1,265 @@
+{
+  "schema_version": 2,
+  "recorded_at": "2026-07-23T18:08:21.633Z",
+  "source_run": {
+    "workflow_name": "Main",
+    "workflow_id": 302951406,
+    "run_id": 30031090231,
+    "run_attempt": 1,
+    "url": "https://github.com/meta-secret/nook/actions/runs/30031090231",
+    "event": "push",
+    "head_branch": "main",
+    "head_sha": "fe6e7476135956bfadd1c17264030408c1dfed49",
+    "conclusion": "success",
+    "created_at": "2026-07-23T17:49:59Z",
+    "started_at": "2026-07-23T17:49:59Z",
+    "completed_at": "2026-07-23T18:08:06Z"
+  },
+  "source_pull_requests": [
+    {
+      "number": 682,
+      "url": "https://github.com/meta-secret/nook/pull/682",
+      "title": "Require regression tests for discovered bugs"
+    }
+  ],
+  "summary": {
+    "queue_seconds": 0,
+    "execution_seconds": 1087,
+    "wall_seconds": 1087,
+    "job_count": 1,
+    "step_count": 16,
+    "build_seconds": 902,
+    "deployment_seconds": 36,
+    "coverage_seconds": 1
+  },
+  "cache_telemetry": {
+    "totals": {
+      "job_count": 1,
+      "remote_backend_job_count": 0,
+      "local_fallback_job_count": 1,
+      "sccache_compile_requests": 180,
+      "sccache_cache_hits": 0,
+      "sccache_cache_misses": 94,
+      "sccache_hit_rate_percent": 0,
+      "buildkit_completed_steps": 492,
+      "buildkit_cached_steps": 287,
+      "buildkit_cache_hit_rate_percent": 58.33
+    },
+    "jobs": [
+      {
+        "job": "ci",
+        "cache_backend": {
+          "kind": "local_fallback",
+          "persistent": false,
+          "reason": "credentials_unavailable"
+        },
+        "sccache": {
+          "report_count": 7,
+          "compile_requests": 180,
+          "requests_executed": 94,
+          "cache_hits": 0,
+          "cache_misses": 94,
+          "cache_errors": 0,
+          "cache_writes": 94,
+          "hit_rate_percent": 0
+        },
+        "buildkit": {
+          "build_record_count": 14,
+          "completed_steps": 492,
+          "cached_steps": 287,
+          "cache_hit_rate_percent": 58.33,
+          "measurement": "buildx_target_record_steps"
+        },
+        "collection": {
+          "complete": true,
+          "warnings": []
+        }
+      }
+    ],
+    "collection": {
+      "complete": true,
+      "warnings": []
+    }
+  },
+  "jobs": [
+    {
+      "id": 89287552721,
+      "name": "Check, build, e2e, and deploy dev",
+      "status": "completed",
+      "conclusion": "success",
+      "runner_name": "GitHub Actions 1000004081",
+      "runner_group_name": "GitHub Actions",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "started_at": "2026-07-23T17:50:03Z",
+      "completed_at": "2026-07-23T18:08:06Z",
+      "duration_seconds": 1083,
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T17:50:03Z",
+          "completed_at": "2026-07-23T17:50:05Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 2,
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T17:50:05Z",
+          "completed_at": "2026-07-23T17:50:06Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 3,
+          "name": "Docker setup",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T17:50:06Z",
+          "completed_at": "2026-07-23T17:50:18Z",
+          "duration_seconds": 12
+        },
+        {
+          "number": 4,
+          "name": "Preflight, check, build, and e2e",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T17:50:18Z",
+          "completed_at": "2026-07-23T18:05:20Z",
+          "duration_seconds": 902
+        },
+        {
+          "number": 5,
+          "name": "Record all headless UI demos",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:05:20Z",
+          "completed_at": "2026-07-23T18:07:15Z",
+          "duration_seconds": 115
+        },
+        {
+          "number": 6,
+          "name": "Upload complete Main UI demo artifact",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:15Z",
+          "completed_at": "2026-07-23T18:07:17Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 7,
+          "name": "Publish largest Main UI demos to the merged PR issue",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:17Z",
+          "completed_at": "2026-07-23T18:07:21Z",
+          "duration_seconds": 4
+        },
+        {
+          "number": 8,
+          "name": "Deploy isolated development applications to Cloudflare Pages",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:21Z",
+          "completed_at": "2026-07-23T18:07:51Z",
+          "duration_seconds": 30
+        },
+        {
+          "number": 9,
+          "name": "Configure and verify isolated development domains",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:51Z",
+          "completed_at": "2026-07-23T18:07:56Z",
+          "duration_seconds": 5
+        },
+        {
+          "number": 10,
+          "name": "Record development deployment",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:56Z",
+          "completed_at": "2026-07-23T18:07:57Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 11,
+          "name": "Export commit-keyed nook-core/auth coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:57Z",
+          "completed_at": "2026-07-23T18:07:57Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 12,
+          "name": "Upload commit-keyed nook-core/auth coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:57Z",
+          "completed_at": "2026-07-23T18:07:58Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 13,
+          "name": "Preserve cache telemetry",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:07:58Z",
+          "completed_at": "2026-07-23T18:08:00Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 25,
+          "name": "Post Docker setup",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:08:00Z",
+          "completed_at": "2026-07-23T18:08:04Z",
+          "duration_seconds": 4
+        },
+        {
+          "number": 26,
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:08:04Z",
+          "completed_at": "2026-07-23T18:08:04Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 27,
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-23T18:08:04Z",
+          "completed_at": "2026-07-23T18:08:04Z",
+          "duration_seconds": 0
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "baseline_runs": [
+      {
+        "run_id": 30028942920,
+        "run_attempt": 1
+      },
+      {
+        "run_id": 30020710097,
+        "run_attempt": 1
+      }
+    ],
+    "baseline_quality": "comparable",
+    "baseline_note": "Two most recent successful Main attempts from the same workflow",
+    "wall_seconds_change_percent": -7.3,
+    "execution_seconds_change_percent": -7.3,
+    "build_seconds_change_percent": -8.5,
+    "regression": false,
+    "regression_reasons": []
+  }
+}
