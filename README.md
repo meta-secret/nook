@@ -407,6 +407,8 @@ PR CI also caches the small native coverage and generated WASM handoffs under
 exact hashes of their Rust, toolchain, Docker, Task, and workflow inputs.
 Repository invariant preflight still runs on every head; an exact handoff hit
 skips only Rust/WASM validation already completed for those identical inputs.
+For unchanged Rust validation inputs, the steady-state PR workflow budget is
+four to five minutes; an exact cache miss seeds its handoff once.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
 Docker cache migration but is intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.

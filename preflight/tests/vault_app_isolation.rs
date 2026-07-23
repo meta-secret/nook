@@ -981,6 +981,8 @@ fn assert_pr_workflow_contract(root: &Path) {
         "actions/cache/save@v6",
         "nook-native-validation-v1-",
         "nook-wasm-validation-v1-",
+        "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+        "git diff --name-only \"$BASE_SHA\" \"$HEAD_SHA\" --",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
@@ -991,6 +993,12 @@ fn assert_pr_workflow_contract(root: &Path) {
             "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
         );
     }
+    assert_eq!(
+        pr.matches("git diff --name-only \"$BASE_SHA\" \"$HEAD_SHA\" --")
+            .count(),
+        2,
+        "coverage input detection must compare the event base to the explicit PR head, never a moving synthetic merge"
+    );
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
