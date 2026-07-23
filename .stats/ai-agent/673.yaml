@@ -1,0 +1,99 @@
+schema_version: 3
+source_pr:
+  number: 673
+  url: https://github.com/meta-secret/nook/pull/673
+  title: Verify steady-state PR validation budget
+  change_surface: docs_ci_pr_validation_performance_proof
+  head_sha: 8e8d6908ae6b73e7347c152721158513c49389b6
+  started_at: 2026-07-23T13:34:21Z
+  opened_at: 2026-07-23T13:37:38Z
+  merged_at: 2026-07-23T15:28:31Z
+  elapsed_seconds: 6850
+  open_to_merge_seconds: 6653
+summary:
+  local_execution_count: 7
+  local_check_count: 7
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 4096
+  github_actions_run_count: 5
+  github_actions_seconds: 1974
+  pr_retrigger_count: 4
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T15:32:00Z
+  head_sha: 8e8d6908ae6b73e7347c152721158513c49389b6
+  by_type:
+    rust: 628
+    preflight: 34
+    web_unit: 245
+    e2e: 199
+  total: 1106
+local_executions:
+  - { command: "task format && git diff --check", category: check, started_at: "2026-07-23T13:34:52Z", finished_at: "2026-07-23T13:36:15Z", duration_seconds: 83, outcome: passed, reason: initial_fail_closed_documentation_hygiene }
+  - { command: "task format && git diff --check", category: check, started_at: "2026-07-23T14:00:52Z", finished_at: "2026-07-23T14:47:56Z", duration_seconds: 2824, outcome: passed, reason: reusable_handoff_documentation_hygiene_after_cold_promotion }
+  - { command: "task pr:ready PR=673", category: check, started_at: "2026-07-23T14:53:06Z", finished_at: "2026-07-23T14:53:12Z", duration_seconds: 6, outcome: failed, reason: readiness_detected_new_main_stats_base }
+  - { command: "task format && git diff --check", category: check, started_at: "2026-07-23T14:59:10Z", finished_at: "2026-07-23T15:17:13Z", duration_seconds: 1083, outcome: passed, reason: system_of_record_review_fix_hygiene }
+  - { command: "task pr:ready PR=673", category: check, started_at: "2026-07-23T14:58:08Z", finished_at: "2026-07-23T14:58:14Z", duration_seconds: 6, outcome: failed, reason: readiness_detected_unresolved_system_of_record_review_thread }
+  - { command: "task format && git diff --check", category: check, started_at: "2026-07-23T15:22:22Z", finished_at: "2026-07-23T15:23:49Z", duration_seconds: 87, outcome: passed, reason: final_documented_budget_and_trigger_hygiene }
+  - { command: "task pr:ready PR=673", category: check, started_at: "2026-07-23T15:28:07Z", finished_at: "2026-07-23T15:28:14Z", duration_seconds: 7, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 30012040776, run_attempt: 1, head_sha: c44663dbbd8c26888832611cfdf878831e5f8c66, trigger: pull_request, started_at: "2026-07-23T13:37:42Z", finished_at: "2026-07-23T13:58:15Z", duration_seconds: 1233, conclusion: success }
+  - { workflow: PR, run_id: 30017522729, run_attempt: 1, head_sha: c1dd653395a3f39e7462efdaed892855271bf7dc, trigger: pull_request, started_at: "2026-07-23T14:48:10Z", finished_at: "2026-07-23T14:52:38Z", duration_seconds: 268, conclusion: success }
+  - { workflow: PR, run_id: 30017953705, run_attempt: 1, head_sha: 3d78256756e453f8024c6ffc417217120ea15fbe, trigger: pull_request, started_at: "2026-07-23T14:53:39Z", finished_at: "2026-07-23T14:57:42Z", duration_seconds: 243, conclusion: success }
+  - { workflow: PR, run_id: 30020365117, run_attempt: 1, head_sha: 8e8d6908ae6b73e7347c152721158513c49389b6, trigger: pull_request, started_at: "2026-07-23T15:24:07Z", finished_at: "2026-07-23T15:27:55Z", duration_seconds: 228, conclusion: success }
+  - { workflow: PR, run_id: 30020710755, run_attempt: 1, head_sha: 8e8d6908ae6b73e7347c152721158513c49389b6, trigger: pull_request, started_at: "2026-07-23T15:28:34Z", finished_at: "2026-07-23T15:28:36Z", duration_seconds: 2, conclusion: skipped }
+cache_telemetry:
+  totals:
+    job_count: 12
+    remote_backend_job_count: 0
+    local_fallback_job_count: 12
+    sccache_compile_requests: 3075
+    sccache_cache_hits: 0
+    sccache_cache_misses: 2554
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 766
+    buildkit_cached_steps: 216
+    buildkit_cache_hit_rate_percent: 28.2
+  jobs:
+    - { workflow: PR, run_id: 30012040776, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 2131, cache_hits: 0, cache_misses: 1763, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 325, cached_steps: 93, cache_hit_rate_percent: 28.62, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30012040776, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 67, cached_steps: 21, cache_hit_rate_percent: 31.34, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30012040776, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 143, cached_steps: 42, cache_hit_rate_percent: 29.37, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30017522729, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 15, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30017522729, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 62, cached_steps: 20, cache_hit_rate_percent: 32.26, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30017522729, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 0, cached_steps: 0, cache_hit_rate_percent: null, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30017953705, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 15, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30017953705, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 62, cached_steps: 20, cache_hit_rate_percent: 32.26, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30017953705, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 0, cached_steps: 0, cache_hit_rate_percent: null, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30020365117, run_attempt: 1, job: rust, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 15, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30020365117, run_attempt: 1, job: verify, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 62, cached_steps: 20, cache_hit_rate_percent: 32.26, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30020365117, run_attempt: 1, job: wasm, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 0, cached_steps: 0, cache_hit_rate_percent: null, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-23T14:48:10Z", reason: document_cross_commit_reuse_after_cold_handoff_promotion }
+  - { kind: base_update, at: "2026-07-23T14:53:39Z", reason: validate_rebased_head_after_main_stats_commit }
+  - { kind: head_push, at: "2026-07-23T15:24:07Z", reason: address_system_of_record_budget_review }
+  - { kind: reopen, at: "2026-07-23T15:28:34Z", reason: post_merge_pull_request_dispatch_was_automatically_skipped }
+merge_attempts:
+  - { at: "2026-07-23T15:28:31Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [580, 598]
+  baseline_quality: comparable
+  baseline_note: PRs 580 and 598 changed CI documentation and exercised the same format, PR, preview, and readiness gates, but they did not intentionally measure a cold promotion followed by multiple steady-state proof runs.
+  elapsed_seconds_change_percent: 692.4
+  local_execution_seconds_change_percent: 5836.2
+  github_actions_seconds_change_percent: 411.4
+  test_inventory_total_change: 72
+  regression: true
+  regression_reasons:
+    - The proof PR intentionally ran one cold producer cycle and three trusted-handoff validation cycles, so aggregate Actions time exceeded the comparable single-run documentation baseline.
+    - Two repository-wide format executions stalled in the local Docker build graph for 47 minutes and 18 minutes even though the documentation remained unchanged after formatting.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Cold run 30012040776 established a fresh exact-input producer baseline; the later warm runs were required to prove the promoted handoff, rebase safety, and final reviewed head rather than repeating an unchanged validation without evidence.
+    - The final exact-head required-job span was 224 seconds, inside the documented four-to-five-minute budget, and both expensive Rust and WASM producer steps skipped only after trusted artifact validation.
+    - All untrusted pull-request jobs correctly used credential-free local fallback; compiler-cache misses occurred only during the intentional cold producer run and no persistent secret was exposed.
+    - The long local format executions were host Docker stalls outside the hosted PR workflow. They did not alter files, and the final warm local format returned to 87 seconds without a repository change, so no product-CI correction is supported by this record.
+    - The automatic skipped post-merge pull_request dispatch is recorded for completeness and consumed two seconds without executing product validation.
+  required_actions: []
