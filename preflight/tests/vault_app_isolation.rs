@@ -1004,6 +1004,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         2,
         "coverage input detection must use the explicit event snapshots' merge-base diff, never a moving synthetic merge or a two-dot snapshot diff"
     );
+    let native_job = section(&pr, "  rust:\n", "  wasm:\n");
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
@@ -1023,7 +1024,8 @@ fn assert_pr_workflow_contract(root: &Path) {
         "workflowPath !== '.github/workflows/pr.yml'",
         "run.path?.replace(/@[^@]+$/, '')",
         "ref: ${{ steps.source.outputs.base-sha }}",
-        "git merge --no-commit --no-ff \"$HEAD_SHA\"",
+        "git merge-tree --write-tree HEAD \"$HEAD_SHA\"",
+        "git read-tree --reset -u \"$merge_tree\"",
         "'Native Rust verification'",
         "'WASM verification and artifact'",
         "'Verify and preview'",
@@ -1037,6 +1039,22 @@ fn assert_pr_workflow_contract(root: &Path) {
             "trusted validation promotion is missing: {required}"
         );
     }
+    assert!(
+        !trusted_handoff.contains("workflow_dispatch")
+            && !trusted_handoff.contains("listPullRequestsAssociatedWithCommit"),
+        "trusted validation promotion must require the immutable workflow-run PR snapshot"
+    );
+    assert!(
+        trusted_handoff.contains("context.payload.workflow_run?.pull_requests?.[0]"),
+        "trusted validation promotion must derive PR provenance from the immutable workflow-run event snapshot"
+    );
+    assert!(
+        native_job.contains("run.event === 'workflow_run'")
+            && wasm_job.contains("run.event === 'workflow_run'")
+            && !native_job.contains("workflow_dispatch")
+            && !wasm_job.contains("workflow_dispatch"),
+        "trusted handoff consumers must accept only automatic workflow-run promotions"
+    );
     assert_eq!(
         pr.matches("task ci:pr:wasm").count(),
         1,

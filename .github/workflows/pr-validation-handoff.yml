@@ -12,37 +12,28 @@ on:
   workflow_run:
     workflows: [PR]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: Successful PR workflow run to promote
-        required: true
-        type: string
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: pr-validation-handoff-${{ github.event.workflow_run.id || inputs.run_id }}
+  group: pr-validation-handoff-${{ github.event.workflow_run.id }}
   cancel-in-progress: false
 
 jobs:
   promote:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'pull_request' &&
-        github.event.workflow_run.repository.full_name == github.repository
-      )
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.repository.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Verify source PR workflow
         id: source
         uses: actions/github-script@v9
         env:
-          REQUESTED_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          REQUESTED_RUN_ID: ${{ github.event.workflow_run.id }}
         with:
           retries: 3
           script: |
@@ -87,8 +78,9 @@ jobs:
               }
             }
 
-            const pullRequest = run.pull_requests?.[0]
+            const pullRequest = context.payload.workflow_run?.pull_requests?.[0]
             if (
+              context.payload.workflow_run?.id !== runId ||
               !pullRequest ||
               !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
               !/^[0-9a-f]{40}$/.test(pullRequest.head?.sha || '') ||
@@ -115,7 +107,9 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "$HEAD_SHA" --no-tags
-          git merge --no-commit --no-ff "$HEAD_SHA"
+          merge_tree="$(git merge-tree --write-tree HEAD "$HEAD_SHA")"
+          [[ "$merge_tree" =~ ^[0-9a-f]{40}$ ]]
+          git read-tree --reset -u "$merge_tree"
 
       - name: Derive exact validation keys
         id: keys
