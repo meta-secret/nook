@@ -13,7 +13,9 @@ function savePilotStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
-test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
+test('keep the Nook Pilot save action responsive through session activity', async ({
+  page,
+}) => {
   const messages = await loadPilotMessages()
   const stubArgs = savePilotStubArgs(messages)
 
@@ -111,9 +113,11 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('status')).toHaveText('Secure sign-in submitted')
   await expect(widget.getByText('Save this login?')).toBeVisible()
+  const saveButton = widget.getByTestId('nook-auth-gate-save')
   await demoBeat(page)
 
-  await widget.getByTestId('nook-auth-gate-save').click()
+  await expect(saveButton).toBeEnabled()
+  await saveButton.click()
   await expect(widget.getByText('Login saved')).toBeVisible()
   await demoBeat(page)
 })
