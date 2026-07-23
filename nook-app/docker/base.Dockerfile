@@ -26,6 +26,7 @@ ARG WASM_PACK_VERSION=0.15.0
 ARG LLVM_COV_VERSION=0.8.7
 ARG SCCACHE_VERSION=0.16.0
 ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
+ARG SCCACHE_REDIS_MODE=local
 ARG SCCACHE_REDIS_PORT=6380
 # Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
 # Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
@@ -38,6 +39,7 @@ ARG BINARYEN_VERSION=122
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
+ENV NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}
 ENV SCCACHE_REDIS_ENDPOINT=redis://host.docker.internal:${SCCACHE_REDIS_PORT}
 ENV SCCACHE_REDIS_KEY_PREFIX=nook
 # Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the

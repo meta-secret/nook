@@ -95,11 +95,11 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
 }
 
 #[test]
-fn github_actions_use_the_authenticated_persistent_cache() {
+fn github_actions_keep_remote_credentials_out_of_delivery_builds() {
     assert_cache_actions_use_credential_files();
     assert_cache_connector_redacts_credentials();
     assert_workflows_scope_cache_credentials();
-    assert_rust_builds_mount_cache_credentials();
+    assert_rust_build_cache_boundary();
 }
 
 fn assert_cache_actions_use_credential_files() {
@@ -266,47 +266,25 @@ fn assert_workflows_scope_cache_credentials() {
         }
     }
 
-    let main_path = ".github/workflows/main.yml";
-    let main_workflow = read(main_path);
-    let password_count = main_workflow
-        .matches("cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}")
-        .count();
-    let client_id_count = main_workflow
-        .matches("cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}")
-        .count();
-    let client_secret_count = main_workflow
-        .matches(
-            "cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}",
-        )
-        .count();
-    assert_eq!(
-        password_count, 1,
-        "only trusted Docker setup calls in {main_path} may receive the Redis password"
-    );
-    assert_eq!(
-        client_id_count, 1,
-        "only trusted Docker setup calls in {main_path} may receive the Access client ID"
-    );
-    assert_eq!(
-        client_secret_count, 1,
-        "only trusted Docker setup calls in {main_path} may receive the Access client secret"
-    );
-
-    let nightly = read(".github/workflows/e2e-nightly.yml");
-    for secret_input in [
-        "cache-redis-password: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CACHE_REDIS_PASSWORD || '' }}",
-        "cache-cloudflare-client-id: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID || '' }}",
-        "cache-cloudflare-client-secret: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET || '' }}",
+    for path in [
+        ".github/workflows/main.yml",
+        ".github/workflows/e2e-nightly.yml",
     ] {
-        assert_eq!(
-            nightly.matches(secret_input).count(),
-            1,
-            "nightly cache credentials must be limited to the trusted default branch"
-        );
+        let workflow = read(path);
+        for secret in [
+            "NOOK_CACHE_REDIS_PASSWORD",
+            "NOOK_CLOUDFLARE_ACCESS_CLIENT_ID",
+            "NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET",
+        ] {
+            assert!(
+                !workflow.contains(secret),
+                "delivery workflow {path} must use the job-local cache and stable BuildKit keys"
+            );
+        }
     }
 }
 
-fn assert_rust_builds_mount_cache_credentials() {
+fn assert_rust_build_cache_boundary() {
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}"));
     let app_tasks = read("nook-app/Taskfile.yml");
@@ -315,24 +293,86 @@ fn assert_rust_builds_mount_cache_credentials() {
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");
     assert!(wrapper.contains("/run/secrets/sccache_redis_password"));
+    assert!(wrapper.contains("NOOK_SCCACHE_REDIS_MODE"));
+    assert!(wrapper.contains("exec \"$@\""));
     assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
+    assert!(rust_base.contains("NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}"));
+
+    assert!(bake.contains("SCCACHE_REDIS_MODE = SCCACHE_REDIS_MODE"));
+    assert!(app_tasks.contains("--set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'"));
 
     let secret_mount = "--mount=type=secret,id=sccache_redis_password";
+    let core_dockerfile = read("nook-app/nook-core/Dockerfile");
     assert!(
-        read("nook-app/nook-core/Dockerfile")
-            .matches(secret_mount)
-            .count()
-            >= 12
+        !core_dockerfile.contains(secret_mount),
+        "Rust dependency and source layers must remain reusable across Main and PR jobs"
     );
     assert!(
-        read("nook-app/nook-wasm/Dockerfile")
-            .matches(secret_mount)
-            .count()
-            >= 3
+        !read("nook-app/nook-wasm/Dockerfile").contains(secret_mount),
+        "WASM source layers must remain reusable across Main and PR jobs"
     );
+}
+
+fn assert_delivery_cache_scope_contract() {
+    let setup = read(".github/actions/nook-docker-setup/action.yml");
+    assert!(setup.contains("cache-telemetry.cjs start"));
+    assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
+    assert!(setup.contains("job_scope=\"$(printf '%s' \"$GITHUB_JOB\""));
+    assert!(setup.contains("full-e2e|full-extension-e2e)"));
+    assert!(setup.contains("job_scope=e2e"));
+    assert!(setup.contains("app_tree=\"$(git rev-parse HEAD:nook-app)\""));
+    assert!(setup.contains("dockerignore_blob=\"$(git hash-object .dockerignore)\""));
+    assert!(setup.contains("scope_suffix=\"-pr-$pr_number-$job_scope-$cache_generation\""));
+    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
+    assert!(setup.contains("repos/$GITHUB_REPOSITORY/actions/caches"));
+    assert!(setup.contains("cache_total_count()"));
+    assert!(setup.contains("Unable to probe hosted BuildKit cache key"));
+    assert!(setup.contains("require-e2e-cache"));
+    assert!(setup.contains("required_scopes=\"$required_scopes nook-web-e2e-v1\""));
+    assert!(setup.contains("e2e)"));
+    assert!(setup.contains("required_scopes=\"nook-web-deps-v1 nook-web-e2e-v1\""));
+    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
+    assert!(setup.contains("candidate_suffixes=\"$("));
+    assert!(setup.contains("seed_scope_suffix=\"$candidate_suffix\""));
+    assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX=$seed_scope_suffix"));
+    assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
+    assert!(setup.contains("[ -n \"$fallback_enabled\" ]"));
+
+    let bake = read("nook-app/docker-bake.hcl");
+    assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
+    assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
+    assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
+    assert!(bake.contains("GHA_CACHE_FALLBACK_ENABLED != \"\""));
+    for scope in [
+        "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
+    ] {
+        assert!(
+            bake.contains(scope),
+            "delivery cache must isolate immutable PR job generations: {scope}"
+        );
+    }
+    for main_scope in [
+        "\"type=gha,scope=nook-rust-base-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-deps-v2,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-deps-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-native-source-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-source-v1,version=2\"",
+        "\"type=gha,scope=nook-web-deps-v1,version=2\"",
+        "\"type=gha,scope=nook-web-v1,version=2\"",
+        "\"type=gha,scope=nook-web-e2e-v1,version=2\"",
+    ] {
+        assert!(
+            bake.matches(main_scope).count() >= 3,
+            "a missing generation with an older PR seed must also import Main: {main_scope}"
+        );
+    }
 }
 
 #[test]
@@ -388,9 +428,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
             >= 3
     );
 
-    let setup = read(".github/actions/nook-docker-setup/action.yml");
-    assert!(setup.contains("cache-telemetry.cjs start"));
-    assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
+    assert_delivery_cache_scope_contract();
 
     let telemetry_action = read(".github/actions/nook-cache-telemetry/action.yml");
     for required in [

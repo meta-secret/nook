@@ -51,6 +51,10 @@ variable "SCCACHE_REDIS_HOST_IP" {
   default = ""
 }
 
+variable "SCCACHE_REDIS_MODE" {
+  default = "local"
+}
+
 variable "SCCACHE_REDIS_PASSWORD_FILE" {
   default = ""
 }
@@ -68,82 +72,197 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-rust_base_cache_from = GHA_CACHE_ENABLED != "" ? [
+// Pull requests append a per-PR, per-job, app-tree generation suffix. The job owner is required
+// because native, WASM, and verify solve overlapping Rust targets on separate builders. The
+// generation makes a completed PR lineage immutable: its first solve may seed from Main and
+// export, while later solves only read it. Main keeps the empty suffix as the fallback for a new
+// generation.
+variable "GHA_CACHE_SCOPE_SUFFIX" {
+  default = ""
+}
+
+// A PR uses Main only while one of its job-owned cache indices is absent. Once the lineage exists,
+// mixing mutable Main records back into the solve can select an equivalent base result from a
+// different exporter and invalidate every child layer.
+variable "GHA_CACHE_FALLBACK_ENABLED" {
+  default = ""
+}
+
+// A missing content-addressed generation may seed from the newest completed read-only generation
+// owned by the same PR/job. New PRs leave this empty and seed from Main.
+variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
+  default = ""
+}
+
+rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-base-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
+] : [
+  "type=gha,scope=nook-rust-base-v1,version=2",
+]) : [
+  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-base-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-rust_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
+rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : [
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+]) : [
+  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-deps-v2,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-rust_wasm_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
+rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : [
+  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+]) : [
+  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-rust_native_source_cache_from = GHA_CACHE_ENABLED != "" ? [
+rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-native-source-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : [
+  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+]) : [
+  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-native-source-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-rust_wasm_source_cache_from = GHA_CACHE_ENABLED != "" ? [
+rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-wasm-source-v1,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+] : [
+  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
+  "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-v1,version=2",
+]) : [
+  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-web_deps_cache_from = GHA_CACHE_ENABLED != "" ? [
+web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-web-deps-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+] : [
+  "type=gha,scope=nook-web-deps-v1,version=2",
+]) : [
+  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 web_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-web-deps-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-web_cache_from = GHA_CACHE_ENABLED != "" ? [
+web_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-web-v1,version=2",
   "type=gha,scope=nook-web-deps-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-web-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-web-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-web-v1,version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+] : [
+  "type=gha,scope=nook-web-v1,version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+]) : [
+  "type=gha,scope=nook-web-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 web_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-web-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-web-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
-web_e2e_cache_from = GHA_CACHE_ENABLED != "" ? [
+web_e2e_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-web-e2e-v1,version=2",
   "type=gha,scope=nook-web-deps-v1,version=2",
-] : []
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
+  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
+  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-web-e2e-v1,version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+] : [
+  "type=gha,scope=nook-web-e2e-v1,version=2",
+  "type=gha,scope=nook-web-deps-v1,version=2",
+]) : [
+  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+]
 
 web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-web-e2e-v1,mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 target "_sccache-network" {
   args = {
+    SCCACHE_REDIS_MODE = SCCACHE_REDIS_MODE
     SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
   }
   extra-hosts = {
