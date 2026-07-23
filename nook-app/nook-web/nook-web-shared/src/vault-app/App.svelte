@@ -513,9 +513,14 @@
     if (vault.isAuthenticated) {
       vault.clearUnlockedSession();
     }
-    await vault.selectVaultForUnlock(pending.storeId);
-    if (vault.activeVaultStoreId !== pending.storeId) {
-      throw new Error(vault.t("errors.vault_selection_failed"));
+    const existingLocalVault = vault.localVaults.some(
+      (entry) => entry.storeId === pending.storeId,
+    );
+    if (existingLocalVault) {
+      await vault.selectVaultForUnlock(pending.storeId);
+      if (vault.activeVaultStoreId !== pending.storeId) {
+        throw new Error(vault.t("errors.vault_selection_failed"));
+      }
     }
     vault.loginRequiresExistingVault = true;
     vault.loginSetupType = pending.setupType;
