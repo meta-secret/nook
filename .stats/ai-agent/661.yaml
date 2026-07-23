@@ -1,0 +1,103 @@
+schema_version: 3
+source_pr:
+  number: 661
+  url: https://github.com/meta-secret/nook/pull/661
+  title: Fix existing vault recovery on first folder selection
+  change_surface: rust_wasm_web_existing_vault_recovery
+  head_sha: 930446a259fbb51204658f3801dafcd9271e793e
+  started_at: 2026-07-23T05:00:00Z
+  opened_at: 2026-07-23T08:10:51Z
+  merged_at: 2026-07-23T17:19:47Z
+  elapsed_seconds: 44387
+  open_to_merge_seconds: 32936
+summary:
+  local_execution_count: 8
+  local_check_count: 3
+  local_test_count: 4
+  local_combined_count: 1
+  local_execution_seconds: 1011
+  github_actions_run_count: 9
+  github_actions_seconds: 11512
+  pr_retrigger_count: 8
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T17:21:00Z
+  head_sha: 930446a259fbb51204658f3801dafcd9271e793e
+  by_type:
+    rust: 630
+    preflight: 34
+    web_unit: 251
+    e2e: 200
+  total: 1115
+local_executions:
+  - { command: "task format", category: check, started_at: "2026-07-23T07:35:00Z", finished_at: "2026-07-23T07:39:00Z", duration_seconds: 240, outcome: passed, reason: initial_rust_wasm_web_hygiene }
+  - { command: "task web:check", category: check, started_at: "2026-07-23T07:39:00Z", finished_at: "2026-07-23T07:41:00Z", duration_seconds: 120, outcome: passed, reason: initial_web_type_and_svelte_validation }
+  - { command: "docker Playwright local-folder focused run", category: test, started_at: "2026-07-23T16:36:00Z", finished_at: "2026-07-23T16:37:00Z", duration_seconds: 60, outcome: failed, reason: stale_local_e2e_image_probe }
+  - { command: "docker Playwright local-folder focused run", category: test, started_at: "2026-07-23T16:39:00Z", finished_at: "2026-07-23T16:40:00Z", duration_seconds: 60, outcome: failed, reason: stale_local_e2e_image_reproduction }
+  - { command: "docker Playwright local-folder focused run", category: test, started_at: "2026-07-23T16:42:00Z", finished_at: "2026-07-23T16:43:00Z", duration_seconds: 60, outcome: failed, reason: stale_local_e2e_image_confirmation }
+  - { command: "docker Playwright local-folder suite with current spec bind mount", category: test, started_at: "2026-07-23T16:45:00Z", finished_at: "2026-07-23T16:45:44Z", duration_seconds: 44, outcome: passed, reason: focused_first_attempt_folder_recovery_regression_proof }
+  - { command: "task format && task web:check && git diff --check", category: combined, started_at: "2026-07-23T16:50:00Z", finished_at: "2026-07-23T16:57:00Z", duration_seconds: 420, outcome: passed, reason: final_review_fix_hygiene_and_type_validation }
+  - { command: "task pr:ready PR=661", category: check, started_at: "2026-07-23T17:19:20Z", finished_at: "2026-07-23T17:19:27Z", duration_seconds: 7, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 29990430191, run_attempt: 1, head_sha: 439cad8b4d03239577e9bf240802caec42a3956c, trigger: pull_request, started_at: "2026-07-23T08:10:55Z", finished_at: "2026-07-23T08:49:49Z", duration_seconds: 2334, conclusion: success }
+  - { workflow: PR, run_id: 29992549734, run_attempt: 1, head_sha: cd13aa8737b56dc64ea50ed9402014d7057f094c, trigger: pull_request, started_at: "2026-07-23T08:49:21Z", finished_at: "2026-07-23T09:24:06Z", duration_seconds: 2085, conclusion: success }
+  - { workflow: PR, run_id: 29995245864, run_attempt: 1, head_sha: 4f15fb70873b05e0646da6fe0719b30aea021efa, trigger: pull_request, started_at: "2026-07-23T09:25:21Z", finished_at: "2026-07-23T09:43:09Z", duration_seconds: 1068, conclusion: failure }
+  - { workflow: PR, run_id: 29998075568, run_attempt: 1, head_sha: ef6fbb4f3eb387a4df179f8175f95778bbc22b0a, trigger: pull_request, started_at: "2026-07-23T10:07:08Z", finished_at: "2026-07-23T10:28:48Z", duration_seconds: 1300, conclusion: cancelled }
+  - { workflow: PR, run_id: 29998731622, run_attempt: 1, head_sha: 50551c05da0194b5ac84756e7c90fa66c892bb1c, trigger: pull_request, started_at: "2026-07-23T10:17:22Z", finished_at: "2026-07-23T10:45:33Z", duration_seconds: 1691, conclusion: failure }
+  - { workflow: PR, run_id: 29998731622, run_attempt: 2, head_sha: 50551c05da0194b5ac84756e7c90fa66c892bb1c, trigger: pull_request, started_at: "2026-07-23T10:46:20Z", finished_at: "2026-07-23T10:55:19Z", duration_seconds: 539, conclusion: failure }
+  - { workflow: PR, run_id: 30024223721, run_attempt: 1, head_sha: 6c8bbcfad23d4521c3c5201c76ffc0dd7bd5f752, trigger: pull_request, started_at: "2026-07-23T16:14:20Z", finished_at: "2026-07-23T16:33:46Z", duration_seconds: 1166, conclusion: success }
+  - { workflow: PR, run_id: 30027594541, run_attempt: 1, head_sha: 6702895847085f1666c8c7ad637a902e5e84f2cc, trigger: pull_request, started_at: "2026-07-23T17:00:56Z", finished_at: "2026-07-23T17:09:46Z", duration_seconds: 530, conclusion: cancelled }
+  - { workflow: PR, run_id: 30027964590, run_attempt: 1, head_sha: ec7e1de279d774ff549c7afe322056244926899e, trigger: pull_request, started_at: "2026-07-23T17:06:00Z", finished_at: "2026-07-23T17:19:19Z", duration_seconds: 799, conclusion: success }
+cache_telemetry:
+  totals:
+    job_count: 41
+    remote_backend_job_count: 0
+    local_fallback_job_count: 41
+    sccache_compile_requests: 11710
+    sccache_cache_hits: 0
+    sccache_cache_misses: 9299
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 6241
+    buildkit_cached_steps: 2518
+    buildkit_cache_hit_rate_percent: 40.35
+  jobs:
+    - { workflow: PR, run_id: 29990430191, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 3236, cache_hits: 0, cache_misses: 2644, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 899, cached_steps: 346, cache_hit_rate_percent: 38.49, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29992549734, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 3129, cache_hits: 0, cache_misses: 2557, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 899, cached_steps: 350, cache_hit_rate_percent: 38.93, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29995245864, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 1157, cache_hits: 0, cache_misses: 883, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 899, cached_steps: 392, cache_hit_rate_percent: 43.6, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29998075568, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 1874, cache_hits: 0, cache_misses: 1449, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 834, cached_steps: 396, cache_hit_rate_percent: 47.48, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29998731622, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 996, cache_hits: 0, cache_misses: 793, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 751, cached_steps: 305, cache_hit_rate_percent: 40.61, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 29998731622, run_attempt: 2, job: aggregate_1_job, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 81, cached_steps: 0, cache_hit_rate_percent: 0.0, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30024223721, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 1157, cache_hits: 0, cache_misses: 883, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 933, cached_steps: 413, cache_hit_rate_percent: 44.27, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30027594541, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 0, cache_hits: 0, cache_misses: 0, hit_rate_percent: null }, buildkit: { completed_steps: 491, cached_steps: 162, cache_hit_rate_percent: 32.99, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+    - { workflow: PR, run_id: 30027964590, run_attempt: 1, job: aggregate_5_jobs, cache_backend: local_fallback, cache_backend_reason: credentials_unavailable, cache_backend_persistent: false, sccache: { compile_requests: 161, cache_hits: 0, cache_misses: 90, hit_rate_percent: 0.0 }, buildkit: { completed_steps: 454, cached_steps: 154, cache_hit_rate_percent: 33.92, measurement: buildx_target_record_steps }, collection_complete: true, collection_warnings: [] }
+pr_retriggers:
+  - { kind: base_update, at: "2026-07-23T08:48:47Z", reason: current_main_integration }
+  - { kind: base_update, at: "2026-07-23T09:25:17Z", reason: current_main_integration }
+  - { kind: head_push, at: "2026-07-23T10:07:03Z", reason: preserve_password_recovery_import }
+  - { kind: base_update, at: "2026-07-23T10:17:16Z", reason: current_main_integration }
+  - { kind: manual_rerun, at: "2026-07-23T10:46:20Z", reason: bounded_retry_after_hosted_browser_failure }
+  - { kind: base_update, at: "2026-07-23T16:14:12Z", reason: integrate_prerequisite_extension_session_fix }
+  - { kind: head_push, at: "2026-07-23T17:00:49Z", reason: address_three_recovery_lifecycle_review_findings }
+  - { kind: base_update, at: "2026-07-23T17:05:53Z", reason: final_current_main_integration }
+merge_attempts:
+  - { at: "2026-07-23T17:19:47Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [602, 631]
+  baseline_quality: comparable
+  baseline_note: PR 602 changed existing-vault identity recovery and PR 631 changed passkey authentication UX under the same hosted PR gate.
+  elapsed_seconds_change_percent: 1086.3
+  local_execution_seconds_change_percent: 56.3
+  github_actions_seconds_change_percent: 395.2
+  test_inventory_total_change: 24
+  regression: true
+  regression_reasons:
+    - The implementation required a separately reviewed prerequisite extension-session fix before final integration could resume.
+    - Multiple security and vault-lifecycle review corrections required replacement exact-head validation cycles.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Three short local focused runs used a stale browser image; the diagnosis was bounded and the final current-source bind-mounted suite passed all seven cases.
+    - Superseded hosted runs were cancelled when review fixes or base updates made their results inapplicable.
+    - The prerequisite extension race was isolated into PR 670 and merged before this PR's final exact-head validation.
+  required_actions: []
