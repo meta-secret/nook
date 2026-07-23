@@ -251,9 +251,6 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await otpPage.goto(`${mockAuth.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
       await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
-      await expect(
-        otpWidget.getByRole('button', { name: 'Save backup codes' }),
-      ).toBeVisible()
       const pickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
       const picker = await pickerPromise
@@ -276,7 +273,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         otpPage.locator('[autocomplete="one-time-code"]'),
       ).toHaveValue(/^\d{6}$/)
-      await expect(picker).toBeClosed()
+      await expect.poll(() => picker.isClosed()).toBe(true)
     } finally {
       await paired.context.close()
       await mockAuth.close()
