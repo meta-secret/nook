@@ -1,0 +1,83 @@
+schema_version: 2
+source_pr:
+  number: 638
+  url: https://github.com/meta-secret/nook/pull/638
+  title: "fix(auth): restore passkey setup hierarchy"
+  change_surface: web_extension_passkey_setup_ui
+  head_sha: 14264b6e1bc17eacbcc09f8f13416f528da43afc
+  started_at: 2026-07-23T00:20:43Z
+  opened_at: 2026-07-23T00:26:23Z
+  merged_at: 2026-07-23T01:03:13Z
+  elapsed_seconds: 2550
+  open_to_merge_seconds: 2210
+summary:
+  local_execution_count: 23
+  local_check_count: 22
+  local_test_count: 1
+  local_combined_count: 0
+  local_execution_seconds: 272
+  github_actions_run_count: 3
+  github_actions_seconds: 2111
+  pr_retrigger_count: 2
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T01:07:28Z
+  head_sha: 14264b6e1bc17eacbcc09f8f13416f528da43afc
+  by_type:
+    rust: 627
+    preflight: 33
+    web_unit: 241
+    e2e: 200
+  total: 1101
+local_executions:
+  - { command: task format, category: check, started_at: 2026-07-23T00:23:43Z, finished_at: 2026-07-23T00:24:42Z, duration_seconds: 59, outcome: passed, reason: initial_pre_push_hygiene }
+  - { command: .github/scripts/ui-demo-contract.sh origin/main, category: check, started_at: 2026-07-23T00:25:03Z, finished_at: 2026-07-23T00:25:04Z, duration_seconds: 1, outcome: passed, reason: initial_ui_demo_contract }
+  - { command: task pr:preflight PR=638, category: check, started_at: 2026-07-23T00:26:36Z, finished_at: 2026-07-23T00:26:44Z, duration_seconds: 8, outcome: passed, reason: initial_pr_policy_and_state_audit }
+  - { command: task format, category: check, started_at: 2026-07-23T00:45:32Z, finished_at: 2026-07-23T00:46:31Z, duration_seconds: 59, outcome: passed, reason: extension_save_confirmation_test_hardening }
+  - { command: .github/scripts/ui-demo-contract.sh origin/main, category: check, started_at: 2026-07-23T00:46:32Z, finished_at: 2026-07-23T00:46:33Z, duration_seconds: 1, outcome: passed, reason: replacement_head_ui_demo_contract }
+  - { command: task pr:ready PR=638, category: check, started_at: 2026-07-23T01:02:51Z, finished_at: 2026-07-23T01:02:59Z, duration_seconds: 8, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+  - { command: cargo nextest Rust inventory initial compile, category: check, started_at: 2026-07-23T01:03:50Z, finished_at: 2026-07-23T01:04:40Z, duration_seconds: 50, outcome: passed, reason: merged_head_rust_inventory_compile }
+  - { command: cargo nextest Rust inventory JSON probe, category: check, started_at: 2026-07-23T01:04:41Z, finished_at: 2026-07-23T01:05:08Z, duration_seconds: 27, outcome: passed, reason: merged_head_rust_inventory_shape }
+  - { command: cargo nextest Rust inventory human probe, category: check, started_at: 2026-07-23T01:05:09Z, finished_at: 2026-07-23T01:05:10Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory_output_probe }
+  - { command: cargo nextest Rust inventory JSON sample, category: check, started_at: 2026-07-23T01:05:11Z, finished_at: 2026-07-23T01:05:12Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory_json_probe }
+  - { command: cargo nextest Rust inventory JSON keys, category: check, started_at: 2026-07-23T01:05:13Z, finished_at: 2026-07-23T01:05:14Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory_json_shape }
+  - { command: cargo nextest Rust inventory count, category: check, started_at: 2026-07-23T01:05:15Z, finished_at: 2026-07-23T01:05:16Z, duration_seconds: 1, outcome: passed, reason: merged_head_rust_inventory }
+  - { command: cargo nextest preflight inventory count, category: check, started_at: 2026-07-23T01:05:15Z, finished_at: 2026-07-23T01:05:16Z, duration_seconds: 1, outcome: passed, reason: merged_head_preflight_inventory }
+  - { command: bunx vitest inventory before host install, category: check, started_at: 2026-07-23T01:05:15Z, finished_at: 2026-07-23T01:05:20Z, duration_seconds: 5, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: bun extension JUnit inventory without output file, category: check, started_at: 2026-07-23T01:05:15Z, finished_at: 2026-07-23T01:05:16Z, duration_seconds: 1, outcome: failed, reason: junit_reporter_requires_output_file }
+  - { command: Playwright app inventory before host install, category: check, started_at: 2026-07-23T01:05:15Z, finished_at: 2026-07-23T01:05:20Z, duration_seconds: 5, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: Playwright extension inventory before host install, category: check, started_at: 2026-07-23T01:05:15Z, finished_at: 2026-07-23T01:05:16Z, duration_seconds: 1, outcome: failed, reason: host_web_dependencies_absent }
+  - { command: bun install --frozen-lockfile, category: check, started_at: 2026-07-23T01:05:30Z, finished_at: 2026-07-23T01:05:31Z, duration_seconds: 1, outcome: passed, reason: prepare_merged_head_web_inventory }
+  - { command: task wasm:build:fast, category: check, started_at: 2026-07-23T01:05:36Z, finished_at: 2026-07-23T01:06:01Z, duration_seconds: 25, outcome: passed, reason: generate_merged_head_wasm_for_web_inventory }
+  - { command: vitest merged-head line inventory, category: check, started_at: 2026-07-23T01:06:13Z, finished_at: 2026-07-23T01:06:16Z, duration_seconds: 3, outcome: passed, reason: merged_head_app_unit_inventory }
+  - { command: bun extension JUnit inventory, category: test, started_at: 2026-07-23T01:06:13Z, finished_at: 2026-07-23T01:06:14Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_unit_inventory }
+  - { command: Playwright app inventory, category: check, started_at: 2026-07-23T01:06:13Z, finished_at: 2026-07-23T01:06:24Z, duration_seconds: 11, outcome: passed, reason: merged_head_app_e2e_inventory }
+  - { command: Playwright extension inventory, category: check, started_at: 2026-07-23T01:06:13Z, finished_at: 2026-07-23T01:06:14Z, duration_seconds: 1, outcome: passed, reason: merged_head_extension_e2e_inventory }
+github_actions_runs:
+  - { workflow: PR, run_id: 29969075399, run_attempt: 1, head_sha: 19cabd80040adb923378ac08d3a1b78541bd4f6f, trigger: pull_request, started_at: 2026-07-23T00:26:27Z, finished_at: 2026-07-23T00:26:54Z, duration_seconds: 27, conclusion: cancelled }
+  - { workflow: PR, run_id: 29969082579, run_attempt: 1, head_sha: 19cabd80040adb923378ac08d3a1b78541bd4f6f, trigger: pull_request, started_at: 2026-07-23T00:26:36Z, finished_at: 2026-07-23T00:45:16Z, duration_seconds: 1120, conclusion: failure }
+  - { workflow: PR, run_id: 29970024637, run_attempt: 1, head_sha: 9637938c4788c2e21fd1d19bcb5a1cfea81eb82f, trigger: pull_request, started_at: 2026-07-23T00:46:42Z, finished_at: 2026-07-23T01:02:46Z, duration_seconds: 964, conclusion: success }
+pr_retriggers:
+  - { kind: reopen, at: 2026-07-23T00:26:36Z, reason: mark_initial_draft_ready_for_full_validation }
+  - { kind: head_push, at: 2026-07-23T00:46:39Z, reason: harden_asynchronous_extension_save_confirmation_after_flaky_failure }
+merge_attempts:
+  - { at: 2026-07-23T01:03:13Z, method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [629, 631]
+  baseline_quality: comparable
+  baseline_note: Recent web and extension browser-flow UI changes using the same full browser gate and merged-head inventory.
+  elapsed_seconds_change_percent: -13.7
+  local_execution_seconds_change_percent: -40.4
+  github_actions_seconds_change_percent: -2.4
+  test_inventory_total_change: 0
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - The first full hosted cycle exposed a load-sensitive extension save-confirmation assertion; the replacement head shared the suite's established 20-second bound and passed every lane.
+    - The replacement hosted cycle followed a material test-stability change, and there were no unchanged-head or manual reruns.
+    - The 27-second draft-transition run was cancelled before expensive work and did not reveal a persistent workflow defect.
+    - Final hosted duration stayed within 2.4 percent of the comparable median, with no cache or suite performance regression.
+  required_actions: []
