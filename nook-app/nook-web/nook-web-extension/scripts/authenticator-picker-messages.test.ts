@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  isAuthenticatorPickerCancelMessage,
   isAuthenticatorPickerQueryMessage,
   isAuthenticatorPickerSelectMessage,
+  isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorPickerOpenMessage,
   isWebsiteAuthenticatorSelectedMessage,
   MAX_AUTHENTICATOR_SEARCH_LENGTH,
@@ -29,6 +31,12 @@ describe('authenticator picker messages', () => {
           vaultStoreId: 'vault-1',
           secretId: 'secret-1',
         },
+      }),
+    ).toBe(true)
+    expect(
+      isAuthenticatorPickerCancelMessage({
+        type: 'nook:authenticator-picker-cancel',
+        payload: { requestId: 'picker-1' },
       }),
     ).toBe(true)
   })
@@ -77,6 +85,21 @@ describe('authenticator picker messages', () => {
           requestId: 'picker-1',
           account: { vaultStoreId: 'vault-1' },
         },
+      }),
+    ).toBe(false)
+    expect(
+      isWebsiteAuthenticatorCanceledMessage({
+        type: 'nook:website-authenticator-canceled',
+        payload: {
+          origin: 'https://example.test',
+          requestId: 'picker-1',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isWebsiteAuthenticatorCanceledMessage({
+        type: 'nook:website-authenticator-canceled',
+        payload: { origin: 'https://example.test' },
       }),
     ).toBe(false)
   })
