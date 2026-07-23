@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  INFRA_SSH_TARGET: '{{default "debian@188.165.236.156" .INFRA_SSH_TARGET}}'
+  INFRA_SSH_TARGET: '{{default "debian@ssh-ovh-borg-1.bynull.link" .INFRA_SSH_TARGET}}'
   INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
   INFRA_MESH_SSH_TARGET: '{{default "ssh.bynull.link" .INFRA_MESH_SSH_TARGET}}'
   INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'
@@ -286,7 +286,7 @@ tasks:
         TUNNEL_SERVICE_TOKEN_SECRET="$cloudflare_client_secret" \
           nohup "$cloudflared_binary" \
           access tcp \
-          --hostname rust-cache.nokey.sh \
+          --hostname redis-ovh-borg-1.bynull.link \
           --url "$bridge_ip:6380" \
           --log-level error \
           --logfile "$cloudflared_log" >/dev/null 2>&1 &

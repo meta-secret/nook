@@ -58,16 +58,15 @@ fn assert_remote_compose_contract() {
         "docker-entrypoint.sh redis-server /run/redis/redis.conf",
         "/run/secrets/redis-password",
         "file: ./secrets/redis-password",
-        "cloudflare/cloudflared:2026.7.2@sha256:",
-        "user: \"1000:1000\"",
-        "--token-file",
-        "/run/secrets/cloudflare-tunnel-token",
-        "file: ./secrets/cloudflare-tunnel-token",
         "appendonly yes",
         "maxmemory-policy allkeys-lru",
         "allkeys-lru",
         "redis-data:/data",
         "registry-data:/var/lib/registry",
+        "cloudflare/cloudflared:2026.7.2@sha256:",
+        "file: ./secrets/cloudflare-tunnel-token",
+        "network_mode: host",
+        "--token-file",
         "restart: unless-stopped",
         "no-new-privileges:true",
     ] {
@@ -94,6 +93,12 @@ fn assert_remote_compose_contract() {
 
 fn assert_infrastructure_deploy_contract() {
     let infra_tasks = read("infra/Taskfile.yml");
+    assert!(
+        infra_tasks.contains(
+            "INFRA_SSH_TARGET: '{{default \"debian@ssh-ovh-borg-1.bynull.link\" .INFRA_SSH_TARGET}}'"
+        ),
+        "infrastructure deployment must target the OVH borg-1 Debian account by default"
+    );
     let deploy = infra_tasks
         .split("\n  deploy:\n")
         .nth(1)
@@ -106,10 +111,9 @@ fn assert_infrastructure_deploy_contract() {
         "openssl rand -hex 32",
         "chmod 0600 '$remote_secrets/redis-password'",
         "chmod 0400 '$remote_secrets/cloudflare-tunnel-token'",
-        "cloudflare-tunnel-token",
-        "grep -qx cloudflared",
         "cat /run/secrets/redis-password",
         "redis-cli ping",
+        "grep -qx cloudflared",
         "http://127.0.0.1:5000/v2/",
     ] {
         assert!(
@@ -122,6 +126,7 @@ fn assert_infrastructure_deploy_contract() {
     assert!(!deploy.contains("chmod 0444"));
     assert!(!infra_tasks.contains("-e REDISCLI_AUTH"));
     assert!(!infra_tasks.contains("--env REDISCLI_AUTH"));
+    assert!(deploy.contains("missing Cloudflare tunnel token"));
 
     assert!(read(".gitignore").contains("/infra/secrets/"));
     assert!(read(".dockerignore").contains("infra/secrets"));
