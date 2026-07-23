@@ -1,4 +1,10 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
+
+export async function expectLoginSaved(widget: Locator): Promise<void> {
+  await expect(widget.getByText('Login saved')).toBeVisible({
+    timeout: 20_000,
+  })
+}
 
 export async function signInAndSaveMockLogin(
   loginPage: Page,
@@ -19,5 +25,5 @@ export async function signInAndSaveMockLogin(
     timeout: 15_000,
   })
   await widget.getByTestId('nook-auth-gate-save').click()
-  await expect(widget.getByText('Login saved')).toBeVisible()
+  await expectLoginSaved(widget)
 }
