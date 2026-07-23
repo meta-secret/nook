@@ -354,7 +354,7 @@ task pr:review PR=410      # optional idempotent exact-head Codex review request
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
-task infra:deploy           # deploy private Redis, Cloudflare Tunnel, and future registry
+task infra:deploy           # deploy private Redis and future loopback-only registry
 task infra:status           # inspect the remote infrastructure stack
 task infra:redis:stats      # remote compiler-cache memory and hit statistics
 ```

@@ -4,9 +4,11 @@ This directory owns the small stateful Docker stack used by Nook builds:
 
 - Redis on server loopback port `6380`, protected by a generated 256-bit
   password, with AOF persistence and a 12 GiB LRU ceiling.
-- A Cloudflare Tunnel publishes Redis as `rust-cache.nokey.sh` without opening
-  a server firewall port. Cloudflare Access admits only the GitHub Actions
-  service token, and Redis still requires its own password.
+- A repository-managed Cloudflare Tunnel connector publishes Redis as
+  `redis-ovh-borg-1.bynull.link` without opening a server firewall port.
+  Cloudflare Access admits only the GitHub Actions service token, and Redis
+  still requires its own password. The connector uses host networking so the
+  remotely managed `tcp://localhost:6380` ingress reaches loopback Redis.
 - An OCI Distribution registry on server loopback port `5000`, with persistent
   storage. It is deployed for future Docker/BuildKit caching but is not yet used
   by CI.
@@ -24,12 +26,14 @@ task infra:registry:check
 ```
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
-remote deployment directory. The server must already contain the Cloudflare
-tunnel token at `secrets/cloudflare-tunnel-token`; deployment deliberately does
-not copy that credential from the repository. The containing `secrets/`
-directory is mode `0700`; the token file is read-only so the non-root
-`cloudflared` container, which runs as the deployment user's UID, can consume
-the Compose bind-mounted secret without making it group- or world-readable.
+remote deployment directory. The default target is
+`debian@ssh-ovh-borg-1.bynull.link`. The server must already contain the
+Cloudflare tunnel token at `secrets/cloudflare-tunnel-token`; deployment
+deliberately does not copy that credential from the repository. The containing
+`secrets/` directory is mode `0700`; the token file is read-only so the
+non-root `cloudflared` container, which runs as the deployment user's UID, can
+consume the Compose bind-mounted secret without making it group- or
+world-readable.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern: each Linux
 server joins as a headless Cloudflare One Client and receives a private Mesh IP.

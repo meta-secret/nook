@@ -170,7 +170,7 @@ fn assert_cache_connector_redacts_credentials() {
     for required in [
         "cloudflare/cloudflared:2026.7.2@sha256:",
         "access tcp",
-        "--hostname rust-cache.nokey.sh",
+        "--hostname redis-ovh-borg-1.bynull.link",
         "CACHE_REDIS_PASSWORD_FILE",
         "CACHE_CLOUDFLARE_CLIENT_ID_FILE",
         "CACHE_CLOUDFLARE_CLIENT_SECRET_FILE",

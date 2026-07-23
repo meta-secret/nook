@@ -58,6 +58,7 @@ services:
       - --token-file
       - /run/secrets/cloudflare-tunnel-token
     restart: unless-stopped
+    network_mode: host
     depends_on:
       redis:
         condition: service_healthy
