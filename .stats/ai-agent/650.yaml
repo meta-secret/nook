@@ -1,0 +1,171 @@
+schema_version: 3
+source_pr:
+  number: 650
+  url: https://github.com/meta-secret/nook/pull/650
+  title: "fix(sentinel): restore participant response input"
+  change_surface: shared_web_sentinel_participant_roster_ui
+  head_sha: 7671e2aed3b7a89e73a51203821b4e902b0228ee
+  started_at: 2026-07-23T04:30:45Z
+  opened_at: 2026-07-23T04:58:55Z
+  merged_at: 2026-07-23T07:01:02Z
+  elapsed_seconds: 9017
+  open_to_merge_seconds: 7327
+summary:
+  local_execution_count: 21
+  local_check_count: 16
+  local_test_count: 0
+  local_combined_count: 5
+  local_execution_seconds: 1401
+  github_actions_run_count: 6
+  github_actions_seconds: 6239
+  pr_retrigger_count: 5
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: 2026-07-23T07:03:00Z
+  head_sha: 7671e2aed3b7a89e73a51203821b4e902b0228ee
+  by_type:
+    rust: 627
+    preflight: 34
+    web_unit: 242
+    e2e: 200
+  total: 1103
+local_executions:
+  - { command: task format, category: check, started_at: "2026-07-23T04:39:00Z", finished_at: "2026-07-23T04:41:46Z", duration_seconds: 166, outcome: passed, reason: initial_repository_hygiene }
+  - { command: "UI_DEMO_SPECS=e2e/demos/sentinel-invitation.demo.spec.ts task ui:demo", category: combined, started_at: "2026-07-23T04:41:47Z", finished_at: "2026-07-23T04:45:20Z", duration_seconds: 213, outcome: passed, reason: initial_focused_participant_response_flow_proof }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T04:45:21Z", finished_at: "2026-07-23T04:45:22Z", duration_seconds: 1, outcome: failed, reason: precommit_tree_did_not_include_ui_changes }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T04:57:48Z", finished_at: "2026-07-23T04:57:49Z", duration_seconds: 1, outcome: passed, reason: initial_exact_head_ui_demo_contract }
+  - { command: "task pr:preflight PR=650", category: check, started_at: "2026-07-23T04:59:00Z", finished_at: "2026-07-23T04:59:08Z", duration_seconds: 8, outcome: passed, reason: initial_pr_policy_and_state_audit }
+  - { command: task format, category: check, started_at: "2026-07-23T04:59:24Z", finished_at: "2026-07-23T05:00:43Z", duration_seconds: 79, outcome: passed, reason: first_current_main_base_update_hygiene }
+  - { command: "UI_DEMO_SPECS=e2e/demos/sentinel-invitation.demo.spec.ts task ui:demo", category: combined, started_at: "2026-07-23T05:00:44Z", finished_at: "2026-07-23T05:03:07Z", duration_seconds: 143, outcome: passed, reason: first_base_update_focused_flow_proof }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T05:03:08Z", finished_at: "2026-07-23T05:03:09Z", duration_seconds: 1, outcome: passed, reason: first_base_update_ui_demo_contract }
+  - { command: "task pr:ready PR=650", category: check, started_at: "2026-07-23T05:28:20Z", finished_at: "2026-07-23T05:28:25Z", duration_seconds: 5, outcome: failed, reason: main_advanced_during_exact_head_workflow }
+  - { command: task format, category: check, started_at: "2026-07-23T05:28:44Z", finished_at: "2026-07-23T05:29:59Z", duration_seconds: 75, outcome: passed, reason: second_current_main_base_update_hygiene }
+  - { command: "UI_DEMO_SPECS=e2e/demos/sentinel-invitation.demo.spec.ts task ui:demo", category: combined, started_at: "2026-07-23T05:30:00Z", finished_at: "2026-07-23T05:32:14Z", duration_seconds: 134, outcome: passed, reason: second_base_update_focused_flow_proof }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T05:32:15Z", finished_at: "2026-07-23T05:32:16Z", duration_seconds: 1, outcome: passed, reason: second_base_update_ui_demo_contract }
+  - { command: "task pr:ready PR=650", category: check, started_at: "2026-07-23T05:49:40Z", finished_at: "2026-07-23T05:49:45Z", duration_seconds: 5, outcome: failed, reason: main_advanced_during_exact_head_workflow }
+  - { command: task format, category: check, started_at: "2026-07-23T05:50:13Z", finished_at: "2026-07-23T05:51:49Z", duration_seconds: 96, outcome: passed, reason: third_current_main_base_update_hygiene }
+  - { command: "UI_DEMO_SPECS=e2e/demos/sentinel-invitation.demo.spec.ts task ui:demo", category: combined, started_at: "2026-07-23T05:51:50Z", finished_at: "2026-07-23T05:54:17Z", duration_seconds: 147, outcome: passed, reason: third_base_update_focused_flow_proof }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T05:54:18Z", finished_at: "2026-07-23T05:54:19Z", duration_seconds: 1, outcome: passed, reason: third_base_update_ui_demo_contract }
+  - { command: task format, category: check, started_at: "2026-07-23T06:37:12Z", finished_at: "2026-07-23T06:39:43Z", duration_seconds: 151, outcome: passed, reason: stats_only_main_advance_exact_head_hygiene }
+  - { command: "UI_DEMO_SPECS=e2e/demos/sentinel-invitation.demo.spec.ts task ui:demo", category: combined, started_at: "2026-07-23T06:39:44Z", finished_at: "2026-07-23T06:42:30Z", duration_seconds: 166, outcome: passed, reason: final_base_update_focused_flow_proof }
+  - { command: .github/scripts/ui-demo-contract.sh, category: check, started_at: "2026-07-23T06:42:31Z", finished_at: "2026-07-23T06:42:32Z", duration_seconds: 1, outcome: failed, reason: required_full_base_sha_argument_omitted }
+  - { command: .github/scripts/ui-demo-contract.sh resolved_base_sha, category: check, started_at: "2026-07-23T06:42:33Z", finished_at: "2026-07-23T06:42:34Z", duration_seconds: 1, outcome: passed, reason: final_exact_head_ui_demo_contract }
+  - { command: "task pr:ready PR=650", category: check, started_at: "2026-07-23T07:00:44Z", finished_at: "2026-07-23T07:00:50Z", duration_seconds: 6, outcome: passed, reason: exact_head_readiness_before_squash_merge }
+github_actions_runs:
+  - { workflow: PR, run_id: 29980924494, run_attempt: 1, head_sha: dceb4d2a6e821db06866abb312b05c7e2847a62d, trigger: pull_request, started_at: "2026-07-23T04:58:58Z", finished_at: "2026-07-23T05:06:31Z", duration_seconds: 453, conclusion: cancelled }
+  - { workflow: PR, run_id: 29981237259, run_attempt: 1, head_sha: 37e290cb1a03199153394d28b6de387cb05b5f57, trigger: pull_request, started_at: "2026-07-23T05:05:55Z", finished_at: "2026-07-23T05:21:14Z", duration_seconds: 919, conclusion: failure }
+  - { workflow: PR, run_id: 29981237259, run_attempt: 2, head_sha: 37e290cb1a03199153394d28b6de387cb05b5f57, trigger: pull_request, started_at: "2026-07-23T05:22:00Z", finished_at: "2026-07-23T05:28:03Z", duration_seconds: 363, conclusion: success }
+  - { workflow: PR, run_id: 29982399523, run_attempt: 1, head_sha: c07003cfb6e93c298a86c661b78ce4ba60164fbf, trigger: pull_request, started_at: "2026-07-23T05:31:52Z", finished_at: "2026-07-23T05:49:21Z", duration_seconds: 1049, conclusion: success }
+  - { workflow: PR, run_id: 29983550771, run_attempt: 1, head_sha: 87e252f423300fa0abb08e8bcdd57bc8face638a, trigger: pull_request, started_at: "2026-07-23T05:56:55Z", finished_at: "2026-07-23T06:36:49Z", duration_seconds: 2394, conclusion: success }
+  - { workflow: PR, run_id: 29985898414, run_attempt: 1, head_sha: 7671e2aed3b7a89e73a51203821b4e902b0228ee, trigger: pull_request, started_at: "2026-07-23T06:42:40Z", finished_at: "2026-07-23T07:00:21Z", duration_seconds: 1061, conclusion: success }
+cache_telemetry:
+  totals:
+    job_count: 6
+    remote_backend_job_count: 0
+    local_fallback_job_count: 6
+    sccache_compile_requests: 6365
+    sccache_cache_hits: 0
+    sccache_cache_misses: 5201
+    sccache_hit_rate_percent: 0.0
+    buildkit_completed_steps: 1478
+    buildkit_cached_steps: 583
+    buildkit_cache_hit_rate_percent: 39.45
+  jobs:
+    - workflow: PR
+      run_id: 29983550771
+      run_attempt: 1
+      job: rust
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 2132, cache_hits: 0, cache_misses: 1764, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 305, cached_steps: 64, cache_hit_rate_percent: 20.98, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29983550771
+      run_attempt: 1
+      job: wasm
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29983550771
+      run_attempt: 1
+      job: verify
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 2132, cache_hits: 0, cache_misses: 1763, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 294, cached_steps: 85, cache_hit_rate_percent: 28.91, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29985898414
+      run_attempt: 1
+      job: rust
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 161, cache_hits: 0, cache_misses: 90, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 305, cached_steps: 192, cache_hit_rate_percent: 62.95, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29985898414
+      run_attempt: 1
+      job: wasm
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 944, cache_hits: 0, cache_misses: 791, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 140, cached_steps: 42, cache_hit_rate_percent: 30.0, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 29985898414
+      run_attempt: 1
+      job: verify
+      cache_backend: local_fallback
+      cache_backend_reason: credentials_unavailable
+      cache_backend_persistent: false
+      sccache: { compile_requests: 52, cache_hits: 0, cache_misses: 2, hit_rate_percent: 0.0 }
+      buildkit: { completed_steps: 294, cached_steps: 158, cache_hit_rate_percent: 53.74, measurement: buildx_target_record_steps }
+      collection_complete: true
+      collection_warnings: []
+pr_retriggers:
+  - { kind: head_push, at: "2026-07-23T05:05:51Z", reason: incorporate_current_main_before_initial_workflow_completed }
+  - { kind: manual_rerun, at: "2026-07-23T05:22:00Z", reason: retry_base_coverage_fallback_failure_on_unchanged_product_head }
+  - { kind: head_push, at: "2026-07-23T05:31:48Z", reason: incorporate_main_advance_after_successful_unchanged_head_rerun }
+  - { kind: head_push, at: "2026-07-23T05:56:50Z", reason: incorporate_current_main_after_exact_head_workflow }
+  - { kind: head_push, at: "2026-07-23T06:42:36Z", reason: incorporate_stats_only_main_advance_after_exact_head_workflow }
+merge_attempts:
+  - { at: "2026-07-23T07:01:02Z", method: squash, outcome: success, reason: exact_head_and_base_readiness_passed }
+comparison:
+  baseline_prs: [644]
+  baseline_quality: comparable
+  baseline_note: PR 644 was a recent shared web UI flow change using the same Rust, WASM, headless demo, preview, and merged-head inventory gates.
+  elapsed_seconds_change_percent: 223.9
+  local_execution_seconds_change_percent: 245.9
+  github_actions_seconds_change_percent: 249.9
+  test_inventory_total_change: 1
+  regression: true
+  regression_reasons:
+    - End-to-end elapsed time exceeded the comparable baseline by 6233 seconds because four current-main updates required fresh exact-head validation.
+    - Actions time exceeded the comparable baseline by 4456 seconds across superseded heads and one bounded rerun of an unchanged head after a coverage fallback failure.
+    - Local validation time exceeded the baseline by 996 seconds because repository policy required format and focused browser proof after every base update.
+waste_assessment:
+  wasteful: false
+  findings:
+    - Each replacement head followed a real current-main advance; the repeated exact-head checks were required rather than speculative full-suite reruns.
+    - The one unchanged-head rerun was bounded to failed jobs after the base coverage fallback failed while native Rust, WASM, web checks, demo, and preview had already passed.
+    - Cache telemetry was introduced on the later base, so the first four recorded attempts have no cache artifacts; both telemetry-enabled runs are represented by all six available job artifacts.
+    - Untrusted pull-request jobs correctly used credential-free local fallback and exposed no persistent Redis credentials.
+    - The final head improved BuildKit target-step reuse to 392 of 739 steps, allowing native verification to fall from 19m23s on the prior head to 5m58s.
+    - The remaining 0 percent compiler-cache hit rate is expected for credential-free PR jobs; supplying trusted remote cache credentials to untrusted pull requests would violate the repository security boundary.
+  required_actions: []
