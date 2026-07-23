@@ -973,9 +973,14 @@ fn assert_pr_workflow_contract(root: &Path) {
         "name: pr-wasm-${{ github.run_id }}",
         "task ci:pr:e2e:web:artifacts",
         "task ci:pr:e2e:extension:artifacts",
+        "task preflight",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
+        "actions/cache/restore@v6",
+        "actions/cache/save@v6",
+        "nook-native-validation-v1-",
+        "nook-wasm-validation-v1-",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
@@ -988,8 +993,10 @@ fn assert_pr_workflow_contract(root: &Path) {
     }
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
-        wasm_job.contains("task ci:pr:wasm") && wasm_job.contains("Upload verified WASM handoff"),
-        "PR CI must build and upload verified WASM exactly once"
+        wasm_job.contains("task ci:pr:wasm")
+            && wasm_job.contains("steps.wasm-validation.outputs.cache-hit != 'true'")
+            && wasm_job.contains("Upload verified WASM handoff"),
+        "PR CI must restore or build and upload verified WASM exactly once"
     );
     assert_eq!(
         pr.matches("task ci:pr:wasm").count(),

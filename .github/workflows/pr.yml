@@ -46,10 +46,30 @@ jobs:
         uses: actions/checkout@v7
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+
+      - name: Repository invariant preflight
+        run: task preflight
+
+      - name: Restore validated native Rust handoff
+        id: rust-validation
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/nook-ci-artifacts/rust
+          key: nook-native-validation-v1-${{ runner.os }}-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/Cargo.toml', 'nook-app/nook-wasm/docker-bake.hcl', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}
+
       - name: Rust format, clippy, tests, and coverage
+        if: steps.rust-validation.outputs.cache-hit != 'true'
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
+
+      - name: Save validated native Rust handoff
+        if: steps.rust-validation.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/nook-ci-artifacts/rust
+          key: ${{ steps.rust-validation.outputs.cache-primary-key }}
+
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
         with:
@@ -74,11 +94,26 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
+      - name: Restore validated WASM handoff
+        id: wasm-validation
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+          key: nook-wasm-validation-v1-${{ runner.os }}-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}
+
       - name: WASM clippy, build, and Node tests
+        if: steps.wasm-validation.outputs.cache-hit != 'true'
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
           CI: true
           WASM_BUILD_MODE: dev
+
+      - name: Save validated WASM handoff
+        if: steps.wasm-validation.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+          key: ${{ steps.wasm-validation.outputs.cache-primary-key }}
 
       - name: Upload verified WASM handoff
         uses: actions/upload-artifact@v7

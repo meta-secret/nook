@@ -403,6 +403,10 @@ requests restore identical BuildKit dependency and source layers. Local builds
 use the same Docker-host-only service. The authenticated Cloudflare Access path
 to the server cache remains available for explicit trusted operations, outside
 delivery builds. Redis does not cache Cargo downloads or Docker layers.
+PR CI also caches the small native coverage and generated WASM handoffs under
+exact hashes of their Rust, toolchain, Docker, Task, and workflow inputs.
+Repository invariant preflight still runs on every head; an exact handoff hit
+skips only Rust/WASM validation already completed for those identical inputs.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
 Docker cache migration but is intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.

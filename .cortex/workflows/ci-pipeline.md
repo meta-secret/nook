@@ -172,6 +172,14 @@ PR/job read-only, before falling back to Main; BuildKit rebuilds only changed
 inputs. The self-hosted `nook` label is
 reserved for runner cleanup while that machine remains registered.
 
+The split native and WASM producers additionally restore small validated
+handoffs by exact input hash. Their keys cover Rust sources and manifests,
+toolchain and Docker definitions, Task entry points, Docker setup, and the PR
+workflow itself. An exact hit skips only the corresponding previously completed
+Rust/WASM producer; repository invariant preflight still runs on every PR head.
+There are no prefix restore keys, so changed validation inputs must execute and
+save a new handoff before downstream jobs can consume it.
+
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
