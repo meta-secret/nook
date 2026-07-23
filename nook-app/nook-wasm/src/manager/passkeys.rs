@@ -3,7 +3,7 @@
 use super::NookVaultManager;
 use crate::storage::event_db::load_local_event_store;
 use crate::{NookError, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration};
-use wasm_bindgen::{JsError, JsValue, prelude::wasm_bindgen};
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
 
 struct DecryptedPasskeys {
@@ -38,8 +38,9 @@ fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
 }
 
 fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
+    let receiver = js_sys::Object::new();
     let active = ceremony_active
-        .call0(&JsValue::UNDEFINED)
+        .call0(&receiver)
         .map_err(|_| JsError::new("passkey-ceremony-expired"))?;
     if active.as_bool() == Some(true) {
         Ok(())
