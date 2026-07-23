@@ -920,15 +920,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             && core_bake.contains("cache-to   = rust_native_source_cache_to"),
         "native dependency and source-sensitive coverage layers need independent hosted caches"
     );
-    let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
-    assert!(
-        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-build")
-            && wasm_dockerfile.contains("FROM builder-wasm-build AS builder-wasm")
-            && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
-            && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
-            && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
-        "native verification and WASM must run as sibling branches, preserve locale rebuilds, and join only small outputs"
-    );
+    assert_release_wasm_cache_contract(root);
     assert_parallel_web_pipeline(root);
     let web_bake = read(root, "nook-app/docker/toolchain.docker-bake.hcl");
     assert!(
@@ -963,6 +955,26 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     assert!(
         main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
         "Main must use the preparation group that publishes complete dependency and source cache scopes"
+    );
+}
+
+fn assert_release_wasm_cache_contract(root: &Path) {
+    let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
+    assert!(
+        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-build")
+            && wasm_dockerfile.contains("FROM builder-wasm-build AS builder-wasm")
+            && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
+            && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
+            && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
+            && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
+        "native verification and release-profile WASM tests must run as sibling branches, preserve locale rebuilds, and join only small outputs"
+    );
+    let core_dockerfile = read(root, "nook-app/nook-core/Dockerfile");
+    assert!(
+        !core_dockerfile.contains("wasm-dependency-test")
+            && !core_dockerfile
+                .contains("cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm"),
+        "the manifest-only WASM boundary must not compile a second debug test graph"
     );
 }
 

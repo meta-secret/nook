@@ -59,7 +59,7 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 FROM builder-wasm-build AS builder-wasm
 
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    wasm-pack test --node nook-wasm \
+    wasm-pack test --node --release nook-wasm \
     && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export

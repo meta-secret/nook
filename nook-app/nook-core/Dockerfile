@@ -40,16 +40,10 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     && nook-sccache-report chef-wasm-clippy
 RUN cargo fetch --locked
 
-# WASM jobs stop at this lightweight boundary instead of compiling native nextest/coverage deps.
+# WASM jobs stop at the release cargo-chef boundary instead of compiling a second debug test graph
+# or the native nextest/coverage dependency profiles. The downstream Node tests also use release
+# mode, so their dependencies share this artifact lineage with the web build.
 FROM builder-deps-common AS builder-wasm-deps
-
-RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
-RUN echo '' > nook-auth2/src/lib.rs
-RUN echo '' > nook-core/src/lib.rs
-RUN echo '' > nook-wasm/src/lib.rs
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm \
-    && nook-sccache-report wasm-dependency-test
 
 # Native verification extends the WASM dependency boundary with native and coverage profiles.
 FROM builder-wasm-deps AS builder-deps
@@ -59,8 +53,11 @@ FROM builder-wasm-deps AS builder-deps
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
 # native deps here instead of with chef. Stub in dummy crate roots so the workspace resolves,
 # compile the deps, and keep the stubs for downstream workspace packages. Real crate source is
-# copied over the stubs in builder-debug in dependency order (nook-auth2 -> nook-core -> nook-wasm).
+# created here and copied over in builder-debug in dependency order (nook-auth2 -> nook-core ->
+# nook-wasm).
 # Kept as separate cache layers.
+RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src \
+    && touch nook-auth2/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo nextest run --no-run -p nook-auth2 --profile ci \
     && nook-sccache-report native-auth-nextest-dependencies
