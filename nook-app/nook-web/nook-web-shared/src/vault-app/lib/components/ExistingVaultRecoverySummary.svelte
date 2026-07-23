@@ -28,46 +28,48 @@
         <LockKeyhole class="mt-0.5 size-3.5 shrink-0" />
         <p>{vault.t('vault_recovery.sentinel_required')}</p>
       </div>
-    {:else}
-      <div class="space-y-2" data-testid="existing-vault-passkey-hints">
-        <div class="flex items-start gap-2">
-          <KeyRound class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <div>
-            <h4 class="text-xs font-medium text-foreground">
-              {vault.t('vault_recovery.passkey_title')}
-            </h4>
-            <p class="text-[11px] leading-relaxed text-muted-foreground">
-              {vault.t('vault_recovery.passkey_description')}
-            </p>
-          </div>
-        </div>
-        {#if summary.devices.length > 0}
-          <ul class="space-y-1 pl-5">
-            {#each summary.devices as device (device.deviceId)}
-              <li
-                class="flex min-w-0 items-center justify-between gap-2 text-xs"
-                data-testid="existing-vault-device-hint"
-              >
-                <span class="truncate text-muted-foreground">
-                  {device.label || vault.t('vault_recovery.unnamed_device')}
-                </span>
-                <code
-                  class="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-foreground"
-                >
-                  {vault.t('vault_recovery.device_hint', {
-                    hint: device.passkeyHint,
-                  })}
-                </code>
-              </li>
-            {/each}
-          </ul>
-        {:else}
-          <p class="pl-5 text-[11px] text-muted-foreground">
-            {vault.t('vault_recovery.no_device_hints')}
-          </p>
-        {/if}
-      </div>
+    {/if}
 
+    <div class="space-y-2" data-testid="existing-vault-passkey-hints">
+      <div class="flex items-start gap-2">
+        <KeyRound class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        <div>
+          <h4 class="text-xs font-medium text-foreground">
+            {vault.t('vault_recovery.passkey_title')}
+          </h4>
+          <p class="text-[11px] leading-relaxed text-muted-foreground">
+            {vault.t('vault_recovery.passkey_description')}
+          </p>
+        </div>
+      </div>
+      {#if summary.devices.length > 0}
+        <ul class="space-y-1 pl-5">
+          {#each summary.devices as device (device.deviceId)}
+            <li
+              class="flex min-w-0 items-center justify-between gap-2 text-xs"
+              data-testid="existing-vault-device-hint"
+            >
+              <span class="truncate text-muted-foreground">
+                {device.label || vault.t('vault_recovery.unnamed_device')}
+              </span>
+              <code
+                class="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-foreground"
+              >
+                {vault.t('vault_recovery.device_hint', {
+                  hint: device.passkeyHint,
+                })}
+              </code>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="pl-5 text-[11px] text-muted-foreground">
+          {vault.t('vault_recovery.no_device_hints')}
+        </p>
+      {/if}
+    </div>
+
+    {#if !summary.requiresSentinelQuorum}
       <div
         class="border-t border-border/60 pt-2 text-xs"
         data-testid="existing-vault-password-status"

@@ -524,6 +524,9 @@ export async function discoverStagedVaultStoreId(
               passwordEntries,
               requiresSentinelQuorum: raw.requiresSentinelQuorum,
             };
+            state.passwordEntries = passwordEntries;
+            state.selectedPasswordEntryId =
+              passwordEntries.length === 1 ? passwordEntries[0]!.id : undefined;
           } finally {
             raw.free();
           }
