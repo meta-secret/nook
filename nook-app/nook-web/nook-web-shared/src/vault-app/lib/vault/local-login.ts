@@ -73,6 +73,18 @@ export async function selectVaultForUnlock(
   }
 }
 
+export async function prepareExistingVaultImportSlot(
+  state: VaultState,
+): Promise<void> {
+  await prepareNewLocalVaultSlot();
+  if (state.manager) {
+    await state.enqueueStorage(() => state.manager!.resetVaultSession());
+  }
+  state.activeVaultStoreId = undefined;
+  state.localVaultPresent = await hasActiveLocalVault();
+  state.localLoginPrepared = false;
+}
+
 export async function createLocalVaultWithDeviceKeys(
   state: VaultState,
   label?: string,
