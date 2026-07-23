@@ -689,9 +689,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          git fetch origin "$BASE_SHA" "$HEAD_SHA" --depth=1
+          git fetch origin "$BASE_SHA" "$HEAD_SHA" --no-tags --prune --depth=1000
           changed_count="$(
-            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- \
+            git diff --name-only "$BASE_SHA...$HEAD_SHA" -- \
               nook-app/.cargo \
               nook-app/Cargo.lock \
               nook-app/Cargo.toml \
@@ -704,7 +704,7 @@ jobs:
               | tr -d ' '
           )"
           source_changed_count="$(
-            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- \
+            git diff --name-only "$BASE_SHA...$HEAD_SHA" -- \
               nook-app/.cargo \
               nook-app/Cargo.lock \
               nook-app/Cargo.toml \

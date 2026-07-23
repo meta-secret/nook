@@ -987,7 +987,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "steps.trusted-wasm.outputs.found != 'true'",
         "'nook-app/nook-wasm/**'",
         "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
-        "git diff --name-only \"$BASE_SHA\" \"$HEAD_SHA\" --",
+        "git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
@@ -999,10 +999,10 @@ fn assert_pr_workflow_contract(root: &Path) {
         );
     }
     assert_eq!(
-        pr.matches("git diff --name-only \"$BASE_SHA\" \"$HEAD_SHA\" --")
+        pr.matches("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --")
             .count(),
         2,
-        "coverage input detection must compare the event base to the explicit PR head, never a moving synthetic merge"
+        "coverage input detection must use the explicit event snapshots' merge-base diff, never a moving synthetic merge or a two-dot snapshot diff"
     );
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(

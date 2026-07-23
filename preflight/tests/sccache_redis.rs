@@ -356,6 +356,21 @@ fn assert_delivery_cache_scope_contract() {
             "delivery cache must isolate immutable PR job generations: {scope}"
         );
     }
+    for main_scope in [
+        "\"type=gha,scope=nook-rust-base-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-deps-v2,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-deps-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-native-source-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-source-v1,version=2\"",
+        "\"type=gha,scope=nook-web-deps-v1,version=2\"",
+        "\"type=gha,scope=nook-web-v1,version=2\"",
+        "\"type=gha,scope=nook-web-e2e-v1,version=2\"",
+    ] {
+        assert!(
+            bake.matches(main_scope).count() >= 3,
+            "a missing generation with an older PR seed must also import Main: {main_scope}"
+        );
+    }
 }
 
 #[test]

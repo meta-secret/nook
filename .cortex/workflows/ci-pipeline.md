@@ -415,10 +415,11 @@ the base app image. If the artifact is missing or invalid, the PR runs
 the multi-GB app image. PRs without Rust/Cargo/source changes—including changes
 only to coverage build/export plumbing—reuse the floor-validated current coverage
 as the base comparison because the measured source is unchanged.
-Coverage input detection compares the pull request event's explicit base and
-head SHAs. It must not compare the base to the checked-out synthetic merge,
-because Main can advance after the event snapshot and make unrelated default-
-branch source changes look like pull request changes.
+Coverage input detection compares the merge-base diff between the pull request
+event's explicit base and head SHAs. It must not compare the base to the
+checked-out synthetic merge, because Main can advance after the event snapshot;
+it also must not use a two-dot snapshot diff, because a behind-base branch would
+then count Main-only changes as pull request changes.
 
 ## Local vs remote CI
 
