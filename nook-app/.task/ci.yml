@@ -14,9 +14,11 @@ tasks:
         vars: { BUILD_TASK: _ci:pr:rust:host }
 
   _ci:pr:rust:host:
-    cmds:
-      - task: preflight
-      - task: docker:ci:rust:export
+    # These builds have independent Dockerfiles and can share the hosted BuildKit daemon safely.
+    # Running them as dependencies hides repository-invariant validation under Rust compilation.
+    deps:
+      - preflight
+      - docker:ci:rust:export
 
   ci:pr:wasm:
     desc: WASM clippy, build, and Node tests for the split hosted PR pipeline.

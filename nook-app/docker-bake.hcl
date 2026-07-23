@@ -155,52 +155,52 @@ rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 ] : []
 
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
-  "type=gha,scope=nook-rust-native-source-v1,version=2",
+  "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
-  "type=gha,scope=nook-rust-wasm-source-v1,version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
 ] : []
 
 web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [

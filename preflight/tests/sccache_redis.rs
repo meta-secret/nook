@@ -340,6 +340,8 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX=$seed_scope_suffix"));
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -n \"$fallback_enabled\" ]"));
+    assert!(setup.contains("main-cache-only"));
+    assert!(setup.contains("main-cache-only requires cache-write=false"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -349,8 +351,8 @@ fn assert_delivery_cache_scope_contract() {
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v1${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-wasm-source-v1${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
     ] {
         assert!(
@@ -362,8 +364,8 @@ fn assert_delivery_cache_scope_contract() {
         "\"type=gha,scope=nook-rust-base-v1,version=2\"",
         "\"type=gha,scope=nook-rust-deps-v2,version=2\"",
         "\"type=gha,scope=nook-rust-wasm-deps-v1,version=2\"",
-        "\"type=gha,scope=nook-rust-native-source-v1,version=2\"",
-        "\"type=gha,scope=nook-rust-wasm-source-v1,version=2\"",
+        "\"type=gha,scope=nook-rust-native-source-v2,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-source-v2,version=2\"",
         "\"type=gha,scope=nook-web-deps-v1,version=2\"",
         "\"type=gha,scope=nook-web-v1,version=2\"",
         "\"type=gha,scope=nook-web-e2e-v1,version=2\"",
@@ -373,6 +375,19 @@ fn assert_delivery_cache_scope_contract() {
             "a missing generation with an older PR seed must also import Main: {main_scope}"
         );
     }
+
+    let core_bake = read("nook-app/nook-core/docker-bake.hcl");
+    let wasm_dependencies = core_bake
+        .split_once("target \"builder-wasm-deps\"")
+        .expect("WASM dependency target must exist")
+        .1
+        .split_once("target \"builder-debug\"")
+        .expect("native source target must follow WASM dependencies")
+        .0;
+    assert!(
+        wasm_dependencies.contains("cache-from = rust_deps_cache_from"),
+        "WASM dependencies must restore Main's complete native dependency ancestor"
+    );
 }
 
 #[test]

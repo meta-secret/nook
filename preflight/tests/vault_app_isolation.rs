@@ -865,8 +865,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
-        "type=gha,scope=nook-rust-native-source-v1",
-        "type=gha,scope=nook-rust-wasm-source-v1",
+        "type=gha,scope=nook-rust-native-source-v2",
+        "type=gha,scope=nook-rust-wasm-source-v2",
         "type=gha,scope=nook-web-deps-v1",
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
@@ -947,6 +947,8 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "cache_write_enabled=1",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
+        "main-cache-only",
+        "main-cache-only requires cache-write=false",
     ] {
         assert!(
             setup.contains(required),
@@ -1009,8 +1011,17 @@ fn assert_pr_workflow_contract(root: &Path) {
     assert!(
         wasm_job.contains("task ci:pr:wasm")
             && wasm_job.contains("steps.trusted-wasm.outputs.found != 'true'")
-            && wasm_job.contains("Upload verified WASM handoff"),
+            && wasm_job.contains("Upload verified WASM handoff")
+            && wasm_job.contains("cache-write: \"false\"")
+            && wasm_job.contains("main-cache-only: \"true\""),
         "PR CI must restore or build and upload verified WASM exactly once"
+    );
+    assert!(
+        native_job.contains("cache-write: \"false\"")
+            && native_job.contains("main-cache-only: \"true\"")
+            && native_job.contains("if: steps.trusted-native.outputs.found == 'true'")
+            && native_job.contains("task preflight"),
+        "native PR validation must read Main cache only and run explicit preflight only for an exact handoff"
     );
     assert!(
         !pr.contains("actions/cache/"),
@@ -1062,16 +1073,19 @@ fn assert_pr_workflow_contract(root: &Path) {
     );
     let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
     assert!(
-        verify_job.contains("if: ${{ github.event.action != 'closed' && always() }}")
-            && verify_job.contains("needs: wasm")
-            && verify_job.contains("if: needs.wasm.result != 'success'")
-            && verify_job.contains("WASM verification completed with ${{ needs.wasm.result }}")
-            && verify_job.contains("Download verified WASM handoff")
+        verify_job.contains("if: github.event.action != 'closed'")
+            && !verify_job.contains("needs: wasm")
+            && verify_job.contains("name: Wait for verified WASM handoff")
+            && verify_job.contains("WASM verification completed with $wasm_conclusion")
+            && verify_job.contains(
+                "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
+            )
+            && verify_job.contains("attempt $attempt/360")
             && !verify_job.contains("task ci:pr:wasm")
             && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
         ),
-        "PR preview must surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
+        "PR preview must prepare in parallel, surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
     );
     let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
     assert!(

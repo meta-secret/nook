@@ -161,17 +161,16 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use
 GitHub-hosted `ubuntu-latest`, so concurrent work scales across the repository's
 hosted-runner allowance instead of queueing on one Docker host. Delivery builds
 restore distinct GitHub Actions BuildKit cache scopes; main refreshes the
-default-branch scopes that new PRs may access. PR generations are isolated by
-PR number, workflow job, the `nook-app` Git tree, and `.dockerignore`, so the
-native, WASM, and verify exporters cannot replace one another's overlapping
-Rust cache lineage. A generation reads Main fallback scopes and writes its
-private lineage only while one of its required cache indices is missing.
-Subsequent pushes read that immutable private lineage alone, so equivalent
-records from another exporter cannot invalidate its children. A missing
-generation may seed from the newest complete generation owned by the same
-PR/job read-only, before falling back to Main; BuildKit rebuilds only changed
-inputs. The self-hosted `nook` label is
-reserved for runner cleanup while that machine remains registered.
+default-branch scopes that new PRs may access. Native and WASM producer jobs
+restore only this trusted Main lineage and disable cache export. Exact-input
+handoffs own repeat-run acceleration, so those producers do not need mutable or
+partial PR-local Rust lineages. The WASM dependency target reads Main's complete
+native dependency export, which already contains the shared WASM ancestor,
+instead of preferring the smaller lineage that previously rebuilt cargo-chef
+and test dependencies on source-changing PRs. Web and e2e cache generations
+remain isolated by PR number, workflow job, the `nook-app` Git tree, and
+`.dockerignore`. The self-hosted `nook` label is reserved for runner cleanup
+while that machine remains registered.
 
 The split native and WASM producers additionally restore small validated
 handoffs by exact input hash. Their keys cover Rust sources and manifests,
@@ -185,14 +184,17 @@ completed workflow-run event; there is no post-merge or manual fallback to
 mutable PR metadata. A later PR skips a producer only after resolving an exact
 artifact by ID and verifying that its successful workflow run used this trusted
 default-branch promotion workflow. PR-writable caches never bypass required
-validation, and repository invariant preflight still runs on every PR head.
-Changed inputs must execute and complete the full workflow before a new handoff
-can be promoted. If promotion cannot prove its provenance, consumers treat the
-artifact as a miss and run the producers. With unchanged exact validation
-inputs, a trusted handoff remains reusable across PR commits and the
-steady-state required-job budget is four to five minutes. Measure that budget
-from the first required job start through the last required job completion;
-report GitHub-hosted runner queue time separately.
+validation, and repository invariant preflight still runs on every PR head. On
+a producer miss, preflight and native validation run concurrently. The preview
+job also starts independently, does checkout, contract tests, and Docker setup
+in parallel with both producers, and polls the current run attempt before
+downloading the stable WASM artifact. Changed inputs must execute and complete
+the full workflow before a new handoff can be promoted. If promotion cannot
+prove its provenance, consumers treat the artifact as a miss and run the
+producers. The required-job budget is four to five minutes for exact handoff
+hits and ordinary source-changing PRs. Measure it from the first required job
+start through the last required job completion; report GitHub-hosted runner
+queue time separately.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
@@ -458,14 +460,13 @@ parallel worktrees from replacing each other's review/readiness binaries.
 
 **Delivery jobs are ephemeral but cache-aware.** PR verification, main, and
 release use GitHub-hosted runners. Main exports the default-branch cache that
-new PRs can restore under GitHub's cache visibility rules. Every PR uses scopes
-suffixed with its PR number, job owner, and app-tree generation. A missing
-generation seeds from Main and writes its private manifests once; a complete
-generation is read-only. This prevents concurrent PR and Main jobs, and later
-reruns of the same job, from replacing parent records beneath cached children.
-Native coverage and WASM source-sensitive layers
-have their own GHA BuildKit scopes in addition to the manifest-only dependency
-scopes, so non-Rust pushes do not repeat unchanged Cargo compilation.
+new PRs can restore under GitHub's cache visibility rules. Native coverage and
+WASM producers are default-branch-cache-only, with PR writes disabled; their
+exact trusted handoffs make branch-local source caches unnecessary. Web and e2e
+jobs continue to use scopes suffixed with PR number, job owner, and app-tree
+generation. Native coverage and WASM source-sensitive layers have separate v2
+GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
+non-Rust pushes do not repeat unchanged Cargo compilation.
 Delivery Docker builds use the job-local Redis-backed sccache and carry no
 credential mounts. Trusted Main and no-secret PR jobs must generate identical
 BuildKit keys for dependency and source layers; secret-mounted compiler steps

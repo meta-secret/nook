@@ -25,7 +25,10 @@ target "builder-wasm-deps" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  cache-from = rust_wasm_deps_cache_from
+  // Main's full native dependency export includes this complete ancestor lineage. Restoring that
+  // single authoritative cache avoids selecting an incomplete WASM-only PR lineage and rebuilding
+  // every cargo-chef/test dependency on a source-changing pull request.
+  cache-from = rust_deps_cache_from
   cache-to   = rust_wasm_deps_cache_to
 }
 

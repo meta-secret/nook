@@ -6,6 +6,10 @@ inputs:
     description: Allow this workflow source to update the shared hosted BuildKit cache scopes.
     required: false
     default: "true"
+  main-cache-only:
+    description: Restore only the trusted default-branch cache and disable cache writes.
+    required: false
+    default: "false"
   cache-redis-password:
     description: Password for the persistent remote Rust compiler cache.
     required: false
@@ -110,6 +114,17 @@ runs:
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
+        if [ "${{ inputs.main-cache-only }}" = "true" ]; then
+          if [ "${{ inputs.cache-write }}" != "false" ]; then
+            echo "main-cache-only requires cache-write=false" >&2
+            exit 1
+          fi
+          echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
+          exit 0
+        fi
         cache_write_enabled=""
         if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
           app_tree="$(git rev-parse HEAD:nook-app)"
@@ -124,10 +139,10 @@ runs:
 
           case "$job_scope" in
             rust)
-              required_scopes="nook-rust-base-v1 nook-rust-deps-v2 nook-rust-native-source-v1"
+              required_scopes="nook-rust-base-v1 nook-rust-deps-v2 nook-rust-native-source-v2"
               ;;
             wasm)
-              required_scopes="nook-rust-base-v1 nook-rust-wasm-deps-v1 nook-rust-wasm-source-v1"
+              required_scopes="nook-rust-base-v1 nook-rust-wasm-deps-v1 nook-rust-wasm-source-v2"
               ;;
             verify)
               required_scopes="nook-web-deps-v1 nook-web-v1"
