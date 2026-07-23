@@ -1255,6 +1255,10 @@ async function continueWithAuthenticator(
       return
     }
     const requestId = response.requestId
+    if (dismissed || !continueButton.isConnected) {
+      cancelAuthenticatorPickerRequest(requestId)
+      return
+    }
     const timeoutId = window.setTimeout(
       () => {
         if (pendingAuthenticatorPicker?.requestId !== requestId) return
@@ -1303,15 +1307,19 @@ async function continueWithAuthenticator(
   }
 }
 
+function cancelAuthenticatorPickerRequest(requestId: string): void {
+  void sendRuntimeMessage({
+    type: 'nook:authenticator-picker-cancel',
+    payload: { requestId },
+  })
+}
+
 function cancelPendingAuthenticatorPickerRequest(): void {
   const pending = pendingAuthenticatorPicker
   if (!pending) return
   pendingAuthenticatorPicker = undefined
   window.clearTimeout(pending.timeoutId)
-  void sendRuntimeMessage({
-    type: 'nook:authenticator-picker-cancel',
-    payload: { requestId: pending.requestId },
-  })
+  cancelAuthenticatorPickerRequest(pending.requestId)
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
