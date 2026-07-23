@@ -2,9 +2,9 @@
 #
 # Pull-request workflows may upload same-run artifacts for downstream jobs, but they must never
 # write or restore a PR-scoped cache that can bypass required validation. This workflow runs only
-# from the default branch, verifies the source workflow and all required producer/consumer jobs,
-# validates the artifact shape, and republishes immutable exact-input artifacts. A later PR run
-# may skip a producer only after downloading one of these trusted artifacts by ID.
+# from the default branch, verifies the source workflow and all required producer/consumer jobs
+# across attempts, validates the artifact shape, and republishes immutable exact-input artifacts.
+# A later PR run may skip a producer only after downloading one of these trusted artifacts by ID.
 
 name: PR validation handoff
 
@@ -63,19 +63,55 @@ jobs:
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
               ...context.repo,
               run_id: runId,
-              filter: 'latest',
+              filter: 'all',
               per_page: 100,
             })
-            for (const requiredName of [
-              'Native Rust verification',
-              'WASM verification and artifact',
-              'Verify and preview',
-            ]) {
-              const job = jobs.find((candidate) => candidate.name === requiredName)
-              if (!job || job.status !== 'completed' || job.conclusion !== 'success') {
-                core.setFailed(`Run ${runId} lacks successful job: ${requiredName}`)
-                return
+
+            const currentAttempt = run.run_attempt
+            if (!Number.isSafeInteger(currentAttempt) || currentAttempt <= 0) {
+              core.setFailed(`Run ${runId} has an invalid attempt: ${currentAttempt}`)
+              return
+            }
+
+            const hasSuccessfulJob = (requiredName, allowEarlierAttempt) => {
+              const matchingJobs = jobs.filter((candidate) => candidate.name === requiredName)
+              const currentJob = matchingJobs.find(
+                (candidate) => candidate.run_attempt === currentAttempt,
+              )
+              if (currentJob) {
+                if (currentJob.status === 'completed' && currentJob.conclusion === 'success') {
+                  return true
+                }
+                core.setFailed(
+                  `Run ${runId} attempt ${currentAttempt} lacks successful job: ${requiredName}`,
+                )
+                return false
               }
+
+              const earlierSuccess = allowEarlierAttempt
+                ? matchingJobs.find(
+                    (candidate) =>
+                      candidate.run_attempt < currentAttempt &&
+                      candidate.status === 'completed' &&
+                      candidate.conclusion === 'success',
+                  )
+                : undefined
+              if (earlierSuccess) {
+                return true
+              }
+
+              core.setFailed(
+                `Run ${runId} attempt ${currentAttempt} lacks successful job: ${requiredName}`,
+              )
+              return false
+            }
+
+            if (
+              !hasSuccessfulJob('Native Rust verification', true) ||
+              !hasSuccessfulJob('WASM verification and artifact', true) ||
+              !hasSuccessfulJob('Verify and preview', false)
+            ) {
+              return
             }
 
             const pullRequest = context.payload.workflow_run?.pull_requests?.[0]

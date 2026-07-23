@@ -1060,6 +1060,20 @@ fn assert_pr_workflow_contract(root: &Path) {
         "trusted validation promotion must derive PR provenance from the immutable workflow-run event snapshot"
     );
     assert!(
+        trusted_handoff.contains("filter: 'all'")
+            && !trusted_handoff.contains("filter: 'latest'")
+            && trusted_handoff.contains("const currentAttempt = run.run_attempt")
+            && trusted_handoff.contains(
+                "!hasSuccessfulJob('Native Rust verification', true)",
+            )
+            && trusted_handoff.contains(
+                "!hasSuccessfulJob('WASM verification and artifact', true)",
+            )
+            && trusted_handoff.contains("!hasSuccessfulJob('Verify and preview', false)")
+            && trusted_handoff.contains("candidate.run_attempt < currentAttempt"),
+        "trusted validation promotion must accept successful producers omitted from a failed-job rerun while requiring the current consumer attempt"
+    );
+    assert!(
         native_job.contains("run.event === 'workflow_run'")
             && wasm_job.contains("run.event === 'workflow_run'")
             && !native_job.contains("workflow_dispatch")
