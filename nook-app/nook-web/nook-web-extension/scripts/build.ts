@@ -399,6 +399,9 @@ async function buildChromeLocales() {
         widgetAuthenticatorPickerOpened: {
           message: catalog.extension.widget.authenticator_picker_opened,
         },
+        widgetAuthenticatorPickerCanceled: {
+          message: catalog.extension.widget.authenticator_picker_canceled,
+        },
         widgetEnrollTitle: { message: catalog.extension.widget.enroll_title },
         widgetEnrollDescription: {
           message: catalog.extension.widget.enroll_description,

@@ -39,6 +39,7 @@ import {
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
 import {
+  isAuthenticatorPickerCancelMessage,
   isAuthenticatorPickerQueryMessage,
   isAuthenticatorPickerSelectMessage,
   isWebsiteAuthenticatorPickerOpenMessage,
@@ -658,7 +659,7 @@ function isPendingAuthenticatorPicker(
   value: unknown,
 ): value is PendingAuthenticatorPicker {
   return (
-    value !== null &&
+    !!value &&
     typeof value === 'object' &&
     'requestId' in value &&
     typeof value.requestId === 'string' &&
@@ -1221,6 +1222,33 @@ async function selectAuthenticatorPicker(
     return { ok: false, reason: 'authenticator-picker-page-unavailable' }
   }
   await removeAuthenticatorPicker(request.requestId)
+  return { ok: true }
+}
+
+async function cancelAuthenticatorPicker(
+  message: { payload: { requestId: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthenticatorPickerSender(sender)) {
+    return { ok: false, reason: 'authenticator-picker-forbidden' }
+  }
+  const request = await loadAuthenticatorPicker(message.payload.requestId)
+  if (!request) {
+    return { ok: true }
+  }
+  await removeAuthenticatorPicker(request.requestId)
+  try {
+    await chrome.tabs.sendMessage(request.tabId, {
+      type: 'nook:website-authenticator-canceled',
+      payload: {
+        origin: request.origin,
+        requestId: request.requestId,
+      },
+    })
+  } catch {
+    // The website may have navigated while its picker was open. The pending
+    // request is still canceled and must not remain reusable.
+  }
   return { ok: true }
 }
 
@@ -1810,6 +1838,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           ok: false,
           reason: 'authenticator-picker-select-failed',
+        }),
+      )
+    return true
+  }
+
+  if (isAuthenticatorPickerCancelMessage(message)) {
+    void cancelAuthenticatorPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          reason: 'authenticator-picker-cancel-failed',
         }),
       )
     return true
