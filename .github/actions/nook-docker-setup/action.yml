@@ -125,24 +125,45 @@ runs:
           fi
           echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
 
-          legacy_scope_suffix=""
+          seed_scope_suffix=""
           if [ -n "$fallback_enabled" ] && [ -n "$required_scopes" ]; then
-            legacy_scope_suffix="-pr-$pr_number-$job_scope"
-            for scope in $required_scopes; do
-              cache_count="$(
-                gh api --method GET "repos/$GITHUB_REPOSITORY/actions/caches" \
-                  -f key="index-$scope$legacy_scope_suffix" \
-                  -f ref="$GITHUB_REF" \
-                  -f per_page=1 \
-                  --jq '.total_count'
-              )"
-              if [ "$cache_count" -eq 0 ]; then
-                legacy_scope_suffix=""
+            first_scope="${required_scopes%% *}"
+            candidate_suffixes="$(
+              gh api --method GET "repos/$GITHUB_REPOSITORY/actions/caches" \
+                -f key="index-$first_scope-pr-$pr_number-$job_scope" \
+                -f ref="$GITHUB_REF" \
+                -f per_page=100 \
+                --jq '.actions_caches[].key' \
+                | sed -E "s|^index-$first_scope(.*)-1-[^#]+#[0-9]+$|\\1|" \
+                | awk '!seen[$0]++'
+            )"
+            while IFS= read -r candidate_suffix; do
+              if [ -z "$candidate_suffix" ] \
+                || [ "$candidate_suffix" = "$scope_suffix" ] \
+                || [[ ! "$candidate_suffix" =~ ^-pr-$pr_number-$job_scope(-[0-9a-f]{12})?$ ]]; then
+                continue
+              fi
+              candidate_complete=1
+              for scope in $required_scopes; do
+                cache_count="$(
+                  gh api --method GET "repos/$GITHUB_REPOSITORY/actions/caches" \
+                    -f key="index-$scope$candidate_suffix" \
+                    -f ref="$GITHUB_REF" \
+                    -f per_page=1 \
+                    --jq '.total_count'
+                )"
+                if [ "$cache_count" -eq 0 ]; then
+                  candidate_complete=""
+                  break
+                fi
+              done
+              if [ -n "$candidate_complete" ]; then
+                seed_scope_suffix="$candidate_suffix"
                 break
               fi
-            done
+            done <<< "$candidate_suffixes"
           fi
-          echo "GHA_CACHE_LEGACY_SCOPE_SUFFIX=$legacy_scope_suffix" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_SEED_SCOPE_SUFFIX=$seed_scope_suffix" >> "$GITHUB_ENV"
 
           if [ "${{ inputs.cache-write }}" = "true" ] && [ -n "$fallback_enabled" ]; then
             cache_write_enabled=1
@@ -150,7 +171,7 @@ runs:
         else
           echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
           echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_LEGACY_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
           if [ "${{ inputs.cache-write }}" = "true" ]; then
             cache_write_enabled=1
           fi

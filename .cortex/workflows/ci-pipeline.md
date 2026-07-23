@@ -166,9 +166,10 @@ native, WASM, and verify exporters cannot replace one another's overlapping
 Rust cache lineage. A generation reads Main fallback scopes and writes its
 private lineage only while one of its required cache indices is missing.
 Subsequent pushes read that immutable private lineage alone, so equivalent
-records from another exporter cannot invalidate its children. During the
-cache-format rollout, a missing generation may seed from a complete legacy
-PR/job scope read-only instead of rebuilding identical layers. The self-hosted `nook` label is
+records from another exporter cannot invalidate its children. A missing
+generation may seed from the newest complete generation owned by the same
+PR/job read-only, before falling back to Main; BuildKit rebuilds only changed
+inputs. The self-hosted `nook` label is
 reserved for runner cleanup while that machine remains registered.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its

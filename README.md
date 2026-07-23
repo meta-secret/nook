@@ -387,9 +387,9 @@ addressed by PR number, workflow job, the `nook-app` Git tree, and
 private generation. Once its required cache indices exist, later pushes and
 reruns read the generation without rewriting it or mixing mutable exporters.
 Job ownership also prevents the native, WASM, and verify jobs from replacing
-one another's overlapping Rust cache lineage. During this cache-format
-transition, a missing generation may seed from its completed legacy PR/job
-scope read-only instead of repeating an otherwise identical cold build.
+one another's overlapping Rust cache lineage. A missing generation may seed
+from the newest complete generation owned by the same PR/job, read-only, before
+falling back to Main; BuildKit then rebuilds only inputs that actually changed.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
