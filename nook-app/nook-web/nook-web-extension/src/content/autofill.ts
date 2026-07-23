@@ -1322,6 +1322,11 @@ function cancelPendingAuthenticatorPickerRequest(): void {
   cancelAuthenticatorPickerRequest(pending.requestId)
 }
 
+function removeScannedWidget(): void {
+  cancelPendingAuthenticatorPickerRequest()
+  removeWidget()
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
     sender.id === chrome.runtime.id &&
@@ -2037,13 +2042,14 @@ async function scanAndRender(): Promise<void> {
     enrollmentHints.qr ||
     (enrollmentHints.backupCodes && workflowForms.length === 0)
   ) {
+    cancelPendingAuthenticatorPickerRequest()
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanSequence) return
     renderEnrollmentWidget(enrollmentHints, vaultConnection)
     return
   }
   if (workflowForms.length === 0) {
-    removeWidget()
+    removeScannedWidget()
     return
   }
 
@@ -2072,12 +2078,12 @@ async function scanAndRender(): Promise<void> {
   })
   if (sequence !== scanSequence) return
   if (!response?.ok || !response.snapshot) {
-    removeWidget()
+    removeScannedWidget()
     return
   }
   const selected = workflowForms[response.snapshot.observationIndex]
   if (!selected) {
-    removeWidget()
+    removeScannedWidget()
     return
   }
   const vaultConnection = await loadPilotVaultConnection()

@@ -1207,7 +1207,7 @@ async function selectAuthenticatorPicker(
     return { ok: false, reason: 'authenticator-picker-selection-invalid' }
   }
   try {
-    await chrome.tabs.sendMessage(request.tabId, {
+    const response: unknown = await chrome.tabs.sendMessage(request.tabId, {
       type: 'nook:website-authenticator-selected',
       payload: {
         origin: request.origin,
@@ -1218,6 +1218,14 @@ async function selectAuthenticatorPicker(
         },
       },
     })
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true
+    ) {
+      return { ok: false, reason: 'authenticator-picker-page-unavailable' }
+    }
   } catch {
     return { ok: false, reason: 'authenticator-picker-page-unavailable' }
   }
