@@ -977,10 +977,15 @@ fn assert_pr_workflow_contract(root: &Path) {
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
-        "actions/cache/restore@v6",
-        "actions/cache/save@v6",
-        "nook-native-validation-v1-",
-        "nook-wasm-validation-v1-",
+        "name: Locate trusted native handoff",
+        "name: Locate trusted WASM handoff",
+        "nook-trusted-native-validation-v2-",
+        "nook-trusted-wasm-validation-v2-",
+        "run.name === 'PR validation handoff'",
+        "run.path === '.github/workflows/pr-validation-handoff.yml'",
+        "steps.trusted-native.outputs.found != 'true'",
+        "steps.trusted-wasm.outputs.found != 'true'",
+        "'nook-app/nook-wasm/**'",
         "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "git diff --name-only \"$BASE_SHA\" \"$HEAD_SHA\" --",
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
@@ -1002,10 +1007,33 @@ fn assert_pr_workflow_contract(root: &Path) {
     let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
-            && wasm_job.contains("steps.wasm-validation.outputs.cache-hit != 'true'")
+            && wasm_job.contains("steps.trusted-wasm.outputs.found != 'true'")
             && wasm_job.contains("Upload verified WASM handoff"),
         "PR CI must restore or build and upload verified WASM exactly once"
     );
+    assert!(
+        !pr.contains("actions/cache/"),
+        "PR-writable caches must never bypass required validation"
+    );
+
+    let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
+    for required in [
+        "name: PR validation handoff",
+        "github.event.workflow_run.conclusion == 'success'",
+        "run.path !== '.github/workflows/pr.yml'",
+        "'Native Rust verification'",
+        "'WASM verification and artifact'",
+        "'Verify and preview'",
+        "producer_jobs_verified: true",
+        "nook-validation-manifest.json",
+        "nook-trusted-native-validation-v2-",
+        "nook-trusted-wasm-validation-v2-",
+    ] {
+        assert!(
+            trusted_handoff.contains(required),
+            "trusted validation promotion is missing: {required}"
+        );
+    }
     assert_eq!(
         pr.matches("task ci:pr:wasm").count(),
         1,

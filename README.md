@@ -275,11 +275,14 @@ never enter `nook-web:local`.
 
 Before local Rust compilation, Task idempotently starts a Docker-host-only
 `nook-sccache-redis` container so short-lived compilers can reuse compatible
-crate compiler outputs. Trusted default-branch and normal nightly GitHub jobs
-instead reach the password-protected persistent Redis service deployed from
-[`infra/`](infra/) through Cloudflare Access. Pull requests, arbitrary refs,
-dependency-update agents, and AI-authored jobs retain the no-secrets job-local
-fallback. Local builds need no remote credentials. Override local
+crate compiler outputs. Delivery workflows use the same no-secret job-local
+service. The password-protected persistent Redis service deployed from
+[`infra/`](infra/) through Cloudflare Access remains available to explicit
+trusted operations: runtime Rust containers mount its credential, while
+secret-free image-build compiler steps bypass remote sccache so their BuildKit
+vertices remain reusable. Pull requests, arbitrary refs, dependency-update
+agents, and AI-authored jobs never receive that credential. Local builds need
+no remote credentials. Override local
 defaults with `SCCACHE_REDIS_PORT`, `SCCACHE_REDIS_MAXMEMORY`, or
 `SCCACHE_REDIS_IMAGE`. Runtime containers receive an explicit 1,048,576
 open-file limit; override with `DOCKER_NOFILE_LIMIT`.
@@ -405,12 +408,18 @@ requests restore identical BuildKit dependency and source layers. Local builds
 use the same Docker-host-only service. The authenticated Cloudflare Access path
 to the server cache remains available for explicit trusted operations, outside
 delivery builds. Redis does not cache Cargo downloads or Docker layers.
-PR CI also caches the small native coverage and generated WASM handoffs under
-exact hashes of their Rust, toolchain, Docker, Task, and workflow inputs.
-Repository invariant preflight still runs on every head; an exact handoff hit
-skips only Rust/WASM validation already completed for those identical inputs.
+PR CI also uploads the small native coverage and generated WASM handoffs. After
+the complete PR workflow succeeds, default-branch-only
+`pr-validation-handoff.yml` verifies the source run and required jobs, validates
+both artifact shapes, adds provenance, and republishes them under exact hashes
+of their Rust, toolchain, Docker, Task, and workflow inputs. Later PRs accept
+only those trusted promoted artifacts by ID; PR-writable caches can never bypass
+validation. Repository invariant preflight still runs on every head, and an
+exact trusted handoff skips only Rust/WASM validation already completed for
+identical inputs.
 For unchanged Rust validation inputs, the steady-state PR workflow budget is
-four to five minutes; an exact cache miss seeds its handoff once.
+four to five minutes; an exact handoff miss executes validation and is promoted
+only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future

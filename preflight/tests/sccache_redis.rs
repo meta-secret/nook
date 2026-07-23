@@ -293,10 +293,16 @@ fn assert_rust_build_cache_boundary() {
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");
     assert!(wrapper.contains("/run/secrets/sccache_redis_password"));
+    assert!(wrapper.contains("NOOK_SCCACHE_REDIS_MODE"));
+    assert!(wrapper.contains("exec \"$@\""));
     assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
+    assert!(rust_base.contains("NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}"));
+
+    assert!(bake.contains("SCCACHE_REDIS_MODE = SCCACHE_REDIS_MODE"));
+    assert!(app_tasks.contains("--set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'"));
 
     let secret_mount = "--mount=type=secret,id=sccache_redis_password";
     let core_dockerfile = read("nook-app/nook-core/Dockerfile");
@@ -315,11 +321,17 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("cache-telemetry.cjs start"));
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
     assert!(setup.contains("job_scope=\"$(printf '%s' \"$GITHUB_JOB\""));
+    assert!(setup.contains("full-e2e|full-extension-e2e)"));
+    assert!(setup.contains("job_scope=e2e"));
     assert!(setup.contains("app_tree=\"$(git rev-parse HEAD:nook-app)\""));
     assert!(setup.contains("dockerignore_blob=\"$(git hash-object .dockerignore)\""));
     assert!(setup.contains("scope_suffix=\"-pr-$pr_number-$job_scope-$cache_generation\""));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("repos/$GITHUB_REPOSITORY/actions/caches"));
+    assert!(setup.contains("cache_total_count()"));
+    assert!(setup.contains("Unable to probe hosted BuildKit cache key"));
+    assert!(setup.contains("require-e2e-cache"));
+    assert!(setup.contains("required_scopes=\"$required_scopes nook-web-e2e-v1\""));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(setup.contains("candidate_suffixes=\"$("));
     assert!(setup.contains("seed_scope_suffix=\"$candidate_suffix\""));

@@ -50,25 +50,80 @@ jobs:
       - name: Repository invariant preflight
         run: task preflight
 
-      - name: Restore validated native Rust handoff
-        id: rust-validation
-        uses: actions/cache/restore@v6
+      - name: Derive native validation key
+        id: native-key
+        run: |
+          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Locate trusted native handoff
+        id: trusted-native
+        uses: actions/github-script@v9
+        env:
+          ARTIFACT_NAME: ${{ steps.native-key.outputs.value }}
         with:
+          retries: 3
+          script: |
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              ...context.repo,
+              name: process.env.ARTIFACT_NAME,
+              per_page: 100,
+            })
+            for (const artifact of artifacts.sort((a, b) => b.id - a.id)) {
+              if (artifact.expired || !artifact.workflow_run?.id) continue
+              const { data: run } = await github.rest.actions.getWorkflowRun({
+                ...context.repo,
+                run_id: artifact.workflow_run.id,
+              })
+              if (
+                run.name === 'PR validation handoff' &&
+                run.path === '.github/workflows/pr-validation-handoff.yml' &&
+                run.head_branch === context.payload.repository.default_branch &&
+                run.status === 'completed' &&
+                run.conclusion === 'success' &&
+                ['workflow_run', 'workflow_dispatch'].includes(run.event)
+              ) {
+                core.setOutput('found', 'true')
+                core.setOutput('artifact-id', String(artifact.id))
+                core.setOutput('run-id', String(run.id))
+                return
+              }
+            }
+            core.setOutput('found', 'false')
+
+      - name: Download trusted native handoff
+        if: steps.trusted-native.outputs.found == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.trusted-native.outputs.artifact-id }}
           path: ${{ runner.temp }}/nook-ci-artifacts/rust
-          key: nook-native-validation-v1-${{ runner.os }}-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/Cargo.toml', 'nook-app/nook-wasm/docker-bake.hcl', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.trusted-native.outputs.run-id }}
+
+      - name: Validate trusted native handoff
+        if: steps.trusted-native.outputs.found == 'true'
+        env:
+          EXPECTED_KEY: ${{ steps.native-key.outputs.value }}
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/nook-ci-artifacts/rust"
+          jq -e --arg key "$EXPECTED_KEY" \
+            '.schema_version == 1 and
+             .kind == "native" and
+             .input_key == $key and
+             .source_workflow == ".github/workflows/pr.yml" and
+             .producer_jobs_verified == true' \
+            "$dir/nook-validation-manifest.json" >/dev/null
+          for file in summary.txt summary.json lcov.info coverage-floor.json; do
+            test -s "$dir/$file"
+          done
 
       - name: Rust format, clippy, tests, and coverage
-        if: steps.rust-validation.outputs.cache-hit != 'true'
+        if: steps.trusted-native.outputs.found != 'true'
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
-
-      - name: Save validated native Rust handoff
-        if: steps.rust-validation.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ runner.temp }}/nook-ci-artifacts/rust
-          key: ${{ steps.rust-validation.outputs.cache-primary-key }}
 
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
@@ -94,26 +149,81 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      - name: Restore validated WASM handoff
-        id: wasm-validation
-        uses: actions/cache/restore@v6
+      - name: Derive WASM validation key
+        id: wasm-key
+        run: |
+          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Locate trusted WASM handoff
+        id: trusted-wasm
+        uses: actions/github-script@v9
+        env:
+          ARTIFACT_NAME: ${{ steps.wasm-key.outputs.value }}
         with:
+          retries: 3
+          script: |
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              ...context.repo,
+              name: process.env.ARTIFACT_NAME,
+              per_page: 100,
+            })
+            for (const artifact of artifacts.sort((a, b) => b.id - a.id)) {
+              if (artifact.expired || !artifact.workflow_run?.id) continue
+              const { data: run } = await github.rest.actions.getWorkflowRun({
+                ...context.repo,
+                run_id: artifact.workflow_run.id,
+              })
+              if (
+                run.name === 'PR validation handoff' &&
+                run.path === '.github/workflows/pr-validation-handoff.yml' &&
+                run.head_branch === context.payload.repository.default_branch &&
+                run.status === 'completed' &&
+                run.conclusion === 'success' &&
+                ['workflow_run', 'workflow_dispatch'].includes(run.event)
+              ) {
+                core.setOutput('found', 'true')
+                core.setOutput('artifact-id', String(artifact.id))
+                core.setOutput('run-id', String(run.id))
+                return
+              }
+            }
+            core.setOutput('found', 'false')
+
+      - name: Download trusted WASM handoff
+        if: steps.trusted-wasm.outputs.found == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.trusted-wasm.outputs.artifact-id }}
           path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-          key: nook-wasm-validation-v1-${{ runner.os }}-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.trusted-wasm.outputs.run-id }}
+
+      - name: Validate trusted WASM handoff
+        if: steps.trusted-wasm.outputs.found == 'true'
+        env:
+          EXPECTED_KEY: ${{ steps.wasm-key.outputs.value }}
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
+          jq -e --arg key "$EXPECTED_KEY" \
+            '.schema_version == 1 and
+             .kind == "wasm" and
+             .input_key == $key and
+             .source_workflow == ".github/workflows/pr.yml" and
+             .producer_jobs_verified == true' \
+            "$dir/nook-validation-manifest.json" >/dev/null
+          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts; do
+            test -s "$dir/$file"
+          done
 
       - name: WASM clippy, build, and Node tests
-        if: steps.wasm-validation.outputs.cache-hit != 'true'
+        if: steps.trusted-wasm.outputs.found != 'true'
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
           CI: true
           WASM_BUILD_MODE: dev
-
-      - name: Save validated WASM handoff
-        if: steps.wasm-validation.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-          key: ${{ steps.wasm-validation.outputs.cache-primary-key }}
 
       - name: Upload verified WASM handoff
         uses: actions/upload-artifact@v7
@@ -163,6 +273,8 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          require-e2e-cache: ${{ steps.ui-demo-contract.outputs.required }}
 
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8

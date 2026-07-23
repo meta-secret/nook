@@ -51,6 +51,10 @@ variable "SCCACHE_REDIS_HOST_IP" {
   default = ""
 }
 
+variable "SCCACHE_REDIS_MODE" {
+  default = "local"
+}
+
 variable "SCCACHE_REDIS_PASSWORD_FILE" {
   default = ""
 }
@@ -240,6 +244,7 @@ web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 target "_sccache-network" {
   args = {
+    SCCACHE_REDIS_MODE = SCCACHE_REDIS_MODE
     SCCACHE_REDIS_PORT = SCCACHE_REDIS_PORT
   }
   extra-hosts = {

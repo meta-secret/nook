@@ -14,6 +14,7 @@ validation and cannot trigger Main after merge.
 | Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
 | [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
+| [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful PR workflow / manual source run  | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, verify, wasm-bindgen tests, all web builds, **full local-provider + split-app isolation e2e**, all headless UI demos with a 90-day artifact and the 10 largest recordings added to the merged PR's Linear issue, isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then immediately squash-merge one `.stats/main-build/**` record; the stats merge is ignored by Main, terminating the loop | Yes (`NOOK_GITHUB_PAT`)                   |
@@ -175,10 +176,15 @@ reserved for runner cleanup while that machine remains registered.
 The split native and WASM producers additionally restore small validated
 handoffs by exact input hash. Their keys cover Rust sources and manifests,
 toolchain and Docker definitions, Task entry points, Docker setup, and the PR
-workflow itself. An exact hit skips only the corresponding previously completed
-Rust/WASM producer; repository invariant preflight still runs on every PR head.
-There are no prefix restore keys, so changed validation inputs must execute and
-save a new handoff before downstream jobs can consume it.
+workflow itself. PR workflows upload only same-run artifacts. After the entire
+run succeeds, default-branch-only `pr-validation-handoff.yml` verifies the
+source workflow and all required jobs, validates the artifact shapes, adds
+provenance, and republishes immutable trusted artifacts. A later PR skips a
+producer only after resolving an exact artifact by ID and verifying that its
+successful workflow run used this trusted default-branch promotion workflow.
+PR-writable caches never bypass required validation, and repository invariant
+preflight still runs on every PR head. Changed inputs must execute and complete
+the full workflow before a new handoff can be promoted.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
@@ -456,7 +462,9 @@ credential mounts. Trusted Main and no-secret PR jobs must generate identical
 BuildKit keys for dependency and source layers; secret-mounted compiler steps
 are forbidden because they make fresh hosted builders rebuild the Rust graph
 instead of restoring Main's exported layers. The authenticated remote compiler
-cache remains an explicit trusted-operation fallback, not a delivery-CI input.
+cache remains available to explicit trusted runtime operations: those
+containers mount the credential, while image-build compilation in external
+mode bypasses sccache when the credential is absent.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
