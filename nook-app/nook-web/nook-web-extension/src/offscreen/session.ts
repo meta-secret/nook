@@ -7,8 +7,18 @@ import initNookWasm, {
   providerWasmArgs,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  SessionOperationQueue,
+  type SessionOperationPriority,
+} from '../lib/session-operation-queue'
+import {
+  scrubProviderCredentials,
+  stageProviderCredentials,
+} from '../lib/provider-credential-staging'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
+const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
+const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
 
 type DeviceResult = {
   deviceId: string
@@ -36,6 +46,8 @@ type ExtensionVaultGrant = {
 let initPromise: Promise<unknown> | undefined
 let manager: NookVaultManager | undefined
 let sessionTimer: ReturnType<typeof setTimeout> | undefined
+let sessionGeneration = 0
+let sessionDeadlineAt = 0
 
 const LOGIN_SAVE_OFFER_TTL_MS = 2 * 60 * 1000
 
@@ -48,14 +60,18 @@ type PendingLoginSaveOffer = {
   decision: 'create' | 'update'
   replaceSecretId?: string
   expiresAt: number
+  expiryTimer: ReturnType<typeof setTimeout>
 }
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
+const canceledWebsitePasskeyRequests = new Set<string>()
+const sessionOperations = new SessionOperationQueue()
 
 function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
   if (!offer) return
   offer.username = ''
   offer.password = ''
+  clearTimeout(offer.expiryTimer)
   pendingLoginSaveOffers.delete(offer.offerId)
 }
 
@@ -114,22 +130,46 @@ async function deviceResult(
   }
 }
 
-function armSessionExpiry(): void {
+function scheduleSessionExpiry(generation: number): void {
   if (sessionTimer) clearTimeout(sessionTimer)
+  sessionDeadlineAt = Date.now() + SESSION_DURATION_MS
   sessionTimer = setTimeout(() => {
-    const activeManager = manager
-    manager = undefined
+    if (generation !== sessionGeneration) return
     sessionTimer = undefined
-    activeManager?.lockDeviceIdentity()
-    activeManager?.free()
+    sessionDeadlineAt = 0
+    sessionGeneration += 1
+    const expiredManager = manager
+    manager = undefined
+    if (expiredManager) {
+      try {
+        expiredManager.lockDeviceIdentity()
+        expiredManager.free()
+      } catch {
+        // The service worker closes this document immediately if a WASM call
+        // still owns the manager when the session expires.
+      }
+    }
+    sessionOperations.close(new Error(SESSION_LOCKED_ERROR))
     chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
   }, SESSION_DURATION_MS)
 }
 
 async function activateSession(): Promise<DeviceResult> {
   const activeManager = await getManager()
-  armSessionExpiry()
+  sessionGeneration += 1
+  scheduleSessionExpiry(sessionGeneration)
   return deviceResult(activeManager)
+}
+
+function renewSessionExpiry(generation: number): void {
+  if (
+    generation !== sessionGeneration ||
+    sessionDeadlineAt === 0 ||
+    Date.now() >= sessionDeadlineAt
+  ) {
+    throw new Error(SESSION_LOCKED_ERROR)
+  }
+  scheduleSessionExpiry(generation)
 }
 
 function messageType(message: unknown): string | undefined {
@@ -320,18 +360,8 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await (await getManager()).unlockPinDeviceIdentity(pin)
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-lock': {
-      // Mirror idle expiry so callers (including e2e) can force a locked session.
-      if (sessionTimer) clearTimeout(sessionTimer)
-      sessionTimer = undefined
-      const activeManager = manager
-      manager = undefined
-      activeManager?.lockDeviceIdentity()
-      activeManager?.free()
-      chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
-      return { ok: true }
-    }
     case 'nook:extension-session-seal-identity-handoff': {
+      const generation = sessionGeneration
       const payload = messagePayload(message)
       const recipientPublicKey = payload.recipientPublicKey
       const nonce = payload.nonce
@@ -343,7 +373,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
       if (status !== 'unlocked') {
-        throw new Error('Extension device identity is locked.')
+        throw new Error(SESSION_LOCKED_ERROR)
       }
       const device = await deviceResult(activeManager)
       if (
@@ -359,7 +389,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         recipientPublicKey,
         nonce,
       )
-      armSessionExpiry()
+      renewSessionExpiry(generation)
       return { ok: true, envelope }
     }
     case 'nook:extension-session-import-vault': {
@@ -663,7 +693,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           decision === 'update' && typeof plan.secretId === 'string'
             ? plan.secretId
             : undefined
-        pendingLoginSaveOffers.set(offerId, {
+        const offer: PendingLoginSaveOffer = {
           offerId,
           origin: payload.origin,
           username: payload.username,
@@ -672,7 +702,11 @@ async function handleMessage(message: unknown): Promise<unknown> {
           decision,
           replaceSecretId,
           expiresAt: Date.now() + LOGIN_SAVE_OFFER_TTL_MS,
-        })
+          expiryTimer: setTimeout(() => {
+            clearLoginSaveOffer(pendingLoginSaveOffers.get(offerId))
+          }, LOGIN_SAVE_OFFER_TTL_MS),
+        }
+        pendingLoginSaveOffers.set(offerId, offer)
         payload.password = ''
         return {
           ok: true,
@@ -721,19 +755,24 @@ async function handleMessage(message: unknown): Promise<unknown> {
       if (offer.vaultStoreId !== grant.vaultStoreId) {
         throw new Error('Login save offer does not match the vault grant.')
       }
+      clearTimeout(offer.expiryTimer)
+      pendingLoginSaveOffers.delete(offer.offerId)
+      const committedOffer = { ...offer }
+      offer.username = ''
+      offer.password = ''
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
       try {
         await activeManager.commitWebsiteLoginSave(
-          offer.origin,
-          offer.username,
-          offer.password,
-          offer.replaceSecretId ?? '',
+          committedOffer.origin,
+          committedOffer.username,
+          committedOffer.password,
+          committedOffer.replaceSecretId ?? '',
         )
         await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
-        return { ok: true, decision: offer.decision }
+        return { ok: true, decision: committedOffer.decision }
       } finally {
-        clearLoginSaveOffer(offer)
+        clearLoginSaveOffer(committedOffer)
       }
     }
     case 'nook:extension-session-dismiss-login-save': {
@@ -746,53 +785,85 @@ async function handleMessage(message: unknown): Promise<unknown> {
       clearLoginSaveOffer(pendingLoginSaveOffers.get(payload.offerId))
       return { ok: true }
     }
+    case 'nook:extension-session-cancel-passkey': {
+      const payload = messagePayload(message)
+      if (typeof payload.requestId !== 'string') {
+        throw new Error(
+          'Extension session received an invalid passkey cancellation.',
+        )
+      }
+      canceledWebsitePasskeyRequests.add(payload.requestId)
+      return { ok: true }
+    }
     case 'nook:extension-session-register-passkey': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
-      if (typeof payload.requestJson !== 'string') {
+      if (
+        typeof payload.requestId !== 'string' ||
+        typeof payload.requestJson !== 'string' ||
+        typeof payload.queueExpiresAt !== 'number'
+      ) {
         throw new Error('Extension session received an invalid registration.')
       }
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
-      const registration = await activeManager.registerWebsitePasskey(
-        payload.requestJson,
-      )
       try {
-        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
-        return {
-          ok: true,
-          credentialId: registration.credentialId,
-          clientDataJSON: registration.clientDataJSON,
-          attestationObject: registration.attestationObject,
-          transports: registration.transports,
+        const registration = await activeManager.registerWebsitePasskey(
+          payload.requestJson,
+          () =>
+            Date.now() < (payload.queueExpiresAt as number) &&
+            !canceledWebsitePasskeyRequests.has(payload.requestId as string),
+        )
+        try {
+          await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+          return {
+            ok: true,
+            credentialId: registration.credentialId,
+            clientDataJSON: registration.clientDataJSON,
+            attestationObject: registration.attestationObject,
+            transports: registration.transports,
+          }
+        } finally {
+          registration.free()
         }
       } finally {
-        registration.free()
+        canceledWebsitePasskeyRequests.delete(payload.requestId)
       }
     }
     case 'nook:extension-session-assert-passkey': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
-      if (typeof payload.requestJson !== 'string') {
+      if (
+        typeof payload.requestId !== 'string' ||
+        typeof payload.requestJson !== 'string' ||
+        typeof payload.queueExpiresAt !== 'number'
+      ) {
         throw new Error('Extension session received an invalid assertion.')
       }
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
-      const assertion = await activeManager.assertWebsitePasskey(
-        payload.requestJson,
-      )
       try {
-        await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
-        return {
-          ok: true,
-          credentialId: assertion.credentialId,
-          clientDataJSON: assertion.clientDataJSON,
-          authenticatorData: assertion.authenticatorData,
-          signature: assertion.signature,
-          userHandle: assertion.userHandle,
+        const assertion = await activeManager.assertWebsitePasskey(
+          payload.requestJson,
+          () =>
+            Date.now() < (payload.queueExpiresAt as number) &&
+            !canceledWebsitePasskeyRequests.has(payload.requestId as string),
+        )
+        try {
+          await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
+          return {
+            ok: true,
+            credentialId: assertion.credentialId,
+            clientDataJSON: assertion.clientDataJSON,
+            authenticatorData: assertion.authenticatorData,
+            signature: assertion.signature,
+            userHandle: assertion.userHandle,
+          }
+        } finally {
+          assertion.free()
         }
       } finally {
-        assertion.free()
+        canceledWebsitePasskeyRequests.delete(payload.requestId)
       }
     }
     default:
@@ -800,9 +871,196 @@ async function handleMessage(message: unknown): Promise<unknown> {
   }
 }
 
+function sessionMessagePriority(type: string): SessionOperationPriority {
+  switch (type) {
+    case 'nook:extension-session-seal-identity-handoff':
+    case 'nook:extension-session-plan-login-save':
+    case 'nook:extension-session-commit-login-save':
+    case 'nook:extension-session-reveal-login':
+    case 'nook:extension-session-authenticator-code':
+    case 'nook:extension-session-authenticator-enroll-confirm':
+    case 'nook:extension-session-authenticator-backup-attach':
+    case 'nook:extension-session-list-logins':
+    case 'nook:extension-session-list-authenticators':
+    case 'nook:extension-session-register-passkey':
+    case 'nook:extension-session-assert-passkey':
+    case 'nook:extension-session-begin-passkey-setup':
+    case 'nook:extension-session-unlock-options':
+    case 'nook:extension-session-unlock-passkey':
+    case 'nook:extension-session-unlock-pin':
+      return 'interactive'
+    default:
+      return 'normal'
+  }
+}
+
+function requestedQueueExpiry(
+  payload: Record<string, unknown>,
+): number | undefined {
+  const value = payload.queueExpiresAt
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS)
+}
+
+const sensitiveSessionFields: Readonly<
+  Record<string, readonly string[] | undefined>
+> = {
+  'nook:extension-session-finish-passkey-setup': [
+    'credentialId',
+    'userHandle',
+    'prfInput',
+    'prfOutput',
+  ],
+  'nook:extension-session-recover-passkey': [
+    'credentialId',
+    'userHandle',
+    'prfOutput',
+  ],
+  'nook:extension-session-unlock-passkey': ['prfOutput'],
+  'nook:extension-session-create-pin': ['pin'],
+  'nook:extension-session-unlock-pin': ['pin'],
+  'nook:extension-session-plan-login-save': ['password'],
+  'nook:extension-session-authenticator-enroll-preview': ['otpauthUri'],
+  'nook:extension-session-authenticator-enroll-code': ['otpauthUri'],
+  'nook:extension-session-authenticator-enroll-confirm': ['otpauthUri'],
+  'nook:extension-session-authenticator-backup-attach': ['codes'],
+}
+
+function copySensitiveValue(value: unknown): unknown {
+  if (Array.isArray(value)) return [...value]
+  if (value instanceof Uint8Array) return new Uint8Array(value)
+  return value
+}
+
+function clearSensitiveValue(value: unknown): void {
+  if (Array.isArray(value) || value instanceof Uint8Array) value.fill(0)
+}
+
+function enqueueSensitiveSessionMessage(
+  message: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  fields: readonly string[],
+): Promise<unknown> {
+  let pendingPayload: Record<string, unknown> | undefined = { ...payload }
+  for (const field of fields) {
+    pendingPayload[field] = copySensitiveValue(payload[field])
+    clearSensitiveValue(payload[field])
+    payload[field] = typeof payload[field] === 'string' ? '' : []
+  }
+  const clearPending = () => {
+    if (!pendingPayload) return
+    for (const field of fields) {
+      clearSensitiveValue(pendingPayload[field])
+      pendingPayload[field] = undefined
+    }
+    pendingPayload = undefined
+  }
+  return sessionOperations.enqueue(
+    async () => {
+      const operationPayload = pendingPayload
+      pendingPayload = undefined
+      if (!operationPayload) {
+        throw new Error('Extension session request expired.')
+      }
+      try {
+        return await handleMessage({ ...message, payload: operationPayload })
+      } finally {
+        for (const field of fields) {
+          clearSensitiveValue(operationPayload[field])
+          operationPayload[field] = undefined
+        }
+      }
+    },
+    {
+      priority: 'interactive',
+      expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+      onExpire: clearPending,
+    },
+  )
+}
+
+function enqueueVaultImportMessage(
+  message: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): Promise<unknown> {
+  const stagedProviders = stageProviderCredentials(payload.providers)
+  if (!stagedProviders)
+    return sessionOperations.enqueue(() => handleMessage(message))
+  payload.providers = []
+  let pendingPayload: Record<string, unknown> | undefined = {
+    ...payload,
+    providers: stagedProviders,
+  }
+  const clearPending = () => {
+    if (!pendingPayload) return
+    scrubProviderCredentials(pendingPayload.providers)
+    pendingPayload = undefined
+  }
+  return sessionOperations.enqueue(
+    async () => {
+      const operationPayload = pendingPayload
+      pendingPayload = undefined
+      if (!operationPayload) {
+        throw new Error('Extension session request expired.')
+      }
+      try {
+        return await handleMessage({ ...message, payload: operationPayload })
+      } finally {
+        scrubProviderCredentials(operationPayload.providers)
+        operationPayload.providers = []
+      }
+    },
+    {
+      priority: 'interactive',
+      expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+      onExpire: clearPending,
+    },
+  )
+}
+
+function enqueueSessionMessage(message: unknown): Promise<unknown> {
+  const type = messageType(message)
+  if (!type) return Promise.resolve(undefined)
+  const payload = messagePayload(message)
+  if (type === 'nook:extension-session-import-vault') {
+    return enqueueVaultImportMessage(
+      message as Record<string, unknown>,
+      payload,
+    )
+  }
+  const requestedExpiry = requestedQueueExpiry(payload)
+  const priority = requestedExpiry
+    ? payload.queuePriority === 'interactive'
+      ? 'interactive'
+      : 'probe'
+    : sessionMessagePriority(type)
+  const sensitiveFields = sensitiveSessionFields[type]
+  if (sensitiveFields) {
+    return enqueueSensitiveSessionMessage(
+      message as Record<string, unknown>,
+      payload,
+      sensitiveFields,
+    )
+  }
+
+  const expiresAt =
+    requestedExpiry ??
+    (priority === 'interactive'
+      ? Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS
+      : undefined)
+  return sessionOperations.enqueue(() => handleMessage(message), {
+    priority,
+    expiresAt,
+  })
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (messageType(message) === 'nook:extension-session-lock') return false
   const serviceWorkerOnly =
-    messageType(message) === 'nook:extension-session-seal-identity-handoff'
+    messageType(message) === 'nook:extension-session-seal-identity-handoff' ||
+    messageType(message) === 'nook:extension-session-cancel-passkey'
   const serviceWorkerSender =
     sender.tab === undefined &&
     (sender.url === undefined ||
@@ -814,7 +1072,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   ) {
     return false
   }
-  void handleMessage(message)
+  if (messageType(message) === 'nook:extension-session-dismiss-login-save') {
+    void handleMessage(message)
+      .then((response) => sendResponse(response))
+      .catch((error: unknown) =>
+        sendResponse({
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Extension session failed.',
+        }),
+      )
+    return true
+  }
+  if (messageType(message) === 'nook:extension-session-cancel-passkey') {
+    void handleMessage(message)
+      .then((response) => sendResponse(response))
+      .catch((error: unknown) =>
+        sendResponse({
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Extension session failed.',
+        }),
+      )
+    return true
+  }
+  void enqueueSessionMessage(message)
     .then((response) => sendResponse(response))
     .catch((error: unknown) =>
       sendResponse({

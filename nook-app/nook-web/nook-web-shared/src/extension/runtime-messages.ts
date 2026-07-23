@@ -68,6 +68,7 @@ export type ExtensionPairedVaultIdentityDiscoveryMessage = {
   payload: {
     requestId: string
     vaultStoreId: string
+    expiresAt: number
   }
 }
 
@@ -280,9 +281,19 @@ function isPairedVaultRequestMessage(
 export function isExtensionPairedVaultIdentityDiscoveryMessage(
   message: unknown,
 ): message is ExtensionPairedVaultIdentityDiscoveryMessage {
-  return isPairedVaultRequestMessage(
-    message,
-    'nook:extension-paired-vault-identity-discovery',
+  return (
+    isPairedVaultRequestMessage(
+      message,
+      'nook:extension-paired-vault-identity-discovery',
+    ) &&
+    typeof (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
+      .expiresAt === 'number' &&
+    Number.isFinite(
+      (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
+        .expiresAt,
+    ) &&
+    (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
+      .expiresAt > Date.now()
   )
 }
 

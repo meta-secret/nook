@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { launchPairedPinExtension } from './helpers/paired-pin-extension'
+import {
+  exerciseConcurrentSessionStatus,
+  launchPairedPinExtension,
+} from './helpers/paired-pin-extension'
 import { signInAndSaveMockLogin } from './helpers/mock-auth-login'
 import { startMockAuthServer } from './mock-auth'
 
@@ -46,7 +49,9 @@ test.describe('PIN Pilot save login', () => {
     })
     try {
       const loginPage = await paired.context.newPage()
-      await signInAndSaveMockLogin(loginPage, mockAuth.origin)
+      await signInAndSaveMockLogin(loginPage, mockAuth.origin, async () => {
+        await exerciseConcurrentSessionStatus(paired.context)
+      })
 
       const nextLogin = await paired.context.newPage()
       await nextLogin.goto(`${mockAuth.origin}/plain/login`)
