@@ -381,8 +381,9 @@ Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 GitHub Actions runs PR, main, and release validation on `ubuntu-latest`; each
 fresh VM restores distinct BuildKit v2 cache scopes. Main refreshes the
-default-branch cache that new PRs may restore; PR reruns reuse their branch
-cache.
+default-branch cache that new PRs may restore. Each PR writes only to
+PR-number-suffixed scopes, reads those before the Main fallback, and therefore
+keeps later pushes and reruns stable while other delivery jobs build.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and

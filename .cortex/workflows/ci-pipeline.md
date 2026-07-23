@@ -422,9 +422,12 @@ parallel worktrees from replacing each other's review/readiness binaries.
 
 **Delivery jobs are ephemeral but cache-aware.** PR verification, main, and
 release use GitHub-hosted runners. Main exports the default-branch cache that
-new PRs can restore under GitHub's cache visibility rules; a PR also updates its
-branch cache for later pushes. Separate scopes prevent parallel image lineages
-from overwriting one another. Native coverage and WASM source-sensitive layers
+new PRs can restore under GitHub's cache visibility rules. Every PR writes only
+to scopes suffixed with its PR number and reads those before the shared Main
+fallback. This prevents concurrent PR and Main jobs from replacing one
+another's mutable manifests while still letting the first PR run reuse merged
+layers. Separate scopes prevent parallel image lineages from overwriting one
+another. Native coverage and WASM source-sensitive layers
 have their own GHA BuildKit scopes in addition to the manifest-only dependency
 scopes, so non-Rust pushes do not repeat unchanged Cargo compilation.
 Delivery Docker builds use the job-local Redis-backed sccache and carry no
