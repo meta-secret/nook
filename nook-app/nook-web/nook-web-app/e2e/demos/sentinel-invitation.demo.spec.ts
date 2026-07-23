@@ -31,4 +31,26 @@ test('Sentinel creation invites participants instead of standalone join', async 
     page.getByTestId('sentinel-onboarding-create-keys'),
   ).toBeVisible()
   await demoBeat(page)
+
+  await page.getByTestId('sentinel-onboarding-create-keys').click()
+  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('device-protection-create-new-choice').click()
+  await page.getByTestId('device-protection-setup-btn').click()
+  await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page
+    .getByTestId('sentinel-genesis-name-input')
+    .fill('Sentinel response demo')
+  await page.getByTestId('sentinel-onboarding-continue-policy').click()
+  await page.getByTestId('sentinel-onboarding-continue-devices').click()
+  await expect(
+    page.getByTestId('sentinel-genesis-response-input'),
+  ).toBeVisible()
+  await expect(
+    page.getByTestId('sentinel-genesis-authentication-instructions'),
+  ).toContainText('Paste the signed response')
+  await demoBeat(page)
 })

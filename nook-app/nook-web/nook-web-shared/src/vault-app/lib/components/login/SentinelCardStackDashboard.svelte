@@ -452,6 +452,18 @@
                     bind:value={participantLabel}
                   />
                 </label>
+                <label
+                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
+                >
+                  {vault.t('login.sentinel_card_stack_public_key_label')}
+                  <textarea
+                    class="mt-2 min-h-24 w-full resize-y border border-white/20 bg-[#192128] px-3 py-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                    data-testid="sentinel-genesis-response-input"
+                    placeholder={vault.t(
+                      'login.sentinel_card_stack_public_key_placeholder',
+                    )}
+                    bind:value={response}></textarea>
+                </label>
                 {#if response}
                   <div
                     class="border border-[#63eaa1]/40 bg-[#63eaa1]/5 px-3 py-3"
