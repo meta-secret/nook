@@ -40,20 +40,23 @@ application capability checks enforce the vault-type boundary.
 | Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
 
 Authenticator items remain standalone and are not guessed from an issuer name
-or silently associated with the current origin. Until a typed website
-association exists, the in-page gate uses non-secret ordinal choices and
-requires an explicit selection for every OTP fill. Disambiguating metadata
-belongs in a future extension-controlled picker, not the host page DOM. An
-empty vault state says that no 2FA code is saved and offers to open Simple
-Vault. Page QR and backup code enrollment uses explicit Pilot actions
+or silently associated with the current origin. The in-page gate opens an
+extension-controlled picker for every OTP fill. That picker searches all
+authenticator items through Rust/WASM, shows issuer/account labels only inside
+the extension document, and returns the selected opaque item identity to the
+origin-bound content script. An empty result stays in the picker without
+exposing vault metadata to the website DOM. Page QR and backup code enrollment
+uses explicit Pilot actions
 (**Add 2FA from this page** / **Save backup codes**) with local decode/extract,
 WASM validation, and confirmation before any vault write. It is never silent
 page scraping or background scanning.
 
 "No vault UI in the extension" means no second vault-management UI. The toolbar
 popup may contain the standard one-time device-protection widget because
-WebAuthn needs an extension-owned document and a user gesture. It contains no
-vault picker, unlock, secrets, settings, or device administration.
+WebAuthn needs an extension-owned document and a user gesture. A bounded
+extension-owned authenticator picker may show searchable non-secret 2FA
+metadata for one explicit fill choice; it cannot create, reveal, edit, delete,
+recover, or administer vault items.
 
 ## First Run And Approval
 
@@ -256,6 +259,8 @@ The gate must:
 - show only contextual accounts returned by the background/WASM boundary when
   matched-account fill is available, using non-secret ordinal choices in the
   page DOM rather than usernames, issuer names, or account labels;
+- for OTP challenges, open the extension-owned searchable 2FA picker and keep
+  issuer/account labels out of the host-page DOM;
 - open a browser-native or extension-controlled authorization surface when the
   extension is locked;
 - open Simple Vault for full search, creation, editing, and settings.
