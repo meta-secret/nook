@@ -390,13 +390,12 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 
 Rust compilation has a second cache boundary below Docker layers: pinned
 `sccache` clients use Redis to reuse compatible source-sensitive compiler
-outputs. The shared WASM dependency warm-up deliberately uses only BuildKit,
-with no credential mount, so Main and pull requests restore the same stable
-critical-path layer; native warm-ups retain sccache for fast cold recovery.
-Local builds and untrusted GitHub jobs use a Docker-host-only service; trusted
-default-branch and nightly runners use an authenticated Cloudflare Access TCP
-proxy to the server service. Redis does not cache Cargo downloads or Docker
-layers.
+outputs. Delivery CI always uses a job-local Docker-host-only Redis service and
+never mounts remote-cache credentials into Rust build steps, so Main and pull
+requests restore identical BuildKit dependency and source layers. Local builds
+use the same Docker-host-only service. The authenticated Cloudflare Access path
+to the server cache remains available for explicit trusted operations, outside
+delivery builds. Redis does not cache Cargo downloads or Docker layers.
 The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
 Docker cache migration but is intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.

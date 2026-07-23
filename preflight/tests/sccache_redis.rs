@@ -95,7 +95,7 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
 }
 
 #[test]
-fn github_actions_use_the_authenticated_persistent_cache() {
+fn github_actions_keep_remote_credentials_out_of_delivery_builds() {
     assert_cache_actions_use_credential_files();
     assert_cache_connector_redacts_credentials();
     assert_workflows_scope_cache_credentials();
@@ -263,43 +263,21 @@ fn assert_workflows_scope_cache_credentials() {
         }
     }
 
-    let main_path = ".github/workflows/main.yml";
-    let main_workflow = read(main_path);
-    let password_count = main_workflow
-        .matches("cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}")
-        .count();
-    let client_id_count = main_workflow
-        .matches("cache-cloudflare-client-id: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID }}")
-        .count();
-    let client_secret_count = main_workflow
-        .matches(
-            "cache-cloudflare-client-secret: ${{ secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET }}",
-        )
-        .count();
-    assert_eq!(
-        password_count, 1,
-        "only trusted Docker setup calls in {main_path} may receive the Redis password"
-    );
-    assert_eq!(
-        client_id_count, 1,
-        "only trusted Docker setup calls in {main_path} may receive the Access client ID"
-    );
-    assert_eq!(
-        client_secret_count, 1,
-        "only trusted Docker setup calls in {main_path} may receive the Access client secret"
-    );
-
-    let nightly = read(".github/workflows/e2e-nightly.yml");
-    for secret_input in [
-        "cache-redis-password: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CACHE_REDIS_PASSWORD || '' }}",
-        "cache-cloudflare-client-id: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_ID || '' }}",
-        "cache-cloudflare-client-secret: ${{ github.ref == 'refs/heads/main' && secrets.NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET || '' }}",
+    for path in [
+        ".github/workflows/main.yml",
+        ".github/workflows/e2e-nightly.yml",
     ] {
-        assert_eq!(
-            nightly.matches(secret_input).count(),
-            1,
-            "nightly cache credentials must be limited to the trusted default branch"
-        );
+        let workflow = read(path);
+        for secret in [
+            "NOOK_CACHE_REDIS_PASSWORD",
+            "NOOK_CLOUDFLARE_ACCESS_CLIENT_ID",
+            "NOOK_CLOUDFLARE_ACCESS_CLIENT_SECRET",
+        ] {
+            assert!(
+                !workflow.contains(secret),
+                "delivery workflow {path} must use the job-local cache and stable BuildKit keys"
+            );
+        }
     }
 }
 
@@ -319,29 +297,13 @@ fn assert_rust_builds_mount_cache_credentials() {
 
     let secret_mount = "--mount=type=secret,id=sccache_redis_password";
     let core_dockerfile = read("nook-app/nook-core/Dockerfile");
-    let (wasm_dependency_layers, native_and_source_layers) = core_dockerfile
-        .split_once("# Native verification extends the WASM dependency boundary")
-        .expect("the core Dockerfile must separate WASM and native dependency layers");
     assert!(
-        !wasm_dependency_layers.contains(secret_mount),
-        "WASM dependency layers must share one BuildKit key across trusted and no-secret CI"
-    );
-    assert_eq!(
-        wasm_dependency_layers
-            .matches("RUN RUSTC_WRAPPER= cargo")
-            .count(),
-        3,
-        "WASM dependency compiles must bypass sccache so they need no credential mount"
+        !core_dockerfile.contains(secret_mount),
+        "Rust dependency and source layers must remain reusable across Main and PR jobs"
     );
     assert!(
-        native_and_source_layers.matches(secret_mount).count() >= 9,
-        "native dependency and source-sensitive compiles must retain authenticated sccache access"
-    );
-    assert!(
-        read("nook-app/nook-wasm/Dockerfile")
-            .matches(secret_mount)
-            .count()
-            >= 3
+        !read("nook-app/nook-wasm/Dockerfile").contains(secret_mount),
+        "WASM source layers must remain reusable across Main and PR jobs"
     );
 }
 
