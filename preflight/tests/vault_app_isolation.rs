@@ -1151,10 +1151,15 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    let native_job_lookup = pr
+    let rust_handoff = section(
+        &pr,
+        "      - name: Download Rust coverage handoff\n",
+        "      - name: Deploy unified internal test harness\n",
+    );
+    let native_job_lookup = rust_handoff
         .find("native_job=\"$(")
         .expect("PR verification must inspect the latest native job");
-    let artifact_lookup = pr
+    let artifact_lookup = rust_handoff
         .find("actions/runs/$GITHUB_RUN_ID/artifacts")
         .expect("PR verification must inspect the Rust handoff artifact");
     assert!(
