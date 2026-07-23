@@ -1662,6 +1662,92 @@ pub(crate) fn password_entries_to_vec(
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookVaultRecoveryDevice {
+    device_id: String,
+    label: String,
+    passkey_hint: String,
+}
+
+#[wasm_bindgen]
+impl NookVaultRecoveryDevice {
+    #[wasm_bindgen(getter, js_name = deviceId)]
+    pub fn device_id(&self) -> String {
+        self.device_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = passkeyHint)]
+    pub fn passkey_hint(&self) -> String {
+        self.passkey_hint.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookVaultRecoveryOptions {
+    store_id: String,
+    vault_name: String,
+    devices: Vec<NookVaultRecoveryDevice>,
+    password_entries: Vec<NookPasswordEntrySummary>,
+    requires_sentinel_quorum: bool,
+}
+
+#[wasm_bindgen]
+impl NookVaultRecoveryOptions {
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> String {
+        self.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultName)]
+    pub fn vault_name(&self) -> String {
+        self.vault_name.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn devices(&self) -> Vec<NookVaultRecoveryDevice> {
+        self.devices.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = passwordEntries)]
+    pub fn password_entries(&self) -> Vec<NookPasswordEntrySummary> {
+        self.password_entries.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = requiresSentinelQuorum)]
+    pub fn requires_sentinel_quorum(&self) -> bool {
+        self.requires_sentinel_quorum
+    }
+
+    pub(crate) fn from_core(
+        store_id: String,
+        vault_name: String,
+        options: nook_core::VaultRecoveryOptions,
+    ) -> Self {
+        Self {
+            store_id,
+            vault_name,
+            devices: options
+                .devices
+                .into_iter()
+                .map(|device| NookVaultRecoveryDevice {
+                    device_id: device.device_id.as_str().to_owned(),
+                    label: device.label,
+                    passkey_hint: device.passkey_hint,
+                })
+                .collect(),
+            password_entries: password_entries_to_vec(&options.password_entries),
+            requires_sentinel_quorum: options.requires_sentinel_quorum,
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookEnrollmentProvider(nook_core::EnrollmentProvider);
 
 #[wasm_bindgen]

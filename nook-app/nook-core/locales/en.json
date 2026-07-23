@@ -746,6 +746,16 @@
     "recovery_confirm": "Reset this browser's device identity? Saved sync connections will be removed. Local encrypted vaults will remain, but you may need a vault password or another enrolled device to regain access.",
     "recovery_complete": "Device identity reset. Create a new passkey to continue."
   },
+  "vault_recovery": {
+    "passkey_title": "Passkeys for this vault",
+    "passkey_description": "In the passkey chooser, look for a saved Nook passkey whose name ends with one of these device IDs. Standard-mode passkeys can recover that device; high-security passkeys also require its local browser key.",
+    "unnamed_device": "Enrolled device",
+    "no_device_hints": "This backup does not expose a current device ID.",
+    "password_available": "Backup password available",
+    "password_description": "Prepare this browser first. If the selected passkey does not already open the vault, Nook will offer one of these backup-password entries next.",
+    "password_unavailable": "No backup password is stored in this vault.",
+    "sentinel_required": "This is a Sentinel vault. Passkeys identify participants, but opening the vault requires the configured participant quorum."
+  },
   "architecture_modes": {
     "vault_type_title": "Vault type",
     "vault_type_simple_title": "Simple",

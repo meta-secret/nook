@@ -203,6 +203,7 @@ export function beginProviderSetup(
     state.oauthFile = undefined;
   }
   state.localFolder = undefined;
+  state.existingVaultRecoverySummary = undefined;
   state.errorMsg = "";
   state.dismissSuccess();
   log.debug("provider setup started", { type, oauthPreset });
@@ -221,6 +222,7 @@ export function cancelAddProvider(state: VaultState) {
   resetICloudSignInState(state);
   state.addProviderOpen = false;
   state.loginSetupType = undefined;
+  state.existingVaultRecoverySummary = undefined;
   state.applyActiveProviderCredentials();
   state.errorMsg = "";
 }
@@ -236,10 +238,12 @@ export function cancelProviderSetup(state: VaultState) {
         ? DEFAULT_DRIVE_BACKUP_NAME
         : DEFAULT_GITHUB_REPO;
     state.localFolder = undefined;
+    state.existingVaultRecoverySummary = undefined;
     state.errorMsg = "";
     return;
   }
   state.loginSetupType = undefined;
+  state.existingVaultRecoverySummary = undefined;
   state.addProviderOpen = false;
   state.applyActiveProviderCredentials();
   state.errorMsg = "";
@@ -484,7 +488,53 @@ export async function discoverStagedVaultStoreId(
       }, 30_000);
     });
     try {
-      return await Promise.race([discovery, timeout]);
+      const storeId = await Promise.race([discovery, timeout]);
+      if (storeId && state.manager) {
+        try {
+          const raw = await state.enqueueStorage(() =>
+            state.manager!.vaultRecoveryOptions(),
+          );
+          try {
+            const devices = raw.devices.map((device) => {
+              try {
+                return {
+                  deviceId: device.deviceId,
+                  label: device.label,
+                  passkeyHint: device.passkeyHint,
+                };
+              } finally {
+                device.free();
+              }
+            });
+            const passwordEntries = raw.passwordEntries.map((entry) => {
+              try {
+                return {
+                  id: entry.id,
+                  label: entry.label,
+                  createdAt: entry.createdAt,
+                };
+              } finally {
+                entry.free();
+              }
+            });
+            state.existingVaultRecoverySummary = {
+              storeId: raw.storeId,
+              vaultName: raw.vaultName,
+              devices,
+              passwordEntries,
+              requiresSentinelQuorum: raw.requiresSentinelQuorum,
+            };
+          } finally {
+            raw.free();
+          }
+        } catch (error) {
+          state.existingVaultRecoverySummary = undefined;
+          log.warn("vault recovery summary unavailable", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      return storeId;
     } finally {
       if (timeoutId !== undefined) clearTimeout(timeoutId);
     }

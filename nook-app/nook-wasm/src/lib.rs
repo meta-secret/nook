@@ -46,8 +46,8 @@ pub use types::{
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
     NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
     NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultMember,
-    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
-    NookWebsiteLoginSavePlan,
+    NookVaultRecoveryDevice, NookVaultRecoveryOptions, NookVaultSecretAccessDiagnostic,
+    NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 

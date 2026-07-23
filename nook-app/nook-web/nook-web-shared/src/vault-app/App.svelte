@@ -6,6 +6,9 @@
   import {
     saveAuthProviders,
     type AuthProvidersSnapshot,
+    type LocalFolderConfig,
+    type OAuthFileConfig,
+    type StorageProviderType,
   } from "$lib/auth-providers";
   import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
   import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
@@ -313,6 +316,7 @@
           vault.errorMsg = vault.t("auth_storage.existing_vault_not_found");
           return;
         }
+        rememberExistingVaultImport(activeStoreId);
       } catch (error) {
         vault.errorMsg =
           error instanceof Error ? error.message : vault.t("auth_storage.sync_failed");
@@ -330,10 +334,9 @@
       );
       if (!adopted) return;
       extensionBackedVaultSession = true;
-      await vault.loadDb();
-      if (existingVaultImport && vault.isAuthenticated) {
-        await vault.activateConnectedExistingVault(activeStoreId);
-      }
+      await (existingVaultImport
+        ? resumeExistingVaultImport()
+        : vault.loadDb());
       return;
     }
     if (
@@ -365,10 +368,9 @@
         );
         if (!adopted) return;
         extensionBackedVaultSession = true;
-        await vault.loadDb();
-        if (existingVaultImport && vault.isAuthenticated) {
-          await vault.activateConnectedExistingVault(activeStoreId);
-        }
+        await (existingVaultImport
+          ? resumeExistingVaultImport()
+          : vault.loadDb());
         return;
       }
       pendingExistingVaultUnlock = true;
@@ -456,6 +458,17 @@
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(
     undefined,
   );
+  type PendingExistingVaultImport = {
+    storeId: string;
+    setupType: StorageProviderType;
+    githubPat: string;
+    githubRepo: string;
+    oauthFile: OAuthFileConfig | undefined;
+    localFolder: LocalFolderConfig | undefined;
+  };
+  let pendingExistingVaultImport = $state<
+    PendingExistingVaultImport | undefined
+  >(undefined);
   let pendingExistingVaultUnlock = $state(false);
   let pendingEnrollmentDeviceUnlock = $state(false);
   let pendingEnrollmentSubmit = $state<
@@ -472,6 +485,43 @@
       urlEnrollmentPending &&
       !vault.deviceProtectionReady,
   );
+
+  function rememberExistingVaultImport(storeId: string): void {
+    const setupType = vault.loginSetupType;
+    if (!setupType) return;
+    pendingExistingVaultImport = {
+      storeId,
+      setupType,
+      githubPat: vault.githubPat,
+      githubRepo: vault.githubRepo,
+      oauthFile: vault.oauthFile
+        ? (JSON.parse(JSON.stringify(vault.oauthFile)) as OAuthFileConfig)
+        : undefined,
+      localFolder: vault.localFolder
+        ? (JSON.parse(JSON.stringify(vault.localFolder)) as LocalFolderConfig)
+        : undefined,
+    };
+  }
+
+  async function resumeExistingVaultImport(): Promise<void> {
+    const pending = pendingExistingVaultImport;
+    if (!pending) {
+      await vault.loadDb();
+      return;
+    }
+    vault.loginRequiresExistingVault = true;
+    vault.loginSetupType = pending.setupType;
+    vault.storageMode = pending.setupType;
+    vault.githubPat = pending.githubPat;
+    vault.githubRepo = pending.githubRepo;
+    vault.oauthFile = pending.oauthFile;
+    vault.localFolder = pending.localFolder;
+    await vault.connectStagedProvider();
+    if (vault.isAuthenticated) {
+      await vault.activateConnectedExistingVault(pending.storeId);
+      pendingExistingVaultImport = undefined;
+    }
+  }
 
   async function handleUseEnrollmentCode(code: string, password: string) {
     if (!vault.deviceProtectionReady) {
@@ -691,7 +741,7 @@
       return;
     }
     pendingExistingVaultUnlock = false;
-    void vault.loadDb();
+    void resumeExistingVaultImport();
   });
 
   // `#enroll=` lands on an empty browser: open device protection immediately so

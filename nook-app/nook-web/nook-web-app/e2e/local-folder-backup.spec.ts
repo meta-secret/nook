@@ -1,6 +1,7 @@
 import { test, expect, type Page } from './fixtures'
 import {
   addSecret,
+  addVaultPassword,
   assertVaultReady,
   clearBrowserVault,
   connectLocalVault,
@@ -11,164 +12,12 @@ import {
   uniqueSecretKey,
   waitForVaultOperationsIdle,
 } from './helpers'
-
-type LocalFolderRecord = { path: string; content: string }
-
-async function installLocalFolderPickerMock(page: Page) {
-  await page.addInitScript(() => {
-    const storageKey = '__nookE2eLocalFolderFiles'
-    function readSnapshot(): Array<{ path: string; content: string }> {
-      try {
-        return JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as Array<{
-          path: string
-          content: string
-        }>
-      } catch {
-        return []
-      }
-    }
-
-    function writeSnapshot(records: Array<{ path: string; content: string }>) {
-      sessionStorage.setItem(storageKey, JSON.stringify(records))
-    }
-
-    class MemoryFileHandle {
-      kind = 'file' as const
-
-      constructor(
-        public name: string,
-        private files: Map<string, string>,
-        private persist: () => void,
-      ) {}
-
-      async getFile() {
-        return new File([this.files.get(this.name) ?? ''], this.name, {
-          type: 'application/x-yaml',
-        })
-      }
-
-      async createWritable() {
-        return {
-          write: async (data: string) => {
-            this.files.set(this.name, data)
-            this.persist()
-          },
-          close: async () => undefined,
-        }
-      }
-    }
-
-    class MemoryDirectoryHandle {
-      kind = 'directory' as const
-      private directories = new Map<string, MemoryDirectoryHandle>()
-      private files = new Map<string, string>()
-
-      constructor(public name: string) {}
-
-      seed(path: string, content: string) {
-        const [head, ...tail] = path.split('/')
-        if (!head) return
-        if (tail.length === 0) {
-          this.files.set(head, content)
-          return
-        }
-        let child = this.directories.get(head)
-        if (!child) {
-          child = new MemoryDirectoryHandle(head)
-          this.directories.set(head, child)
-        }
-        child.seed(tail.join('/'), content)
-      }
-
-      clear() {
-        this.directories.clear()
-        this.files.clear()
-      }
-
-      replace(records: Array<{ path: string; content: string }>) {
-        this.clear()
-        for (const record of records) {
-          this.seed(record.path, record.content)
-        }
-      }
-
-      async queryPermission() {
-        return 'granted'
-      }
-
-      async requestPermission() {
-        return 'granted'
-      }
-
-      async getDirectoryHandle(name: string, options?: { create?: boolean }) {
-        const existing = this.directories.get(name)
-        if (existing) return existing
-        if (!options?.create) {
-          throw new DOMException('Not found', 'NotFoundError')
-        }
-        const child = new MemoryDirectoryHandle(name)
-        this.directories.set(name, child)
-        return child
-      }
-
-      async getFileHandle(name: string, options?: { create?: boolean }) {
-        if (!this.files.has(name)) {
-          if (!options?.create) {
-            throw new DOMException('Not found', 'NotFoundError')
-          }
-          this.files.set(name, '')
-        }
-        return new MemoryFileHandle(name, this.files, () =>
-          writeSnapshot(root.snapshot()),
-        )
-      }
-
-      async *entries(): AsyncIterable<
-        [string, MemoryDirectoryHandle | MemoryFileHandle]
-      > {
-        for (const entry of this.directories.entries()) {
-          yield entry
-        }
-        for (const name of this.files.keys()) {
-          yield [
-            name,
-            new MemoryFileHandle(name, this.files, () =>
-              writeSnapshot(root.snapshot()),
-            ),
-          ]
-        }
-      }
-
-      snapshot(prefix = ''): Array<{ path: string; content: string }> {
-        const records: Array<{ path: string; content: string }> = []
-        for (const [name, content] of this.files.entries()) {
-          records.push({ path: `${prefix}${name}`, content })
-        }
-        for (const [name, dir] of this.directories.entries()) {
-          records.push(...dir.snapshot(`${prefix}${name}/`))
-        }
-        return records.sort((left, right) =>
-          left.path.localeCompare(right.path),
-        )
-      }
-    }
-
-    const root = new MemoryDirectoryHandle('Nook Backup')
-    for (const record of readSnapshot()) {
-      root.seed(record.path, record.content)
-    }
-    Object.assign(window, {
-      showDirectoryPicker: async () => root,
-      __nookE2eLocalFolderSnapshot: () => root.snapshot(),
-      __nookE2eSetLocalFolderSnapshot: (
-        records: Array<{ path: string; content: string }>,
-      ) => {
-        root.replace(records)
-        writeSnapshot(root.snapshot())
-      },
-    })
-  })
-}
+import {
+  installLocalFolderPickerMock,
+  localFolderSnapshot,
+  setLocalFolderSnapshot,
+  type LocalFolderRecord,
+} from './local-folder-mock'
 
 async function installInterceptedLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
@@ -191,30 +40,6 @@ async function installUnsupportedLocalFolderPickerMock(page: Page) {
       value: undefined,
     })
   })
-}
-
-async function localFolderSnapshot(page: Page): Promise<LocalFolderRecord[]> {
-  return page.evaluate(
-    () =>
-      (
-        window as Window & {
-          __nookE2eLocalFolderSnapshot?: () => LocalFolderRecord[]
-        }
-      ).__nookE2eLocalFolderSnapshot?.() ?? [],
-  )
-}
-
-async function setLocalFolderSnapshot(
-  page: Page,
-  records: LocalFolderRecord[],
-) {
-  await page.evaluate((nextRecords) => {
-    ;(
-      window as Window & {
-        __nookE2eSetLocalFolderSnapshot?: (records: LocalFolderRecord[]) => void
-      }
-    ).__nookE2eSetLocalFolderSnapshot?.(nextRecords)
-  }, records)
 }
 
 function eventLogRecords(records: LocalFolderRecord[]): LocalFolderRecord[] {
@@ -277,7 +102,7 @@ test.describe('local folder backup provider', () => {
     await expectEmptyLocalFolderRejected(page)
   })
 
-  test('requests device identity before importing an existing folder vault', async ({
+  test('shows recovery choices and imports an existing folder on the first attempt', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -289,6 +114,13 @@ test.describe('local folder backup provider', () => {
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
+    await openStorageSettings(page)
+    await expandSettingsSection(page, 'unlock')
+    await addVaultPassword(
+      page,
+      'Emergency recovery',
+      'existing-folder-backup-password',
+    )
     await connectLocalFolderProviderFromSettings(page)
     await page.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(page)
@@ -298,6 +130,11 @@ test.describe('local folder backup provider', () => {
       'existing-folder-value',
     )
     await waitForLocalFolderEventRecords(page)
+    const passkeyLabel = await page.evaluate(
+      () => localStorage.getItem('nook_e2e_passkey_label') ?? '',
+    )
+    const passkeyDeviceHint = passkeyLabel.split(' - device ')[1]
+    expect(passkeyDeviceHint).toBeTruthy()
 
     await clearBrowserVault(page)
     await page.reload()
@@ -308,9 +145,24 @@ test.describe('local folder backup provider', () => {
 
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    const recoverySummary = page.getByTestId('existing-vault-recovery-summary')
+    await expect(recoverySummary).toBeVisible()
+    await expect(recoverySummary).toContainText(`device ${passkeyDeviceHint}`)
+    await expect(
+      page.getByTestId('existing-vault-password-status'),
+    ).toContainText('Backup password available')
+    await expect(
+      page.getByTestId('existing-vault-password-status'),
+    ).toContainText('Emergency recovery')
     await expect(page.locator('body')).not.toContainText(
       "Authorize before using this browser's device key.",
     )
+
+    await page.getByTestId('device-protection-use-existing-choice').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
   })
 
   test('explains the AI-debug browser directory-picker boundary', async ({

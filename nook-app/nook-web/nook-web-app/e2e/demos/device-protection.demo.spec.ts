@@ -1,9 +1,18 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  addVaultPassword,
+  assertVaultReady,
+  clearBrowserVault,
+  connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expandSettingsSection,
   expectEmptyLocalFolderRejected,
+  installPasskeyMock,
+  openStorageSettings,
+  waitForVaultOperationsIdle,
 } from '../helpers'
+import { installLocalFolderPickerMock } from '../local-folder-mock'
 
 const DEMO_BEAT_MS = 700
 
@@ -117,5 +126,53 @@ test('reject an empty folder before existing-vault recovery', async ({
   })
 
   await expectEmptyLocalFolderRejected(page, () => demoBeat(page))
+  await demoBeat(page)
+})
+
+test('shows matching passkeys and password recovery before opening a folder backup', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  })
+  await installPasskeyMock(page)
+  await installLocalFolderPickerMock(page)
+  await page.goto('/app/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await connectLocalVault(page)
+  await openStorageSettings(page)
+  await expandSettingsSection(page, 'unlock')
+  await addVaultPassword(page, 'Emergency recovery', 'demo-backup-password')
+  await expandSettingsSection(page, 'storage')
+  await page.getByTestId('add-provider-btn').first().click()
+  await page.getByTestId('provider-option-local-folder').click()
+  await page.getByTestId('settings-choose-local-folder-btn').click()
+  await page.getByTestId('settings-connect-local-folder-btn').click()
+  await waitForVaultOperationsIdle(page)
+  await assertVaultReady(page)
+
+  await clearBrowserVault(page)
+  await page.reload()
+  await page.getByTestId('login-connect-storage-btn').click()
+  await page.getByTestId('provider-option-local-folder').click()
+  await page.getByTestId('login-choose-local-folder-btn').click()
+  await page.getByTestId('login-connect-local-folder-btn').click()
+
+  const summary = page.getByTestId('existing-vault-recovery-summary')
+  await expect(summary).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(summary).toContainText('Passkeys for this vault')
+  await expect(summary).toContainText('device ')
+  await expect(summary).toContainText('Backup password available')
+  await expect(summary).toContainText('Emergency recovery')
+  await demoBeat(page)
+
+  await page.getByTestId('device-protection-use-existing-choice').click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
   await demoBeat(page)
 })

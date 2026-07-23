@@ -32,7 +32,7 @@
   use:portal
 >
   <div
-    class="relative overflow-hidden rounded-xl border border-border/60 bg-background/95 shadow-xl shadow-black/25 backdrop-blur-md"
+    class="relative max-h-[calc(100svh-5rem)] overflow-y-auto rounded-xl border border-border/60 bg-background/95 shadow-xl shadow-black/25 backdrop-blur-md"
   >
     {#if onDismiss}
       <button

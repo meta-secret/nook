@@ -14,6 +14,7 @@ pub(crate) mod vault_event_store;
 pub(crate) mod vault_format;
 pub(crate) mod vault_ids;
 pub(crate) mod vault_projection;
+pub(crate) mod vault_recovery_options;
 pub(crate) mod vault_runtime_policy;
 pub(crate) mod vault_search_catalog;
 pub(crate) mod vault_security;
