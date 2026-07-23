@@ -17,6 +17,7 @@ import {
   isExtensionReadySetupState,
   setupStorageKey,
 } from '../background/pairing-grants'
+import { isWebsiteAuthenticatorSelectedMessage } from '../lib/authenticator-picker-messages'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import {
   compactProgressState,
@@ -172,13 +173,24 @@ function setFlightProgress(
 type AuthenticatorOptionsResponse = {
   ok?: boolean
   status?: 'ready' | 'locked' | 'unavailable'
-  accounts?: WebsiteAuthenticatorOption[]
+  requestId?: string
 }
 
 type AuthenticatorFillResponse = {
   ok?: boolean
   code?: string
 }
+
+type PendingAuthenticatorPicker = {
+  requestId: string
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}
+
+let pendingAuthenticatorPicker: PendingAuthenticatorPicker | undefined
 
 function translatedMessage(key: string): string {
   return chrome.i18n.getMessage(key) || 'Nook'
@@ -1123,7 +1135,7 @@ async function continueWithNook(
 }
 
 async function fillAuthenticatorCode(
-  account: WebsiteAuthenticatorOption,
+  account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'>,
   workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
@@ -1168,66 +1180,12 @@ async function fillAuthenticatorCode(
   return true
 }
 
-function renderAuthenticatorChooser(
-  panel: HTMLElement,
-  accounts: WebsiteAuthenticatorOption[],
-  workflow: PasswordFormObservation,
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-  openVaultButton: HTMLButtonElement,
-): void {
-  continueButton.hidden = true
-  openVaultButton.hidden = true
-  description.textContent = translatedMessage('widgetChooseAuthenticator')
-
-  const list = document.createElement('div')
-  list.className = 'account-list'
-  accounts.forEach((account, index) => {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = 'secondary-button account-button'
-    button.textContent = translatedMessageWithSubstitution(
-      'widgetSavedAuthenticator',
-      safeSavedOptionNumber(index),
-    )
-    button.addEventListener('click', (event) => {
-      if (!isTrustedAuthAction(event.isTrusted) || busy) return
-      busy = true
-      button.disabled = true
-      void fillAuthenticatorCode(
-        account,
-        workflow,
-        step,
-        title,
-        description,
-        continueButton,
-      )
-        .then((filled) => {
-          if (filled) {
-            list.remove()
-          } else {
-            button.disabled = false
-          }
-        })
-        .finally(() => {
-          busy = false
-        })
-    })
-    list.append(button)
-  })
-  panel.append(list)
-}
-
 async function continueWithAuthenticator(
   workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
-  openVaultButton: HTMLButtonElement,
-  panel: HTMLElement,
 ): Promise<void> {
   if (busy) return
   busy = true
@@ -1242,7 +1200,7 @@ async function continueWithAuthenticator(
 
   try {
     const response = await sendRuntimeMessage<AuthenticatorOptionsResponse>({
-      type: 'nook:website-authenticator-options',
+      type: 'nook:website-authenticator-picker-open',
       payload: { origin: location.origin },
     })
     if (!response?.ok) {
@@ -1277,32 +1235,30 @@ async function continueWithAuthenticator(
       return
     }
 
-    const accounts = response.accounts ?? []
-    if (accounts.length === 0) {
+    if (!response.requestId) {
       setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetNoAuthenticator'),
-        false,
-      )
-      continueButton.hidden = true
-      openVaultButton.textContent = translatedMessage('widgetAddAuthenticator')
-      openVaultButton.setAttribute(
-        'aria-label',
-        translatedMessage('widgetAddAuthenticator'),
+        translatedMessage('widgetAuthenticatorFillFailed'),
+        true,
       )
       return
     }
-    renderAuthenticatorChooser(
-      panel,
-      accounts,
+    pendingAuthenticatorPicker = {
+      requestId: response.requestId,
       workflow,
       step,
       title,
       description,
       continueButton,
-      openVaultButton,
+    }
+    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorPickerOpened'),
+      true,
     )
   } finally {
     busy = false
@@ -1311,6 +1267,35 @@ async function continueWithAuthenticator(
     }
   }
 }
+
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (
+    sender.id !== chrome.runtime.id ||
+    !isWebsiteAuthenticatorSelectedMessage(message) ||
+    message.payload.origin !== location.origin ||
+    message.payload.requestId !== pendingAuthenticatorPicker?.requestId
+  ) {
+    return false
+  }
+  const pending = pendingAuthenticatorPicker
+  pendingAuthenticatorPicker = undefined
+  busy = true
+  pending.continueButton.disabled = true
+  void fillAuthenticatorCode(
+    message.payload.account,
+    pending.workflow,
+    pending.step,
+    pending.title,
+    pending.description,
+    pending.continueButton,
+  ).finally(() => {
+    busy = false
+    if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
+      pending.continueButton.disabled = false
+    }
+  })
+  return false
+})
 
 const WIDGET_PANEL_STYLES = `
     :host {
@@ -1883,8 +1868,6 @@ function renderWidget(
         title,
         description,
         continueButton,
-        openVaultButton,
-        body,
       )
     } else if (snapshot.action === 'generate-password') {
       void generatePasswordWithNook(
@@ -1963,9 +1946,9 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const enrollmentHints = detectEnrollmentHints()
-  // Prefer enrollment ceremony UI when setup/recovery material is present,
-  // even if password or OTP fields share the page.
-  if (enrollmentHints.qr || enrollmentHints.backupCodes) {
+  // Setup material starts an enrollment ceremony. Recovery hints remain part
+  // of an active OTP challenge so Rust can keep code fill as the primary action.
+  if (enrollmentHints.qr) {
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanSequence) return
     renderEnrollmentWidget(enrollmentHints, vaultConnection)

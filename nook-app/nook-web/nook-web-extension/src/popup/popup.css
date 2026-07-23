@@ -41,12 +41,90 @@ body {
 }
 
 .device-setup,
-.companion-home {
+.companion-home,
+.authenticator-picker {
   display: grid;
   gap: 14px;
   padding: 22px;
   border: 1px solid var(--border);
   background: var(--background);
+}
+
+.authenticator-picker {
+  min-height: 590px;
+  align-content: start;
+}
+
+.picker-filter {
+  position: relative;
+  display: grid;
+  gap: 7px;
+}
+
+.picker-filter svg {
+  position: absolute;
+  z-index: 1;
+  bottom: 13px;
+  left: 12px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.picker-filter input {
+  padding-left: 40px;
+}
+
+.filter-chip {
+  width: fit-content;
+  margin: -4px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 9px;
+}
+
+.picker-status {
+  margin: 18px 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-align: center;
+}
+
+.authenticator-results {
+  display: grid;
+  gap: 8px;
+  max-height: 286px;
+  overflow-y: auto;
+}
+
+.authenticator-result {
+  display: grid;
+  min-height: 64px;
+  gap: 3px;
+  text-align: left;
+}
+
+.authenticator-result strong,
+.authenticator-result span,
+.authenticator-result small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.authenticator-result span {
+  color: var(--secondary-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.authenticator-result small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .step-label {

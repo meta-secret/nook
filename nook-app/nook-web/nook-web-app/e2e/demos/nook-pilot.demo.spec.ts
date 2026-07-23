@@ -16,6 +16,7 @@ function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
 function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
     localizedMessages: messages,
+    authenticatorPickerFlow: true,
     responsesByType: {
       'nook:authentication-workflow-snapshot': {
         ok: true,
@@ -27,19 +28,6 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
           totalSteps: 3,
           observationIndex: 0,
         },
-      },
-      'nook:website-authenticator-options': {
-        ok: true,
-        status: 'ready',
-        accounts: [
-          {
-            vaultStoreId: 'demo-vault',
-            vaultName: 'Demo vault',
-            secretId: 'demo-totp-1',
-            issuer: 'Namecheap',
-            account: 'pilot@example.test',
-          },
-        ],
       },
       'nook:website-authenticator-fill': {
         ok: true,
@@ -236,6 +224,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
               placeholder="Enter OTP Code"
               autocomplete="off"
             />
+            <p>Want to use a Backup Code?</p>
             <button type="submit">Submit</button>
           </form>
         </main>
@@ -251,10 +240,11 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
 
   await widget.getByRole('button', { name: 'Fill 2FA code' }).click()
   await expect(
-    widget.getByRole('button', { name: 'Saved 2FA 1' }),
+    widget.getByText(
+      'Choose a saved 2FA item in the Nook window. You can search all 2FA items in your vault.',
+    ),
   ).toBeVisible()
   await demoBeat(page)
-  await widget.getByRole('button', { name: 'Saved 2FA 1' }).click()
   await expect(page.getByPlaceholder('Enter OTP Code')).toHaveValue('482913')
   await expect(
     widget.getByText(

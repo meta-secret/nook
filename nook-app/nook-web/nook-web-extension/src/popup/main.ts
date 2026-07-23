@@ -11,6 +11,7 @@ import {
   type ExtensionDeviceProtectionStatus,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
+import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import './popup.css'
 
 function loadCompanionVaultConnection(): Promise<{
@@ -37,10 +38,20 @@ async function main() {
   const target = document.getElementById('app')
   if (!target) return
 
-  const [i18n, vaultConnection] = await Promise.all([
-    initializeExtensionI18n(),
-    loadCompanionVaultConnection(),
-  ])
+  const searchParams = new URLSearchParams(window.location.search)
+  const i18n = await initializeExtensionI18n()
+  if (searchParams.get('intent') === 'authenticator-picker') {
+    mount(AuthenticatorPicker, {
+      target,
+      props: {
+        i18n,
+        requestId: searchParams.get('request') ?? '',
+      },
+    })
+    return
+  }
+
+  const vaultConnection = await loadCompanionVaultConnection()
   let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
   let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
   protectionStatus = await extensionDeviceProtectionStatus()
@@ -54,8 +65,7 @@ async function main() {
       i18n,
       isConnected: vaultConnection.isConnected,
       vaultName: vaultConnection.vaultName,
-      pairingRequested:
-        new URLSearchParams(window.location.search).get('intent') === 'pair',
+      pairingRequested: searchParams.get('intent') === 'pair',
       protectionStatus,
       activeSessionDevice,
     },

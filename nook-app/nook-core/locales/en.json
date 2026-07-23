@@ -1498,6 +1498,17 @@
       "stay_ready": "Stay ready",
       "not_now": "Not now"
     },
+    "authenticator_picker": {
+      "step_label": "2FA with Nook",
+      "title": "Choose a 2FA code",
+      "description": "Search all authenticator items in your unlocked vault. Only 2FA items are shown.",
+      "search_label": "Search 2FA items",
+      "search_placeholder": "Service or account",
+      "filter_label": "2FA only",
+      "loading": "Loading saved 2FA items…",
+      "no_results": "No matching 2FA items.",
+      "failed": "Nook could not load or select this 2FA item. Unlock the extension and try again."
+    },
     "widget": {
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook",
@@ -1564,6 +1575,7 @@
       "saved_authenticator": "Saved 2FA $1",
       "authenticator_fill_failed": "Nook could not fill this 2FA code. Unlock Nook and try again.",
       "authenticator_filled": "The code is filled. Review the site and submit it manually.",
+      "authenticator_picker_opened": "Choose a saved 2FA item in the Nook window. You can search all 2FA items in your vault.",
       "enroll_title": "Add 2FA from this page",
       "enroll_description": "Nook can capture a visible authenticator QR after you approve. Nothing is scanned in the background.",
       "add_from_page": "Add 2FA from this page",

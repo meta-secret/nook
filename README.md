@@ -93,9 +93,11 @@ and passkey use from an approved, unlocked Simple Vault.
 The extension is a separately protected device. It pairs only with Simple
 Vault; Sentinel never participates. Passkey generation, RP validation, signing,
 and counter updates stay in Rust/WASM. On recognized one-time-code fields, the
-user chooses a saved authenticator and the extension fills a freshly derived
-code. Settings-page QR enrollment and backup-code capture require the same
-explicit Pilot consent and confirmation before anything is saved.
+user searches and chooses from all saved authenticator items in an
+extension-owned 2FA picker, and the extension fills a freshly derived code.
+Issuer and account labels never enter the website DOM. Settings-page QR
+enrollment and backup-code capture require the same explicit Pilot consent and
+confirmation before anything is saved.
 
 Production installs through the Chrome Web Store (Brave uses the same listing).
 Development and PR previews offer an unsigned ZIP with Developer-mode install

@@ -6,7 +6,10 @@ use crate::types::{NookAuthenticatorAccount, NookTotpCode};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 impl NookVaultManager {
-    fn list_authenticator_accounts(&self) -> Result<Vec<NookAuthenticatorAccount>, NookError> {
+    fn list_authenticator_accounts(
+        &self,
+        query: &str,
+    ) -> Result<Vec<NookAuthenticatorAccount>, NookError> {
         let crypto = self
             .vault
             .crypto
@@ -19,7 +22,9 @@ impl NookVaultManager {
             }
             let mut record =
                 nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
-            if let nook_core::SecretValue::Authenticator(authenticator) = &record.data {
+            if record.matches_search(query)
+                && let nook_core::SecretValue::Authenticator(authenticator) = &record.data
+            {
                 accounts.push(NookAuthenticatorAccount::from_authenticator(
                     id,
                     authenticator,
@@ -62,10 +67,11 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = listAuthenticatorAccounts)]
     pub async fn list_authenticator_accounts_js(
         &mut self,
+        query: &str,
     ) -> Result<Vec<NookAuthenticatorAccount>, JsError> {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        self.list_authenticator_accounts().map_err(Into::into)
+        self.list_authenticator_accounts(query).map_err(Into::into)
     }
 
     #[wasm_bindgen(js_name = currentAuthenticatorCodeForFill)]
