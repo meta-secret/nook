@@ -138,7 +138,17 @@ function scheduleSessionExpiry(generation: number): void {
     sessionTimer = undefined
     sessionDeadlineAt = 0
     sessionGeneration += 1
+    const expiredManager = manager
     manager = undefined
+    if (expiredManager) {
+      try {
+        expiredManager.lockDeviceIdentity()
+        expiredManager.free()
+      } catch {
+        // The service worker closes this document immediately if a WASM call
+        // still owns the manager when the session expires.
+      }
+    }
     sessionOperations.close(new Error(SESSION_LOCKED_ERROR))
     chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
   }, SESSION_DURATION_MS)
@@ -870,6 +880,8 @@ function sessionMessagePriority(type: string): SessionOperationPriority {
     case 'nook:extension-session-authenticator-code':
     case 'nook:extension-session-authenticator-enroll-confirm':
     case 'nook:extension-session-authenticator-backup-attach':
+    case 'nook:extension-session-list-logins':
+    case 'nook:extension-session-list-authenticators':
     case 'nook:extension-session-register-passkey':
     case 'nook:extension-session-assert-passkey':
     case 'nook:extension-session-begin-passkey-setup':

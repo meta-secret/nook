@@ -78,6 +78,10 @@ import {
 } from '../lib/webauthn-messages'
 import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
 import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
+import {
+  scrubProviderCredentials,
+  stageProviderCredentials,
+} from '../lib/provider-credential-staging'
 
 const extensionSessionDocument = 'offscreen/session.html'
 const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
@@ -1562,7 +1566,7 @@ async function websiteAuthenticatorBackupAttach(
       },
     )
     if ('response' in access) return access.response
-    return await sendSessionMessage({
+    const pending = sendSessionMessage({
       type: 'nook:extension-session-authenticator-backup-attach',
       payload: {
         ...access.grant,
@@ -1571,6 +1575,8 @@ async function websiteAuthenticatorBackupAttach(
         mode: message.payload.mode,
       },
     })
+    codes.fill('')
+    return await pending
   } finally {
     codes.fill('')
   }
@@ -1820,28 +1826,37 @@ async function importApprovedPairing(
       extensionPairingGrantStorageItems(message.payload, imported),
     )
     await ensureExtensionSessionDocument()
-    const sessionImport = await sendSessionMessage({
-      type: 'nook:extension-session-import-vault',
-      payload: {
-        vaultStoreId: message.payload.vaultStoreId,
-        deviceId: message.payload.deviceId,
-        devicePublicKey: message.payload.devicePublicKey,
-        deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
-        eventLogRecords: message.eventLogRecords,
-        providers: message.payload.providers,
-      },
-    })
-    if (
-      !sessionImport ||
-      typeof sessionImport !== 'object' ||
-      !('ok' in sessionImport) ||
-      sessionImport.ok !== true
-    ) {
-      await removeLocalStorage([
-        pairingGrantStorageKey(message.payload.vaultStoreId),
-        setupStorageKey,
-      ])
-      return { ok: false, reason: 'extension-vault-import-failed' }
+    const providers =
+      stageProviderCredentials(message.payload.providers) ??
+      message.payload.providers
+    try {
+      const pending = sendSessionMessage({
+        type: 'nook:extension-session-import-vault',
+        payload: {
+          vaultStoreId: message.payload.vaultStoreId,
+          deviceId: message.payload.deviceId,
+          devicePublicKey: message.payload.devicePublicKey,
+          deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
+          eventLogRecords: message.eventLogRecords,
+          providers,
+        },
+      })
+      scrubProviderCredentials(providers)
+      const sessionImport = await pending
+      if (
+        !sessionImport ||
+        typeof sessionImport !== 'object' ||
+        !('ok' in sessionImport) ||
+        sessionImport.ok !== true
+      ) {
+        await removeLocalStorage([
+          pairingGrantStorageKey(message.payload.vaultStoreId),
+          setupStorageKey,
+        ])
+        return { ok: false, reason: 'extension-vault-import-failed' }
+      }
+    } finally {
+      scrubProviderCredentials(providers)
     }
     return { ok: true, eventCount: imported.eventCount }
   } catch {
