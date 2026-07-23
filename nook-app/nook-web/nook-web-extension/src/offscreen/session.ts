@@ -507,9 +507,16 @@ async function handleMessage(message: unknown): Promise<unknown> {
     case 'nook:extension-session-list-authenticators': {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
+      if (typeof payload.query !== 'string') {
+        throw new Error(
+          'Extension session received an invalid authenticator search.',
+        )
+      }
       const activeManager = await getManager()
       await openPasskeyVault(activeManager, grant)
-      const accounts = await activeManager.listAuthenticatorAccounts()
+      const accounts = await activeManager.listAuthenticatorAccounts(
+        payload.query,
+      )
       try {
         return {
           ok: true,

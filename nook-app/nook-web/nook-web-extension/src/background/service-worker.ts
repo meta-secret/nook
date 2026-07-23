@@ -39,6 +39,11 @@ import {
   runtimeSimpleVaultUrl,
 } from '../lib/simple-vault-runtime'
 import {
+  isAuthenticatorPickerQueryMessage,
+  isAuthenticatorPickerSelectMessage,
+  isWebsiteAuthenticatorPickerOpenMessage,
+} from '../lib/authenticator-picker-messages'
+import {
   isWebsiteAuthenticatorBackupAttachMessage,
   isWebsiteAuthenticatorEnrollCodeMessage,
   isWebsiteAuthenticatorEnrollConfirmMessage,
@@ -90,6 +95,18 @@ type PendingIdentityHandoff =
     }
 const pendingIdentityHandoffConsumptions = new Set<string>()
 const pendingWebsitePasskeyRequests = new Set<string>()
+type PendingAuthenticatorPicker = {
+  requestId: string
+  origin: string
+  tabId: number
+  allowedVaultStoreIds: string[]
+  expiresAt: number
+}
+const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
+const pendingAuthenticatorPickers = new Map<
+  string,
+  PendingAuthenticatorPicker
+>()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
   extensionSessionDocumentCreation ??= chrome.offscreen
@@ -631,6 +648,64 @@ function sessionResponseAccounts(response: unknown): unknown[] {
   return response.accounts
 }
 
+function purgeExpiredAuthenticatorPickers(now = Date.now()): void {
+  for (const [requestId, request] of pendingAuthenticatorPickers) {
+    if (request.expiresAt <= now) {
+      pendingAuthenticatorPickers.delete(requestId)
+    }
+  }
+}
+
+function isAuthenticatorPickerSender(
+  sender: chrome.runtime.MessageSender,
+): boolean {
+  if (sender.id !== chrome.runtime.id || !sender.url) return false
+  try {
+    const senderUrl = new URL(sender.url)
+    return (
+      senderUrl.origin === new URL(chrome.runtime.getURL('/')).origin &&
+      senderUrl.pathname === '/popup/index.html'
+    )
+  } catch {
+    return false
+  }
+}
+
+async function authenticatorAccounts(
+  grants: StoredExtensionPairingGrant[],
+  query: string,
+): Promise<WebsiteAuthenticatorOption[]> {
+  const accounts: WebsiteAuthenticatorOption[] = []
+  for (const grant of grants) {
+    const response = await sendSessionMessage({
+      type: 'nook:extension-session-list-authenticators',
+      payload: { ...grant, query },
+    })
+    for (const account of sessionResponseAccounts(response)) {
+      if (
+        !account ||
+        typeof account !== 'object' ||
+        !('secretId' in account) ||
+        typeof account.secretId !== 'string' ||
+        !('issuer' in account) ||
+        typeof account.issuer !== 'string' ||
+        !('account' in account) ||
+        typeof account.account !== 'string'
+      ) {
+        continue
+      }
+      accounts.push({
+        vaultStoreId: grant.vaultStoreId,
+        vaultName: grant.vaultName,
+        secretId: account.secretId,
+        issuer: account.issuer,
+        account: account.account,
+      })
+    }
+  }
+  return accounts
+}
+
 async function authorizedWebsiteGrant(
   origin: string,
   vaultStoreId: string,
@@ -972,35 +1047,121 @@ async function websiteAuthenticatorOptions(
   )
   if ('response' in access) return access.response
 
-  const accounts: WebsiteAuthenticatorOption[] = []
-  for (const grant of access.grants) {
-    const response = await sendSessionMessage({
-      type: 'nook:extension-session-list-authenticators',
-      payload: grant,
-    })
-    for (const account of sessionResponseAccounts(response)) {
-      if (
-        !account ||
-        typeof account !== 'object' ||
-        !('secretId' in account) ||
-        typeof account.secretId !== 'string' ||
-        !('issuer' in account) ||
-        typeof account.issuer !== 'string' ||
-        !('account' in account) ||
-        typeof account.account !== 'string'
-      ) {
-        continue
-      }
-      accounts.push({
-        vaultStoreId: grant.vaultStoreId,
-        vaultName: grant.vaultName,
-        secretId: account.secretId,
-        issuer: account.issuer,
-        account: account.account,
-      })
-    }
-  }
+  const accounts = await authenticatorAccounts(access.grants, '')
   return { ok: true, status: 'ready', accounts }
+}
+
+async function openWebsiteAuthenticatorPicker(
+  message: { payload: { origin: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  const access = await availableWebsiteGrants(
+    message.payload.origin,
+    sender,
+    'authenticator-forbidden-origin',
+  )
+  if ('response' in access) return access.response
+  if (sender.tab?.id === undefined) {
+    return { ok: false, reason: 'authenticator-picker-tab-missing' }
+  }
+
+  purgeExpiredAuthenticatorPickers()
+  const requestId = randomNonce()
+  pendingAuthenticatorPickers.set(requestId, {
+    requestId,
+    origin: message.payload.origin,
+    tabId: sender.tab.id,
+    allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
+    expiresAt: Date.now() + AUTHENTICATOR_PICKER_TTL_MS,
+  })
+  const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
+  pickerUrl.searchParams.set('intent', 'authenticator-picker')
+  pickerUrl.searchParams.set('request', requestId)
+  try {
+    if (chrome.windows?.create) {
+      await chrome.windows.create({
+        url: pickerUrl.toString(),
+        type: 'popup',
+        width: 460,
+        height: 620,
+        focused: true,
+      })
+    } else {
+      await chrome.tabs.create({ url: pickerUrl.toString() })
+    }
+  } catch {
+    pendingAuthenticatorPickers.delete(requestId)
+    return { ok: false, reason: 'authenticator-picker-open-failed' }
+  }
+  return { ok: true, status: 'ready', requestId }
+}
+
+async function queryAuthenticatorPicker(
+  message: { payload: { requestId: string; query: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthenticatorPickerSender(sender)) {
+    return { ok: false, reason: 'authenticator-picker-forbidden' }
+  }
+  purgeExpiredAuthenticatorPickers()
+  const request = pendingAuthenticatorPickers.get(message.payload.requestId)
+  if (!request) {
+    return { ok: false, reason: 'authenticator-picker-expired' }
+  }
+  const grants = (await passwordPairingGrants()).filter((grant) =>
+    request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+  )
+  const accounts = await authenticatorAccounts(grants, message.payload.query)
+  return { ok: true, accounts }
+}
+
+async function selectAuthenticatorPicker(
+  message: {
+    payload: {
+      requestId: string
+      vaultStoreId: string
+      secretId: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isAuthenticatorPickerSender(sender)) {
+    return { ok: false, reason: 'authenticator-picker-forbidden' }
+  }
+  purgeExpiredAuthenticatorPickers()
+  const request = pendingAuthenticatorPickers.get(message.payload.requestId)
+  if (!request) {
+    return { ok: false, reason: 'authenticator-picker-expired' }
+  }
+  const grants = (await passwordPairingGrants()).filter((grant) =>
+    request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+  )
+  const accounts = await authenticatorAccounts(grants, '')
+  const selected = accounts.find(
+    (account) =>
+      account.vaultStoreId === message.payload.vaultStoreId &&
+      account.secretId === message.payload.secretId,
+  )
+  if (!selected) {
+    return { ok: false, reason: 'authenticator-picker-selection-invalid' }
+  }
+  try {
+    await chrome.tabs.sendMessage(request.tabId, {
+      type: 'nook:website-authenticator-selected',
+      payload: {
+        origin: request.origin,
+        requestId: request.requestId,
+        account: {
+          vaultStoreId: selected.vaultStoreId,
+          secretId: selected.secretId,
+        },
+      },
+    })
+  } catch {
+    return { ok: false, reason: 'authenticator-picker-page-unavailable' }
+  }
+  pendingAuthenticatorPickers.delete(request.requestId)
+  return { ok: true }
 }
 
 async function websiteAuthenticatorFill(
@@ -1561,6 +1722,39 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isWebsiteAuthenticatorPickerOpenMessage(message)) {
+    void openWebsiteAuthenticatorPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'authenticator-picker-open-failed' }),
+      )
+    return true
+  }
+
+  if (isAuthenticatorPickerQueryMessage(message)) {
+    void queryAuthenticatorPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          reason: 'authenticator-picker-query-failed',
+        }),
+      )
+    return true
+  }
+
+  if (isAuthenticatorPickerSelectMessage(message)) {
+    void selectAuthenticatorPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          reason: 'authenticator-picker-select-failed',
+        }),
+      )
+    return true
+  }
+
   if (isAuthenticationWorkflowSnapshotMessage(message)) {
     if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
       sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })

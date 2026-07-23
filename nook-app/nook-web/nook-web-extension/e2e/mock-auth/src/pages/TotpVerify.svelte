@@ -67,6 +67,7 @@
         placeholder="Enter OTP Code"
         autocomplete="off"
       />
+      <p>Want to use a Backup Code?</p>
       <button type="submit" disabled={busy}>Submit</button>
     </form>
   {/if}
