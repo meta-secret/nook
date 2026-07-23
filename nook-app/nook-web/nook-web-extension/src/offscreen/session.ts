@@ -677,7 +677,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           decision === 'update' && typeof plan.secretId === 'string'
             ? plan.secretId
             : undefined
-        const offer = {
+        const offer: PendingLoginSaveOffer = {
           offerId,
           origin: payload.origin,
           username: payload.username,
