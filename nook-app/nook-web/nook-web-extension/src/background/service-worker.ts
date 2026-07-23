@@ -2129,7 +2129,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isExtensionSessionLockMessage(message)) {
     const extensionSender =
       sender.id === chrome.runtime.id &&
-      sender.tab === undefined &&
       (sender.url === undefined ||
         sender.url.startsWith(chrome.runtime.getURL('')))
     if (!extensionSender) {
