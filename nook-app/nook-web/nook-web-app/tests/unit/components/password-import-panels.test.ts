@@ -34,8 +34,7 @@ function importResult(): NookImportResult {
 
 describe('LastPass import panel', () => {
   test('shows progress and locks the file input until import finishes', async () => {
-    let finishImport: ((result: NookImportResult) => void) | undefined =
-      undefined
+    let finishImport: (result: NookImportResult) => void = () => undefined
     const onImport = vi.fn(
       async () =>
         new Promise<NookImportResult>((resolve) => {
@@ -60,17 +59,15 @@ describe('LastPass import panel', () => {
     await fireEvent.click(submit)
     await waitFor(() => {
       expect(
-        view.getByTestId('lastpass-import-panel-progress'),
-      ).toHaveTextContent('common.import_progress_title')
+        view.getByTestId('lastpass-import-panel-progress').textContent,
+      ).toContain('common.import_progress_title')
     })
     expect(input.disabled).toBe(true)
     expect(submit.disabled).toBe(true)
 
-    finishImport?.(importResult())
+    finishImport(importResult())
     await waitFor(() => {
-      expect(
-        view.queryByTestId('lastpass-import-panel-progress'),
-      ).not.toBeInTheDocument()
+      expect(view.queryByTestId('lastpass-import-panel-progress')).toBeNull()
     })
   })
 
