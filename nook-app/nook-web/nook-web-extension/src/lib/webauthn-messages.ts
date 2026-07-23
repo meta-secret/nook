@@ -6,6 +6,7 @@ export type WebsitePasskeyOptionsMessage = {
     requestId: string
     ceremony: WebsitePasskeyCeremony
     requestJson: string
+    expiresAt: number
   }
 }
 
@@ -36,7 +37,11 @@ function validBase(message: unknown): message is {
     'requestJson' in payload &&
     typeof payload.requestJson === 'string' &&
     payload.requestJson.length > 0 &&
-    payload.requestJson.length <= 65_536
+    payload.requestJson.length <= 65_536 &&
+    'expiresAt' in payload &&
+    typeof payload.expiresAt === 'number' &&
+    Number.isFinite(payload.expiresAt) &&
+    payload.expiresAt > Date.now()
   )
 }
 

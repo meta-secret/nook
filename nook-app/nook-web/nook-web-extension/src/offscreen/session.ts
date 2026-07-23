@@ -55,6 +55,7 @@ type PendingLoginSaveOffer = {
   decision: 'create' | 'update'
   replaceSecretId?: string
   expiresAt: number
+  expiryTimer: ReturnType<typeof setTimeout>
 }
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
@@ -64,6 +65,7 @@ function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
   if (!offer) return
   offer.username = ''
   offer.password = ''
+  clearTimeout(offer.expiryTimer)
   pendingLoginSaveOffers.delete(offer.offerId)
 }
 
@@ -129,17 +131,10 @@ function scheduleSessionExpiry(generation: number): void {
     if (generation !== sessionGeneration) return
     sessionTimer = undefined
     sessionDeadlineAt = 0
-    void sessionOperations.enqueue(
-      async () => {
-        if (generation !== sessionGeneration) return
-        const activeManager = manager
-        manager = undefined
-        activeManager?.lockDeviceIdentity()
-        activeManager?.free()
-        chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
-      },
-      { priority: 'expiry' },
-    )
+    sessionGeneration += 1
+    manager = undefined
+    sessionOperations.close(new Error('Extension device identity is locked.'))
+    chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
   }, SESSION_DURATION_MS)
 }
 
@@ -682,7 +677,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           decision === 'update' && typeof plan.secretId === 'string'
             ? plan.secretId
             : undefined
-        pendingLoginSaveOffers.set(offerId, {
+        const offer = {
           offerId,
           origin: payload.origin,
           username: payload.username,
@@ -691,7 +686,11 @@ async function handleMessage(message: unknown): Promise<unknown> {
           decision,
           replaceSecretId,
           expiresAt: Date.now() + LOGIN_SAVE_OFFER_TTL_MS,
-        })
+          expiryTimer: setTimeout(() => {
+            clearLoginSaveOffer(pendingLoginSaveOffers.get(offerId))
+          }, LOGIN_SAVE_OFFER_TTL_MS),
+        }
+        pendingLoginSaveOffers.set(offerId, offer)
         payload.password = ''
         return {
           ok: true,
@@ -866,6 +865,10 @@ const sensitiveSessionFields: Readonly<
   'nook:extension-session-create-pin': ['pin'],
   'nook:extension-session-unlock-pin': ['pin'],
   'nook:extension-session-plan-login-save': ['password'],
+  'nook:extension-session-authenticator-enroll-preview': ['otpauthUri'],
+  'nook:extension-session-authenticator-enroll-code': ['otpauthUri'],
+  'nook:extension-session-authenticator-enroll-confirm': ['otpauthUri'],
+  'nook:extension-session-authenticator-backup-attach': ['codes'],
 }
 
 function copySensitiveValue(value: unknown): unknown {
@@ -926,7 +929,11 @@ function enqueueSessionMessage(message: unknown): Promise<unknown> {
   if (!type) return Promise.resolve(undefined)
   const payload = messagePayload(message)
   const requestedExpiry = requestedQueueExpiry(payload)
-  const priority = requestedExpiry ? 'probe' : sessionMessagePriority(type)
+  const priority = requestedExpiry
+    ? payload.queuePriority === 'interactive'
+      ? 'interactive'
+      : 'probe'
+    : sessionMessagePriority(type)
   const sensitiveFields = sensitiveSessionFields[type]
   if (sensitiveFields) {
     return enqueueSensitiveSessionMessage(
@@ -961,6 +968,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     !messageType(message)?.startsWith('nook:extension-session-')
   ) {
     return false
+  }
+  if (messageType(message) === 'nook:extension-session-dismiss-login-save') {
+    void handleMessage(message)
+      .then((response) => sendResponse(response))
+      .catch((error: unknown) =>
+        sendResponse({
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Extension session failed.',
+        }),
+      )
+    return true
   }
   void enqueueSessionMessage(message)
     .then((response) => sendResponse(response))

@@ -79,6 +79,7 @@ import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-me
 import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
 
 const extensionSessionDocument = 'offscreen/session.html'
+const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 let extensionSessionDocumentCreation: Promise<void> | undefined
 let extensionSessionDocumentClosure: Promise<void> | undefined
 type PendingIdentityHandoff =
@@ -529,8 +530,10 @@ async function requestPairedVaultUnlock(
   }
 
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const statusResponse = (await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })) as ExtensionSessionStatusResponse
   if (statusResponse.status !== 'unlocked') {
     await openCompanionLauncher()
@@ -880,18 +883,22 @@ async function websiteLoginSaveOffer(
   },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
+  let pendingPassword = message.payload.password
+  message.payload.password = ''
   if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-    message.payload.password = ''
+    pendingPassword = ''
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    message.payload.password = ''
+    pendingPassword = ''
     return { ok: true, status: 'unavailable' }
   }
   await ensureExtensionSessionDocument()
+  const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (
     !status ||
@@ -899,7 +906,7 @@ async function websiteLoginSaveOffer(
     !('status' in status) ||
     status.status !== 'unlocked'
   ) {
-    message.payload.password = ''
+    pendingPassword = ''
     openCompanionLauncher()
     return { ok: true, status: 'locked' }
   }
@@ -912,10 +919,10 @@ async function websiteLoginSaveOffer(
       ...grant,
       origin: message.payload.origin,
       username: message.payload.username,
-      password: message.payload.password,
+      password: pendingPassword,
     },
   })
-  message.payload.password = ''
+  pendingPassword = ''
   if (
     !response ||
     typeof response !== 'object' ||
@@ -1706,6 +1713,7 @@ async function performWebsitePasskey(
       requestId: string
       ceremony: WebsitePasskeyCeremony
       requestJson: string
+      expiresAt: number
       vaultStoreId: string
       credentialId?: string
     }
@@ -1741,6 +1749,8 @@ async function performWebsitePasskey(
       payload: {
         ...grant,
         requestJson: JSON.stringify(context.request),
+        queueExpiresAt: message.payload.expiresAt,
+        queuePriority: 'interactive',
       },
     })
   } finally {

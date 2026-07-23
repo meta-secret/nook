@@ -52,9 +52,7 @@ describe('SessionOperationQueue', () => {
       },
     )
 
-    await expect(queued).rejects.toThrow(
-      'Extension session request expired before execution.',
-    )
+    await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
     expect(password).toBeUndefined()
     blocker.release()
     await first
@@ -67,5 +65,27 @@ describe('SessionOperationQueue', () => {
     })
     await expect(failed).rejects.toThrow('expected failure')
     expect(await queue.enqueue(async () => 'ok')).toBe('ok')
+  })
+
+  test('closes terminally and clears queued sensitive input', async () => {
+    const queue = new SessionOperationQueue()
+    const blocker = deferred()
+    const first = queue.enqueue(() => blocker.promise)
+    let pendingSecret: string | undefined = 'temporary-secret'
+    const queued = queue.enqueue(async () => undefined, {
+      onExpire: () => {
+        pendingSecret = undefined
+      },
+    })
+
+    queue.close(new Error('session expired'))
+
+    await expect(queued).rejects.toThrow('session expired')
+    expect(pendingSecret).toBeUndefined()
+    await expect(queue.enqueue(async () => undefined)).rejects.toThrow(
+      'session expired',
+    )
+    blocker.release()
+    await first
   })
 })

@@ -16,6 +16,7 @@ type PageRequest = {
   requestId: string
   ceremony: WebsitePasskeyCeremony
   request: Record<string, unknown>
+  expiresAt: number
 }
 
 type PasskeyOption = {
@@ -152,6 +153,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
       requestId: request.requestId,
       ceremony: request.ceremony,
       requestJson,
+      expiresAt: request.expiresAt,
     },
   } satisfies WebsitePasskeyOptionsMessage)
   const options = validOptions(optionsResponse?.options)
@@ -174,6 +176,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
       requestId: request.requestId,
       ceremony: request.ceremony,
       requestJson,
+      expiresAt: request.expiresAt,
       vaultStoreId: selected.vaultStoreId,
       credentialId: selected.account?.credentialId,
     },
@@ -203,6 +206,9 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   if (
     message.type !== 'request' ||
     (message.ceremony !== 'create' && message.ceremony !== 'get') ||
+    typeof message.expiresAt !== 'number' ||
+    !Number.isFinite(message.expiresAt) ||
+    message.expiresAt <= Date.now() ||
     !message.request ||
     typeof message.request !== 'object' ||
     JSON.stringify(message.request).length > 65_536

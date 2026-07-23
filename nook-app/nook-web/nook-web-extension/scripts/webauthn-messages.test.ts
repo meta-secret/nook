@@ -16,6 +16,7 @@ describe('website passkey runtime messages', () => {
       requestId: 'request-1234567890',
       ceremony: 'get',
       requestJson,
+      expiresAt: Date.now() + 60_000,
     }
     expect(
       isWebsitePasskeyOptionsMessage({

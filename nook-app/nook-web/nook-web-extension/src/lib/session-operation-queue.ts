@@ -29,19 +29,38 @@ const priorityOrder: Record<SessionOperationPriority, number> = {
   probe: 3,
 }
 
-const expiredError = () =>
-  new Error('Extension session request expired before execution.')
+const expiredError = () => new Error('EXTENSION_SESSION_REQUEST_EXPIRED')
 
 export class SessionOperationQueue {
   private entries: QueueEntry<unknown>[] = []
   private sequence = 0
   private running = false
+  private closedError: Error | undefined
+
+  close(error = new Error('Extension session queue closed.')): void {
+    if (this.closedError) return
+    this.closedError = error
+    const pending = this.entries
+    this.entries = []
+    for (const entry of pending) {
+      if (entry.settled) continue
+      entry.settled = true
+      if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
+      entry.onExpire?.()
+      entry.reject(error)
+    }
+  }
 
   enqueue<T>(
     operation: () => Promise<T>,
     options: QueueOptions = {},
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
+      if (this.closedError) {
+        options.onExpire?.()
+        reject(this.closedError)
+        return
+      }
       const entry: QueueEntry<T> = {
         sequence: this.sequence++,
         priority: priorityOrder[options.priority ?? 'normal'],
