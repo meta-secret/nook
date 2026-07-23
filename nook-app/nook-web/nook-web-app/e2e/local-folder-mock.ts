@@ -131,8 +131,13 @@ export async function installLocalFolderPickerMock(page: Page) {
 
     const root = new MemoryDirectoryHandle('Nook Backup')
     for (const record of readSnapshot()) root.seed(record.path, record.content)
+    let pickerInvocationCount = 0
     Object.assign(window, {
-      showDirectoryPicker: async () => root,
+      showDirectoryPicker: async () => {
+        pickerInvocationCount += 1
+        return root
+      },
+      __nookE2eLocalFolderPickerInvocationCount: () => pickerInvocationCount,
       __nookE2eLocalFolderSnapshot: () => root.snapshot(),
       __nookE2eSetLocalFolderSnapshot: (
         records: Array<{ path: string; content: string }>,
@@ -142,6 +147,19 @@ export async function installLocalFolderPickerMock(page: Page) {
       },
     })
   })
+}
+
+export async function localFolderPickerInvocationCount(
+  page: Page,
+): Promise<number> {
+  return page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __nookE2eLocalFolderPickerInvocationCount?: () => number
+        }
+      ).__nookE2eLocalFolderPickerInvocationCount?.() ?? 0,
+  )
 }
 
 export async function localFolderSnapshot(

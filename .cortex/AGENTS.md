@@ -17,6 +17,17 @@ workflow. Stop without a fix only for a concrete blocker that cannot be resolved
 inside the authorized scope, and report that blocker precisely. Full contract:
 [references/ai-debugging.md § Purpose and completion contract](references/ai-debugging.md#purpose-and-completion-contract).
 
+## ⛔ Non-negotiable: every bug fix needs regression coverage
+
+When an AI agent finds or fixes a bug, it must add a behavior-focused regression
+test that reproduces the missed failure path. Rust/core bugs require Rust unit
+or integration tests. User-visible website and web-extension bugs require
+Playwright e2e coverage of the exact sequence that failed; unit, component, or
+WASM tests may supplement but never replace that browser regression. Add WASM
+tests first when the fault is reproducible at the typed boundary, then keep the
+Playwright test for the user-visible flow. Full policy:
+[rules.md §4](rules.md#4-testing-requirements).
+
 ## ⛔ Non-negotiable: squash merge every PR
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).

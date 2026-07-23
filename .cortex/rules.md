@@ -75,6 +75,29 @@ This document defines the strict development standards, architectural boundaries
 
 When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
 
+### Every bug fix requires a regression test
+
+Finding a root cause is not completion. Every AI-authored bug fix must add
+behavior-focused regression coverage that would fail on the broken behavior and
+pass with the fix:
+
+- **`nook-core` / `nook-auth2`:** add one or more Rust unit, property, or
+  integration tests at the owning domain boundary.
+- **Typed Rust/WASM boundary:** when the failure is reproducible without a
+  browser, add the narrow Rust/WASM test first. This supplements the owning
+  domain tests and does not replace browser coverage for a user-visible bug.
+- **Website or web extension:** add a Playwright e2e test that reproduces the
+  exact user sequence and asserts the previously missed failure. Component,
+  Vitest, or WASM coverage alone is insufficient because the existing e2e suite
+  already missed the integration bug.
+- **Cross-layer bugs:** cover each owning layer when practical: narrow
+  Rust/WASM tests for policy or boundary behavior, plus Playwright for the
+  visible website/extension regression.
+
+If faithful automated reproduction is technically impossible, document the
+specific constraint in the PR and add the closest deterministic lower-layer
+test. Cost or inconvenience is not an exception.
+
 ### Line coverage threshold (90%)
 
 `nook-core + nook-auth2` line coverage is measured with **`cargo llvm-cov nextest`** and checked against a committed **90%** floor:
