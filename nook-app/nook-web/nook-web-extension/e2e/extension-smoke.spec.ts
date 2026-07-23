@@ -835,6 +835,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }),
     ).toBeVisible()
     await expect(
+      emptyAuthenticatorPicker.getByTestId('authenticator-destination'),
+    ).toContainText(`Code will be filled on ${loginServer.origin}.`)
+    await expect(
       emptyAuthenticatorPicker.getByText('No matching 2FA items.'),
     ).toBeVisible()
     await emptyAuthenticatorPicker.close()
