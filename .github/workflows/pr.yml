@@ -59,6 +59,10 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   wasm:
     name: WASM verification and artifact
     if: github.event.action != 'closed'
@@ -85,26 +89,33 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   verify:
     name: Verify and preview
     if: ${{ github.event.action != 'closed' && always() }}
     needs: wasm
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Require successful WASM verification
         if: needs.wasm.result != 'success'
         run: |
           echo "::error::WASM verification completed with ${{ needs.wasm.result }}"
           exit 1
 
-      - name: Checkout
-        uses: actions/checkout@v7
-
       - name: Test Linear UI demo publishing helper
         run: node --test .github/scripts/linear-ui-demo.test.cjs
 
       - name: Test Main build statistics collector
         run: node --test .github/scripts/main-build-stats.test.cjs
+
+      - name: Test cache telemetry collector
+        run: node --test .github/scripts/cache-telemetry.test.cjs
 
       - name: Enforce the UI demo contract
         id: ui-demo-contract
@@ -810,6 +821,10 @@ jobs:
               `, { subjectId: pullRequest.id, body }))
             }
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   full-e2e:
     name: Full browser e2e (main fix)
     if: >-
@@ -852,6 +867,10 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   full-extension-e2e:
     name: Full extension e2e (main fix)
     if: >-
@@ -891,3 +910,7 @@ jobs:
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry

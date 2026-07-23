@@ -87,7 +87,8 @@ RUN curl -fsSL \
     && sccache --version
 
 COPY nook-app/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
-RUN chmod 0755 /usr/local/bin/nook-sccache
+COPY nook-app/docker/sccache-report.sh /usr/local/bin/nook-sccache-report
+RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
 COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 

@@ -13,15 +13,34 @@ const [redisPassword, cloudflareClientId, cloudflareClientSecret] = inputNames.m
   (name) => process.env[name] || "",
 );
 
-if (!redisPassword || !cloudflareClientId || !cloudflareClientSecret) {
+const githubEnvironmentPath = process.env.GITHUB_ENV;
+if (!githubEnvironmentPath) {
+  process.stderr.write(
+    "::error::GITHUB_ENV is required for Rust cache selection\n",
+  );
+  process.exit(1);
+}
+
+const credentialsAvailable =
+  Boolean(redisPassword) && Boolean(cloudflareClientId) && Boolean(cloudflareClientSecret);
+fs.appendFileSync(
+  githubEnvironmentPath,
+  [
+    "NOOK_SCCACHE_BACKEND=local_fallback",
+    `NOOK_SCCACHE_BACKEND_REASON=${
+      credentialsAvailable ? "persistent_connection_unavailable" : "credentials_unavailable"
+    }`,
+    "",
+  ].join("\n"),
+);
+if (!credentialsAvailable) {
   process.exit(0);
 }
 
 const runnerTemp = process.env.RUNNER_TEMP;
-const githubEnvironmentPath = process.env.GITHUB_ENV;
-if (!runnerTemp || !githubEnvironmentPath) {
+if (!runnerTemp) {
   process.stderr.write(
-    "::error::RUNNER_TEMP and GITHUB_ENV are required for the persistent Rust cache\n",
+    "::error::RUNNER_TEMP is required for the persistent Rust cache\n",
   );
   process.exit(1);
 }
@@ -72,6 +91,15 @@ const externalCacheEnabled = appendedEnvironment.includes(
 );
 if (!externalCacheEnabled) {
   fs.rmSync(credentialDirectory, { recursive: true, force: true });
+} else {
+  fs.appendFileSync(
+    githubEnvironmentPath,
+    [
+      "NOOK_SCCACHE_BACKEND=remote",
+      "NOOK_SCCACHE_BACKEND_REASON=persistent_service",
+      "",
+    ].join("\n"),
+  );
 }
 
 if (result.error) {

@@ -128,6 +128,62 @@ test('serializes JSON-compatible YAML without unsafe plain scalars', () => {
   assert.ok(serialized.endsWith('\n'))
 })
 
+test('records persistent compiler and BuildKit cache telemetry from Main artifacts', () => {
+  const input = fixture()
+  input.cacheTelemetry = [
+    {
+      schema_version: 1,
+      github: {
+        run_id: String(input.run.id),
+        run_attempt: input.run.run_attempt,
+        job: 'ci',
+      },
+      cache_backend: {
+        kind: 'remote',
+        persistent: true,
+        reason: 'persistent_service',
+      },
+      sccache: {
+        report_count: 3,
+        compile_requests: 100,
+        requests_executed: 90,
+        cache_hits: 72,
+        cache_misses: 18,
+        cache_errors: 0,
+        cache_writes: 18,
+        hit_rate_percent: 80,
+      },
+      buildkit: {
+        build_record_count: 4,
+        completed_steps: 50,
+        cached_steps: 35,
+        cache_hit_rate_percent: 70,
+        measurement: 'buildx_target_record_steps',
+      },
+      collection: { complete: true, warnings: [] },
+    },
+  ]
+
+  const record = buildMainBuildStats(input)
+
+  assert.equal(record.schema_version, 2)
+  assert.equal(record.cache_telemetry.jobs[0].cache_backend.kind, 'remote')
+  assert.equal(record.cache_telemetry.totals.sccache_hit_rate_percent, 80)
+  assert.equal(record.cache_telemetry.totals.buildkit_cache_hit_rate_percent, 70)
+  assert.equal(record.cache_telemetry.collection.complete, true)
+})
+
+test('marks cache telemetry unavailable instead of inventing hit rates', () => {
+  const record = buildMainBuildStats(fixture())
+
+  assert.equal(record.cache_telemetry.totals.job_count, 0)
+  assert.equal(record.cache_telemetry.totals.sccache_hit_rate_percent, null)
+  assert.equal(record.cache_telemetry.totals.buildkit_cache_hit_rate_percent, null)
+  assert.deepEqual(record.cache_telemetry.collection.warnings, [
+    'cache_telemetry_artifact_unavailable',
+  ])
+})
+
 test('retains incomplete failed steps with null timing instead of inventing duration', () => {
   const input = fixture()
   input.run.conclusion = 'cancelled'
@@ -233,6 +289,9 @@ test('workflow records completed trusted Main runs without a stats recursion pat
     collector,
     /runs\/\{run_id\}\/attempts\/\{attempt_number\}\/jobs'[\s\S]*attempt_number: eventRun\.run_attempt/,
   )
+  assert.match(collector, /cache-telemetry-\$\{\{ github\.event\.workflow_run\.id \}\}/)
+  assert.match(collector, /run-id: \$\{\{ github\.event\.workflow_run\.id \}\}/)
+  assert.match(collector, /github-token: \$\{\{ github\.token \}\}/)
   assert.doesNotMatch(collector, /filter: 'latest'/)
   assert.match(collector, /GH_TOKEN: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)
   assert.doesNotMatch(collector, /GH_TOKEN:.*github\.token/)
