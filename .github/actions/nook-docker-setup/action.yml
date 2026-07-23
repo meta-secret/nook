@@ -124,12 +124,33 @@ runs:
             done
           fi
           echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
+
+          legacy_scope_suffix=""
+          if [ -n "$fallback_enabled" ] && [ -n "$required_scopes" ]; then
+            legacy_scope_suffix="-pr-$pr_number-$job_scope"
+            for scope in $required_scopes; do
+              cache_count="$(
+                gh api --method GET "repos/$GITHUB_REPOSITORY/actions/caches" \
+                  -f key="index-$scope$legacy_scope_suffix" \
+                  -f ref="$GITHUB_REF" \
+                  -f per_page=1 \
+                  --jq '.total_count'
+              )"
+              if [ "$cache_count" -eq 0 ]; then
+                legacy_scope_suffix=""
+                break
+              fi
+            done
+          fi
+          echo "GHA_CACHE_LEGACY_SCOPE_SUFFIX=$legacy_scope_suffix" >> "$GITHUB_ENV"
+
           if [ "${{ inputs.cache-write }}" = "true" ] && [ -n "$fallback_enabled" ]; then
             cache_write_enabled=1
           fi
         else
           echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
           echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_LEGACY_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
           if [ "${{ inputs.cache-write }}" = "true" ]; then
             cache_write_enabled=1
           fi

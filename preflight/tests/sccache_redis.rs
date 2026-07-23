@@ -321,12 +321,15 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("repos/$GITHUB_REPOSITORY/actions/caches"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
+    assert!(setup.contains("legacy_scope_suffix=\"-pr-$pr_number-$job_scope\""));
+    assert!(setup.contains("GHA_CACHE_LEGACY_SCOPE_SUFFIX=$legacy_scope_suffix"));
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -n \"$fallback_enabled\" ]"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
+    assert!(bake.contains("variable \"GHA_CACHE_LEGACY_SCOPE_SUFFIX\""));
     assert!(bake.contains("GHA_CACHE_FALLBACK_ENABLED != \"\""));
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
