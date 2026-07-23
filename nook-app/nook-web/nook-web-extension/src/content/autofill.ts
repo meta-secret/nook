@@ -1303,6 +1303,17 @@ async function continueWithAuthenticator(
   }
 }
 
+function cancelPendingAuthenticatorPickerRequest(): void {
+  const pending = pendingAuthenticatorPicker
+  if (!pending) return
+  pendingAuthenticatorPicker = undefined
+  window.clearTimeout(pending.timeoutId)
+  void sendRuntimeMessage({
+    type: 'nook:authenticator-picker-cancel',
+    payload: { requestId: pending.requestId },
+  })
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
     sender.id === chrome.runtime.id &&
@@ -1673,6 +1684,7 @@ function createWidgetShell(
   dismissButton.textContent = '×'
   dismissButton.setAttribute('aria-label', translatedMessage('widgetDismiss'))
   dismissButton.addEventListener('click', () => {
+    cancelPendingAuthenticatorPickerRequest()
     dismissed = true
     removeWidget()
   })
@@ -1915,6 +1927,7 @@ function renderWidget(
   continueButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
     if (!canContinueWithNook) {
+      cancelPendingAuthenticatorPickerRequest()
       dismissed = true
       removeWidget()
       return
@@ -1960,6 +1973,7 @@ function renderWidget(
   takeOverButton.hidden = !canContinueWithNook
   takeOverButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
+    cancelPendingAuthenticatorPickerRequest()
     dismissed = true
     removeWidget()
   })
