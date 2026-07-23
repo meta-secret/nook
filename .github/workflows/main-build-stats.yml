@@ -34,6 +34,16 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
+      - name: Download completed Main cache telemetry
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cache-telemetry-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-*
+          path: ${{ runner.temp }}/main-cache-telemetry
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
       - name: Collect completed Main run metrics
         id: record
         uses: actions/github-script@v9
@@ -68,6 +78,17 @@ jobs:
                 per_page: 100,
               },
             )
+            const cacheTelemetryDir = path.join(
+              process.env.RUNNER_TEMP,
+              'main-cache-telemetry',
+            )
+            const cacheTelemetry = fs.existsSync(cacheTelemetryDir)
+              ? fs.readdirSync(cacheTelemetryDir)
+                .filter((name) => name.endsWith('.json'))
+                .map((name) =>
+                  JSON.parse(fs.readFileSync(path.join(cacheTelemetryDir, name), 'utf8')),
+                )
+              : []
 
             let sourcePullRequests = []
             try {
@@ -111,6 +132,7 @@ jobs:
               jobs,
               sourcePullRequests,
               baselineRecords,
+              cacheTelemetry,
               recordedAt: new Date().toISOString(),
             })
             fs.mkdirSync(path.dirname(outputPath), { recursive: true })

@@ -27,7 +27,8 @@ code.
 
 ## Recorded metrics
 
-Each schema-version-1 record is JSON-compatible YAML and contains:
+Each schema-version-2 record is JSON-compatible YAML and contains the fields
+below. Historical schema-version-1 timing-only records remain valid baselines.
 
 - Main run ID, attempt, head SHA, conclusion, URL, and timestamps;
 - associated pull requests when GitHub can resolve them;
@@ -36,6 +37,9 @@ Each schema-version-1 record is JSON-compatible YAML and contains:
 - aggregate development-deployment and coverage-export durations;
 - every job and step with status, conclusion, timestamps, and duration;
 - runner labels and identity for distinguishing hosted-capacity changes.
+- a cache-telemetry artifact from the Main job, including the selected
+  persistent/fallback sccache backend, compiler hit rate, and BuildKit
+  target-record step cache rate;
 - comparison with the two latest successful attempts from the same workflow,
   including threshold-based wall, execution, and build regression flags.
 

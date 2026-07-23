@@ -33,7 +33,8 @@ RUN touch nook-core/src/i18n.rs
 # slim web image can therefore run web-only Task gates without Cargo installed.
 RUN cargo clippy --release --target wasm32-unknown-unknown \
       -p nook-wasm \
-      -- -D warnings
+      -- -D warnings \
+    && nook-sccache-report wasm-clippy
 # Emit the single JS/WASM package directly into the shared web source tree where every app imports
 # it. target/ stays in-tree for reuse.
 RUN case "$WASM_BUILD_MODE" in \
@@ -50,9 +51,11 @@ RUN case "$WASM_BUILD_MODE" in \
          | xargs -0 sha256sum \
          | sha256sum \
          | cut -d' ' -f1)" \
-         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 )
+         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 ) \
+    && nook-sccache-report wasm-build
 
-RUN wasm-pack test --node nook-wasm
+RUN wasm-pack test --node nook-wasm \
+    && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export
 
