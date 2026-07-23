@@ -54,7 +54,9 @@
                 <code
                   class="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-foreground"
                 >
-                  device {device.passkeyHint}
+                  {vault.t('vault_recovery.device_hint', {
+                    hint: device.passkeyHint,
+                  })}
                 </code>
               </li>
             {/each}

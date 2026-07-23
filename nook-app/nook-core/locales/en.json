@@ -749,6 +749,7 @@
   "vault_recovery": {
     "passkey_title": "Passkeys for this vault",
     "passkey_description": "In the passkey chooser, look for a saved Nook passkey whose name ends with one of these device IDs. Standard-mode passkeys can recover that device; high-security passkeys also require its local browser key.",
+    "device_hint": "device {hint}",
     "unnamed_device": "Enrolled device",
     "no_device_hints": "This backup does not expose a current device ID.",
     "password_available": "Backup password available",

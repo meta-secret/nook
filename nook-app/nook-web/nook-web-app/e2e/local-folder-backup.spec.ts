@@ -124,11 +124,8 @@ test.describe('local folder backup provider', () => {
     await connectLocalFolderProviderFromSettings(page)
     await page.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(page)
-    await addSecret(
-      page,
-      uniqueSecretKey('existing-folder-source'),
-      'existing-folder-value',
-    )
+    const sourceSecretKey = uniqueSecretKey('existing-folder-source')
+    await addSecret(page, sourceSecretKey, 'existing-folder-value')
     await waitForLocalFolderEventRecords(page)
     const passkeyLabel = await page.evaluate(
       () => localStorage.getItem('nook_e2e_passkey_label') ?? '',
@@ -158,11 +155,31 @@ test.describe('local folder backup provider', () => {
       "Authorize before using this browser's device key.",
     )
 
-    await page.getByTestId('device-protection-use-existing-choice').click()
+    await page.evaluate(() => {
+      const useExistingChoice = document.querySelector<HTMLElement>(
+        '[data-testid="device-protection-use-existing-choice"]',
+      )
+      const vault = (
+        window as Window & {
+          __nookVault?: {
+            isAuthenticated: boolean
+            activeVaultStoreId?: string
+          }
+        }
+      ).__nookVault
+      if (!useExistingChoice) throw new Error('Expected passkey choice')
+      if (!vault) throw new Error('Expected test vault state')
+      vault.isAuthenticated = true
+      vault.activeVaultStoreId = 'store_stalevault01'
+      useExistingChoice.click()
+    })
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: 30_000,
     })
     await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
+    await expect(
+      page.getByTestId('secret-row').filter({ hasText: sourceSecretKey }),
+    ).toBeVisible()
   })
 
   test('explains the AI-debug browser directory-picker boundary', async ({

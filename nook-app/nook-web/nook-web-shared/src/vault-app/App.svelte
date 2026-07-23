@@ -379,11 +379,12 @@
       }
       return;
     }
+    if (existingVaultImport) {
+      await resumeExistingVaultImport();
+      return;
+    }
     if (vault.loginSetupType) {
       await vault.connectStagedProvider();
-      if (existingVaultImport && vault.isAuthenticated) {
-        await vault.activateConnectedExistingVault(activeStoreId);
-      }
       return;
     }
     await vault.loadDb();
@@ -508,6 +509,13 @@
     if (!pending) {
       await vault.loadDb();
       return;
+    }
+    if (vault.isAuthenticated) {
+      vault.clearUnlockedSession();
+    }
+    await vault.selectVaultForUnlock(pending.storeId);
+    if (vault.activeVaultStoreId !== pending.storeId) {
+      throw new Error(vault.t("errors.vault_selection_failed"));
     }
     vault.loginRequiresExistingVault = true;
     vault.loginSetupType = pending.setupType;
@@ -741,7 +749,8 @@
       return;
     }
     pendingExistingVaultUnlock = false;
-    void resumeExistingVaultImport();
+    const importPending = pendingExistingVaultImport !== undefined;
+    void (importPending ? resumeExistingVaultImport() : vault.loadDb());
   });
 
   // `#enroll=` lands on an empty browser: open device protection immediately so
@@ -1020,6 +1029,7 @@
                 onDismiss={() => {
                   if (showExistingVaultPasskeyOverlay) {
                     pendingExistingVaultUnlock = false;
+                    pendingExistingVaultImport = undefined;
                     return;
                   }
                   if (showEnrollmentPasskeyOverlay) {

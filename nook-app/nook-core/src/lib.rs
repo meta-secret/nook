@@ -254,7 +254,8 @@ pub use validation::{
     validate_storage_mode,
 };
 pub use vault::vault_recovery_options::{
-    VaultRecoveryDevice, VaultRecoveryOptions, recovery_device_id_hint, vault_recovery_options,
+    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, recovery_device_id_hint,
+    vault_recovery_options,
 };
 pub use vault_access_diagnostics::{
     VaultAccessDiagnosticsReport, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
