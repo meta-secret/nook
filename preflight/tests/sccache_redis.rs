@@ -40,6 +40,10 @@ fn sccache_redis_routing_is_portable_and_not_lan_exposed() {
         !app_tasks.contains("| jq"),
         "sccache bootstrap must not add jq to the host prerequisites"
     );
+    assert!(
+        !app_tasks.contains("print $4; exit") && !app_tasks.contains("print $2; exit"),
+        "pipefail-safe Docker inspection must consume complete output instead of SIGPIPEing the producer"
+    );
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"SCCACHE_REDIS_HOST_IP\""));
@@ -214,6 +218,10 @@ fn assert_cache_connector_redacts_credentials() {
     assert!(!connector.contains("--env TUNNEL_SERVICE_TOKEN"));
     assert!(!connector.contains("--service-token-id"));
     assert!(!connector.contains("--service-token-secret"));
+    assert!(
+        !connector.contains("print $4; exit"),
+        "pipefail-safe bridge discovery must not stop Docker inspection early"
+    );
     for forbidden_output in [
         "echo \"$cloudflare_client_id\"",
         "echo \"$cloudflare_client_secret\"",
