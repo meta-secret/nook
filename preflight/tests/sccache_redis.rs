@@ -144,6 +144,9 @@ fn assert_cache_actions_use_credential_files() {
         "spawnSync(\"task\", [\"infra:cache:connect\"]",
         "externalCacheEnabled",
         "fs.rmSync(credentialDirectory, { recursive: true, force: true })",
+        "NOOK_SCCACHE_BACKEND=local_fallback",
+        "NOOK_SCCACHE_BACKEND=remote",
+        "NOOK_SCCACHE_BACKEND_REASON=persistent_service",
     ] {
         assert!(
             cache_action_main.contains(required),
@@ -330,6 +333,98 @@ fn assert_rust_builds_mount_cache_credentials() {
             .count()
             >= 3
     );
+}
+
+#[test]
+fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
+    let reporter = read("nook-app/docker/sccache-report.sh");
+    for required in [
+        "--show-stats --stats-format=json",
+        "NOOK_SCCACHE_STATS",
+        "compile_requests",
+        "requests_executed",
+        "cache_hits",
+        "cache_misses",
+        "cache_errors",
+        "cache_writes",
+    ] {
+        assert!(
+            reporter.contains(required),
+            "sccache reporter is missing safe counter: {required}"
+        );
+    }
+    for forbidden in [
+        "cache_location",
+        "SCCACHE_REDIS_PASSWORD",
+        "SCCACHE_REDIS_ENDPOINT",
+    ] {
+        assert!(
+            !reporter.contains(forbidden),
+            "sccache telemetry must not emit backend details: {forbidden}"
+        );
+    }
+
+    let rust_base = read("nook-app/docker/base.Dockerfile");
+    assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
+    for path in [
+        "nook-app/nook-core/Dockerfile",
+        "nook-app/nook-wasm/Dockerfile",
+    ] {
+        assert!(
+            read(path).contains("nook-sccache-report"),
+            "{path} must report compiler cache outcomes"
+        );
+    }
+    assert!(
+        read("nook-app/nook-core/Dockerfile")
+            .matches("nook-sccache-report")
+            .count()
+            >= 12
+    );
+    assert!(
+        read("nook-app/nook-wasm/Dockerfile")
+            .matches("nook-sccache-report")
+            .count()
+            >= 3
+    );
+
+    let setup = read(".github/actions/nook-docker-setup/action.yml");
+    assert!(setup.contains("cache-telemetry.cjs start"));
+    assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
+
+    let telemetry_action = read(".github/actions/nook-cache-telemetry/action.yml");
+    for required in [
+        "cache-telemetry.cjs collect",
+        "cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}",
+        "actions/upload-artifact@v7",
+    ] {
+        assert!(
+            telemetry_action.contains(required),
+            "cache telemetry action is missing: {required}"
+        );
+    }
+
+    let pr = read(".github/workflows/pr.yml");
+    assert!(
+        pr.matches("uses: ./.github/actions/nook-cache-telemetry")
+            .count()
+            >= 5,
+        "every Buildx-backed PR job must preserve cache telemetry"
+    );
+    let main = read(".github/workflows/main.yml");
+    assert!(main.contains("uses: ./.github/actions/nook-cache-telemetry"));
+
+    let main_stats = read(".github/workflows/main-build-stats.yml");
+    for required in [
+        "Download completed Main cache telemetry",
+        "cache-telemetry-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-*",
+        "cacheTelemetry",
+    ] {
+        assert!(
+            main_stats.contains(required),
+            "Main statistics must retain cache telemetry: {required}"
+        );
+    }
 }
 
 #[test]
