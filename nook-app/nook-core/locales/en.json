@@ -1502,6 +1502,7 @@
       "step_label": "2FA with Nook",
       "title": "Choose a 2FA code",
       "description": "Search all authenticator items in your unlocked vault. Only 2FA items are shown.",
+      "destination": "Code will be filled on {origin}.",
       "search_label": "Search 2FA items",
       "search_placeholder": "Service or account",
       "filter_label": "2FA only",

@@ -15,6 +15,7 @@
 
   let query = $state('')
   let accounts = $state<WebsiteAuthenticatorOption[]>([])
+  let destinationOrigin = $state('')
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
@@ -40,6 +41,7 @@
     error = ''
     const response = await sendRuntimeMessage<{
       ok?: boolean
+      origin?: string
       accounts?: WebsiteAuthenticatorOption[]
     }>({
       type: 'nook:authenticator-picker-query',
@@ -47,11 +49,13 @@
     })
     if (sequence !== querySequence) return
     loading = false
-    if (!response?.ok) {
+    if (!response?.ok || typeof response.origin !== 'string') {
       accounts = []
+      destinationOrigin = ''
       error = i18n.t('extension.authenticator_picker.failed')
       return
     }
+    destinationOrigin = response.origin
     accounts = response.accounts ?? []
   }
 
@@ -104,6 +108,13 @@
   <p class="description">
     {i18n.t('extension.authenticator_picker.description')}
   </p>
+  {#if destinationOrigin}
+    <p class="destination-origin" data-testid="authenticator-destination">
+      {i18n.t('extension.authenticator_picker.destination', {
+        origin: destinationOrigin,
+      })}
+    </p>
+  {/if}
 
   <div class="picker-filter">
     <Search aria-hidden="true" size={18} />

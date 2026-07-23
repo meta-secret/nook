@@ -263,6 +263,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
           'Choose a saved 2FA item in the Nook window. You can search all 2FA items in your vault.',
         ),
       ).toBeVisible()
+      await expect(
+        picker.getByTestId('authenticator-destination'),
+      ).toContainText(`Code will be filled on ${mockAuth.origin}.`)
       await expect(otpWidget.getByText('alice-2fa@nook.test')).toHaveCount(0)
       await expect(otpWidget.getByText('bob-2fa@nook.test')).toHaveCount(0)
       await expect(picker.getByText('Mock Auth Primary')).toBeVisible()

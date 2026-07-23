@@ -1174,7 +1174,7 @@ async function queryAuthenticatorPicker(
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
   const accounts = await authenticatorAccounts(grants, message.payload.query)
-  return { ok: true, accounts }
+  return { ok: true, origin: request.origin, accounts }
 }
 
 async function selectAuthenticatorPicker(
