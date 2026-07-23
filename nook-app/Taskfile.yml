@@ -70,6 +70,7 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
+    --set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'
     --set '*.args.SCCACHE_REDIS_PORT={{.SCCACHE_REDIS_PORT}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'

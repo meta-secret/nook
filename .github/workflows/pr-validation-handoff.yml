@@ -1,0 +1,206 @@
+# Promote successful PR Rust/WASM handoffs from trusted default-branch code.
+#
+# Pull-request workflows may upload same-run artifacts for downstream jobs, but they must never
+# write or restore a PR-scoped cache that can bypass required validation. This workflow runs only
+# from the default branch, verifies the source workflow and all required producer/consumer jobs,
+# validates the artifact shape, and republishes immutable exact-input artifacts. A later PR run
+# may skip a producer only after downloading one of these trusted artifacts by ID.
+
+name: PR validation handoff
+
+on:
+  workflow_run:
+    workflows: [PR]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful PR workflow run to promote
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: pr-validation-handoff-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.repository.full_name == github.repository
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify source PR workflow
+        id: source
+        uses: actions/github-script@v9
+        env:
+          REQUESTED_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        with:
+          retries: 3
+          script: |
+            const runId = Number(process.env.REQUESTED_RUN_ID)
+            if (!Number.isSafeInteger(runId) || runId <= 0) {
+              core.setFailed(`Invalid source run id: ${process.env.REQUESTED_RUN_ID}`)
+              return
+            }
+
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              ...context.repo,
+              run_id: runId,
+            })
+            const workflowPath = run.path?.replace(/@[^@]+$/, '')
+            if (
+              run.name !== 'PR' ||
+              workflowPath !== '.github/workflows/pr.yml' ||
+              run.event !== 'pull_request' ||
+              run.status !== 'completed' ||
+              run.conclusion !== 'success' ||
+              run.repository.full_name !== `${context.repo.owner}/${context.repo.repo}`
+            ) {
+              core.setFailed(`Run ${runId} is not a successful repository PR workflow`)
+              return
+            }
+
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              ...context.repo,
+              run_id: runId,
+              filter: 'latest',
+              per_page: 100,
+            })
+            for (const requiredName of [
+              'Native Rust verification',
+              'WASM verification and artifact',
+              'Verify and preview',
+            ]) {
+              const job = jobs.find((candidate) => candidate.name === requiredName)
+              if (!job || job.status !== 'completed' || job.conclusion !== 'success') {
+                core.setFailed(`Run ${runId} lacks successful job: ${requiredName}`)
+                return
+              }
+            }
+
+            const pullRequest = run.pull_requests?.[0]
+            if (
+              !pullRequest ||
+              !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
+              !/^[0-9a-f]{40}$/.test(pullRequest.head?.sha || '') ||
+              pullRequest.head.sha !== run.head_sha
+            ) {
+              core.setFailed(`Run ${runId} has no pull request or valid base/head snapshots`)
+              return
+            }
+
+            core.setOutput('base-sha', pullRequest.base.sha)
+            core.setOutput('run-id', String(runId))
+            core.setOutput('head-sha', run.head_sha)
+            core.setOutput('pr-number', String(pullRequest.number))
+
+      - name: Checkout validated PR base
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.source.outputs.base-sha }}
+          fetch-depth: 0
+
+      - name: Recreate validated PR merge tree
+        env:
+          HEAD_SHA: ${{ steps.source.outputs.head-sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$HEAD_SHA" --no-tags
+          git merge --no-commit --no-ff "$HEAD_SHA"
+
+      - name: Derive exact validation keys
+        id: keys
+        run: |
+          {
+            echo "native=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}"
+            echo "wasm=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download validated native handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-rust-${{ steps.source.outputs.run-id }}
+          path: ${{ runner.temp }}/trusted-validation/native
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run-id }}
+
+      - name: Download validated WASM handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ steps.source.outputs.run-id }}
+          path: ${{ runner.temp }}/trusted-validation/wasm
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run-id }}
+
+      - name: Validate and attest promoted handoffs
+        env:
+          HEAD_SHA: ${{ steps.source.outputs.head-sha }}
+          NATIVE_KEY: ${{ steps.keys.outputs.native }}
+          PR_NUMBER: ${{ steps.source.outputs.pr-number }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run-id }}
+          WASM_KEY: ${{ steps.keys.outputs.wasm }}
+        run: |
+          set -euo pipefail
+          native="${RUNNER_TEMP}/trusted-validation/native"
+          wasm="${RUNNER_TEMP}/trusted-validation/wasm"
+
+          for file in summary.txt summary.json lcov.info coverage-floor.json; do
+            test -s "$native/$file"
+          done
+          jq -e '.data[0].totals.lines.percent >= 0' "$native/summary.json" >/dev/null
+
+          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts; do
+            test -s "$wasm/$file"
+          done
+          jq -e '.name == "nook-wasm"' "$wasm/package.json" >/dev/null
+
+          manifest() {
+            kind="$1"
+            key="$2"
+            output="$3"
+            jq -n \
+              --arg head_sha "$HEAD_SHA" \
+              --arg input_key "$key" \
+              --arg kind "$kind" \
+              --argjson pr_number "$PR_NUMBER" \
+              --argjson source_run_id "$SOURCE_RUN_ID" \
+              '{
+                schema_version: 1,
+                kind: $kind,
+                input_key: $input_key,
+                source_run_id: $source_run_id,
+                source_head_sha: $head_sha,
+                source_pr_number: $pr_number,
+                source_workflow: ".github/workflows/pr.yml",
+                producer_jobs_verified: true
+              }' > "$output"
+          }
+          manifest native "$NATIVE_KEY" "$native/nook-validation-manifest.json"
+          manifest wasm "$WASM_KEY" "$wasm/nook-validation-manifest.json"
+
+      - name: Publish trusted native handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.keys.outputs.native }}
+          path: ${{ runner.temp }}/trusted-validation/native
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish trusted WASM handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.keys.outputs.wasm }}
+          path: ${{ runner.temp }}/trusted-validation/wasm
+          retention-days: 30
+          if-no-files-found: error
