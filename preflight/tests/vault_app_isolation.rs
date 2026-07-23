@@ -1177,9 +1177,10 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
         .find("native_job=\"$(")
         .expect("PR verification must inspect the current native job when no artifact exists");
     assert!(
-        artifact_lookup < native_job_lookup
+        native_job_lookup < artifact_lookup
+            && rust_handoff.contains("[ -z \"$native_job_id\" ]")
             && rust_handoff.contains("This failed-job rerun has no native producer"),
-        "PR verification must accept an exact-head artifact before requiring a producer in a failed-job rerun"
+        "PR verification must prefer a current producer and fall back only when a failed-job rerun omits it"
     );
     let wasm_handoff = section(
         &pr,
@@ -1188,13 +1189,14 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
     );
     assert!(
         wasm_handoff
-            .find("actions/runs/$GITHUB_RUN_ID/artifacts")
-            .expect("PR verification must inspect the WASM handoff artifact")
-            < wasm_handoff.find("wasm_job=\"$(").expect(
-                "PR verification must inspect the current WASM job when no artifact exists"
-            )
+            .find("wasm_job=\"$(")
+            .expect("PR verification must inspect the current WASM job")
+            < wasm_handoff
+                .find("actions/runs/$GITHUB_RUN_ID/artifacts")
+                .expect("PR verification must inspect the WASM handoff artifact")
+            && wasm_handoff.contains("[ -z \"$wasm_job_id\" ]")
             && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
-        "PR verification must reuse exact-head WASM from a successful earlier attempt"
+        "PR verification must wait for a current WASM producer and reuse prior output only when it is absent"
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(

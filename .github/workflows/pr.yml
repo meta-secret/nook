@@ -291,36 +291,41 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 360); do
-            # The artifact name is run-stable and exact to this run's head. A failed-job rerun may
-            # omit the already-successful WASM job from the current attempt, so accept its existing
-            # validated artifact before requiring a current-attempt producer.
-            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-              --paginate \
-              --jq '.artifacts[].name' \
-              | grep -Fxq "$ARTIFACT_NAME"; then
-              destination="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
-              rm -rf "$destination"
-              mkdir -p "$destination"
-              gh run download "$GITHUB_RUN_ID" \
-                --name "$ARTIFACT_NAME" \
-                --dir "$destination"
-              test -s "$destination/nook_wasm.js"
-              exit 0
-            fi
-
             wasm_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
             )"
-            if [ "$(jq -r '.id // empty' <<< "$wasm_job")" = "" ]; then
-              echo "::error::This failed-job rerun has no WASM producer and the run-stable artifact is unavailable"
-              exit 1
-            fi
+            wasm_job_id="$(jq -r '.id // empty' <<< "$wasm_job")"
             wasm_status="$(jq -r '.status // "queued"' <<< "$wasm_job")"
             wasm_conclusion="$(jq -r '.conclusion // ""' <<< "$wasm_job")"
-            if [ "$wasm_status" = "completed" ] && [ "$wasm_conclusion" != "success" ]; then
+            if [ -n "$wasm_job_id" ] \
+              && [ "$wasm_status" = "completed" ] \
+              && [ "$wasm_conclusion" != "success" ]; then
               echo "::error::WASM verification completed with $wasm_conclusion"
               exit 1
+            fi
+
+            # A failed-job rerun may omit the already-successful producer. Reuse the run-stable,
+            # exact-head artifact only when there is no current producer, or after it succeeds.
+            if [ -z "$wasm_job_id" ] \
+              || { [ "$wasm_status" = "completed" ] && [ "$wasm_conclusion" = "success" ]; }; then
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+                --paginate \
+                --jq '.artifacts[].name' \
+                | grep -Fxq "$ARTIFACT_NAME"; then
+                destination="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
+                rm -rf "$destination"
+                mkdir -p "$destination"
+                gh run download "$GITHUB_RUN_ID" \
+                  --name "$ARTIFACT_NAME" \
+                  --dir "$destination"
+                test -s "$destination/nook_wasm.js"
+                exit 0
+              fi
+              if [ -z "$wasm_job_id" ]; then
+                echo "::error::This failed-job rerun has no WASM producer and the run-stable artifact is unavailable"
+                exit 1
+              fi
             fi
 
             echo "Waiting for verified WASM artifact (attempt $attempt/360; wasm=$wasm_status${wasm_conclusion:+/$wasm_conclusion})"
@@ -433,34 +438,40 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 360); do
-            # A successful earlier attempt's artifact is exact to this immutable run head and is
-            # the required fallback when a failed-job rerun does not schedule the native producer.
-            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-              --paginate \
-              --jq '.artifacts[].name' \
-              | grep -Fxq "$ARTIFACT_NAME"; then
-              rm -rf coverage/current
-              mkdir -p coverage/current
-              gh run download "$GITHUB_RUN_ID" \
-                --name "$ARTIFACT_NAME" \
-                --dir coverage/current
-              test -s coverage/current/summary.json
-              exit 0
-            fi
-
             native_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "Native Rust verification")] | first // {}'
             )"
-            if [ "$(jq -r '.id // empty' <<< "$native_job")" = "" ]; then
-              echo "::error::This failed-job rerun has no native producer and the run-stable artifact is unavailable"
-              exit 1
-            fi
+            native_job_id="$(jq -r '.id // empty' <<< "$native_job")"
             native_status="$(jq -r '.status // "queued"' <<< "$native_job")"
             native_conclusion="$(jq -r '.conclusion // ""' <<< "$native_job")"
-            if [ "$native_status" = "completed" ] && [ "$native_conclusion" != "success" ]; then
+            if [ -n "$native_job_id" ] \
+              && [ "$native_status" = "completed" ] \
+              && [ "$native_conclusion" != "success" ]; then
               echo "::error::Native Rust verification completed with $native_conclusion"
               exit 1
+            fi
+
+            # Preserve current-attempt ordering when the producer is scheduled. If GitHub omits it
+            # from a failed-job rerun, fall back to the prior successful exact-head artifact.
+            if [ -z "$native_job_id" ] \
+              || { [ "$native_status" = "completed" ] && [ "$native_conclusion" = "success" ]; }; then
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+                --paginate \
+                --jq '.artifacts[].name' \
+                | grep -Fxq "$ARTIFACT_NAME"; then
+                rm -rf coverage/current
+                mkdir -p coverage/current
+                gh run download "$GITHUB_RUN_ID" \
+                  --name "$ARTIFACT_NAME" \
+                  --dir coverage/current
+                test -s coverage/current/summary.json
+                exit 0
+              fi
+              if [ -z "$native_job_id" ]; then
+                echo "::error::This failed-job rerun has no native producer and the run-stable artifact is unavailable"
+                exit 1
+              fi
             fi
 
             echo "Waiting for native coverage artifact (attempt $attempt/360; native=$native_status${native_conclusion:+/$native_conclusion})"
