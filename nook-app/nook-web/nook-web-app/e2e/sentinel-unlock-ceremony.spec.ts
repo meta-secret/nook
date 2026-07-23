@@ -62,7 +62,7 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await contextC?.close()
   })
 
-  test('creates a local 2-of-3 Sentinel and delivers its member shares without a provider', async () => {
+  test('completes local 2-of-3 Sentinel onboarding and unlock through the browser UI', async () => {
     await expectPathChooser(deviceA)
     await deviceA.getByTestId('get-started-path-sentinel').click()
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
@@ -205,32 +205,28 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     expect(deviceCDelivery).not.toContain('githubPat')
     expect(deviceCDelivery).not.toContain('oauthFile')
 
-    await deviceB.evaluate(async (payload) => {
-      const participantVault = (
-        window as Window & {
-          __nookVault?: {
-            acceptSentinelGenesisShareDelivery: (
-              payload: string,
-            ) => Promise<void>
-          }
-        }
-      ).__nookVault
-      if (!participantVault) throw new Error('Participant vault is unavailable')
-      await participantVault.acceptSentinelGenesisShareDelivery(payload)
-    }, deviceBDelivery)
-    await deviceC.evaluate(async (payload) => {
-      const participantVault = (
-        window as Window & {
-          __nookVault?: {
-            acceptSentinelGenesisShareDelivery: (
-              payload: string,
-            ) => Promise<void>
-          }
-        }
-      ).__nookVault
-      if (!participantVault) throw new Error('Participant vault is unavailable')
-      await participantVault.acceptSentinelGenesisShareDelivery(payload)
-    }, deviceCDelivery)
+    async function receiveParticipantShare(
+      participantDevice: Page,
+      delivery: string,
+    ) {
+      const deliveryInput = participantDevice.getByTestId(
+        'sentinel-genesis-receive-share-input',
+      )
+      await expect(deliveryInput).toBeVisible()
+      await deliveryInput.fill(delivery)
+      const receiveButton = participantDevice.getByTestId(
+        'sentinel-genesis-receive-share',
+      )
+      await expect(receiveButton).toBeEnabled()
+      await receiveButton.click()
+      await expect(deliveryInput).toHaveValue('')
+      await expect(
+        participantDevice.getByTestId('sentinel-unlock-participant-helper'),
+      ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    }
+
+    await receiveParticipantShare(deviceB, deviceBDelivery)
+    await receiveParticipantShare(deviceC, deviceCDelivery)
 
     const ownerProviderCount = await deviceA.evaluate(() => {
       return (window as Window & { __nookVault?: { syncProviders: unknown[] } })
@@ -250,9 +246,6 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await expect(deviceA.getByTestId('sentinel-ceremony-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-  })
-
-  test('exchanges only opaque session-bound responses and reaches quorum', async () => {
     await deviceA.getByTestId('sentinel-unlock-start-btn').click()
     const unlockRequestOutput = deviceA.getByTestId(
       'sentinel-unlock-request-output',
@@ -268,29 +261,27 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       deviceA.getByTestId('sentinel-unlock-finalize-btn'),
     ).toBeDisabled()
 
-    const opaqueResponse = await deviceB.evaluate(
-      async ({ storeId, request }) => {
-        const participantVault = (
-          window as Window & {
-            __nookVault?: {
-              manager?: {
-                loadSentinelGenesisShareDelivery: (
-                  storeId: string,
-                ) => Promise<string>
-                respondToSentinelUnlockRequest: (
-                  request: string,
-                ) => Promise<string>
-              }
-            }
-          }
-        ).__nookVault
-        if (!participantVault?.manager)
-          throw new Error('Participant vault is unavailable')
-        await participantVault.manager.loadSentinelGenesisShareDelivery(storeId)
-        return participantVault.manager.respondToSentinelUnlockRequest(request)
-      },
-      { storeId: memberStoreId, request: unlockRequest },
+    const deliverySelect = deviceB.getByTestId(
+      'sentinel-unlock-delivery-select',
     )
+    await deliverySelect.click()
+    await deviceB
+      .getByTestId(`sentinel-unlock-delivery-${memberStoreId}`)
+      .click()
+    await expect(deliverySelect).toContainText(memberStoreId)
+    await deviceB
+      .getByTestId('sentinel-unlock-participant-request-input')
+      .fill(unlockRequest)
+    const createUnlockResponse = deviceB.getByTestId(
+      'sentinel-unlock-create-response-btn',
+    )
+    await expect(createUnlockResponse).toBeEnabled()
+    await createUnlockResponse.click()
+    const opaqueResponseOutput = deviceB.getByTestId(
+      'sentinel-unlock-generated-response-output',
+    )
+    await expect(opaqueResponseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const opaqueResponse = await opaqueResponseOutput.inputValue()
     expect(opaqueResponse.length).toBeGreaterThan(20)
     expect(opaqueResponse).not.toContain('mnemonic')
     expect(opaqueResponse).not.toContain('share_mnemonic')
