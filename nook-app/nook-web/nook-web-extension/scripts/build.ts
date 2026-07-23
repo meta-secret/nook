@@ -190,6 +190,7 @@ type NookLocaleCatalog = {
       saved_authenticator: string
       authenticator_fill_failed: string
       authenticator_filled: string
+      authenticator_picker_opened: string
       enroll_title: string
       enroll_description: string
       add_from_page: string
@@ -394,6 +395,12 @@ async function buildChromeLocales() {
         },
         widgetAuthenticatorFilled: {
           message: catalog.extension.widget.authenticator_filled,
+        },
+        widgetAuthenticatorPickerOpened: {
+          message: catalog.extension.widget.authenticator_picker_opened,
+        },
+        widgetAuthenticatorPickerCanceled: {
+          message: catalog.extension.widget.authenticator_picker_canceled,
         },
         widgetEnrollTitle: { message: catalog.extension.widget.enroll_title },
         widgetEnrollDescription: {

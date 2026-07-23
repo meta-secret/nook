@@ -14,6 +14,8 @@ export type DemoChromeStubArgs = {
   passkeyPilotFlow?: boolean
   /** 2FA enrollment ceremony replies with evidence-gated confirm. */
   enrollPilotFlow?: boolean
+  /** Extension-owned 2FA picker selection returned to the page HUD. */
+  authenticatorPickerFlow?: boolean
   barcodeRawValue?: string
 }
 
@@ -39,15 +41,53 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     generatePilotFlow = false,
     passkeyPilotFlow = false,
     enrollPilotFlow = false,
+    authenticatorPickerFlow = false,
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
   let stagedOffer: StagedSaveOffer | undefined
   let enrollStaged = false
+  const runtimeListeners: Array<
+    (
+      message: unknown,
+      sender: { id: string },
+      sendResponse: RuntimeCallback,
+    ) => boolean
+  > = []
 
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
+    }
+    if (
+      authenticatorPickerFlow &&
+      message.type === 'nook:website-authenticator-picker-open'
+    ) {
+      window.setTimeout(() => {
+        runtimeListeners.forEach((listener) =>
+          listener(
+            {
+              type: 'nook:website-authenticator-selected',
+              payload: {
+                origin: location.origin,
+                requestId: 'demo-authenticator-picker',
+                account: {
+                  vaultStoreId: 'demo-vault',
+                  secretId: 'demo-totp-1',
+                },
+              },
+            },
+            { id: 'demo-extension' },
+            () => {},
+          ),
+        )
+      }, 1_200)
+      return {
+        ok: true,
+        status: 'ready',
+        requestId: 'demo-authenticator-picker',
+        expiresAt: Date.now() + 5 * 60 * 1_000,
+      }
     }
     if (passkeyPilotFlow) {
       switch (message.type) {
@@ -305,7 +345,15 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       },
     },
     runtime: {
+      id: 'demo-extension',
       lastError: undefined,
+      onMessage: {
+        addListener(
+          listener: (message: unknown, sender: { id: string }) => boolean,
+        ) {
+          runtimeListeners.push(listener)
+        },
+      },
       getURL(resource: string) {
         return resource === 'icons/nook.png' ? '/favicon.png' : resource
       },
