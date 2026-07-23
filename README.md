@@ -415,7 +415,9 @@ both artifact shapes, recreates the validated base/head merge tree, adds
 provenance, and republishes them under exact hashes of their Rust, toolchain,
 Docker, Task, and workflow inputs. Promotion requires the immutable PR snapshot
 on the completed workflow-run event; post-merge and manual fallbacks are not
-accepted. Later PRs accept only those trusted promoted artifacts by ID;
+accepted. If promotion cannot prove that provenance, later PRs treat the
+artifact as a cache miss and run the producers. Later PRs accept only trusted
+promoted artifacts by ID;
 PR-writable caches can never bypass validation. Repository invariant preflight
 still runs on every head, and an exact trusted handoff skips only Rust/WASM
 validation already completed for identical inputs.
