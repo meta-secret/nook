@@ -393,6 +393,10 @@
   async function handlePasswordUnlock(entryId: string, password: string) {
     await vault.unlockWithPassword(entryId, password);
     if (vault.isAuthenticated) {
+      const pending = pendingExistingVaultImport;
+      if (pending) {
+        await vault.activateConnectedExistingVault(pending.storeId);
+      }
       pendingExistingVaultImport = undefined;
       vault.existingVaultRecoverySummary = undefined;
     }
@@ -548,7 +552,6 @@
             ? recoverySummary.passwordEntries[0]!.id
             : undefined;
       }
-      pendingExistingVaultImport = undefined;
       return;
     }
     if (

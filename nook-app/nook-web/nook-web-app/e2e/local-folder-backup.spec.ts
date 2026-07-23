@@ -156,24 +156,7 @@ test.describe('local folder backup provider', () => {
       "Authorize before using this browser's device key.",
     )
 
-    await page.evaluate(() => {
-      const useExistingChoice = document.querySelector<HTMLElement>(
-        '[data-testid="device-protection-use-existing-choice"]',
-      )
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            isAuthenticated: boolean
-            activeVaultStoreId?: string
-          }
-        }
-      ).__nookVault
-      if (!useExistingChoice) throw new Error('Expected passkey choice')
-      if (!vault) throw new Error('Expected test vault state')
-      vault.isAuthenticated = true
-      vault.activeVaultStoreId = 'store_stalevault01'
-      useExistingChoice.click()
-    })
+    await page.getByTestId('device-protection-use-existing-choice').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: 30_000,
     })
