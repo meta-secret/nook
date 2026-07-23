@@ -52,6 +52,41 @@ async function getServiceWorker(context: BrowserContext) {
   )
 }
 
+export async function exerciseConcurrentSessionStatus(
+  context: BrowserContext,
+  requestCount = 24,
+): Promise<void> {
+  const worker = await getServiceWorker(context)
+  await worker.evaluate(async (count) => {
+    const requests = Array.from(
+      { length: count },
+      () =>
+        new Promise<void>((resolve, reject) => {
+          globalThis.chrome.runtime.sendMessage(
+            { type: 'nook:extension-session-status' },
+            (response) => {
+              const error = globalThis.chrome.runtime.lastError?.message
+              if (error) {
+                reject(new Error(error))
+                return
+              }
+              if (response?.ok !== true) {
+                reject(
+                  new Error(
+                    response?.error ?? 'Concurrent session status failed.',
+                  ),
+                )
+                return
+              }
+              resolve()
+            },
+          )
+        }),
+    )
+    await Promise.all(requests)
+  }, requestCount)
+}
+
 async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
   return worker.evaluate(

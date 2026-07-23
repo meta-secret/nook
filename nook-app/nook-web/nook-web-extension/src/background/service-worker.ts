@@ -1542,6 +1542,7 @@ const PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS = 1500
 
 async function matchingPasskeyAccountCountForOrigin(
   origin: string,
+  queueExpiresAt: number,
 ): Promise<number> {
   let hostname: string
   try {
@@ -1559,6 +1560,7 @@ async function matchingPasskeyAccountCountForOrigin(
   }
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
+    payload: { queueExpiresAt },
   })
   if (
     !status ||
@@ -1572,7 +1574,7 @@ async function matchingPasskeyAccountCountForOrigin(
   for (const grant of grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-passkeys',
-      payload: { ...grant, rpId: hostname, origin },
+      payload: { ...grant, rpId: hostname, origin, queueExpiresAt },
     })
     if (
       response &&
@@ -1592,9 +1594,10 @@ async function matchingPasskeyAccountCountForOrigin(
 async function matchingPasskeyAccountCountForOriginSafe(
   origin: string,
 ): Promise<number> {
+  const queueExpiresAt = Date.now() + PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS
   try {
     return await Promise.race([
-      matchingPasskeyAccountCountForOrigin(origin),
+      matchingPasskeyAccountCountForOrigin(origin, queueExpiresAt),
       new Promise<number>((resolve) => {
         setTimeout(() => resolve(0), PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS)
       }),

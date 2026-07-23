@@ -9,6 +9,7 @@ export async function expectLoginSaved(widget: Locator): Promise<void> {
 export async function signInAndSaveMockLogin(
   loginPage: Page,
   origin: string,
+  beforeSave?: () => Promise<void>,
 ): Promise<void> {
   await loginPage.goto(`${origin}/plain/login`)
   await loginPage.locator('input[name="username"]').fill('alice@nook.test')
@@ -24,6 +25,8 @@ export async function signInAndSaveMockLogin(
   await expect(widget.getByText('Save this login?')).toBeVisible({
     timeout: 15_000,
   })
+  const concurrentActivity = beforeSave?.()
   await widget.getByTestId('nook-auth-gate-save').click()
+  await concurrentActivity
   await expectLoginSaved(widget)
 }

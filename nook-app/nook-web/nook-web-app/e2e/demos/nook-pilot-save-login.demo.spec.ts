@@ -13,9 +13,7 @@ function savePilotStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
-test('keep the Nook Pilot save action responsive through session activity', async ({
-  page,
-}) => {
+test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
   const messages = await loadPilotMessages()
   const stubArgs = savePilotStubArgs(messages)
 
