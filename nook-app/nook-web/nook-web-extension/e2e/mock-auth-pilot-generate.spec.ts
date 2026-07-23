@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { launchPairedPinExtension } from './helpers/paired-pin-extension'
-import { signInAndSaveMockLogin } from './helpers/mock-auth-login'
+import {
+  expectLoginSaved,
+  signInAndSaveMockLogin,
+} from './helpers/mock-auth-login'
 import { startMockAuthServer } from './mock-auth'
 
 test.describe('PIN Pilot generate password', () => {
@@ -96,7 +99,7 @@ test.describe('PIN Pilot generate password', () => {
         timeout: 15_000,
       })
       await widget.getByTestId('nook-auth-gate-save').click()
-      await expect(widget.getByText('Login saved')).toBeVisible()
+      await expectLoginSaved(widget)
     } finally {
       await paired.context.close()
       await mockAuth.close()

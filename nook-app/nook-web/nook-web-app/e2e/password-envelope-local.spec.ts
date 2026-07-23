@@ -390,7 +390,6 @@ test.describe('enrollment link deep link (local)', () => {
     )
     await expect(pageB.getByTestId('login-vault-name-input')).toHaveCount(0)
 
-    await pageB.getByTestId('device-protection-create-new-choice').click()
     await pageB.getByTestId('device-protection-setup-btn').click()
     await expect(pageB.getByTestId('passkey-auth-overlay')).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

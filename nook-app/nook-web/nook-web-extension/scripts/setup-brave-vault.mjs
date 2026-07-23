@@ -105,7 +105,6 @@ async function ensurePinProtectedPopup(popupPage) {
   await popupPage
     .getByTestId('extension-device-setup')
     .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
-  await popupPage.getByTestId('device-protection-create-new-choice').click()
   await popupPage.getByTestId('device-protection-setup-btn').click()
   await popupPage
     .getByTestId('device-protection-pin-input')

@@ -176,7 +176,6 @@ async function setupPasskeyExtensionPopup(
   const popupPage = await context.newPage()
   await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
   await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
-  await popupPage.getByTestId('device-protection-create-new-choice').click()
   await popupPage.getByTestId('device-protection-setup-btn').click()
   await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
   return popupPage
@@ -305,18 +304,6 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
-    await expect(
-      popupPage.getByTestId('device-protection-use-existing-choice'),
-    ).toHaveText('Authenticate')
-    await expect(popupPage.getByTestId('device-mode-select')).toBeHidden()
-    await expect(
-      popupPage.getByTestId('device-protection-create-new-choice'),
-    ).toHaveText('Create new passkey')
-    await expect(
-      popupPage.getByTestId('device-protection-setup-btn'),
-    ).toBeHidden()
-
-    await popupPage.getByTestId('device-protection-create-new-choice').click()
     await expect(popupPage.getByTestId('device-mode-select')).toHaveValue(
       'standard',
     )

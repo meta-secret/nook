@@ -6,18 +6,7 @@ import {
   waitForPersistedAppLog,
 } from './helpers'
 
-async function revealDeviceProtectionCreateWorkflow(page: Page) {
-  const createChoice = page.getByTestId('device-protection-create-new-choice')
-  if (await createChoice.isVisible()) {
-    await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  }
-  await expect(
-    page.getByTestId('device-protection-create-workflow'),
-  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-}
-
 async function clickDeviceProtectionSetup(page: Page) {
-  await revealDeviceProtectionCreateWorkflow(page)
   const setupButton = page.getByTestId('device-protection-setup-btn')
   await expect(setupButton).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -46,7 +35,6 @@ async function createSentinelParticipantResponse(
   await expect(participant.getByTestId('passkey-auth-overlay')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await revealDeviceProtectionCreateWorkflow(participant)
   const labelInput = participant.getByTestId('device-protection-label-input')
   await labelInput.fill(label)
   await clickDeviceProtectionSetup(participant)
@@ -159,7 +147,7 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
 }
 
 test.describe('passkey device-key protection', () => {
-  test('authenticates before offering explicit new-passkey setup', async ({
+  test('defers passkey until simple vault create without a second existing-passkey widget', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -178,27 +166,15 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('device-protection-title')).toHaveText(
       'Prepare this browser',
     )
-    await expect(
-      page.getByTestId('device-protection-authenticate-workflow'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('device-protection-create-workflow'),
-    ).toHaveCount(0)
-    await expect(
-      page.getByTestId('device-protection-use-existing-choice'),
-    ).toHaveText('Authenticate')
-    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
-    await expect(
-      page.getByTestId('device-protection-create-new-choice'),
-    ).toHaveText('Create new passkey')
-
-    await page.getByTestId('device-protection-create-new-choice').click()
     await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
     await expect(
-      page.getByTestId('device-protection-authenticate-workflow'),
+      page.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use existing passkey')
+    await expect(
+      page.getByTestId('device-protection-existing-workflow'),
     ).toHaveCount(0)
   })
 
@@ -337,7 +313,6 @@ test.describe('passkey device-key protection', () => {
     await page.goto('/app/')
 
     await openPasskeyOverlayForSimpleCreate(page)
-    await revealDeviceProtectionCreateWorkflow(page)
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -375,7 +350,6 @@ test.describe('passkey device-key protection', () => {
     await page.goto('/app/')
 
     await openPasskeyOverlayForSimpleCreate(page)
-    await revealDeviceProtectionCreateWorkflow(page)
     await page.getByTestId('device-mode-select').click()
     await page.getByRole('option', { name: 'High security' }).click()
     await clickDeviceProtectionSetup(page)
@@ -599,12 +573,9 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-use-existing-choice').click()
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      "We couldn't use a Nook passkey",
+      'Your phone may have approved the passkey, but this browser did not receive a usable credential',
     )
-    await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
-    await expect(
-      page.getByTestId('device-protection-create-new-choice'),
-    ).toBeEnabled()
+    await expect(page.getByTestId('device-protection-setup-btn')).toBeEnabled()
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),
     ).toBeHidden()
@@ -630,10 +601,7 @@ test.describe('passkey device-key protection', () => {
 
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByTestId('device-protection-recovery-btn').click()
-    await expect(
-      page.getByTestId('device-protection-use-existing-choice'),
-    ).toHaveText('Authenticate')
-    await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
+    await expect(page.getByTestId('device-protection-setup-btn')).toBeVisible()
 
     const persisted = await page.evaluate(
       () =>
