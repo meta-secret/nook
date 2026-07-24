@@ -26,7 +26,6 @@ fn to_pascal_ident(s: &str) -> Ident {
     Ident::new(&s.to_upper_camel_case(), Span::call_site())
 }
 
-
 /// Generates strongly-typed, compile-time self-orchestrating Rust task code using `quote!`.
 pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::error::Error>> {
     let parsed: GraphYaml = serde_yaml::from_str(yaml_content)?;
@@ -43,6 +42,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
                 impl Task for #task_ident {
                     fn execute(&self, prompt: &Prompt) {
                         println!(concat!("[Task: ", stringify!(#task_ident), "] Executing prompt: {}"), prompt.text);
+                        Agent.call(prompt);
                     }
                 }
             };
@@ -76,6 +76,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
                     fn execute(&self, prompt: &Prompt) {
                         #( #exec_calls )*
                         println!(concat!("[Task: ", stringify!(#task_ident), "] Executing prompt: {}"), prompt.text);
+                        Agent.call(prompt);
                     }
                 }
             };
@@ -85,7 +86,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
 
     let code = quote! {
         //! Auto-generated task dependency graph from YAML.
-        use crate::{Prompt, Task};
+        use crate::{Agent, Prompt, Task};
 
         #tokens
     };
@@ -107,23 +108,26 @@ mod tests {
     fn test_yaml_generator_with_quote() {
         let yaml = r#"
 graph:
+  architecture:
+    depends_on:
+
   backend:
     depends_on:
       - architecture
-      - unit_test
 
   unit_test:
     depends_on:
-
-  architecture:
-    depends_on:
+      - backend
 "#;
 
         let code = generate_rust_code(yaml).expect("Failed to generate code with quote");
         assert!(code.contains("struct BackendTask"));
         assert!(code.contains("struct BackendDeps"));
         assert!(code.contains("struct UnitTestTask"));
+        assert!(code.contains("struct UnitTestDeps"));
         assert!(code.contains("struct ArchitectureTask"));
+        assert!(code.contains("Agent"));
+
     }
 
     #[test]
@@ -131,7 +135,8 @@ graph:
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../graph.yaml");
         if std::path::Path::new(path).exists() {
             let code = generate_from_file(path).expect("Failed to generate from graph.yaml");
-            assert!(code.contains("struct BackendTask"));
+            assert!(code.contains("struct UnitTestTask"));
+            assert!(code.contains("struct UnitTestDeps"));
         }
     }
 }

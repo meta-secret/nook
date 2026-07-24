@@ -1,12 +1,11 @@
-
 graph:
+  architecture:
+    depends_on:
+
   backend:
     depends_on:
       - architecture
-      - unit_test
 
   unit_test:
     depends_on:
-
-  architecture:
-    depends_on:
+      - backend

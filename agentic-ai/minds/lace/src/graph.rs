@@ -1,8 +1,9 @@
-//! Task dependency graph derived from `graph.yaml`.
+//! Task dependency graph derived from updated `graph.yaml`.
 //!
-//! Plain, explicit Rust structs with self-orchestrating task execution.
+//! Sequence: Architecture -> Backend -> UnitTest
+//! Each task executes its prerequisites first, then invokes the AI Agent with the prompt.
 
-use crate::{Prompt, Task};
+use crate::{Agent, Prompt, Task};
 
 /// Task: `architecture` (depends_on: [])
 #[derive(Debug, Clone, Copy, Default)]
@@ -10,17 +11,8 @@ pub struct ArchitectureTask;
 
 impl Task for ArchitectureTask {
     fn execute(&self, prompt: &Prompt) {
-        println!("[Task: architecture] Executing prompt: {}", prompt.text);
-    }
-}
-
-/// Task: `unit_test` (depends_on: [])
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UnitTestTask;
-
-impl Task for UnitTestTask {
-    fn execute(&self, prompt: &Prompt) {
-        println!("[Task: unit_test] Executing prompt: {}", prompt.text);
+        println!("[Task: architecture] Executing architecture design...");
+        Agent.call(prompt);
     }
 }
 
@@ -28,10 +20,9 @@ impl Task for UnitTestTask {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BackendDeps {
     pub architecture: ArchitectureTask,
-    pub unit_test: UnitTestTask,
 }
 
-/// Task: `backend` (depends_on: [architecture, unit_test])
+/// Task: `backend` (depends_on: [architecture])
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BackendTask {
     pub deps: BackendDeps,
@@ -40,11 +31,28 @@ pub struct BackendTask {
 impl Task for BackendTask {
     fn execute(&self, prompt: &Prompt) {
         self.deps.architecture.execute(prompt);
-        self.deps.unit_test.execute(prompt);
-        println!(
-            "[Task: backend] Executing after prerequisites with prompt: {}",
-            prompt.text
-        );
+        println!("[Task: backend] Executing backend development...");
+        Agent.call(prompt);
+    }
+}
+
+/// Prerequisites required for `unit_test` task
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UnitTestDeps {
+    pub backend: BackendTask,
+}
+
+/// Task: `unit_test` (depends_on: [backend])
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UnitTestTask {
+    pub deps: UnitTestDeps,
+}
+
+impl Task for UnitTestTask {
+    fn execute(&self, prompt: &Prompt) {
+        self.deps.backend.execute(prompt);
+        println!("[Task: unit_test] Running unit tests after backend...");
+        Agent.call(prompt);
     }
 }
 
@@ -53,12 +61,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_plain_struct_task_graph() {
+    fn test_task_graph_execution() {
         let prompt = Prompt {
-            text: "Build minds graph with plain structs".to_string(),
+            text: "Develop feature and test".to_string(),
         };
 
-        let backend = BackendTask::default();
-        backend.execute(&prompt);
+        // Terminal task is unit_test (which depends on backend -> architecture)
+        let unit_test_task = UnitTestTask::default();
+        unit_test_task.execute(&prompt);
     }
 }
