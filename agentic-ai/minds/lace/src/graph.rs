@@ -1,73 +1,99 @@
-//! Task dependency graph derived from updated `graph.yaml`.
-//!
-//! Sequence: Architecture -> Backend -> UnitTest
-//! Each task executes its prerequisites first, then invokes the AI Agent with the prompt.
-
-use crate::{Agent, Prompt, Task};
-
-/// Task: `architecture` (depends_on: [])
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ArchitectureTask;
-
-impl Task for ArchitectureTask {
-    fn execute(&self, prompt: &Prompt) {
-        println!("[Task: architecture] Executing architecture design...");
-        Agent.call(prompt);
+//! Auto-generated task dependency graph from YAML.
+pub mod architecture {
+    use crate::{Agent, Prompt, RetriableTask, Task, TaskResult};
+    #[derive(Debug, Clone, Default)]
+    pub struct ArchitectureOutput {
+        pub design_doc: String,
+    }
+    ///Design the architecture of the system.
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct ArchitectureTask;
+    impl Task for ArchitectureTask {
+        type Output = ArchitectureOutput;
+        fn execute(&self, prompt: &Prompt) -> TaskResult<Self::Output> {
+            println!(
+                concat!("[Task: ", stringify!(ArchitectureTask),
+                "] Executing prompt: {}"), prompt.text
+            );
+            Agent.call(prompt);
+            Ok(ArchitectureOutput::default())
+        }
+    }
+    impl RetriableTask for ArchitectureTask {
+        fn max_retries(&self) -> usize {
+            1usize
+        }
     }
 }
-
-/// Prerequisites required for `backend` task
-#[derive(Debug, Clone, Copy, Default)]
-pub struct BackendDeps {
-    pub architecture: ArchitectureTask,
-}
-
-/// Task: `backend` (depends_on: [architecture])
-#[derive(Debug, Clone, Copy, Default)]
-pub struct BackendTask {
-    pub deps: BackendDeps,
-}
-
-impl Task for BackendTask {
-    fn execute(&self, prompt: &Prompt) {
-        self.deps.architecture.execute(prompt);
-        println!("[Task: backend] Executing backend development...");
-        Agent.call(prompt);
+pub mod backend {
+    use crate::{Agent, Prompt, RetriableTask, Task, TaskResult};
+    #[derive(Debug, Clone, Default)]
+    pub struct BackendOutput {
+        pub source_code: String,
+    }
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct BackendDeps {
+        pub architecture: super::architecture::ArchitectureTask,
+    }
+    ///Implement backend services based on architecture design.
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct BackendTask {
+        pub deps: BackendDeps,
+    }
+    impl Task for BackendTask {
+        type Output = BackendOutput;
+        fn execute(&self, prompt: &Prompt) -> TaskResult<Self::Output> {
+            let _ = self.deps.architecture.execute(prompt)?;
+            println!(
+                concat!("[Task: ", stringify!(BackendTask), "] Executing prompt: {}"),
+                prompt.text
+            );
+            Agent.call(prompt);
+            Ok(BackendOutput::default())
+        }
+    }
+    impl RetriableTask for BackendTask {
+        fn max_retries(&self) -> usize {
+            1usize
+        }
     }
 }
-
-/// Prerequisites required for `unit_test` task
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UnitTestDeps {
-    pub backend: BackendTask,
-}
-
-/// Task: `unit_test` (depends_on: [backend])
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UnitTestTask {
-    pub deps: UnitTestDeps,
-}
-
-impl Task for UnitTestTask {
-    fn execute(&self, prompt: &Prompt) {
-        self.deps.backend.execute(prompt);
-        println!("[Task: unit_test] Running unit tests after backend...");
-        Agent.call(prompt);
+pub mod unit_test {
+    use crate::{Agent, Prompt, RetriableTask, Task, TaskResult};
+    #[derive(Debug, Clone, Default)]
+    pub struct UnitTestOutput {
+        pub test_logs: String,
+        pub passed: bool,
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_task_graph_execution() {
-        let prompt = Prompt {
-            text: "Develop feature and test".to_string(),
-        };
-
-        // Terminal task is unit_test (which depends on backend -> architecture)
-        let unit_test_task = UnitTestTask::default();
-        unit_test_task.execute(&prompt);
+    #[derive(Debug, Clone, Default)]
+    pub struct UnitTestError {
+        pub failed_test_count: u32,
+        pub error_log: String,
+    }
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct UnitTestDeps {
+        pub backend: super::backend::BackendTask,
+    }
+    ///Run unit test suite against backend code.
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct UnitTestTask {
+        pub deps: UnitTestDeps,
+    }
+    impl Task for UnitTestTask {
+        type Output = UnitTestOutput;
+        fn execute(&self, prompt: &Prompt) -> TaskResult<Self::Output> {
+            let _ = self.deps.backend.execute(prompt)?;
+            println!(
+                concat!("[Task: ", stringify!(UnitTestTask), "] Executing prompt: {}"),
+                prompt.text
+            );
+            Agent.call(prompt);
+            Ok(UnitTestOutput::default())
+        }
+    }
+    impl RetriableTask for UnitTestTask {
+        fn max_retries(&self) -> usize {
+            3usize
+        }
     }
 }
