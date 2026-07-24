@@ -973,8 +973,16 @@ fn assert_release_wasm_cache_contract(root: &Path) {
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")
             && !core_dockerfile
-                .contains("cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm"),
-        "the manifest-only WASM boundary must not compile a second debug test graph"
+                .contains("cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm")
+            && core_dockerfile.contains(
+                "cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm",
+            ),
+        "the manifest-only WASM boundary must prewarm release tests without compiling a second debug graph"
+    );
+    assert!(
+        read(root, "nook-app/nook-web/.task/wasm.yml")
+            .contains("wasm-pack test --node --release nook-wasm"),
+        "the documented manual WASM test task must use the same release profile as hosted CI"
     );
 }
 

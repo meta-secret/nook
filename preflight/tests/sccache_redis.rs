@@ -199,7 +199,7 @@ fn assert_rust_build_cache_boundary() {
     let secret_mount = "--mount=type=secret,id=sccache_redis_password";
     let core_dockerfile = read("nook-app/nook-core/Dockerfile");
     assert!(
-        core_dockerfile.matches(secret_mount).count() >= 11,
+        core_dockerfile.matches(secret_mount).count() >= 12,
         "every native Rust compiler layer must receive the optional cache credential"
     );
     assert!(
@@ -318,7 +318,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
         read("nook-app/nook-core/Dockerfile")
             .matches("nook-sccache-report")
             .count()
-            >= 11
+            >= 12
     );
     assert!(
         read("nook-app/nook-wasm/Dockerfile")
