@@ -70,9 +70,9 @@ tasks:
         fi'
 
   _wasm:test:
-    desc: Run nook-wasm wasm-bindgen tests in Node.
+    desc: Run release-profile nook-wasm wasm-bindgen tests in Node.
     cmds:
-      - cd "{{.APP_ROOT}}" && wasm-pack test --node nook-wasm
+      - cd "{{.APP_ROOT}}" && wasm-pack test --node --release nook-wasm
 
   wasm:test:browser:
     desc: Run nook-wasm wasm-bindgen tests in headless Chrome (manual/debug).

@@ -40,16 +40,16 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     && nook-sccache-report chef-wasm-clippy
 RUN cargo fetch --locked
 
-# WASM jobs stop at this lightweight boundary instead of compiling native nextest/coverage deps.
+# WASM jobs add only the release test graph needed by the downstream Node tests, avoiding a second
+# debug profile and the native nextest/coverage dependency profiles. Stub roots keep this layer
+# manifest-keyed so Main can publish the test-only dependencies for read-only PR restores.
 FROM builder-deps-common AS builder-wasm-deps
 
-RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src
-RUN echo '' > nook-auth2/src/lib.rs
-RUN echo '' > nook-core/src/lib.rs
-RUN echo '' > nook-wasm/src/lib.rs
+RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src \
+    && touch nook-auth2/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm \
-    && nook-sccache-report wasm-dependency-test
+    cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm \
+    && nook-sccache-report wasm-release-test-dependencies
 
 # Native verification extends the WASM dependency boundary with native and coverage profiles.
 FROM builder-wasm-deps AS builder-deps
@@ -59,7 +59,7 @@ FROM builder-wasm-deps AS builder-deps
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
 # native deps here instead of with chef. Stub in dummy crate roots so the workspace resolves,
 # compile the deps, and keep the stubs for downstream workspace packages. Real crate source is
-# copied over the stubs in builder-debug in dependency order (nook-auth2 -> nook-core -> nook-wasm).
+# copied over in builder-debug in dependency order (nook-auth2 -> nook-core -> nook-wasm).
 # Kept as separate cache layers.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo nextest run --no-run -p nook-auth2 --profile ci \
