@@ -971,6 +971,9 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains(
                 "CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm",
             )
+            && wasm_dockerfile.contains(
+                "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm",
+            )
             && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")

@@ -65,9 +65,11 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 
 FROM builder-wasm-source AS builder-wasm-tests
 
-# Match wasm-pack test's compile step: CARGO_BUILD_TARGET + `cargo build --tests --release`.
+# Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
+# later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm \
+    && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm \
     && nook-sccache-report wasm-release-tests
 
 FROM builder-wasm-tests AS builder-wasm
