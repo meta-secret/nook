@@ -1,0 +1,265 @@
+{
+  "schema_version": 2,
+  "recorded_at": "2026-07-24T00:58:53.201Z",
+  "source_run": {
+    "workflow_name": "Main",
+    "workflow_id": 302951406,
+    "run_id": 30056460724,
+    "run_attempt": 1,
+    "url": "https://github.com/meta-secret/nook/actions/runs/30056460724",
+    "event": "push",
+    "head_branch": "main",
+    "head_sha": "b2bbf6b06c3c2d9c2ac9cc498b39347326ebe56e",
+    "conclusion": "success",
+    "created_at": "2026-07-24T00:32:11Z",
+    "started_at": "2026-07-24T00:32:11Z",
+    "completed_at": "2026-07-24T00:58:40Z"
+  },
+  "source_pull_requests": [
+    {
+      "number": 692,
+      "url": "https://github.com/meta-secret/nook/pull/692",
+      "title": "Reuse release WASM artifacts in PR tests"
+    }
+  ],
+  "summary": {
+    "queue_seconds": 0,
+    "execution_seconds": 1589,
+    "wall_seconds": 1589,
+    "job_count": 1,
+    "step_count": 16,
+    "build_seconds": 1407,
+    "deployment_seconds": 40,
+    "coverage_seconds": 1
+  },
+  "cache_telemetry": {
+    "totals": {
+      "job_count": 1,
+      "remote_backend_job_count": 0,
+      "direct_compile_job_count": 1,
+      "sccache_compile_requests": 0,
+      "sccache_cache_hits": 0,
+      "sccache_cache_misses": 0,
+      "sccache_hit_rate_percent": null,
+      "buildkit_completed_steps": 472,
+      "buildkit_cached_steps": 236,
+      "buildkit_cache_hit_rate_percent": 50
+    },
+    "jobs": [
+      {
+        "job": "ci",
+        "cache_backend": {
+          "kind": "direct_compile",
+          "persistent": false,
+          "reason": "credentials_unavailable"
+        },
+        "sccache": {
+          "report_count": 0,
+          "compile_requests": 0,
+          "requests_executed": 0,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "cache_errors": 0,
+          "cache_writes": 0,
+          "hit_rate_percent": null
+        },
+        "buildkit": {
+          "build_record_count": 14,
+          "completed_steps": 472,
+          "cached_steps": 236,
+          "cache_hit_rate_percent": 50,
+          "measurement": "buildx_target_record_steps"
+        },
+        "collection": {
+          "complete": true,
+          "warnings": []
+        }
+      }
+    ],
+    "collection": {
+      "complete": true,
+      "warnings": []
+    }
+  },
+  "jobs": [
+    {
+      "id": 89369089716,
+      "name": "Check, build, e2e, and deploy dev",
+      "status": "completed",
+      "conclusion": "success",
+      "runner_name": "GitHub Actions 1000004209",
+      "runner_group_name": "GitHub Actions",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "started_at": "2026-07-24T00:32:14Z",
+      "completed_at": "2026-07-24T00:58:40Z",
+      "duration_seconds": 1586,
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:32:15Z",
+          "completed_at": "2026-07-24T00:32:16Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 2,
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:32:16Z",
+          "completed_at": "2026-07-24T00:32:16Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 3,
+          "name": "Docker setup",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:32:16Z",
+          "completed_at": "2026-07-24T00:32:23Z",
+          "duration_seconds": 7
+        },
+        {
+          "number": 4,
+          "name": "Preflight, check, build, and e2e",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:32:23Z",
+          "completed_at": "2026-07-24T00:55:50Z",
+          "duration_seconds": 1407
+        },
+        {
+          "number": 5,
+          "name": "Record all headless UI demos",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:55:50Z",
+          "completed_at": "2026-07-24T00:57:46Z",
+          "duration_seconds": 116
+        },
+        {
+          "number": 6,
+          "name": "Upload complete Main UI demo artifact",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:57:46Z",
+          "completed_at": "2026-07-24T00:57:48Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 7,
+          "name": "Publish largest Main UI demos to the merged PR issue",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:57:48Z",
+          "completed_at": "2026-07-24T00:57:50Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 8,
+          "name": "Deploy isolated development applications to Cloudflare Pages",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:57:50Z",
+          "completed_at": "2026-07-24T00:58:19Z",
+          "duration_seconds": 29
+        },
+        {
+          "number": 9,
+          "name": "Configure and verify isolated development domains",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:19Z",
+          "completed_at": "2026-07-24T00:58:30Z",
+          "duration_seconds": 11
+        },
+        {
+          "number": 10,
+          "name": "Record development deployment",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:30Z",
+          "completed_at": "2026-07-24T00:58:30Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 11,
+          "name": "Export commit-keyed nook-core/auth coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:30Z",
+          "completed_at": "2026-07-24T00:58:31Z",
+          "duration_seconds": 1
+        },
+        {
+          "number": 12,
+          "name": "Upload commit-keyed nook-core/auth coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:31Z",
+          "completed_at": "2026-07-24T00:58:31Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 13,
+          "name": "Preserve cache telemetry",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:31Z",
+          "completed_at": "2026-07-24T00:58:33Z",
+          "duration_seconds": 2
+        },
+        {
+          "number": 25,
+          "name": "Post Docker setup",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:33Z",
+          "completed_at": "2026-07-24T00:58:39Z",
+          "duration_seconds": 6
+        },
+        {
+          "number": 26,
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:39Z",
+          "completed_at": "2026-07-24T00:58:39Z",
+          "duration_seconds": 0
+        },
+        {
+          "number": 27,
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-07-24T00:58:39Z",
+          "completed_at": "2026-07-24T00:58:39Z",
+          "duration_seconds": 0
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "baseline_runs": [
+      {
+        "run_id": 30049286599,
+        "run_attempt": 1
+      },
+      {
+        "run_id": 30043000808,
+        "run_attempt": 1
+      }
+    ],
+    "baseline_quality": "comparable",
+    "baseline_note": "Two most recent successful Main attempts from the same workflow",
+    "wall_seconds_change_percent": -14.4,
+    "execution_seconds_change_percent": -14.4,
+    "build_seconds_change_percent": -14.9,
+    "regression": false,
+    "regression_reasons": []
+  }
+}
