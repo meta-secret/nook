@@ -304,7 +304,7 @@ jobs:
           ARTIFACT_NAME: pr-wasm-${{ github.run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 180); do
+          for attempt in $(seq 1 900); do
             wasm_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
@@ -354,8 +354,8 @@ jobs:
               exit 1
             fi
 
-            echo "Waiting for current-attempt WASM artifact (attempt $attempt/180; wasm=$wasm_status${wasm_conclusion:+/$wasm_conclusion})"
-            sleep 10
+            echo "Waiting for current-attempt WASM artifact (attempt $attempt/900; wasm=$wasm_status${wasm_conclusion:+/$wasm_conclusion})"
+            sleep 2
           done
           echo "::error::Current-attempt WASM artifact was not published within 30 minutes"
           exit 1
@@ -463,7 +463,7 @@ jobs:
           ARTIFACT_NAME: pr-rust-${{ github.run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 180); do
+          for attempt in $(seq 1 900); do
             native_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "Native Rust verification")] | first // {}'
@@ -502,8 +502,8 @@ jobs:
               fi
             fi
 
-            echo "Waiting for native coverage artifact (attempt $attempt/180; native=$native_status${native_conclusion:+/$native_conclusion})"
-            sleep 10
+            echo "Waiting for native coverage artifact (attempt $attempt/900; native=$native_status${native_conclusion:+/$native_conclusion})"
+            sleep 2
           done
           echo "::error::Native Rust coverage artifact was not published within 30 minutes"
           exit 1
@@ -517,7 +517,7 @@ jobs:
             cat "${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
           )"
           test -n "$artifact_attempt"
-          for attempt in $(seq 1 180); do
+          for attempt in $(seq 1 900); do
             wasm_job="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
                 --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
@@ -544,39 +544,14 @@ jobs:
               echo "::error::WASM verification completed with $wasm_conclusion"
               exit 1
             fi
-            echo "Waiting to gate preview on WASM Node tests (attempt $attempt/180; wasm=$wasm_status)"
-            sleep 10
+            echo "Waiting to gate preview on WASM Node tests (attempt $attempt/900; wasm=$wasm_status)"
+            sleep 2
           done
           echo "::error::WASM verification did not complete within 30 minutes"
           exit 1
 
-      - name: Deploy unified internal test harness
-        id: deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-          CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}
-        run: |
-          # Deploy reuses the image prepared by the preceding gate (dist is in-image, no bind
-          # mount or second setup). Capture the preview URL from the container's stdout marker.
-          # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
-          # print the container output (it holds the real error) before failing the step.
-          set +e
-          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
-          status=$?
-          set -e
-          echo "$out"
-          if [ "$status" -ne 0 ]; then
-            echo "::error::Cloudflare preview deploy failed (exit $status)"
-            exit "$status"
-          fi
-          # Strip ANSI codes before matching the marker (defensive; the container already sanitizes).
-          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
-          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
-          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy and verify isolated Pages previews
-        id: deploy-isolated
+      - name: Deploy and verify Pages previews
+        id: deploy-all
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
@@ -588,28 +563,63 @@ jobs:
           simple_url="https://pr-$pr.nokey-simple.pages.dev"
           sentinel_url="https://pr-$pr.nokey-sentinel.pages.dev"
 
-          deploy() {
-            project="$1"
-            dist="$2"
-            label="$3"
+          deploy_dir="$(mktemp -d)"
+          trap 'rm -rf "$deploy_dir"' EXIT
+
+          CF_PAGES_PROJECT_NAME=nook \
+            CF_PAGES_PRODUCTION_BRANCH=main \
+            CF_PAGES_DIST_DIR=nook-app/nook-web/nook-web-app/dist \
+            task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
+            >"$deploy_dir/unified.log" 2>&1 &
+          unified_pid=$!
+          CF_PAGES_PROJECT_NAME=nokey-sh \
+            CF_PAGES_PRODUCTION_BRANCH=main \
+            CF_PAGES_DIST_DIR=nook-app/nook-web/nook-web-app/dist/site \
+            task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
+            >"$deploy_dir/site.log" 2>&1 &
+          site_pid=$!
+          CF_PAGES_PROJECT_NAME=nokey-simple \
+            CF_PAGES_PRODUCTION_BRANCH=main \
+            CF_PAGES_DIST_DIR=nook-app/nook-web/nook-vault-simple/dist \
+            task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
+            >"$deploy_dir/simple.log" 2>&1 &
+          simple_pid=$!
+          CF_PAGES_PROJECT_NAME=nokey-sentinel \
+            CF_PAGES_PRODUCTION_BRANCH=main \
+            CF_PAGES_DIST_DIR=nook-app/nook-web/nook-vault-sentinel/dist \
+            task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
+            >"$deploy_dir/sentinel.log" 2>&1 &
+          sentinel_pid=$!
+
+          wait_for_deploy() {
+            pid="$1"
+            label="$2"
+            log="$3"
             set +e
-            out="$(CF_PAGES_PROJECT_NAME="$project" CF_PAGES_PRODUCTION_BRANCH=main CF_PAGES_DIST_DIR="$dist" task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
+            wait "$pid"
             status=$?
             set -e
-            echo "$out"
+            cat "$log"
             if [ "$status" -ne 0 ]; then
               echo "::error::$label preview deploy failed (exit $status)"
               exit "$status"
             fi
           }
 
-          deploy nokey-sh nook-app/nook-web/nook-web-app/dist/site Site
-          deploy nokey-simple nook-app/nook-web/nook-vault-simple/dist Simple
-          deploy nokey-sentinel nook-app/nook-web/nook-vault-sentinel/dist Sentinel
+          wait_for_deploy "$unified_pid" "Unified" "$deploy_dir/unified.log"
+          wait_for_deploy "$site_pid" "Site" "$deploy_dir/site.log"
+          wait_for_deploy "$simple_pid" "Simple" "$deploy_dir/simple.log"
+          wait_for_deploy "$sentinel_pid" "Sentinel" "$deploy_dir/sentinel.log"
+
+          clean="$(sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$deploy_dir/unified.log")"
+          preview_url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+          if [ -z "$preview_url" ]; then
+            echo "::error::Unified preview deploy did not emit NOOK_PREVIEW_URL"
+            exit 1
+          fi
 
           body="$(mktemp)"
           headers="$(mktemp)"
-          trap 'rm -f "$body" "$headers"' EXIT
           verified=false
           for attempt in $(seq 1 60); do
             site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
@@ -686,20 +696,23 @@ jobs:
             echo "::error::Extension metadata did not converge to the exact PR head"
             exit 1
           fi
-          echo "site_url=$site_url" >> "$GITHUB_OUTPUT"
-          echo "simple_url=$simple_url" >> "$GITHUB_OUTPUT"
-          echo "sentinel_url=$sentinel_url" >> "$GITHUB_OUTPUT"
-          echo "extension_url=$site_url/downloads/nook-passwords-pr-$pr.zip" >> "$GITHUB_OUTPUT"
+          {
+            echo "preview_url=$preview_url"
+            echo "site_url=$site_url"
+            echo "simple_url=$simple_url"
+            echo "sentinel_url=$sentinel_url"
+            echo "extension_url=$site_url/downloads/nook-passwords-pr-$pr.zip"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
-        if: steps.deploy.outcome == 'success' && steps.deploy-isolated.outcome == 'success'
+        if: steps.deploy-all.outcome == 'success'
         uses: actions/github-script@v9
         env:
-          PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-          SITE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.site_url }}
-          SIMPLE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.simple_url }}
-          SENTINEL_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.sentinel_url }}
-          EXTENSION_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.extension_url }}
+          PREVIEW_URL: ${{ steps.deploy-all.outputs.preview_url }}
+          SITE_PREVIEW_URL: ${{ steps.deploy-all.outputs.site_url }}
+          SIMPLE_PREVIEW_URL: ${{ steps.deploy-all.outputs.simple_url }}
+          SENTINEL_PREVIEW_URL: ${{ steps.deploy-all.outputs.sentinel_url }}
+          EXTENSION_PREVIEW_URL: ${{ steps.deploy-all.outputs.extension_url }}
         with:
           retries: 3
           script: |
@@ -763,14 +776,14 @@ jobs:
             }
 
       - name: Record github-pages deployment
-        if: steps.deploy.outcome == 'success' && steps.deploy-isolated.outcome == 'success'
+        if: steps.deploy-all.outcome == 'success'
         uses: actions/github-script@v9
         env:
-          PREVIEW_URL: ${{ steps.deploy-isolated.outputs.site_url }}
-          UNIFIED_PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-          SIMPLE_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.simple_url }}
-          SENTINEL_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.sentinel_url }}
-          EXTENSION_PREVIEW_URL: ${{ steps.deploy-isolated.outputs.extension_url }}
+          PREVIEW_URL: ${{ steps.deploy-all.outputs.site_url }}
+          UNIFIED_PREVIEW_URL: ${{ steps.deploy-all.outputs.preview_url }}
+          SIMPLE_PREVIEW_URL: ${{ steps.deploy-all.outputs.simple_url }}
+          SENTINEL_PREVIEW_URL: ${{ steps.deploy-all.outputs.sentinel_url }}
+          EXTENSION_PREVIEW_URL: ${{ steps.deploy-all.outputs.extension_url }}
         with:
           retries: 3
           script: |

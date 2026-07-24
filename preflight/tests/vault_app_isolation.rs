@@ -931,10 +931,10 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
     assert!(
         docker_tasks.contains("for attempt in 1 2; do")
             && docker_tasks.contains("nook-web-ci")
-            && docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\"")
+            && !docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\"")
             && docker_tasks
                 .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
-        "hosted web delivery must run validation once before retrying only the immediate BuildKit frontend flake"
+        "hosted web delivery must solve the joined validation/build target once and retry only the immediate BuildKit frontend flake"
     );
     let app_tasks = read(root, "nook-app/Taskfile.yml");
     assert!(
@@ -961,13 +961,17 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
 fn assert_release_wasm_cache_contract(root: &Path) {
     let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
     assert!(
-        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-build")
+        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source")
+            && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-clippy")
+            && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-build")
             && wasm_dockerfile.contains("FROM builder-wasm-build AS builder-wasm")
+            && wasm_dockerfile
+                .contains("COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed")
             && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
-        "native verification and release-profile WASM tests must run as sibling branches, preserve locale rebuilds, and join only small outputs"
+        "native verification, WASM clippy, and release builds must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile tests"
     );
     let core_dockerfile = read(root, "nook-app/nook-core/Dockerfile");
     assert!(
@@ -1059,7 +1063,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "Native Rust verification completed with $native_conclusion",
-        "attempt $attempt/180",
+        "attempt $attempt/900",
         "coverage/current/tools/nook-preflight coverage-inputs",
         "--repository \"$GITHUB_WORKSPACE\"",
         "--base \"$BASE_SHA\"",
@@ -1176,8 +1180,8 @@ fn assert_pr_workflow_contract(root: &Path) {
             && verify_job.contains("grep -Fxq \"$artifact_attempt\"")
             && verify_job.contains("WASM artifact attempt $artifact_attempt did not complete successfully")
             && verify_job.contains("name: Require WASM producer success before preview")
-            && verify_job.contains("attempt $attempt/180")
-            && verify_job.contains("sleep 10")
+            && verify_job.contains("attempt $attempt/900")
+            && verify_job.contains("sleep 2")
             && !verify_job.contains("task ci:pr:wasm")
             && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
@@ -1294,7 +1298,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
     let rust_handoff = section(
         &pr,
         "      - name: Download Rust coverage handoff\n",
-        "      - name: Deploy unified internal test harness\n",
+        "      - name: Deploy and verify Pages previews\n",
     );
     let artifact_lookup = rust_handoff
         .find("actions/runs/$GITHUB_RUN_ID/artifacts")
@@ -1324,6 +1328,25 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
             && wasm_handoff.contains("nook-run-attempt")
             && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
         "PR verification must consume only the current producer attempt and reuse prior output only when it is absent"
+    );
+    let deploy = section(
+        &pr,
+        "      - name: Deploy and verify Pages previews\n",
+        "      - name: Comment preview URL on PR\n",
+    );
+    assert!(
+        deploy.contains("id: deploy-all")
+            && deploy.contains(">\"$deploy_dir/unified.log\" 2>&1 &")
+            && deploy.contains(">\"$deploy_dir/site.log\" 2>&1 &")
+            && deploy.contains(">\"$deploy_dir/simple.log\" 2>&1 &")
+            && deploy.contains(">\"$deploy_dir/sentinel.log\" 2>&1 &")
+            && deploy.contains("wait_for_deploy"),
+        "independent Cloudflare preview uploads must run concurrently and all succeed before alias verification"
+    );
+    assert!(
+        ci_tasks.contains("node \"{{.WEB_ROOT}}/node_modules/.bin/wrangler\"")
+            && !ci_tasks.contains("bun add wrangler"),
+        "preview deploys must use the dependency-locked Wrangler binary instead of installing it at runtime"
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(

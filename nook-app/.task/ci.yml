@@ -318,8 +318,7 @@ tasks:
     cmds:
       # Cloudflare does NOT support running Wrangler under the Bun runtime: `bunx wrangler` crashes
       # (e.g. TypeError from node:timers/promises) and propagates an opaque non-zero exit (201 in CI).
-      # The image has no npm/npx, so we install wrangler with bun (package manager only) into a temp
-      # dir and then invoke it with `node` — the Node runtime Cloudflare officially supports.
+      # Invoke the dependency-locked Wrangler binary with Node, the runtime Cloudflare supports.
       #
       # NOTE: this is a `>-` FOLDED scalar — every newline becomes a space, so the whole block runs
       # as ONE line. Do NOT put `#` comments inside the shell body below: a folded `#` comments out
@@ -338,9 +337,7 @@ tasks:
           echo "error: Cloudflare Pages deploy directory not found: $deploy_dir" >&2;
           exit 1;
         fi;
-        wr_dir="$(mktemp -d)";
-        ( cd "$wr_dir" && printf "{\"name\":\"nook-wrangler\"}" > package.json && bun add wrangler@4 >/dev/null 2>&1 );
-        wrangler() { node "$wr_dir/node_modules/.bin/wrangler" "$@"; };
+        wrangler() { node "{{.WEB_ROOT}}/node_modules/.bin/wrangler" "$@"; };
         wrangler pages project create "$project" --production-branch="$production_branch" >/dev/null 2>&1 || true;
         set +e;
         deploy_output="$(

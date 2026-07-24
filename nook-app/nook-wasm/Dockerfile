@@ -11,11 +11,10 @@ RUN mkdir -p /opt/nook \
 ENV CARGO_TARGET_DIR=/opt/nook/cargo-target
 WORKDIR /meta-secret/nook
 
-# nook-wasm build stage: wasm32 clippy + release build + wasm-pack bundle. It is a sibling of
-# builder-debug from the shared manifest-keyed dependency image, so hosted BuildKit can run WASM
-# and native coverage concurrently instead of serializing both source-sensitive branches.
+# nook-wasm source stage shared by sibling clippy and release-build branches. The exported package
+# does not wait for clippy; the later Node-test join still gates the WASM job on both branches.
 
-FROM builder-wasm-deps AS builder-wasm-build
+FROM builder-wasm-deps AS builder-wasm-source
 
 ARG WASM_BUILD_MODE=dev
 
@@ -29,13 +28,19 @@ COPY nook-app/nook-wasm nook-wasm
 # the module that embeds locale JSON so locale-only changes cannot reuse stale WASM outputs.
 RUN touch nook-core/src/i18n.rs
 
-# Rust clippy, native coverage/tests, and wasm-bindgen Node tests finish in the Rust branch. The
-# slim web image can therefore run web-only Task gates without Cargo installed.
+# Clippy is a sibling of the export path so the exact generated package can reach web verification
+# while linting runs. Its marker is joined before release-profile Node tests complete the WASM job.
+FROM builder-wasm-source AS builder-wasm-clippy
+
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo clippy --release --target wasm32-unknown-unknown \
       -p nook-wasm \
       -- -D warnings \
-    && nook-sccache-report wasm-clippy
+    && nook-sccache-report wasm-clippy \
+    && install -D /dev/null /opt/nook/wasm-clippy-passed
+
+FROM builder-wasm-source AS builder-wasm-build
+
 # Emit the single JS/WASM package directly into the shared web source tree where every app imports
 # it. target/ stays in-tree for reuse.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
@@ -57,6 +62,8 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     && nook-sccache-report wasm-build
 
 FROM builder-wasm-build AS builder-wasm
+
+COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clippy-passed
 
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     wasm-pack test --node --release nook-wasm \
