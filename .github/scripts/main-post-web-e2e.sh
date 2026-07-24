@@ -12,7 +12,9 @@ cd "$ROOT"
 ext_status=0
 demo_status=0
 
-task docker:e2e:run TASK=_extension:test:e2e &
+# Use public CI wrappers — docker:e2e:run / docker:ui-demo:run are internal and
+# reject direct CLI invocation (task exit 202).
+task extension:test:e2e:ci &
 ext_pid=$!
 task ui:demo:ci UI_DEMO_OUTPUT_DIR="$UI_DEMO_OUTPUT_DIR" &
 demo_pid=$!

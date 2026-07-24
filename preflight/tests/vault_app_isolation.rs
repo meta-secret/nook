@@ -1402,7 +1402,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
     );
     let post_web = read(root, ".github/scripts/main-post-web-e2e.sh");
     for required in [
-        "task docker:e2e:run TASK=_extension:test:e2e &",
+        "task extension:test:e2e:ci &",
         "task ui:demo:ci UI_DEMO_OUTPUT_DIR=\"$UI_DEMO_OUTPUT_DIR\" &",
         "wait \"$ext_pid\"",
         "wait \"$demo_pid\"",
@@ -1412,6 +1412,18 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
             "main post-web-e2e overlap missing: {required}"
         );
     }
+    let extension_tasks = read(root, "nook-app/nook-web/.task/extension.yml");
+    let extension_ci = section(
+        &extension_tasks,
+        "  extension:test:e2e:ci:\n",
+        "\n  extension:smoke:hosted:",
+    );
+    assert!(
+        extension_ci.contains("task: docker:e2e:run")
+            && extension_ci.contains("TASK: _extension:test:e2e")
+            && !extension_ci.contains("task: setup"),
+        "Main post-web extension e2e must reuse the sealed image without re-running setup"
+    );
     let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(
         cleanup.contains("--filter until=168h"),
