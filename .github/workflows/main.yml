@@ -1,6 +1,7 @@
-# Main branch: one container for format/wasm/verify/build/e2e (task ci:main);
-# deploy the fast, unoptimized development channel to Cloudflare Pages. Immutable releases remain
-# responsible for production wasm optimization.
+# Main branch: one container for format/wasm/verify/build/web e2e (task ci:main:web-e2e),
+# then overlap extension e2e with headless UI demos; deploy the fast, unoptimized development
+# channel to Cloudflare Pages. Immutable releases remain responsible for production wasm
+# optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only and statistics-only changes do not need the product pipeline. A trusted
 # workflow_run collector records this workflow only after each attempt completes.
@@ -65,9 +66,9 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      - name: Preflight, check, build, and e2e
+      - name: Preflight, check, build, and web e2e
         run: >-
-          task ci:main
+          task ci:main:web-e2e
           VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
           VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
           VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
@@ -83,11 +84,17 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
-      - name: Record all headless UI demos
+      - name: Extension e2e and UI demos
         id: record-ui-demo
         env:
           UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
-        run: task ui:demo:ci UI_DEMO_OUTPUT_DIR="$UI_DEMO_OUTPUT_DIR"
+          CI: true
+          GIT_COMMIT_ID: ${{ github.sha }}
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+        run: bash .github/scripts/main-post-web-e2e.sh
 
       - name: Upload complete Main UI demo artifact
         if: always()

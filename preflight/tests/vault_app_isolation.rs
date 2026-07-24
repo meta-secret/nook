@@ -529,6 +529,7 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
         "vars: { BUILD_TASK: _ci:pr:host }",
         "vars: { BUILD_TASK: _ci:pr:e2e:host }",
         "vars: { BUILD_TASK: _ci:main:host }",
+        "vars: { BUILD_TASK: _ci:main:web-e2e:host }",
     ] {
         assert!(
             ci.contains(required),
@@ -754,10 +755,21 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
         !verify.contains("_web:build:parallel"),
         "the sealed image already contains the validated production web build"
     );
-    let main = section(&ci, "  _ci:main:\n", "\n  _ci:nightly:e2e:");
+    let main_core = section(&ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
     assert!(
-        !main.contains("_web:e2e:build-dist"),
+        !main_core.contains("_web:e2e:build-dist"),
         "main must not request the same e2e build before the e2e task checks its stamp"
+    );
+    assert!(
+        main_core.contains("_web:test:e2e:parallel")
+            && main_core.contains("_web:e2e:restore-prod-dist")
+            && !main_core.contains("_extension:test:e2e"),
+        "main web e2e core must restore prod dist without serializing extension e2e"
+    );
+    let main = section(&ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
+    assert!(
+        main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
+        "full main gate must keep extension e2e after the web core"
     );
 
     let web = read(&root, "nook-app/nook-web/.task/web.yml");
@@ -1375,7 +1387,23 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
         "release must initialize Docker from the workflow ref before checking out an older source"
     );
     let main = read(root, ".github/workflows/main.yml");
-    assert!(main.contains("          task ci:main\n"));
+    assert!(
+        main.contains("          task ci:main:web-e2e\n")
+            && main.contains("bash .github/scripts/main-post-web-e2e.sh"),
+        "main must run web e2e first, then overlap extension e2e with UI demos"
+    );
+    let post_web = read(root, ".github/scripts/main-post-web-e2e.sh");
+    for required in [
+        "task docker:e2e:run TASK=_extension:test:e2e &",
+        "task ui:demo:ci UI_DEMO_OUTPUT_DIR=\"$UI_DEMO_OUTPUT_DIR\" &",
+        "wait \"$ext_pid\"",
+        "wait \"$demo_pid\"",
+    ] {
+        assert!(
+            post_web.contains(required),
+            "main post-web-e2e overlap missing: {required}"
+        );
+    }
     let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(
         cleanup.contains("--filter until=168h"),

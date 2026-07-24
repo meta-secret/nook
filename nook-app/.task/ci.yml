@@ -156,6 +156,12 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:host }
 
+  ci:main:web-e2e:
+    desc: Main web gate without extension e2e — used when Main overlaps extension with UI demos.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:web-e2e:host }
+
   _ci:main:host:
     cmds:
       - task: preflight
@@ -163,6 +169,14 @@ tasks:
         vars: { SETUP_TARGET: nook-web-e2e }
       - task: docker:e2e:run
         vars: { TASK: _ci:main }
+
+  _ci:main:web-e2e:host:
+    cmds:
+      - task: preflight
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
+      - task: docker:e2e:run
+        vars: { TASK: _ci:main:core }
 
   ci:main:prepare:
     desc: Format check and wasm build in one container (manual/debug only — prefer ci:main:build).
@@ -280,14 +294,19 @@ tasks:
       - task: _format:check
       - task: _ci:pr:parallel
 
-  _ci:main:
-    desc: Main gate — verify the sealed production build, create one e2e build, test, and restore prod dist.
+  _ci:main:core:
+    desc: Main web gate — verify the sealed production build, create one e2e build, test, and restore prod dist.
     cmds:
       - task: _ci:main:build
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
       - task: _web:test:e2e:parallel
       - task: _web:test:e2e:isolation
       - task: _web:e2e:restore-prod-dist
+
+  _ci:main:
+    desc: Main gate — web e2e plus extension e2e in one container.
+    cmds:
+      - task: _ci:main:core
       - task: _extension:test:e2e
 
   _ci:main:web:e2e-only:
