@@ -50,6 +50,12 @@ tasks:
       - task: docker:e2e:run
         vars: { TASK: _extension:test:e2e }
 
+  extension:test:e2e:ci:
+    desc: Extension Playwright e2e from the already-built CI e2e image.
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _extension:test:e2e }
+
   extension:smoke:hosted:
     desc: Download and verify a dev or PR extension, then run its disposable hosted Simple Vault smoke in Docker.
     deps:
