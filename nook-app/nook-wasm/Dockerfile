@@ -11,8 +11,8 @@ RUN mkdir -p /opt/nook \
 ENV CARGO_TARGET_DIR=/opt/nook/cargo-target
 WORKDIR /meta-secret/nook
 
-# nook-wasm source stage shared by sibling clippy and release-build branches. The exported package
-# does not wait for clippy; the later Node-test join still gates the WASM job on both branches.
+# nook-wasm source stage shared by sibling clippy, package-export, and release-test branches. The
+# exported package does not wait for clippy or Node tests; the later join still gates those paths.
 
 FROM builder-wasm-deps AS builder-wasm-source
 
@@ -28,8 +28,10 @@ COPY nook-app/nook-wasm nook-wasm
 # the module that embeds locale JSON so locale-only changes cannot reuse stale WASM outputs.
 RUN touch nook-core/src/i18n.rs
 
-# Clippy is a sibling of the export path so the exact generated package can reach web verification
-# while linting runs. Its marker is joined before release-profile Node tests complete the WASM job.
+# Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
+# wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
+# therefore a different Cargo feature/unit graph (dev-dependencies). Compiling that test graph here
+# in parallel with the export path prevents the Node-test join from rebuilding workspace crates.
 FROM builder-wasm-source AS builder-wasm-clippy
 
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
@@ -61,9 +63,19 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
          && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 ) \
     && nook-sccache-report wasm-build
 
-FROM builder-wasm-build AS builder-wasm
+FROM builder-wasm-source AS builder-wasm-tests
+
+# Match wasm-pack test's compile step: CARGO_BUILD_TARGET + `cargo build --tests --release`.
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm \
+    && nook-sccache-report wasm-release-tests
+
+FROM builder-wasm-tests AS builder-wasm
 
 COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clippy-passed
+COPY --from=builder-wasm-build \
+    /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
+    /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
 
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     wasm-pack test --node --release nook-wasm \
