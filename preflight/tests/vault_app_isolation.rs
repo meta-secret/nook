@@ -755,22 +755,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
         !verify.contains("_web:build:parallel"),
         "the sealed image already contains the validated production web build"
     );
-    let main_core = section(&ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
-    assert!(
-        !main_core.contains("_web:e2e:build-dist"),
-        "main must not request the same e2e build before the e2e task checks its stamp"
-    );
-    assert!(
-        main_core.contains("_web:test:e2e:parallel")
-            && main_core.contains("_web:e2e:restore-prod-dist")
-            && !main_core.contains("_extension:test:e2e"),
-        "main web e2e core must restore prod dist without serializing extension e2e"
-    );
-    let main = section(&ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
-    assert!(
-        main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
-        "full main gate must keep extension e2e after the web core"
-    );
+    assert_main_web_e2e_core_contract(&ci);
 
     let web = read(&root, "nook-app/nook-web/.task/web.yml");
     let e2e = section(
@@ -1371,6 +1356,25 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
     assert!(
         e2e_pr.contains("cache-write: \"false\""),
         "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
+    );
+}
+
+fn assert_main_web_e2e_core_contract(ci: &str) {
+    let main_core = section(ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
+    assert!(
+        !main_core.contains("_web:e2e:build-dist"),
+        "main must not request the same e2e build before the e2e task checks its stamp"
+    );
+    assert!(
+        main_core.contains("_web:test:e2e:parallel")
+            && main_core.contains("_web:e2e:restore-prod-dist")
+            && !main_core.contains("_extension:test:e2e"),
+        "main web e2e core must restore prod dist without serializing extension e2e"
+    );
+    let main = section(ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
+    assert!(
+        main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
+        "full main gate must keep extension e2e after the web core"
     );
 }
 
