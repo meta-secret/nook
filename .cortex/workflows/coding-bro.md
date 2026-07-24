@@ -317,8 +317,8 @@ task pr:ready PR=<number>           # read-only exact-head readiness assertion
 ```
 
 Do **not** require `task ci:pr` before merge. The remote `pr.yml` run is the
-product gate. The automatic full browser gate is main-only (`task ci:main` /
-`main.yml`).
+product gate. The automatic full browser gate is main-only (`task ci:main:web-e2e`
+plus overlapped extension/UI demos in `main.yml`).
 
 See [pull-requests.md § Validation](pull-requests.md#5-validation-github-actions-only) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
