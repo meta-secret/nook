@@ -297,7 +297,6 @@ tasks:
         test -s "$artifacts/nook-wasm/nook_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "nook-web-ci.target=nook-web-verify" --set "nook-web-ci.output=type=cacheonly" nook-web-ci;
         for attempt in 1 2; do
           if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-ci; then
             exit 0;

@@ -1,5 +1,5 @@
 //! Typed browser and WASM adapter for the Nook Rust core.
-//! Browser lifecycle glue remains behind typed exports; domain policy stays in core.
+//! Browser lifecycle glue stays behind typed exports while domain policy remains in core.
 
 #![allow(
     clippy::missing_errors_doc,
