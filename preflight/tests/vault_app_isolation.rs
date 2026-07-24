@@ -964,14 +964,21 @@ fn assert_release_wasm_cache_contract(root: &Path) {
         wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-clippy")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-build")
-            && wasm_dockerfile.contains("FROM builder-wasm-build AS builder-wasm")
+            && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-tests")
+            && wasm_dockerfile.contains("FROM builder-wasm-tests AS builder-wasm")
             && wasm_dockerfile
                 .contains("COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed")
+            && wasm_dockerfile.contains(
+                "CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm",
+            )
+            && wasm_dockerfile.contains(
+                "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm",
+            )
             && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
-        "native verification, WASM clippy, and release builds must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile tests"
+        "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
     let core_dockerfile = read(root, "nook-app/nook-core/Dockerfile");
     assert!(
