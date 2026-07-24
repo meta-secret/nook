@@ -769,27 +769,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
         "the e2e task must rely on the freshness-checked build instead of rebuilding unconditionally"
     );
 
-    let e2e_builder = read(&root, ".github/scripts/e2e-build-if-needed.sh");
-    assert_eq!(
-        e2e_builder.matches("bun run build:unified").count(),
-        1,
-        "e2e must compile the unified harness exactly once"
-    );
-    for required in [
-        "site_source=\"$WEB_ROOT/dist-prod/site\"",
-        "cp -a \"$site_source\" \"$DIST/site\"",
-        "bun run assemble:preview",
-    ] {
-        assert!(
-            e2e_builder.contains(required),
-            "e2e assembly contract missing: {required}"
-        );
-    }
-    assert!(
-        !e2e_builder.contains("bun run build:simple")
-            && !e2e_builder.contains("bun run build:sentinel"),
-        "e2e must reuse the sealed Simple and Sentinel artifacts"
-    );
+    assert_e2e_build_if_needed_contract(&root);
 
     let extension = read(&root, "nook-app/nook-web/.task/extension.yml");
     let extension_check = section(
@@ -1375,6 +1355,30 @@ fn assert_main_web_e2e_core_contract(ci: &str) {
     assert!(
         main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
         "full main gate must keep extension e2e after the web core"
+    );
+}
+
+fn assert_e2e_build_if_needed_contract(root: &Path) {
+    let e2e_builder = read(root, ".github/scripts/e2e-build-if-needed.sh");
+    assert_eq!(
+        e2e_builder.matches("bun run build:unified").count(),
+        1,
+        "e2e must compile the unified harness exactly once"
+    );
+    for required in [
+        "site_source=\"$WEB_ROOT/dist-prod/site\"",
+        "cp -a \"$site_source\" \"$DIST/site\"",
+        "bun run assemble:preview",
+    ] {
+        assert!(
+            e2e_builder.contains(required),
+            "e2e assembly contract missing: {required}"
+        );
+    }
+    assert!(
+        !e2e_builder.contains("bun run build:simple")
+            && !e2e_builder.contains("bun run build:sentinel"),
+        "e2e must reuse the sealed Simple and Sentinel artifacts"
     );
 }
 
