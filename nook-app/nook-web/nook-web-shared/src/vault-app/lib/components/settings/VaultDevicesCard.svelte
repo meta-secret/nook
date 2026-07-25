@@ -93,6 +93,16 @@
     }
   }
 
+  async function handleExtensionSetupAction() {
+    const state = extensionSetupState
+    if (!state) return
+    if (state.status === 'not_installed') {
+      await handleExtensionInstall()
+      return
+    }
+    await handleExtensionConnect()
+  }
+
   function extensionStatusLabel(status: ExtensionSetupStatus): string {
     if (status === 'not_installed') {
       return vault.t('extension_setup.status_not_installed')
@@ -260,10 +270,7 @@
             : undefined}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
-          onclick={() =>
-            void (extensionSetupState.status === 'not_installed'
-              ? handleExtensionInstall()
-              : handleExtensionConnect())}
+          onclick={() => void handleExtensionSetupAction()}
         >
           {#if extensionInstallBusy}
             {vault.t(

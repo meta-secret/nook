@@ -607,7 +607,9 @@
       extensionConnectRoute ||
       (vault.activeVaultStoreId !== storeId && !discoveringStagedImport)
     ) {
-      return discovery.status;
+      return discovery.status === "different-vault"
+        ? "unavailable"
+        : discovery.status;
     }
     if (discovery.status === "locked") {
       window.setTimeout(() => {
