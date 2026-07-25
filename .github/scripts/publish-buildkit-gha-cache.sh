@@ -80,6 +80,8 @@ wasm_deps_force_upload=(
 )
 
 # GHA logs prefix each line with a timestamp, so match " #N writing layer " not "^#N ".
+# Completion is "sending cache export … done" and/or "DONE". Main #755 uploaded cook
+# layers then failed this guard when DONE lagged tee flush.
 assert_wasm_deps_exported() {
   local log_file="$1"
   local export_line step_id layer_count
@@ -93,7 +95,7 @@ assert_wasm_deps_exported() {
     echo "publish-buildkit-gha-cache: could not parse builder-wasm-deps export step id" >&2
     exit 1
   fi
-  if ! grep -qE " #${step_id} DONE " "$log_file"; then
+  if ! grep -qE " #${step_id} (DONE|sending cache export .* done)" "$log_file"; then
     echo "publish-buildkit-gha-cache: builder-wasm-deps export step #${step_id} did not complete" >&2
     exit 1
   fi
@@ -112,12 +114,20 @@ run_bake() {
   local log_file="$1"
   shift
   echo "Publishing hosted BuildKit cache from builder ${builder}: $*"
-  BUILDKIT_PROGRESS=plain docker buildx --builder "$builder" bake \
+  # Line-buffer bake progress so tee flushes export lines before the assert runs.
+  set +e
+  BUILDKIT_PROGRESS=plain stdbuf -oL -eL docker buildx --builder "$builder" bake \
     --allow="fs.read=${repo_root}" \
     "${password_allow[@]}" \
     "${bake_files[@]}" \
     "${common_sets[@]}" \
-    "$@" 2>&1 | tee "$log_file"
+    "$@" 2>&1 | stdbuf -oL -eL tee "$log_file"
+  local bake_status=${PIPESTATUS[0]}
+  set -e
+  if [ "$bake_status" -ne 0 ]; then
+    echo "publish-buildkit-gha-cache: bake failed with exit ${bake_status}" >&2
+    exit "$bake_status"
+  fi
 }
 
 wasm_log="$(mktemp)"
