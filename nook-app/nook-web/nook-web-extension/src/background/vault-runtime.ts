@@ -14,6 +14,7 @@ import initNookWasm, {
   NookAuthenticationOutcomeObservation,
   NookAuthenticationPageObservation,
   NookAuthenticationPageObservations,
+  NookExtensionPairingState,
   NookExternalEventLogRecords,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -45,16 +46,23 @@ export async function readExtensionPairingState(): Promise<
 > {
   await ensureExtensionWasm()
   const state = await wasmReadExtensionPairingState()
-  return state && typeof state === 'object'
-    ? (state as Record<string, unknown>)
-    : {}
+  try {
+    return state.toObject() as Record<string, unknown>
+  } finally {
+    state.free()
+  }
 }
 
 export async function writeExtensionPairingState(
   entries: Record<string, unknown>,
 ): Promise<void> {
   await ensureExtensionWasm()
-  await wasmWriteExtensionPairingState(entries)
+  const state = NookExtensionPairingState.fromObject(entries)
+  try {
+    await wasmWriteExtensionPairingState(state)
+  } finally {
+    state.free()
+  }
 }
 
 export async function removeExtensionPairingState(
