@@ -1023,6 +1023,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
     assert_main_deferred_rust_cache_publish(root);
+    assert_main_split_pipeline(root);
 }
 
 fn assert_rust_cache_export_hardening(bake: &str) {
@@ -1051,7 +1052,8 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
         main.contains("PREPARE_GROUP=prepare-and-publish-cache")
             && main.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && main.contains("task ci:main:publish-gha-cache")
-            && main.contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
+            && main.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && main.contains("\n  publish-cache:\n"),
         "Main must warm prepare without publishing, then export complete dependency scopes only after success"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
@@ -1080,6 +1082,33 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
             && base_dockerfile.contains("FROM ${RUST_IMAGE} AS rust-base")
             && !base_dockerfile.contains("cargo-chef:latest-rust-${RUST_VERSION}"),
         "Rust base images must be digest-pinned so floating tags cannot invalidate chef cook layers"
+    );
+}
+
+fn assert_main_split_pipeline(root: &Path) {
+    let main = read(root, ".github/workflows/main.yml");
+    assert!(
+        main.contains("\n  rust:\n")
+            && main.contains("\n  wasm:\n")
+            && main.contains("\n  web:\n")
+            && main.contains("\n  web-e2e:\n")
+            && main.contains("\n  publish-cache:\n")
+            && main.contains("task ci:pr:rust")
+            && main.contains("task ci:pr:wasm")
+            && main.contains("task ci:main:web:artifacts")
+            && main.contains("task ci:main:e2e:web:artifacts")
+            && main.contains("needs: [web, web-e2e]")
+            && main.contains("needs: [rust, wasm]"),
+        "Main must split native Rust, WASM, web verify, and browser suites while deferring GHA cache publish"
+    );
+    let coverage_export = read(root, "nook-app/nook-core/docker-bake.hcl")
+        .split("target \"coverage-export\" {")
+        .nth(1)
+        .expect("coverage-export target")
+        .to_owned();
+    assert!(
+        coverage_export.contains("cache-to   = rust_native_source_cache_to"),
+        "coverage-export must retain the native-source GHA exporter for deferred Main publish"
     );
 }
 
@@ -1543,48 +1572,51 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
         "release must initialize Docker from the workflow ref before checking out an older source"
     );
     let main = read(root, ".github/workflows/main.yml");
-    assert!(
-        main.contains("          task ci:main:prepare-images\n")
-            && main.contains("bash .github/scripts/main-post-web-e2e.sh"),
-        "main must bake images first, then overlap web e2e with extension e2e and UI demos"
-    );
-    let post_web = read(root, ".github/scripts/main-post-web-e2e.sh");
     for required in [
-        "task ci:main:web-e2e:ci &",
-        "task extension:test:e2e:ci &",
-        "task ui:demo:ci UI_DEMO_OUTPUT_DIR=\"$UI_DEMO_OUTPUT_DIR\" &",
-        "wait \"$web_pid\"",
-        "wait \"$ext_pid\"",
-        "wait \"$demo_pid\"",
+        "\n  rust:\n",
+        "\n  wasm:\n",
+        "\n  web:\n",
+        "\n  web-e2e:\n",
+        "\n  extension-e2e:\n",
+        "\n  ui-demos:\n",
+        "\n  deploy:\n",
+        "needs: [wasm]",
+        "needs: [web, web-e2e]",
+        "task ci:main:e2e:web:artifacts",
+        "task ci:main:e2e:extension:artifacts",
+        "task ci:main:ui-demo:artifacts",
+        "main-wasm-${{ github.run_id }}",
     ] {
         assert!(
-            post_web.contains(required),
-            "main post-web-e2e overlap missing: {required}"
+            main.contains(required),
+            "main parallel delivery contract missing: {required}"
         );
     }
     assert!(
-        !post_web.contains("task docker:e2e:run") && !post_web.contains("task docker:ui-demo:run"),
-        "main suite coordinator must use public Task wrappers, not internal docker run tasks"
+        !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
+        "same-runner Main suite coordinator was replaced by multi-job consumers"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
-    let web_ci = section(&ci_tasks, "  ci:main:web-e2e:ci:\n", "\n  _ci:main:host:");
+    let web_ci = section(
+        &ci_tasks,
+        "  ci:main:web-e2e:ci:\n",
+        "\n  ci:main:web:artifacts:",
+    );
     assert!(
         web_ci.contains("task: docker:e2e:run")
-            && web_ci.contains("TASK: _ci:main:core")
-            && !web_ci.contains("task: setup"),
-        "Main web e2e CI wrapper must reuse the sealed image without re-running setup"
+            && web_ci.contains("TASK: _ci:main:web:e2e-only")
+            && !web_ci.contains("TASK: _ci:main:core"),
+        "Main web e2e CI wrapper must run e2e-only without re-verifying the sealed build"
     );
-    let extension_tasks = read(root, "nook-app/nook-web/.task/extension.yml");
-    let extension_ci = section(
-        &extension_tasks,
-        "  extension:test:e2e:ci:\n",
-        "\n  extension:smoke:hosted:",
+    let web_e2e_artifacts = section(
+        &ci_tasks,
+        "  _ci:main:e2e:web:artifacts:host:\n",
+        "\n  ci:main:e2e:extension:artifacts:",
     );
     assert!(
-        extension_ci.contains("task: docker:e2e:run")
-            && extension_ci.contains("TASK: _extension:test:e2e")
-            && !extension_ci.contains("task: setup"),
-        "Main post-web extension e2e must reuse the sealed image without re-running setup"
+        web_e2e_artifacts.contains("task: docker:ci:web:e2e:build")
+            && web_e2e_artifacts.contains("TASK: _ci:main:web:e2e-only"),
+        "Main web e2e artifact consumer must bake the Chromium image then run e2e-only"
     );
     let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(

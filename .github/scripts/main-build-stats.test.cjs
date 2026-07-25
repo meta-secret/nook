@@ -111,6 +111,7 @@ test('builds stable Main timing metrics from completed run jobs and steps', () =
     wall_seconds: 1200,
     job_count: 1,
     step_count: 4,
+    // Legacy fixture still uses the pre-split Main build step name.
     build_seconds: 600,
     deployment_seconds: 120,
     coverage_seconds: 30,

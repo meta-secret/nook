@@ -2,8 +2,20 @@ const fs = require('node:fs')
 const { isDeepStrictEqual } = require('node:util')
 const { validateTelemetryRecord } = require('./cache-telemetry.cjs')
 
-const BUILD_STEP = 'Preflight, check, build, and e2e'
+// Producer compile/verify work only. Browser suites are parallel consumers and must not
+// inflate build_seconds relative to the historical single-job Main step.
+const BUILD_STEPS = new Set([
+  'Native Rust format, tests, and coverage',
+  'WASM clippy, build, and package export',
+  'WASM Node tests',
+  'Svelte checks, JS unit tests, lint, and web build',
+  // Legacy single-job Main step names retained for historical records.
+  'Preflight, check, build, and e2e',
+  'Preflight, check, build, and web e2e',
+  'Preflight and build images',
+])
 const DEPLOYMENT_STEPS = new Set([
+  'Build sealed web image for development deploy',
   'Deploy isolated development applications to Cloudflare Pages',
   'Configure and verify isolated development domains',
   'Record development deployment',
@@ -330,7 +342,7 @@ function buildMainBuildStats({
       wall_seconds: wallSeconds,
       job_count: normalizedJobs.length,
       step_count: normalizedJobs.reduce((total, job) => total + job.steps.length, 0),
-      build_seconds: sumNamedStepSeconds(normalizedJobs, (name) => name === BUILD_STEP),
+      build_seconds: sumNamedStepSeconds(normalizedJobs, (name) => BUILD_STEPS.has(name)),
       deployment_seconds: sumNamedStepSeconds(normalizedJobs, (name) =>
         DEPLOYMENT_STEPS.has(name),
       ),
@@ -567,7 +579,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  BUILD_STEP,
+  BUILD_STEPS,
   addComparison,
   buildMainBuildStats,
   normalizeLegacyMainBuildStats,

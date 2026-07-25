@@ -126,6 +126,8 @@ fn assert_cache_actions_use_credential_files() {
         "NOOK_SCCACHE_BACKEND=direct_compile",
         "NOOK_SCCACHE_BACKEND=remote",
         "NOOK_SCCACHE_BACKEND_REASON=persistent_tls_service",
+        "hosted_secret_free_by_design",
+        "credentials_unavailable",
     ] {
         assert!(
             cache_action_main.contains(required),
