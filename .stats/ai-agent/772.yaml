@@ -1,0 +1,127 @@
+schema_version: 3
+source_pr:
+  number: 772
+  url: https://github.com/meta-secret/nook/pull/772
+  title: Cut Main publish-cache warm to deps-only Bake
+  change_surface: ci_main_publish_cache_deps_only_warm
+  head_sha: 200c0653dea6fddb9f6cc74a43284f23d7477255
+  started_at: '2026-07-25T18:02:00Z'
+  opened_at: '2026-07-25T18:06:40Z'
+  merged_at: '2026-07-25T18:22:02Z'
+  elapsed_seconds: 1202
+  open_to_merge_seconds: 922
+summary:
+  local_execution_count: 5
+  local_check_count: 3
+  local_test_count: 2
+  local_combined_count: 0
+  local_execution_seconds: 294
+  github_actions_run_count: 2
+  github_actions_seconds: 724
+  pr_retrigger_count: 1
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: '2026-07-25T18:23:00Z'
+  head_sha: 200c0653dea6fddb9f6cc74a43284f23d7477255
+  by_type:
+    rust: 634
+    preflight: 40
+    web_unit: 278
+    e2e: 205
+  total: 1157
+local_executions:
+- command: cargo test --manifest-path preflight/Cargo.toml --test vault_app_isolation delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches
+  category: test
+  started_at: '2026-07-25T18:05:20Z'
+  finished_at: '2026-07-25T18:05:25Z'
+  duration_seconds: 5
+  outcome: passed
+  reason: hosted_cache_contract_after_deps_only_warm
+- command: task format
+  category: check
+  started_at: '2026-07-25T18:05:30Z'
+  finished_at: '2026-07-25T18:06:37Z'
+  duration_seconds: 67
+  outcome: passed
+  reason: pre_push_hygiene_initial
+- command: task format
+  category: check
+  started_at: '2026-07-25T18:12:56Z'
+  finished_at: '2026-07-25T18:15:17Z'
+  duration_seconds: 141
+  outcome: passed
+  reason: pre_push_hygiene_rustfmt_fix
+- command: cargo test --manifest-path preflight/Cargo.toml --test vault_app_isolation delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches
+  category: test
+  started_at: '2026-07-25T18:15:15Z'
+  finished_at: '2026-07-25T18:15:17Z'
+  duration_seconds: 2
+  outcome: passed
+  reason: contract_recheck_after_rustfmt
+- command: task pr:ready PR=772
+  category: check
+  started_at: '2026-07-25T18:21:50Z'
+  finished_at: '2026-07-25T18:21:59Z'
+  duration_seconds: 9
+  outcome: passed
+  reason: readiness_before_squash_merge
+github_actions_runs:
+- workflow: PR
+  run_id: 30168974693
+  run_attempt: 1
+  head_sha: 891bf9239182cce3d17523971aea0090cadd6f8d
+  trigger: pull_request
+  started_at: '2026-07-25T18:06:42Z'
+  finished_at: '2026-07-25T18:12:30Z'
+  duration_seconds: 348
+  conclusion: failure
+- workflow: PR
+  run_id: 30169261854
+  run_attempt: 1
+  head_sha: 42f12bc03a8c91487facc10a320c3607c7f5b9bc
+  trigger: pull_request
+  started_at: '2026-07-25T18:15:20Z'
+  finished_at: '2026-07-25T18:21:36Z'
+  duration_seconds: 376
+  conclusion: success
+cache_telemetry:
+  totals:
+    job_count: 0
+    remote_backend_job_count: 0
+    direct_compile_job_count: 0
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: null
+    buildkit_completed_steps: null
+    buildkit_cached_steps: null
+    buildkit_cache_hit_rate_percent: null
+  jobs: []
+pr_retriggers:
+- at: '2026-07-25T18:15:20Z'
+  kind: head_push
+  reason: rustfmt_preflight_assert_chain
+merge_attempts:
+- at: '2026-07-25T18:22:02Z'
+  method: squash
+  outcome: success
+  reason: readiness_passed
+comparison:
+  baseline_prs:
+  - 766
+  - 760
+  baseline_quality: comparable
+  baseline_note: Recent Main GHA publish-cache assert/export fixes on the same BuildKit cache surface.
+  elapsed_seconds_change_percent: 20.3
+  local_execution_seconds_change_percent: 126.2
+  github_actions_seconds_change_percent: -16.2
+  test_inventory_total_change: 0
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+  - First PR cycle failed only on rustfmt for the new warm-script assert chain; one avoidable Validate cycle.
+  - Change itself is CI orchestration only; product gates stayed green after the format fix.
+  required_actions: []
