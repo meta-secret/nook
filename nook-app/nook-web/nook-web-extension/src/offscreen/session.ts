@@ -65,7 +65,15 @@ type PendingLoginSaveOffer = {
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
 const canceledWebsitePasskeyRequests = new Set<string>()
-const sessionOperations = new SessionOperationQueue()
+let sessionOperations = new SessionOperationQueue()
+
+function replaceSessionOperations(
+  error = new Error(SESSION_LOCKED_ERROR),
+): void {
+  const previous = sessionOperations
+  sessionOperations = new SessionOperationQueue()
+  previous.close(error)
+}
 
 function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
   if (!offer) return
@@ -149,12 +157,14 @@ function scheduleSessionExpiry(generation: number): void {
         // still owns the manager when the session expires.
       }
     }
-    sessionOperations.close(new Error(SESSION_LOCKED_ERROR))
+    replaceSessionOperations()
     chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
   }, SESSION_DURATION_MS)
 }
 
 async function activateSession(): Promise<DeviceResult> {
+  // Expiry closes the queue permanently; unlock must install a fresh queue.
+  sessionOperations = new SessionOperationQueue()
   const activeManager = await getManager()
   sessionGeneration += 1
   scheduleSessionExpiry(sessionGeneration)
@@ -411,26 +421,42 @@ async function handleMessage(message: unknown): Promise<unknown> {
       )
       const status = statusValue.toObject()
       statusValue.free()
-      const existing = await activeManager.loadAuthProviders()
-      const merged = new Map<string, StorageProvider>(
-        existing.providers.map((provider) => [provider.id, provider]),
-      )
-      for (const provider of providers) {
-        if (
-          provider &&
+      const protection = await activeManager.deviceProtectionStatus()
+      const grantedProviders = providers.filter(
+        (provider): provider is StorageProvider =>
+          !!provider &&
           typeof provider === 'object' &&
           'id' in provider &&
-          typeof provider.id === 'string'
-        ) {
+          typeof provider.id === 'string',
+      )
+      if (protection === 'unlocked') {
+        const existing = await activeManager.loadAuthProviders()
+        const merged = new Map<string, StorageProvider>(
+          existing.providers.map((provider) => [provider.id, provider]),
+        )
+        for (const provider of grantedProviders) {
           // The Rust/Tsify ABI performs the complete shape validation when the
           // snapshot is saved; this guard only narrows the merge key here.
-          merged.set(provider.id, provider as StorageProvider)
+          merged.set(provider.id, provider)
         }
+        await activeManager.saveAuthProviders({
+          providers: Array.from(merged.values()),
+          activeVaultStoreId: grant.vaultStoreId,
+        })
+      } else if (grantedProviders.length > 0) {
+        // Pairing may race a closed/locked offscreen session. Website grants are
+        // already sealed for this device public key, so persist without unlock.
+        const lockedManager = activeManager as NookVaultManager & {
+          savePresealedAuthProviders: (snapshot: {
+            providers: StorageProvider[]
+            activeVaultStoreId: string
+          }) => Promise<void>
+        }
+        await lockedManager.savePresealedAuthProviders({
+          providers: grantedProviders,
+          activeVaultStoreId: grant.vaultStoreId,
+        })
       }
-      await activeManager.saveAuthProviders({
-        providers: Array.from(merged.values()),
-        activeVaultStoreId: grant.vaultStoreId,
-      })
       return { ok: true, status }
     }
     case 'nook:extension-session-update-vault': {
@@ -986,8 +1012,21 @@ function enqueueVaultImportMessage(
   payload: Record<string, unknown>,
 ): Promise<unknown> {
   const stagedProviders = stageProviderCredentials(payload.providers)
-  if (!stagedProviders)
-    return sessionOperations.enqueue(() => handleMessage(message))
+  // Pairing imports are one-shot and may run against a cold offscreen WASM
+  // runtime. Never expire them with the short interactive probe budget.
+  if (!stagedProviders || stagedProviders.length === 0) {
+    return sessionOperations.enqueue(
+      () =>
+        handleMessage({
+          ...message,
+          payload: {
+            ...payload,
+            providers: stagedProviders ?? payload.providers ?? [],
+          },
+        }),
+      { priority: 'interactive' },
+    )
+  }
   payload.providers = []
   let pendingPayload: Record<string, unknown> | undefined = {
     ...payload,
@@ -1014,7 +1053,6 @@ function enqueueVaultImportMessage(
     },
     {
       priority: 'interactive',
-      expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
       onExpire: clearPending,
     },
   )

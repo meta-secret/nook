@@ -64,6 +64,11 @@ test('offer browser extension install on vault home and in Devices', async ({
       payload: { intent: 'pair' },
     }),
   )
+  // Companion pair intent is the entry into Simple Vault /extension-connect
+  // consent; grant acceptance after Approve is covered by extension e2e.
+  await expect(
+    page.getByTestId('extension-install-setup-connect'),
+  ).toBeVisible()
   await demoBeat(page)
 
   await page.getByTestId('vault-settings-tab').click()

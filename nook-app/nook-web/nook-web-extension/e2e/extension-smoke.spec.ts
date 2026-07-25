@@ -24,6 +24,7 @@ import {
 } from '../src/lib/simple-vault-target'
 import { startMockAuthServer } from './mock-auth'
 import { waitForExtensionPairingReady } from './helpers/extension-approval'
+import { lockExtensionSession } from './helpers/paired-pin-extension'
 
 const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
 
@@ -1096,5 +1097,53 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
   } finally {
     await context.close()
     await loginServer.close()
+  }
+})
+
+test('accepts the pairing grant after the extension session was locked', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+  test.skip(isHostedSmoke, 'Hosted smoke keeps a warm unlocked session')
+  testInfo.setTimeout(180_000)
+
+  const userDataDir = testInfo.outputPath('chromium-profile-locked-handoff')
+  const context = await launchExtensionContext(userDataDir)
+  await context.addInitScript(installMockPasskeyRuntime)
+
+  try {
+    const popupPage = await setupPasskeyExtensionPopup(context)
+    const simplePage = await openSimpleVaultConnection(context, popupPage)
+
+    await advanceCreateVaultWizardToFinalStep(simplePage)
+    await simplePage
+      .getByTestId('login-vault-name-input')
+      .fill('Locked session handoff vault')
+    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await expect(
+      simplePage.getByTestId('extension-connect-consent'),
+    ).toBeVisible()
+
+    // Close the offscreen session before Approve. The grant handoff must still
+    // import the event log without requiring an unlocked saveAuthProviders path.
+    await lockExtensionSession(context)
+
+    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await waitForExtensionPairingReady(
+      simplePage,
+      async () => {
+        const storage = await readExtensionStorage(context)
+        return storage[setupStorageKey]
+      },
+      'Locked session handoff vault',
+    )
+    await expect(
+      simplePage.getByTestId('extension-connect-approved'),
+    ).toBeVisible()
+    await expect(
+      simplePage.getByTestId('extension-connect-consent').getByRole('alert'),
+    ).toHaveCount(0)
+  } finally {
+    await context.close()
   }
 })

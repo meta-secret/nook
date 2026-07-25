@@ -115,7 +115,23 @@
               resolve()
               return
             }
-            reject(new Error(vault.t('extension.consent.grant_rejected')))
+            const failure =
+              typeof response === 'object' && response !== null
+                ? (response as { reason?: unknown; error?: unknown })
+                : undefined
+            const detail =
+              typeof failure?.reason === 'string' && failure.reason.length > 0
+                ? failure.reason
+                : typeof failure?.error === 'string' && failure.error.length > 0
+                  ? failure.error
+                  : undefined
+            reject(
+              new Error(
+                detail
+                  ? `${vault.t('extension.consent.grant_rejected')} (${detail})`
+                  : vault.t('extension.consent.grant_rejected'),
+              ),
+            )
           },
         )
       })

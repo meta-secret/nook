@@ -1,0 +1,730 @@
+schema_version: 3
+source_pr:
+  number: 750
+  url: https://github.com/meta-secret/nook/pull/750
+  title: Fix extension pairing grant handoff after locked session
+  change_surface: rust_wasm_browser_extension_pairing_grant_locked_session
+  head_sha: d0f20182b36169ca8b10979f3605ca3b88b63e5e
+  started_at: '2026-07-25T07:41:00Z'
+  opened_at: '2026-07-25T07:54:54Z'
+  merged_at: '2026-07-25T09:18:40Z'
+  elapsed_seconds: 5860
+  open_to_merge_seconds: 5026
+summary:
+  local_execution_count: 8
+  local_check_count: 8
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 640
+  github_actions_run_count: 9
+  github_actions_seconds: 3985
+  pr_retrigger_count: 7
+  agent_requested_rerun_count: 1
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: '2026-07-25T09:20:00Z'
+  head_sha: d0f20182b36169ca8b10979f3605ca3b88b63e5e
+  by_type:
+    rust: 634
+    preflight: 40
+    web_unit: 278
+    e2e: 205
+  total: 1157
+local_executions:
+- command: task format
+  category: check
+  started_at: '2026-07-25T07:48:00Z'
+  finished_at: '2026-07-25T07:52:00Z'
+  duration_seconds: 240
+  outcome: passed
+  reason: pre_push_hygiene_initial_fix
+- command: task format
+  category: check
+  started_at: '2026-07-25T08:03:00Z'
+  finished_at: '2026-07-25T08:04:30Z'
+  duration_seconds: 90
+  outcome: passed
+  reason: pre_push_hygiene_ui_demo_consent
+- command: task format
+  category: check
+  started_at: '2026-07-25T08:12:30Z'
+  finished_at: '2026-07-25T08:13:30Z'
+  duration_seconds: 60
+  outcome: passed
+  reason: pre_push_hygiene_demo_local_vault_helper
+- command: task format
+  category: check
+  started_at: '2026-07-25T08:24:00Z'
+  finished_at: '2026-07-25T08:25:00Z'
+  duration_seconds: 60
+  outcome: passed
+  reason: pre_push_hygiene_demo_chooser_locator
+- command: task format
+  category: check
+  started_at: '2026-07-25T08:36:00Z'
+  finished_at: '2026-07-25T08:37:00Z'
+  duration_seconds: 60
+  outcome: passed
+  reason: pre_push_hygiene_demo_second_context_vault
+- command: task format
+  category: check
+  started_at: '2026-07-25T08:43:30Z'
+  finished_at: '2026-07-25T08:44:30Z'
+  duration_seconds: 60
+  outcome: passed
+  reason: pre_push_hygiene_install_setup_demo_contract
+- command: task format
+  category: check
+  started_at: '2026-07-25T09:10:00Z'
+  finished_at: '2026-07-25T09:11:00Z'
+  duration_seconds: 60
+  outcome: passed
+  reason: pre_push_hygiene_remove_ci_full_e2e_label
+- command: task pr:ready PR=750
+  category: check
+  started_at: '2026-07-25T09:18:25Z'
+  finished_at: '2026-07-25T09:18:35Z'
+  duration_seconds: 10
+  outcome: passed
+  reason: readiness_before_squash_merge
+github_actions_runs:
+- workflow: PR
+  run_id: 30150165133
+  run_attempt: 1
+  head_sha: 684d0605da48df15934c13e0e587abbf6bdc3dab
+  trigger: pull_request
+  started_at: '2026-07-25T07:54:57Z'
+  finished_at: '2026-07-25T07:59:41Z'
+  conclusion: failure
+  duration_seconds: 284
+- workflow: PR
+  run_id: 30150473585
+  run_attempt: 1
+  head_sha: cc838ce165680e01187e4cf0d002ebf2418b21ed
+  trigger: pull_request
+  started_at: '2026-07-25T08:05:07Z'
+  finished_at: '2026-07-25T08:12:08Z'
+  conclusion: failure
+  duration_seconds: 421
+- workflow: PR
+  run_id: 30150732545
+  run_attempt: 1
+  head_sha: 46d63005af38c7adf2e32dfe38e1d688e5cb4714
+  trigger: pull_request
+  started_at: '2026-07-25T08:13:51Z'
+  finished_at: '2026-07-25T08:21:01Z'
+  conclusion: failure
+  duration_seconds: 430
+- workflow: PR
+  run_id: 30151075354
+  run_attempt: 1
+  head_sha: b13fa76d36daee289b8259c4fdbb32f5f6cbf614
+  trigger: pull_request
+  started_at: '2026-07-25T08:25:27Z'
+  finished_at: '2026-07-25T08:33:16Z'
+  conclusion: failure
+  duration_seconds: 469
+- workflow: PR
+  run_id: 30151434529
+  run_attempt: 1
+  head_sha: 56e6a6551b712919e1791e79184c160eb3fa1138
+  trigger: pull_request
+  started_at: '2026-07-25T08:37:35Z'
+  finished_at: '2026-07-25T08:43:17Z'
+  conclusion: failure
+  duration_seconds: 342
+- workflow: PR
+  run_id: 30151644388
+  run_attempt: 1
+  head_sha: 5459c4e7f984fbac85384dd0c7e350e22f1d3000
+  trigger: pull_request
+  started_at: '2026-07-25T08:44:53Z'
+  finished_at: '2026-07-25T08:54:38Z'
+  conclusion: success
+  duration_seconds: 585
+- workflow: PR
+  run_id: 30151935732
+  run_attempt: 1
+  head_sha: 5459c4e7f984fbac85384dd0c7e350e22f1d3000
+  trigger: pull_request
+  started_at: '2026-07-25T08:55:05Z'
+  finished_at: '2026-07-25T09:12:21Z'
+  conclusion: cancelled
+  duration_seconds: 1036
+- workflow: PR
+  run_id: 30152392355
+  run_attempt: 1
+  head_sha: 5459c4e7f984fbac85384dd0c7e350e22f1d3000
+  trigger: pull_request
+  started_at: '2026-07-25T09:11:24Z'
+  finished_at: '2026-07-25T09:11:30Z'
+  conclusion: cancelled
+  duration_seconds: 6
+- workflow: PR
+  run_id: 30152394297
+  run_attempt: 1
+  head_sha: 8d6358b63753a963ba913873afe1f77551c85f2f
+  trigger: pull_request
+  started_at: '2026-07-25T09:11:29Z'
+  finished_at: '2026-07-25T09:18:21Z'
+  conclusion: success
+  duration_seconds: 412
+cache_telemetry:
+  totals:
+    job_count: 26
+    remote_backend_job_count: 0
+    direct_compile_job_count: 26
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: null
+    buildkit_completed_steps: 5037
+    buildkit_cached_steps: 2622
+    buildkit_cache_hit_rate_percent: 52.05
+  jobs:
+  - workflow: PR
+    run_id: 30150165133
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 309
+      cached_steps: 187
+      cache_hit_rate_percent: 60.52
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150165133
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: credentials_unavailable
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 0
+      cached_steps: 0
+      cache_hit_rate_percent: null
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150165133
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 269
+      cached_steps: 132
+      cache_hit_rate_percent: 49.07
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150473585
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 309
+      cached_steps: 205
+      cache_hit_rate_percent: 66.34
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150473585
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 144
+      cached_steps: 51
+      cache_hit_rate_percent: 35.42
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150473585
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 269
+      cached_steps: 132
+      cache_hit_rate_percent: 49.07
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150732545
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 309
+      cached_steps: 205
+      cache_hit_rate_percent: 66.34
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150732545
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 144
+      cached_steps: 51
+      cache_hit_rate_percent: 35.42
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30150732545
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 269
+      cached_steps: 132
+      cache_hit_rate_percent: 49.07
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151075354
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 309
+      cached_steps: 205
+      cache_hit_rate_percent: 66.34
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151075354
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 144
+      cached_steps: 51
+      cache_hit_rate_percent: 35.42
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151075354
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 273
+      cached_steps: 132
+      cache_hit_rate_percent: 48.35
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151434529
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 309
+      cached_steps: 187
+      cache_hit_rate_percent: 60.52
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151434529
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 144
+      cached_steps: 51
+      cache_hit_rate_percent: 35.42
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151434529
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 273
+      cached_steps: 175
+      cache_hit_rate_percent: 64.1
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151644388
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 309
+      cached_steps: 205
+      cache_hit_rate_percent: 66.34
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151644388
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 286
+      cached_steps: 154
+      cache_hit_rate_percent: 53.85
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151644388
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 273
+      cached_steps: 132
+      cache_hit_rate_percent: 48.35
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151935732
+    run_attempt: 1
+    job: full-e2e
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 79
+      cached_steps: 0
+      cache_hit_rate_percent: 0
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151935732
+    run_attempt: 1
+    job: full-extension-e2e
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 79
+      cached_steps: 0
+      cache_hit_rate_percent: 0
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151935732
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 15
+      cached_steps: 0
+      cache_hit_rate_percent: 0
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151935732
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 221
+      cached_steps: 81
+      cache_hit_rate_percent: 36.65
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30151935732
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 0
+      cached_steps: 0
+      cache_hit_rate_percent: null
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30152394297
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 15
+      cached_steps: 0
+      cache_hit_rate_percent: 0
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30152394297
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 286
+      cached_steps: 154
+      cache_hit_rate_percent: 53.85
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30152394297
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 0
+      cached_steps: 0
+      cache_hit_rate_percent: null
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+pr_retriggers:
+- at: '2026-07-25T08:05:01Z'
+  kind: head_push
+  reason: ui_demo_consent_coverage
+- at: '2026-07-25T08:13:43Z'
+  kind: head_push
+  reason: fix_demo_local_vault_helper
+- at: '2026-07-25T08:25:19Z'
+  kind: head_push
+  reason: stabilize_demo_chooser_locator
+- at: '2026-07-25T08:37:25Z'
+  kind: head_push
+  reason: bootstrap_second_context_vault_for_demo
+- at: '2026-07-25T08:44:45Z'
+  kind: head_push
+  reason: satisfy_ui_demo_contract_via_install_setup
+- at: '2026-07-25T08:55:05Z'
+  kind: manual_rerun
+  reason: ci_full_e2e_label_for_locked_session_smoke
+- at: '2026-07-25T09:11:23Z'
+  kind: head_push
+  reason: drop_ci_full_e2e_after_targeted_smoke_passed
+merge_attempts:
+- at: '2026-07-25T09:18:40Z'
+  method: squash
+  outcome: success
+  reason: verify_green_after_dropping_unrelated_full_e2e
+comparison:
+  baseline_prs:
+  - 670
+  - 713
+  baseline_quality: comparable
+  baseline_note: PR 670 changed extension session security (regression source); PR 713 is a recent extension behavior fix
+    with Verify-gated delivery.
+  elapsed_seconds_change_percent: -44.6
+  local_execution_seconds_change_percent: 156.5
+  github_actions_seconds_change_percent: -47.1
+  test_inventory_total_change: 40
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: true
+  findings:
+  - Five Verify failures were spent iterating a UI demo that cannot exercise Approve (__nookVault unavailable in headless
+    UI demos); final coverage correctly stayed in extension Playwright e2e.
+  - Applying ci:full-e2e after Verify was green burned ~17m on a cancelled full browser suite; locked-session smoke had already
+    passed and remaining Pilot flakes were out of scope.
+  required_actions:
+  - Prefer extension Playwright coverage for pairing-consent grant acceptance; only touch UI demos for the path-filter contract,
+    not for __nookVault Approve flows.
+  - Do not apply ci:full-e2e when the regression is already covered by a targeted extension smoke and remaining suite failures
+    are known out-of-scope flakes.
