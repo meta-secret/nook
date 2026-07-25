@@ -8,6 +8,28 @@ async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
+async function readDeviceIdentity(
+  page: Parameters<typeof connectLocalVault>[0],
+) {
+  return page.evaluate(async () => {
+    type DemoVault = {
+      manager?: {
+        device_id: string
+        device_public_key: string
+        deviceSigningPublicKey: () => Promise<string>
+      }
+    }
+    const manager = (window as Window & { __nookVault?: DemoVault }).__nookVault
+      ?.manager
+    if (!manager) throw new Error('Extension device manager unavailable')
+    return {
+      deviceId: manager.device_id,
+      devicePublicKey: manager.device_public_key,
+      deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
+    }
+  })
+}
+
 test('approve extension pairing when the browser handoff accepts the grant', async ({
   page,
   browser,
@@ -21,36 +43,11 @@ test('approve extension pairing when the browser handoff accepts the grant', asy
   const extensionContext = await browser.newContext()
   await extensionContext.addInitScript(installMockPasskeyRuntime)
   const extensionPage = await extensionContext.newPage()
-  await extensionPage.goto(`${new URL(page.url()).origin}/app/`)
-  await expect(
-    extensionPage.getByTestId('login-create-vault-chooser'),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
-  const extensionDevice = await extensionPage.evaluate(async () => {
-    type DemoVault = {
-      manager?: {
-        device_id: string
-        device_public_key: string
-        deviceSigningPublicKey: () => Promise<string>
-      }
-    }
-    const manager = (window as Window & { __nookVault?: DemoVault }).__nookVault
-      ?.manager
-    if (!manager) throw new Error('Extension device manager unavailable')
-    let lastError = 'Extension device identity unavailable'
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      try {
-        return {
-          deviceId: manager.device_id,
-          devicePublicKey: manager.device_public_key,
-          deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
-        }
-      } catch (caught) {
-        lastError = caught instanceof Error ? caught.message : String(caught)
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-    }
-    throw new Error(lastError)
+  await connectLocalVault(extensionPage)
+  await expect(extensionPage.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
   })
+  const extensionDevice = await readDeviceIdentity(extensionPage)
   await extensionContext.close()
 
   await page.getByTestId('header-lock-vault-btn').click()
