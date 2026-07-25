@@ -240,8 +240,11 @@ tasks:
         vars: { SETUP_TARGET: nook-web-e2e }
 
   _ci:main:publish-gha-cache:host:
+    # Flattened app includes can run with cwd under nook-app/. Always resolve from REPO_ROOT so
+    # Main's deferred cache publish cannot miss the script (exit 127) after a warm prepare.
+    dir: '{{.REPO_ROOT}}'
     cmds:
-      - bash .github/scripts/publish-buildkit-gha-cache.sh
+      - bash "{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh"
 
   _ci:main:web-e2e:host:
     cmds:
