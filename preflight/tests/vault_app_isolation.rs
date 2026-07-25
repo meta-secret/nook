@@ -1420,11 +1420,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
         "main suite coordinator must use public Task wrappers, not internal docker run tasks"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
-    let web_ci = section(
-        &ci_tasks,
-        "  ci:main:web-e2e:ci:\n",
-        "\n  _ci:main:host:",
-    );
+    let web_ci = section(&ci_tasks, "  ci:main:web-e2e:ci:\n", "\n  _ci:main:host:");
     assert!(
         web_ci.contains("task: docker:e2e:run")
             && web_ci.contains("TASK: _ci:main:core")
