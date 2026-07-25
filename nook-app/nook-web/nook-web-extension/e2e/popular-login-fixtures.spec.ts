@@ -4,32 +4,31 @@ import {
   saveVaultLogin,
 } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  listShellTemplateIds,
+  resolveSiteFixture,
+  siteShellCount,
+} from './mock-auth/fixtures/resolve-site-fixture.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const catalogPath = path.resolve(
   here,
   '../../../nook-core/data/popular_login_sites.json',
 )
-const fixturesDir = path.resolve(here, 'mock-auth/fixtures/sites')
 
 type CatalogEntry = { id: string }
-type SiteFixture = {
-  id: string
-  steps: Array<{ fields: Array<{ type?: string }> }>
-}
 
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as CatalogEntry[]
 const singleStepPasswordIds = catalog
   .map((site) => {
-    const fixture = JSON.parse(
-      readFileSync(path.join(fixturesDir, `${site.id}.json`), 'utf8'),
-    ) as SiteFixture
+    const fixture = resolveSiteFixture(site.id)
     const single =
-      fixture.steps.length === 1 &&
-      fixture.steps[0]?.fields.some((field) => field.type === 'password')
+      Boolean(fixture) &&
+      fixture!.steps.length === 1 &&
+      fixture!.steps[0]?.fields.some((field) => field.type === 'password')
     return single ? site.id : undefined
   })
   .filter((id): id is string => Boolean(id))
@@ -37,14 +36,13 @@ const singleStepPasswordIds = catalog
 test.describe('popular login fixture coverage', () => {
   test.describe.configure({ timeout: 600_000 })
 
-  test('catalog and fixture files stay aligned', () => {
-    const files = readdirSync(fixturesDir).filter((name) =>
-      name.endsWith('.json'),
-    )
+  test('catalog maps to shared templates without per-site duplicates', () => {
     expect(catalog).toHaveLength(100)
-    expect(files).toHaveLength(100)
+    expect(siteShellCount()).toBe(100)
+    expect(listShellTemplateIds().length).toBeGreaterThan(0)
+    expect(listShellTemplateIds().length).toBeLessThan(100)
     for (const site of catalog) {
-      expect(files).toContain(`${site.id}.json`)
+      expect(resolveSiteFixture(site.id)?.id).toBe(site.id)
     }
   })
 

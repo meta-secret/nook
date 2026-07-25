@@ -3,19 +3,23 @@
  * Generates popular_login_sites.json (100 entries) and mock-auth fixtures.
  * Research-based structural shells; capture-login-shell.mjs can overwrite with live drafts.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../..',
 )
 const catalogPath = path.join(root, 'nook-core/data/popular_login_sites.json')
-const fixturesDir = path.join(
+const fixturesRoot = path.join(
   root,
-  'nook-web/nook-web-extension/e2e/mock-auth/fixtures/sites',
+  'nook-web/nook-web-extension/e2e/mock-auth/fixtures',
 )
+const templatesDir = path.join(fixturesRoot, 'templates')
+const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
+const legacySitesDir = path.join(fixturesRoot, 'sites')
 
 /** @typedef {{ name: string, type?: string, id?: string, autocomplete?: string, placeholder?: string, 'aria-label'?: string, 'data-qa'?: string, 'data-testid'?: string }} Field */
 /** @typedef {{ fields: Field[], submit: { type?: string, name?: string, id?: string, label: string } }} Step */
@@ -1116,7 +1120,63 @@ function shellFor(id, family) {
   return emailPassword()
 }
 
-mkdirSync(fixturesDir, { recursive: true })
+const CAPTURE_IDS = new Set([
+  'facebook',
+  'google',
+  'microsoft',
+  'apple',
+  'amazon',
+  'github',
+  'linkedin',
+  'x',
+  'slack',
+  'instagram',
+])
+
+const SPECIAL_TEMPLATE_IDS = {
+  facebook: 'facebook',
+  github: 'github',
+  instagram: 'instagram',
+  linkedin: 'linkedin',
+  slack: 'slack',
+  x: 'x',
+  microsoft: 'microsoft',
+  azure: 'microsoft',
+  office: 'microsoft',
+  outlook: 'microsoft',
+  google: 'google',
+  gmail: 'google',
+  youtube: 'google',
+  apple: 'apple',
+  icloud: 'apple',
+}
+
+function shapeKey(shell) {
+  return JSON.stringify({
+    quirks: shell.quirks ?? [],
+    steps: shell.steps,
+  })
+}
+
+function genericTemplateName(shell) {
+  const steps = shell.steps ?? []
+  const names = (steps[0]?.fields ?? []).map((field) => field.name)
+  if (steps.length === 1 && names[0] === 'email' && names[1] === 'password') {
+    return 'email-password'
+  }
+  if (
+    steps.length === 1 &&
+    names[0] === 'username' &&
+    names[1] === 'password'
+  ) {
+    return 'username-password'
+  }
+  if (steps.length >= 2 && names[0] === 'email') return 'email-first'
+  if (steps.length >= 2 && names[0] === 'loginfmt') return 'microsoft'
+  if (steps.length >= 2 && names[0] === 'identifier') return 'google'
+  if (steps.length === 1 && names[0] === 'accountName') return 'apple'
+  return null
+}
 
 const catalog = SITES.map(([id, name, family, loginUrl, hosts], index) => ({
   id,
@@ -1129,37 +1189,68 @@ const catalog = SITES.map(([id, name, family, loginUrl, hosts], index) => ({
 
 writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`)
 
+/** @type {Map<string, { quirks: string[], steps: unknown[] }>} */
+const shellsById = new Map()
 for (const site of catalog) {
   const shell = shellFor(site.id, site.family)
-  const fixture = {
-    id: site.id,
-    source: SPECIAL[site.id] || SPECIAL[site.family] ? 'capture' : 'research',
-    loginUrl: site.loginUrl,
+  shellsById.set(site.id, {
     quirks: shell.quirks ?? [],
     steps: shell.steps,
+  })
+}
+
+/** @type {Map<string, string>} */
+const templateIdByShape = new Map()
+/** @type {Map<string, { id: string, quirks: string[], steps: unknown[] }>} */
+const templates = new Map()
+
+for (const site of catalog) {
+  const shell = shellsById.get(site.id)
+  const key = shapeKey(shell)
+  if (templateIdByShape.has(key)) continue
+  let templateId =
+    SPECIAL_TEMPLATE_IDS[site.id] ?? genericTemplateName(shell) ?? site.id
+  const existing = templates.get(templateId)
+  if (existing && shapeKey(existing) !== key) {
+    templateId = `${templateId}-${createHash('sha1').update(key).digest('hex').slice(0, 6)}`
   }
-  // facebook already capture-tagged via SPECIAL; mark known Tier-1 as capture
-  if (
-    [
-      'facebook',
-      'google',
-      'microsoft',
-      'apple',
-      'amazon',
-      'github',
-      'linkedin',
-      'x',
-      'slack',
-      'instagram',
-    ].includes(site.id)
-  ) {
-    fixture.source = 'capture'
+  templateIdByShape.set(key, templateId)
+  if (!templates.has(templateId)) {
+    templates.set(templateId, {
+      id: templateId,
+      quirks: shell.quirks,
+      steps: shell.steps,
+    })
   }
+}
+
+rmSync(legacySitesDir, { recursive: true, force: true })
+rmSync(templatesDir, { recursive: true, force: true })
+mkdirSync(templatesDir, { recursive: true })
+
+for (const [templateId, template] of [...templates.entries()].sort((a, b) =>
+  a[0].localeCompare(b[0]),
+)) {
   writeFileSync(
-    path.join(fixturesDir, `${site.id}.json`),
-    `${JSON.stringify(fixture, null, 2)}\n`,
+    path.join(templatesDir, `${templateId}.json`),
+    `${JSON.stringify(template, null, 2)}\n`,
   )
 }
 
+/** @type {Record<string, { template: string, source: string, loginUrl: string }>} */
+const siteShells = {}
+for (const site of catalog) {
+  const shell = shellsById.get(site.id)
+  const template = templateIdByShape.get(shapeKey(shell))
+  siteShells[site.id] = {
+    template,
+    source: CAPTURE_IDS.has(site.id) ? 'capture' : 'research',
+    loginUrl: site.loginUrl,
+  }
+}
+
+writeFileSync(siteShellsPath, `${JSON.stringify(siteShells, null, 2)}\n`)
+
 console.log(`Wrote ${catalog.length} catalog entries → ${catalogPath}`)
-console.log(`Wrote ${catalog.length} fixtures → ${fixturesDir}`)
+console.log(`Wrote ${templates.size} shell templates → ${templatesDir}`)
+console.log(`Wrote ${catalog.length} site→template map → ${siteShellsPath}`)

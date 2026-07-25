@@ -1,3 +1,5 @@
+import siteShellsJson from '../../fixtures/site-shells.json'
+
 export type SiteFixtureField = {
   name?: string
   type?: string
@@ -28,6 +30,7 @@ export type SiteFixture = {
   loginUrl: string
   quirks: string[]
   steps: SiteFixtureStep[]
+  template: string
 }
 
 export type PopularLoginSite = {
@@ -39,27 +42,73 @@ export type PopularLoginSite = {
   rank: number
 }
 
-const fixtureModules = import.meta.glob('../../fixtures/sites/*.json', {
+type ShellTemplate = {
+  id: string
+  quirks: string[]
+  steps: SiteFixtureStep[]
+}
+
+type SiteShellRef = {
+  template: string
+  source: 'capture' | 'research'
+  loginUrl: string
+  quirks?: string[]
+  steps?: SiteFixtureStep[]
+}
+
+const siteShells = siteShellsJson as Record<string, SiteShellRef>
+
+const templateModules = import.meta.glob('../../fixtures/templates/*.json', {
   eager: true,
   import: 'default',
-}) as Record<string, SiteFixture>
+}) as Record<string, ShellTemplate>
 
-const fixturesById = new Map<string, SiteFixture>()
-for (const [pathKey, fixture] of Object.entries(fixtureModules)) {
+const templatesById = new Map<string, ShellTemplate>()
+for (const [pathKey, template] of Object.entries(templateModules)) {
   const id = pathKey
     .split('/')
     .pop()
     ?.replace(/\.json$/u, '')
-  if (!id || !fixture || typeof fixture !== 'object') continue
-  fixturesById.set(id, { ...fixture, id })
+  if (!id || !template || typeof template !== 'object') continue
+  templatesById.set(id, { ...template, id })
+}
+
+function resolveSiteFixture(id: string): SiteFixture | undefined {
+  const ref = siteShells[id]
+  if (!ref) return undefined
+  const template = templatesById.get(ref.template)
+  const steps = ref.steps ?? template?.steps
+  if (!steps || steps.length === 0) return undefined
+  return {
+    id,
+    source: ref.source,
+    loginUrl: ref.loginUrl,
+    quirks: ref.quirks ?? template?.quirks ?? [],
+    steps,
+    template: ref.template,
+  }
+}
+
+const fixturesById = new Map<string, SiteFixture>()
+for (const id of Object.keys(siteShells)) {
+  const fixture = resolveSiteFixture(id)
+  if (fixture) fixturesById.set(id, fixture)
 }
 
 export function listSiteFixtureIds(): string[] {
   return [...fixturesById.keys()].sort()
 }
 
+export function listShellTemplateIds(): string[] {
+  return [...templatesById.keys()].sort()
+}
+
 export function getSiteFixture(id: string): SiteFixture | undefined {
   return fixturesById.get(id)
+}
+
+export function getShellTemplate(id: string): ShellTemplate | undefined {
+  return templatesById.get(id)
 }
 
 export function isSiteFixture(value: unknown): value is SiteFixture {

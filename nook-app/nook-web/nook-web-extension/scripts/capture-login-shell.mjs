@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * One-time local capture of a live login page into a structural mock fixture.
+ * One-time local capture of a live login page into a structural shell template.
  * Never run in CI. Usage:
  *   node scripts/capture-login-shell.mjs <site-id>
  *   node scripts/capture-login-shell.mjs --all
+ *
+ * Writes/updates fixtures/templates/<site-id>.json and points site-shells.json
+ * at that template. Does not store cookies, passwords, or PII.
  */
 import { chromium } from 'playwright'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -15,12 +18,15 @@ const root = path.resolve(
   '../../..',
 )
 const catalogPath = path.join(root, 'nook-core/data/popular_login_sites.json')
-const fixturesDir = path.join(
+const fixturesRoot = path.join(
   root,
-  'nook-web/nook-web-extension/e2e/mock-auth/fixtures/sites',
+  'nook-web/nook-web-extension/e2e/mock-auth/fixtures',
 )
+const templatesDir = path.join(fixturesRoot, 'templates')
+const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
+const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
 
 function siteById(id) {
   return catalog.find((site) => site.id === id)
@@ -29,7 +35,8 @@ function siteById(id) {
 async function captureSite(site) {
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage()
-  const fixturePath = path.join(fixturesDir, `${site.id}.json`)
+  const templateId = site.id
+  const templatePath = path.join(templatesDir, `${templateId}.json`)
   try {
     await page.goto(site.loginUrl, {
       waitUntil: 'domcontentloaded',
@@ -79,10 +86,8 @@ async function captureSite(site) {
       passwords.length > 0
         ? [...identity.slice(0, 1), passwords[0]]
         : identity.slice(0, 1)
-    const fixture = {
-      id: site.id,
-      source: 'capture',
-      loginUrl: site.loginUrl,
+    const template = {
+      id: templateId,
       quirks: [],
       steps: [
         {
@@ -91,14 +96,21 @@ async function captureSite(site) {
         },
       ],
     }
-    writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`)
-    console.log(`captured ${site.id} → ${fixturePath}`)
+    mkdirSync(templatesDir, { recursive: true })
+    writeFileSync(templatePath, `${JSON.stringify(template, null, 2)}\n`)
+    siteShells[site.id] = {
+      template: templateId,
+      source: 'capture',
+      loginUrl: site.loginUrl,
+    }
+    writeFileSync(siteShellsPath, `${JSON.stringify(siteShells, null, 2)}\n`)
+    console.log(`captured ${site.id} → template ${templateId}`)
     return true
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.warn(`capture failed for ${site.id}: ${message}`)
-    if (existsSync(fixturePath)) {
-      console.warn(`keeping existing research fixture for ${site.id}`)
+    if (existsSync(templatePath) || siteShells[site.id]) {
+      console.warn(`keeping existing shell mapping for ${site.id}`)
     }
     return false
   } finally {

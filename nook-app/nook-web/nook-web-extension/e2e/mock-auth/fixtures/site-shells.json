@@ -1,0 +1,502 @@
+{
+  "1password": {
+    "loginUrl": "https://my.1password.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "adobe": {
+    "loginUrl": "https://auth.services.adobe.com/en_US/index.html",
+    "source": "research",
+    "template": "email-first"
+  },
+  "airbnb": {
+    "loginUrl": "https://www.airbnb.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "amazon": {
+    "loginUrl": "https://www.amazon.com/ap/signin",
+    "source": "capture",
+    "template": "email-first"
+  },
+  "americanexpress": {
+    "loginUrl": "https://www.americanexpress.com/en-us/account/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "apple": {
+    "loginUrl": "https://appleid.apple.com/sign-in",
+    "source": "capture",
+    "template": "apple"
+  },
+  "asana": {
+    "loginUrl": "https://app.asana.com/-/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "atlassian": {
+    "loginUrl": "https://id.atlassian.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "auth0": {
+    "loginUrl": "https://manage.auth0.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "aws": {
+    "loginUrl": "https://signin.aws.amazon.com/",
+    "source": "capture",
+    "template": "email-first"
+  },
+  "azure": {
+    "loginUrl": "https://portal.azure.com/",
+    "source": "capture",
+    "template": "microsoft"
+  },
+  "bankofamerica": {
+    "loginUrl": "https://www.bankofamerica.com/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "bbc": {
+    "loginUrl": "https://account.bbc.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bestbuy": {
+    "loginUrl": "https://www.bestbuy.com/identity/global/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "binance": {
+    "loginUrl": "https://accounts.binance.com/en/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "bitbucket": {
+    "loginUrl": "https://bitbucket.org/account/signin/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "bitwarden": {
+    "loginUrl": "https://vault.bitwarden.com/#/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "booking": {
+    "loginUrl": "https://account.booking.com/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "canva": {
+    "loginUrl": "https://www.canva.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "capitalone": {
+    "loginUrl": "https://verified.capitalone.com/auth/signin",
+    "source": "research",
+    "template": "username-password"
+  },
+  "cashapp": {
+    "loginUrl": "https://cash.app/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "chase": {
+    "loginUrl": "https://secure.chase.com/web/auth/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "citi": {
+    "loginUrl": "https://online.citi.com/US/login.do",
+    "source": "research",
+    "template": "username-password"
+  },
+  "cloudflare": {
+    "loginUrl": "https://dash.cloudflare.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "coinbase": {
+    "loginUrl": "https://login.coinbase.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "costco": {
+    "loginUrl": "https://www.costco.com/LogonForm",
+    "source": "research",
+    "template": "email-password"
+  },
+  "delta": {
+    "loginUrl": "https://www.delta.com/login/loginPage",
+    "source": "research",
+    "template": "email-password"
+  },
+  "digitalocean": {
+    "loginUrl": "https://cloud.digitalocean.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "discord": {
+    "loginUrl": "https://discord.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "discover": {
+    "loginUrl": "https://portal.discover.com/customersvcs/universalLogin/ac_main",
+    "source": "research",
+    "template": "username-password"
+  },
+  "disneyplus": {
+    "loginUrl": "https://www.disneyplus.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "doordash": {
+    "loginUrl": "https://www.doordash.com/consumer/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "dropbox": {
+    "loginUrl": "https://www.dropbox.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "ebay": {
+    "loginUrl": "https://signin.ebay.com/ws/eBayISAPI.dll",
+    "source": "research",
+    "template": "email-password"
+  },
+  "etsy": {
+    "loginUrl": "https://www.etsy.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "expedia": {
+    "loginUrl": "https://www.expedia.com/user/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "facebook": {
+    "loginUrl": "https://www.facebook.com/login",
+    "source": "capture",
+    "template": "facebook"
+  },
+  "fidelity": {
+    "loginUrl": "https://digital.fidelity.com/prgw/digital/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "figma": {
+    "loginUrl": "https://www.figma.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "github": {
+    "loginUrl": "https://github.com/login",
+    "source": "capture",
+    "template": "github"
+  },
+  "gitlab": {
+    "loginUrl": "https://gitlab.com/users/sign_in",
+    "source": "research",
+    "template": "email-first"
+  },
+  "gmail": {
+    "loginUrl": "https://accounts.google.com/ServiceLogin?service=mail",
+    "source": "capture",
+    "template": "google"
+  },
+  "google": {
+    "loginUrl": "https://accounts.google.com/ServiceLogin",
+    "source": "capture",
+    "template": "google"
+  },
+  "grubhub": {
+    "loginUrl": "https://www.grubhub.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hbomax": {
+    "loginUrl": "https://auth.max.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "heroku": {
+    "loginUrl": "https://id.heroku.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hilton": {
+    "loginUrl": "https://www.hilton.com/en/hilton-honors/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "homedepot": {
+    "loginUrl": "https://www.homedepot.com/auth/view/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hubspot": {
+    "loginUrl": "https://app.hubspot.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hulu": {
+    "loginUrl": "https://auth.hulu.com/web/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "icloud": {
+    "loginUrl": "https://www.icloud.com/",
+    "source": "capture",
+    "template": "apple"
+  },
+  "instagram": {
+    "loginUrl": "https://www.instagram.com/accounts/login/",
+    "source": "capture",
+    "template": "instagram"
+  },
+  "lastpass": {
+    "loginUrl": "https://lastpass.com/login.php",
+    "source": "research",
+    "template": "email-first"
+  },
+  "linkedin": {
+    "loginUrl": "https://www.linkedin.com/login",
+    "source": "capture",
+    "template": "linkedin"
+  },
+  "lowes": {
+    "loginUrl": "https://www.lowes.com/myaccount",
+    "source": "research",
+    "template": "email-password"
+  },
+  "lyft": {
+    "loginUrl": "https://account.lyft.com/auth",
+    "source": "research",
+    "template": "email-password"
+  },
+  "marriott": {
+    "loginUrl": "https://www.marriott.com/sign-in.mi",
+    "source": "research",
+    "template": "email-password"
+  },
+  "microsoft": {
+    "loginUrl": "https://login.live.com/",
+    "source": "capture",
+    "template": "microsoft"
+  },
+  "monday": {
+    "loginUrl": "https://auth.monday.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "netflix": {
+    "loginUrl": "https://www.netflix.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "netlify": {
+    "loginUrl": "https://app.netlify.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "notion": {
+    "loginUrl": "https://www.notion.so/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "nytimes": {
+    "loginUrl": "https://myaccount.nytimes.com/auth/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "office": {
+    "loginUrl": "https://login.microsoftonline.com/",
+    "source": "capture",
+    "template": "microsoft"
+  },
+  "okta": {
+    "loginUrl": "https://login.okta.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "outlook": {
+    "loginUrl": "https://outlook.live.com/owa/",
+    "source": "capture",
+    "template": "microsoft"
+  },
+  "paramount": {
+    "loginUrl": "https://www.paramountplus.com/account/signin/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "paypal": {
+    "loginUrl": "https://www.paypal.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "paypalme": {
+    "loginUrl": "https://account.venmo.com/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pinterest": {
+    "loginUrl": "https://www.pinterest.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "primevideo": {
+    "loginUrl": "https://www.amazon.com/ap/signin",
+    "source": "capture",
+    "template": "email-first"
+  },
+  "proton": {
+    "loginUrl": "https://account.proton.me/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "reddit": {
+    "loginUrl": "https://www.reddit.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "robinhood": {
+    "loginUrl": "https://robinhood.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "salesforce": {
+    "loginUrl": "https://login.salesforce.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "schwab": {
+    "loginUrl": "https://www.schwab.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "shopify": {
+    "loginUrl": "https://accounts.shopify.com/store-login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "slack": {
+    "loginUrl": "https://slack.com/signin",
+    "source": "capture",
+    "template": "slack"
+  },
+  "southwest": {
+    "loginUrl": "https://www.southwest.com/loyalty/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "spotify": {
+    "loginUrl": "https://accounts.spotify.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "squarespace": {
+    "loginUrl": "https://login.squarespace.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "steam": {
+    "loginUrl": "https://store.steampowered.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "stripe": {
+    "loginUrl": "https://dashboard.stripe.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "target": {
+    "loginUrl": "https://www.target.com/account",
+    "source": "research",
+    "template": "email-password"
+  },
+  "tiktok": {
+    "loginUrl": "https://www.tiktok.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "trello": {
+    "loginUrl": "https://trello.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "twitch": {
+    "loginUrl": "https://www.twitch.tv/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "uber": {
+    "loginUrl": "https://auth.uber.com/v2/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "united": {
+    "loginUrl": "https://www.united.com/ual/en/us/account/account/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "usbank": {
+    "loginUrl": "https://www.usbank.com/index.html",
+    "source": "research",
+    "template": "username-password"
+  },
+  "vanguard": {
+    "loginUrl": "https://investor.vanguard.com/my-account/log-on",
+    "source": "research",
+    "template": "username-password"
+  },
+  "vercel": {
+    "loginUrl": "https://vercel.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "walmart": {
+    "loginUrl": "https://www.walmart.com/account/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "wellsfargo": {
+    "loginUrl": "https://connect.secure.wellsfargo.com/auth/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "wordpress": {
+    "loginUrl": "https://wordpress.com/log-in",
+    "source": "research",
+    "template": "email-first"
+  },
+  "x": {
+    "loginUrl": "https://x.com/i/flow/login",
+    "source": "capture",
+    "template": "x"
+  },
+  "yahoo": {
+    "loginUrl": "https://login.yahoo.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "youtube": {
+    "loginUrl": "https://accounts.google.com/ServiceLogin?service=youtube",
+    "source": "capture",
+    "template": "google"
+  },
+  "zendesk": {
+    "loginUrl": "https://www.zendesk.com/login/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "zoom": {
+    "loginUrl": "https://zoom.us/signin",
+    "source": "research",
+    "template": "email-first"
+  }
+}

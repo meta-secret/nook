@@ -243,17 +243,21 @@ CI does **not** hit live third-party login pages. Coverage is data-driven:
 1. Catalog: [`nook-core/data/popular_login_sites.json`](../../nook-app/nook-core/data/popular_login_sites.json)
    — exactly **100** password-manager-relevant destinations (`id`, `family`,
    `loginUrl`, `hosts`, `rank`).
-2. Structural fixtures: `nook-web-extension/e2e/mock-auth/fixtures/sites/<id>.json`
-   — field attrs, multi-step shells, quirks (`aria-hidden-ancestor`, etc.),
-   with `source: capture | research`.
-3. Renderer: mock-auth route `/site/:id` (`DetectionFromFixture.svelte`).
+2. Shared shell templates: `nook-web-extension/e2e/mock-auth/fixtures/templates/*.json`
+   — unique structural auth DOM shapes (email+password, email-first, bank
+   username+password, Microsoft/Google/Apple families, and a few brand
+   specials). Sites do **not** duplicate identical JSON.
+3. Site→template map: `nook-web-extension/e2e/mock-auth/fixtures/site-shells.json`
+   — every catalog id points at a template (`source: capture | research`).
+4. Renderer: mock-auth route `/site/:id` (`DetectionFromFixture.svelte`).
    Legacy paths (`/facebook`, `/google`, …) still resolve to the same fixtures.
-4. Capture tool (local/agent only):
+5. Capture tool (local/agent only):
    `nook-web-extension/scripts/capture-login-shell.mjs` opens a live `loginUrl`
-   once and drafts a fixture. Bot-blocked sites keep research fixtures.
-5. Automated gates: Rust catalog invariant (100 unique ranked ids); Vitest over
-   every fixture’s rendered HTML; extension e2e Pilot visibility for all 100
-   and fill-to-success for single-step password shells.
+   once and drafts/updates a template + map entry. Bot-blocked sites keep
+   research template mappings.
+6. Automated gates: Rust catalog invariant (100 unique ranked ids); Vitest over
+   every resolved site shell; extension e2e Pilot visibility for all 100 and
+   fill-to-success for single-step password shells.
 
 Related host credential matching remains in
 [`login_site_hosts.json`](../../nook-app/nook-core/data/login_site_hosts.json).

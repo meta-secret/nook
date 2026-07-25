@@ -9,10 +9,12 @@ const catalogPath = path.resolve(
   here,
   '../../../../../nook-core/data/popular_login_sites.json',
 )
-const fixturesDir = path.resolve(
+const fixturesRoot = path.resolve(
   here,
-  '../../../../nook-web-extension/e2e/mock-auth/fixtures/sites',
+  '../../../../nook-web-extension/e2e/mock-auth/fixtures',
 )
+const templatesDir = path.join(fixturesRoot, 'templates')
+const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 
 type SiteFixtureField = {
   name?: string
@@ -27,15 +29,52 @@ type SiteFixtureField = {
 
 type SiteFixture = {
   id: string
-  source: string
   quirks: string[]
   steps: Array<{
     fields: SiteFixtureField[]
     submit: { type?: string; label: string; name?: string; id?: string }
   }>
+  template: string
 }
 
 type CatalogEntry = { id: string; rank: number }
+type SiteShellRef = {
+  template: string
+  source: string
+  loginUrl: string
+  quirks?: string[]
+  steps?: SiteFixture['steps']
+}
+
+const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8')) as Record<
+  string,
+  SiteShellRef
+>
+const templates = new Map(
+  readdirSync(templatesDir)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => {
+      const id = name.replace(/\.json$/u, '')
+      const template = JSON.parse(
+        readFileSync(path.join(templatesDir, name), 'utf8'),
+      ) as { quirks: string[]; steps: SiteFixture['steps'] }
+      return [id, template] as const
+    }),
+)
+
+function resolveSiteFixture(id: string): SiteFixture | undefined {
+  const ref = siteShells[id]
+  if (!ref) return undefined
+  const template = templates.get(ref.template)
+  const steps = ref.steps ?? template?.steps
+  if (!steps || steps.length === 0) return undefined
+  return {
+    id,
+    quirks: ref.quirks ?? template?.quirks ?? [],
+    steps,
+    template: ref.template,
+  }
+}
 
 function escapeAttr(value: string): string {
   return value.replace(/&/gu, '&amp;').replace(/"/gu, '&quot;')
@@ -83,34 +122,31 @@ describe('popular login site fixtures', () => {
   const catalog = JSON.parse(
     readFileSync(catalogPath, 'utf8'),
   ) as CatalogEntry[]
-  const fixtureFiles = readdirSync(fixturesDir).filter((name) =>
-    name.endsWith('.json'),
-  )
 
-  test('catalog has exactly 100 sites and every id has a fixture file', () => {
+  test('catalog has exactly 100 sites mapped to shared shell templates', () => {
     expect(catalog).toHaveLength(100)
-    expect(fixtureFiles).toHaveLength(100)
+    expect(Object.keys(siteShells)).toHaveLength(100)
+    expect(templates.size).toBeGreaterThan(0)
+    expect(templates.size).toBeLessThan(catalog.length)
     for (const site of catalog) {
-      expect(fixtureFiles).toContain(`${site.id}.json`)
+      expect(siteShells[site.id]).toBeTruthy()
+      expect(resolveSiteFixture(site.id)).toBeTruthy()
+      expect(templates.has(siteShells[site.id].template)).toBe(true)
     }
   })
 
   test.each(catalog.map((site) => [site.id, site.id]))(
     'detects login workflow for %s',
     (siteId) => {
-      const fixture = JSON.parse(
-        readFileSync(path.join(fixturesDir, `${siteId}.json`), 'utf8'),
-      ) as SiteFixture
+      const fixture = resolveSiteFixture(siteId) as SiteFixture
       expect(fixture.id).toBe(siteId)
       expect(fixture.steps.length).toBeGreaterThan(0)
 
-      // Username-first shells: assert first step; password shells: final step.
       const firstStep = fixture.steps[0]
       const firstHasPassword = firstStep.fields.some(
         (field) => field.type === 'password',
       )
-      const stepIndex = firstHasPassword ? 0 : 0
-      document.body.innerHTML = renderStepHtml(fixture, stepIndex)
+      document.body.innerHTML = renderStepHtml(fixture, 0)
       const observations = summarizeAuthenticationWorkflowForms()
       expect(observations.length).toBeGreaterThan(0)
       const summary = observations[0]?.summary
