@@ -138,6 +138,31 @@ pub fn open_provider_credentials(
     Ok(had_plaintext)
 }
 
+fn field_is_presealed(value: &str) -> bool {
+    value.is_empty() || is_sealed_credential(value)
+}
+
+/// True when every credential field is empty or already age-sealed.
+///
+/// Used by extension pairing to persist website-sealed provider grants without
+/// requiring an unlocked device session in the offscreen document.
+#[must_use]
+pub fn provider_credentials_are_presealed(snapshot: &AuthProvidersSnapshotData) -> bool {
+    snapshot.providers.iter().all(|provider| {
+        provider
+            .github_pat
+            .as_deref()
+            .is_none_or(field_is_presealed)
+            && provider.oauth_file.as_ref().is_none_or(|oauth| {
+                field_is_presealed(&oauth.access_token)
+                    && oauth
+                        .refresh_token
+                        .as_deref()
+                        .is_none_or(field_is_presealed)
+            })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,5 +295,20 @@ mod tests {
         let mut opened = snapshot;
         assert!(!open_provider_credentials(&extension, &mut opened).unwrap());
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+    }
+
+    #[test]
+    fn presealed_check_accepts_sealed_or_empty_credentials() {
+        let identity = DeviceIdentity::generate().unwrap();
+        let mut snapshot = github_snapshot("github_pat_11PRESEAL");
+        assert!(!provider_credentials_are_presealed(&snapshot));
+        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        assert!(provider_credentials_are_presealed(&snapshot));
+        assert!(provider_credentials_are_presealed(
+            &AuthProvidersSnapshotData {
+                providers: Vec::new(),
+                active_vault_store_id: Some("store-1".to_owned()),
+            }
+        ));
     }
 }

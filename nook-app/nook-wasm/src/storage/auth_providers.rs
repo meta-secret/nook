@@ -9,7 +9,7 @@
 
 use nook_core::{
     AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
-    seal_provider_credentials,
+    provider_credentials_are_presealed, seal_provider_credentials,
 };
 
 use crate::NookError;
@@ -154,6 +154,22 @@ pub(crate) async fn save_auth_providers(
     let mut sealed = snapshot.clone();
     seal_provider_credentials(identity, &mut sealed)?;
     write_snapshot(&sealed).await
+}
+
+/// Persist a snapshot whose credential fields are already age-sealed (or empty).
+///
+/// Extension pairing uses this when the offscreen device session is locked: the
+/// website sealed grants for the extension device public key, so import must not
+/// require an unlocked private key just to accept the handoff.
+pub(crate) async fn save_presealed_auth_providers(
+    snapshot: &AuthProvidersSnapshotData,
+) -> Result<(), NookError> {
+    if !provider_credentials_are_presealed(snapshot) {
+        return Err(NookError::Decryption(
+            "Presealed auth-provider save rejected plaintext credentials.".to_owned(),
+        ));
+    }
+    write_snapshot(snapshot).await
 }
 
 pub(crate) async fn delete_auth_providers_db() -> Result<(), NookError> {

@@ -2123,19 +2123,21 @@ async function importApprovedPairing(
       stageProviderCredentials(message.payload.providers) ??
       message.payload.providers
     try {
-      const pending = sendSessionMessage({
-        type: 'nook:extension-session-import-vault',
+      // Snapshot before scrubbing so lazy extension IPC cannot observe emptied
+      // credential fields mid-handoff.
+      const importMessage = {
+        type: 'nook:extension-session-import-vault' as const,
         payload: {
           vaultStoreId: message.payload.vaultStoreId,
           deviceId: message.payload.deviceId,
           devicePublicKey: message.payload.devicePublicKey,
           deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
           eventLogRecords: message.eventLogRecords,
-          providers,
+          providers: structuredClone(providers),
         },
-      })
+      }
       scrubProviderCredentials(providers)
-      const sessionImport = await pending
+      const sessionImport = await sendSessionMessage(importMessage)
       if (
         !sessionImport ||
         typeof sessionImport !== 'object' ||
@@ -2146,7 +2148,15 @@ async function importApprovedPairing(
           pairingGrantStorageKey(message.payload.vaultStoreId),
           setupStorageKey,
         ])
-        return { ok: false, reason: 'extension-vault-import-failed' }
+        const reason =
+          sessionImport &&
+          typeof sessionImport === 'object' &&
+          'error' in sessionImport &&
+          typeof sessionImport.error === 'string' &&
+          sessionImport.error.length > 0
+            ? sessionImport.error
+            : 'extension-vault-import-failed'
+        return { ok: false, reason }
       }
     } finally {
       scrubProviderCredentials(providers)
