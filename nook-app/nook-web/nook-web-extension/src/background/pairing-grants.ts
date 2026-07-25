@@ -193,9 +193,30 @@ export function setupAfterPairingGrantRemoval(
   return remaining[0] ? setupStateFromPairingGrant(remaining[0]) : undefined
 }
 
+export function selectedPairingGrantFirst(
+  stored: Record<string, unknown>,
+  grants: StoredExtensionPairingGrant[],
+): StoredExtensionPairingGrant[] {
+  const setup = stored[setupStorageKey]
+  const selectedVaultStoreId = isExtensionReadySetupState(setup)
+    ? setup.selectedVaultStoreId
+    : undefined
+  return [...grants].sort((left, right) => {
+    const leftSelected = left.vaultStoreId === selectedVaultStoreId
+    const rightSelected = right.vaultStoreId === selectedVaultStoreId
+    if (leftSelected !== rightSelected) return leftSelected ? -1 : 1
+    return right.approvedAt.localeCompare(left.approvedAt)
+  })
+}
+
 type LegacyStoredExtensionPairingGrant = Omit<
   StoredExtensionPairingGrant,
   'eventCount' | 'eventLogHeads' | 'lastLocalSyncAt'
+>
+
+type LegacyExtensionReadySetupState = Omit<
+  ExtensionReadySetupState,
+  'selectedVaultStoreId'
 >
 
 function isLegacyStoredExtensionPairingGrant(
@@ -220,19 +241,46 @@ function isLegacyStoredExtensionPairingGrant(
   )
 }
 
+function isLegacyExtensionReadySetupState(
+  value: unknown,
+): value is LegacyExtensionReadySetupState {
+  if (typeof value !== 'object' || value === null) return false
+  const state = value as Record<string, unknown>
+  return (
+    state.status === 'ready' &&
+    typeof state.deviceLabel === 'string' &&
+    Array.isArray(state.pairedVaults) &&
+    state.pairedVaults.length > 0 &&
+    state.pairedVaults.every((vault) => typeof vault === 'string') &&
+    typeof state.selectedVaultName === 'string' &&
+    state.selectedVaultName.length > 0 &&
+    typeof state.syncProviderCount === 'number' &&
+    Number.isInteger(state.syncProviderCount) &&
+    state.syncProviderCount >= 0 &&
+    typeof state.eventCount === 'number' &&
+    Number.isInteger(state.eventCount) &&
+    state.eventCount > 0 &&
+    Array.isArray(state.eventLogHeads) &&
+    state.eventLogHeads.length > 0 &&
+    state.eventLogHeads.every((head) => typeof head === 'string') &&
+    typeof state.lastLocalSyncAt === 'string' &&
+    state.lastLocalSyncAt.length > 0
+  )
+}
+
 export function migratedLegacyPairingStorageItems(
   legacy: Record<string, unknown>,
 ): Record<string, unknown> {
   const setup = legacy[setupStorageKey]
-  if (!isExtensionReadySetupState(setup)) return {}
-  const key = pairingGrantStorageKey(setup.selectedVaultStoreId)
-  const grant = legacy[key]
-  if (
-    !isLegacyStoredExtensionPairingGrant(grant) ||
-    grant.vaultStoreId !== setup.selectedVaultStoreId
-  ) {
-    return {}
-  }
+  if (!isLegacyExtensionReadySetupState(setup)) return {}
+  const selected = Object.entries(legacy).find(
+    ([key, value]) =>
+      key.startsWith('nook:extension-pairing-grant:') &&
+      isLegacyStoredExtensionPairingGrant(value) &&
+      value.vaultName === setup.selectedVaultName,
+  )
+  if (!selected || !isLegacyStoredExtensionPairingGrant(selected[1])) return {}
+  const [key, grant] = selected
   const migrated: StoredExtensionPairingGrant = {
     ...grant,
     eventCount: setup.eventCount,

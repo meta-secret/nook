@@ -170,28 +170,13 @@ pub(crate) async fn save_presealed_auth_providers(
         ));
     }
     let raw = read_raw_snapshot().await?;
-    let mut merged = nook_core::normalize_auth_snapshot(&raw).snapshot;
-    if !provider_credentials_are_presealed(&merged) {
+    let existing = nook_core::normalize_auth_snapshot(&raw).snapshot;
+    if !provider_credentials_are_presealed(&existing) {
         return Err(NookError::Decryption(
             "Presealed auth-provider merge rejected plaintext credentials.".to_owned(),
         ));
     }
-    let mut map: std::collections::HashMap<String, nook_core::StorageProviderData> = merged
-        .providers
-        .into_iter()
-        .map(|p| (p.id.clone(), p))
-        .collect();
-    for provider in &snapshot.providers {
-        map.insert(provider.id.clone(), provider.clone());
-    }
-    merged.providers = map.into_values().collect();
-    if snapshot
-        .active_vault_store_id
-        .as_deref()
-        .is_some_and(|id| !id.is_empty())
-    {
-        merged.active_vault_store_id = snapshot.active_vault_store_id.clone();
-    }
+    let merged = nook_core::replace_active_vault_provider_grants(&existing, snapshot);
     write_snapshot(&merged).await
 }
 
@@ -361,10 +346,17 @@ mod wasm_idb_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_save_preserves_existing_provider_and_updates_active_vault() {
+    async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() {
         clear_auth_snapshot().await;
         let identity = DeviceIdentity::generate().expect("identity");
-        let existing = github_snapshot_with_id("gh-existing", "github_pat_existing");
+        let mut existing = github_snapshot_with_id("gh-removed", "github_pat_existing");
+        existing.providers[0].store_id = Some("store-incoming".to_owned());
+        let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
+            .providers
+            .remove(0);
+        retained.store_id = Some("store-other".to_owned());
+        existing.providers.push(retained);
+        existing.active_vault_store_id = Some("store-incoming".to_owned());
         save_auth_providers(&identity, &existing)
             .await
             .expect("save existing");
@@ -384,7 +376,7 @@ mod wasm_idb_tests {
             .map(|provider| provider.id.as_str())
             .collect::<Vec<_>>();
         provider_ids.sort_unstable();
-        assert_eq!(provider_ids, vec!["gh-existing", "gh-incoming"]);
+        assert_eq!(provider_ids, vec!["gh-incoming", "gh-retained"]);
         assert_eq!(
             stored.active_vault_store_id.as_deref(),
             Some("store-incoming")

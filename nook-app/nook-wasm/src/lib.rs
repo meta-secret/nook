@@ -1246,6 +1246,22 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Replace the complete sync-provider grant set for the incoming active
+    /// vault while preserving grants owned by other paired vaults.
+    #[wasm_bindgen(js_name = replaceAuthProvidersForVault)]
+    pub async fn replace_auth_providers_for_vault(
+        &self,
+        snapshot: nook_core::AuthProvidersSnapshotData,
+    ) -> Result<(), wasm_bindgen::JsError> {
+        let identity = self.device_identity()?;
+        let existing = crate::storage::auth_providers::load_auth_providers(&identity)
+            .await?
+            .snapshot;
+        let replaced = nook_core::replace_active_vault_provider_grants(&existing, &snapshot);
+        crate::storage::auth_providers::save_auth_providers(&identity, &replaced).await?;
+        Ok(())
+    }
+
     /// Persist already-sealed provider credentials without unlocking the device.
     ///
     /// Used by extension pairing when the offscreen session was closed/locked

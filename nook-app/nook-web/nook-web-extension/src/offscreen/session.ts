@@ -458,17 +458,8 @@ async function handleMessage(message: unknown): Promise<unknown> {
           typeof provider.id === 'string',
       )
       if (protection === 'unlocked') {
-        const existing = await activeManager.loadAuthProviders()
-        const merged = new Map<string, StorageProvider>(
-          existing.providers.map((provider) => [provider.id, provider]),
-        )
-        for (const provider of grantedProviders) {
-          // The Rust/Tsify ABI performs the complete shape validation when the
-          // snapshot is saved; this guard only narrows the merge key here.
-          merged.set(provider.id, provider)
-        }
-        await activeManager.saveAuthProviders({
-          providers: Array.from(merged.values()),
+        await activeManager.replaceAuthProvidersForVault({
+          providers: grantedProviders,
           activeVaultStoreId: grant.vaultStoreId,
         })
       } else if (grantedProviders.length > 0) {

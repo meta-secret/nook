@@ -235,10 +235,10 @@ pub use sync_provider_store::{
     normalize_auth_snapshot, oauth_remote_storage_ref, provider_label_by_id,
     provider_onboarding_type, provider_replication_capability_for_row, provider_storage_detail,
     provider_supports_replication, provider_target_key, providers_visible_while_device_locked,
-    seed_provider_from_legacy_storage, set_google_drive_provider_mode, set_icloud_provider_mode,
-    staged_remote_storage_args, storage_args_for_provider, sync_providers_for_active_vault,
-    update_oauth_remote_ref, update_provider_sync_metadata, validate_provider_row_replication,
-    vault_storage_args,
+    replace_active_vault_provider_grants, seed_provider_from_legacy_storage,
+    set_google_drive_provider_mode, set_icloud_provider_mode, staged_remote_storage_args,
+    storage_args_for_provider, sync_providers_for_active_vault, update_oauth_remote_ref,
+    update_provider_sync_metadata, validate_provider_row_replication, vault_storage_args,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,

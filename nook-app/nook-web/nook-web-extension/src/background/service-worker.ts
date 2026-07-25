@@ -27,6 +27,7 @@ import {
   isStoredExtensionPairingGrant,
   migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
   setupStorageKey,
 } from './pairing-grants'
@@ -753,20 +754,22 @@ function isAuthorizedWebsiteSender(
 
 async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
   const stored = await getPairingStorage()
-  return Object.values(stored).filter(
+  const grants = Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
       value.scopes.includes('passkey-management'),
   )
+  return selectedPairingGrantFirst(stored, grants)
 }
 
 async function passwordPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
   const stored = await getPairingStorage()
-  return Object.values(stored).filter(
+  const grants = Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
       value.scopes.includes('password-filling'),
   )
+  return selectedPairingGrantFirst(stored, grants)
 }
 
 async function availableWebsiteGrants(

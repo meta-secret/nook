@@ -22,6 +22,7 @@ import {
   isExtensionReadySetupState,
   migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
   setupStorageKey,
 } from '../../../../nook-web-extension/src/background/pairing-grants'
@@ -376,6 +377,13 @@ describe('extension pairing approved message', () => {
       selectedVaultName: 'Personal',
       eventCount: 2,
     })
+    const grants = [
+      stored[pairingGrantStorageKey('store-1')],
+      stored[pairingGrantStorageKey('store-2')],
+    ] as Parameters<typeof selectedPairingGrantFirst>[1]
+    expect(selectedPairingGrantFirst(stored, grants)[0]?.vaultStoreId).toBe(
+      'store-2',
+    )
   })
 
   test('migrates only the selected valid legacy grant into Rexie shape', () => {
@@ -402,9 +410,13 @@ describe('extension pairing approved message', () => {
     const key = pairingGrantStorageKey('store-1')
     const { eventCount, eventLogHeads, lastLocalSyncAt, ...legacyGrant } =
       current[key] as Record<string, unknown>
+    const legacySetup = {
+      ...(current[setupStorageKey] as Record<string, unknown>),
+    }
+    delete legacySetup.selectedVaultStoreId
     const migrated = migratedLegacyPairingStorageItems({
       [key]: legacyGrant,
-      [setupStorageKey]: current[setupStorageKey],
+      [setupStorageKey]: legacySetup,
     })
 
     expect(eventCount).toBe(3)
