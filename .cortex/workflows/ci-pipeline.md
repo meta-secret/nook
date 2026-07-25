@@ -16,7 +16,7 @@ validation and cannot trigger Main after merge.
 | [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful same-repository PR workflow      | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: restore/refresh scoped BuildKit caches, bake sealed images, then **overlap** full local-provider + isolation web e2e with extension e2e and all headless UI demos (90-day artifact + 10 largest recordings on the merged PR's Linear issue), then isolated Pages deploys to `dev.nokey.sh` and both `*.dev.nokey.sh` vault origins | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust ‖ WASM producers refresh scoped BuildKit caches; then **overlap** browser-free web verify, local-provider web e2e, extension e2e, and all headless UI demos on separate runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then immediately squash-merge one `.stats/main-build/**` record; the stats merge is ignored by Main, terminating the loop | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -486,10 +486,11 @@ source-sensitive layers have separate v2
 GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
 non-Rust pushes do not repeat unchanged Cargo compilation.
 Hosted Main, nightly, and PR Docker builds all omit the direct TLS Redis
-credential. This makes Main's exported compiler vertices reusable by the
-secret-free PR solve; a secret-backed Main vertex would force every PR to
-recompile the dependency graph. The Redis cache remains an optional authorized
-local optimization and never a correctness input.
+credential (`hosted_secret_free_by_design`). This makes Main's exported
+compiler vertices reusable by the secret-free PR solve; a secret-backed Main
+vertex would force every PR to recompile the dependency graph. The hosted remote
+cache is GitHub Actions BuildKit scopes; Redis sccache remains an optional
+authorized local optimization and never a correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.

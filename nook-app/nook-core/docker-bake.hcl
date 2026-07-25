@@ -60,5 +60,8 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
+  // Main's split native job publishes through this target; without cache-to the hosted
+  // native-source scope is never refreshed when prepare-and-publish-cache is not used.
   cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
 }

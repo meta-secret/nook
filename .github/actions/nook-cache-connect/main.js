@@ -14,17 +14,28 @@ if (!githubEnvironmentPath) {
   process.exit(1);
 }
 
+const hostedDelivery =
+  process.env.GITHUB_ACTIONS === "true" || process.env.NOOK_ENV === "ci";
+const missingCredentialReason = hostedDelivery
+  ? "hosted_secret_free_by_design"
+  : "credentials_unavailable";
+
 fs.appendFileSync(
   githubEnvironmentPath,
   [
     "NOOK_SCCACHE_BACKEND=direct_compile",
     `NOOK_SCCACHE_BACKEND_REASON=${
-      redisPassword ? "persistent_credential_available" : "credentials_unavailable"
+      redisPassword ? "persistent_credential_available" : missingCredentialReason
     }`,
     "",
   ].join("\n"),
 );
 if (!redisPassword) {
+  if (hostedDelivery) {
+    process.stdout.write(
+      "Hosted delivery omits Redis sccache so GHA BuildKit compiler layers stay secret-free for PR restores\n",
+    );
+  }
   process.exit(0);
 }
 

@@ -33,7 +33,7 @@ below. Historical schema-version-1 timing-only records remain valid baselines.
 - Main run ID, attempt, head SHA, conclusion, URL, and timestamps;
 - associated pull requests when GitHub can resolve them;
 - queue, execution, and end-to-end wall time;
-- the combined `Preflight, check, build, and e2e` step duration;
+- aggregate producer build/verify step duration (native Rust, WASM, and browser-free web; legacy single-job step names remain recognized);
 - aggregate development-deployment and coverage-export durations;
 - every job and step with status, conclusion, timestamps, and duration;
 - runner labels and identity for distinguishing hosted-capacity changes.
