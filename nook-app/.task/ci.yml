@@ -162,6 +162,12 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:prepare-images:host }
 
+  ci:main:publish-gha-cache:
+    desc: Export the warm Main prepare graph into hosted GHA cache scopes (same Buildx builder).
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:publish-gha-cache:host }
+
   ci:main:web-e2e:
     desc: Main web gate without extension e2e — prepare images then run web e2e alone (manual/debug).
     cmds:
@@ -232,6 +238,10 @@ tasks:
       - task: preflight
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
+
+  _ci:main:publish-gha-cache:host:
+    cmds:
+      - bash .github/scripts/publish-buildkit-gha-cache.sh
 
   _ci:main:web-e2e:host:
     cmds:

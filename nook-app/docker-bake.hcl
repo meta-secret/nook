@@ -58,6 +58,8 @@ variable "SCCACHE_REDIS_PASSWORD_FILE" {
 // Enabled only by the GitHub Actions Docker setup. Keeping the default empty preserves zero-network
 // local builds. Separate scopes are mandatory: Docker's GHA backend overwrites a scope when a
 // different image exports to it, so sharing the default `buildkit` scope loses sibling lineages.
+// Rust exporters omit ignore-error so a failed cook-layer upload fails Main instead of leaving PRs
+// with indexes that silently miss and redownload crates. Web exporters keep ignore-error.
 variable "GHA_CACHE_ENABLED" {
   default = ""
 }
@@ -98,55 +100,67 @@ rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == 
 ]
 
 rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
 rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
   "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
   "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
   "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
+// v2 is the self-contained WASM dependency lineage. Keep reading v1 during the migration window
+// so already-warmed runners can still restore cook layers until Main publishes v2.
 rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
+  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
+  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
   "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
@@ -154,43 +168,51 @@ rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_S
   "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
   "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
   "type=gha,scope=nook-rust-native-source-v2,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
   "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-wasm-source-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
   "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
   "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
   "type=gha,scope=nook-rust-wasm-source-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
   "type=gha,scope=nook-rust-wasm-source-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
+  "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
   "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
 web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
@@ -271,11 +293,27 @@ group "prepare" {
   targets = ["rust-format-check", "web-artifacts", "web-deps"]
 }
 
-// Main is the sole hosted-cache writer. Selecting dependency and native-source targets as explicit
-// cache-only outputs is required: cache exporters attached to named build contexts are not run
-// merely because another target consumed them.
+// Main preparation warms these targets in the job-scoped builder. Hosted cache export is deferred
+// to `publish-gha-cache` so a cancelled Mid-prepare Main run cannot publish incomplete indexes.
+// Selecting dependency and native-source targets as explicit cache-only outputs is required:
+// cache exporters attached to named build contexts are not run merely because another target
+// consumed them.
 group "prepare-and-publish-cache" {
   targets = [
+    "rust-format-check",
+    "web-artifacts",
+    "web-deps",
+    "builder-wasm-deps",
+    "builder-deps",
+    "builder-debug",
+  ]
+}
+
+// Export-only group used after a successful Main prepare on the same Buildx builder. Includes
+// rust-base explicitly so its dedicated scope cannot drift from the dependency lineages.
+group "publish-gha-cache" {
+  targets = [
+    "rust-base",
     "rust-format-check",
     "web-artifacts",
     "web-deps",

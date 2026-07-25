@@ -25,8 +25,10 @@ target "builder-wasm-deps" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  // Main owns this complete WASM dependency lineage. Pull requests restore it read-only, avoiding
-  // both dependency rebuilds and competition with the larger native dependency cache.
+  // Main owns this complete WASM dependency lineage (nook-rust-wasm-deps-v2). Pull requests restore
+  // it read-only, avoiding both dependency rebuilds and competition with the larger native
+  // dependency cache. The restore list also imports rust-base + native deps so cook layers cannot
+  // orphan when sibling scopes advance independently.
   cache-from = rust_wasm_deps_cache_from
   cache-to   = rust_wasm_deps_cache_to
 }
@@ -60,8 +62,8 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  // Main's split native job publishes through this target; without cache-to the hosted
-  // native-source scope is never refreshed when prepare-and-publish-cache is not used.
+  // Retain cache-to so native-source export stays wired when this target is solved with
+  // writes enabled; Main's deferred publish-cache path refreshes via builder-debug.
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }

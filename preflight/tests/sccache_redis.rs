@@ -237,6 +237,7 @@ fn assert_delivery_cache_scope_contract() {
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
@@ -249,6 +250,7 @@ fn assert_delivery_cache_scope_contract() {
     for main_scope in [
         "\"type=gha,scope=nook-rust-base-v1,version=2\"",
         "\"type=gha,scope=nook-rust-deps-v2,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-deps-v2,version=2\"",
         "\"type=gha,scope=nook-rust-wasm-deps-v1,version=2\"",
         "\"type=gha,scope=nook-rust-native-source-v2,version=2\"",
         "\"type=gha,scope=nook-rust-wasm-source-v2,version=2\"",
@@ -261,6 +263,12 @@ fn assert_delivery_cache_scope_contract() {
             "a missing generation with an older PR seed must also import Main: {main_scope}"
         );
     }
+    assert!(
+        bake.contains("type=gha,scope=nook-rust-base-v1,version=2")
+            && bake.contains("rust_wasm_deps_cache_from")
+            && bake.matches("nook-rust-base-v1,version=2").count() >= 4,
+        "WASM/native dependency restores must also import the rust-base scope that parents chef cook layers"
+    );
 
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dependencies = core_bake
