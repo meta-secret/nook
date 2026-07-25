@@ -78,11 +78,21 @@ jobs:
           WASM_BUILD_MODE=dev
         env:
           CI: true
+          # Warm the job-scoped builder only. Publishing mid-prepare lets cancelled Main runs
+          # overwrite GHA indexes without the cargo-chef cook blobs PRs need.
+          GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+
+      - name: Publish hosted BuildKit cache
+        if: success()
+        run: task ci:main:publish-gha-cache WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Web e2e, extension e2e, and UI demos
         id: record-ui-demo
