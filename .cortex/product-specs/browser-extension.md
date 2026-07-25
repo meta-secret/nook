@@ -241,23 +241,25 @@ Nook Pilot HUD; the companion may also show a one-line current-tab hint
 CI does **not** hit live third-party login pages. Coverage is data-driven:
 
 1. Catalog: [`nook-core/data/popular_login_sites.json`](../../nook-app/nook-core/data/popular_login_sites.json)
-   — exactly **100** password-manager-relevant destinations (`id`, `family`,
-   `loginUrl`, `hosts`, `rank`).
+   — password-manager-relevant destinations (`id`, `family`, `loginUrl`,
+   `hosts`, `rank`). The catalog may grow (research/scan of many sites); it
+   is a thin index, not a set of duplicated DOM fixtures.
 2. Shared shell templates: `nook-web-extension/e2e/mock-auth/fixtures/templates/*.json`
-   — unique structural auth DOM shapes (email+password, email-first, bank
-   username+password, Microsoft/Google/Apple families, and a few brand
-   specials). Sites do **not** duplicate identical JSON.
+   — **unique** structural auth DOM shapes and quirks (email+password,
+   email-first, bank username+password, Microsoft/Google/Apple families,
+   brand specials such as Facebook `aria-hidden-ancestor`). Identical shells
+   are never copied per brand.
 3. Site→template map: `nook-web-extension/e2e/mock-auth/fixtures/site-shells.json`
    — every catalog id points at a template (`source: capture | research`).
-4. Renderer: mock-auth route `/site/:id` (`DetectionFromFixture.svelte`).
-   Legacy paths (`/facebook`, `/google`, …) still resolve to the same fixtures.
-5. Capture tool (local/agent only):
-   `nook-web-extension/scripts/capture-login-shell.mjs` opens a live `loginUrl`
-   once and drafts/updates a template + map entry. Bot-blocked sites keep
-   research template mappings.
-6. Automated gates: Rust catalog invariant (100 unique ranked ids); Vitest over
-   every resolved site shell; extension e2e Pilot visibility for all 100 and
-   fill-to-success for single-step password shells.
+4. Renderer: mock-auth `/template/:id` (unique shells) and `/site/:id`
+   (catalog id → template). Legacy paths (`/facebook`, `/google`, …) still
+   resolve.
+5. Capture / research (local/agent only): open live `loginUrl`s to discover
+   anomalies; promote only **new** shapes into templates. Bot-blocked sites
+   stay on research mappings. CI never hits live third parties.
+6. Automated gates: catalog→template mapping invariant; Vitest + extension
+   e2e over **each unique template** (Pilot visibility; fill-to-success for
+   single-step password shells)—not one e2e visit per catalog id.
 
 Related host credential matching remains in
 [`login_site_hosts.json`](../../nook-app/nook-core/data/login_site_hosts.json).

@@ -1,17 +1,30 @@
 <script lang="ts">
   import { completePlainLogin } from '../lib/plain-login'
-  import { getSiteFixture, type SiteFixtureField } from '../lib/site-fixtures'
+  import {
+    getSiteFixture,
+    getTemplateFixture,
+    type SiteFixtureField,
+  } from '../lib/site-fixtures'
 
   let {
     siteId,
+    templateId,
   }: {
-    siteId: string
+    siteId?: string
+    templateId?: string
   } = $props()
 
   let stepIndex = $state(0)
   let error = $state('')
 
-  const fixture = $derived(getSiteFixture(siteId))
+  const fixture = $derived(
+    templateId
+      ? getTemplateFixture(templateId)
+      : siteId
+        ? getSiteFixture(siteId)
+        : undefined,
+  )
+  const label = $derived(templateId ?? siteId ?? 'unknown')
   const step = $derived(fixture?.steps[stepIndex])
   const wrapAriaHidden = $derived(
     Boolean(fixture?.quirks.includes('aria-hidden-ancestor')),
@@ -82,13 +95,13 @@
   <main>
     <h1>Unknown site fixture</h1>
     <p data-testid="mock-auth-scenario">missing-fixture</p>
-    <p class="error" role="alert">No fixture for {siteId}</p>
+    <p class="error" role="alert">No fixture for {label}</p>
   </main>
 {:else if wrapAriaHidden}
   <div aria-hidden="true">
     <main>
-      <h1>{siteId}</h1>
-      <p data-testid="mock-auth-scenario">{siteId}-login</p>
+      <h1>{label}</h1>
+      <p data-testid="mock-auth-scenario">{label}-login</p>
       {#if error}
         <p class="error" role="alert">{error}</p>
       {/if}
@@ -130,8 +143,8 @@
   </div>
 {:else}
   <main>
-    <h1>{siteId}</h1>
-    <p data-testid="mock-auth-scenario">{siteId}-login</p>
+    <h1>{label}</h1>
+    <p data-testid="mock-auth-scenario">{label}-login</p>
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}

@@ -111,6 +111,22 @@ export function getShellTemplate(id: string): ShellTemplate | undefined {
   return templatesById.get(id)
 }
 
+/** Render a shared template as a fixture (CI exercises unique shells, not every catalog id). */
+export function getTemplateFixture(
+  templateId: string,
+): SiteFixture | undefined {
+  const template = templatesById.get(templateId)
+  if (!template || template.steps.length === 0) return undefined
+  return {
+    id: templateId,
+    source: 'research',
+    loginUrl: `https://template.invalid/${templateId}`,
+    quirks: template.quirks ?? [],
+    steps: template.steps,
+    template: templateId,
+  }
+}
+
 export function isSiteFixture(value: unknown): value is SiteFixture {
   if (!value || typeof value !== 'object') return false
   const fixture = value as SiteFixture

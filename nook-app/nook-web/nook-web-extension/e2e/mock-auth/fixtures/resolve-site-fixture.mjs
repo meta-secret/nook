@@ -64,6 +64,11 @@ export function listShellTemplateIds() {
   return [...templatesById.keys()].sort()
 }
 
+/** @param {string} id */
+export function getShellTemplate(id) {
+  return templatesById.get(id)
+}
+
 export function siteShellCount() {
   return Object.keys(siteShells).length
 }

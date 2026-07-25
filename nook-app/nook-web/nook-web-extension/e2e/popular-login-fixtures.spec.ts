@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  getShellTemplate,
   listShellTemplateIds,
   resolveSiteFixture,
   siteShellCount,
@@ -22,50 +23,49 @@ const catalogPath = path.resolve(
 type CatalogEntry = { id: string }
 
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as CatalogEntry[]
-const singleStepPasswordIds = catalog
-  .map((site) => {
-    const fixture = resolveSiteFixture(site.id)
-    const single =
-      Boolean(fixture) &&
-      fixture!.steps.length === 1 &&
-      fixture!.steps[0]?.fields.some((field) => field.type === 'password')
-    return single ? site.id : undefined
-  })
-  .filter((id): id is string => Boolean(id))
+const templateIds = listShellTemplateIds()
+const singleStepPasswordTemplates = templateIds.filter((templateId) => {
+  const template = getShellTemplate(templateId)
+  return (
+    Boolean(template) &&
+    template!.steps.length === 1 &&
+    template!.steps[0]?.fields.some((field) => field.type === 'password')
+  )
+})
 
 test.describe('popular login fixture coverage', () => {
-  test.describe.configure({ timeout: 600_000 })
+  test.describe.configure({ timeout: 180_000 })
 
-  test('catalog maps to shared templates without per-site duplicates', () => {
+  test('catalog maps to shared templates; CI covers unique shells only', () => {
     expect(catalog).toHaveLength(100)
     expect(siteShellCount()).toBe(100)
-    expect(listShellTemplateIds().length).toBeGreaterThan(0)
-    expect(listShellTemplateIds().length).toBeLessThan(100)
+    expect(templateIds.length).toBeGreaterThan(0)
+    expect(templateIds.length).toBeLessThan(100)
     for (const site of catalog) {
-      expect(resolveSiteFixture(site.id)?.id).toBe(site.id)
+      expect(resolveSiteFixture(site.id)?.template).toBeTruthy()
     }
   })
 
-  test('shows Pilot Continue with Nook on every popular-site mock', async ({
+  test('shows Pilot Continue with Nook on every unique shell template', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
 
     const mockAuth = await startMockAuthServer()
     const paired = await launchPairedPinExtension(testInfo, {
-      vaultName: 'Popular login fixtures vault',
+      vaultName: 'Popular login templates vault',
     })
     try {
-      for (const site of catalog) {
+      for (const templateId of templateIds) {
         const page = await paired.context.newPage()
-        await page.goto(`${mockAuth.origin}/site/${site.id}`)
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(
           widget.getByRole('button', { name: 'Continue with Nook' }),
-          `Pilot missing for ${site.id}`,
+          `Pilot missing for template ${templateId}`,
         ).toBeVisible({ timeout: 20_000 })
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
-          `${site.id}-login`,
+          `${templateId}-login`,
         )
         await page.close()
       }
@@ -75,11 +75,11 @@ test.describe('popular login fixture coverage', () => {
     }
   })
 
-  test('fills single-step password popular-site mocks to success', async ({
+  test('fills single-step password shell templates to success', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
-    expect(singleStepPasswordIds.length).toBeGreaterThan(10)
+    expect(singleStepPasswordTemplates.length).toBeGreaterThan(0)
 
     const mockAuth = await startMockAuthServer()
     const paired = await launchPairedPinExtension(testInfo, {
@@ -93,9 +93,9 @@ test.describe('popular login fixture coverage', () => {
         'extension-fill-password',
       )
 
-      for (const siteId of singleStepPasswordIds) {
+      for (const templateId of singleStepPasswordTemplates) {
         const page = await paired.context.newPage()
-        await page.goto(`${mockAuth.origin}/site/${siteId}`)
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible({
           timeout: 20_000,

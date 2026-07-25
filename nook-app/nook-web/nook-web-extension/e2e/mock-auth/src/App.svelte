@@ -25,6 +25,7 @@
   }
 
   const siteMatch = $derived(pathname.match(/^\/site\/([a-z0-9-]+)$/u))
+  const templateMatch = $derived(pathname.match(/^\/template\/([a-z0-9-]+)$/u))
   const legacySiteId = $derived(
     (
       {
@@ -82,6 +83,8 @@
   <DetectionSpa />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
+{:else if templateMatch?.[1]}
+  <DetectionFromFixture templateId={templateMatch[1]} />
 {:else if siteMatch?.[1]}
   <DetectionFromFixture siteId={siteMatch[1]} />
 {:else if legacySiteId}
