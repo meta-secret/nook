@@ -300,15 +300,15 @@ group "prepare" {
   targets = ["rust-format-check", "web-artifacts", "web-deps"]
 }
 
-// Main preparation warms these targets in the job-scoped builder. Hosted cache export is deferred
-// to `publish-gha-cache` so a cancelled Mid-prepare Main run cannot publish incomplete indexes.
-// Selecting dependency and native-source targets as explicit cache-only outputs is required:
-// cache exporters attached to named build contexts are not run merely because another target
-// consumed them.
+// Main `publish-cache` warms only the hosted GHA scopes PRs restore. Intentionally omits
+// `web-artifacts` and `rust-format-check`: those re-run the full WASM/native verification graph
+// that the rust/wasm producers already completed, and they invalidate every commit so they do
+// not pay for themselves as shared cache. Hosted export is deferred to `publish-gha-cache` so a
+// cancelled Mid-warm Main run cannot publish incomplete indexes. Selecting dependency and
+// native-source targets as explicit cache-only outputs is required: cache exporters attached to
+// named build contexts are not run merely because another target consumed them.
 group "prepare-and-publish-cache" {
   targets = [
-    "rust-format-check",
-    "web-artifacts",
     "web-deps",
     "builder-wasm-deps",
     "builder-deps",
@@ -316,13 +316,11 @@ group "prepare-and-publish-cache" {
   ]
 }
 
-// Export-only group used after a successful Main prepare on the same Buildx builder. Includes
+// Export-only group used after a successful Main warm on the same Buildx builder. Includes
 // rust-base explicitly so its dedicated scope cannot drift from the dependency lineages.
 group "publish-gha-cache" {
   targets = [
     "rust-base",
-    "rust-format-check",
-    "web-artifacts",
     "web-deps",
     "builder-wasm-deps",
     "builder-deps",

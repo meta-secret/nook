@@ -162,8 +162,14 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:prepare-images:host }
 
+  ci:main:warm-gha-cache:
+    desc: Warm Main dependency/native-source Bake targets for deferred GHA export (no preflight or web image).
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:warm-gha-cache:host }
+
   ci:main:publish-gha-cache:
-    desc: Export the warm Main prepare graph into hosted GHA cache scopes (same Buildx builder).
+    desc: Export the warm Main dependency graph into hosted GHA cache scopes (same Buildx builder).
     cmds:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:publish-gha-cache:host }
@@ -239,9 +245,15 @@ tasks:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
 
+  _ci:main:warm-gha-cache:host:
+    # Flattened app includes can run with cwd under nook-app/. Always resolve from REPO_ROOT.
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/warm-buildkit-gha-cache.sh"
+
   _ci:main:publish-gha-cache:host:
     # Flattened app includes can run with cwd under nook-app/. Always resolve from REPO_ROOT so
-    # Main's deferred cache publish cannot miss the script (exit 127) after a warm prepare.
+    # Main's deferred cache publish cannot miss the script (exit 127) after a warm bake.
     dir: '{{.REPO_ROOT}}'
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh"
