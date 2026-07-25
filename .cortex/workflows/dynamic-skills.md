@@ -15,9 +15,7 @@ Dynamic skills turn concrete feedback into reusable guidance:
 1. A **skill card** in [`.cortex/dynamic-skills/`](../dynamic-skills/) is the
    source of truth for the pattern. Every durable repo-specific agent skill
    belongs here.
-2. An optional **Cursor project skill** in [`.cursor/skills/`](../../.cursor/skills/)
-   makes that pattern invokable by name. Cursor skills are mirrors, not the
-   canonical copy.
+2. Executable skills live in [`.agents/skills/`](../../.agents/skills/) (the canonical open agent skill directory for Antigravity, Cursor, Claude, and Codex), with symlinks in [`.cursor/skills/`](../../.cursor/skills/) and [`.claude/skills/`](../../.claude/skills/). Skill wrappers are mirrors, not the canonical copy.
 3. The registry at [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md)
    lists every available skill card and whether it has an executable skill.
 
@@ -37,7 +35,7 @@ new or updated skill immediately after capture.
 Use <skill-name> and refactor <scope>
 ```
 
-Read the named skill card, read any linked Cursor skill, inspect the target
+Read the named skill card, read any linked skill, inspect the target
 scope, and apply the pattern with normal coding workflow and validation.
 
 ## Intake Workflow
@@ -54,8 +52,7 @@ scope, and apply the pattern with normal coding workflow and validation.
    a new card only when the lesson is meaningfully distinct.
 5. Update [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md) in the
    same change.
-6. Create or update `.cursor/skills/<skill-name>/SKILL.md` when the pattern is
-   intended to be invoked directly by future agents.
+6. Create or update `.agents/skills/<skill-name>/SKILL.md` (and ensure `.cursor/skills/` and `.claude/skills/` symlinks exist) when the pattern is intended to be invoked directly by future agents.
 
 Ask for clarification only when the scope or preferred pattern cannot be inferred
 from the user's example and surrounding code.

@@ -6,20 +6,19 @@ dynamically from concrete project feedback; it does not mean optional or ad hoc.
 
 Use this index before refactors, review handling, issue-scope decisions, or skill
 creation so agents apply the existing repo-specific guidance and keep related
-knowledge consolidated. Optional `.cursor/skills/` entries mirror these cards for
-direct invocation; the `.cortex` card remains the source of truth.
+knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.cursor/skills/` and `.claude/skills/`) enable direct invocation across Antigravity, Cursor, Claude, and Codex; the `.cortex` card remains the source of truth.
 
-| Skill card | Purpose | Cursor skill |
+| Skill card | Purpose | Executable skill |
 |---|---|---|
-| [code-review-comments.md](code-review-comments.md) | Handle every active comment without waiting for reviewers: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.cursor/skills/code-review-comments/SKILL.md`](../../.cursor/skills/code-review-comments/SKILL.md) |
-| [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional Cursor project skills | [`.cursor/skills/dynamic-skill/SKILL.md`](../../.cursor/skills/dynamic-skill/SKILL.md) |
-| [efficient-pr-delivery.md](efficient-pr-delivery.md) | Ship PRs with machine-readable preflight/readiness, format-then-push, and repository-only GitHub Actions watching | [`.cursor/skills/efficient-pr-delivery/SKILL.md`](../../.cursor/skills/efficient-pr-delivery/SKILL.md) |
-| [github-actions-only-validation.md](github-actions-only-validation.md) | Format locally; every product gate runs on GitHub Actions | [`.cursor/skills/github-actions-only-validation/SKILL.md`](../../.cursor/skills/github-actions-only-validation/SKILL.md) |
-| [pre-push-hygiene.md](pre-push-hygiene.md) | Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses | [`.cursor/skills/pre-push-hygiene/SKILL.md`](../../.cursor/skills/pre-push-hygiene/SKILL.md) |
-| [browser-extension-release-security.md](browser-extension-release-security.md) | Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts | [`.cursor/skills/browser-extension-release-security/SKILL.md`](../../.cursor/skills/browser-extension-release-security/SKILL.md) |
+| [code-review-comments.md](code-review-comments.md) | Handle every active comment without waiting for reviewers: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.agents/skills/code-review-comments/SKILL.md`](../../.agents/skills/code-review-comments/SKILL.md) |
+| [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional project skills | [`.agents/skills/dynamic-skill/SKILL.md`](../../.agents/skills/dynamic-skill/SKILL.md) |
+| [efficient-pr-delivery.md](efficient-pr-delivery.md) | Ship PRs with machine-readable preflight/readiness, format-then-push, and repository-only GitHub Actions watching | [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../.agents/skills/efficient-pr-delivery/SKILL.md) |
+| [github-actions-only-validation.md](github-actions-only-validation.md) | Format locally; every product gate runs on GitHub Actions | [`.agents/skills/github-actions-only-validation/SKILL.md`](../../.agents/skills/github-actions-only-validation/SKILL.md) |
+| [pre-push-hygiene.md](pre-push-hygiene.md) | Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses | [`.agents/skills/pre-push-hygiene/SKILL.md`](../../.agents/skills/pre-push-hygiene/SKILL.md) |
+| [browser-extension-release-security.md](browser-extension-release-security.md) | Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts | [`.agents/skills/browser-extension-release-security/SKILL.md`](../../.agents/skills/browser-extension-release-security/SKILL.md) |
 | [feature-issue-planning.md](feature-issue-planning.md) | Organize every feature issue pack with a mandatory milestone, parent issue, focused sub-issues, and labels so GitHub stays manageable | |
-| [issue-scope-management.md](issue-scope-management.md) | Manage deferred, risky, or too-large work through existing issues, aggregate parent issues, and focused sub-issues without disrupting other agents | [`.cursor/skills/issue-scope-management/SKILL.md`](../../.cursor/skills/issue-scope-management/SKILL.md) |
-| [rust-coding.md](rust-coding.md) | Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs | [`.cursor/skills/rust-coding/SKILL.md`](../../.cursor/skills/rust-coding/SKILL.md) |
+| [issue-scope-management.md](issue-scope-management.md) | Manage deferred, risky, or too-large work through existing issues, aggregate parent issues, and focused sub-issues without disrupting other agents | [`.agents/skills/issue-scope-management/SKILL.md`](../../.agents/skills/issue-scope-management/SKILL.md) |
+| [rust-coding.md](rust-coding.md) | Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs | [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md) |
 | [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes in Rust and reserve TypeScript for UI presentation state and browser glue; model sum types as enums and treat `Option<T>` as a missing enum | |
 
 ## How To Add One
@@ -28,5 +27,5 @@ direct invocation; the `.cortex` card remains the source of truth.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
 3. Add the new card to the table above.
-4. If the user wants direct invocation, create `.cursor/skills/<skill-name>/SKILL.md`
-   that points back to the `.cortex` card, then link it from the table.
+4. If the user wants direct invocation, create `.agents/skills/<skill-name>/SKILL.md`
+   (with symlinks in `.cursor/skills/` and `.claude/skills/`) pointing back to the `.cortex` card, then link it from the table.
