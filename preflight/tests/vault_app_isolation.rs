@@ -1047,8 +1047,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "Main must warm prepare without publishing, then export complete dependency scopes only after success"
     );
     assert!(
-        read(root, ".github/scripts/publish-buildkit-gha-cache.sh")
-            .contains("publish-gha-cache"),
+        read(root, ".github/scripts/publish-buildkit-gha-cache.sh").contains("publish-gha-cache"),
         "Main cache publish must bake the export-only group on the warm job-scoped builder"
     );
     let base_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
