@@ -231,6 +231,33 @@ verification code via Rust/WASM, and encrypts the authenticator only after
 Sufficient outcome evidence. Consented backup-code capture follows; secrets
 never appear in the HUD.
 
+The companion popup “Ready / Connected” state means the extension device is
+paired to a vault. It is not login detection. Login detection is the in-page
+Nook Pilot HUD; the companion may also show a one-line current-tab hint
+(“Login form detected on this page” / “No login form detected”).
+
+### Popular-site detection coverage
+
+CI does **not** hit live third-party login pages. Structural mock-auth fixtures
+under `nook-web-extension/e2e/mock-auth` are the merge gate for popular-site
+shells that mirror host families in `nook-core/data/login_site_hosts.json`:
+
+| Family | Mock path | Shape covered |
+|---|---|---|
+| Microsoft | `/microsoft` | email-first `loginfmt` |
+| Slack | `/slack` | `data-qa="login_email"` |
+| Facebook | `/facebook` | `email`/`pass`, including `aria-hidden` ancestor |
+| Google | `/google` | email-first `identifier` |
+| Apple | `/apple` | Apple ID + password |
+| Amazon | `/amazon` | email-first then password |
+| GitHub | `/github` | `login` + password |
+| LinkedIn | `/linkedin` | `session_key` / `session_password` |
+| X | `/x` | username-first then password |
+
+Live sites remain manual/QA only. Unit HTML snapshots in
+`password-forms.test.ts` and extension smoke/pilot e2e assert Pilot appears
+(and Facebook fill-to-success) against these fixtures.
+
 ### In-Page HUD
 
 When a likely login flow is present, the content script may show a Nook-owned
