@@ -1,0 +1,45 @@
+{
+  "id": "slack",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "id": "email",
+          "data-qa": "login_email",
+          "placeholder": "name@work-email.com"
+        }
+      ],
+      "submit": {
+        "type": "button",
+        "data-qa": "signin_button",
+        "label": "Sign In"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "id": "email",
+          "data-qa": "login_email",
+          "placeholder": "name@work-email.com"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "id": "password",
+          "data-qa": "login_password",
+          "autocomplete": "current-password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "data-qa": "signin_btn",
+        "label": "Sign In"
+      }
+    }
+  ]
+}

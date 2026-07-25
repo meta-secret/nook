@@ -238,25 +238,31 @@ Nook Pilot HUD; the companion may also show a one-line current-tab hint
 
 ### Popular-site detection coverage
 
-CI does **not** hit live third-party login pages. Structural mock-auth fixtures
-under `nook-web-extension/e2e/mock-auth` are the merge gate for popular-site
-shells that mirror host families in `nook-core/data/login_site_hosts.json`:
+CI does **not** hit live third-party login pages. Coverage is data-driven:
 
-| Family | Mock path | Shape covered |
-|---|---|---|
-| Microsoft | `/microsoft` | email-first `loginfmt` |
-| Slack | `/slack` | `data-qa="login_email"` |
-| Facebook | `/facebook` | `email`/`pass`, including `aria-hidden` ancestor |
-| Google | `/google` | email-first `identifier` |
-| Apple | `/apple` | Apple ID + password |
-| Amazon | `/amazon` | email-first then password |
-| GitHub | `/github` | `login` + password |
-| LinkedIn | `/linkedin` | `session_key` / `session_password` |
-| X | `/x` | username-first then password |
+1. Catalog: [`nook-core/data/popular_login_sites.json`](../../nook-app/nook-core/data/popular_login_sites.json)
+   — password-manager-relevant destinations (`id`, `family`, `loginUrl`,
+   `hosts`, `rank`). The catalog may grow (research/scan of many sites); it
+   is a thin index, not a set of duplicated DOM fixtures.
+2. Shared shell templates: `nook-web-extension/e2e/mock-auth/fixtures/templates/*.json`
+   — **unique** structural auth DOM shapes and quirks (email+password,
+   email-first, bank username+password, Microsoft/Google/Apple families,
+   brand specials such as Facebook `aria-hidden-ancestor`). Identical shells
+   are never copied per brand.
+3. Site→template map: `nook-web-extension/e2e/mock-auth/fixtures/site-shells.json`
+   — every catalog id points at a template (`source: capture | research`).
+4. Renderer: mock-auth `/template/:id` (unique shells) and `/site/:id`
+   (catalog id → template). Legacy paths (`/facebook`, `/google`, …) still
+   resolve.
+5. Capture / research (local/agent only): open live `loginUrl`s to discover
+   anomalies; promote only **new** shapes into templates. Bot-blocked sites
+   stay on research mappings. CI never hits live third parties.
+6. Automated gates: catalog→template mapping invariant; Vitest + extension
+   e2e over **each unique template** (Pilot visibility; fill-to-success for
+   single-step password shells)—not one e2e visit per catalog id.
 
-Live sites remain manual/QA only. Unit HTML snapshots in
-`password-forms.test.ts` and extension smoke/pilot e2e assert Pilot appears
-(and Facebook fill-to-success) against these fixtures.
+Related host credential matching remains in
+[`login_site_hosts.json`](../../nook-app/nook-core/data/login_site_hosts.json).
 
 ### In-Page HUD
 
