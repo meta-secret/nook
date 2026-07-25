@@ -973,23 +973,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         8,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
-    assert!(
-        !bake.contains(
-            "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
-        ) && !bake.contains(
-            "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
-        ),
-        "Rust dependency cache exporters must not ignore upload failures"
-    );
-    assert!(
-        bake.contains("group \"prepare-and-publish-cache\"")
-            && bake.contains("group \"publish-gha-cache\"")
-            && bake.contains("\"builder-wasm-deps\",")
-            && bake.contains("\"builder-deps\",")
-            && bake.contains("\"builder-debug\",")
-            && bake.contains("\"rust-base\","),
-        "Main preparation must select dependency and native-source targets so their dedicated cache exporters run"
-    );
+    assert_rust_cache_export_hardening(&bake);
 
     let rust_bake = read(root, "nook-app/nook-wasm/docker-bake.hcl");
     assert!(
@@ -1037,7 +1021,30 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
+    assert_main_deferred_rust_cache_publish(root);
+}
 
+fn assert_rust_cache_export_hardening(bake: &str) {
+    assert!(
+        !bake.contains(
+            "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
+        ) && !bake.contains(
+            "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
+        ),
+        "Rust dependency cache exporters must not ignore upload failures"
+    );
+    assert!(
+        bake.contains("group \"prepare-and-publish-cache\"")
+            && bake.contains("group \"publish-gha-cache\"")
+            && bake.contains("\"builder-wasm-deps\",")
+            && bake.contains("\"builder-deps\",")
+            && bake.contains("\"builder-debug\",")
+            && bake.contains("\"rust-base\","),
+        "Main preparation must select dependency and native-source targets so their dedicated cache exporters run"
+    );
+}
+
+fn assert_main_deferred_rust_cache_publish(root: &Path) {
     let main = read(root, ".github/workflows/main.yml");
     assert!(
         main.contains("PREPARE_GROUP=prepare-and-publish-cache")
