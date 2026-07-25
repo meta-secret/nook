@@ -169,7 +169,25 @@ pub(crate) async fn save_presealed_auth_providers(
             "Presealed auth-provider save rejected plaintext credentials.".to_owned(),
         ));
     }
-    write_snapshot(snapshot).await
+    let raw = read_raw_snapshot().await?;
+    let mut merged = nook_core::normalize_auth_snapshot(&raw).snapshot;
+    let mut map: std::collections::HashMap<String, nook_core::StorageProviderData> = merged
+        .providers
+        .into_iter()
+        .map(|p| (p.id.clone(), p))
+        .collect();
+    for provider in &snapshot.providers {
+        map.insert(provider.id.clone(), provider.clone());
+    }
+    merged.providers = map.into_values().collect();
+    if snapshot
+        .active_vault_store_id
+        .as_deref()
+        .is_some_and(|id| !id.is_empty())
+    {
+        merged.active_vault_store_id = snapshot.active_vault_store_id.clone();
+    }
+    write_snapshot(&merged).await
 }
 
 pub(crate) async fn delete_auth_providers_db() -> Result<(), NookError> {

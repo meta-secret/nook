@@ -1985,9 +1985,7 @@ export class VaultState {
         if (vaultStoreId) {
           const unpairOk = await requestExtensionUnpairVault(vaultStoreId);
           if (!unpairOk) {
-            throw new Error(
-              "Failed to unpair extension before local browser data deletion.",
-            );
+            throw new Error(this.t("extension.consent.unpair_failed"));
           }
         }
         const deletion = this.enqueueStorage(() =>

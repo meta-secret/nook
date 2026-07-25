@@ -641,9 +641,11 @@ function setLocalStorage(items: Record<string, unknown>): Promise<void> {
   })
 }
 
-function getLocalStorage(key: string | null): Promise<Record<string, unknown>> {
+function getLocalStorage(
+  key?: string | string[] | Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(key, (items) => {
+    chrome.storage.local.get(key ?? null, (items) => {
       const message = chrome.runtime.lastError?.message
       if (message) reject(new Error(message))
       else resolve(items)
@@ -692,7 +694,7 @@ function isAuthorizedWebsiteSender(
 }
 
 async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
-  const stored = await getLocalStorage(null)
+  const stored = await getLocalStorage()
   return Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
@@ -701,7 +703,7 @@ async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
 }
 
 async function passwordPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
-  const stored = await getLocalStorage(null)
+  const stored = await getLocalStorage()
   return Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
@@ -2177,7 +2179,7 @@ async function unpairExtensionVault(
     const targetKey = pairingGrantStorageKey(vaultStoreId)
     await removeLocalStorage([targetKey])
 
-    const allStorage = await getLocalStorage(null)
+    const allStorage = await getLocalStorage()
     const remainingGrants: StoredExtensionPairingGrant[] = []
     for (const [key, value] of Object.entries(allStorage)) {
       if (
