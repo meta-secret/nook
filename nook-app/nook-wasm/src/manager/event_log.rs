@@ -7,9 +7,10 @@ use crate::storage::drive_events::{
     fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent,
 };
 use crate::storage::event_db::{
-    append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
-    load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
+    append_outbox_index, clear_local_event_store, is_event_log_mode, load_heads, load_key_epoch,
+    load_local_event_store, load_outbox, load_signing_seed, queue_outbox_entry,
+    remove_outbox_entry, save_event_bytes, save_heads, save_key_epoch, save_signing_seed,
+    set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -180,11 +181,24 @@ impl NookVaultManager {
         if self.event_log.signing_seed.is_empty() {
             if let Some(seed) = load_signing_seed().await? {
                 self.event_log.signing_seed = seed;
+            } else if !self.vault.store_id.is_empty() && self.event_log_has_events().await? {
+                // Minting a fresh signer against an existing log produces
+                // unauthorized JoinApproved events that the extension quarantines.
+                return Err(NookError::IndexedDb(
+                    "Vault event-log signing identity is missing. Unlock or restore this device before approving new members.".to_owned(),
+                ));
             } else {
                 let (identity, seed) = SigningIdentity::generate()?;
                 save_signing_seed(seed.as_str()).await?;
                 self.event_log.signing_seed = seed.into_inner();
                 return Ok(identity);
+            }
+        } else {
+            // Identity handoff installs the seed only in memory; persist it so
+            // lock/reload keeps the same authorized actor for later approvals.
+            let stored = load_signing_seed().await?;
+            if stored.as_deref() != Some(self.event_log.signing_seed.as_str()) {
+                save_signing_seed(&self.event_log.signing_seed).await?;
             }
         }
         Ok(SigningIdentity::from_seed_hex_stored(
@@ -193,8 +207,28 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) async fn load_event_heads(&mut self) -> Result<Vec<String>, NookError> {
-        if self.event_log.heads.is_empty() && !self.vault.store_id.is_empty() {
-            self.event_log.heads = load_heads(&self.vault.store_id).await?;
+        if !self.vault.store_id.is_empty() {
+            let store = load_local_event_store(&self.vault.store_id).await?;
+            if !store.event_ids().is_empty() {
+                // Prefer applicable causal heads so a quarantined/unauthorized
+                // approval cannot remain a permanent parent tip.
+                let graph = store.load_graph(&self.vault.store_id)?;
+                let heads = graph
+                    .heads()
+                    .into_iter()
+                    .map(|id| id.as_str().to_owned())
+                    .collect::<Vec<_>>();
+                if !heads.is_empty() {
+                    if self.event_log.heads != heads {
+                        self.event_log.heads = heads;
+                        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
+                    }
+                    return Ok(self.event_log.heads.clone());
+                }
+            }
+            if self.event_log.heads.is_empty() {
+                self.event_log.heads = load_heads(&self.vault.store_id).await?;
+            }
         }
         Ok(self.event_log.heads.clone())
     }
@@ -255,6 +289,24 @@ impl NookVaultManager {
             operations: operations.clone(),
         })?;
         let event_id = event.id()?;
+        // Refuse to persist events the causal graph would quarantine. Otherwise
+        // an unauthorized JoinApproved becomes a permanent poisoned head that
+        // blocks later extension pairing imports.
+        let local = load_local_event_store(&self.vault.store_id).await?;
+        let mut graph = local.load_graph(&self.vault.store_id)?;
+        match graph.insert(event.clone(), self.vault.store_id.as_str())? {
+            nook_core::EventInsertStatus::Quarantined(reason) => {
+                return Err(NookError::Database(format!(
+                    "Refusing to append unauthorized vault event: {reason}"
+                )));
+            }
+            nook_core::EventInsertStatus::Pending(reason) => {
+                return Err(NookError::Database(format!(
+                    "Refusing to append vault event with unresolved parents: {reason:?}"
+                )));
+            }
+            nook_core::EventInsertStatus::Duplicate | nook_core::EventInsertStatus::Applied => {}
+        }
         save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.vault.store_id, &self.event_log.heads).await?;
@@ -564,7 +616,12 @@ impl NookVaultManager {
         persist_locked_projection: bool,
     ) -> Result<(), NookError> {
         let heads = union_remote_events_and_heads(local, remote_events, &self.vault.store_id)?;
+        // Persist only events retained after quarantine. Saving rejected
+        // JoinApproved bytes poisons later pairing retries.
         for (event_id, bytes) in remote_events {
+            if local.get_bytes(event_id).is_none() {
+                continue;
+            }
             save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes).await?;
         }
         self.event_log.heads = heads.clone();
@@ -743,15 +800,31 @@ impl NookVaultManager {
             &expected_device_public_key,
             &expected_device_signing_public_key,
         )?;
+        // Derive envelopes from the same loaded graph, not a prior in-memory
+        // meta snapshot that may disagree after quarantine filtering.
+        let mut granted_meta = nook_core::VaultMetaState::default();
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut granted_meta)?;
         let auth_id = nook_core::dec_auth_id_from_public_key(&expected_device_public_key)?;
-        let has_device_envelope = self.vault.meta.auth.contains_key(&auth_id);
-
-        Ok(ExtensionEventLogImportStatus {
-            vault_store_id: self.vault.store_id.clone(),
+        let has_device_envelope = granted_meta.auth.contains_key(&auth_id);
+        let access_granted = has_active_grant && has_device_envelope;
+        let status = ExtensionEventLogImportStatus {
+            vault_store_id: expected_store_id.as_str().to_owned(),
             event_count: merged.len(),
             heads: self.event_log.heads.clone(),
-            access_granted: has_active_grant && has_device_envelope,
-        })
+            access_granted,
+        };
+        if access_granted {
+            self.vault.meta = granted_meta;
+        } else {
+            // Roll back so a rejected import cannot leave quarantined heads that
+            // permanently fail later pairing attempts for this vault.
+            clear_local_event_store(expected_store_id.as_str()).await?;
+            self.event_log.heads.clear();
+            self.vault.meta = nook_core::VaultMetaState::default();
+            self.vault.store_id.clear();
+        }
+
+        Ok(status)
     }
 
     pub(in crate::manager) async fn sync_local_folder_provider(

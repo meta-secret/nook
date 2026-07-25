@@ -350,7 +350,7 @@ export async function adoptExtensionIdentity(
     request,
     message,
   );
-  manager.finishExtensionIdentityHandoff(
+  await manager.finishExtensionIdentityHandoff(
     envelope,
     nonce,
     request.deviceId,

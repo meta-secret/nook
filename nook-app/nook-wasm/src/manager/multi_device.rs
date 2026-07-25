@@ -344,6 +344,20 @@ impl NookVaultManager {
             members_key_ciphertext: envelopes.members_key.clone(),
         }];
         self.persist_vault_change(operations).await?;
+        let store = crate::storage::event_db::load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        if !nook_core::event_graph_has_active_device_access(
+            &graph,
+            &join.device_id,
+            &join.public_key,
+            &join.signing_public_key,
+        )? {
+            return Err(NookError::Database(
+                "Extension approval did not produce an active event-log grant for this device."
+                    .to_owned(),
+            )
+            .into());
+        }
         Ok(self.get_records()?)
     }
 }

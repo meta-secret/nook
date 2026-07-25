@@ -50,7 +50,7 @@ impl NookVaultManager {
     /// Open and validate an extension identity handoff, then adopt both the age
     /// identity and its matching event-signing seed for this in-memory session.
     #[wasm_bindgen(js_name = finishExtensionIdentityHandoff)]
-    pub fn finish_extension_identity_handoff(
+    pub async fn finish_extension_identity_handoff(
         &mut self,
         envelope: &str,
         nonce: &str,
@@ -85,6 +85,9 @@ impl NookVaultManager {
         self.device.id = identity.device_id().as_str().to_owned();
         self.device.identity_private_key = identity.secret_string().into_inner();
         self.event_log.signing_seed = signing_seed;
+        // Persist immediately so a later lock/reload cannot mint a different
+        // unauthorized signer before Approve.
+        crate::storage::event_db::save_signing_seed(&self.event_log.signing_seed).await?;
         Ok(())
     }
 

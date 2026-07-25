@@ -366,4 +366,73 @@ mod tests {
             .unwrap()
         );
     }
+
+    #[test]
+    fn materialize_exposes_extension_envelope_only_for_active_grants() {
+        let extension = DeviceIdentity::generate().unwrap();
+        let (signing, _) = SigningIdentity::generate().unwrap();
+        let keys = crate::generate_vault_keys().unwrap();
+        let auth =
+            crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key).unwrap();
+        let envelopes = crate::parse_auth_envelopes(auth.value.as_str()).unwrap();
+        let auth_id = dec_auth_id_from_public_key(&extension.public_key()).unwrap();
+        let store_id = crate::generate_store_id().unwrap();
+        let mut graph = EventGraph::new();
+        let approval = signed_event(
+            &signing,
+            &store_id,
+            vec![],
+            vec![
+                VaultOperation::VaultImported {
+                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    secrets: vec![],
+                    password_entries: vec![],
+                },
+                VaultOperation::JoinApproved {
+                    device_id: extension.device_id().clone(),
+                    encryption_public_key: extension.public_key(),
+                    signing_public_key: signing.public_key(),
+                    label: MemberLabel::from_trusted("Browser extension".to_owned()),
+                    secrets_key_ciphertext: envelopes.secrets_key.clone(),
+                    members_key_ciphertext: envelopes.members_key.clone(),
+                },
+            ],
+            "2026-07-25T00:00:00Z",
+        );
+        let approval_id = approval.id().unwrap();
+        graph.insert(approval, store_id.as_str()).unwrap();
+
+        let mut meta = VaultMetaState::default();
+        materialize_vault_meta_from_graph(&graph, &mut meta).unwrap();
+        assert!(meta.auth.contains_key(&auth_id));
+        assert!(
+            event_graph_has_active_device_access(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &signing.public_key(),
+            )
+            .unwrap()
+        );
+
+        let revocation = signed_event(
+            &signing,
+            &store_id,
+            vec![approval_id],
+            vec![VaultOperation::DeviceRevoked {
+                device_id: extension.device_id().clone(),
+            }],
+            "2026-07-25T00:01:00Z",
+        );
+        graph.insert(revocation, store_id.as_str()).unwrap();
+        assert!(
+            !event_graph_has_active_device_access(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &signing.public_key(),
+            )
+            .unwrap()
+        );
+    }
 }

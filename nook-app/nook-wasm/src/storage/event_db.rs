@@ -99,6 +99,27 @@ async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookE
     Ok(())
 }
 
+async fn store_delete(store_name: &str, key: &str) -> Result<(), NookError> {
+    let rexie = open_nook_db().await?;
+    let transaction = rexie
+        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
+    let store = transaction
+        .store(store_name)
+        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
+    let js_key = serde_wasm_bindgen::to_value(key)
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+    store
+        .delete(js_key)
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
+    Ok(())
+}
+
 pub(crate) async fn is_event_log_mode() -> Result<bool, NookError> {
     Ok(vault_get(EVENT_LOG_MODE_KEY)
         .await?
@@ -183,6 +204,27 @@ pub(crate) async fn save_event_bytes(
             serde_json::to_string(&ids).map_err(|e| NookError::Serialization(e.to_string()))?;
         store_put(STORE_EVENTS, &index_key, &json).await?;
     }
+    Ok(())
+}
+
+/// Drop a vault's local event-log projection (events, heads, epoch).
+///
+/// Used when an extension pairing import rejects access so a poisoned or
+/// quarantined partial import cannot permanently block later approvals.
+pub(crate) async fn clear_local_event_store(store_id: &str) -> Result<(), NookError> {
+    let index_key = format!("event_index:{store_id}");
+    let ids: Vec<String> = match store_get(STORE_EVENTS, &index_key).await? {
+        None => Vec::new(),
+        Some(json) => {
+            serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
+        }
+    };
+    for event_id in ids {
+        store_delete(STORE_EVENTS, &event_key(store_id, &event_id)).await?;
+    }
+    store_delete(STORE_EVENTS, &index_key).await?;
+    store_delete(STORE_PROJECTIONS, &heads_key(store_id)).await?;
+    store_delete(STORE_PROJECTIONS, &epoch_key(store_id)).await?;
     Ok(())
 }
 
