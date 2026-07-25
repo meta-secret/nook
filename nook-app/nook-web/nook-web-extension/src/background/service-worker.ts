@@ -8,6 +8,7 @@ import {
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
+  isExtensionUnpairVaultMessage,
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
@@ -2108,6 +2109,8 @@ async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   try {
+    await ensureExtensionSessionDocument()
+    await sendSessionMessage({ type: 'nook:extension-session-reset' })
     const imported = await importExtensionEventLog(
       message.payload,
       message.eventLogRecords,
@@ -2118,7 +2121,6 @@ async function importApprovedPairing(
     await setLocalStorage(
       extensionPairingGrantStorageItems(message.payload, imported),
     )
-    await ensureExtensionSessionDocument()
     const providers =
       stageProviderCredentials(message.payload.providers) ??
       message.payload.providers
@@ -2154,6 +2156,22 @@ async function importApprovedPairing(
     return { ok: true, eventCount: imported.eventCount }
   } catch {
     return { ok: false, reason: 'event-log-import-failed' }
+  }
+}
+
+async function unpairExtensionVault(
+  vaultStoreId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    await removeLocalStorage([
+      pairingGrantStorageKey(vaultStoreId),
+      setupStorageKey,
+    ])
+    await ensureExtensionSessionDocument()
+    await sendSessionMessage({ type: 'nook:extension-session-reset' })
+    return { ok: true }
+  } catch {
+    return { ok: false }
   }
 }
 
@@ -2587,6 +2605,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message.payload.vaultStoreId,
       message.payload.eventLogRecords,
     ).then(sendResponse)
+    return true
+  }
+
+  if (isExtensionUnpairVaultMessage(message)) {
+    if (sender.id !== chrome.runtime.id || !isNokeySender(sender)) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void unpairExtensionVault(message.payload.vaultStoreId).then(sendResponse)
     return true
   }
 

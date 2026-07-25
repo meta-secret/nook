@@ -52,6 +52,13 @@ export type ExtensionLocalEventLogUpdatedMessage = {
   }
 }
 
+export type ExtensionUnpairVaultMessage = {
+  type: 'nook:extension-unpair-vault'
+  payload: {
+    vaultStoreId: string
+  }
+}
+
 export type ExtensionIdentityHandoffRequestMessage = {
   type: 'nook:extension-identity-handoff-request'
   payload: {
@@ -412,5 +419,22 @@ export function isExtensionLocalEventLogUpdatedMessage(
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
     isExtensionEventLogRecords(payload.eventLogRecords)
+  )
+}
+
+export function isExtensionUnpairVaultMessage(
+  message: unknown,
+): message is ExtensionUnpairVaultMessage {
+  if (
+    !isRuntimeMessage(message) ||
+    message.type !== 'nook:extension-unpair-vault' ||
+    typeof (message as { payload?: unknown }).payload !== 'object' ||
+    !(message as { payload?: unknown }).payload
+  ) {
+    return false
+  }
+  const payload = (message as { payload: Record<string, unknown> }).payload
+  return (
+    typeof payload.vaultStoreId === 'string' && payload.vaultStoreId.length > 0
   )
 }

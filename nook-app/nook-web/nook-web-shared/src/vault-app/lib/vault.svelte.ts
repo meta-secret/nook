@@ -88,7 +88,10 @@ import {
   type VaultArchitecture,
   type VaultType,
 } from "$lib/vault-architecture";
-import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
+import {
+  publishExtensionEventLogUpdate,
+  publishExtensionUnpairVault,
+} from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
@@ -1975,6 +1978,12 @@ export class VaultState {
     this.stopVaultSync();
     try {
       const manager = this.manager;
+      const vaultStoreId =
+        this.activeVaultStoreId ??
+        (await this.enqueueStorage(() => manager.vaultStoreId));
+      if (vaultStoreId) {
+        publishExtensionUnpairVault(vaultStoreId);
+      }
       await deleteBrowserData(() => {
         const deletion = this.enqueueStorage(() =>
           manager.deleteLocalBrowserData(),

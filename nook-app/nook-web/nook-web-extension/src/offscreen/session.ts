@@ -252,6 +252,17 @@ async function flushPasskeyEventToProviders(
 
 async function handleMessage(message: unknown): Promise<unknown> {
   switch (messageType(message)) {
+    case 'nook:extension-session-reset': {
+      if (manager) {
+        try {
+          manager.free()
+        } catch {
+          // Ignore error during manager cleanup
+        }
+        manager = null
+      }
+      return { ok: true }
+    }
     case 'nook:extension-session-status': {
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
