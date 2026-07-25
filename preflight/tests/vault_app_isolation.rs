@@ -1067,9 +1067,8 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
     assert!(
         ci_tasks.contains("_ci:main:warm-gha-cache:host:")
-            && ci_tasks.contains(
-                "bash \"{{.REPO_ROOT}}/.github/scripts/warm-buildkit-gha-cache.sh\"",
-            )
+            && ci_tasks
+                .contains("bash \"{{.REPO_ROOT}}/.github/scripts/warm-buildkit-gha-cache.sh\"",)
             && ci_tasks.contains("_ci:main:publish-gha-cache:host:")
             && ci_tasks.contains("dir: '{{.REPO_ROOT}}'")
             && ci_tasks
