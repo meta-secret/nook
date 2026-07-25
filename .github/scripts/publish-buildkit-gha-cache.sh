@@ -3,6 +3,9 @@
 # Call only after a successful prepare on the same job-scoped Buildx builder so
 # cancelled Mid-prepare runs cannot publish incomplete indexes that orphan the
 # cargo-chef cook layers PRs need.
+#
+# Proof signal: a PR that does not touch Cargo.lock / recipe inputs should restore
+# builder-deps-common `cargo chef cook` as CACHED from nook-rust-wasm-deps-v2.
 
 set -euo pipefail
 
