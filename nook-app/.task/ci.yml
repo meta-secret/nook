@@ -156,11 +156,23 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:host }
 
+  ci:main:prepare-images:
+    desc: Main preflight plus sealed nook-web / nook-web-e2e image bake (no browser suites).
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:prepare-images:host }
+
   ci:main:web-e2e:
-    desc: Main web gate without extension e2e — used when Main overlaps extension with UI demos.
+    desc: Main web gate without extension e2e — prepare images then run web e2e alone (manual/debug).
     cmds:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:web-e2e:host }
+
+  ci:main:web-e2e:ci:
+    desc: Main web e2e from the already-built CI e2e image.
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _ci:main:core }
 
   _ci:main:host:
     cmds:
@@ -169,6 +181,12 @@ tasks:
         vars: { SETUP_TARGET: nook-web-e2e }
       - task: docker:e2e:run
         vars: { TASK: _ci:main }
+
+  _ci:main:prepare-images:host:
+    cmds:
+      - task: preflight
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
 
   _ci:main:web-e2e:host:
     cmds:
