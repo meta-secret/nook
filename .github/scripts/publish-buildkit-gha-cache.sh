@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Export the already-built Main prepare graph into hosted GHA cache scopes.
-# Call only after a successful prepare on the same job-scoped Buildx builder so
-# cancelled Mid-prepare runs cannot publish incomplete indexes that orphan the
-# cargo-chef cook layers PRs need.
+# Export the already-warmed Main dependency graph into hosted GHA cache scopes.
+# Call only after warm-buildkit-gha-cache.sh succeeds on the same job-scoped
+# Buildx builder so cancelled Mid-warm runs cannot publish incomplete indexes
+# that orphan the cargo-chef cook layers PRs need.
 #
-# Critical: do not import remote GHA manifests during this export. A warm prepare
+# Critical: do not import remote GHA manifests during this export. A warm bake
 # already has cook layers in the local builder. Re-importing remote indexes made
 # the exporter emit incomplete index-only updates that PRs could not restore —
 # observed on Main after #740/#734 where builder-wasm-deps finished in ~1–4s with
@@ -15,6 +15,10 @@
 # recompression on that scope when the BuildKit/GHA exporter honors it; index-only
 # is still success when the local graph is exported without re-import (blob digests
 # may already exist from older scopes).
+#
+# Export only rust-base / wasm-deps / native-deps / native-source / web-deps.
+# Skip web-artifacts and rust-format-check: they duplicate producer work and
+# invalidate every commit, so they are not worth a second Main rebuild.
 #
 # Proof signal: a PR that does not touch Cargo.lock / recipe inputs should restore
 # builder-deps-common `cargo chef cook` as CACHED from nook-rust-wasm-deps-v3.
@@ -62,16 +66,14 @@ common_sets=(
   --set "*.output=type=cacheonly"
 )
 
-# Export local prepare layers only — empty cache-from prevents the thin-index trap.
+# Export local warm layers only — empty cache-from prevents the thin-index trap.
 no_import_rust_base=(--set "rust-base.cache-from=")
 no_import_wasm_deps=(--set "builder-wasm-deps.cache-from=")
 no_import_rust_rest=(
   --set "builder-deps.cache-from="
   --set "builder-debug.cache-from="
-  --set "rust-format-check.cache-from="
 )
 web_no_import=(
-  --set "web-artifacts.cache-from="
   --set "web-deps.cache-from="
 )
 
@@ -107,7 +109,7 @@ assert_wasm_deps_exported() {
     # After a reseed epoch bump, the first Main must write layers. Later Mains may
     # legitimately send index-only when those zstd digests already exist in GHA.
     echo "builder-wasm-deps GHA export completed as index-only (step #${step_id}; 0 writing layer lines)"
-    echo "publish-buildkit-gha-cache: accepting index-only export from local prepare graph (no cache-from reimport)"
+    echo "publish-buildkit-gha-cache: accepting index-only export from local warm graph (no cache-from reimport)"
   else
     echo "builder-wasm-deps GHA export wrote ${layer_count} layer(s) (step #${step_id})"
   fi
@@ -147,16 +149,16 @@ run_bake "$wasm_log" \
 
 assert_wasm_deps_exported "$wasm_log"
 
-# 2) Remaining rust scopes (native deps / source / format).
+# 2) Remaining rust scopes (native deps / native source).
 run_bake "$rust_log" \
   "${no_import_rust_base[@]}" \
   "${no_import_wasm_deps[@]}" \
   "${no_import_rust_rest[@]}" \
-  rust-base builder-deps builder-debug rust-format-check
+  rust-base builder-deps builder-debug
 
-# 3) Web scopes last so they do not compete with cook uploads for the rate limit.
+# 3) Web dependency scope last so it does not compete with cook uploads for the rate limit.
 run_bake "$web_log" \
   "${web_no_import[@]}" \
-  web-artifacts web-deps
+  web-deps
 
 echo "Hosted BuildKit cache publish complete"
