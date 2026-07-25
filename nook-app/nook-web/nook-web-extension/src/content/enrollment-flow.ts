@@ -89,7 +89,8 @@ type BackupAttachResponse = {
   reason?: string
 }
 
-const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 12_000
+// Multi-step QR → verify → success under CI load regularly exceeds 12s.
+const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 30_000
 const ENROLLMENT_EVIDENCE_POLL_MS = 250
 
 let pendingEnrollmentWatch:
@@ -134,9 +135,11 @@ function collectEnrollmentOutcomeObservation(
       '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
     ),
   )
+  // Prefer explicit auth-error markers. Bare [role="alert"] is too broad during
+  // SPA route swaps and unrelated live regions, and can false-conflict with success.
   const errorMarkerPresent = Boolean(
     document.querySelector(
-      '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]',
+      '[data-nook-auth-outcome="error"], .error[role="alert"]',
     ),
   )
   return {
@@ -227,6 +230,28 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
     watch.authPath,
     watch.sawMutation,
   )
+
+  // Happy path: commit on clear success without a service-worker roundtrip.
+  // Under CI load, classify messaging can briefly fail while the success DOM
+  // is already stable; also avoids SPA flashes where an old alert conflicts.
+  if (observation.successMarkerPresent && !observation.errorMarkerPresent) {
+    if (pendingEnrollmentWatch?.stageId !== watch.stageId) return
+    stopPendingEnrollmentWatch()
+    await commitStagedEnrollment(
+      watch.host,
+      watch.section,
+      watch.stageId,
+      watch.vaultStoreId,
+    )
+    return
+  }
+
+  // Both markers can coexist for one frame during soft SPA navigation. Keep
+  // watching until the DOM settles instead of dismissing the staged secret.
+  if (observation.successMarkerPresent && observation.errorMarkerPresent) {
+    return
+  }
+
   const verdict = await classifyEnrollmentOutcome(watch.host, observation)
   if (!verdict || pendingEnrollmentWatch?.stageId !== watch.stageId) return
 

@@ -145,8 +145,11 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
 
   await page.getByRole('button', { name: 'Verify' }).click()
   await expect(page.getByTestId('mock-auth-success')).toBeVisible()
+  // Enrollment evidence watches soft SPA success markers; keep this patient so
+  // the demo matches the content-script commit path under load.
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
-  ).toBeVisible({ timeout: 15_000 })
+  ).toBeVisible({ timeout: 30_000 })
+  await expect(widget.getByTestId('nook-auth-gate')).toBeVisible()
   await demoBeat(page)
 })
