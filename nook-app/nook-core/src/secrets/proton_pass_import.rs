@@ -261,10 +261,15 @@ fn convert_login(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
     .find(|candidate| !candidate.trim().is_empty())
     .map_or("", str::trim);
     let mut notes = item.data.metadata.note.clone();
-    append_proton_metadata(
-        &mut notes,
-        item_metadata(item, vault_name, website_url.as_str(), username),
-    );
+    let mut metadata = item_metadata(item, vault_name, website_url.as_str(), username);
+    if let Some(name) = super::import_support::source_label_metadata(
+        "name",
+        &item.data.metadata.name,
+        website_url.as_str(),
+    ) {
+        metadata.insert(0, name);
+    }
+    append_proton_metadata(&mut notes, metadata);
     SecretValue::Login(LoginSecret {
         website_url,
         username: username.to_owned(),
@@ -454,6 +459,7 @@ mod tests {
                 password: "secret".to_owned(),
                 notes: concat!(
                     "Recovery codes elsewhere\n\n## Proton Pass",
+                    "\n- name: GitHub",
                     "\n- vault: Work",
                     "\n- pinned: true",
                     "\n- email: alice@example.com",

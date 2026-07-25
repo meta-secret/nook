@@ -73,14 +73,9 @@ fn columns(headers: &StringRecord) -> Result<ChromePasswordColumns, ChromePasswo
 }
 
 fn append_name_metadata(notes: &mut String, name: &str, website_url: &str) {
-    if name.is_empty() || name == website_url {
-        return;
+    if let Some(entry) = super::import_support::source_label_metadata("name", name, website_url) {
+        super::import_support::append_import_metadata(notes, "Browser password manager", [entry]);
     }
-    if !notes.is_empty() {
-        notes.push_str("\n\n");
-    }
-    notes.push_str("## Browser password manager\n- name: ");
-    notes.push_str(name);
 }
 
 fn convert_record(record: &StringRecord, columns: ChromePasswordColumns) -> Option<SecretValue> {
