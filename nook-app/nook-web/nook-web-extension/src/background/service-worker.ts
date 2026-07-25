@@ -26,6 +26,7 @@ import {
   extensionStoredPairingGrantStorageItems,
   isStoredExtensionPairingGrant,
   pairingGrantStorageKey,
+  setupStateFromPairingGrant,
   setupStorageKey,
 } from './pairing-grants'
 import type { StoredExtensionPairingGrant } from './pairing-grants'
