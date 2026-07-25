@@ -2,6 +2,28 @@
 
 This is the system of record and entry point for all AI agents working in this repository. Follow the links below for deep context on Nook's architecture, design, and standards.
 
+## ⛔ Non-negotiable: load both design skills for every UI task
+
+Before designing, implementing, or reviewing any user-visible website or browser
+extension UI, agents MUST read and use both installed skills:
+
+- [`design-taste-frontend`](../.agents/skills/design-taste-frontend/SKILL.md)
+- [`impeccable`](../.agents/skills/impeccable/SKILL.md)
+
+This applies to new screens, redesigns, component and style changes, responsive
+behavior, interaction states, and visual polish.
+
+These skills are complementary design-quality lenses, not permission to replace
+Nook's stack or architecture. Nook remains Svelte-based, and this `.cortex`
+guidance remains authoritative for typed Rust/WASM boundaries, translations,
+accessibility, established components and tokens, tests, and dependency
+choices. Use Impeccable's surface mode and task playbook to ground the work,
+then apply the Nook-specific taste skill's Svelte implementation, anti-slop, and
+visual pre-flight guidance.
+
+Full repository-specific application contract:
+[dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md).
+
 ## ⛔ Non-negotiable: AI-debug mode exists to fix bugs
 
 **The purpose of AI-debug mode is to turn developer annotations into verified
@@ -199,6 +221,7 @@ normal build-performance PR. Full policy:
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 * [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 * [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; every product gate runs on GitHub Actions**.
+* [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
