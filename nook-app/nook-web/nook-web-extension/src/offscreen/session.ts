@@ -259,7 +259,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         } catch {
           // Ignore error during manager cleanup
         }
-        manager = null
+        manager = undefined
       }
       return { ok: true }
     }
