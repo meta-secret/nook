@@ -108,8 +108,8 @@ describe('popular login shell templates', () => {
   const templateIds = [...templates.keys()].sort()
 
   test('catalog maps every site to a shared template (no per-site shell copies)', () => {
-    expect(catalog).toHaveLength(100)
-    expect(Object.keys(siteShells)).toHaveLength(100)
+    expect(catalog).toHaveLength(1000)
+    expect(Object.keys(siteShells)).toHaveLength(1000)
     expect(templates.size).toBeGreaterThan(0)
     expect(templates.size).toBeLessThan(catalog.length)
     for (const site of catalog) {

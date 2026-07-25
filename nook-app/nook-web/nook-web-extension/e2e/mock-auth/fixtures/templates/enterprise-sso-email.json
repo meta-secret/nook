@@ -1,0 +1,21 @@
+{
+  "id": "enterprise-sso-email",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Work email",
+          "aria-label": "Work email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue with SSO"
+      }
+    }
+  ]
+}
