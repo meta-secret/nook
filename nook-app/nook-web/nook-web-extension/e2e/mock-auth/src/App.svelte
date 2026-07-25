@@ -1,7 +1,13 @@
 <script lang="ts">
+  import DetectionAmazon from './pages/DetectionAmazon.svelte'
+  import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionCombined from './pages/DetectionCombined.svelte'
+  import DetectionFacebook from './pages/DetectionFacebook.svelte'
+  import DetectionGitHub from './pages/DetectionGitHub.svelte'
+  import DetectionGoogle from './pages/DetectionGoogle.svelte'
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
+  import DetectionLinkedIn from './pages/DetectionLinkedIn.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
   import DetectionMicrosoft from './pages/DetectionMicrosoft.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
@@ -9,6 +15,7 @@
   import DetectionSignup from './pages/DetectionSignup.svelte'
   import DetectionSlack from './pages/DetectionSlack.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
+  import DetectionX from './pages/DetectionX.svelte'
   import NotFound from './pages/NotFound.svelte'
   import PlainLogin from './pages/PlainLogin.svelte'
   import Success from './pages/Success.svelte'
@@ -68,6 +75,20 @@
   <DetectionMicrosoft />
 {:else if pathname === '/slack'}
   <DetectionSlack />
+{:else if pathname === '/facebook'}
+  <DetectionFacebook />
+{:else if pathname === '/google'}
+  <DetectionGoogle />
+{:else if pathname === '/apple'}
+  <DetectionApple />
+{:else if pathname === '/amazon'}
+  <DetectionAmazon />
+{:else if pathname === '/github'}
+  <DetectionGitHub />
+{:else if pathname === '/linkedin'}
+  <DetectionLinkedIn />
+{:else if pathname === '/x'}
+  <DetectionX />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
 {:else}

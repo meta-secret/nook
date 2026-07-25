@@ -192,6 +192,19 @@ h1 {
   color: color-mix(in oklab, oklch(0.8 0.08 70) 80%, var(--foreground));
 }
 
+.login-detection {
+  margin: -4px 8px 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.login-detection[data-status='detected'] {
+  color: color-mix(in oklab, oklch(0.78 0.08 155) 85%, var(--foreground));
+}
+
 .field-group {
   display: grid;
   gap: 7px;

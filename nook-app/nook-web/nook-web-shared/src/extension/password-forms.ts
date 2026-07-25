@@ -112,9 +112,16 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 
 function isRenderedInput(field: HTMLInputElement): boolean {
   if (field.type === "hidden") return false;
+  // Cookie/consent layers often mark large subtrees aria-hidden while the
+  // login fields remain CSS-visible and focusable (common on Meta). Only the
+  // field itself is rejected for aria-hidden; ancestors still fail on hidden /
+  // display:none / visibility:hidden so closed header menus stay ignored.
+  if (field.getAttribute("aria-hidden") === "true") {
+    return false;
+  }
   let element: HTMLElement | undefined = field;
   while (element) {
-    if (element.hidden || element.getAttribute("aria-hidden") === "true") {
+    if (element.hidden) {
       return false;
     }
     const style = element.ownerDocument.defaultView?.getComputedStyle(element);
