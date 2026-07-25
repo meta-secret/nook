@@ -1072,8 +1072,9 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
             && publish_script.contains("force-compression=true")
             && publish_script.contains("writing layer")
             && publish_script.contains("accepting index-only export")
-            && publish_script.contains("rust-base builder-wasm-deps"),
-        "Main cache publish must export wasm-deps alone into v3 without reimport"
+            && publish_script.contains("rust-base builder-wasm-deps")
+            && publish_script.contains("(^|[[:space:]])#${step_id} "),
+        "Main cache publish must export wasm-deps alone into v3 and accept tee logs without a leading space before #N"
     );
     assert!(
         read(root, "nook-app/nook-core/Dockerfile").contains("NOOK_WASM_DEPS_CACHE_EPOCH=")

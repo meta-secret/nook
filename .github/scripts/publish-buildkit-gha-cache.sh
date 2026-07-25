@@ -79,12 +79,13 @@ wasm_deps_force_upload=(
   --set "builder-wasm-deps.cache-to=type=gha,scope=nook-rust-wasm-deps-v3,mode=max,version=2,compression=zstd,force-compression=true,timeout=10m"
 )
 
-# GHA logs prefix each line with a timestamp, so match " #N writing layer " not "^#N ".
-# Completion is "sending cache export … done" and/or "DONE". Main #755 uploaded cook
-# layers then failed this guard when DONE lagged tee flush.
+# Match BuildKit step ids at line start (local tee) or after a GHA timestamp space
+# ("…Z #N …"). Do not require a leading space alone — that rejected Main #761's tee
+# log (`#53 sending cache export 11.9s done` / `#53 DONE 33.8s`) after a successful
+# multi-layer upload. Completion is "sending cache export … done" and/or "DONE".
 assert_wasm_deps_exported() {
   local log_file="$1"
-  local export_line step_id layer_count
+  local export_line step_id layer_count step_prefix
   export_line="$(grep -n '\[builder-wasm-deps\] exporting to GitHub Actions Cache' "$log_file" | head -1 || true)"
   if [ -z "$export_line" ]; then
     echo "publish-buildkit-gha-cache: builder-wasm-deps did not export to GHA cache" >&2
@@ -95,11 +96,13 @@ assert_wasm_deps_exported() {
     echo "publish-buildkit-gha-cache: could not parse builder-wasm-deps export step id" >&2
     exit 1
   fi
-  if ! grep -qE " #${step_id} (DONE|sending cache export .* done)" "$log_file"; then
+  # Bound the step id so "#53 " does not match "#153 ".
+  step_prefix="(^|[[:space:]])#${step_id} "
+  if ! grep -qE "${step_prefix}(DONE|sending cache export .* done)" "$log_file"; then
     echo "publish-buildkit-gha-cache: builder-wasm-deps export step #${step_id} did not complete" >&2
     exit 1
   fi
-  layer_count="$(grep -cE " #${step_id} writing layer " "$log_file" || true)"
+  layer_count="$(grep -cE "${step_prefix}writing layer " "$log_file" || true)"
   if [ "${layer_count:-0}" -lt 1 ]; then
     # After a reseed epoch bump, the first Main must write layers. Later Mains may
     # legitimately send index-only when those zstd digests already exist in GHA.
