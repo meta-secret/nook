@@ -679,26 +679,57 @@ function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
   )
 }
 
+function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(null, (items) => {
+      if (chrome.runtime.lastError) {
+        reject(
+          new Error(
+            chrome.runtime.lastError.message ??
+              'Unable to read legacy extension pairing state.',
+          ),
+        )
+        return
+      }
+      resolve(items)
+    })
+  })
+}
+
+function removeLegacyPairingStorage(keys: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) {
+        reject(
+          new Error(
+            chrome.runtime.lastError.message ??
+              'Unable to remove legacy extension pairing state.',
+          ),
+        )
+        return
+      }
+      resolve()
+    })
+  })
+}
+
 function ensureLegacyPairingMigration(): Promise<void> {
   legacyPairingMigration ??= (async () => {
     // Browser storage is a read-once upgrade source only. Rexie remains the
     // sole ongoing owner of pairing state after the legacy rows are removed.
-    const legacy = (await chrome.storage.local.get(null)) as Record<
-      string,
-      unknown
-    >
+    const legacy = await readLegacyPairingStorage()
     const legacyKeys = legacyPairingStorageKeys(legacy)
     if (legacyKeys.length === 0) return
     const current = await readExtensionPairingState()
     if (Object.keys(current).length > 0) {
-      await chrome.storage.local.remove(legacyKeys)
+      await removeLegacyPairingStorage(legacyKeys)
       return
     }
     const migrated = migratedLegacyPairingStorageItems(legacy)
     if (Object.keys(migrated).length > 0) {
       await writeExtensionPairingState(migrated)
     }
-    await chrome.storage.local.remove(legacyKeys)
+    await removeLegacyPairingStorage(legacyKeys)
   })()
   return legacyPairingMigration
 }
