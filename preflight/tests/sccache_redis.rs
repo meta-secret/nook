@@ -235,7 +235,7 @@ fn assert_delivery_cache_scope_contract() {
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
@@ -248,6 +248,7 @@ fn assert_delivery_cache_scope_contract() {
     for main_scope in [
         "\"type=gha,scope=nook-rust-base-v1,version=2\"",
         "\"type=gha,scope=nook-rust-deps-v2,version=2\"",
+        "\"type=gha,scope=nook-rust-wasm-deps-v3,version=2\"",
         "\"type=gha,scope=nook-rust-wasm-deps-v2,version=2\"",
         "\"type=gha,scope=nook-rust-wasm-deps-v1,version=2\"",
         "\"type=gha,scope=nook-rust-native-source-v2,version=2\"",

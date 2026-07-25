@@ -944,6 +944,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "GHA_CACHE_WRITE_ENABLED",
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
+        "type=gha,scope=nook-rust-wasm-deps-v3",
         "type=gha,scope=nook-rust-wasm-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
         "type=gha,scope=nook-rust-native-source-v2",
@@ -1027,7 +1028,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
 fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
-            "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
+            "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
         ) && !bake.contains(
             "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
         ),
@@ -1061,9 +1062,15 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
                 .contains("bash \"{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh\"",),
         "Main cache publish must invoke the export script from REPO_ROOT, not a relative nook-app cwd"
     );
+    let publish_script = read(root, ".github/scripts/publish-buildkit-gha-cache.sh");
     assert!(
-        read(root, ".github/scripts/publish-buildkit-gha-cache.sh").contains("publish-gha-cache"),
-        "Main cache publish must bake the export-only group on the warm job-scoped builder"
+        publish_script.contains("builder-wasm-deps")
+            && publish_script.contains("cache-from=")
+            && publish_script.contains("nook-rust-wasm-deps-v3")
+            && publish_script.contains("force-compression=true")
+            && publish_script.contains("writing layer")
+            && publish_script.contains("refuse to publish an incomplete"),
+        "Main cache publish must export local prepare layers into v3, force cook uploads, and reject thin indexes"
     );
     let base_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
     assert!(
