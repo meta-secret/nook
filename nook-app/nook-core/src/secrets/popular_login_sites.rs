@@ -1,7 +1,8 @@
 //! Curated password-manager-relevant popular login destinations.
 //!
-//! The catalog drives mock-auth fixture coverage. CI asserts exactly 100
-//! entries with stable ids; live third-party pages are never fetched here.
+//! The catalog is a thin index of destinations mapped to unique mock-auth
+//! shell templates. CI asserts exactly 1000 entries with stable ids; live
+//! third-party pages are never fetched here.
 
 #[cfg(test)]
 mod tests {
@@ -20,11 +21,11 @@ mod tests {
     }
 
     #[test]
-    fn catalog_has_exactly_one_hundred_unique_ranked_sites() {
+    fn catalog_has_exactly_one_thousand_unique_ranked_sites() {
         let sites: Vec<PopularLoginSite> =
             serde_json::from_str(include_str!("../../data/popular_login_sites.json"))
                 .expect("bundled popular_login_sites.json must deserialize");
-        assert_eq!(sites.len(), 100, "catalog must contain exactly 100 sites");
+        assert_eq!(sites.len(), 1000, "catalog must contain exactly 1000 sites");
         let mut ids = HashSet::new();
         let mut ranks = HashSet::new();
         for site in sites {
@@ -47,7 +48,7 @@ mod tests {
                 site.id
             );
             assert!(
-                (1..=100).contains(&site.rank),
+                (1..=1000).contains(&site.rank),
                 "rank for {} out of range",
                 site.id
             );

@@ -37,8 +37,8 @@ test.describe('popular login fixture coverage', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test('catalog maps to shared templates; CI covers unique shells only', () => {
-    expect(catalog).toHaveLength(100)
-    expect(siteShellCount()).toBe(100)
+    expect(catalog).toHaveLength(1000)
+    expect(siteShellCount()).toBe(1000)
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(100)
     for (const site of catalog) {

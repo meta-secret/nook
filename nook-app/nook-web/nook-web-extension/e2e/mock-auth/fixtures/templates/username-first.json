@@ -1,0 +1,43 @@
+{
+  "id": "username-first",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "username",
+          "autocomplete": "username",
+          "placeholder": "Username",
+          "aria-label": "Username"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Next"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "username",
+          "autocomplete": "username",
+          "placeholder": "Username",
+          "aria-label": "Username"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

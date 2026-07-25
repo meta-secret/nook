@@ -1,0 +1,28 @@
+{
+  "id": "pin-login",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "userid",
+          "autocomplete": "username",
+          "placeholder": "User ID",
+          "aria-label": "User ID"
+        },
+        {
+          "type": "password",
+          "name": "pin",
+          "autocomplete": "current-password",
+          "placeholder": "PIN",
+          "aria-label": "PIN"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}
