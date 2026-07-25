@@ -1053,6 +1053,14 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
             && main.contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
         "Main must warm prepare without publishing, then export complete dependency scopes only after success"
     );
+    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    assert!(
+        ci_tasks.contains("_ci:main:publish-gha-cache:host:")
+            && ci_tasks.contains("dir: '{{.REPO_ROOT}}'")
+            && ci_tasks
+                .contains("bash \"{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh\"",),
+        "Main cache publish must invoke the export script from REPO_ROOT, not a relative nook-app cwd"
+    );
     assert!(
         read(root, ".github/scripts/publish-buildkit-gha-cache.sh").contains("publish-gha-cache"),
         "Main cache publish must bake the export-only group on the warm job-scoped builder"
