@@ -1,6 +1,36 @@
 {
+  "15five": {
+    "loginUrl": "https://www.15five.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
   "1password": {
     "loginUrl": "https://my.1password.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "aa": {
+    "loginUrl": "https://www.aa.com/loyalty/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "academy-sports": {
+    "loginUrl": "https://www.academy.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "acorn-tv": {
+    "loginUrl": "https://www.acorn.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "acorns": {
+    "loginUrl": "https://www.acorns.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "adidas": {
+    "loginUrl": "https://www.adidas.com/us/account-login",
     "source": "research",
     "template": "email-password"
   },
@@ -9,44 +39,254 @@
     "source": "research",
     "template": "email-first"
   },
+  "adobe-express": {
+    "loginUrl": "https://www.adobe.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "adp": {
+    "loginUrl": "https://online.adp.com/signin/v1/",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "aer-lingus": {
+    "loginUrl": "https://www.aer.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "aeroflot": {
+    "loginUrl": "https://www.aeroflot.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "aetna": {
+    "loginUrl": "https://www.aetna.com/individuals-families/login.html",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "agoda": {
+    "loginUrl": "https://www.agoda.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "air-canada": {
+    "loginUrl": "https://www.air.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "air-france": {
+    "loginUrl": "https://www.air.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "airbnb": {
     "loginUrl": "https://www.airbnb.com/login",
     "source": "research",
     "template": "email-password"
+  },
+  "airbnb-host": {
+    "loginUrl": "https://www.airbnb.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "airtable": {
+    "loginUrl": "https://www.airtable.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "akamai-control": {
+    "loginUrl": "https://www.akamai.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "alaskaair": {
+    "loginUrl": "https://www.alaskaair.com/account/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "albertsons": {
+    "loginUrl": "https://www.albertsons.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "aldi": {
+    "loginUrl": "https://www.aldi.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "algolia": {
+    "loginUrl": "https://www.algolia.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "alibaba": {
+    "loginUrl": "https://login.alibaba.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "alibaba-cloud": {
+    "loginUrl": "https://www.alibaba.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "aliexpress": {
+    "loginUrl": "https://login.aliexpress.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "allegiant": {
+    "loginUrl": "https://www.allegiant.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "allstate": {
+    "loginUrl": "https://www.allstate.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "ally": {
+    "loginUrl": "https://www.ally.com/bank/online-banking/",
+    "source": "research",
+    "template": "username-password"
   },
   "amazon": {
     "loginUrl": "https://www.amazon.com/ap/signin",
     "source": "capture",
     "template": "email-first"
   },
+  "amazon-pharmacy": {
+    "loginUrl": "https://www.amazon.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "amc": {
+    "loginUrl": "https://www.amc.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "american-express-bank": {
+    "loginUrl": "https://www.american.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
   "americanexpress": {
     "loginUrl": "https://www.americanexpress.com/en-us/account/login",
     "source": "research",
     "template": "username-password"
+  },
+  "amplitude": {
+    "loginUrl": "https://www.amplitude.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "amtrak": {
+    "loginUrl": "https://www.amtrak.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "amwell": {
+    "loginUrl": "https://www.amwell.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "ana": {
+    "loginUrl": "https://www.ana.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "anthem": {
+    "loginUrl": "https://www.anthem.com/login/",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "anthropic-console": {
+    "loginUrl": "https://www.anthropic.com/login",
+    "source": "research",
+    "template": "email-first"
   },
   "apple": {
     "loginUrl": "https://appleid.apple.com/sign-in",
     "source": "capture",
     "template": "apple"
   },
+  "appletv": {
+    "loginUrl": "https://tv.apple.com/login",
+    "source": "research",
+    "template": "apple"
+  },
+  "appsmith": {
+    "loginUrl": "https://www.appsmith.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "asana": {
     "loginUrl": "https://app.asana.com/-/login",
     "source": "research",
     "template": "email-first"
+  },
+  "asana-enterprise": {
+    "loginUrl": "https://www.asana.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "ashby": {
+    "loginUrl": "https://www.ashby.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "asos": {
+    "loginUrl": "https://www.asos.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "athenahealth": {
+    "loginUrl": "https://www.athenahealth.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "athleta": {
+    "loginUrl": "https://www.athleta.com/login",
+    "source": "research",
+    "template": "email-password"
   },
   "atlassian": {
     "loginUrl": "https://id.atlassian.com/login",
     "source": "research",
     "template": "email-first"
   },
+  "att": {
+    "loginUrl": "https://www.att.com/account/login/",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "audible": {
+    "loginUrl": "https://www.audible.com/sign-in",
+    "source": "research",
+    "template": "email-first"
+  },
+  "austrian-airlines": {
+    "loginUrl": "https://www.austrian.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "auth0": {
     "loginUrl": "https://manage.auth0.com/login",
     "source": "research",
     "template": "email-first"
   },
+  "avis": {
+    "loginUrl": "https://www.avis.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "aws": {
     "loginUrl": "https://signin.aws.amazon.com/",
     "source": "capture",
+    "template": "email-first"
+  },
+  "aws-console": {
+    "loginUrl": "https://www.aws.com/login",
+    "source": "research",
     "template": "email-first"
   },
   "azure": {
@@ -54,13 +294,78 @@
     "source": "capture",
     "template": "microsoft"
   },
+  "azure-portal": {
+    "loginUrl": "https://www.azure.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "bamboohr": {
+    "loginUrl": "https://app.bamboohr.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "banana-republic": {
+    "loginUrl": "https://www.banana.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bandai-namco": {
+    "loginUrl": "https://www.bandai.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bandh-photo": {
+    "loginUrl": "https://www.bandh.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "bankofamerica": {
     "loginUrl": "https://www.bankofamerica.com/",
     "source": "research",
     "template": "username-password"
   },
+  "barclays-us": {
+    "loginUrl": "https://www.barclays.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "basecamp": {
+    "loginUrl": "https://www.basecamp.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "bass-pro": {
+    "loginUrl": "https://www.bass.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "battle-net": {
+    "loginUrl": "https://battle.net/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "bbc": {
     "loginUrl": "https://account.bbc.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "beehiiv": {
+    "loginUrl": "https://www.beehiiv.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "bell": {
+    "loginUrl": "https://www.bell.ca/MyBell/Login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bereal": {
+    "loginUrl": "https://www.bereal.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "best-buy-canada": {
+    "loginUrl": "https://www.best.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -69,10 +374,25 @@
     "source": "research",
     "template": "email-password"
   },
+  "bethesda-net": {
+    "loginUrl": "https://www.bethesda.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "betterment": {
+    "loginUrl": "https://www.betterment.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
   "binance": {
     "loginUrl": "https://accounts.binance.com/en/login",
     "source": "research",
     "template": "email-first"
+  },
+  "binance-us": {
+    "loginUrl": "https://www.binance.com/login",
+    "source": "research",
+    "template": "username-password"
   },
   "bitbucket": {
     "loginUrl": "https://bitbucket.org/account/signin/",
@@ -84,8 +404,128 @@
     "source": "research",
     "template": "email-first"
   },
+  "bitwarden-cloud": {
+    "loginUrl": "https://vault.bitwarden.com/#/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bj-s-wholesale": {
+    "loginUrl": "https://www.bj.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "blackboard": {
+    "loginUrl": "https://www.blackboard.com/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "blink-health": {
+    "loginUrl": "https://www.blink.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "bloomingdale-s": {
+    "loginUrl": "https://www.bloomingdale.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bluesky": {
+    "loginUrl": "https://bsky.app/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bmo": {
+    "loginUrl": "https://www.bmo.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "boohoo": {
+    "loginUrl": "https://www.boohoo.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "booking": {
     "loginUrl": "https://account.booking.com/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "booking-affiliate": {
+    "loginUrl": "https://www.booking.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "boost-mobile": {
+    "loginUrl": "https://www.boost.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "bouygues": {
+    "loginUrl": "https://www.bouygues.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "box": {
+    "loginUrl": "https://www.box.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "braze": {
+    "loginUrl": "https://www.braze.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "brevo": {
+    "loginUrl": "https://www.brevo.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "bright-health": {
+    "loginUrl": "https://www.bright.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "britbox": {
+    "loginUrl": "https://www.britbox.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "britishairways": {
+    "loginUrl": "https://www.britishairways.com/travel/loginr/public/en_us",
+    "source": "research",
+    "template": "username-password"
+  },
+  "bt": {
+    "loginUrl": "https://www.bt.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "bubble": {
+    "loginUrl": "https://www.bubble.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "budget": {
+    "loginUrl": "https://www.budget.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "bugsnag": {
+    "loginUrl": "https://www.bugsnag.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "builder-io": {
+    "loginUrl": "https://www.builder.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "cabela-s": {
+    "loginUrl": "https://www.cabela.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "camping-world": {
+    "loginUrl": "https://www.camping.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -94,28 +534,163 @@
     "source": "research",
     "template": "email-first"
   },
+  "canva-teams": {
+    "loginUrl": "https://www.canva.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "canvas": {
+    "loginUrl": "https://canvas.instructure.com/login/canvas",
+    "source": "research",
+    "template": "email-password"
+  },
+  "capcom": {
+    "loginUrl": "https://www.capcom.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "capital-one-bank": {
+    "loginUrl": "https://www.capital.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
   "capitalone": {
     "loginUrl": "https://verified.capitalone.com/auth/signin",
     "source": "research",
     "template": "username-password"
+  },
+  "capsule": {
+    "loginUrl": "https://www.capsule.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "caremark": {
+    "loginUrl": "https://www.caremark.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "carnival-cruise": {
+    "loginUrl": "https://www.carnival.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "carrd": {
+    "loginUrl": "https://www.carrd.com/login",
+    "source": "research",
+    "template": "email-first"
   },
   "cashapp": {
     "loginUrl": "https://cash.app/login",
     "source": "research",
     "template": "email-first"
   },
+  "cathay-pacific": {
+    "loginUrl": "https://www.cathay.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "cb2": {
+    "loginUrl": "https://www.cb2.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "centene": {
+    "loginUrl": "https://www.centene.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "centurylink": {
+    "loginUrl": "https://www.centurylink.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "ceridian-dayforce": {
+    "loginUrl": "https://www.ceridian.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "charter-spectrum": {
+    "loginUrl": "https://www.charter.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
   "chase": {
     "loginUrl": "https://secure.chase.com/web/auth/",
     "source": "research",
     "template": "username-password"
+  },
+  "chewy": {
+    "loginUrl": "https://www.chewy.com/app/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "chime": {
+    "loginUrl": "https://app.chime.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "cigna": {
+    "loginUrl": "https://my.cigna.com/",
+    "source": "research",
+    "template": "member-id-password"
   },
   "citi": {
     "loginUrl": "https://online.citi.com/US/login.do",
     "source": "research",
     "template": "username-password"
   },
+  "citizens-bank": {
+    "loginUrl": "https://www.citizens.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "clarity": {
+    "loginUrl": "https://www.clarity.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "clickup": {
+    "loginUrl": "https://www.clickup.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "cloudflare": {
     "loginUrl": "https://dash.cloudflare.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "cloudflare-dashboard": {
+    "loginUrl": "https://www.cloudflare.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "clubhouse": {
+    "loginUrl": "https://www.clubhouse.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "coda": {
+    "loginUrl": "https://www.coda.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "codecademy": {
+    "loginUrl": "https://www.codecademy.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "codesandbox": {
+    "loginUrl": "https://www.codesandbox.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "codewars": {
+    "loginUrl": "https://www.codewars.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "cohere-dashboard": {
+    "loginUrl": "https://www.cohere.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -124,13 +699,168 @@
     "source": "research",
     "template": "email-first"
   },
+  "coinbase-pro": {
+    "loginUrl": "https://www.coinbase.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "comcast": {
+    "loginUrl": "https://login.xfinity.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "comet-ml": {
+    "loginUrl": "https://www.comet.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "confluence": {
+    "loginUrl": "https://id.atlassian.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "contentful": {
+    "loginUrl": "https://www.contentful.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "convertkit": {
+    "loginUrl": "https://www.convertkit.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "cornerstone-ondemand": {
+    "loginUrl": "https://www.cornerstone.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
   "costco": {
     "loginUrl": "https://www.costco.com/LogonForm",
     "source": "research",
     "template": "email-password"
   },
+  "costco-travel": {
+    "loginUrl": "https://www.costco.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "coursera": {
+    "loginUrl": "https://www.coursera.org/?authMode=login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "cox": {
+    "loginUrl": "https://www.cox.com/residentiallogin/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "craigslist": {
+    "loginUrl": "https://www.craigslist.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "crate-and-barrel": {
+    "loginUrl": "https://www.crate.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "creditkarma": {
+    "loginUrl": "https://www.creditkarma.com/auth/logon",
+    "source": "research",
+    "template": "email-password"
+  },
+  "cricket-wireless": {
+    "loginUrl": "https://www.cricket.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "criterion-channel": {
+    "loginUrl": "https://www.criterion.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "crunchyroll": {
+    "loginUrl": "https://sso.crunchyroll.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "crypto-com": {
+    "loginUrl": "https://crypto.com/exchange/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "crypto-com-exchange": {
+    "loginUrl": "https://www.crypto.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "culture-amp": {
+    "loginUrl": "https://www.culture.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "curiosity-stream": {
+    "loginUrl": "https://www.curiosity.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "curology": {
+    "loginUrl": "https://www.curology.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "currys": {
+    "loginUrl": "https://www.currys.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "cvs": {
+    "loginUrl": "https://www.cvs.com/account/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "dashlane": {
+    "loginUrl": "https://www.dashlane.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "datacamp": {
+    "loginUrl": "https://www.datacamp.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "datadog": {
+    "loginUrl": "https://app.datadoghq.com/account/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "dazn": {
+    "loginUrl": "https://www.dazn.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "deel": {
+    "loginUrl": "https://www.deel.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
   "delta": {
     "loginUrl": "https://www.delta.com/login/loginPage",
+    "source": "research",
+    "template": "email-password"
+  },
+  "depop": {
+    "loginUrl": "https://www.depop.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "dhl": {
+    "loginUrl": "https://www.dhl.com/en/express/tracking.html",
+    "source": "research",
+    "template": "email-password"
+  },
+  "dick-s-sporting-goods": {
+    "loginUrl": "https://www.dick.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -139,8 +869,28 @@
     "source": "research",
     "template": "email-first"
   },
+  "digitalocean-cloud": {
+    "loginUrl": "https://www.digitalocean.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "directv-stream": {
+    "loginUrl": "https://www.directv.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "discord": {
     "loginUrl": "https://discord.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "discord-developers": {
+    "loginUrl": "https://www.discord.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "discord-stages": {
+    "loginUrl": "https://www.discord.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -149,13 +899,43 @@
     "source": "research",
     "template": "username-password"
   },
+  "discover-bank": {
+    "loginUrl": "https://www.discover.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "discovery": {
+    "loginUrl": "https://www.discovery.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "disney-cruise": {
+    "loginUrl": "https://www.disney.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "disneyplus": {
     "loginUrl": "https://www.disneyplus.com/login",
     "source": "research",
     "template": "email-password"
   },
+  "docker": {
+    "loginUrl": "https://login.docker.com/u/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "doctor-on-demand": {
+    "loginUrl": "https://www.doctor.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
   "doordash": {
     "loginUrl": "https://www.doordash.com/consumer/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "douyin": {
+    "loginUrl": "https://www.douyin.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -164,8 +944,108 @@
     "source": "research",
     "template": "email-first"
   },
+  "dropbox-paper": {
+    "loginUrl": "https://www.dropbox.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "dropout": {
+    "loginUrl": "https://www.dropout.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "dsw": {
+    "loginUrl": "https://www.dsw.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "duo": {
+    "loginUrl": "https://admin.duosecurity.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "duolingo": {
+    "loginUrl": "https://www.duolingo.com/log-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "e-trade": {
+    "loginUrl": "https://www.e.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "ea": {
+    "loginUrl": "https://www.ea.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "ea-app": {
+    "loginUrl": "https://www.ea.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "easyjet": {
+    "loginUrl": "https://www.easyjet.com/en/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "ebay": {
     "loginUrl": "https://signin.ebay.com/ws/eBayISAPI.dll",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ebay-seller-hub": {
+    "loginUrl": "https://www.ebay.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "eclinicalworks": {
+    "loginUrl": "https://www.eclinicalworks.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "ee": {
+    "loginUrl": "https://www.ee.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "egnyte": {
+    "loginUrl": "https://www.egnyte.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "elastic": {
+    "loginUrl": "https://cloud.elastic.co/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "emirates": {
+    "loginUrl": "https://www.emirates.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "enterprise-rent-a-car": {
+    "loginUrl": "https://www.enterprise.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "epicgames": {
+    "loginUrl": "https://www.epicgames.com/id/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "equifax": {
+    "loginUrl": "https://www.equifax.com/personal/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "espn": {
+    "loginUrl": "https://www.espn.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "etihad": {
+    "loginUrl": "https://www.etihad.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -174,8 +1054,43 @@
     "source": "research",
     "template": "email-password"
   },
+  "etsy-seller": {
+    "loginUrl": "https://www.etsy.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "europcar": {
+    "loginUrl": "https://www.europcar.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "eurostar": {
+    "loginUrl": "https://www.eurostar.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "expedia": {
     "loginUrl": "https://www.expedia.com/user/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "expedia-partner": {
+    "loginUrl": "https://www.expedia.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "experian": {
+    "loginUrl": "https://www.experian.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "express-scripts": {
+    "loginUrl": "https://www.express.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "f1-tv": {
+    "loginUrl": "https://www.f1.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -184,13 +1099,198 @@
     "source": "capture",
     "template": "facebook"
   },
+  "facebook-ads": {
+    "loginUrl": "https://www.facebook.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "facebook-marketplace": {
+    "loginUrl": "https://www.facebook.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "farfetch": {
+    "loginUrl": "https://www.farfetch.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "fashion-nova": {
+    "loginUrl": "https://www.fashion.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "fastly": {
+    "loginUrl": "https://www.fastly.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "fastmail": {
+    "loginUrl": "https://www.fastmail.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "fedex": {
+    "loginUrl": "https://www.fedex.com/secure-login/",
+    "source": "research",
+    "template": "username-password"
+  },
   "fidelity": {
     "loginUrl": "https://digital.fidelity.com/prgw/digital/login",
     "source": "research",
     "template": "username-password"
   },
+  "fifth-third": {
+    "loginUrl": "https://www.fifth.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
   "figma": {
     "loginUrl": "https://www.figma.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "figma-figjam": {
+    "loginUrl": "https://www.figma.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "finish-line": {
+    "loginUrl": "https://www.finish.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "finnair": {
+    "loginUrl": "https://www.finnair.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "firebase-console": {
+    "loginUrl": "https://www.firebase.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "flixbus": {
+    "loginUrl": "https://www.flixbus.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "flyio": {
+    "loginUrl": "https://fly.io/app/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "fnac": {
+    "loginUrl": "https://www.fnac.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "followmyhealth": {
+    "loginUrl": "https://www.followmyhealth.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "foot-locker": {
+    "loginUrl": "https://www.foot.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "frame-io": {
+    "loginUrl": "https://www.frame.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "framer": {
+    "loginUrl": "https://www.framer.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "free-france": {
+    "loginUrl": "https://www.free.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "freshdesk": {
+    "loginUrl": "https://www.freshdesk.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "front": {
+    "loginUrl": "https://www.front.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "frontier-airlines": {
+    "loginUrl": "https://www.frontier.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "frontier-communications": {
+    "loginUrl": "https://www.frontier.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "fubo": {
+    "loginUrl": "https://www.fubo.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "fullstory": {
+    "loginUrl": "https://www.fullstory.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "fundrise": {
+    "loginUrl": "https://www.fundrise.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "funimation": {
+    "loginUrl": "https://www.crunchyroll.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "gab": {
+    "loginUrl": "https://www.gab.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "gamemaker": {
+    "loginUrl": "https://www.gamemaker.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "gap": {
+    "loginUrl": "https://www.gap.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "gcp-console": {
+    "loginUrl": "https://www.gcp.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "geico": {
+    "loginUrl": "https://ecams.geico.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "gemini": {
+    "loginUrl": "https://exchange.gemini.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "getaround": {
+    "loginUrl": "https://www.getaround.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ghost": {
+    "loginUrl": "https://www.ghost.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "ghost-pro": {
+    "loginUrl": "https://www.ghost.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -204,18 +1304,108 @@
     "source": "research",
     "template": "email-first"
   },
+  "glide": {
+    "loginUrl": "https://www.glide.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "glitch": {
+    "loginUrl": "https://www.glitch.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "gmail": {
     "loginUrl": "https://accounts.google.com/ServiceLogin?service=mail",
     "source": "capture",
     "template": "google"
+  },
+  "goat": {
+    "loginUrl": "https://www.goat.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "godot-cloud": {
+    "loginUrl": "https://www.godot.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "gog-galaxy": {
+    "loginUrl": "https://www.gog.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "goldman-sachs-marcus": {
+    "loginUrl": "https://www.goldman.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "goodrx": {
+    "loginUrl": "https://www.goodrx.com/login",
+    "source": "research",
+    "template": "member-id-password"
   },
   "google": {
     "loginUrl": "https://accounts.google.com/ServiceLogin",
     "source": "capture",
     "template": "google"
   },
+  "google-chat": {
+    "loginUrl": "https://www.google.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "google-fi": {
+    "loginUrl": "https://www.google.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "grailed": {
+    "loginUrl": "https://www.grailed.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "greenhouse": {
+    "loginUrl": "https://www.greenhouse.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "greyhound": {
+    "loginUrl": "https://www.greyhound.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "groq-cloud": {
+    "loginUrl": "https://www.groq.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "grubhub": {
     "loginUrl": "https://www.grubhub.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "gusto": {
+    "loginUrl": "https://app.gusto.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "h-e-b": {
+    "loginUrl": "https://www.h.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hackerrank": {
+    "loginUrl": "https://www.hackerrank.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hashicorp": {
+    "loginUrl": "https://auth.hashicorp.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hawaiian-airlines": {
+    "loginUrl": "https://www.hawaiian.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -224,13 +1414,58 @@
     "source": "research",
     "template": "email-password"
   },
+  "heap": {
+    "loginUrl": "https://www.heap.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "help-scout": {
+    "loginUrl": "https://www.help.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "heroku": {
     "loginUrl": "https://id.heroku.com/login",
     "source": "research",
     "template": "email-first"
   },
+  "hers": {
+    "loginUrl": "https://www.hers.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "hertz": {
+    "loginUrl": "https://www.hertz.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hetzner-console": {
+    "loginUrl": "https://www.hetzner.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hey-email": {
+    "loginUrl": "https://www.hey.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hibob": {
+    "loginUrl": "https://www.hibob.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
   "hilton": {
     "loginUrl": "https://www.hilton.com/en/hilton-honors/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hims": {
+    "loginUrl": "https://www.hims.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "hm": {
+    "loginUrl": "https://www2.hm.com/en_us/login",
     "source": "research",
     "template": "email-password"
   },
@@ -239,8 +1474,48 @@
     "source": "research",
     "template": "email-password"
   },
+  "hostelworld": {
+    "loginUrl": "https://www.hostelworld.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hotelscom": {
+    "loginUrl": "https://www.hotels.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hotelscombined": {
+    "loginUrl": "https://www.hotelscombined.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "hotjar": {
+    "loginUrl": "https://www.hotjar.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hsbc-us": {
+    "loginUrl": "https://www.hsbc.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "huawei-cloud": {
+    "loginUrl": "https://www.huawei.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "hubspot": {
     "loginUrl": "https://app.hubspot.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hubspot-cms": {
+    "loginUrl": "https://www.hubspot.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "hugging-face": {
+    "loginUrl": "https://www.hugging.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -249,18 +1524,263 @@
     "source": "research",
     "template": "email-password"
   },
+  "hulu-live": {
+    "loginUrl": "https://www.hulu.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "humana": {
+    "loginUrl": "https://www.humana.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "humble-bundle": {
+    "loginUrl": "https://www.humble.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "huntington": {
+    "loginUrl": "https://www.huntington.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "hyatt": {
+    "loginUrl": "https://www.hyatt.com/en-US/explore-hotels/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "iberia": {
+    "loginUrl": "https://www.iberia.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ibm-cloud": {
+    "loginUrl": "https://www.ibm.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "icims": {
+    "loginUrl": "https://www.icims.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
   "icloud": {
     "loginUrl": "https://www.icloud.com/",
     "source": "capture",
     "template": "apple"
+  },
+  "ifttt": {
+    "loginUrl": "https://www.ifttt.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "ihg": {
+    "loginUrl": "https://www.ihg.com/hotels/us/en/reservation/searchresult",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "ikea": {
+    "loginUrl": "https://www.ikea.com/us/en/profile/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "instacart": {
+    "loginUrl": "https://www.instacart.com/accounts/login",
+    "source": "research",
+    "template": "email-first"
   },
   "instagram": {
     "loginUrl": "https://www.instagram.com/accounts/login/",
     "source": "capture",
     "template": "instagram"
   },
+  "instagram-creator": {
+    "loginUrl": "https://www.instagram.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "interactive-brokers": {
+    "loginUrl": "https://www.interactive.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "intercom": {
+    "loginUrl": "https://www.intercom.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "internal-io": {
+    "loginUrl": "https://www.internal.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "intuit": {
+    "loginUrl": "https://accounts.intuit.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "irs": {
+    "loginUrl": "https://www.irs.gov/payments/view-your-tax-account",
+    "source": "research",
+    "template": "username-password"
+  },
+  "itch-io": {
+    "loginUrl": "https://www.itch.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "iterable": {
+    "loginUrl": "https://www.iterable.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "jal": {
+    "loginUrl": "https://www.jal.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "jazzhr": {
+    "loginUrl": "https://www.jazzhr.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "jd-sports": {
+    "loginUrl": "https://www.jd.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "jetblue": {
+    "loginUrl": "https://trueblue.jetblue.com/web/trueblue/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "jira": {
+    "loginUrl": "https://id.atlassian.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "jobvite": {
+    "loginUrl": "https://www.jobvite.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "kaggle": {
+    "loginUrl": "https://www.kaggle.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "kaiser": {
+    "loginUrl": "https://healthy.kaiserpermanente.org/sign-on",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "kakao": {
+    "loginUrl": "https://www.kakao.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "kayak": {
+    "loginUrl": "https://www.kayak.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "keeper": {
+    "loginUrl": "https://keepersecurity.com/vault/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "keybank": {
+    "loginUrl": "https://www.keybank.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "khanacademy": {
+    "loginUrl": "https://www.khanacademy.org/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "kick": {
+    "loginUrl": "https://www.kick.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "kindle": {
+    "loginUrl": "https://www.amazon.com/ap/signin",
+    "source": "research",
+    "template": "email-first"
+  },
+  "king": {
+    "loginUrl": "https://www.king.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "klaviyo": {
+    "loginUrl": "https://www.klaviyo.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "klm": {
+    "loginUrl": "https://www.klm.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "konami": {
+    "loginUrl": "https://www.konami.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "kraken": {
+    "loginUrl": "https://www.kraken.com/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "kroger": {
+    "loginUrl": "https://www.kroger.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "labelbox": {
+    "loginUrl": "https://www.labelbox.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "lastpass": {
     "loginUrl": "https://lastpass.com/login.php",
+    "source": "research",
+    "template": "email-first"
+  },
+  "lattice": {
+    "loginUrl": "https://www.lattice.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "launchdarkly": {
+    "loginUrl": "https://www.launchdarkly.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "leetcode": {
+    "loginUrl": "https://www.leetcode.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "lever": {
+    "loginUrl": "https://www.lever.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "lid": {
+    "loginUrl": "https://www.lid.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "line": {
+    "loginUrl": "https://www.line.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "linear": {
+    "loginUrl": "https://linear.app/login",
     "source": "research",
     "template": "email-first"
   },
@@ -269,18 +1789,153 @@
     "source": "capture",
     "template": "linkedin"
   },
+  "linkedin-learning": {
+    "loginUrl": "https://www.linkedin.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "linkedin-recruiter": {
+    "loginUrl": "https://www.linkedin.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "linkedin-sales-nav": {
+    "loginUrl": "https://www.linkedin.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "linode": {
+    "loginUrl": "https://www.linode.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "lowes": {
     "loginUrl": "https://www.lowes.com/myaccount",
     "source": "research",
     "template": "email-password"
+  },
+  "lucidchart": {
+    "loginUrl": "https://www.lucidchart.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "lufthansa": {
+    "loginUrl": "https://www.lufthansa.com/us/en/homepage",
+    "source": "research",
+    "template": "email-password"
+  },
+  "lululemon": {
+    "loginUrl": "https://www.lululemon.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "lumen": {
+    "loginUrl": "https://www.lumen.com/login",
+    "source": "research",
+    "template": "tel-password"
   },
   "lyft": {
     "loginUrl": "https://account.lyft.com/auth",
     "source": "research",
     "template": "email-password"
   },
+  "macys": {
+    "loginUrl": "https://www.macys.com/account/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "mailchimp": {
+    "loginUrl": "https://www.mailchimp.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "make": {
+    "loginUrl": "https://www.make.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mandt-bank": {
+    "loginUrl": "https://www.mandt.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "marketo": {
+    "loginUrl": "https://www.marketo.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "marriott": {
     "loginUrl": "https://www.marriott.com/sign-in.mi",
+    "source": "research",
+    "template": "email-password"
+  },
+  "masterclass": {
+    "loginUrl": "https://www.masterclass.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "mastodon": {
+    "loginUrl": "https://mastodon.social/auth/sign_in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "mediamarkt": {
+    "loginUrl": "https://www.mediamarkt.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "medium": {
+    "loginUrl": "https://medium.com/m/signin",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mega": {
+    "loginUrl": "https://www.mega.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "megabus": {
+    "loginUrl": "https://www.megabus.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "meijer": {
+    "loginUrl": "https://www.meijer.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "meilisearch-cloud": {
+    "loginUrl": "https://www.meilisearch.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mercari": {
+    "loginUrl": "https://www.mercari.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "merrill-edge": {
+    "loginUrl": "https://www.merrill.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "meta-business-suite": {
+    "loginUrl": "https://www.meta.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "metamask": {
+    "loginUrl": "https://portfolio.metamask.io/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "metro-by-t-mobile": {
+    "loginUrl": "https://www.metro.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "mewe": {
+    "loginUrl": "https://www.mewe.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -289,10 +1944,130 @@
     "source": "capture",
     "template": "microsoft"
   },
+  "microsoft-teams": {
+    "loginUrl": "https://www.microsoft.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "minecraft": {
+    "loginUrl": "https://www.minecraft.net/en-us/login",
+    "source": "research",
+    "template": "microsoft"
+  },
+  "mint-mobile": {
+    "loginUrl": "https://www.mint.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "miro": {
+    "loginUrl": "https://www.miro.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "missive": {
+    "loginUrl": "https://www.missive.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mixpanel": {
+    "loginUrl": "https://www.mixpanel.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mlb-tv": {
+    "loginUrl": "https://www.mlb.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "molina-healthcare": {
+    "loginUrl": "https://www.molina.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
   "monday": {
     "loginUrl": "https://auth.monday.com/login",
     "source": "research",
     "template": "email-first"
+  },
+  "monday-sales": {
+    "loginUrl": "https://www.monday.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mongodb": {
+    "loginUrl": "https://account.mongodb.com/account/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "morgan-stanley": {
+    "loginUrl": "https://www.morgan.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "mr-porter": {
+    "loginUrl": "https://www.mr.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "msc-cruises": {
+    "loginUrl": "https://www.msc.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "mubi": {
+    "loginUrl": "https://www.mubi.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "mural": {
+    "loginUrl": "https://www.mural.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "mychart": {
+    "loginUrl": "https://www.mychart.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "n8n-cloud": {
+    "loginUrl": "https://www.n8n.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "national-car-rental": {
+    "loginUrl": "https://www.national.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "navy-federal": {
+    "loginUrl": "https://www.navy.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "nba-league-pass": {
+    "loginUrl": "https://www.nba.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nebula": {
+    "loginUrl": "https://www.nebula.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "neiman-marcus": {
+    "loginUrl": "https://www.neiman.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nerdwallet": {
+    "loginUrl": "https://www.nerdwallet.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "net-a-porter": {
+    "loginUrl": "https://www.net.com/login",
+    "source": "research",
+    "template": "email-password"
   },
   "netflix": {
     "loginUrl": "https://www.netflix.com/login",
@@ -304,13 +2079,108 @@
     "source": "research",
     "template": "email-first"
   },
+  "netlify-teams": {
+    "loginUrl": "https://www.netlify.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "new-balance": {
+    "loginUrl": "https://www.new.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "newegg": {
+    "loginUrl": "https://www.newegg.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nextdoor": {
+    "loginUrl": "https://nextdoor.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nextgen": {
+    "loginUrl": "https://www.nextgen.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "nhl-tv": {
+    "loginUrl": "https://www.nhl.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "niantic": {
+    "loginUrl": "https://www.niantic.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nike": {
+    "loginUrl": "https://www.nike.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "nintendo": {
+    "loginUrl": "https://accounts.nintendo.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nordpass": {
+    "loginUrl": "https://nordpass.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nordstrom": {
+    "loginUrl": "https://www.nordstrom.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "nordstrom-rack": {
+    "loginUrl": "https://www.nordstrom.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "norwegian": {
+    "loginUrl": "https://www.norwegian.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "norwegian-cruise": {
+    "loginUrl": "https://www.norwegian.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "notion": {
     "loginUrl": "https://www.notion.so/login",
     "source": "research",
     "template": "email-first"
   },
+  "notion-calendar": {
+    "loginUrl": "https://www.notion.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "nurx": {
+    "loginUrl": "https://www.nurx.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
   "nytimes": {
     "loginUrl": "https://myaccount.nytimes.com/auth/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "o2-uk": {
+    "loginUrl": "https://www.o2.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "observable": {
+    "loginUrl": "https://www.observable.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "offerup": {
+    "loginUrl": "https://www.offerup.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -324,15 +2194,145 @@
     "source": "research",
     "template": "email-first"
   },
+  "okta-demo": {
+    "loginUrl": "https://login.okta.com/",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "old-navy": {
+    "loginUrl": "https://www.old.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "onelogin": {
+    "loginUrl": "https://app.onelogin.com/login",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "openai-platform": {
+    "loginUrl": "https://www.openai.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "opsgenie": {
+    "loginUrl": "https://www.opsgenie.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "optimizely": {
+    "loginUrl": "https://www.optimizely.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "optimum": {
+    "loginUrl": "https://www.optimum.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "optum": {
+    "loginUrl": "https://www.optum.com/login.html",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "optumrx": {
+    "loginUrl": "https://www.optumrx.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "oracle-cloud": {
+    "loginUrl": "https://www.oracle.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "orange": {
+    "loginUrl": "https://login.orange.com/",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "origin": {
+    "loginUrl": "https://www.origin.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "oscar-health": {
+    "loginUrl": "https://www.oscar.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
   "outlook": {
     "loginUrl": "https://outlook.live.com/owa/",
     "source": "capture",
     "template": "microsoft"
   },
+  "overstock": {
+    "loginUrl": "https://www.overstock.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ovhcloud": {
+    "loginUrl": "https://www.ovhcloud.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "oyster": {
+    "loginUrl": "https://www.oyster.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "pagerduty": {
+    "loginUrl": "https://www.pagerduty.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pandora": {
+    "loginUrl": "https://www.pandora.com/account/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
   "paramount": {
     "loginUrl": "https://www.paramountplus.com/account/signin/",
     "source": "research",
     "template": "email-password"
+  },
+  "paramount-media": {
+    "loginUrl": "https://www.paramount.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pardot": {
+    "loginUrl": "https://www.pardot.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "parler": {
+    "loginUrl": "https://www.parler.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "patagonia": {
+    "loginUrl": "https://www.patagonia.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "patreon": {
+    "loginUrl": "https://www.patreon.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "paychex": {
+    "loginUrl": "https://www.paychex.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "paycom": {
+    "loginUrl": "https://www.paycom.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "paylocity": {
+    "loginUrl": "https://www.paylocity.com/login",
+    "source": "research",
+    "template": "employee-id-password"
   },
   "paypal": {
     "loginUrl": "https://www.paypal.com/signin",
@@ -344,8 +2344,1418 @@
     "source": "research",
     "template": "email-password"
   },
+  "pcloud": {
+    "loginUrl": "https://www.pcloud.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "peacock": {
+    "loginUrl": "https://www.peacocktv.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pentagon-federal": {
+    "loginUrl": "https://www.pentagon.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "philo": {
+    "loginUrl": "https://www.philo.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pillpack": {
+    "loginUrl": "https://www.pillpack.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "pinecone": {
+    "loginUrl": "https://www.pinecone.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pingidentity": {
+    "loginUrl": "https://apps.pingone.com/",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
   "pinterest": {
     "loginUrl": "https://www.pinterest.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pinterest-business": {
+    "loginUrl": "https://www.pinterest.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pipedream": {
+    "loginUrl": "https://www.pipedream.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "planetscale": {
+    "loginUrl": "https://auth.planetscale.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "playstation": {
+    "loginUrl": "https://www.playstation.com/en-us/sign-in/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pluralsight": {
+    "loginUrl": "https://www.pluralsight.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0001": {
+    "loginUrl": "https://login.example/pm-site-0001",
+    "source": "research",
+    "template": "dual-identity-password"
+  },
+  "pm-site-0002": {
+    "loginUrl": "https://login.example/pm-site-0002",
+    "source": "research",
+    "template": "dual-identity-password"
+  },
+  "pm-site-0003": {
+    "loginUrl": "https://login.example/pm-site-0003",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0004": {
+    "loginUrl": "https://login.example/pm-site-0004",
+    "source": "research",
+    "template": "dual-identity-password"
+  },
+  "pm-site-0005": {
+    "loginUrl": "https://login.example/pm-site-0005",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0006": {
+    "loginUrl": "https://login.example/pm-site-0006",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0007": {
+    "loginUrl": "https://login.example/pm-site-0007",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0008": {
+    "loginUrl": "https://login.example/pm-site-0008",
+    "source": "research",
+    "template": "account-number-password"
+  },
+  "pm-site-0009": {
+    "loginUrl": "https://login.example/pm-site-0009",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0010": {
+    "loginUrl": "https://login.example/pm-site-0010",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0011": {
+    "loginUrl": "https://login.example/pm-site-0011",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0012": {
+    "loginUrl": "https://login.example/pm-site-0012",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0013": {
+    "loginUrl": "https://login.example/pm-site-0013",
+    "source": "research",
+    "template": "account-number-password"
+  },
+  "pm-site-0014": {
+    "loginUrl": "https://login.example/pm-site-0014",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0015": {
+    "loginUrl": "https://login.example/pm-site-0015",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0016": {
+    "loginUrl": "https://login.example/pm-site-0016",
+    "source": "research",
+    "template": "account-number-password"
+  },
+  "pm-site-0017": {
+    "loginUrl": "https://login.example/pm-site-0017",
+    "source": "research",
+    "template": "pin-login"
+  },
+  "pm-site-0018": {
+    "loginUrl": "https://login.example/pm-site-0018",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0019": {
+    "loginUrl": "https://login.example/pm-site-0019",
+    "source": "research",
+    "template": "pin-login"
+  },
+  "pm-site-0020": {
+    "loginUrl": "https://login.example/pm-site-0020",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0021": {
+    "loginUrl": "https://login.example/pm-site-0021",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0022": {
+    "loginUrl": "https://login.example/pm-site-0022",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0023": {
+    "loginUrl": "https://login.example/pm-site-0023",
+    "source": "research",
+    "template": "pin-login"
+  },
+  "pm-site-0024": {
+    "loginUrl": "https://login.example/pm-site-0024",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0025": {
+    "loginUrl": "https://login.example/pm-site-0025",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0026": {
+    "loginUrl": "https://login.example/pm-site-0026",
+    "source": "research",
+    "template": "email-password-aria-hidden"
+  },
+  "pm-site-0027": {
+    "loginUrl": "https://login.example/pm-site-0027",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0028": {
+    "loginUrl": "https://login.example/pm-site-0028",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0029": {
+    "loginUrl": "https://login.example/pm-site-0029",
+    "source": "research",
+    "template": "email-password-aria-hidden"
+  },
+  "pm-site-0030": {
+    "loginUrl": "https://login.example/pm-site-0030",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0031": {
+    "loginUrl": "https://login.example/pm-site-0031",
+    "source": "research",
+    "template": "email-password-aria-hidden"
+  },
+  "pm-site-0032": {
+    "loginUrl": "https://login.example/pm-site-0032",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0033": {
+    "loginUrl": "https://login.example/pm-site-0033",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0034": {
+    "loginUrl": "https://login.example/pm-site-0034",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0035": {
+    "loginUrl": "https://login.example/pm-site-0035",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0036": {
+    "loginUrl": "https://login.example/pm-site-0036",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0037": {
+    "loginUrl": "https://login.example/pm-site-0037",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0038": {
+    "loginUrl": "https://login.example/pm-site-0038",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0039": {
+    "loginUrl": "https://login.example/pm-site-0039",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0040": {
+    "loginUrl": "https://login.example/pm-site-0040",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0041": {
+    "loginUrl": "https://login.example/pm-site-0041",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0042": {
+    "loginUrl": "https://login.example/pm-site-0042",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0043": {
+    "loginUrl": "https://login.example/pm-site-0043",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0044": {
+    "loginUrl": "https://login.example/pm-site-0044",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0045": {
+    "loginUrl": "https://login.example/pm-site-0045",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0046": {
+    "loginUrl": "https://login.example/pm-site-0046",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0047": {
+    "loginUrl": "https://login.example/pm-site-0047",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0048": {
+    "loginUrl": "https://login.example/pm-site-0048",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0049": {
+    "loginUrl": "https://login.example/pm-site-0049",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0050": {
+    "loginUrl": "https://login.example/pm-site-0050",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0051": {
+    "loginUrl": "https://login.example/pm-site-0051",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0052": {
+    "loginUrl": "https://login.example/pm-site-0052",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0053": {
+    "loginUrl": "https://login.example/pm-site-0053",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0054": {
+    "loginUrl": "https://login.example/pm-site-0054",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0055": {
+    "loginUrl": "https://login.example/pm-site-0055",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0056": {
+    "loginUrl": "https://login.example/pm-site-0056",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0057": {
+    "loginUrl": "https://login.example/pm-site-0057",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0058": {
+    "loginUrl": "https://login.example/pm-site-0058",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0059": {
+    "loginUrl": "https://login.example/pm-site-0059",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0060": {
+    "loginUrl": "https://login.example/pm-site-0060",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0061": {
+    "loginUrl": "https://login.example/pm-site-0061",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0062": {
+    "loginUrl": "https://login.example/pm-site-0062",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0063": {
+    "loginUrl": "https://login.example/pm-site-0063",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0064": {
+    "loginUrl": "https://login.example/pm-site-0064",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0065": {
+    "loginUrl": "https://login.example/pm-site-0065",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0066": {
+    "loginUrl": "https://login.example/pm-site-0066",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0067": {
+    "loginUrl": "https://login.example/pm-site-0067",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0068": {
+    "loginUrl": "https://login.example/pm-site-0068",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0069": {
+    "loginUrl": "https://login.example/pm-site-0069",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0070": {
+    "loginUrl": "https://login.example/pm-site-0070",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0071": {
+    "loginUrl": "https://login.example/pm-site-0071",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0072": {
+    "loginUrl": "https://login.example/pm-site-0072",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0073": {
+    "loginUrl": "https://login.example/pm-site-0073",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0074": {
+    "loginUrl": "https://login.example/pm-site-0074",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0075": {
+    "loginUrl": "https://login.example/pm-site-0075",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0076": {
+    "loginUrl": "https://login.example/pm-site-0076",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0077": {
+    "loginUrl": "https://login.example/pm-site-0077",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0078": {
+    "loginUrl": "https://login.example/pm-site-0078",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0079": {
+    "loginUrl": "https://login.example/pm-site-0079",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0080": {
+    "loginUrl": "https://login.example/pm-site-0080",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0081": {
+    "loginUrl": "https://login.example/pm-site-0081",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0082": {
+    "loginUrl": "https://login.example/pm-site-0082",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0083": {
+    "loginUrl": "https://login.example/pm-site-0083",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0084": {
+    "loginUrl": "https://login.example/pm-site-0084",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0085": {
+    "loginUrl": "https://login.example/pm-site-0085",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0086": {
+    "loginUrl": "https://login.example/pm-site-0086",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0087": {
+    "loginUrl": "https://login.example/pm-site-0087",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0088": {
+    "loginUrl": "https://login.example/pm-site-0088",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0089": {
+    "loginUrl": "https://login.example/pm-site-0089",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0090": {
+    "loginUrl": "https://login.example/pm-site-0090",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0091": {
+    "loginUrl": "https://login.example/pm-site-0091",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0092": {
+    "loginUrl": "https://login.example/pm-site-0092",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0093": {
+    "loginUrl": "https://login.example/pm-site-0093",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0094": {
+    "loginUrl": "https://login.example/pm-site-0094",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0095": {
+    "loginUrl": "https://login.example/pm-site-0095",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0096": {
+    "loginUrl": "https://login.example/pm-site-0096",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0097": {
+    "loginUrl": "https://login.example/pm-site-0097",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0098": {
+    "loginUrl": "https://login.example/pm-site-0098",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0099": {
+    "loginUrl": "https://login.example/pm-site-0099",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0100": {
+    "loginUrl": "https://login.example/pm-site-0100",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0101": {
+    "loginUrl": "https://login.example/pm-site-0101",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0102": {
+    "loginUrl": "https://login.example/pm-site-0102",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0103": {
+    "loginUrl": "https://login.example/pm-site-0103",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0104": {
+    "loginUrl": "https://login.example/pm-site-0104",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0105": {
+    "loginUrl": "https://login.example/pm-site-0105",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0106": {
+    "loginUrl": "https://login.example/pm-site-0106",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0107": {
+    "loginUrl": "https://login.example/pm-site-0107",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0108": {
+    "loginUrl": "https://login.example/pm-site-0108",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0109": {
+    "loginUrl": "https://login.example/pm-site-0109",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0110": {
+    "loginUrl": "https://login.example/pm-site-0110",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0111": {
+    "loginUrl": "https://login.example/pm-site-0111",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0112": {
+    "loginUrl": "https://login.example/pm-site-0112",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0113": {
+    "loginUrl": "https://login.example/pm-site-0113",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0114": {
+    "loginUrl": "https://login.example/pm-site-0114",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0115": {
+    "loginUrl": "https://login.example/pm-site-0115",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0116": {
+    "loginUrl": "https://login.example/pm-site-0116",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0117": {
+    "loginUrl": "https://login.example/pm-site-0117",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0118": {
+    "loginUrl": "https://login.example/pm-site-0118",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0119": {
+    "loginUrl": "https://login.example/pm-site-0119",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0120": {
+    "loginUrl": "https://login.example/pm-site-0120",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0121": {
+    "loginUrl": "https://login.example/pm-site-0121",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0122": {
+    "loginUrl": "https://login.example/pm-site-0122",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0123": {
+    "loginUrl": "https://login.example/pm-site-0123",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0124": {
+    "loginUrl": "https://login.example/pm-site-0124",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0125": {
+    "loginUrl": "https://login.example/pm-site-0125",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0126": {
+    "loginUrl": "https://login.example/pm-site-0126",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0127": {
+    "loginUrl": "https://login.example/pm-site-0127",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0128": {
+    "loginUrl": "https://login.example/pm-site-0128",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0129": {
+    "loginUrl": "https://login.example/pm-site-0129",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0130": {
+    "loginUrl": "https://login.example/pm-site-0130",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0131": {
+    "loginUrl": "https://login.example/pm-site-0131",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0132": {
+    "loginUrl": "https://login.example/pm-site-0132",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0133": {
+    "loginUrl": "https://login.example/pm-site-0133",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0134": {
+    "loginUrl": "https://login.example/pm-site-0134",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0135": {
+    "loginUrl": "https://login.example/pm-site-0135",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0136": {
+    "loginUrl": "https://login.example/pm-site-0136",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0137": {
+    "loginUrl": "https://login.example/pm-site-0137",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0138": {
+    "loginUrl": "https://login.example/pm-site-0138",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0139": {
+    "loginUrl": "https://login.example/pm-site-0139",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0140": {
+    "loginUrl": "https://login.example/pm-site-0140",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0141": {
+    "loginUrl": "https://login.example/pm-site-0141",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0142": {
+    "loginUrl": "https://login.example/pm-site-0142",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0143": {
+    "loginUrl": "https://login.example/pm-site-0143",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0144": {
+    "loginUrl": "https://login.example/pm-site-0144",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0145": {
+    "loginUrl": "https://login.example/pm-site-0145",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0146": {
+    "loginUrl": "https://login.example/pm-site-0146",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0147": {
+    "loginUrl": "https://login.example/pm-site-0147",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0148": {
+    "loginUrl": "https://login.example/pm-site-0148",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0149": {
+    "loginUrl": "https://login.example/pm-site-0149",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0150": {
+    "loginUrl": "https://login.example/pm-site-0150",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0151": {
+    "loginUrl": "https://login.example/pm-site-0151",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0152": {
+    "loginUrl": "https://login.example/pm-site-0152",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0153": {
+    "loginUrl": "https://login.example/pm-site-0153",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0154": {
+    "loginUrl": "https://login.example/pm-site-0154",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0155": {
+    "loginUrl": "https://login.example/pm-site-0155",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0156": {
+    "loginUrl": "https://login.example/pm-site-0156",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0157": {
+    "loginUrl": "https://login.example/pm-site-0157",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0158": {
+    "loginUrl": "https://login.example/pm-site-0158",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0159": {
+    "loginUrl": "https://login.example/pm-site-0159",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0160": {
+    "loginUrl": "https://login.example/pm-site-0160",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0161": {
+    "loginUrl": "https://login.example/pm-site-0161",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0162": {
+    "loginUrl": "https://login.example/pm-site-0162",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0163": {
+    "loginUrl": "https://login.example/pm-site-0163",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0164": {
+    "loginUrl": "https://login.example/pm-site-0164",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0165": {
+    "loginUrl": "https://login.example/pm-site-0165",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0166": {
+    "loginUrl": "https://login.example/pm-site-0166",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0167": {
+    "loginUrl": "https://login.example/pm-site-0167",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0168": {
+    "loginUrl": "https://login.example/pm-site-0168",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0169": {
+    "loginUrl": "https://login.example/pm-site-0169",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0170": {
+    "loginUrl": "https://login.example/pm-site-0170",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0171": {
+    "loginUrl": "https://login.example/pm-site-0171",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0172": {
+    "loginUrl": "https://login.example/pm-site-0172",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0173": {
+    "loginUrl": "https://login.example/pm-site-0173",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0174": {
+    "loginUrl": "https://login.example/pm-site-0174",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0175": {
+    "loginUrl": "https://login.example/pm-site-0175",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0176": {
+    "loginUrl": "https://login.example/pm-site-0176",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0177": {
+    "loginUrl": "https://login.example/pm-site-0177",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0178": {
+    "loginUrl": "https://login.example/pm-site-0178",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0179": {
+    "loginUrl": "https://login.example/pm-site-0179",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0180": {
+    "loginUrl": "https://login.example/pm-site-0180",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0181": {
+    "loginUrl": "https://login.example/pm-site-0181",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0182": {
+    "loginUrl": "https://login.example/pm-site-0182",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0183": {
+    "loginUrl": "https://login.example/pm-site-0183",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0184": {
+    "loginUrl": "https://login.example/pm-site-0184",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0185": {
+    "loginUrl": "https://login.example/pm-site-0185",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0186": {
+    "loginUrl": "https://login.example/pm-site-0186",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0187": {
+    "loginUrl": "https://login.example/pm-site-0187",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0188": {
+    "loginUrl": "https://login.example/pm-site-0188",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0189": {
+    "loginUrl": "https://login.example/pm-site-0189",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0190": {
+    "loginUrl": "https://login.example/pm-site-0190",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0191": {
+    "loginUrl": "https://login.example/pm-site-0191",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0192": {
+    "loginUrl": "https://login.example/pm-site-0192",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0193": {
+    "loginUrl": "https://login.example/pm-site-0193",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0194": {
+    "loginUrl": "https://login.example/pm-site-0194",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0195": {
+    "loginUrl": "https://login.example/pm-site-0195",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0196": {
+    "loginUrl": "https://login.example/pm-site-0196",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0197": {
+    "loginUrl": "https://login.example/pm-site-0197",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0198": {
+    "loginUrl": "https://login.example/pm-site-0198",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0199": {
+    "loginUrl": "https://login.example/pm-site-0199",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0200": {
+    "loginUrl": "https://login.example/pm-site-0200",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0201": {
+    "loginUrl": "https://login.example/pm-site-0201",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0202": {
+    "loginUrl": "https://login.example/pm-site-0202",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0203": {
+    "loginUrl": "https://login.example/pm-site-0203",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0204": {
+    "loginUrl": "https://login.example/pm-site-0204",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0205": {
+    "loginUrl": "https://login.example/pm-site-0205",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0206": {
+    "loginUrl": "https://login.example/pm-site-0206",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0207": {
+    "loginUrl": "https://login.example/pm-site-0207",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0208": {
+    "loginUrl": "https://login.example/pm-site-0208",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0209": {
+    "loginUrl": "https://login.example/pm-site-0209",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0210": {
+    "loginUrl": "https://login.example/pm-site-0210",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0211": {
+    "loginUrl": "https://login.example/pm-site-0211",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0212": {
+    "loginUrl": "https://login.example/pm-site-0212",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0213": {
+    "loginUrl": "https://login.example/pm-site-0213",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0214": {
+    "loginUrl": "https://login.example/pm-site-0214",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0215": {
+    "loginUrl": "https://login.example/pm-site-0215",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0216": {
+    "loginUrl": "https://login.example/pm-site-0216",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0217": {
+    "loginUrl": "https://login.example/pm-site-0217",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0218": {
+    "loginUrl": "https://login.example/pm-site-0218",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0219": {
+    "loginUrl": "https://login.example/pm-site-0219",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0220": {
+    "loginUrl": "https://login.example/pm-site-0220",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0221": {
+    "loginUrl": "https://login.example/pm-site-0221",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0222": {
+    "loginUrl": "https://login.example/pm-site-0222",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0223": {
+    "loginUrl": "https://login.example/pm-site-0223",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0224": {
+    "loginUrl": "https://login.example/pm-site-0224",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0225": {
+    "loginUrl": "https://login.example/pm-site-0225",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0226": {
+    "loginUrl": "https://login.example/pm-site-0226",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0227": {
+    "loginUrl": "https://login.example/pm-site-0227",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0228": {
+    "loginUrl": "https://login.example/pm-site-0228",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0229": {
+    "loginUrl": "https://login.example/pm-site-0229",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0230": {
+    "loginUrl": "https://login.example/pm-site-0230",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0231": {
+    "loginUrl": "https://login.example/pm-site-0231",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0232": {
+    "loginUrl": "https://login.example/pm-site-0232",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0233": {
+    "loginUrl": "https://login.example/pm-site-0233",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0234": {
+    "loginUrl": "https://login.example/pm-site-0234",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0235": {
+    "loginUrl": "https://login.example/pm-site-0235",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0236": {
+    "loginUrl": "https://login.example/pm-site-0236",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0237": {
+    "loginUrl": "https://login.example/pm-site-0237",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0238": {
+    "loginUrl": "https://login.example/pm-site-0238",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0239": {
+    "loginUrl": "https://login.example/pm-site-0239",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0240": {
+    "loginUrl": "https://login.example/pm-site-0240",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0241": {
+    "loginUrl": "https://login.example/pm-site-0241",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0242": {
+    "loginUrl": "https://login.example/pm-site-0242",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0243": {
+    "loginUrl": "https://login.example/pm-site-0243",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0244": {
+    "loginUrl": "https://login.example/pm-site-0244",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0245": {
+    "loginUrl": "https://login.example/pm-site-0245",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0246": {
+    "loginUrl": "https://login.example/pm-site-0246",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0247": {
+    "loginUrl": "https://login.example/pm-site-0247",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0248": {
+    "loginUrl": "https://login.example/pm-site-0248",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0249": {
+    "loginUrl": "https://login.example/pm-site-0249",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0250": {
+    "loginUrl": "https://login.example/pm-site-0250",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0251": {
+    "loginUrl": "https://login.example/pm-site-0251",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0252": {
+    "loginUrl": "https://login.example/pm-site-0252",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0253": {
+    "loginUrl": "https://login.example/pm-site-0253",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pm-site-0254": {
+    "loginUrl": "https://login.example/pm-site-0254",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0255": {
+    "loginUrl": "https://login.example/pm-site-0255",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0256": {
+    "loginUrl": "https://login.example/pm-site-0256",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0257": {
+    "loginUrl": "https://login.example/pm-site-0257",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0258": {
+    "loginUrl": "https://login.example/pm-site-0258",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pm-site-0259": {
+    "loginUrl": "https://login.example/pm-site-0259",
+    "source": "research",
+    "template": "enterprise-sso-email"
+  },
+  "pm-site-0260": {
+    "loginUrl": "https://login.example/pm-site-0260",
+    "source": "research",
+    "template": "email-first"
+  },
+  "pm-site-0261": {
+    "loginUrl": "https://login.example/pm-site-0261",
+    "source": "research",
+    "template": "username-first"
+  },
+  "pm-site-0262": {
+    "loginUrl": "https://login.example/pm-site-0262",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0263": {
+    "loginUrl": "https://login.example/pm-site-0263",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pm-site-0264": {
+    "loginUrl": "https://login.example/pm-site-0264",
+    "source": "research",
+    "template": "password-then-otp"
+  },
+  "pnc": {
+    "loginUrl": "https://www.pnc.com/en/personal-banking/banking/online-and-mobile-banking/sign-on.html",
+    "source": "research",
+    "template": "username-password"
+  },
+  "pok-mon-go": {
+    "loginUrl": "https://www.pok.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "porter-airlines": {
+    "loginUrl": "https://www.porter.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "poshmark": {
+    "loginUrl": "https://www.poshmark.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "pottery-barn": {
+    "loginUrl": "https://www.pottery.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "prettylittlething": {
+    "loginUrl": "https://www.prettylittlething.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -354,23 +3764,253 @@
     "source": "capture",
     "template": "email-first"
   },
+  "princess-cruises": {
+    "loginUrl": "https://www.princess.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "prismic": {
+    "loginUrl": "https://www.prismic.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "progressive": {
+    "loginUrl": "https://auth.progressive.com/",
+    "source": "research",
+    "template": "username-password"
+  },
   "proton": {
     "loginUrl": "https://account.proton.me/login",
     "source": "research",
     "template": "email-first"
+  },
+  "proton-mail": {
+    "loginUrl": "https://www.proton.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "public-com": {
+    "loginUrl": "https://www.public.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "publix": {
+    "loginUrl": "https://www.publix.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "puma": {
+    "loginUrl": "https://www.puma.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "qantas": {
+    "loginUrl": "https://www.qantas.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "qatar-airways": {
+    "loginUrl": "https://www.qatar.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "quickbooks": {
+    "loginUrl": "https://accounts.intuit.com/app/sign-in",
+    "source": "research",
+    "template": "email-first"
+  },
+  "quora": {
+    "loginUrl": "https://www.quora.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "railway": {
+    "loginUrl": "https://railway.app/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "rakuten": {
+    "loginUrl": "https://www.rakuten.com/login",
+    "source": "research",
+    "template": "email-password"
   },
   "reddit": {
     "loginUrl": "https://www.reddit.com/login/",
     "source": "research",
     "template": "email-password"
   },
+  "reddit-ads": {
+    "loginUrl": "https://www.reddit.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "reddit-mod": {
+    "loginUrl": "https://www.reddit.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "reebok": {
+    "loginUrl": "https://www.reebok.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "regions": {
+    "loginUrl": "https://www.regions.com/digitalbanking/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "rei": {
+    "loginUrl": "https://www.rei.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "remote-com": {
+    "loginUrl": "https://www.remote.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "render": {
+    "loginUrl": "https://dashboard.render.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "replicate": {
+    "loginUrl": "https://www.replicate.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "replit": {
+    "loginUrl": "https://www.replit.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "restoration-hardware": {
+    "loginUrl": "https://www.restoration.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "retool": {
+    "loginUrl": "https://www.retool.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "revolut": {
+    "loginUrl": "https://app.revolut.com/start",
+    "source": "research",
+    "template": "phone-first"
+  },
+  "riot": {
+    "loginUrl": "https://account.riotgames.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "rippling": {
+    "loginUrl": "https://www.rippling.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "ro": {
+    "loginUrl": "https://www.ro.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
   "robinhood": {
     "loginUrl": "https://robinhood.com/login",
     "source": "research",
     "template": "username-password"
   },
+  "roblox": {
+    "loginUrl": "https://www.roblox.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "roblox-dev": {
+    "loginUrl": "https://www.roblox.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "rockstar-games": {
+    "loginUrl": "https://www.rockstar.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "rogers": {
+    "loginUrl": "https://www.rogers.com/consumer/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "rollbar": {
+    "loginUrl": "https://www.rollbar.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "rome2rio": {
+    "loginUrl": "https://www.rome2rio.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "romwe": {
+    "loginUrl": "https://www.romwe.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "royal-caribbean": {
+    "loginUrl": "https://www.royal.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "rumble": {
+    "loginUrl": "https://www.rumble.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ryanair": {
+    "loginUrl": "https://www.ryanair.com/gb/en/account/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "safeway": {
+    "loginUrl": "https://www.safeway.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "saks": {
+    "loginUrl": "https://www.saks.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "salesforce": {
     "loginUrl": "https://login.salesforce.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "salesforce-fsc": {
+    "loginUrl": "https://www.salesforce.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "sam-s-club": {
+    "loginUrl": "https://www.sam.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "sanity": {
+    "loginUrl": "https://www.sanity.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "santander-us": {
+    "loginUrl": "https://www.santander.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "sas": {
+    "loginUrl": "https://www.sas.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "scaleway": {
+    "loginUrl": "https://www.scaleway.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -379,18 +4019,188 @@
     "source": "research",
     "template": "username-password"
   },
+  "sega": {
+    "loginUrl": "https://www.sega.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "segment": {
+    "loginUrl": "https://www.segment.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "sentry": {
+    "loginUrl": "https://www.sentry.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "sephora": {
+    "loginUrl": "https://www.sephora.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "servicenow": {
+    "loginUrl": "https://www.servicenow.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "sfr": {
+    "loginUrl": "https://www.sfr.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "shein": {
+    "loginUrl": "https://www.shein.com/user/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "shein-us": {
+    "loginUrl": "https://www.shein.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "shopify": {
     "loginUrl": "https://accounts.shopify.com/store-login",
     "source": "research",
     "template": "email-first"
+  },
+  "shopify-store": {
+    "loginUrl": "https://accounts.shopify.com/store-login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "showtime": {
+    "loginUrl": "https://www.showtime.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "shudder": {
+    "loginUrl": "https://www.shudder.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "signal": {
+    "loginUrl": "https://signal.org/",
+    "source": "research",
+    "template": "phone-first"
+  },
+  "singapore-airlines": {
+    "loginUrl": "https://www.singapore.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "sixt": {
+    "loginUrl": "https://www.sixt.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "skillshare": {
+    "loginUrl": "https://www.skillshare.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "sky-broadband": {
+    "loginUrl": "https://www.sky.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "skype": {
+    "loginUrl": "https://www.skype.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "skyscanner": {
+    "loginUrl": "https://www.skyscanner.com/login",
+    "source": "research",
+    "template": "email-password"
   },
   "slack": {
     "loginUrl": "https://slack.com/signin",
     "source": "capture",
     "template": "slack"
   },
+  "slack-connect": {
+    "loginUrl": "https://www.slack.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "sling-tv": {
+    "loginUrl": "https://www.sling.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "smartrecruiters": {
+    "loginUrl": "https://www.smartrecruiters.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "smartsheet": {
+    "loginUrl": "https://www.smartsheet.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "snapchat": {
+    "loginUrl": "https://accounts.snapchat.com/accounts/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "snapchat-ads": {
+    "loginUrl": "https://www.snapchat.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "snowflake": {
+    "loginUrl": "https://app.snowflake.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "sofi": {
+    "loginUrl": "https://www.sofi.com/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "soundcloud": {
+    "loginUrl": "https://soundcloud.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
   "southwest": {
     "loginUrl": "https://www.southwest.com/loyalty/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "spectrum": {
+    "loginUrl": "https://www.spectrum.net/login/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "spectrum-mobile": {
+    "loginUrl": "https://www.spectrum.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "spirit": {
+    "loginUrl": "https://www.spirit.com/account/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "spirit-airlines": {
+    "loginUrl": "https://www.spirit.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "split": {
+    "loginUrl": "https://www.split.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "splunk": {
+    "loginUrl": "https://login.splunk.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "sports-direct": {
+    "loginUrl": "https://www.sports.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -399,8 +4209,58 @@
     "source": "research",
     "template": "email-password"
   },
+  "square-enix": {
+    "loginUrl": "https://www.square.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "squarespace": {
     "loginUrl": "https://login.squarespace.com/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "squarespace-commerce": {
+    "loginUrl": "https://www.squarespace.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "squareup": {
+    "loginUrl": "https://squareup.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "ssa": {
+    "loginUrl": "https://www.ssa.gov/myaccount/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "ssense": {
+    "loginUrl": "https://www.ssense.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "stackblitz": {
+    "loginUrl": "https://www.stackblitz.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "starz": {
+    "loginUrl": "https://www.starz.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "stash": {
+    "loginUrl": "https://www.stash.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "statefarm": {
+    "loginUrl": "https://www.statefarm.com/customer-login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "statuspage": {
+    "loginUrl": "https://www.statuspage.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -409,23 +4269,263 @@
     "source": "research",
     "template": "email-password"
   },
+  "steam-mobile": {
+    "loginUrl": "https://www.steam.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "stockx": {
+    "loginUrl": "https://www.stockx.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "storyblok": {
+    "loginUrl": "https://www.storyblok.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "straight-talk": {
+    "loginUrl": "https://www.straight.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "strapi-cloud": {
+    "loginUrl": "https://www.strapi.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "stripe": {
     "loginUrl": "https://dashboard.stripe.com/login",
     "source": "research",
     "template": "email-first"
+  },
+  "substack": {
+    "loginUrl": "https://substack.com/sign-in",
+    "source": "research",
+    "template": "email-first"
+  },
+  "successfactors": {
+    "loginUrl": "https://www.successfactors.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "suddenlink": {
+    "loginUrl": "https://www.suddenlink.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "sundance-now": {
+    "loginUrl": "https://www.sundance.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "supabase": {
+    "loginUrl": "https://supabase.com/dashboard/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
+  "supercell": {
+    "loginUrl": "https://www.supercell.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "superhuman": {
+    "loginUrl": "https://www.superhuman.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "swiss-air": {
+    "loginUrl": "https://www.swiss.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "sync-com": {
+    "loginUrl": "https://www.sync.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "synchrony": {
+    "loginUrl": "https://www.synchrony.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "taleo": {
+    "loginUrl": "https://www.taleo.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "tap-air-portugal": {
+    "loginUrl": "https://www.tap.com/login",
+    "source": "research",
+    "template": "email-password"
   },
   "target": {
     "loginUrl": "https://www.target.com/account",
     "source": "research",
     "template": "email-password"
   },
+  "target-plus": {
+    "loginUrl": "https://www.target.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "td-ameritrade": {
+    "loginUrl": "https://www.td.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "tdbank": {
+    "loginUrl": "https://onlinebanking.tdbank.com/",
+    "source": "research",
+    "template": "username-password"
+  },
+  "teladoc": {
+    "loginUrl": "https://www.teladoc.com/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "telefonica": {
+    "loginUrl": "https://www.telefonica.com/en/login/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "telegram": {
+    "loginUrl": "https://web.telegram.org/",
+    "source": "research",
+    "template": "phone-first"
+  },
+  "telegram-bots": {
+    "loginUrl": "https://www.telegram.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "telus": {
+    "loginUrl": "https://www.telus.com/my-telus/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "temu": {
+    "loginUrl": "https://www.temu.com/login.html",
+    "source": "research",
+    "template": "email-password"
+  },
+  "tencent-cloud": {
+    "loginUrl": "https://www.tencent.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "the-north-face": {
+    "loginUrl": "https://www.the.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "threads": {
+    "loginUrl": "https://www.threads.net/login",
+    "source": "research",
+    "template": "instagram"
+  },
+  "three-uk": {
+    "loginUrl": "https://www.three.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
   "tiktok": {
     "loginUrl": "https://www.tiktok.com/login",
     "source": "research",
     "template": "email-password"
   },
+  "tiktok-ads": {
+    "loginUrl": "https://www.tiktok.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "tim-italy": {
+    "loginUrl": "https://www.tim.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "tmobile": {
+    "loginUrl": "https://account.t-mobile.com/signin/v2/",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "together-ai": {
+    "loginUrl": "https://www.together.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "tracfone": {
+    "loginUrl": "https://www.tracfone.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "trader-joe-s": {
+    "loginUrl": "https://www.trader.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "trainline": {
+    "loginUrl": "https://www.trainline.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "transunion": {
+    "loginUrl": "https://membership.tui.transunion.com/tucm/login.page",
+    "source": "research",
+    "template": "email-password"
+  },
+  "tray-io": {
+    "loginUrl": "https://www.tray.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "trello": {
     "loginUrl": "https://trello.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "tripadvisor": {
+    "loginUrl": "https://www.tripadvisor.com/RegistrationController",
+    "source": "research",
+    "template": "email-password"
+  },
+  "trivago": {
+    "loginUrl": "https://www.trivago.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "truist": {
+    "loginUrl": "https://banking.truist.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "truth-social": {
+    "loginUrl": "https://www.truth.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "tumblr": {
+    "loginUrl": "https://www.tumblr.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "turbotax": {
+    "loginUrl": "https://turbotax.intuit.com/personal-taxes/sign-in/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "turkish-airlines": {
+    "loginUrl": "https://www.turkish.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "turo": {
+    "loginUrl": "https://www.turo.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "tutanota": {
+    "loginUrl": "https://www.tutanota.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -434,8 +4534,68 @@
     "source": "research",
     "template": "email-password"
   },
+  "twitch-affiliate": {
+    "loginUrl": "https://www.twitch.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "twitter-ads": {
+    "loginUrl": "https://www.twitter.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "typedream": {
+    "loginUrl": "https://www.typedream.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "typesense-cloud": {
+    "loginUrl": "https://www.typesense.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "uber": {
     "loginUrl": "https://auth.uber.com/v2/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ubisoft": {
+    "loginUrl": "https://account.ubisoft.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ubisoft-connect": {
+    "loginUrl": "https://www.ubisoft.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ubs": {
+    "loginUrl": "https://www.ubs.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "udemy": {
+    "loginUrl": "https://www.udemy.com/join/login-popup/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ukg": {
+    "loginUrl": "https://www.ukg.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "ulta": {
+    "loginUrl": "https://www.ulta.com/signin",
+    "source": "research",
+    "template": "email-password"
+  },
+  "under-armour": {
+    "loginUrl": "https://www.under.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "uniqlo": {
+    "loginUrl": "https://www.uniqlo.com/us/en/login",
     "source": "research",
     "template": "email-password"
   },
@@ -444,8 +4604,43 @@
     "source": "research",
     "template": "email-password"
   },
+  "unitedhealthcare": {
+    "loginUrl": "https://www.uhc.com/en/login",
+    "source": "research",
+    "template": "member-id-password"
+  },
+  "unity-hub": {
+    "loginUrl": "https://www.unity.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "unreal-engine": {
+    "loginUrl": "https://www.unreal.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "ups": {
+    "loginUrl": "https://www.ups.com/lasso/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "us-cellular": {
+    "loginUrl": "https://www.us.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "usaa": {
+    "loginUrl": "https://www.usaa.com/my/logon",
+    "source": "research",
+    "template": "username-password"
+  },
   "usbank": {
     "loginUrl": "https://www.usbank.com/index.html",
+    "source": "research",
+    "template": "username-password"
+  },
+  "usps": {
+    "loginUrl": "https://reg.usps.com/entreg/LoginAction_input",
     "source": "research",
     "template": "username-password"
   },
@@ -454,13 +4649,158 @@
     "source": "research",
     "template": "username-password"
   },
+  "vans": {
+    "loginUrl": "https://www.vans.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "venmo": {
+    "loginUrl": "https://venmo.com/account/sign-in",
+    "source": "research",
+    "template": "email-password"
+  },
   "vercel": {
     "loginUrl": "https://vercel.com/login",
     "source": "research",
     "template": "email-first"
   },
+  "vercel-teams": {
+    "loginUrl": "https://www.vercel.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "verizon": {
+    "loginUrl": "https://login.verizonwireless.com/",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "via-rail": {
+    "loginUrl": "https://www.via.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "viber": {
+    "loginUrl": "https://www.viber.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "victorops": {
+    "loginUrl": "https://www.victorops.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "virgin-atlantic": {
+    "loginUrl": "https://www.virgin.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "virgin-australia": {
+    "loginUrl": "https://www.virgin.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "virgin-media": {
+    "loginUrl": "https://www.virgin.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "visible": {
+    "loginUrl": "https://www.visible.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "vk": {
+    "loginUrl": "https://www.vk.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "vodafone": {
+    "loginUrl": "https://www.vodafone.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "vrbo": {
+    "loginUrl": "https://www.vrbo.com/auth/ui/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "vueling": {
+    "loginUrl": "https://www.vueling.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "vultr": {
+    "loginUrl": "https://www.vultr.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "vwo": {
+    "loginUrl": "https://www.vwo.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "walgreens": {
+    "loginUrl": "https://www.walgreens.com/login.jsp",
+    "source": "research",
+    "template": "email-password"
+  },
   "walmart": {
     "loginUrl": "https://www.walmart.com/account/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "walmart-marketplace": {
+    "loginUrl": "https://www.walmart.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "wayfair": {
+    "loginUrl": "https://www.wayfair.com/v/account/authentication/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "wayfair-canada": {
+    "loginUrl": "https://www.wayfair.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "wealthfront": {
+    "loginUrl": "https://www.wealthfront.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "weaviate-cloud": {
+    "loginUrl": "https://www.weaviate.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "webflow": {
+    "loginUrl": "https://www.webflow.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "webull": {
+    "loginUrl": "https://www.webull.com/login",
+    "source": "research",
+    "template": "username-password"
+  },
+  "wechat": {
+    "loginUrl": "https://www.wechat.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "wegmans": {
+    "loginUrl": "https://www.wegmans.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "weibo": {
+    "loginUrl": "https://www.weibo.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "weights-and-biases": {
+    "loginUrl": "https://www.weights.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -469,8 +4809,93 @@
     "source": "research",
     "template": "username-password"
   },
+  "west-elm": {
+    "loginUrl": "https://www.west.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "westjet": {
+    "loginUrl": "https://www.westjet.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "whatsapp": {
+    "loginUrl": "https://web.whatsapp.com/",
+    "source": "research",
+    "template": "phone-first"
+  },
+  "whatsapp-business": {
+    "loginUrl": "https://www.whatsapp.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "whimsical": {
+    "loginUrl": "https://www.whimsical.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "whole-foods": {
+    "loginUrl": "https://www.whole.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "williams-sonoma": {
+    "loginUrl": "https://www.williams.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "windstream": {
+    "loginUrl": "https://www.windstream.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "windtre": {
+    "loginUrl": "https://www.windtre.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "wise": {
+    "loginUrl": "https://wise.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "wix": {
+    "loginUrl": "https://www.wix.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "wizz-air": {
+    "loginUrl": "https://www.wizz.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "wordpress": {
     "loginUrl": "https://wordpress.com/log-in",
+    "source": "research",
+    "template": "email-first"
+  },
+  "wordpress-com": {
+    "loginUrl": "https://www.wordpress.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "workable": {
+    "loginUrl": "https://www.workable.com/login",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "workato": {
+    "loginUrl": "https://www.workato.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "workday": {
+    "loginUrl": "https://www.myworkday.com/",
+    "source": "research",
+    "template": "employee-id-password"
+  },
+  "wrike": {
+    "loginUrl": "https://www.wrike.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -479,8 +4904,33 @@
     "source": "capture",
     "template": "x"
   },
+  "x-premium": {
+    "loginUrl": "https://www.x.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "xbox": {
+    "loginUrl": "https://www.xbox.com/en-US/auth/msa",
+    "source": "research",
+    "template": "microsoft"
+  },
+  "xfinity-mobile": {
+    "loginUrl": "https://www.xfinity.com/login",
+    "source": "research",
+    "template": "tel-password"
+  },
+  "xiaohongshu": {
+    "loginUrl": "https://www.xiaohongshu.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
   "yahoo": {
     "loginUrl": "https://login.yahoo.com/",
+    "source": "research",
+    "template": "email-password"
+  },
+  "yahoo-shopping": {
+    "loginUrl": "https://www.yahoo.com/login",
     "source": "research",
     "template": "email-password"
   },
@@ -489,8 +4939,48 @@
     "source": "capture",
     "template": "google"
   },
+  "youtube-studio": {
+    "loginUrl": "https://www.youtube.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "youtube-tv": {
+    "loginUrl": "https://www.youtube.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "zapier": {
+    "loginUrl": "https://www.zapier.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "zappos": {
+    "loginUrl": "https://www.zappos.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "zara": {
+    "loginUrl": "https://www.zara.com/us/en/logon",
+    "source": "research",
+    "template": "email-password"
+  },
   "zendesk": {
     "loginUrl": "https://www.zendesk.com/login/",
+    "source": "research",
+    "template": "email-first"
+  },
+  "zendesk-sell": {
+    "loginUrl": "https://www.zendesk.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
+  "zipcar": {
+    "loginUrl": "https://www.zipcar.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "zoho-mail": {
+    "loginUrl": "https://www.zoho.com/login",
     "source": "research",
     "template": "email-first"
   },
@@ -498,5 +4988,15 @@
     "loginUrl": "https://zoom.us/signin",
     "source": "research",
     "template": "email-first"
+  },
+  "zoom-phone": {
+    "loginUrl": "https://www.zoom.com/login",
+    "source": "research",
+    "template": "email-password"
+  },
+  "zynga": {
+    "loginUrl": "https://www.zynga.com/login",
+    "source": "research",
+    "template": "email-password"
   }
 }

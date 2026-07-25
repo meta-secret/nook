@@ -1,0 +1,43 @@
+{
+  "id": "phone-first",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "tel",
+          "name": "phone",
+          "autocomplete": "tel",
+          "placeholder": "Mobile number",
+          "aria-label": "Mobile number"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "tel",
+          "name": "phone",
+          "autocomplete": "tel",
+          "placeholder": "Mobile number",
+          "aria-label": "Mobile number"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}
