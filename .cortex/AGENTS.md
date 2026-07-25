@@ -170,8 +170,10 @@ normal build-performance PR. Full policy:
 ## 2. Design Specs & Beliefs (`design-docs/`)
 * [design-docs/index.md](design-docs/index.md) — Index of design specifications and status.
 * [design-docs/core-beliefs.md](design-docs/core-beliefs.md) — Agent-first operating beliefs.
-* [design-docs/unified-vault.md](design-docs/unified-vault.md) — **Local-first unified vault**, version sync, conflict resolution.
+* [design-docs/unified-vault.md](design-docs/unified-vault.md) — **Local-first unified vault** (scalar sync historical; see event-log).
 * [design-docs/vault-session-and-lock.md](design-docs/vault-session-and-lock.md) — **Lock**, in-memory session, vault vs sync provider model.
+* [design-docs/auth-providers.md](design-docs/auth-providers.md) — Login gate, `nook_auth` sync-provider credentials, OAuth origins.
+* [design-docs/vault-event-log.md](design-docs/vault-event-log.md) — Immutable event log, causal DAG, projection (live provider sync).
 
 ## 3. Product Specifications (`product-specs/`)
 * [product-specs/index.md](product-specs/index.md) — Index of product specifications.

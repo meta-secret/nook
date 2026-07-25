@@ -109,7 +109,7 @@ The **same sync spec files** run against different backends. CI swaps providers 
 | ------------------------ | ----------------------------------------- | ------- |
 | `NOOK_E2E_SYNC_PROVIDER` | `file`, `local`, `google-drive`, `github` | `file`  |
 
-Registry and factories live in `nook-app/nook-web/e2e/sync-provider.ts`:
+Registry and factories live in `nook-app/nook-web/nook-web-app/e2e/sync-provider.ts`:
 
 - **`createSyncTarget()`** — isolated e2e remote (reads provider from env)
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
