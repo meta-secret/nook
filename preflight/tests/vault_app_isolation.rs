@@ -944,6 +944,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "GHA_CACHE_WRITE_ENABLED",
         "type=gha,scope=nook-rust-base-v1",
         "type=gha,scope=nook-rust-deps-v2",
+        "type=gha,scope=nook-rust-wasm-deps-v3",
         "type=gha,scope=nook-rust-wasm-deps-v2",
         "type=gha,scope=nook-rust-wasm-deps-v1",
         "type=gha,scope=nook-rust-native-source-v2",
@@ -1028,44 +1029,80 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
 fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
-            "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
+            "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
         ) && !bake.contains(
             "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
         ),
         "Rust dependency cache exporters must not ignore upload failures"
     );
+    let prepare_publish = bake
+        .split("group \"prepare-and-publish-cache\"")
+        .nth(1)
+        .and_then(|rest| rest.split("group \"").next())
+        .expect("prepare-and-publish-cache group");
     assert!(
-        bake.contains("group \"prepare-and-publish-cache\"")
-            && bake.contains("group \"publish-gha-cache\"")
-            && bake.contains("\"builder-wasm-deps\",")
-            && bake.contains("\"builder-deps\",")
-            && bake.contains("\"builder-debug\",")
+        bake.contains("group \"publish-gha-cache\"")
+            && prepare_publish.contains("\"builder-wasm-deps\",")
+            && prepare_publish.contains("\"builder-deps\",")
+            && prepare_publish.contains("\"builder-debug\",")
+            && prepare_publish.contains("\"web-deps\",")
+            && !prepare_publish.contains("web-artifacts")
+            && !prepare_publish.contains("rust-format-check")
             && bake.contains("\"rust-base\","),
-        "Main preparation must select dependency and native-source targets so their dedicated cache exporters run"
+        "Main publish-cache warm must select dependency and native-source targets without re-baking producer graphs"
     );
 }
 
 fn assert_main_deferred_rust_cache_publish(root: &Path) {
     let main = read(root, ".github/workflows/main.yml");
     assert!(
-        main.contains("PREPARE_GROUP=prepare-and-publish-cache")
+        main.contains("task ci:main:warm-gha-cache")
             && main.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && main.contains("task ci:main:publish-gha-cache")
             && main.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && main.contains("\n  publish-cache:\n"),
-        "Main must warm prepare without publishing, then export complete dependency scopes only after success"
+            && main.contains("\n  publish-cache:\n")
+            && !main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
+        "Main must warm dependency scopes without publishing, then export them only after success"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
     assert!(
-        ci_tasks.contains("_ci:main:publish-gha-cache:host:")
+        ci_tasks.contains("_ci:main:warm-gha-cache:host:")
+            && ci_tasks
+                .contains("bash \"{{.REPO_ROOT}}/.github/scripts/warm-buildkit-gha-cache.sh\"",)
+            && ci_tasks.contains("_ci:main:publish-gha-cache:host:")
             && ci_tasks.contains("dir: '{{.REPO_ROOT}}'")
             && ci_tasks
                 .contains("bash \"{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh\"",),
-        "Main cache publish must invoke the export script from REPO_ROOT, not a relative nook-app cwd"
+        "Main cache warm/publish must invoke scripts from REPO_ROOT, not a relative nook-app cwd"
+    );
+    let warm_script = read(root, ".github/scripts/warm-buildkit-gha-cache.sh");
+    assert!(
+        warm_script.contains("prepare-and-publish-cache")
+            && warm_script.contains("GHA_CACHE_WRITE_ENABLED must be empty")
+            && warm_script.contains("type=cacheonly"),
+        "Main cache warm must bake prepare-and-publish-cache read-only into the job builder"
+    );
+    let publish_script = read(root, ".github/scripts/publish-buildkit-gha-cache.sh");
+    assert!(
+        publish_script.contains("builder-wasm-deps")
+            && publish_script.contains("cache-from=")
+            && publish_script.contains("nook-rust-wasm-deps-v3")
+            && publish_script.contains("force-compression=true")
+            && publish_script.contains("writing layer")
+            && publish_script.contains("accepting index-only export")
+            && publish_script.contains("rust-base builder-wasm-deps")
+            && publish_script.contains("rust-base builder-deps builder-debug")
+            && publish_script.contains("\n  web-deps\n")
+            && !publish_script.contains("web-artifacts web-deps")
+            && !publish_script.contains("builder-debug rust-format-check")
+            && publish_script.contains("(^|[[:space:]])#${step_id} "),
+        "Main cache publish must export wasm-deps alone into v3 without re-exporting producer graphs"
     );
     assert!(
-        read(root, ".github/scripts/publish-buildkit-gha-cache.sh").contains("publish-gha-cache"),
-        "Main cache publish must bake the export-only group on the warm job-scoped builder"
+        read(root, "nook-app/nook-core/Dockerfile").contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
+            && read(root, "nook-app/nook-core/Dockerfile")
+                .contains("/etc/nook-wasm-deps-cache-epoch"),
+        "WASM cook lineage must include a bumpable epoch layer so reseeds force new cook digests"
     );
     let base_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
     assert!(

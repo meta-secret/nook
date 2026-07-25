@@ -248,8 +248,9 @@ jobs:
 
   publish-cache:
     name: Publish GHA BuildKit cache
-    # Dedicated warm+export job keeps deferred publish on one builder without blocking deploy.
-    # Needs producers only so a failed native/WASM graph does not refresh hosted indexes.
+    # Dedicated deps-only warm+export job keeps deferred publish on one builder without blocking
+    # deploy and without re-running producer verification graphs. Needs producers only so a failed
+    # native/WASM graph does not refresh hosted indexes.
     needs: [rust, wasm]
     runs-on: ubuntu-latest
     permissions:
@@ -262,27 +263,13 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
-      - name: Warm prepare graph without publishing
-        run: >-
-          task ci:main:prepare-images
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-          PREPARE_GROUP=prepare-and-publish-cache
+      - name: Warm dependency graph without publishing
+        run: task ci:main:warm-gha-cache WASM_BUILD_MODE=dev
         env:
           CI: true
-          # Warm the job-scoped builder only. Publishing mid-prepare lets cancelled Main runs
+          # Warm the job-scoped builder only. Publishing mid-warm lets cancelled Main runs
           # overwrite GHA indexes without the cargo-chef cook blobs PRs need.
           GHA_CACHE_WRITE_ENABLED: ""
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
       - name: Publish hosted BuildKit cache
         if: success()

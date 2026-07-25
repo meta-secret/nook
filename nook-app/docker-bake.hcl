@@ -126,35 +126,39 @@ rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
-// v2 is the self-contained WASM dependency lineage. Keep reading v1 during the migration window
-// so already-warmed runners can still restore cook layers until Main publishes v2.
+// v3 is the self-contained WASM dependency lineage (zstd cook upload from deferred Main
+// publish). Keep reading v2/v1 during the migration window so already-warmed runners can
+// still restore until Main publishes v3 with real cook layers.
 rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
+  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
+  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
   "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},version=2",
 ]
 
 rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
+  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
@@ -185,6 +189,7 @@ rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
   "type=gha,scope=nook-rust-wasm-source-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
@@ -195,6 +200,7 @@ rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUF
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
   "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
   "type=gha,scope=nook-rust-wasm-source-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
@@ -202,6 +208,7 @@ rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUF
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
   "type=gha,scope=nook-rust-wasm-source-v2,version=2",
+  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
   "type=gha,scope=nook-rust-deps-v2,version=2",
@@ -293,15 +300,15 @@ group "prepare" {
   targets = ["rust-format-check", "web-artifacts", "web-deps"]
 }
 
-// Main preparation warms these targets in the job-scoped builder. Hosted cache export is deferred
-// to `publish-gha-cache` so a cancelled Mid-prepare Main run cannot publish incomplete indexes.
-// Selecting dependency and native-source targets as explicit cache-only outputs is required:
-// cache exporters attached to named build contexts are not run merely because another target
-// consumed them.
+// Main `publish-cache` warms only the hosted GHA scopes PRs restore. Intentionally omits
+// `web-artifacts` and `rust-format-check`: those re-run the full WASM/native verification graph
+// that the rust/wasm producers already completed, and they invalidate every commit so they do
+// not pay for themselves as shared cache. Hosted export is deferred to `publish-gha-cache` so a
+// cancelled Mid-warm Main run cannot publish incomplete indexes. Selecting dependency and
+// native-source targets as explicit cache-only outputs is required: cache exporters attached to
+// named build contexts are not run merely because another target consumed them.
 group "prepare-and-publish-cache" {
   targets = [
-    "rust-format-check",
-    "web-artifacts",
     "web-deps",
     "builder-wasm-deps",
     "builder-deps",
@@ -309,13 +316,11 @@ group "prepare-and-publish-cache" {
   ]
 }
 
-// Export-only group used after a successful Main prepare on the same Buildx builder. Includes
+// Export-only group used after a successful Main warm on the same Buildx builder. Includes
 // rust-base explicitly so its dedicated scope cannot drift from the dependency lineages.
 group "publish-gha-cache" {
   targets = [
     "rust-base",
-    "rust-format-check",
-    "web-artifacts",
     "web-deps",
     "builder-wasm-deps",
     "builder-deps",

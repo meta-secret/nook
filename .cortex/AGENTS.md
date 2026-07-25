@@ -225,7 +225,7 @@ normal build-performance PR. Full policy:
 
 ### Project skills
 * [dynamic-skills/index.md](dynamic-skills/index.md) is the canonical registry of repo-specific skills agents must consult for matching work. The directory name means the skills were captured dynamically from durable project feedback; it does **not** mean they are optional or ad hoc.
-* `.cursor/skills/` entries are executable mirrors for tools that support project skills. They must point back to `.cortex/dynamic-skills/`; do not treat `.cursor/skills/` as the source of truth.
+* `.agents/skills/` is the canonical open agent skills directory natively discovered by Antigravity and open agent standards. `.cursor/skills/` and `.claude/skills/` entries are executable symlinks/mirrors so Cursor, Claude, Codex, and Antigravity all share the exact same skills source. They must point back to `.cortex/dynamic-skills/` cards; do not treat the skill wrappers as the source of truth.
 
 ### Debugging and CI verification — always check app logs
 * Investigation order: **GitHub Actions / test output** → **static analysis findings

@@ -1,0 +1,157 @@
+schema_version: 3
+source_pr:
+  number: 766
+  url: https://github.com/meta-secret/nook/pull/766
+  title: Fix wasm-deps publish assert for tee logs without leading space
+  change_surface: ci_buildkit_gha_wasm_deps_publish_assert_tee
+  head_sha: f05d06aed9d26bdf2a0a0c114d3a6f8fedc7771b
+  started_at: '2026-07-25T11:36:00Z'
+  opened_at: '2026-07-25T11:37:55Z'
+  merged_at: '2026-07-25T11:52:39Z'
+  elapsed_seconds: 999
+  open_to_merge_seconds: 884
+summary:
+  local_execution_count: 3
+  local_check_count: 3
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 130
+  github_actions_run_count: 1
+  github_actions_seconds: 864
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: '2026-07-25T12:27:00Z'
+  head_sha: f05d06aed9d26bdf2a0a0c114d3a6f8fedc7771b
+  by_type:
+    rust: 634
+    preflight: 40
+    web_unit: 278
+    e2e: 205
+  total: 1157
+local_executions:
+- command: task format
+  category: check
+  started_at: '2026-07-25T11:37:00Z'
+  finished_at: '2026-07-25T11:37:50Z'
+  duration_seconds: 50
+  outcome: passed
+  reason: pre_push_hygiene
+- command: bash assert_wasm_deps_exported smoke against tee-shaped #53 log
+  category: check
+  started_at: '2026-07-25T11:37:20Z'
+  finished_at: '2026-07-25T11:37:25Z'
+  duration_seconds: 5
+  outcome: passed
+  reason: local_assert_regression_check
+- command: task pr:ready PR=766
+  category: check
+  started_at: '2026-07-25T11:52:25Z'
+  finished_at: '2026-07-25T11:52:35Z'
+  duration_seconds: 10
+  outcome: passed
+  reason: readiness_before_squash_merge
+github_actions_runs:
+- workflow: PR
+  run_id: 30156565904
+  run_attempt: 1
+  head_sha: 16a79f4fbb6ae6b283c19a98c4bfee850f430148
+  trigger: pull_request
+  started_at: '2026-07-25T11:37:57Z'
+  finished_at: '2026-07-25T11:52:21Z'
+  conclusion: success
+  duration_seconds: 864
+cache_telemetry:
+  totals:
+    job_count: 3
+    remote_backend_job_count: 0
+    direct_compile_job_count: 3
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: null
+    buildkit_completed_steps: 378
+    buildkit_cached_steps: 166
+    buildkit_cache_hit_rate_percent: 43.92
+  jobs:
+  - workflow: PR
+    run_id: 30156565904
+    run_attempt: 1
+    job: rust
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 313
+      cached_steps: 147
+      cache_hit_rate_percent: 46.96
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30156565904
+    run_attempt: 1
+    job: wasm
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 0
+      cached_steps: 0
+      cache_hit_rate_percent: null
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+  - workflow: PR
+    run_id: 30156565904
+    run_attempt: 1
+    job: verify
+    cache_backend: direct_compile
+    cache_backend_reason: hosted_secret_free_by_design
+    cache_backend_persistent: false
+    sccache:
+      compile_requests: 0
+      cache_hits: 0
+      cache_misses: 0
+      hit_rate_percent: null
+    buildkit:
+      completed_steps: 65
+      cached_steps: 19
+      cache_hit_rate_percent: 29.23
+      measurement: buildx_target_record_steps
+    collection_complete: true
+    collection_warnings: []
+pr_retriggers: []
+merge_attempts:
+- at: '2026-07-25T11:52:39Z'
+  method: squash
+  outcome: success
+  reason: readiness_passed
+comparison:
+  baseline_prs:
+  - 760
+  baseline_quality: comparable
+  baseline_note: Same publish-assert series; #760 treated DONE/sending-done but still required a leading space before #N.
+  elapsed_seconds_change_percent: 6.1
+  local_execution_seconds_change_percent: 85.7
+  github_actions_seconds_change_percent: 336.4
+  test_inventory_total_change: 0
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+  - One green PR cycle after diagnosing Main #761 false assert failure on tee logs.
+  - Post-merge Main publish-cache succeeded (run 30156989557) with Hosted BuildKit cache publish complete; overall Main still red on unrelated extension e2e flake.
+  required_actions: []

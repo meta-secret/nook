@@ -220,7 +220,8 @@ pub use password_envelope::{
 };
 pub use session::{ReplaceSecretInput, replace_encrypted_secret, replace_secret};
 pub use sync_provider_credentials::{
-    AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials, seal_provider_credentials,
+    AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials,
+    provider_credentials_are_presealed, seal_provider_credentials,
     seal_provider_credentials_for_public_key,
 };
 pub use sync_provider_store::{

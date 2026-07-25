@@ -30,6 +30,11 @@ COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
+# Stable epoch for the hosted WASM cook lineage. Bump when reseeding
+# nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
+# layer blobs — index-only refs to older scopes are not enough for PR restores.
+ARG NOOK_WASM_DEPS_CACHE_EPOCH=v3-seed-1
+RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
 # wasm deps via cargo-chef (the wasm build in nook-app/nook-wasm/Dockerfile reuses these). Separate RUNs so
 # each cooks into its own cache layer.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
