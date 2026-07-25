@@ -1442,7 +1442,11 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
         "same-runner Main suite coordinator was replaced by multi-job consumers"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
-    let web_ci = section(&ci_tasks, "  ci:main:web-e2e:ci:\n", "\n  ci:main:web:artifacts:");
+    let web_ci = section(
+        &ci_tasks,
+        "  ci:main:web-e2e:ci:\n",
+        "\n  ci:main:web:artifacts:",
+    );
     assert!(
         web_ci.contains("task: docker:e2e:run")
             && web_ci.contains("TASK: _ci:main:web:e2e-only")
