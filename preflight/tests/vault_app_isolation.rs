@@ -529,6 +529,7 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
         "vars: { BUILD_TASK: _ci:pr:host }",
         "vars: { BUILD_TASK: _ci:pr:e2e:host }",
         "vars: { BUILD_TASK: _ci:main:host }",
+        "vars: { BUILD_TASK: _ci:main:prepare-images:host }",
         "vars: { BUILD_TASK: _ci:main:web-e2e:host }",
     ] {
         assert!(
@@ -1396,14 +1397,16 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
     );
     let main = read(root, ".github/workflows/main.yml");
     assert!(
-        main.contains("          task ci:main:web-e2e\n")
+        main.contains("          task ci:main:prepare-images\n")
             && main.contains("bash .github/scripts/main-post-web-e2e.sh"),
-        "main must run web e2e first, then overlap extension e2e with UI demos"
+        "main must bake images first, then overlap web e2e with extension e2e and UI demos"
     );
     let post_web = read(root, ".github/scripts/main-post-web-e2e.sh");
     for required in [
+        "task ci:main:web-e2e:ci &",
         "task extension:test:e2e:ci &",
         "task ui:demo:ci UI_DEMO_OUTPUT_DIR=\"$UI_DEMO_OUTPUT_DIR\" &",
+        "wait \"$web_pid\"",
         "wait \"$ext_pid\"",
         "wait \"$demo_pid\"",
     ] {
@@ -1412,6 +1415,18 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
             "main post-web-e2e overlap missing: {required}"
         );
     }
+    assert!(
+        !post_web.contains("task docker:e2e:run") && !post_web.contains("task docker:ui-demo:run"),
+        "main suite coordinator must use public Task wrappers, not internal docker run tasks"
+    );
+    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let web_ci = section(&ci_tasks, "  ci:main:web-e2e:ci:\n", "\n  _ci:main:host:");
+    assert!(
+        web_ci.contains("task: docker:e2e:run")
+            && web_ci.contains("TASK: _ci:main:core")
+            && !web_ci.contains("task: setup"),
+        "Main web e2e CI wrapper must reuse the sealed image without re-running setup"
+    );
     let extension_tasks = read(root, "nook-app/nook-web/.task/extension.yml");
     let extension_ci = section(
         &extension_tasks,
