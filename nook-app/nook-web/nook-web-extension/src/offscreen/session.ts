@@ -462,9 +462,10 @@ async function handleMessage(message: unknown): Promise<unknown> {
           providers: grantedProviders,
           activeVaultStoreId: grant.vaultStoreId,
         })
-      } else if (grantedProviders.length > 0) {
+      } else {
         // Pairing may race a closed/locked offscreen session. Website grants are
-        // already sealed for this device public key, so persist without unlock.
+        // already sealed for this device public key, so replace this vault's
+        // complete provider set without unlock, including an empty set.
         const lockedManager = activeManager as NookVaultManager & {
           savePresealedAuthProviders: (snapshot: {
             providers: StorageProvider[]

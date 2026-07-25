@@ -106,6 +106,7 @@ declare namespace chrome {
 
   namespace storage {
     type StorageArea = {
+      get(callback: (items: Record<string, unknown>) => void): void
       get(
         keys?: string | string[] | Record<string, unknown> | null,
         callback?: (items: Record<string, unknown>) => void,

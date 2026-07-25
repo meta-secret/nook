@@ -173,7 +173,7 @@ pub(crate) async fn save_presealed_auth_providers(
     let existing = nook_core::normalize_auth_snapshot(&raw).snapshot;
     if !provider_credentials_are_presealed(&existing) {
         return Err(NookError::Decryption(
-            "Presealed auth-provider merge rejected plaintext credentials.".to_owned(),
+            "auth-provider-plaintext-migration-required".to_owned(),
         ));
     }
     let merged = nook_core::replace_active_vault_provider_grants(&existing, snapshot);
@@ -398,12 +398,49 @@ mod wasm_idb_tests {
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
         seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
         let result = save_presealed_auth_providers(&incoming).await;
-        assert!(matches!(result, Err(NookError::Decryption(_))));
+        assert!(matches!(
+            result,
+            Err(NookError::Decryption(message))
+                if message == "auth-provider-plaintext-migration-required"
+        ));
 
         let raw = read_raw_snapshot().await.expect("read raw");
         assert_eq!(
             raw["providers"][0]["githubPat"].as_str(),
             Some("github_pat_legacy_plaintext")
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn presealed_empty_save_clears_only_the_incoming_vault() {
+        clear_auth_snapshot().await;
+        let identity = DeviceIdentity::generate().expect("identity");
+        let mut existing = github_snapshot_with_id("gh-removed", "github_pat_removed");
+        existing.providers[0].store_id = Some("store-incoming".to_owned());
+        let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
+            .providers
+            .remove(0);
+        retained.store_id = Some("store-other".to_owned());
+        existing.providers.push(retained);
+        existing.active_vault_store_id = Some("store-incoming".to_owned());
+        save_auth_providers(&identity, &existing)
+            .await
+            .expect("save existing");
+
+        save_presealed_auth_providers(&AuthProvidersSnapshotData {
+            providers: Vec::new(),
+            active_vault_store_id: Some("store-incoming".to_owned()),
+        })
+        .await
+        .expect("replace with empty provider set");
+
+        let raw = read_raw_snapshot().await.expect("read raw");
+        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        assert_eq!(stored.providers.len(), 1);
+        assert_eq!(stored.providers[0].id, "gh-retained");
+        assert_eq!(
+            stored.active_vault_store_id.as_deref(),
+            Some("store-incoming")
         );
     }
 }

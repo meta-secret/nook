@@ -22,6 +22,7 @@ import {
   isExtensionReadySetupState,
   migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  selectedPairingGrant,
   selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
   setupStorageKey,
@@ -384,9 +385,10 @@ describe('extension pairing approved message', () => {
     expect(selectedPairingGrantFirst(stored, grants)[0]?.vaultStoreId).toBe(
       'store-2',
     )
+    expect(selectedPairingGrant(stored)?.vaultStoreId).toBe('store-2')
   })
 
-  test('migrates only the selected valid legacy grant into Rexie shape', () => {
+  test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
     const current = extensionPairingGrantStorageItems(
       {
         vaultType: 'simple',
@@ -427,6 +429,17 @@ describe('extension pairing approved message', () => {
       eventLogHeads: ['event-3'],
       lastLocalSyncAt,
     })
+
+    expect(
+      migratedLegacyPairingStorageItems({
+        [key]: legacyGrant,
+        [pairingGrantStorageKey('store-2')]: {
+          ...legacyGrant,
+          vaultStoreId: 'store-2',
+        },
+        [setupStorageKey]: legacySetup,
+      }),
+    ).toEqual({})
   })
 })
 

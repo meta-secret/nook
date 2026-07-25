@@ -38,7 +38,7 @@ export type ImportedEventLogState = {
 export function isStoredExtensionPairingGrant(
   value: unknown,
 ): value is StoredExtensionPairingGrant {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const grant = value as Record<string, unknown>
   return (
     grant.vaultType === 'simple' &&
@@ -68,7 +68,7 @@ export function isStoredExtensionPairingGrant(
 export function isExtensionReadySetupState(
   value: unknown,
 ): value is ExtensionReadySetupState {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
 
   const state = value as Record<string, unknown>
   return (
@@ -209,6 +209,15 @@ export function selectedPairingGrantFirst(
   })
 }
 
+export function selectedPairingGrant(
+  stored: Record<string, unknown>,
+): StoredExtensionPairingGrant | undefined {
+  const setup = stored[setupStorageKey]
+  if (!isExtensionReadySetupState(setup)) return undefined
+  const grant = stored[pairingGrantStorageKey(setup.selectedVaultStoreId)]
+  return isStoredExtensionPairingGrant(grant) ? grant : undefined
+}
+
 type LegacyStoredExtensionPairingGrant = Omit<
   StoredExtensionPairingGrant,
   'eventCount' | 'eventLogHeads' | 'lastLocalSyncAt'
@@ -222,7 +231,7 @@ type LegacyExtensionReadySetupState = Omit<
 function isLegacyStoredExtensionPairingGrant(
   value: unknown,
 ): value is LegacyStoredExtensionPairingGrant {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const grant = value as Record<string, unknown>
   return (
     grant.vaultType === 'simple' &&
@@ -244,7 +253,7 @@ function isLegacyStoredExtensionPairingGrant(
 function isLegacyExtensionReadySetupState(
   value: unknown,
 ): value is LegacyExtensionReadySetupState {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const state = value as Record<string, unknown>
   return (
     state.status === 'ready' &&
@@ -273,14 +282,20 @@ export function migratedLegacyPairingStorageItems(
 ): Record<string, unknown> {
   const setup = legacy[setupStorageKey]
   if (!isLegacyExtensionReadySetupState(setup)) return {}
-  const selected = Object.entries(legacy).find(
+  const selected = Object.entries(legacy).filter(
     ([key, value]) =>
       key.startsWith('nook:extension-pairing-grant:') &&
       isLegacyStoredExtensionPairingGrant(value) &&
       value.vaultName === setup.selectedVaultName,
   )
-  if (!selected || !isLegacyStoredExtensionPairingGrant(selected[1])) return {}
-  const [key, grant] = selected
+  if (
+    selected.length !== 1 ||
+    !selected[0] ||
+    !isLegacyStoredExtensionPairingGrant(selected[0][1])
+  ) {
+    return {}
+  }
+  const [key, grant] = selected[0]
   const migrated: StoredExtensionPairingGrant = {
     ...grant,
     eventCount: setup.eventCount,

@@ -27,6 +27,7 @@ import {
   isStoredExtensionPairingGrant,
   migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  selectedPairingGrant,
   selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
   setupStorageKey,
@@ -548,18 +549,27 @@ async function discoverPairedVaultIdentity(
     const key = pairingGrantStorageKey(vaultStoreId)
     const stored = await getPairingStorage()
     const grant = stored[key]
+    const selectedGrant = selectedPairingGrant(stored)
+    if (selectedGrant && selectedGrant.vaultStoreId !== vaultStoreId) {
+      return {
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId,
+          vaultStoreId,
+          status: 'different-vault',
+          connectedVaultStoreId: selectedGrant.vaultStoreId,
+          connectedVaultName: selectedGrant.vaultName,
+        },
+      }
+    }
     if (!isStoredExtensionPairingGrant(grant)) {
-      const setup = stored[setupStorageKey]
-      const selectedGrant = isExtensionReadySetupState(setup)
-        ? stored[pairingGrantStorageKey(setup.selectedVaultStoreId)]
-        : undefined
-      const connectedGrant = isStoredExtensionPairingGrant(selectedGrant)
-        ? selectedGrant
-        : Object.entries(stored).find(
-            ([storedKey, value]) =>
-              storedKey.startsWith('nook:extension-pairing-grant:') &&
-              isStoredExtensionPairingGrant(value),
-          )?.[1]
+      const connectedGrant =
+        selectedGrant ??
+        Object.entries(stored).find(
+          ([storedKey, value]) =>
+            storedKey.startsWith('nook:extension-pairing-grant:') &&
+            isStoredExtensionPairingGrant(value),
+        )?.[1]
       if (isStoredExtensionPairingGrant(connectedGrant)) {
         return {
           type: 'nook:extension-paired-vault-identity-status',
@@ -681,7 +691,7 @@ function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
 
 function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(null, (items) => {
+    chrome.storage.local.get((items) => {
       if (chrome.runtime.lastError) {
         reject(
           new Error(
@@ -722,14 +732,15 @@ function ensureLegacyPairingMigration(): Promise<void> {
     if (legacyKeys.length === 0) return
     const current = await readExtensionPairingState()
     if (Object.keys(current).length > 0) {
-      await removeLegacyPairingStorage(legacyKeys)
       return
     }
     const migrated = migratedLegacyPairingStorageItems(legacy)
     if (Object.keys(migrated).length > 0) {
       await writeExtensionPairingState(migrated)
+      await removeLegacyPairingStorage(
+        Object.keys(migrated).filter((key) => legacyKeys.includes(key)),
+      )
     }
-    await removeLegacyPairingStorage(legacyKeys)
   })()
   return legacyPairingMigration
 }
@@ -2195,6 +2206,25 @@ async function removePairingStorage(keys: string[]): Promise<void> {
   await removeExtensionPairingState(keys)
 }
 
+async function restorePairingStorage(
+  previous: Record<string, unknown>,
+  written: Record<string, unknown>,
+): Promise<void> {
+  const touchedKeys = Object.keys(written)
+  const restore = Object.fromEntries(
+    touchedKeys
+      .filter((key) => key in previous)
+      .map((key) => [key, previous[key]]),
+  )
+  if (Object.keys(restore).length > 0) {
+    await writeExtensionPairingState(restore)
+  }
+  const addedKeys = touchedKeys.filter((key) => !(key in previous))
+  if (addedKeys.length > 0) {
+    await removeExtensionPairingState(addedKeys)
+  }
+}
+
 async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
@@ -2207,11 +2237,17 @@ async function importApprovedPairing(
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
     await ensureExtensionSessionDocument()
-    await sendSessionMessage({ type: 'nook:extension-session-reset' })
     const providers =
       stageProviderCredentials(message.payload.providers) ??
       message.payload.providers
+    const pairingItems = extensionPairingGrantStorageItems(
+      message.payload,
+      imported,
+    )
+    const previousPairingState = await getPairingStorage()
+    await setPairingStorage(pairingItems)
     try {
+      await sendSessionMessage({ type: 'nook:extension-session-reset' })
       // Snapshot before scrubbing so lazy extension IPC cannot observe emptied
       // credential fields mid-handoff.
       const importMessage = {
@@ -2241,11 +2277,12 @@ async function importApprovedPairing(
           sessionImport.error.length > 0
             ? sessionImport.error
             : 'extension-vault-import-failed'
+        await restorePairingStorage(previousPairingState, pairingItems)
         return { ok: false, reason }
       }
-      await setPairingStorage(
-        extensionPairingGrantStorageItems(message.payload, imported),
-      )
+    } catch (error) {
+      await restorePairingStorage(previousPairingState, pairingItems)
+      throw error
     } finally {
       scrubProviderCredentials(providers)
     }
@@ -2261,7 +2298,7 @@ async function importLocalEventLogUpdate(
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   const key = pairingGrantStorageKey(vaultStoreId)
   try {
-    const stored = await getPairingStorage(key)
+    const stored = await getPairingStorage()
     const grant = stored[key]
     if (!isStoredExtensionPairingGrant(grant)) {
       return { ok: false, reason: 'vault-not-paired' }

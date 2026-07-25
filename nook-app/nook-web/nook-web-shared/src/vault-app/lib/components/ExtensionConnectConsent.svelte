@@ -119,12 +119,18 @@
               typeof response === 'object' && response !== null
                 ? (response as { reason?: unknown; error?: unknown })
                 : undefined
-            const detail =
+            const reason =
               typeof failure?.reason === 'string' && failure.reason.length > 0
                 ? failure.reason
                 : typeof failure?.error === 'string' && failure.error.length > 0
                   ? failure.error
                   : undefined
+            const detail =
+              reason === 'auth-provider-plaintext-migration-required'
+                ? vault.t(
+                    'extension.consent.plaintext_provider_migration_required',
+                  )
+                : undefined
             reject(
               new Error(
                 detail

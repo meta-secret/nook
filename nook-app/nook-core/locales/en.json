@@ -1670,6 +1670,7 @@
       "unlock_first": "Unlock Simple Vault first, then approve this extension device.",
       "messaging_unavailable": "Browser extension messaging is unavailable.",
       "grant_rejected": "The extension did not accept the Simple Vault pairing grant.",
+      "plaintext_provider_migration_required": "Unlock the extension once to securely migrate its existing sync-provider credentials, then try again.",
       "handoff_failed": "Extension approved, but the browser handoff failed.",
       "handoff_failed_detail": "Extension approved, but the browser handoff failed: {error}",
       "approved": "Extension device approved.",
