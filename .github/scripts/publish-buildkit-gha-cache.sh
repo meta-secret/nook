@@ -99,6 +99,8 @@ assert_wasm_deps_exported() {
   fi
   layer_count="$(grep -cE " #${step_id} writing layer " "$log_file" || true)"
   if [ "${layer_count:-0}" -lt 1 ]; then
+    # After a reseed epoch bump, the first Main must write layers. Later Mains may
+    # legitimately send index-only when those zstd digests already exist in GHA.
     echo "builder-wasm-deps GHA export completed as index-only (step #${step_id}; 0 writing layer lines)"
     echo "publish-buildkit-gha-cache: accepting index-only export from local prepare graph (no cache-from reimport)"
   else
