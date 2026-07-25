@@ -1,10 +1,10 @@
 import { expect, test } from '../fixtures'
-import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from '../helpers'
+import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 import { installMockPasskeyRuntime } from '../passkey-mock'
 
 const DEMO_BEAT_MS = 700
 
-async function demoBeat(page: Parameters<typeof createLocalVaultOnLogin>[0]) {
+async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
@@ -12,7 +12,7 @@ test('approve extension pairing when the browser handoff accepts the grant', asy
   page,
   browser,
 }) => {
-  await createLocalVaultOnLogin(page, 'Demo pairing vault')
+  await connectLocalVault(page)
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -23,7 +23,9 @@ test('approve extension pairing when the browser handoff accepts the grant', asy
   const extensionPage = await extensionContext.newPage()
   await extensionPage.goto(new URL(page.url()).origin)
   await expect(
-    extensionPage.getByTestId('login-create-vault-chooser'),
+    extensionPage
+      .getByTestId('login-create-vault-chooser')
+      .or(extensionPage.getByTestId('login-gate')),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
   const extensionDevice = await extensionPage.evaluate(async () => {
     type DemoVault = {
