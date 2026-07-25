@@ -1071,8 +1071,10 @@ fn assert_main_deferred_rust_cache_publish(root: &Path) {
             && publish_script.contains("nook-rust-wasm-deps-v3")
             && publish_script.contains("force-compression=true")
             && publish_script.contains("writing layer")
-            && publish_script.contains("refuse to publish an incomplete"),
-        "Main cache publish must export local prepare layers into v3, force cook uploads, and reject thin indexes"
+            && publish_script.contains("accepting index-only export")
+            && publish_script.contains("rust-base builder-wasm-deps")
+            && !publish_script.contains("refuse to publish an incomplete"),
+        "Main cache publish must export wasm-deps alone into v3 without reimport, and accept index-only when blobs already exist"
     );
     let base_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
     assert!(

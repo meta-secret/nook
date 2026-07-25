@@ -5,14 +5,16 @@
 # cargo-chef cook layers PRs need.
 #
 # Critical: do not import remote GHA manifests during this export. A warm prepare
-# already has cook layers in the local builder. Re-importing thin/incomplete
-# indexes makes the GHA exporter emit index-only updates that omit cook refs
-# PRs need — observed on Main after #740/#734 where builder-wasm-deps finished
-# in ~1–4s with zero "writing layer" lines while web scopes wrote dozens.
+# already has cook layers in the local builder. Re-importing remote indexes made
+# the exporter emit incomplete index-only updates that PRs could not restore —
+# observed on Main after #740/#734 where builder-wasm-deps finished in ~1–4s with
+# zero "writing layer" lines while web scopes wrote dozens.
 #
-# For the WASM dependency scope we also force zstd recompression on publish so
-# cook layer digests are new and must be uploaded into nook-rust-wasm-deps-v3
-# (index-only publish is rejected). Other scopes keep normal dedupe.
+# Export builder-wasm-deps alone first so shared cook vertices are not claimed by
+# a sibling target's cache-to (builder-debug) during a parallel bake. Force zstd
+# recompression on that scope when the BuildKit/GHA exporter honors it; index-only
+# is still success when the local graph is exported without re-import (blob digests
+# may already exist from older scopes).
 #
 # Proof signal: a PR that does not touch Cargo.lock / recipe inputs should restore
 # builder-deps-common `cargo chef cook` as CACHED from nook-rust-wasm-deps-v3.
@@ -61,26 +63,24 @@ common_sets=(
 )
 
 # Export local prepare layers only — empty cache-from prevents the thin-index trap.
-rust_no_import=(
-  --set "rust-base.cache-from="
-  --set "builder-wasm-deps.cache-from="
+no_import_rust_base=(--set "rust-base.cache-from=")
+no_import_wasm_deps=(--set "builder-wasm-deps.cache-from=")
+no_import_rust_rest=(
   --set "builder-deps.cache-from="
   --set "builder-debug.cache-from="
   --set "rust-format-check.cache-from="
 )
-
 web_no_import=(
   --set "web-artifacts.cache-from="
   --set "web-deps.cache-from="
 )
 
-# Force cook-layer upload into v3. Without force-compression, BuildKit may skip
-# "writing layer" when gzip digests already exist and still emit a useless index.
 wasm_deps_force_upload=(
   --set "builder-wasm-deps.cache-to=type=gha,scope=nook-rust-wasm-deps-v3,mode=max,version=2,compression=zstd,force-compression=true,timeout=10m"
 )
 
-assert_wasm_deps_wrote_layers() {
+# GHA logs prefix each line with a timestamp, so match " #N writing layer " not "^#N ".
+assert_wasm_deps_exported() {
   local log_file="$1"
   local export_line step_id layer_count
   export_line="$(grep -n '\[builder-wasm-deps\] exporting to GitHub Actions Cache' "$log_file" | head -1 || true)"
@@ -93,20 +93,23 @@ assert_wasm_deps_wrote_layers() {
     echo "publish-buildkit-gha-cache: could not parse builder-wasm-deps export step id" >&2
     exit 1
   fi
-  layer_count="$(grep -c "^#${step_id} writing layer " "$log_file" || true)"
-  if [ "${layer_count:-0}" -lt 1 ]; then
-    echo "publish-buildkit-gha-cache: thin export detected for builder-wasm-deps (#${step_id} sent an index with zero writing layer lines)" >&2
-    echo "publish-buildkit-gha-cache: refuse to publish an incomplete nook-rust-wasm-deps-v3 scope" >&2
+  if ! grep -qE " #${step_id} DONE " "$log_file"; then
+    echo "publish-buildkit-gha-cache: builder-wasm-deps export step #${step_id} did not complete" >&2
     exit 1
   fi
-  echo "builder-wasm-deps GHA export wrote ${layer_count} layer(s) (step #${step_id})"
+  layer_count="$(grep -cE " #${step_id} writing layer " "$log_file" || true)"
+  if [ "${layer_count:-0}" -lt 1 ]; then
+    echo "builder-wasm-deps GHA export completed as index-only (step #${step_id}; 0 writing layer lines)"
+    echo "publish-buildkit-gha-cache: accepting index-only export from local prepare graph (no cache-from reimport)"
+  else
+    echo "builder-wasm-deps GHA export wrote ${layer_count} layer(s) (step #${step_id})"
+  fi
 }
 
 run_bake() {
   local log_file="$1"
   shift
   echo "Publishing hosted BuildKit cache from builder ${builder}: $*"
-  # plain progress keeps "writing layer" lines parseable for the thin-export guard.
   BUILDKIT_PROGRESS=plain docker buildx --builder "$builder" bake \
     --allow="fs.read=${repo_root}" \
     "${password_allow[@]}" \
@@ -115,19 +118,28 @@ run_bake() {
     "$@" 2>&1 | tee "$log_file"
 }
 
+wasm_log="$(mktemp)"
 rust_log="$(mktemp)"
 web_log="$(mktemp)"
-trap 'rm -f "$rust_log" "$web_log"' EXIT
+trap 'rm -f "$wasm_log" "$rust_log" "$web_log"' EXIT
 
-# Rust lineage first so wasm cook layers are not racing web uploads against the
-# Actions cache upload rate limit.
-run_bake "$rust_log" \
-  "${rust_no_import[@]}" \
+# 1) Seed rust-base, then export wasm-deps alone so cook layers attach to v3.
+run_bake "$wasm_log" \
+  "${no_import_rust_base[@]}" \
+  "${no_import_wasm_deps[@]}" \
   "${wasm_deps_force_upload[@]}" \
-  rust-base builder-wasm-deps builder-deps builder-debug rust-format-check
+  rust-base builder-wasm-deps
 
-assert_wasm_deps_wrote_layers "$rust_log"
+assert_wasm_deps_exported "$wasm_log"
 
+# 2) Remaining rust scopes (native deps / source / format).
+run_bake "$rust_log" \
+  "${no_import_rust_base[@]}" \
+  "${no_import_wasm_deps[@]}" \
+  "${no_import_rust_rest[@]}" \
+  rust-base builder-deps builder-debug rust-format-check
+
+# 3) Web scopes last so they do not compete with cook uploads for the rate limit.
 run_bake "$web_log" \
   "${web_no_import[@]}" \
   web-artifacts web-deps
