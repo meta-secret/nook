@@ -1,0 +1,178 @@
+schema_version: 3
+source_pr:
+  number: 724
+  url: https://github.com/meta-secret/nook/pull/724
+  title: "chore(skills): expose Taste Skill to Claude Code and Codex"
+  change_surface: agent_skills_taste_frontend_discovery
+  head_sha: 041c628d352c4cd39f00917087bac6fd4f99eeee
+  started_at: "2026-07-25T04:18:00Z"
+  opened_at: "2026-07-25T04:21:39Z"
+  merged_at: "2026-07-25T04:25:13Z"
+  elapsed_seconds: 433
+  open_to_merge_seconds: 214
+summary:
+  local_execution_count: 3
+  local_check_count: 3
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 117
+  github_actions_run_count: 1
+  github_actions_seconds: 198
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: "2026-07-25T04:25:40Z"
+  head_sha: 041c628d352c4cd39f00917087bac6fd4f99eeee
+  by_type:
+    rust: 631
+    preflight: 39
+    web_unit: 251
+    e2e: 200
+  total: 1121
+local_executions:
+  - {
+      command: task format,
+      category: check,
+      started_at: "2026-07-25T04:19:50Z",
+      finished_at: "2026-07-25T04:21:30Z",
+      duration_seconds: 100,
+      outcome: passed,
+      reason: pre_push_hygiene_claude_codex_discovery_symlink,
+    }
+  - {
+      command: "task pr:preflight PR=724",
+      category: check,
+      started_at: "2026-07-25T04:21:50Z",
+      finished_at: "2026-07-25T04:21:57Z",
+      duration_seconds: 7,
+      outcome: passed,
+      reason: initial_preflight_while_checks_queued,
+    }
+  - {
+      command: "task pr:ready PR=724",
+      category: check,
+      started_at: "2026-07-25T04:24:55Z",
+      finished_at: "2026-07-25T04:25:05Z",
+      duration_seconds: 10,
+      outcome: passed,
+      reason: exact_head_readiness_before_squash_merge,
+    }
+github_actions_runs:
+  - {
+      workflow: PR,
+      run_id: 30143890228,
+      run_attempt: 1,
+      head_sha: febec8db52f63fe8773339f5099da1b0cfb7c2df,
+      trigger: pull_request,
+      started_at: "2026-07-25T04:21:42Z",
+      finished_at: "2026-07-25T04:25:00Z",
+      duration_seconds: 198,
+      conclusion: success,
+    }
+cache_telemetry:
+  totals:
+    job_count: 3
+    remote_backend_job_count: 0
+    direct_compile_job_count: 3
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: null
+    buildkit_completed_steps: 80
+    buildkit_cached_steps: 19
+    buildkit_cache_hit_rate_percent: 23.75
+  jobs:
+    - {
+        workflow: PR,
+        run_id: 30143890228,
+        run_attempt: 1,
+        job: rust,
+        cache_backend: direct_compile,
+        cache_backend_reason: credentials_unavailable,
+        cache_backend_persistent: false,
+        sccache: {
+          compile_requests: 0,
+          cache_hits: 0,
+          cache_misses: 0,
+          hit_rate_percent: null,
+        },
+        buildkit: {
+          completed_steps: 15,
+          cached_steps: 0,
+          cache_hit_rate_percent: 0.0,
+          measurement: buildx_target_record_steps,
+        },
+        collection_complete: true,
+        collection_warnings: [],
+      }
+    - {
+        workflow: PR,
+        run_id: 30143890228,
+        run_attempt: 1,
+        job: wasm,
+        cache_backend: direct_compile,
+        cache_backend_reason: credentials_unavailable,
+        cache_backend_persistent: false,
+        sccache: {
+          compile_requests: 0,
+          cache_hits: 0,
+          cache_misses: 0,
+          hit_rate_percent: null,
+        },
+        buildkit: {
+          completed_steps: 0,
+          cached_steps: 0,
+          cache_hit_rate_percent: null,
+          measurement: buildx_target_record_steps,
+        },
+        collection_complete: true,
+        collection_warnings: [],
+      }
+    - {
+        workflow: PR,
+        run_id: 30143890228,
+        run_attempt: 1,
+        job: verify,
+        cache_backend: direct_compile,
+        cache_backend_reason: credentials_unavailable,
+        cache_backend_persistent: false,
+        sccache: {
+          compile_requests: 0,
+          cache_hits: 0,
+          cache_misses: 0,
+          hit_rate_percent: null,
+        },
+        buildkit: {
+          completed_steps: 65,
+          cached_steps: 19,
+          cache_hit_rate_percent: 29.23,
+          measurement: buildx_target_record_steps,
+        },
+        collection_complete: true,
+        collection_warnings: [],
+      }
+pr_retriggers: []
+merge_attempts:
+  - {
+      at: "2026-07-25T04:25:13Z",
+      method: squash,
+      outcome: success,
+      reason: readiness_passed,
+    }
+comparison:
+  baseline_prs: [720]
+  baseline_quality: comparable
+  baseline_note: Direct follow-up to Taste Skill install (#720); same agent-skills surface and PR gate set, symlink-only discovery change.
+  elapsed_seconds_change_percent: -60.4
+  local_execution_seconds_change_percent: -83.5
+  github_actions_seconds_change_percent: -60.2
+  test_inventory_total_change: 0
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - Single green PR validation cycle with no retrigger.
+    - Faster than #720 across elapsed, local, and Actions seconds because the change was a one-file discovery symlink and format was warm.
+  required_actions: []
