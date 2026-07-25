@@ -3,7 +3,10 @@ import {
   exerciseConcurrentSessionStatus,
   launchPairedPinExtension,
 } from './helpers/paired-pin-extension'
-import { signInAndSaveMockLogin } from './helpers/mock-auth-login'
+import {
+  expectLoginSaved,
+  signInAndSaveMockLogin,
+} from './helpers/mock-auth-login'
 import { startMockAuthServer } from './mock-auth'
 
 test.describe('PIN Pilot save login', () => {
@@ -103,7 +106,7 @@ test.describe('PIN Pilot save login', () => {
         timeout: 15_000,
       })
       await widget.getByTestId('nook-auth-gate-save').click()
-      await expect(widget.getByText('Login saved')).toBeVisible()
+      await expectLoginSaved(widget)
 
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
