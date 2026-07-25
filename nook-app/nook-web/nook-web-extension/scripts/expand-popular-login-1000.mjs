@@ -5,13 +5,7 @@
  *
  * Does not hit live sites. Capture remains offline via capture-login-shell.mjs.
  */
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -2269,7 +2263,6 @@ function buildFiller(existingIds) {
       if (existingIds.has(id) || out.some((row) => row[0] === id)) {
         id = `${id}-${n}`
       }
-      const host = `${id.replace(/-/g, '')}.example`
       // Prefer realistic login URL shape; research-only host when unknown.
       const apex = id.includes('-') ? `${id.split('-')[0]}.com` : `${id}.com`
       const loginUrl = `https://www.${apex}/login`
