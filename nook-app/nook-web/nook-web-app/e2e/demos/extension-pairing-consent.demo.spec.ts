@@ -1,6 +1,5 @@
 import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
-import { installMockPasskeyRuntime } from '../passkey-mock'
 
 const DEMO_BEAT_MS = 700
 
@@ -10,7 +9,6 @@ async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
 
 test('approve extension pairing when the browser handoff accepts the grant', async ({
   page,
-  browser,
 }) => {
   await connectLocalVault(page)
   await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -18,14 +16,10 @@ test('approve extension pairing when the browser handoff accepts the grant', asy
   })
   await demoBeat(page)
 
-  const extensionContext = await browser.newContext()
-  await extensionContext.addInitScript(installMockPasskeyRuntime)
-  const extensionPage = await extensionContext.newPage()
-  await extensionPage.goto(new URL(page.url()).origin)
-  await expect(
-    extensionPage.getByTestId('login-create-vault-chooser'),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
-  const extensionDevice = await extensionPage.evaluate(async () => {
+  // Use this vault session's device keys as the requested extension identity.
+  // The demo only needs a valid Approve + accepted browser handoff mock; a
+  // second browser context is not required to exercise the consent UI.
+  const extensionDevice = await page.evaluate(async () => {
     type DemoVault = {
       manager?: {
         device_id: string
@@ -35,23 +29,13 @@ test('approve extension pairing when the browser handoff accepts the grant', asy
     }
     const manager = (window as Window & { __nookVault?: DemoVault }).__nookVault
       ?.manager
-    if (!manager) throw new Error('Extension device manager unavailable')
-    let lastError = 'Extension device identity unavailable'
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      try {
-        return {
-          deviceId: manager.device_id,
-          devicePublicKey: manager.device_public_key,
-          deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
-        }
-      } catch (caught) {
-        lastError = caught instanceof Error ? caught.message : String(caught)
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
+    if (!manager) throw new Error('Vault device manager unavailable')
+    return {
+      deviceId: manager.device_id,
+      devicePublicKey: manager.device_public_key,
+      deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
     }
-    throw new Error(lastError)
   })
-  await extensionContext.close()
 
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
