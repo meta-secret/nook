@@ -69,14 +69,9 @@ fn columns(headers: &StringRecord) -> Result<ApplePasswordColumns, ApplePassword
 }
 
 fn append_title_metadata(notes: &mut String, title: &str, website_url: &str) {
-    if title.is_empty() || title == website_url {
-        return;
+    if let Some(entry) = super::import_support::source_label_metadata("title", title, website_url) {
+        super::import_support::append_import_metadata(notes, "Apple Passwords", [entry]);
     }
-    if !notes.is_empty() {
-        notes.push_str("\n\n");
-    }
-    notes.push_str("## Apple Passwords\n- title: ");
-    notes.push_str(title);
 }
 
 fn convert_record(

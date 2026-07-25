@@ -327,6 +327,11 @@ fn convert_login(item: BitwardenItem) -> Option<SecretValue> {
         .cloned()
         .unwrap_or_else(|| item.name.trim().to_owned());
     let mut metadata = Vec::new();
+    if let Some(name) =
+        super::import_support::source_label_metadata("name", &item.name, &website_url)
+    {
+        metadata.push(name);
+    }
     metadata.push(("totp".to_owned(), login.totp));
     metadata.extend(
         uris.into_iter()
@@ -467,7 +472,7 @@ mod tests {
         assert_eq!(login.password, "secret");
         assert_eq!(
             login.notes,
-            "recovery codes elsewhere\n\n## Bitwarden\n- totp: otpauth://secret\n- uri[2]: https://gist.github.com\n- field.PIN: 1234"
+            "recovery codes elsewhere\n\n## Bitwarden\n- name: GitHub work\n- totp: otpauth://secret\n- uri[2]: https://gist.github.com\n- field.PIN: 1234"
         );
     }
 
@@ -538,7 +543,10 @@ mod tests {
         assert_eq!(first.website_url, "https://my.1password.com/signin");
         assert_eq!(first.username, "");
         assert_eq!(first.password, "");
-        assert_eq!(first.notes, "bla bla bla");
+        assert_eq!(
+            first.notes,
+            "bla bla bla\n\n## Bitwarden\n- name: 1password.com"
+        );
 
         let SecretValue::Login(second) = &plan.items[1] else {
             panic!("expected second login")
@@ -546,6 +554,7 @@ mod tests {
         assert_eq!(second.website_url, "http://rabbitmq.9dev.io:15672/");
         assert_eq!(second.username, "guest");
         assert_eq!(second.password, "guest");
+        assert_eq!(second.notes, "## Bitwarden\n- name: 9dev.io");
     }
 
     #[test]
