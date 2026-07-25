@@ -927,6 +927,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
 
 function sessionMessagePriority(type: string): SessionOperationPriority {
   switch (type) {
+    case 'nook:extension-session-reset':
     case 'nook:extension-session-seal-identity-handoff':
     case 'nook:extension-session-plan-login-save':
     case 'nook:extension-session-commit-login-save':

@@ -1981,10 +1981,15 @@ export class VaultState {
       const vaultStoreId =
         this.activeVaultStoreId ??
         (await this.enqueueStorage(() => manager.vaultStoreId));
-      if (vaultStoreId) {
-        await requestExtensionUnpairVault(vaultStoreId);
-      }
-      await deleteBrowserData(() => {
+      await deleteBrowserData(async () => {
+        if (vaultStoreId) {
+          const unpairOk = await requestExtensionUnpairVault(vaultStoreId);
+          if (!unpairOk) {
+            throw new Error(
+              "Failed to unpair extension before local browser data deletion.",
+            );
+          }
+        }
         const deletion = this.enqueueStorage(() =>
           manager.deleteLocalBrowserData(),
         );

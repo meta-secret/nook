@@ -2193,7 +2193,7 @@ async function unpairExtensionVault(
       const setup = setupStateFromPairingGrant(latest, {
         vaultStoreId: latest.vaultStoreId,
         eventCount: 1,
-        heads: [],
+        heads: ['00'.repeat(32)],
         accessGranted: true,
       })
       await setLocalStorage({ [setupStorageKey]: setup })
@@ -2757,6 +2757,15 @@ chrome.runtime.onMessageExternal.addListener(
         return false
       }
       void createIdentityHandoff(message).then(sendResponse)
+      return true
+    }
+
+    if (isExtensionUnpairVaultMessage(message)) {
+      if (!isNokeySender(sender)) {
+        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        return false
+      }
+      void unpairExtensionVault(message.payload.vaultStoreId).then(sendResponse)
       return true
     }
 
