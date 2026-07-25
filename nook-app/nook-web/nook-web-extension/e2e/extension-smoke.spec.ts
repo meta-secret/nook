@@ -895,14 +895,17 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await fillLoginPage.goto(`${loginServer.origin}/login`)
     const fillWidget = fillLoginPage.locator('#nook-auth-widget')
     await expect(fillWidget).toBeVisible()
+    const loginPickerPromise = context.waitForEvent('page')
     await fillWidget.getByRole('button', { name: 'Continue with Nook' }).click()
     await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
     await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)
-    const savedLogin = fillWidget.getByRole('button', {
-      name: 'Saved login 1',
+    const loginPicker = await loginPickerPromise
+    await loginPicker.waitForURL(/intent=login-picker/)
+    await expect(loginPicker.getByText('alice@nook.test')).toBeVisible({
+      timeout: 20_000,
     })
-    await expect(savedLogin).toBeVisible({ timeout: 20_000 })
-    await savedLogin.click()
+    await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
+    await loginPicker.getByRole('button', { name: /alice@nook\.test/ }).click()
     await expect
       .poll(
         async () =>
@@ -931,21 +934,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
           }
         ).__nookLoginSubmitted,
     )
-    expect([
-      {
-        email: 'alice@nook.test',
-        password: 'extension-fill-password',
-      },
-      {
-        email: 'bob@nook.test',
-        password: 'second-extension-password',
-      },
-    ]).toContainEqual(submittedLogin)
+    expect(submittedLogin).toEqual({
+      email: 'alice@nook.test',
+      password: 'extension-fill-password',
+    })
+    await expect.poll(() => loginPicker.isClosed()).toBe(true)
     await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
     await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
-    await expect(
-      fillWidget.getByRole('button', { name: 'Saved login 2' }),
-    ).toHaveCount(0)
     await expect(
       fillWidget.getByText(
         'Credentials were submitted. Nook is waiting for the site response.',

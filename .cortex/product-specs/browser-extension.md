@@ -256,9 +256,10 @@ The gate must:
 - keep Open vault as an optional secondary action;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
-- show only contextual accounts returned by the background/WASM boundary when
-  matched-account fill is available, using non-secret ordinal choices in the
-  page DOM rather than usernames, issuer names, or account labels;
+- when more than one login matches the page origin, open an extension-owned
+  searchable login picker that shows usernames (and host/vault labels) only
+  inside the extension document; keep those labels out of the host-page DOM and
+  return only the selected opaque item identity to the content script;
 - for OTP challenges, open the extension-owned searchable 2FA picker and keep
   issuer/account labels out of the host-page DOM;
 - open a browser-native or extension-controlled authorization surface when the

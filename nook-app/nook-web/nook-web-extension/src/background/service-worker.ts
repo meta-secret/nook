@@ -45,6 +45,12 @@ import {
   isWebsiteAuthenticatorPickerOpenMessage,
 } from '../lib/authenticator-picker-messages'
 import {
+  isLoginPickerCancelMessage,
+  isLoginPickerQueryMessage,
+  isLoginPickerSelectMessage,
+  isWebsiteLoginPickerOpenMessage,
+} from '../lib/login-picker-messages'
+import {
   isWebsiteAuthenticatorBackupAttachMessage,
   isWebsiteAuthenticatorEnrollCodeMessage,
   isWebsiteAuthenticatorEnrollConfirmMessage,
@@ -110,13 +116,17 @@ type PendingAuthenticatorPicker = {
   allowedVaultStoreIds: string[]
   expiresAt: number
 }
+type PendingLoginPicker = PendingAuthenticatorPicker
 const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
+const LOGIN_PICKER_TTL_MS = 5 * 60 * 1000
 const AUTHENTICATOR_PICKER_STORAGE_PREFIX =
   'nook.extension.authenticator-picker.'
+const LOGIN_PICKER_STORAGE_PREFIX = 'nook.extension.login-picker.'
 const pendingAuthenticatorPickers = new Map<
   string,
   PendingAuthenticatorPicker
 >()
+const pendingLoginPickers = new Map<string, PendingLoginPicker>()
 
 async function ensureExtensionSessionDocument(): Promise<void> {
   await extensionSessionDocumentClosure
@@ -834,26 +844,17 @@ async function authorizedWebsiteGrant(
   return { grant }
 }
 
-async function websiteLoginOptions(
-  message: {
-    payload: {
-      origin: string
-    }
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  const access = await availableWebsiteGrants(
-    message.payload.origin,
-    sender,
-    'login-forbidden-origin',
-  )
-  if ('response' in access) return access.response
-
+async function loginAccountsForOrigin(
+  grants: StoredExtensionPairingGrant[],
+  origin: string,
+  query = '',
+): Promise<WebsiteLoginAccountOption[]> {
   const accounts: WebsiteLoginAccountOption[] = []
-  for (const grant of access.grants) {
+  const needle = query.trim().toLowerCase()
+  for (const grant of grants) {
     const response = await sendSessionMessage({
       type: 'nook:extension-session-list-logins',
-      payload: { ...grant, origin: message.payload.origin },
+      payload: { ...grant, origin },
     })
     for (const account of sessionResponseAccounts(response)) {
       if (
@@ -870,17 +871,248 @@ async function websiteLoginOptions(
       ) {
         continue
       }
-      accounts.push({
+      const option: WebsiteLoginAccountOption = {
         vaultStoreId: grant.vaultStoreId,
         vaultName: grant.vaultName,
         secretId: account.secretId,
         username: account.username,
         websiteUrl: account.websiteUrl,
         websiteHost: account.websiteHost,
-      })
+      }
+      if (
+        needle &&
+        ![
+          option.username,
+          option.websiteHost,
+          option.websiteUrl,
+          option.vaultName,
+        ].some((value) => value.toLowerCase().includes(needle))
+      ) {
+        continue
+      }
+      accounts.push(option)
     }
   }
+  return accounts
+}
+
+async function websiteLoginOptions(
+  message: {
+    payload: {
+      origin: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  const access = await availableWebsiteGrants(
+    message.payload.origin,
+    sender,
+    'login-forbidden-origin',
+  )
+  if ('response' in access) return access.response
+
+  const accounts = await loginAccountsForOrigin(
+    access.grants,
+    message.payload.origin,
+  )
   return { ok: true, status: 'ready', accounts }
+}
+
+function loginPickerStorageKey(requestId: string): string {
+  return `${LOGIN_PICKER_STORAGE_PREFIX}${requestId}`
+}
+
+function isPendingLoginPicker(value: unknown): value is PendingLoginPicker {
+  return isPendingAuthenticatorPicker(value)
+}
+
+async function storeLoginPicker(request: PendingLoginPicker): Promise<void> {
+  pendingLoginPickers.set(request.requestId, request)
+  await setSessionStorage({
+    [loginPickerStorageKey(request.requestId)]: request,
+  })
+}
+
+async function removeLoginPicker(requestId: string): Promise<void> {
+  pendingLoginPickers.delete(requestId)
+  await removeSessionStorage(loginPickerStorageKey(requestId))
+}
+
+async function loadLoginPicker(
+  requestId: string,
+): Promise<PendingLoginPicker | undefined> {
+  let request = pendingLoginPickers.get(requestId)
+  if (!request) {
+    const key = loginPickerStorageKey(requestId)
+    const stored = (await getSessionStorage(key))[key]
+    if (!isPendingLoginPicker(stored) || stored.requestId !== requestId) {
+      if (stored !== undefined) await removeSessionStorage(key)
+      return undefined
+    }
+    request = stored
+    pendingLoginPickers.set(requestId, request)
+  }
+  if (request.expiresAt <= Date.now()) {
+    await removeLoginPicker(requestId)
+    return undefined
+  }
+  return request
+}
+
+function isLoginPickerSender(sender: chrome.runtime.MessageSender): boolean {
+  return isAuthenticatorPickerSender(sender)
+}
+
+async function openWebsiteLoginPicker(
+  message: { payload: { origin: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  const access = await availableWebsiteGrants(
+    message.payload.origin,
+    sender,
+    'login-forbidden-origin',
+  )
+  if ('response' in access) return access.response
+  if (sender.tab?.id === undefined) {
+    return { ok: false, reason: 'login-picker-tab-missing' }
+  }
+
+  const requestId = randomNonce()
+  const request = {
+    requestId,
+    origin: message.payload.origin,
+    tabId: sender.tab.id,
+    allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
+    expiresAt: Date.now() + LOGIN_PICKER_TTL_MS,
+  }
+  await storeLoginPicker(request)
+  const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
+  pickerUrl.searchParams.set('intent', 'login-picker')
+  pickerUrl.searchParams.set('request', requestId)
+  try {
+    if (chrome.windows?.create) {
+      await chrome.windows.create({
+        url: pickerUrl.toString(),
+        type: 'popup',
+        width: 460,
+        height: 620,
+        focused: true,
+      })
+    } else {
+      await chrome.tabs.create({ url: pickerUrl.toString() })
+    }
+  } catch {
+    await removeLoginPicker(requestId)
+    return { ok: false, reason: 'login-picker-open-failed' }
+  }
+  return { ok: true, status: 'ready', requestId, expiresAt: request.expiresAt }
+}
+
+async function queryLoginPicker(
+  message: { payload: { requestId: string; query: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isLoginPickerSender(sender)) {
+    return { ok: false, reason: 'login-picker-forbidden' }
+  }
+  const request = await loadLoginPicker(message.payload.requestId)
+  if (!request) {
+    return { ok: false, reason: 'login-picker-expired' }
+  }
+  const grants = (await passwordPairingGrants()).filter((grant) =>
+    request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+  )
+  const accounts = await loginAccountsForOrigin(
+    grants,
+    request.origin,
+    message.payload.query,
+  )
+  return { ok: true, origin: request.origin, accounts }
+}
+
+async function selectLoginPicker(
+  message: {
+    payload: {
+      requestId: string
+      vaultStoreId: string
+      secretId: string
+    }
+  },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  if (!isLoginPickerSender(sender)) {
+    return { ok: false, reason: 'login-picker-forbidden' }
+  }
+  const request = await loadLoginPicker(message.payload.requestId)
+  if (!request) {
+    return { ok: false, reason: 'login-picker-expired' }
+  }
+  const grants = (await passwordPairingGrants()).filter((grant) =>
+    request.allowedVaultStoreIds.includes(grant.vaultStoreId),
+  )
+  const accounts = await loginAccountsForOrigin(grants, request.origin)
+  const selected = accounts.find(
+    (account) =>
+      account.vaultStoreId === message.payload.vaultStoreId &&
+      account.secretId === message.payload.secretId,
+  )
+  if (!selected) {
+    return { ok: false, reason: 'login-picker-selection-invalid' }
+  }
+  try {
+    const response: unknown = await chrome.tabs.sendMessage(request.tabId, {
+      type: 'nook:website-login-selected',
+      payload: {
+        origin: request.origin,
+        requestId: request.requestId,
+        account: {
+          vaultStoreId: selected.vaultStoreId,
+          secretId: selected.secretId,
+        },
+      },
+    })
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true
+    ) {
+      return { ok: false, reason: 'login-picker-page-unavailable' }
+    }
+  } catch {
+    return { ok: false, reason: 'login-picker-page-unavailable' }
+  }
+  await removeLoginPicker(request.requestId)
+  return { ok: true }
+}
+
+async function cancelLoginPicker(
+  message: { payload: { requestId: string } },
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
+  const request = await loadLoginPicker(message.payload.requestId)
+  if (!request) {
+    return { ok: true }
+  }
+  if (
+    !isLoginPickerSender(sender) &&
+    !isAuthorizedWebsiteSender(sender, request.origin)
+  ) {
+    return { ok: false, reason: 'login-picker-forbidden' }
+  }
+  await removeLoginPicker(request.requestId)
+  try {
+    await chrome.tabs.sendMessage(request.tabId, {
+      type: 'nook:website-login-canceled',
+      payload: {
+        origin: request.origin,
+        requestId: request.requestId,
+      },
+    })
+  } catch {
+    // The website may have navigated while its picker was open.
+  }
+  return { ok: true }
 }
 
 async function websiteLoginSaveOffer(
@@ -1911,6 +2143,51 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isWebsiteLoginPickerOpenMessage(message)) {
+    void openWebsiteLoginPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'login-picker-open-failed' }),
+      )
+    return true
+  }
+
+  if (isLoginPickerQueryMessage(message)) {
+    void queryLoginPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          reason: 'login-picker-query-failed',
+        }),
+      )
+    return true
+  }
+
+  if (isLoginPickerSelectMessage(message)) {
+    void selectLoginPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          reason: 'login-picker-select-failed',
+        }),
+      )
+    return true
+  }
+
+  if (isLoginPickerCancelMessage(message)) {
+    void cancelLoginPicker(message, sender)
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          reason: 'login-picker-cancel-failed',
+        }),
+      )
+    return true
+  }
+
   if (isWebsiteAuthenticatorPickerOpenMessage(message)) {
     void openWebsiteAuthenticatorPicker(message, sender)
       .then(sendResponse)

@@ -12,6 +12,7 @@ import {
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
+import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
 
 function loadCompanionVaultConnection(): Promise<{
@@ -42,6 +43,16 @@ async function main() {
   const i18n = await initializeExtensionI18n()
   if (searchParams.get('intent') === 'authenticator-picker') {
     mount(AuthenticatorPicker, {
+      target,
+      props: {
+        i18n,
+        requestId: searchParams.get('request') ?? '',
+      },
+    })
+    return
+  }
+  if (searchParams.get('intent') === 'login-picker') {
+    mount(LoginPicker, {
       target,
       props: {
         i18n,

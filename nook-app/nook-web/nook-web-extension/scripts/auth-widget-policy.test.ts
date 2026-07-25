@@ -18,7 +18,7 @@ describe('Nook Pilot in-page authorization policy', () => {
     })
   })
 
-  test('uses non-secret ordinals for saved choices', () => {
+  test('uses non-secret ordinals for enrollment backup choices', () => {
     expect(safeSavedOptionNumber(0)).toBe('1')
     expect(safeSavedOptionNumber(2)).toBe('3')
   })

@@ -176,6 +176,8 @@ type NookLocaleCatalog = {
       no_match: string
       choose_account: string
       saved_login: string
+      login_picker_opened: string
+      login_picker_canceled: string
       fill_failed: string
       filled_manual: string
       authenticator_step: string
@@ -191,6 +193,7 @@ type NookLocaleCatalog = {
       authenticator_fill_failed: string
       authenticator_filled: string
       authenticator_picker_opened: string
+      authenticator_picker_canceled: string
       enroll_title: string
       enroll_description: string
       add_from_page: string
@@ -356,6 +359,12 @@ async function buildChromeLocales() {
           message: catalog.extension.widget.choose_account,
         },
         widgetSavedLogin: { message: catalog.extension.widget.saved_login },
+        widgetLoginPickerOpened: {
+          message: catalog.extension.widget.login_picker_opened,
+        },
+        widgetLoginPickerCanceled: {
+          message: catalog.extension.widget.login_picker_canceled,
+        },
         widgetFillFailed: { message: catalog.extension.widget.fill_failed },
         widgetFilledManual: {
           message: catalog.extension.widget.filled_manual,
