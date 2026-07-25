@@ -311,6 +311,32 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           ],
         }
+      case 'nook:website-login-picker-open':
+        window.setTimeout(() => {
+          runtimeListeners.forEach((listener) =>
+            listener(
+              {
+                type: 'nook:website-login-selected',
+                payload: {
+                  origin: location.origin,
+                  requestId: 'demo-login-picker',
+                  account: {
+                    vaultStoreId: 'demo-vault',
+                    secretId: 'demo-login-1',
+                  },
+                },
+              },
+              { id: 'demo-extension' },
+              () => {},
+            ),
+          )
+        }, 1_200)
+        return {
+          ok: true,
+          status: 'ready',
+          requestId: 'demo-login-picker',
+          expiresAt: Date.now() + 5 * 60 * 1_000,
+        }
       case 'nook:website-login-fill':
         return {
           ok: true,

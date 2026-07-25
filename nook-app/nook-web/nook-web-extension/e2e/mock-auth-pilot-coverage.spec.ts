@@ -11,7 +11,7 @@ import { MOCK_AUTH_SECOND_TOTP_SECRET, startMockAuthServer } from './mock-auth'
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test('shows ordinal login chooser and completes plain success', async ({
+  test('shows extension-owned login picker usernames and completes plain success', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -38,15 +38,29 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await expect(widget.getByText('Choose which login to use.')).toBeVisible()
+      await expect(
+        widget.getByText(
+          'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
+        ),
+      ).toBeVisible()
       await expect(widget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(widget.getByText('bob@nook.test')).toHaveCount(0)
-      await widget.getByRole('button', { name: 'Saved login 1' }).click()
+      const loginPicker = await loginPickerPromise
+      await loginPicker.waitForURL(/intent=login-picker/)
+      await expect(loginPicker.getByText('alice@nook.test')).toBeVisible({
+        timeout: 20_000,
+      })
+      await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
+      await loginPicker
+        .getByRole('button', { name: /alice@nook\.test/ })
+        .click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
       )
+      await expect.poll(() => loginPicker.isClosed()).toBe(true)
     } finally {
       await paired.context.close()
       await mockAuth.close()

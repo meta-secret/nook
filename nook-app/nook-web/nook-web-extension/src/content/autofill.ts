@@ -25,12 +25,15 @@ import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-me
 import {
   compactProgressState,
   isTrustedAuthAction,
-  safeSavedOptionNumber,
 } from '../lib/auth-widget-policy'
 import type {
   WebsiteAuthenticatorOption,
   WebsiteLoginAccountOption,
 } from '../lib/login-fill-messages'
+import {
+  isWebsiteLoginCanceledMessage,
+  isWebsiteLoginSelectedMessage,
+} from '../lib/login-picker-messages'
 import type { WebsiteLoginSaveOfferView } from '../lib/login-save-messages'
 import type {
   AuthenticationOutcomeObservationView,
@@ -195,7 +198,17 @@ type PendingAuthenticatorPicker = {
   timeoutId: number
 }
 
+type PendingLoginPicker = PendingAuthenticatorPicker
+
 let pendingAuthenticatorPicker: PendingAuthenticatorPicker | undefined
+let pendingLoginPicker: PendingLoginPicker | undefined
+
+type LoginPickerOpenResponse = {
+  ok?: boolean
+  status?: 'ready' | 'locked' | 'unavailable'
+  requestId?: string
+  expiresAt?: number
+}
 
 function translatedMessage(key: string): string {
   return chrome.i18n.getMessage(key) || 'Nook'
@@ -806,7 +819,7 @@ function setStatus(
 }
 
 async function fillAndSubmitAccount(
-  account: WebsiteLoginAccountOption,
+  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>,
   workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
@@ -866,56 +879,118 @@ async function fillAndSubmitAccount(
   return true
 }
 
-function renderAccountChooser(
-  panel: HTMLElement,
-  accounts: WebsiteLoginAccountOption[],
+async function openLoginPicker(
   workflow: PasswordFormObservation,
   step: HTMLParagraphElement,
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
-  openVaultButton: HTMLButtonElement,
-): void {
-  continueButton.hidden = true
-  openVaultButton.hidden = true
-  description.textContent = translatedMessage('widgetChooseAccount')
-
-  const list = document.createElement('div')
-  list.className = 'account-list'
-  accounts.forEach((account, index) => {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = 'secondary-button account-button'
-    button.textContent = translatedMessageWithSubstitution(
-      'widgetSavedLogin',
-      safeSavedOptionNumber(index),
-    )
-    button.addEventListener('click', (event) => {
-      if (!isTrustedAuthAction(event.isTrusted) || busy) return
-      busy = true
-      button.disabled = true
-      void fillAndSubmitAccount(
-        account,
-        workflow,
-        step,
-        title,
-        description,
-        continueButton,
-      )
-        .then((submitted) => {
-          if (submitted) {
-            list.remove()
-          } else {
-            button.disabled = false
-          }
-        })
-        .finally(() => {
-          busy = false
-        })
-    })
-    list.append(button)
+): Promise<void> {
+  if (pendingLoginPicker) return
+  const response = await sendRuntimeMessage<LoginPickerOpenResponse>({
+    type: 'nook:website-login-picker-open',
+    payload: { origin: location.origin },
   })
-  panel.append(list)
+  if (!response?.ok) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  if (response.status === 'locked') {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetUnlockThenContinue'),
+      true,
+    )
+    return
+  }
+  if (response.status === 'unavailable') {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetConnectVault'),
+      true,
+    )
+    return
+  }
+  if (
+    !response.requestId ||
+    typeof response.expiresAt !== 'number' ||
+    response.expiresAt <= Date.now()
+  ) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  const requestId = response.requestId
+  if (dismissed || !continueButton.isConnected) {
+    cancelLoginPickerRequest(requestId)
+    return
+  }
+  const timeoutId = window.setTimeout(
+    () => {
+      if (pendingLoginPicker?.requestId !== requestId) return
+      const pending = pendingLoginPicker
+      pendingLoginPicker = undefined
+      setStatus(
+        pending.description,
+        pending.continueButton,
+        translatedMessage('widgetFillFailed'),
+        true,
+      )
+      if (
+        pending.continueButton.isConnected &&
+        !pending.continueButton.hidden
+      ) {
+        pending.continueButton.disabled = false
+      }
+    },
+    Math.max(0, response.expiresAt - Date.now()),
+  )
+  pendingLoginPicker = {
+    requestId,
+    workflow,
+    step,
+    title,
+    description,
+    continueButton,
+    timeoutId,
+  }
+  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetLoginPickerOpened'),
+    true,
+  )
+}
+
+function cancelLoginPickerRequest(requestId: string): void {
+  void sendRuntimeMessage({
+    type: 'nook:login-picker-cancel',
+    payload: { requestId },
+  })
+}
+
+function cancelPendingLoginPickerRequest(): void {
+  const pending = pendingLoginPicker
+  if (!pending) return
+  pendingLoginPicker = undefined
+  window.clearTimeout(pending.timeoutId)
+  cancelLoginPickerRequest(pending.requestId)
 }
 
 async function generatePasswordWithNook(
@@ -1043,11 +1118,11 @@ async function continueWithNook(
   title: HTMLHeadingElement,
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
-  openVaultButton: HTMLButtonElement,
-  panel: HTMLElement,
+  _openVaultButton: HTMLButtonElement,
+  _panel: HTMLElement,
   workflow: PasswordFormObservation,
 ): Promise<void> {
-  if (busy) return
+  if (busy || pendingLoginPicker) return
   busy = true
   continueButton.disabled = true
   setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
@@ -1121,19 +1196,14 @@ async function continueWithNook(
       return
     }
 
-    renderAccountChooser(
-      panel,
-      accounts,
-      workflow,
-      step,
-      title,
-      description,
-      continueButton,
-      openVaultButton,
-    )
+    await openLoginPicker(workflow, step, title, description, continueButton)
   } finally {
     busy = false
-    if (continueButton.isConnected && !continueButton.hidden) {
+    if (
+      !pendingLoginPicker &&
+      continueButton.isConnected &&
+      !continueButton.hidden
+    ) {
       continueButton.disabled = false
     }
   }
@@ -1324,10 +1394,62 @@ function cancelPendingAuthenticatorPickerRequest(): void {
 
 function removeScannedWidget(): void {
   cancelPendingAuthenticatorPickerRequest()
+  cancelPendingLoginPickerRequest()
   removeWidget()
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (
+    sender.id === chrome.runtime.id &&
+    isWebsiteLoginCanceledMessage(message) &&
+    message.payload.origin === location.origin &&
+    message.payload.requestId === pendingLoginPicker?.requestId
+  ) {
+    const pending = pendingLoginPicker
+    pendingLoginPicker = undefined
+    window.clearTimeout(pending.timeoutId)
+    setStatus(
+      pending.description,
+      pending.continueButton,
+      translatedMessage('widgetLoginPickerCanceled'),
+      true,
+    )
+    if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
+      pending.continueButton.disabled = false
+    }
+    sendResponse({ ok: true })
+    return false
+  }
+  if (
+    sender.id === chrome.runtime.id &&
+    isWebsiteLoginSelectedMessage(message) &&
+    message.payload.origin === location.origin &&
+    message.payload.requestId === pendingLoginPicker?.requestId
+  ) {
+    const pending = pendingLoginPicker
+    pendingLoginPicker = undefined
+    window.clearTimeout(pending.timeoutId)
+    sendResponse({ ok: true })
+    busy = true
+    pending.continueButton.disabled = true
+    void fillAndSubmitAccount(
+      message.payload.account,
+      pending.workflow,
+      pending.step,
+      pending.title,
+      pending.description,
+      pending.continueButton,
+    ).finally(() => {
+      busy = false
+      if (
+        pending.continueButton.isConnected &&
+        !pending.continueButton.hidden
+      ) {
+        pending.continueButton.disabled = false
+      }
+    })
+    return false
+  }
   if (
     sender.id === chrome.runtime.id &&
     isWebsiteAuthenticatorCanceledMessage(message) &&
@@ -1698,6 +1820,7 @@ function createWidgetShell(
   dismissButton.setAttribute('aria-label', translatedMessage('widgetDismiss'))
   dismissButton.addEventListener('click', () => {
     cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
     dismissed = true
     removeWidget()
   })
@@ -1941,6 +2064,7 @@ function renderWidget(
     if (!isTrustedAuthAction(event.isTrusted)) return
     if (!canContinueWithNook) {
       cancelPendingAuthenticatorPickerRequest()
+      cancelPendingLoginPickerRequest()
       dismissed = true
       removeWidget()
       return
@@ -1987,6 +2111,7 @@ function renderWidget(
   takeOverButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
     cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
     dismissed = true
     removeWidget()
   })
@@ -2043,6 +2168,7 @@ async function scanAndRender(): Promise<void> {
     (enrollmentHints.backupCodes && workflowForms.length === 0)
   ) {
     cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanSequence) return
     renderEnrollmentWidget(enrollmentHints, vaultConnection)

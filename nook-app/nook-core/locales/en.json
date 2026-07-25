@@ -1522,6 +1522,19 @@
       "no_results": "No matching 2FA items.",
       "failed": "Nook could not load or select this 2FA item. Unlock the extension and try again."
     },
+    "login_picker": {
+      "step_label": "Sign in with Nook",
+      "title": "Choose a login",
+      "description": "Pick which saved username to use for this site. Usernames stay in the Nook window.",
+      "destination": "Credentials will be filled on {origin}.",
+      "search_label": "Search logins",
+      "search_placeholder": "Username or host",
+      "filter_label": "Matching this site",
+      "unnamed": "Login without username",
+      "loading": "Loading matching logins…",
+      "no_results": "No matching logins for this site.",
+      "failed": "Nook could not load or select this login. Unlock the extension and try again."
+    },
     "widget": {
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook",
@@ -1574,6 +1587,8 @@
       "no_match": "No saved login matches this site yet. Open the vault to add one.",
       "choose_account": "Choose which login to use.",
       "saved_login": "Saved login $1",
+      "login_picker_opened": "Choose a saved username in the Nook window. Matching logins for this site are listed there.",
+      "login_picker_canceled": "Login selection canceled. Choose Continue with Nook to try again.",
       "fill_failed": "Nook could not fill this login. Try Open vault or unlock and continue again.",
       "filled_manual": "Credentials are filled. Review the site and submit the form manually.",
       "authenticator_step": "2FA with Nook",

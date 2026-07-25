@@ -136,15 +136,15 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(widget.getByText('Choose which login to use.')).toBeVisible()
   await expect(
-    widget.getByRole('button', { name: 'Saved login 1' }),
+    widget.getByText(
+      'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
+    ),
   ).toBeVisible()
   await expect(widget.getByText('pilot@example.test')).toHaveCount(0)
   await expect(widget.getByText('copilot@example.test')).toHaveCount(0)
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Saved login 1' }).click()
   await expect(page.locator('[autocomplete="username"]')).toHaveValue(
     'pilot@example.test',
   )
