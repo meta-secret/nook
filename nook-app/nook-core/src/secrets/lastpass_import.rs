@@ -75,33 +75,33 @@ fn field<'a>(
         .unwrap_or_default()
 }
 
-fn append_lastpass_metadata(notes: &mut String, grouping: &str, favorite: &str, totp: &str) {
+fn append_lastpass_metadata(
+    notes: &mut String,
+    name: &str,
+    website_url: &str,
+    grouping: &str,
+    favorite: &str,
+    totp: &str,
+) {
     let mut metadata = Vec::new();
+    if let Some((key, value)) =
+        super::import_support::source_label_metadata("name", name, website_url)
+    {
+        metadata.push((key, value));
+    }
     if !grouping.trim().is_empty() {
-        metadata.push(("group", grouping.trim()));
+        metadata.push(("group".to_owned(), grouping.trim().to_owned()));
     }
     if matches!(
         favorite.trim().to_ascii_lowercase().as_str(),
         "1" | "true" | "yes"
     ) {
-        metadata.push(("favorite", "true"));
+        metadata.push(("favorite".to_owned(), "true".to_owned()));
     }
     if !totp.trim().is_empty() {
-        metadata.push(("totp", totp.trim()));
+        metadata.push(("totp".to_owned(), totp.trim().to_owned()));
     }
-    if metadata.is_empty() {
-        return;
-    }
-    if !notes.is_empty() {
-        notes.push_str("\n\n");
-    }
-    notes.push_str("## LastPass");
-    for (key, value) in metadata {
-        notes.push_str("\n- ");
-        notes.push_str(key);
-        notes.push_str(": ");
-        notes.push_str(value);
-    }
+    super::import_support::append_import_metadata(notes, "LastPass", metadata);
 }
 
 fn is_secure_note_url(url: &str) -> bool {
@@ -120,22 +120,34 @@ fn convert_record(
     let url = field(record, indexes, "url").trim();
     let name = field(record, indexes, "name").trim();
     let mut notes = field(record, indexes, "extra").to_owned();
-    append_lastpass_metadata(
-        &mut notes,
-        field(record, indexes, "grouping"),
-        field(record, indexes, "fav"),
-        field(record, indexes, "totp"),
-    );
 
     if is_secure_note_url(url) {
+        append_lastpass_metadata(
+            &mut notes,
+            "",
+            "",
+            field(record, indexes, "grouping"),
+            field(record, indexes, "fav"),
+            field(record, indexes, "totp"),
+        );
         return Some(SecretValue::SecureNote(SecureNoteSecret {
             title: name.to_owned(),
             note: notes,
         }));
     }
 
+    let website_url = if url.is_empty() { name } else { url }.to_owned();
+    append_lastpass_metadata(
+        &mut notes,
+        name,
+        &website_url,
+        field(record, indexes, "grouping"),
+        field(record, indexes, "fav"),
+        field(record, indexes, "totp"),
+    );
+
     Some(SecretValue::Login(LoginSecret {
-        website_url: if url.is_empty() { name } else { url }.to_owned(),
+        website_url,
         username: field(record, indexes, "username").to_owned(),
         password: field(record, indexes, "password").to_owned(),
         notes,
@@ -187,7 +199,7 @@ mod tests {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
                 password: "secret".to_owned(),
-                notes: "Recovery codes,\nelsewhere\n\n## LastPass\n- group: Work\n- favorite: true"
+                notes: "Recovery codes,\nelsewhere\n\n## LastPass\n- name: GitHub\n- group: Work\n- favorite: true"
                     .to_owned(),
             })
         );

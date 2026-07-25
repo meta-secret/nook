@@ -89,3 +89,42 @@ pub(crate) fn append_import_metadata(
         notes.push_str(&value);
     }
 }
+
+/// Keep the source vault's item title/name when it is not already the website URL.
+///
+/// Login secrets have no first-class title field, so importers stash the label in
+/// notes. Skip duplicates of the URL fallback so we do not repeat the same string.
+pub(crate) fn source_label_metadata(
+    key: &str,
+    label: &str,
+    website_url: &str,
+) -> Option<(String, String)> {
+    let label = label.trim();
+    let website_url = website_url.trim();
+    if label.is_empty() || label == website_url {
+        None
+    } else {
+        Some((key.to_owned(), label.to_owned()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_label_metadata_keeps_distinct_titles() {
+        assert_eq!(
+            source_label_metadata("name", " GitHub work ", "https://github.com"),
+            Some(("name".to_owned(), "GitHub work".to_owned()))
+        );
+        assert_eq!(
+            source_label_metadata("title", "https://example.com", "https://example.com"),
+            None
+        );
+        assert_eq!(
+            source_label_metadata("name", "   ", "https://example.com"),
+            None
+        );
+    }
+}

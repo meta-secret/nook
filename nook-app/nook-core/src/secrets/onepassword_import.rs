@@ -404,10 +404,15 @@ fn convert_login(item: &OnePasswordItem, vault_name: &str) -> SecretValue {
         item.details.password.clone()
     };
     let mut notes = item.details.notes_plain.clone();
-    append_onepassword_metadata(
-        &mut notes,
-        item_metadata(item, vault_name, website_url.as_str(), true),
-    );
+    let mut metadata = item_metadata(item, vault_name, website_url.as_str(), true);
+    if let Some(title) = super::import_support::source_label_metadata(
+        "title",
+        &item.overview.title,
+        website_url.as_str(),
+    ) {
+        metadata.insert(0, title);
+    }
+    append_onepassword_metadata(&mut notes, metadata);
     SecretValue::Login(LoginSecret {
         website_url,
         username,
@@ -619,7 +624,7 @@ mod tests {
         assert_eq!(login.password, "secret");
         assert_eq!(
             login.notes,
-            "Recovery codes elsewhere\n\n## 1Password\n- format: 1PUX\n- vault: Personal\n- tags: work, code\n- url.gist: https://gist.github.com\n- Security.PIN: 1234\n- Security.TOTP: otpauth://secret"
+            "Recovery codes elsewhere\n\n## 1Password\n- format: 1PUX\n- title: GitHub\n- vault: Personal\n- tags: work, code\n- url.gist: https://gist.github.com\n- Security.PIN: 1234\n- Security.TOTP: otpauth://secret"
         );
 
         let SecretValue::Login(password) = &plan.items[1] else {
