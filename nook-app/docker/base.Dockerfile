@@ -8,16 +8,22 @@
 # base image live here; CLI-version args are declared in the stage that consumes them.
 ARG RUST_VERSION=1.96
 ARG DEBIAN_RELEASE=trixie
-ARG NODE_IMAGE=node:24-${DEBIAN_RELEASE}-slim
+# Pin floating registry tags by digest. `cargo-chef:latest-rust-*` and unpinned
+# `rust`/`node` tags move under us and rewrite the rust-base digest, which orphans
+# every downstream cargo-chef cook layer in the hosted GHA cache and forces PRs to
+# redownload crates on an otherwise unchanged Cargo.lock.
+ARG CARGO_CHEF_IMAGE=lukemathwalker/cargo-chef:latest-rust-1.96-trixie@sha256:3a1dd6010466c1cf591607a75c6e144ba9f099e7f3790d595c6a611a9c78f387
+ARG RUST_IMAGE=rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
+ARG NODE_IMAGE=node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573
 
-FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-${DEBIAN_RELEASE} AS cargo-chef
+FROM ${CARGO_CHEF_IMAGE} AS cargo-chef
 
 # Node is copied into the Rust base for wasm-bindgen Node tests and into the web base for Playwright
 # workers. Using the standalone binary keeps npm/npx out of the sealed images.
 FROM ${NODE_IMAGE} AS playwright-node
 
 # --- Rust/WASM branch -------------------------------------------------------
-FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS rust-base
+FROM ${RUST_IMAGE} AS rust-base
 
 # Pinned CLI versions, declared once here because they are used only inside this stage's RUNs
 # (a pre-FROM ARG would not be visible in RUN). Override with --build-arg / bake args.
