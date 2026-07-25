@@ -929,6 +929,10 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
 
+    assert_main_split_cache_publishers(root, &docker_tasks);
+}
+
+fn assert_main_split_cache_publishers(root: &Path, docker_tasks: &str) {
     let main = read(root, ".github/workflows/main.yml");
     assert!(
         main.contains("\n  rust:\n")
@@ -946,11 +950,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             && docker_tasks.contains("wasm-export builder-wasm-deps"),
         "split Main producers must explicitly publish dependency cache scopes"
     );
-    let core_bake = read(root, "nook-app/nook-core/docker-bake.hcl");
-    let coverage_export = core_bake
+    let coverage_export = read(root, "nook-app/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")
         .nth(1)
-        .expect("coverage-export target");
+        .expect("coverage-export target")
+        .to_owned();
     assert!(
         coverage_export.contains("cache-to   = rust_native_source_cache_to"),
         "coverage-export must publish the native-source GHA scope on Main"
