@@ -1,6 +1,27 @@
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 export type LocalFolderRecord = { path: string; content: string }
+
+export function eventLogRecords(
+  records: LocalFolderRecord[],
+): LocalFolderRecord[] {
+  return records.filter((record) =>
+    /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(record.path),
+  )
+}
+
+/** Wait until the mocked local-folder backup has written at least one event YAML. */
+export async function waitForLocalFolderEventRecords(
+  page: Page,
+  timeoutMs = 30_000,
+): Promise<LocalFolderRecord[]> {
+  await expect
+    .poll(async () => eventLogRecords(await localFolderSnapshot(page)).length, {
+      timeout: timeoutMs,
+    })
+    .toBeGreaterThan(0)
+  return eventLogRecords(await localFolderSnapshot(page))
+}
 
 export async function installLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {

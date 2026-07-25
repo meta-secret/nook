@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  addSecret,
   addVaultPassword,
   assertVaultReady,
   clearBrowserVault,
@@ -10,9 +11,13 @@ import {
   expectEmptyLocalFolderRejected,
   installPasskeyMock,
   openStorageSettings,
+  uniqueSecretKey,
   waitForVaultOperationsIdle,
 } from '../helpers'
-import { installLocalFolderPickerMock } from '../local-folder-mock'
+import {
+  installLocalFolderPickerMock,
+  waitForLocalFolderEventRecords,
+} from '../local-folder-mock'
 
 const DEMO_BEAT_MS = 700
 
@@ -150,7 +155,16 @@ test('shows matching passkeys and password recovery before opening a folder back
   await page.getByTestId('settings-choose-local-folder-btn').click()
   await page.getByTestId('settings-connect-local-folder-btn').click()
   await waitForVaultOperationsIdle(page)
+  await page.getByTestId('vault-secrets-tab').click()
   await assertVaultReady(page)
+  // Folder fan-out must finish before wipe; waitForVaultOperationsIdle alone can
+  // pause sync before the mock directory has durable event YAML.
+  await addSecret(
+    page,
+    uniqueSecretKey('demo-folder-source'),
+    'demo-folder-value',
+  )
+  await waitForLocalFolderEventRecords(page)
 
   await clearBrowserVault(page)
   await page.reload()
@@ -159,6 +173,10 @@ test('shows matching passkeys and password recovery before opening a folder back
   await page.getByTestId('login-choose-local-folder-btn').click()
   await page.getByTestId('login-connect-local-folder-btn').click()
 
+  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('device-protection-gate')).toBeVisible()
   const summary = page.getByTestId('existing-vault-recovery-summary')
   await expect(summary).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
