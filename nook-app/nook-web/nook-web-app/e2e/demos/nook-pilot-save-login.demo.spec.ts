@@ -116,6 +116,12 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
 
   await expect(saveButton).toBeEnabled()
   await saveButton.click()
+  await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
   await expect(widget.getByText('Login saved')).toBeVisible()
+  // Formless success pages used to re-scan and tear this confirmation down.
+  await page.evaluate(() => {
+    document.body.setAttribute('data-demo-mutation', String(Date.now()))
+  })
+  await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
   await demoBeat(page)
 })

@@ -73,6 +73,7 @@ let busy = false
 let widgetCollapsed = false
 let widgetPosition: WidgetPosition | undefined
 let activeSaveOffer: WebsiteLoginSaveOfferView | undefined
+let saveConfirmationActive = false
 let saveOfferDismissedIds = new Set<string>()
 let pendingSaveWatch:
   | {
@@ -259,6 +260,7 @@ function removeWidget(): void {
   renderedWorkflowKey = undefined
   renderedWorkflowRoot = undefined
   activeSaveOffer = undefined
+  saveConfirmationActive = false
 }
 
 type LoginSaveOfferResponse = {
@@ -557,12 +559,16 @@ function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
           return
         }
         title.textContent = translatedMessage('widgetSaveLoginSavedTitle')
+        title.setAttribute('data-testid', 'nook-auth-gate-save-saved')
         description.textContent = translatedMessage(
           'widgetSaveLoginSavedDescription',
         )
         saveButton.hidden = true
         notNowButton.hidden = true
         activeSaveOffer = undefined
+        // Hold confirmation through the dismiss window so formless success
+        // pages cannot scan-away "Login saved" before the user sees it.
+        saveConfirmationActive = true
         window.setTimeout(() => {
           dismissed = false
           removeWidget()
@@ -2149,6 +2155,7 @@ function renderWidget(
 
 async function scanAndRender(): Promise<void> {
   if (dismissed) return
+  if (saveConfirmationActive) return
   if (enrollmentCeremonyActive()) return
   const sequence = ++scanSequence
   if (activeSaveOffer) {
