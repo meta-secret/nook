@@ -20,6 +20,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [issue-scope-management.md](issue-scope-management.md) | Manage deferred, risky, or too-large work through existing issues, aggregate parent issues, and focused sub-issues without disrupting other agents | [`.agents/skills/issue-scope-management/SKILL.md`](../../.agents/skills/issue-scope-management/SKILL.md) |
 | [rust-coding.md](rust-coding.md) | Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs | [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md) |
 | [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes in Rust and reserve TypeScript for UI presentation state and browser glue; model sum types as enums and treat `Option<T>` as a missing enum | |
+| [ui-design-skills.md](ui-design-skills.md) | Always load both `impeccable` and `design-taste-frontend` for user-visible UI work, applying them through Nook's Svelte, product, accessibility, and typed-boundary constraints | |
 
 ## How To Add One
 
