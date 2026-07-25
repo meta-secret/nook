@@ -25,10 +25,12 @@ target "builder-wasm-deps" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  // Main owns this complete WASM dependency lineage (nook-rust-wasm-deps-v2). Pull requests restore
+  // Main owns this complete WASM dependency lineage (nook-rust-wasm-deps-v3). Pull requests restore
   // it read-only, avoiding both dependency rebuilds and competition with the larger native
   // dependency cache. The restore list also imports rust-base + native deps so cook layers cannot
   // orphan when sibling scopes advance independently.
+  //
+  // Cache proof: changing only this comment must still restore chef cook as CACHED from GHA.
   cache-from = rust_wasm_deps_cache_from
   cache-to   = rust_wasm_deps_cache_to
 }
