@@ -17,4 +17,9 @@ type ExtensionIdentityRequestBase<Scope extends string> = {
 
 export type PairedExtensionIdentityDiscoveryFor<Request> =
   | { status: "unavailable" | "locked" }
+  | {
+      status: "different-vault";
+      connectedVaultStoreId: string;
+      connectedVaultName: string;
+    }
   | { status: "unlocked"; request: Request };

@@ -1,17 +1,11 @@
-import {
-  isExtensionLocalEventLogUpdatedMessage,
-  isExtensionUnpairVaultMessage,
-} from '../../../nook-web-shared/src/extension/runtime-messages'
+import { isExtensionLocalEventLogUpdatedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
   if (event.source !== window || event.origin !== window.location.origin) return
 
-  if (
-    isExtensionLocalEventLogUpdatedMessage(event.data) ||
-    isExtensionUnpairVaultMessage(event.data)
-  ) {
+  if (isExtensionLocalEventLogUpdatedMessage(event.data)) {
     chrome.runtime.sendMessage(event.data, () => {
       // The bridge is best-effort when the vault is not paired. Reading
       // lastError prevents an expected unloaded/reloaded worker response from

@@ -8,6 +8,9 @@ import initNookWasm, {
   classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
   configureVaultApplication,
   generatePassword as wasmGeneratePassword,
+  readExtensionPairingState as wasmReadExtensionPairingState,
+  removeExtensionPairingState as wasmRemoveExtensionPairingState,
+  writeExtensionPairingState as wasmWriteExtensionPairingState,
   NookAuthenticationOutcomeObservation,
   NookAuthenticationPageObservation,
   NookAuthenticationPageObservations,
@@ -35,6 +38,30 @@ function ensureExtensionWasm(): Promise<unknown> {
     return value
   })
   return initPromise
+}
+
+export async function readExtensionPairingState(): Promise<
+  Record<string, unknown>
+> {
+  await ensureExtensionWasm()
+  const state = await wasmReadExtensionPairingState()
+  return state && typeof state === 'object'
+    ? (state as Record<string, unknown>)
+    : {}
+}
+
+export async function writeExtensionPairingState(
+  entries: Record<string, unknown>,
+): Promise<void> {
+  await ensureExtensionWasm()
+  await wasmWriteExtensionPairingState(entries)
+}
+
+export async function removeExtensionPairingState(
+  keys: string[],
+): Promise<void> {
+  await ensureExtensionWasm()
+  await wasmRemoveExtensionPairingState(keys)
 }
 
 export async function authenticationWorkflowSnapshot(

@@ -195,6 +195,13 @@ async function discoverPairedExtensionIdentityOnce(
     return undefined;
   }
   if (statusMessage.payload.status !== "unlocked") {
+    if (statusMessage.payload.status === "different-vault") {
+      return {
+        status: "different-vault",
+        connectedVaultStoreId: statusMessage.payload.connectedVaultStoreId,
+        connectedVaultName: statusMessage.payload.connectedVaultName,
+      };
+    }
     return { status: statusMessage.payload.status };
   }
   const scopes = statusMessage.payload.scopes.filter(

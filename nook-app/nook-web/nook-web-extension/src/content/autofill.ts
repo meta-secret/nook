@@ -14,14 +14,11 @@ import type {
   PasswordFormObservation,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import {
-  isExtensionReadySetupState,
-  setupStorageKey,
-} from '../background/pairing-grants'
-import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
 } from '../lib/authenticator-picker-messages'
 import { isQueryLoginDetectionMessage } from '../lib/login-detection-messages'
+import { loadExtensionSetupState } from '../lib/pairing-state'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import {
   compactProgressState,
@@ -223,25 +220,11 @@ function translatedMessageWithSubstitution(
   return chrome.i18n.getMessage(key, substitution) || 'Nook'
 }
 
-function loadPilotVaultConnection(): Promise<PilotVaultConnection> {
-  return new Promise((resolve) => {
-    if (!chrome.storage?.local?.get) {
-      resolve({ connected: false })
-      return
-    }
-    chrome.storage.local.get(setupStorageKey, (items) => {
-      if (chrome.runtime.lastError) {
-        resolve({ connected: false })
-        return
-      }
-      const setup = items[setupStorageKey]
-      if (!isExtensionReadySetupState(setup)) {
-        resolve({ connected: false })
-        return
-      }
-      resolve({ connected: true, vaultName: setup.selectedVaultName })
-    })
-  })
+async function loadPilotVaultConnection(): Promise<PilotVaultConnection> {
+  const setup = await loadExtensionSetupState()
+  return setup
+    ? { connected: true, vaultName: setup.selectedVaultName }
+    : { connected: false }
 }
 
 function vaultConnectionLabel(connection: PilotVaultConnection): string {

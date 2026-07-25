@@ -243,6 +243,7 @@ describe('extension pairing approved message', () => {
       status: 'ready',
       deviceLabel: 'Nook Extension',
       pairedVaults: ['Personal'],
+      selectedVaultStoreId: 'store-1',
       selectedVaultName: 'Personal',
       syncProviderCount: 2,
       eventCount: 3,
@@ -259,6 +260,7 @@ describe('extension pairing approved message', () => {
         status: 'ready',
         deviceLabel: 'Nook Extension',
         pairedVaults: [],
+        selectedVaultStoreId: '',
         selectedVaultName: '',
         syncProviderCount: 0,
         eventCount: 0,
@@ -271,6 +273,7 @@ describe('extension pairing approved message', () => {
         status: 'revoked',
         deviceLabel: 'Nook Extension',
         pairedVaults: ['Personal'],
+        selectedVaultStoreId: 'store-1',
         selectedVaultName: 'Personal',
         syncProviderCount: 0,
         eventCount: 1,
@@ -383,6 +386,30 @@ describe('extension-owned pairing start', () => {
         },
       }),
     ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityStatusMessage({
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-current',
+          status: 'different-vault',
+          connectedVaultStoreId: 'store-previous',
+          connectedVaultName: 'Previous vault',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityStatusMessage({
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-current',
+          status: 'different-vault',
+          connectedVaultStoreId: '',
+          connectedVaultName: 'Previous vault',
+        },
+      }),
+    ).toBe(false)
     expect(
       isExtensionPairedVaultIdentityHandoffRequestMessage({
         type: 'nook:extension-paired-vault-identity-handoff-request',

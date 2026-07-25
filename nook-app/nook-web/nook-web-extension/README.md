@@ -32,7 +32,7 @@ or account-less Nook sessions automatically use that native fallback.
 After a passkey or PIN authorization, the extension keeps its decrypted device
 identity only in an offscreen extension document for 15 minutes. Reopening the
 toolbar popup during that window resumes pairing without another prompt. The
-identity is never written to `chrome.storage`; the session is cleared when the
+identity is never written to browser-vendor storage; the session is cleared when the
 timer expires or the browser closes.
 
 The extension first-run model is specified in
@@ -50,8 +50,9 @@ own IndexedDB through a Rust/WASM-validated runtime message. The extension is
 marked connected only when that graph contains a current approval and encrypted
 key envelope for its passkey-protected device. Afterward, Simple Vault sends the
 same encrypted projection after local changes and provider pulls, so local
-website/extension updates do not require a sync provider. No decrypted secret or
-event-log payload is stored in `chrome.storage.local`.
+website/extension updates do not require a sync provider. Pairing metadata,
+provider grants, and encrypted vault data all remain in extension-origin
+IndexedDB; the extension does not request browser-vendor storage permission.
 
 Build it through Docker-backed Taskfile commands from the repo root or `nook-app/`:
 

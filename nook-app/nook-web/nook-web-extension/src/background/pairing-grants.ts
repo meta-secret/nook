@@ -17,6 +17,7 @@ export type ExtensionReadySetupState = {
   status: 'ready'
   deviceLabel: string
   pairedVaults: string[]
+  selectedVaultStoreId: string
   selectedVaultName: string
   syncProviderCount: number
   eventCount: number
@@ -65,6 +66,8 @@ export function isExtensionReadySetupState(
     Array.isArray(state.pairedVaults) &&
     state.pairedVaults.length > 0 &&
     state.pairedVaults.every((vault) => typeof vault === 'string') &&
+    typeof state.selectedVaultStoreId === 'string' &&
+    state.selectedVaultStoreId.length > 0 &&
     typeof state.selectedVaultName === 'string' &&
     state.selectedVaultName.length > 0 &&
     typeof state.syncProviderCount === 'number' &&
@@ -94,6 +97,7 @@ export function setupStateFromPairingGrant(
     status: 'ready',
     deviceLabel: grant.deviceLabel,
     pairedVaults: [grant.vaultName],
+    selectedVaultStoreId: grant.vaultStoreId,
     selectedVaultName: grant.vaultName,
     syncProviderCount: grant.syncProviderCount,
     eventCount: imported.eventCount,

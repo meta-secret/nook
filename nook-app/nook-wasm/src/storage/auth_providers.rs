@@ -171,6 +171,11 @@ pub(crate) async fn save_presealed_auth_providers(
     }
     let raw = read_raw_snapshot().await?;
     let mut merged = nook_core::normalize_auth_snapshot(&raw).snapshot;
+    if !provider_credentials_are_presealed(&merged) {
+        return Err(NookError::Decryption(
+            "Presealed auth-provider merge rejected plaintext credentials.".to_owned(),
+        ));
+    }
     let mut map: std::collections::HashMap<String, nook_core::StorageProviderData> = merged
         .providers
         .into_iter()
@@ -222,10 +227,10 @@ mod wasm_idb_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
+    fn github_snapshot_with_id(id: &str, pat: &str) -> AuthProvidersSnapshotData {
         AuthProvidersSnapshotData {
             providers: vec![StorageProviderData::github(
-                "gh-wasm",
+                id,
                 "GitHub",
                 pat,
                 "nook",
@@ -233,6 +238,10 @@ mod wasm_idb_tests {
             )],
             active_vault_store_id: None,
         }
+    }
+
+    fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
+        github_snapshot_with_id("gh-wasm", pat)
     }
 
     async fn clear_auth_snapshot() {
@@ -349,5 +358,60 @@ mod wasm_idb_tests {
             .expect("oauth");
         assert_eq!(loaded_oauth.access_token, access);
         assert_eq!(loaded_oauth.refresh_token.as_deref(), Some(refresh));
+    }
+
+    #[wasm_bindgen_test]
+    async fn presealed_save_preserves_existing_provider_and_updates_active_vault() {
+        clear_auth_snapshot().await;
+        let identity = DeviceIdentity::generate().expect("identity");
+        let existing = github_snapshot_with_id("gh-existing", "github_pat_existing");
+        save_auth_providers(&identity, &existing)
+            .await
+            .expect("save existing");
+
+        let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
+        incoming.active_vault_store_id = Some("store-incoming".to_owned());
+        seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
+        save_presealed_auth_providers(&incoming)
+            .await
+            .expect("merge presealed");
+
+        let raw = read_raw_snapshot().await.expect("read raw");
+        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let mut provider_ids = stored
+            .providers
+            .iter()
+            .map(|provider| provider.id.as_str())
+            .collect::<Vec<_>>();
+        provider_ids.sort_unstable();
+        assert_eq!(provider_ids, vec!["gh-existing", "gh-incoming"]);
+        assert_eq!(
+            stored.active_vault_store_id.as_deref(),
+            Some("store-incoming")
+        );
+        assert!(provider_credentials_are_presealed(&stored));
+    }
+
+    #[wasm_bindgen_test]
+    async fn presealed_save_rejects_existing_plaintext_provider_rows() {
+        clear_auth_snapshot().await;
+        write_snapshot(&github_snapshot_with_id(
+            "gh-legacy",
+            "github_pat_legacy_plaintext",
+        ))
+        .await
+        .expect("write legacy plaintext");
+
+        let identity = DeviceIdentity::generate().expect("identity");
+        let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
+        seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
+        let result = save_presealed_auth_providers(&incoming).await;
+        assert!(matches!(result, Err(NookError::Decryption(_))));
+
+        let raw = read_raw_snapshot().await.expect("read raw");
+        assert_eq!(
+            raw["providers"][0]["githubPat"].as_str(),
+            Some("github_pat_legacy_plaintext")
+        );
     }
 }

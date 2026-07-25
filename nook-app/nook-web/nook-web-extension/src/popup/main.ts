@@ -1,9 +1,6 @@
 import { mount } from 'svelte'
-import {
-  isExtensionReadySetupState,
-  setupStorageKey,
-} from '../background/pairing-grants'
 import { initializeExtensionI18n } from '../lib/i18n'
+import { loadExtensionSetupState } from '../lib/pairing-state'
 import {
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
@@ -15,24 +12,14 @@ import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
 
-function loadCompanionVaultConnection(): Promise<{
+async function loadCompanionVaultConnection(): Promise<{
   isConnected: boolean
   vaultName?: string
 }> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(setupStorageKey, (items) => {
-      if (chrome.runtime.lastError) {
-        resolve({ isConnected: false })
-        return
-      }
-      const setup = items[setupStorageKey]
-      if (!isExtensionReadySetupState(setup)) {
-        resolve({ isConnected: false })
-        return
-      }
-      resolve({ isConnected: true, vaultName: setup.selectedVaultName })
-    })
-  })
+  const setup = await loadExtensionSetupState()
+  return setup
+    ? { isConnected: true, vaultName: setup.selectedVaultName }
+    : { isConnected: false }
 }
 
 async function main() {

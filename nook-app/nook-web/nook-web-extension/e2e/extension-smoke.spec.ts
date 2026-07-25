@@ -24,6 +24,10 @@ import {
 } from '../src/lib/simple-vault-target'
 import { startMockAuthServer } from './mock-auth'
 import { waitForExtensionPairingReady } from './helpers/extension-approval'
+import {
+  readExtensionPairingStorage,
+  writeExtensionPairingStorage,
+} from './helpers/extension-pairing-storage'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 
 const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
@@ -68,6 +72,7 @@ const connectedSetupState = {
   status: 'ready',
   deviceLabel: 'Nook Extension - Chromium test profile',
   pairedVaults: ['Personal'],
+  selectedVaultStoreId: 'store-e2e',
   selectedVaultName: 'Personal',
   syncProviderCount: 0,
   eventCount: 1,
@@ -198,37 +203,14 @@ async function openSimpleVaultConnection(
 
 async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
-  return worker.evaluate(
-    () =>
-      new Promise<Record<string, unknown>>((resolve) => {
-        const browserGlobal = globalThis as unknown as {
-          chrome: {
-            storage: {
-              local: {
-                get(
-                  keys: undefined,
-                  callback: (items: Record<string, unknown>) => void,
-                ): void
-              }
-            }
-          }
-        }
-        browserGlobal.chrome.storage.local.get(undefined, resolve)
-      }),
-  )
+  return readExtensionPairingStorage(worker)
 }
 
 async function writeExtensionStorage(
   page: Page,
   items: Record<string, unknown>,
 ) {
-  await page.evaluate(
-    (storageItems) =>
-      new Promise<void>((resolve) => {
-        chrome.storage.local.set(storageItems, resolve)
-      }),
-    items,
-  )
+  await writeExtensionPairingStorage(page, items)
 }
 
 async function sendExternalMessage(
@@ -584,7 +566,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
   }
 })
 
-test('handles vault unpair message and updates storage setup state', async ({
+test('keeps the extension vault independent and switches after valid re-pairing', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -594,9 +576,6 @@ test('handles vault unpair message and updates storage setup state', async ({
   const context = await launchExtensionContext(userDataDir)
 
   try {
-    const worker = await getServiceWorker(context)
-    const extensionId = new URL(worker.url()).host
-
     const popupPage = await setupPasskeyExtensionPopup(context)
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
@@ -622,12 +601,6 @@ test('handles vault unpair message and updates storage setup state', async ({
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
 
-    const unpairResponse = await sendExternalMessage(simplePage, extensionId, {
-      type: 'nook:extension-unpair-vault',
-      payload: { vaultStoreId: 'non-existent-vault' },
-    })
-    expect(unpairResponse).toEqual({ ok: true })
-
     await simplePage.getByTestId('nav-settings-tab').click()
     await simplePage.getByTestId('delete-local-vault-button').click()
     await simplePage.getByTestId('delete-local-vault-confirm').click()
@@ -636,8 +609,56 @@ test('handles vault unpair message and updates storage setup state', async ({
       timeout: 15_000,
     })
 
-    const storage = await readExtensionStorage(context)
-    expect(storage[setupStorageKey]).toBeUndefined()
+    const storageAfterWebsiteDeletion = await readExtensionStorage(context)
+    expect(storageAfterWebsiteDeletion[setupStorageKey]).toMatchObject({
+      status: 'ready',
+      selectedVaultName: 'Unpair test vault',
+    })
+    expect(
+      Object.keys(storageAfterWebsiteDeletion).filter((key) =>
+        key.startsWith('nook:extension-pairing-grant:'),
+      ),
+    ).toHaveLength(1)
+
+    await advanceCreateVaultWizardToFinalStep(simplePage)
+    await simplePage
+      .getByTestId('login-vault-name-input')
+      .fill('Replacement vault')
+    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await expect(
+      simplePage.getByTestId('extension-connect-consent'),
+    ).toBeVisible()
+    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await waitForExtensionPairingReady(
+      simplePage,
+      async () => {
+        const repairedStorage = await readExtensionStorage(context)
+        return repairedStorage[setupStorageKey]
+      },
+      'Replacement vault',
+    )
+    const repairedStorage = await readExtensionStorage(context)
+    const repairedSetup = repairedStorage[setupStorageKey]
+    expect(repairedSetup).toMatchObject({
+      status: 'ready',
+      selectedVaultName: 'Replacement vault',
+    })
+    expect(repairedSetup).toEqual(
+      expect.objectContaining({
+        eventCount: expect.any(Number),
+        eventLogHeads: expect.arrayContaining([expect.any(String)]),
+      }),
+    )
+    const repairedGrants = Object.entries(repairedStorage).filter(([key]) =>
+      key.startsWith('nook:extension-pairing-grant:'),
+    )
+    expect(repairedGrants).toHaveLength(2)
+    expect(repairedGrants.map(([, grant]) => grant)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ vaultName: 'Unpair test vault' }),
+        expect.objectContaining({ vaultName: 'Replacement vault' }),
+      ]),
+    )
   } finally {
     await context.close()
   }

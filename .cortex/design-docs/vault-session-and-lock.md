@@ -55,7 +55,9 @@ flowchart TB
    Storage, Cache Storage, and accessible site cookies; and returns to the
    landing page. Cleanup continues after individual store failures and reports
    the aggregate error from a locked state. It never deletes remote sync
-   replicas or platform-authenticator passkeys.
+   replicas, platform-authenticator passkeys, or the separately isolated
+   browser-extension origin. If the same `store_id` is later reopened, its
+   existing extension pairing is discovered again.
 
 ---
 

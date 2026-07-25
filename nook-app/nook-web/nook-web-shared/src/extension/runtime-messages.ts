@@ -52,13 +52,6 @@ export type ExtensionLocalEventLogUpdatedMessage = {
   }
 }
 
-export type ExtensionUnpairVaultMessage = {
-  type: 'nook:extension-unpair-vault'
-  payload: {
-    vaultStoreId: string
-  }
-}
-
 export type ExtensionIdentityHandoffRequestMessage = {
   type: 'nook:extension-identity-handoff-request'
   payload: {
@@ -102,6 +95,14 @@ export type ExtensionPairedVaultIdentityStatusMessage =
   | {
       type: 'nook:extension-paired-vault-identity-status'
       payload: ExtensionPairedVaultIdentityStatusBase & {
+        status: 'different-vault'
+        connectedVaultStoreId: string
+        connectedVaultName: string
+      }
+    }
+  | {
+      type: 'nook:extension-paired-vault-identity-status'
+      payload: ExtensionPairedVaultIdentityStatusBase & {
         status: 'unlocked'
         extensionRuntimeId: string
         deviceId: string
@@ -131,7 +132,6 @@ export type RuntimeMessage =
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
-  | ExtensionUnpairVaultMessage
 
 function isExtensionEventLogRecord(
   value: unknown,
@@ -337,6 +337,14 @@ export function isExtensionPairedVaultIdentityStatusMessage(
   if (payload.status === 'unavailable' || payload.status === 'locked') {
     return true
   }
+  if (payload.status === 'different-vault') {
+    return (
+      typeof payload.connectedVaultStoreId === 'string' &&
+      payload.connectedVaultStoreId.length > 0 &&
+      typeof payload.connectedVaultName === 'string' &&
+      payload.connectedVaultName.length > 0
+    )
+  }
   return (
     payload.status === 'unlocked' &&
     typeof payload.extensionRuntimeId === 'string' &&
@@ -420,22 +428,5 @@ export function isExtensionLocalEventLogUpdatedMessage(
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
     isExtensionEventLogRecords(payload.eventLogRecords)
-  )
-}
-
-export function isExtensionUnpairVaultMessage(
-  message: unknown,
-): message is ExtensionUnpairVaultMessage {
-  if (
-    !isRuntimeMessage(message) ||
-    message.type !== 'nook:extension-unpair-vault' ||
-    typeof (message as { payload?: unknown }).payload !== 'object' ||
-    !(message as { payload?: unknown }).payload
-  ) {
-    return false
-  }
-  const payload = (message as { payload: Record<string, unknown> }).payload
-  return (
-    typeof payload.vaultStoreId === 'string' && payload.vaultStoreId.length > 0
   )
 }

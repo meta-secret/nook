@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { readExtensionPairingStorage } from './helpers/extension-pairing-storage'
 import { launchPairedPinExtension } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 
@@ -8,45 +9,34 @@ async function listExtensionAuthenticators(
   const worker =
     context.serviceWorkers()[0] ??
     (await context.waitForEvent('serviceworker', { timeout: 45_000 }))
-  return worker.evaluate(async () => {
+  const pairingState = await readExtensionPairingStorage(worker)
+  const grants = Object.entries(pairingState)
+    .filter(([key]) => key.startsWith('nook:extension-pairing-grant:'))
+    .map(([, value]) => value as Record<string, unknown>)
+    .filter(
+      (value) =>
+        typeof value.vaultStoreId === 'string' &&
+        typeof value.deviceId === 'string' &&
+        typeof value.devicePublicKey === 'string' &&
+        typeof value.deviceSigningPublicKey === 'string' &&
+        Array.isArray(value.scopes) &&
+        value.scopes.includes('password-filling'),
+    )
+    .map((value) => ({
+      vaultStoreId: value.vaultStoreId as string,
+      deviceId: value.deviceId as string,
+      devicePublicKey: value.devicePublicKey as string,
+      deviceSigningPublicKey: value.deviceSigningPublicKey as string,
+    }))
+  return worker.evaluate(async (pairedGrants) => {
     await new Promise<unknown>((resolve) => {
       globalThis.chrome.runtime.sendMessage(
         { type: 'nook:ensure-extension-session-runtime' },
         resolve,
       )
     })
-    const grants = await new Promise<
-      Array<{
-        vaultStoreId: string
-        deviceId: string
-        devicePublicKey: string
-        deviceSigningPublicKey: string
-      }>
-    >((resolve) => {
-      globalThis.chrome.storage.local.get(undefined, (items) => {
-        const paired = Object.entries(items)
-          .filter(([key]) => key.startsWith('nook:extension-pairing-grant:'))
-          .map(([, value]) => value as Record<string, unknown>)
-          .filter(
-            (value) =>
-              typeof value.vaultStoreId === 'string' &&
-              typeof value.deviceId === 'string' &&
-              typeof value.devicePublicKey === 'string' &&
-              typeof value.deviceSigningPublicKey === 'string' &&
-              Array.isArray(value.scopes) &&
-              value.scopes.includes('password-filling'),
-          )
-          .map((value) => ({
-            vaultStoreId: value.vaultStoreId as string,
-            deviceId: value.deviceId as string,
-            devicePublicKey: value.devicePublicKey as string,
-            deviceSigningPublicKey: value.deviceSigningPublicKey as string,
-          }))
-        resolve(paired)
-      })
-    })
     const accounts: Array<{ issuer: string; account: string }> = []
-    for (const grant of grants) {
+    for (const grant of pairedGrants) {
       const response = (await new Promise<unknown>((resolve) => {
         globalThis.chrome.runtime.sendMessage(
           {
@@ -70,7 +60,7 @@ async function listExtensionAuthenticators(
       }
     }
     return accounts
-  })
+  }, grants)
 }
 
 test.describe('Browser 2FA enrollment', () => {

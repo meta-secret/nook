@@ -39,7 +39,7 @@ export type ExtensionManifest = {
     matches: string[]
   }
   icons: ManifestIconSet
-  permissions: Array<'activeTab' | 'offscreen' | 'storage'>
+  permissions: Array<'activeTab' | 'offscreen'>
   host_permissions: string[]
   web_accessible_resources: Array<{
     resources: string[]
@@ -123,7 +123,7 @@ export function createManifest(
       matches: [simpleVaultMatch],
     },
     icons: iconSet,
-    permissions: ['activeTab', 'offscreen', 'storage'],
+    permissions: ['activeTab', 'offscreen'],
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {

@@ -54,9 +54,9 @@
   import {
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
-    resolveExtensionSetupStatus,
+    resolveExtensionSetupState,
     shouldOfferExtensionSetup,
-    type ExtensionSetupStatus,
+    type ExtensionSetupState,
   } from "$lib/extension-install";
   import type { VaultItemType } from "$lib/nook";
   import { assessVaultSecurity, configuredVaultApplication } from "$app-wasm";
@@ -125,7 +125,7 @@
   );
   let extensionBackedVaultSession = $state(false);
   let extensionDiscoveryStoreId = $state("");
-  let extensionSetupStatus = $state<ExtensionSetupStatus | undefined>(
+  let extensionSetupState = $state<ExtensionSetupState | undefined>(
     undefined,
   );
   let extensionInstallBusy = $state(false);
@@ -693,14 +693,14 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION || !vault.isAuthenticated) {
-      extensionSetupStatus = undefined;
+      extensionSetupState = undefined;
       return;
     }
-    const status = await resolveExtensionSetupStatus(
+    const state = await resolveExtensionSetupState(
       vault.activeVaultStoreId,
     );
-    extensionSetupStatus = shouldOfferExtensionSetup(status)
-      ? status
+    extensionSetupState = shouldOfferExtensionSetup(state.status)
+      ? state
       : undefined;
   }
 
@@ -1136,10 +1136,10 @@
                 ? 'space-y-4'
                 : 'flex min-h-0 flex-1 flex-col gap-4'}"
             >
-              {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupStatus && extensionSetupStatus !== "paired"}
+              {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState && extensionSetupState.status !== "paired"}
                 <ExtensionInstallSetupCard
                   {vault}
-                  status={extensionSetupStatus}
+                  state={extensionSetupState}
                   installBusy={extensionInstallBusy}
                   onInstall={() => void handleExtensionInstall()}
                   onConnect={() => void handleExtensionConnect()}

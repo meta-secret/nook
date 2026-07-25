@@ -1280,6 +1280,35 @@ pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
     Ok(())
 }
 
+/// Read all extension pairing metadata from extension-origin Rexie storage.
+#[wasm_bindgen(js_name = readExtensionPairingState)]
+pub async fn read_extension_pairing_state() -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError>
+{
+    let entries = crate::storage::extension_state::read_all().await?;
+    serde_wasm_bindgen::to_value(&entries)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+/// Persist extension pairing metadata in extension-origin Rexie storage.
+#[wasm_bindgen(js_name = writeExtensionPairingState)]
+pub async fn write_extension_pairing_state(
+    entries: wasm_bindgen::JsValue,
+) -> Result<(), wasm_bindgen::JsError> {
+    let entries = serde_wasm_bindgen::from_value(entries)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    crate::storage::extension_state::write_all(&entries).await?;
+    Ok(())
+}
+
+/// Remove extension pairing metadata from extension-origin Rexie storage.
+#[wasm_bindgen(js_name = removeExtensionPairingState)]
+pub async fn remove_extension_pairing_state(
+    keys: Vec<String>,
+) -> Result<(), wasm_bindgen::JsError> {
+    crate::storage::extension_state::remove(&keys).await?;
+    Ok(())
+}
+
 /// Find an existing provider whose sync target matches `candidate`, optionally
 /// excluding one provider id. Returns the matching provider or `undefined`.
 #[wasm_bindgen(js_name = findDuplicateSyncProvider)]

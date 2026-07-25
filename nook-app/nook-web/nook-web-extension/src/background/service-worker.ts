@@ -8,7 +8,6 @@ import {
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
-  isExtensionUnpairVaultMessage,
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
@@ -24,9 +23,9 @@ import type {
 import {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
+  isExtensionReadySetupState,
   isStoredExtensionPairingGrant,
   pairingGrantStorageKey,
-  setupStateFromPairingGrant,
   setupStorageKey,
 } from './pairing-grants'
 import type { StoredExtensionPairingGrant } from './pairing-grants'
@@ -35,6 +34,9 @@ import {
   classifyAuthenticationOutcome,
   generateSuggestedPassword,
   importExtensionEventLog,
+  readExtensionPairingState,
+  removeExtensionPairingState,
+  writeExtensionPairingState,
 } from './vault-runtime'
 import {
   isRuntimeSimpleVaultUrl,
@@ -57,6 +59,7 @@ import {
   type LoginDetectionResponse,
   type LoginDetectionStatus,
 } from '../lib/login-detection-messages'
+import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   isWebsiteAuthenticatorBackupAttachMessage,
   isWebsiteAuthenticatorEnrollCodeMessage,
@@ -402,7 +405,7 @@ async function pairedVaultGrantIsCurrent(
   pending: Extract<PendingIdentityHandoff, { kind: 'paired-vault' }>,
 ): Promise<boolean> {
   const key = pairingGrantStorageKey(pending.vaultStoreId)
-  const stored = await getLocalStorage(key)
+  const stored = await getPairingStorage(key)
   const grant = stored[key]
   return (
     isStoredExtensionPairingGrant(grant) &&
@@ -540,9 +543,34 @@ async function discoverPairedVaultIdentity(
   } satisfies ExtensionPairedVaultIdentityStatusMessage
   try {
     const key = pairingGrantStorageKey(vaultStoreId)
-    const stored = await getLocalStorage(key)
+    const stored = await getPairingStorage()
     const grant = stored[key]
-    if (!isStoredExtensionPairingGrant(grant)) return unavailable
+    if (!isStoredExtensionPairingGrant(grant)) {
+      const setup = stored[setupStorageKey]
+      const selectedGrant = isExtensionReadySetupState(setup)
+        ? stored[pairingGrantStorageKey(setup.selectedVaultStoreId)]
+        : undefined
+      const connectedGrant = isStoredExtensionPairingGrant(selectedGrant)
+        ? selectedGrant
+        : Object.entries(stored).find(
+            ([storedKey, value]) =>
+              storedKey.startsWith('nook:extension-pairing-grant:') &&
+              isStoredExtensionPairingGrant(value),
+          )?.[1]
+      if (isStoredExtensionPairingGrant(connectedGrant)) {
+        return {
+          type: 'nook:extension-paired-vault-identity-status',
+          payload: {
+            requestId,
+            vaultStoreId,
+            status: 'different-vault',
+            connectedVaultStoreId: connectedGrant.vaultStoreId,
+            connectedVaultName: connectedGrant.vaultName,
+          },
+        }
+      }
+      return unavailable
+    }
 
     await ensureExtensionSessionDocument()
     const statusResponse = (await sendSessionMessage({
@@ -598,7 +626,7 @@ async function requestPairedVaultUnlock(
 ): Promise<Record<string, unknown>> {
   const { requestId, vaultStoreId } = message.payload
   const key = pairingGrantStorageKey(vaultStoreId)
-  const stored = await getLocalStorage(key)
+  const stored = await getPairingStorage(key)
   if (!isStoredExtensionPairingGrant(stored[key])) {
     return {
       ok: false,
@@ -631,26 +659,16 @@ function hasPairingApprovedType(
   )
 }
 
-function setLocalStorage(items: Record<string, unknown>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.set(items, () => {
-      const message = chrome.runtime.lastError?.message
-      if (message) reject(new Error(message))
-      else resolve()
-    })
-  })
+function setPairingStorage(items: Record<string, unknown>): Promise<void> {
+  return writeExtensionPairingState(items)
 }
 
-function getLocalStorage(
-  key?: string | string[] | Record<string, unknown>,
+async function getPairingStorage(
+  key?: string,
 ): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get(key ?? null, (items) => {
-      const message = chrome.runtime.lastError?.message
-      if (message) reject(new Error(message))
-      else resolve(items)
-    })
-  })
+  const stored = await readExtensionPairingState()
+  if (key === undefined) return stored
+  return key in stored ? { [key]: stored[key] } : {}
 }
 
 function requestOriginAndRpId(
@@ -694,7 +712,7 @@ function isAuthorizedWebsiteSender(
 }
 
 async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
-  const stored = await getLocalStorage()
+  const stored = await getPairingStorage()
   return Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
@@ -703,7 +721,7 @@ async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
 }
 
 async function passwordPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
-  const stored = await getLocalStorage()
+  const stored = await getPairingStorage()
   return Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
@@ -2098,22 +2116,14 @@ async function cancelWebsitePasskey(
   return { ok: true }
 }
 
-function removeLocalStorage(keys: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.remove(keys, () => {
-      const message = chrome.runtime.lastError?.message
-      if (message) reject(new Error(message))
-      else resolve()
-    })
-  })
+function removePairingStorage(keys: string[]): Promise<void> {
+  return removeExtensionPairingState(keys)
 }
 
 async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   try {
-    await ensureExtensionSessionDocument()
-    await sendSessionMessage({ type: 'nook:extension-session-reset' })
     const imported = await importExtensionEventLog(
       message.payload,
       message.eventLogRecords,
@@ -2121,7 +2131,9 @@ async function importApprovedPairing(
     if (!imported.accessGranted) {
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
-    await setLocalStorage(
+    await ensureExtensionSessionDocument()
+    await sendSessionMessage({ type: 'nook:extension-session-reset' })
+    await setPairingStorage(
       extensionPairingGrantStorageItems(message.payload, imported),
     )
     const providers =
@@ -2149,7 +2161,7 @@ async function importApprovedPairing(
         !('ok' in sessionImport) ||
         sessionImport.ok !== true
       ) {
-        await removeLocalStorage([
+        await removePairingStorage([
           pairingGrantStorageKey(message.payload.vaultStoreId),
           setupStorageKey,
         ])
@@ -2172,62 +2184,23 @@ async function importApprovedPairing(
   }
 }
 
-async function unpairExtensionVault(
-  vaultStoreId: string,
-): Promise<{ ok: boolean }> {
-  try {
-    const targetKey = pairingGrantStorageKey(vaultStoreId)
-    await removeLocalStorage([targetKey])
-
-    const allStorage = await getLocalStorage()
-    const remainingGrants: StoredExtensionPairingGrant[] = []
-    for (const [key, value] of Object.entries(allStorage)) {
-      if (
-        key.startsWith('nook:extension-pairing-grant:') &&
-        isStoredExtensionPairingGrant(value)
-      ) {
-        remainingGrants.push(value)
-      }
-    }
-
-    if (remainingGrants.length > 0) {
-      const latest = remainingGrants[0]
-      const setup = setupStateFromPairingGrant(latest, {
-        vaultStoreId: latest.vaultStoreId,
-        eventCount: 1,
-        heads: ['00'.repeat(32)],
-        accessGranted: true,
-      })
-      await setLocalStorage({ [setupStorageKey]: setup })
-    } else {
-      await removeLocalStorage([setupStorageKey])
-    }
-
-    await ensureExtensionSessionDocument()
-    await sendSessionMessage({ type: 'nook:extension-session-reset' })
-    return { ok: true }
-  } catch {
-    return { ok: false }
-  }
-}
-
 async function importLocalEventLogUpdate(
   vaultStoreId: string,
   eventLogRecords: Parameters<typeof importExtensionEventLog>[1],
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   const key = pairingGrantStorageKey(vaultStoreId)
   try {
-    const stored = await getLocalStorage(key)
+    const stored = await getPairingStorage(key)
     const grant = stored[key]
     if (!isStoredExtensionPairingGrant(grant)) {
       return { ok: false, reason: 'vault-not-paired' }
     }
     const imported = await importExtensionEventLog(grant, eventLogRecords)
     if (!imported.accessGranted) {
-      await removeLocalStorage([key, setupStorageKey])
+      await removePairingStorage([key, setupStorageKey])
       return { ok: false, reason: 'event-log-access-revoked' }
     }
-    await setLocalStorage(
+    await setPairingStorage(
       extensionStoredPairingGrantStorageItems(grant, imported),
     )
     await ensureExtensionSessionDocument()
@@ -2247,17 +2220,22 @@ async function importLocalEventLogUpdate(
   }
 }
 
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason !== 'install') {
-    return
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isExtensionPairingStateQueryMessage(message)) {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void getPairingStorage(setupStorageKey)
+      .then((stored) =>
+        sendResponse({ ok: true, setup: stored[setupStorageKey] }),
+      )
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'pairing-state-read-failed' }),
+      )
+    return true
   }
 
-  chrome.storage.local.set({
-    installedAt: new Date().toISOString(),
-  })
-})
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isWebsiteLoginPickerOpenMessage(message)) {
     void openWebsiteLoginPicker(message, sender)
       .then(sendResponse)
@@ -2644,15 +2622,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isExtensionUnpairVaultMessage(message)) {
-    if (sender.id !== chrome.runtime.id || !isNokeySender(sender)) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
-      return false
-    }
-    void unpairExtensionVault(message.payload.vaultStoreId).then(sendResponse)
-    return true
-  }
-
   if (isQueryActiveTabLoginDetectionMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
@@ -2759,15 +2728,6 @@ chrome.runtime.onMessageExternal.addListener(
         return false
       }
       void createIdentityHandoff(message).then(sendResponse)
-      return true
-    }
-
-    if (isExtensionUnpairVaultMessage(message)) {
-      if (!isNokeySender(sender)) {
-        sendResponse({ ok: false, reason: 'forbidden-sender' })
-        return false
-      }
-      void unpairExtensionVault(message.payload.vaultStoreId).then(sendResponse)
       return true
     }
 

@@ -19,6 +19,7 @@ import {
   installForcePinDeviceProtection,
 } from './pin-device'
 import { waitForExtensionPairingReady } from './extension-approval'
+import { readExtensionPairingStorage } from './extension-pairing-storage'
 
 /** Local Simple Vault from playwright webServer / test-e2e.sh. */
 const LOCAL_E2E_SIMPLE_VAULT_URL = 'http://127.0.0.1:5174/'
@@ -89,12 +90,7 @@ export async function exerciseConcurrentSessionStatus(
 
 async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
-  return worker.evaluate(
-    () =>
-      new Promise<Record<string, unknown>>((resolve) => {
-        globalThis.chrome.storage.local.get(undefined, resolve)
-      }),
-  )
+  return readExtensionPairingStorage(worker)
 }
 
 async function advanceCreateVaultWizardToFinalStep(page: Page) {
