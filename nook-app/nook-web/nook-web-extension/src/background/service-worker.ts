@@ -227,21 +227,33 @@ async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
       chrome.tabs.sendMessage(
         tabId,
         { type: 'nook:query-login-detection' },
-        (result) => {
+        (result: unknown) => {
           if (chrome.runtime.lastError) {
             resolve(undefined)
             return
           }
-          resolve(result)
+          if (!result || typeof result !== 'object') {
+            resolve(undefined)
+            return
+          }
+          const payload = result as {
+            ok?: unknown
+            status?: unknown
+          }
+          if (
+            payload.ok !== true ||
+            (payload.status !== 'detected' &&
+              payload.status !== 'not-detected' &&
+              payload.status !== 'unavailable')
+          ) {
+            resolve(undefined)
+            return
+          }
+          resolve({ ok: true, status: payload.status })
         },
       )
     })
-    if (
-      response?.ok === true &&
-      (response.status === 'detected' ||
-        response.status === 'not-detected' ||
-        response.status === 'unavailable')
-    ) {
+    if (response?.ok === true && response.status) {
       return { ok: true, status: response.status }
     }
   } catch {
