@@ -31,11 +31,6 @@ fs.appendFileSync(
   ].join("\n"),
 );
 if (!redisPassword) {
-  if (hostedDelivery) {
-    process.stdout.write(
-      "Hosted delivery omits Redis sccache so GHA BuildKit compiler layers stay secret-free for PR restores\n",
-    );
-  }
   process.exit(0);
 }
 
