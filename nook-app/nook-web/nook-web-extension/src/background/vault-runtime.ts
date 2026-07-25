@@ -9,6 +9,7 @@ import initNookWasm, {
   configureVaultApplication,
   generatePassword as wasmGeneratePassword,
   readExtensionPairingState as wasmReadExtensionPairingState,
+  reconcileExtensionPairingState as wasmReconcileExtensionPairingState,
   removeExtensionPairingState as wasmRemoveExtensionPairingState,
   writeExtensionPairingState as wasmWriteExtensionPairingState,
   NookAuthenticationOutcomeObservation,
@@ -70,6 +71,19 @@ export async function removeExtensionPairingState(
 ): Promise<void> {
   await ensureExtensionWasm()
   await wasmRemoveExtensionPairingState(keys)
+}
+
+export async function reconcileExtensionPairingState(
+  entries: Record<string, unknown>,
+  removedKeys: string[],
+): Promise<void> {
+  await ensureExtensionWasm()
+  const state = NookExtensionPairingState.fromObject(entries)
+  try {
+    await wasmReconcileExtensionPairingState(state, removedKeys)
+  } finally {
+    state.free()
+  }
 }
 
 export async function authenticationWorkflowSnapshot(

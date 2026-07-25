@@ -64,11 +64,29 @@ async function getServiceWorker(context) {
 async function readExtensionStorage(context) {
   const worker = await getServiceWorker(context)
   return worker.evaluate(async () => {
-    const database = await new Promise((resolve, reject) => {
-      const request = indexedDB.open('nook_extension', 1)
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
+    const openDatabase = () =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open('nook_extension', 1)
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains('pairing')) {
+            request.result.createObjectStore('pairing')
+          }
+        }
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+    let database = await openDatabase()
+    if (!database.objectStoreNames.contains('pairing')) {
+      database.close()
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.deleteDatabase('nook_extension')
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject(request.error)
+        request.onblocked = () =>
+          reject(new Error('Unable to repair extension pairing storage.'))
+      })
+      database = await openDatabase()
+    }
     try {
       const transaction = database.transaction('pairing', 'readonly')
       const store = transaction.objectStore('pairing')

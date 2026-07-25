@@ -167,6 +167,13 @@ pub(crate) async fn read_all() -> Result<HashMap<String, ExtensionPairingRecord>
 pub(crate) async fn write_all(
     entries: &HashMap<String, ExtensionPairingRecord>,
 ) -> Result<(), NookError> {
+    reconcile(entries, &[]).await
+}
+
+pub(crate) async fn reconcile(
+    entries: &HashMap<String, ExtensionPairingRecord>,
+    removed_keys: &[String],
+) -> Result<(), NookError> {
     validate_entries(entries)?;
     let rexie = open_db().await?;
     let transaction = rexie
@@ -175,6 +182,14 @@ pub(crate) async fn write_all(
     let store = transaction
         .store(STORE)
         .map_err(|error| idb_err("nook_extension store error", error))?;
+    for key in removed_keys {
+        let key = serde_wasm_bindgen::to_value(key)
+            .map_err(|error| idb_err("nook_extension key error", error))?;
+        store
+            .delete(key)
+            .await
+            .map_err(|error| idb_err("nook_extension delete error", error))?;
+    }
     for (key, value) in entries {
         let key = serde_wasm_bindgen::to_value(key)
             .map_err(|error| idb_err("nook_extension key error", error))?;

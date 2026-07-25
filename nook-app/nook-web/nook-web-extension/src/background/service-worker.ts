@@ -39,6 +39,7 @@ import {
   generateSuggestedPassword,
   importExtensionEventLog,
   readExtensionPairingState,
+  reconcileExtensionPairingState,
   removeExtensionPairingState,
   writeExtensionPairingState,
 } from './vault-runtime'
@@ -2206,6 +2207,14 @@ async function removePairingStorage(keys: string[]): Promise<void> {
   await removeExtensionPairingState(keys)
 }
 
+async function reconcilePairingStorage(
+  items: Record<string, unknown>,
+  removedKeys: string[],
+): Promise<void> {
+  await ensureLegacyPairingMigration()
+  await reconcileExtensionPairingState(items, removedKeys)
+}
+
 async function restorePairingStorage(
   previous: Record<string, unknown>,
   written: Record<string, unknown>,
@@ -2306,10 +2315,10 @@ async function importLocalEventLogUpdate(
     const imported = await importExtensionEventLog(grant, eventLogRecords)
     if (!imported.accessGranted) {
       const setup = setupAfterPairingGrantRemoval(stored, vaultStoreId)
-      await removePairingStorage([key, ...(setup ? [] : [setupStorageKey])])
-      if (setup) {
-        await setPairingStorage({ [setupStorageKey]: setup })
-      }
+      await reconcilePairingStorage(setup ? { [setupStorageKey]: setup } : {}, [
+        key,
+        ...(setup ? [] : [setupStorageKey]),
+      ])
       return { ok: false, reason: 'event-log-access-revoked' }
     }
     const setup = stored[setupStorageKey]

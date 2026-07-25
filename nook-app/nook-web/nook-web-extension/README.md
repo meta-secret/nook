@@ -52,7 +52,9 @@ key envelope for its passkey-protected device. Afterward, Simple Vault sends the
 same encrypted projection after local changes and provider pulls, so local
 website/extension updates do not require a sync provider. Pairing metadata,
 provider grants, and encrypted vault data all remain in extension-origin
-IndexedDB; the extension does not request browser-vendor storage permission.
+IndexedDB. The manifest's browser storage permission supports transient session
+coordination and a one-time migration of legacy pairing metadata; Rexie remains
+the ongoing pairing persistence boundary.
 
 Build it through Docker-backed Taskfile commands from the repo root or `nook-app/`:
 

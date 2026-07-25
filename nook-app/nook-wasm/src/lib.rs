@@ -1360,6 +1360,16 @@ pub async fn remove_extension_pairing_state(
     Ok(())
 }
 
+/// Atomically remove and persist extension pairing metadata in Rexie storage.
+#[wasm_bindgen(js_name = reconcileExtensionPairingState)]
+pub async fn reconcile_extension_pairing_state(
+    state: &NookExtensionPairingState,
+    removed_keys: Vec<String>,
+) -> Result<(), wasm_bindgen::JsError> {
+    crate::storage::extension_state::reconcile(state.entries(), &removed_keys).await?;
+    Ok(())
+}
+
 /// Find an existing provider whose sync target matches `candidate`, optionally
 /// excluding one provider id. Returns the matching provider or `undefined`.
 #[wasm_bindgen(js_name = findDuplicateSyncProvider)]
