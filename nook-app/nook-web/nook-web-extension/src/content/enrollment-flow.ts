@@ -125,20 +125,46 @@ function pageLooksLikeAuthPath(pathname: string): boolean {
   )
 }
 
+function isDisplayedOutcomeMarker(element: Element): boolean {
+  if (!(element instanceof HTMLElement)) return false
+  if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
+    return false
+  }
+  const style = window.getComputedStyle(element)
+  if (
+    style.display === 'none' ||
+    style.visibility === 'hidden' ||
+    style.opacity === '0'
+  ) {
+    return false
+  }
+  const rect = element.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
+}
+
+function queryDisplayedOutcomeMarker(selector: string): Element | undefined {
+  return Array.from(document.querySelectorAll(selector)).find(
+    isDisplayedOutcomeMarker,
+  )
+}
+
 function collectEnrollmentOutcomeObservation(
   startedAt: number,
   authPath: string,
   sawMutation: boolean,
 ): AuthenticationOutcomeObservationView {
+  // Only count markers that are actually shown. Soft SPA demos keep a hidden
+  // success node in the document; treating that as present commits too early
+  // and the ceremony UI then overwrites the saved confirmation.
   const successMarkerPresent = Boolean(
-    document.querySelector(
+    queryDisplayedOutcomeMarker(
       '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
     ),
   )
   // Prefer explicit auth-error markers. Bare [role="alert"] is too broad during
   // SPA route swaps and unrelated live regions, and can false-conflict with success.
   const errorMarkerPresent = Boolean(
-    document.querySelector(
+    queryDisplayedOutcomeMarker(
       '[data-nook-auth-outcome="error"], .error[role="alert"]',
     ),
   )

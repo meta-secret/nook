@@ -71,9 +71,7 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
             color: #f7f7f8;
             font: inherit;
           }
-          #success { display: none; color: #94d4ae; font-weight: 650; }
-          body.verified #setup { display: none; }
-          body.verified #success { display: block; }
+          #success { color: #94d4ae; font-weight: 650; }
         </style>
       </head>
       <body>
@@ -95,9 +93,6 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
             <button type="submit">Verify</button>
           </form>
         </main>
-        <main id="success" data-nook-auth-outcome="success" data-testid="mock-auth-success">
-          Authentication complete
-        </main>
       </body>
     </html>`)
 
@@ -106,7 +101,14 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
       .querySelector('#verify-form')
       ?.addEventListener('submit', (event) => {
         event.preventDefault()
-        document.body.classList.add('verified')
+        const setup = document.querySelector('#setup')
+        setup?.remove()
+        const success = document.createElement('main')
+        success.id = 'success'
+        success.dataset.nookAuthOutcome = 'success'
+        success.dataset.testid = 'mock-auth-success'
+        success.textContent = 'Authentication complete'
+        document.body.append(success)
       })
   })
   await page.evaluate(installDemoChromeStub, stubArgs)
