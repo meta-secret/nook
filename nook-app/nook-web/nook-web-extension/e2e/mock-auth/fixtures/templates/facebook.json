@@ -1,6 +1,8 @@
 {
   "id": "facebook",
-  "quirks": ["aria-hidden-ancestor"],
+  "quirks": [
+    "aria-hidden-ancestor"
+  ],
   "steps": [
     {
       "fields": [
