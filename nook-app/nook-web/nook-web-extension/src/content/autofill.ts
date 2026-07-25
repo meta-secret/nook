@@ -1400,7 +1400,10 @@ function removeScannedWidget(): void {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id === chrome.runtime.id && isQueryLoginDetectionMessage(message)) {
+  if (
+    sender.id === chrome.runtime.id &&
+    isQueryLoginDetectionMessage(message)
+  ) {
     const detected = summarizeAuthenticationWorkflowForms().length > 0
     sendResponse({
       ok: true,
