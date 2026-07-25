@@ -515,7 +515,7 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
-fn delivery_reuses_a_health_checked_buildkit_daemon() {
+fn delivery_avoids_a_shared_buildkit_container() {
     let root = repository_root();
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
@@ -531,6 +531,7 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
         "vars: { BUILD_TASK: _ci:main:host }",
         "vars: { BUILD_TASK: _ci:main:prepare-images:host }",
         "vars: { BUILD_TASK: _ci:main:web-e2e:host }",
+        "job-scoped or daemon BuildKit",
     ] {
         assert!(
             ci.contains(required),
@@ -540,7 +541,9 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
 
     let wrapper = read(&root, ".github/scripts/with-healthy-buildkit.sh");
     for required in [
-        "NOOK_PR_BUILDX_BUILDER:-nook-pr",
+        "builder=\"${NOOK_PR_BUILDX_BUILDER:-}\"",
+        "refusing shared BuildKit builder name 'nook-pr'",
+        "Using daemon BuildKit builder",
         "NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60",
         "buildx inspect \"$builder\" --bootstrap",
         "buildx build",
@@ -553,6 +556,7 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
         "volume rm --force \"$state_volume\"",
         "--driver docker-container",
         "--bootstrap",
+        "Using healthy job-scoped BuildKit builder",
         "BUILDX_BUILDER=\"$builder\" \"$@\"",
     ] {
         assert!(
@@ -561,8 +565,9 @@ fn delivery_reuses_a_health_checked_buildkit_daemon() {
         );
     }
     assert!(
-        !wrapper.contains("trap cleanup EXIT"),
-        "a healthy PR builder must survive successful invocations"
+        !wrapper.contains("NOOK_PR_BUILDX_BUILDER:-nook-pr")
+            && !wrapper.contains("trap cleanup EXIT"),
+        "delivery must not default to or persist a shared nook-pr BuildKit container"
     );
 }
 
@@ -657,6 +662,98 @@ fi
     }
 
     fs::remove_dir_all(temp).expect("remove BuildKit health test directory");
+}
+
+#[test]
+fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() {
+    let root = repository_root();
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must follow the Unix epoch")
+        .as_nanos();
+    let temp = std::env::temp_dir().join(format!(
+        "nook-buildkit-daemon-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&temp).expect("create BuildKit daemon test directory");
+
+    let fake_docker = temp.join("docker");
+    let docker_log = temp.join("docker.log");
+    let command_marker = temp.join("command-ran");
+    fs::write(
+        &fake_docker,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+if [ "${1:-}" = context ] && [ "${2:-}" = show ]; then
+  printf 'desktop-linux\n'
+  exit 0
+fi
+"#,
+    )
+    .expect("write fake Docker command");
+    let mut permissions = fs::metadata(&fake_docker)
+        .expect("stat fake Docker command")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&fake_docker, permissions).expect("make fake Docker executable");
+
+    let output = Command::new("bash")
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .args([
+            "bash",
+            "-c",
+            "printf '%s' \"$BUILDX_BUILDER\" > \"$1\"",
+            "nook-test",
+        ])
+        .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
+        .env("FAKE_DOCKER_LOG", &docker_log)
+        .env_remove("NOOK_PR_BUILDX_BUILDER")
+        .env_remove("BUILDX_BUILDER")
+        .output()
+        .expect("run local BuildKit wrapper");
+
+    assert!(
+        output.status.success(),
+        "wrapper failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&command_marker).expect("wrapped builder marker"),
+        "desktop-linux"
+    );
+    let calls = fs::read_to_string(&docker_log).expect("fake Docker call log");
+    assert!(
+        calls.contains("context show"),
+        "local delivery must resolve the active docker-context builder"
+    );
+    assert!(
+        !calls.contains("buildx create") && !calls.contains("buildx inspect"),
+        "local delivery must not create or probe a docker-container BuildKit"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Using daemon BuildKit builder"),
+        "local delivery must advertise the daemon builder path"
+    );
+
+    let refused = Command::new("bash")
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .args(["true"])
+        .env("DOCKER", &fake_docker)
+        .env("NOOK_PR_BUILDX_BUILDER", "nook-pr")
+        .output()
+        .expect("refuse shared BuildKit builder");
+    assert!(
+        !refused.status.success(),
+        "shared nook-pr builder must be refused"
+    );
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("refusing shared BuildKit builder name"),
+        "refusal must name the shared builder hazard"
+    );
+
+    fs::remove_dir_all(temp).expect("remove BuildKit daemon test directory");
 }
 
 #[test]
