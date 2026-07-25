@@ -111,7 +111,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
-  test('fills SPA, hidden-header, and combined login forms to success', async ({
+  test('fills SPA, hidden-header, Facebook, and combined login forms to success', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -142,6 +142,12 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expectPilotPlainSuccess(
         paired.context,
         `${mockAuth.origin}/login-with-hidden-header`,
+      )
+
+      // Facebook: aria-hidden ancestor must not block CSS-visible email/pass.
+      await expectPilotPlainSuccess(
+        paired.context,
+        `${mockAuth.origin}/facebook`,
       )
 
       // Combined page: success proves Pilot targeted the login form (signup

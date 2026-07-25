@@ -507,6 +507,26 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toBeVisible()
     await expect(slackPage.locator('[data-qa="login_email"]')).toBeVisible()
 
+    const tier1Sites: Array<{ path: string; field: string }> = [
+      { path: '/facebook', field: '[name="email"]' },
+      { path: '/google', field: '[name="identifier"]' },
+      { path: '/apple', field: '#account_name_text_field' },
+      { path: '/amazon', field: '[name="email"]' },
+      { path: '/github', field: '[name="login"]' },
+      { path: '/linkedin', field: '#username' },
+      { path: '/x', field: '[name="text"]' },
+    ]
+    for (const site of tier1Sites) {
+      const page = await context.newPage()
+      await page.goto(`${loginServer.origin}${site.path}`)
+      const widget = page.locator('#nook-auth-widget')
+      await expect(
+        widget.getByRole('button', { name: 'Continue with Nook' }),
+      ).toBeVisible()
+      await expect(page.locator(site.field)).toBeVisible()
+      await page.close()
+    }
+
     const sentinelPage = await context.newPage()
     const sentinelUrl =
       matchingSentinelVaultBaseUrl(simpleVaultBaseUrl) ??

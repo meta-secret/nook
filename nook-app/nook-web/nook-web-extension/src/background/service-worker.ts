@@ -51,6 +51,11 @@ import {
   isWebsiteLoginPickerOpenMessage,
 } from '../lib/login-picker-messages'
 import {
+  isQueryActiveTabLoginDetectionMessage,
+  type LoginDetectionResponse,
+  type LoginDetectionStatus,
+} from '../lib/login-detection-messages'
+import {
   isWebsiteAuthenticatorBackupAttachMessage,
   isWebsiteAuthenticatorEnrollCodeMessage,
   isWebsiteAuthenticatorEnrollConfirmMessage,
@@ -199,6 +204,62 @@ function isExtensionSessionEnsureMessage(
 
 function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
+}
+
+function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      resolve(tabs[0])
+    })
+  })
+}
+
+async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
+  const tab = await queryActiveTab()
+  const tabId = tab?.id
+  if (tabId === undefined) {
+    return { ok: true, status: 'unavailable' }
+  }
+  try {
+    const response = await new Promise<
+      { ok?: boolean; status?: LoginDetectionStatus } | undefined
+    >((resolve) => {
+      chrome.tabs.sendMessage(
+        tabId,
+        { type: 'nook:query-login-detection' },
+        (result: unknown) => {
+          if (chrome.runtime.lastError) {
+            resolve(undefined)
+            return
+          }
+          if (!result || typeof result !== 'object') {
+            resolve(undefined)
+            return
+          }
+          const payload = result as {
+            ok?: unknown
+            status?: unknown
+          }
+          if (
+            payload.ok !== true ||
+            (payload.status !== 'detected' &&
+              payload.status !== 'not-detected' &&
+              payload.status !== 'unavailable')
+          ) {
+            resolve(undefined)
+            return
+          }
+          resolve({ ok: true, status: payload.status })
+        },
+      )
+    })
+    if (response?.ok === true && response.status) {
+      return { ok: true, status: response.status }
+    }
+  } catch {
+    // Content script may be absent on restricted pages.
+  }
+  return { ok: true, status: 'unavailable' }
 }
 
 async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
@@ -2526,6 +2587,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message.payload.vaultStoreId,
       message.payload.eventLogRecords,
     ).then(sendResponse)
+    return true
+  }
+
+  if (isQueryActiveTabLoginDetectionMessage(message)) {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void queryActiveTabLoginDetection()
+      .then(sendResponse)
+      .catch(() =>
+        sendResponse({
+          ok: true,
+          status: 'unavailable',
+        } satisfies LoginDetectionResponse),
+      )
     return true
   }
 

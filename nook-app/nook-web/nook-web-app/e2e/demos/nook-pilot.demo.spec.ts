@@ -337,3 +337,113 @@ test('detect a Microsoft-like email-first login through Nook Pilot', async ({
   await expect(page.locator('[name="loginfmt"]')).toBeVisible()
   await demoBeat(page)
 })
+
+test('detect a Facebook-like login under an aria-hidden consent layer', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+
+  await page.addInitScript(installDemoChromeStub, loginPilotStubArgs(messages))
+
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Facebook</title>
+        <style>
+          :root { color-scheme: light; font-family: Helvetica, Arial, sans-serif; }
+          * { box-sizing: border-box; }
+          body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: #f0f2f5;
+            color: #1c1e21;
+          }
+          main {
+            width: min(396px, calc(100vw - 32px));
+            padding: 20px;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgb(0 0 0 / 10%), 0 8px 16px rgb(0 0 0 / 10%);
+          }
+          h1 { margin: 0 0 16px; color: #0866ff; font-size: 28px; }
+          form { display: grid; gap: 12px; }
+          input {
+            width: 100%;
+            min-height: 52px;
+            padding: 14px 16px;
+            border: 1px solid #dddfe2;
+            border-radius: 6px;
+            font: inherit;
+          }
+          button[type="submit"] {
+            min-height: 48px;
+            border: 0;
+            border-radius: 6px;
+            background: #0866ff;
+            color: #fff;
+            font: 700 20px/1 Helvetica, Arial, sans-serif;
+          }
+          .companion-hint {
+            margin: 16px 0 0;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #111827;
+            color: #e5e7eb;
+            font-size: 13px;
+            text-align: center;
+          }
+          .companion-hint[data-status="detected"] { color: #86efac; }
+        </style>
+      </head>
+      <body>
+        <div aria-hidden="true">
+          <main>
+            <h1>facebook</h1>
+            <form id="login_form">
+              <input
+                type="text"
+                name="email"
+                id="email"
+                placeholder="Email or phone number"
+                aria-label="Email or phone number"
+              />
+              <input
+                type="password"
+                name="pass"
+                id="pass"
+                placeholder="Password"
+                autocomplete="current-password"
+                aria-label="Password"
+              />
+              <button type="submit" name="login" id="loginbutton">Log in</button>
+            </form>
+            <p
+              class="companion-hint"
+              data-testid="companion-login-detection"
+              data-status="detected"
+            >
+              Login form detected on this page
+            </p>
+          </main>
+        </div>
+      </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await injectPilotAutofill(page)
+
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(
+    widget.getByRole('button', { name: 'Continue with Nook' }),
+  ).toBeVisible()
+  await expect(page.locator('[name="email"]')).toBeVisible()
+  await expect(page.locator('[name="pass"]')).toBeVisible()
+  await expect(page.getByTestId('companion-login-detection')).toHaveText(
+    'Login form detected on this page',
+  )
+  await demoBeat(page)
+})
