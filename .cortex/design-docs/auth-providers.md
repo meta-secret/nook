@@ -1,143 +1,190 @@
 # Auth Providers, Sync, and Login UX
 
-How Nook persists **sync provider** credentials, the **login gate**, and how that relates to **vaults** (not the same thing).
+How Nook persists **sync provider** credentials, the **login gate**, and how that
+relates to **vaults** (not the same thing).
 
-> **Canonical model:** [unified-vault.md](unified-vault.md), [vault-session-and-lock.md](vault-session-and-lock.md). Sync providers are **replica targets** for the active vault (`store_id`), not separate vaults.
+> **Canonical model:** [unified-vault.md](unified-vault.md),
+> [vault-session-and-lock.md](vault-session-and-lock.md). Sync providers are
+> **replica targets** for the active vault (`store_id`), not separate vaults.
+> Provider **event-log sync** mechanics live in
+> [vault-event-log.md](vault-event-log.md); this doc owns credentials, sealing,
+> login UX, and OAuth origin constraints.
 
-**Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [password-manager.md](../product-specs/password-manager.md) §2A.
+**Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §4,
+[password-manager.md](../product-specs/password-manager.md) §2A,
+[secret-store-identity.md](secret-store-identity.md).
 
 ---
 
 ## 1. Goals
 
-- **Login when locked:** Primary app is the secret vault after unlock; **Lock** clears the session and returns to the login gate.
-- **Remember sync credentials:** GitHub PAT and provider labels persist in IndexedDB — no repeated token prompts.
-- **Many providers, one vault:** Multiple sync providers replicate the **same** `store_id`; see [vault-session-and-lock.md](vault-session-and-lock.md) §4.
-- **Separation of concerns:** Provider tokens are storage convenience. Vault keys live in the encrypted YAML; device identity lives in `nook_db`.
+- **Login when locked:** Primary app is the secret vault after unlock; **Lock**
+  clears the session and returns to the login gate.
+- **Remember sync credentials:** GitHub PAT and provider labels persist in
+  IndexedDB — no repeated token prompts.
+- **Many providers, one vault:** Multiple sync providers replicate the **same**
+  `store_id`; see [vault-session-and-lock.md](vault-session-and-lock.md) §4.
+- **Separation of concerns:** Provider tokens are storage convenience. Vault keys
+  live in the encrypted YAML; device identity lives in `nook_db`.
 
 ---
 
 ## 2. IndexedDB layout (`nook_auth`)
 
-| Key | Value |
-|-----|-------|
-| `providers` | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
+| Piece | Value |
+|-------|-------|
+| Database | `nook_auth` |
+| Object store | `auth` |
+| Key | `providers` |
+| Value | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
 
-The persisted object is a structured-clone JS object (not a JSON string). Its wire shape is owned by `nook-core` (`AuthProvidersSnapshotData` / `StorageProviderData`, `camelCase`); the TS `StorageProvider` interface mirrors it:
+The persisted object is a structured-clone JS object (not a JSON string). Its
+wire shape is owned by Rust (`AuthProvidersSnapshot` / `StorageProvider` /
+`OAuthFileConfig` / `LocalFolderConfig` in
+[`sync_provider_store.rs`](../../nook-app/nook-core/src/sync/sync_provider_store.rs)),
+exported to TypeScript via Tsify/`$app-wasm` as camelCase. The web layer
+**re-exports** those types; it does **not** hand-author mirror interfaces.
 
-```typescript
-interface StorageProvider {
-  id: string
-  type: 'local' | 'github' | 'oauth-file' | 'local-folder'
-  label: string
-  githubPat?: string   // GitHub only — sealed at rest
-  githubRepo?: string  // GitHub only — repo name (default `nook`)
-  oauthFile?: OAuthFileConfig  // Drive/iCloud — accessToken/refreshToken sealed at rest
-  localFolder?: LocalFolderConfig  // Browser File System Access directory handle metadata
-  storeId?: string     // Logical secret store (`store_{token}`) — see secret-store-identity.md
-  lastSyncedVersion?: number
-  lastSyncedAt?: string
-  lastSyncRevision?: string
-  createdAt: string    // ISO timestamp
-}
+### Wire fields (`StorageProvider`, camelCase)
 
-interface OAuthFileConfig {
-  preset: 'google-drive' | 'icloud'
-  accessToken: string
-  refreshToken?: string
-  expiresAt?: string
-  fileName?: string
-  accountEmail?: string
-  driveMode?: 'private' | 'shared' // Google Drive only; absent legacy rows migrate
-  folderId?: string               // shared mode only; stable Drive parent id
-  iCloudMode?: 'private' | 'shared' // iCloud only; absent legacy rows are private
-  iCloudShareTarget?: string        // versioned non-secret share/zone/root target
-}
-```
+| Field | Notes |
+|-------|-------|
+| `id`, `type`, `label`, `createdAt` | `type`: `local` \| `github` \| `oauth-file` \| `local-folder` |
+| `githubPat?`, `githubRepo?` | GitHub only — PAT sealed at rest |
+| `oauthFile?` | Drive/iCloud block — see below |
+| `localFolder?` | File System Access directory handle metadata (`directoryName?`, `handleId?`) |
+| `storeId?` | Logical secret store (`store_{token}`) — see [secret-store-identity.md](secret-store-identity.md) |
+| `lastSyncedVersion?`, `lastSyncedAt?`, `lastSyncRevision?`, `lastCommonContentHash?` | Sync bookkeeping |
 
+### Wire fields (`oauthFile`)
 
-**Persistence + crypto live in Rust/WASM.** `nook_auth` I/O, credential sealing, snapshot shaping, and the legacy `localStorage` migration all run in `nook-wasm`/`nook-core`; [`auth-providers.ts`](../../nook-app/nook-web/src/lib/auth-providers.ts) is a thin shim that owns only the TS **type declarations**, i18n presentation helpers (`localizeProviderLabel`, `maskGithubPat`, `providerStorageDetail` — coupled to the web `t()` catalog), and wasm-wrapper functions. Ownership split:
+| Field | Notes |
+|-------|-------|
+| `preset` | `google-drive` \| `icloud` |
+| `accessToken`, `refreshToken?` | Sealed at rest |
+| `expiresAt?`, `fileId?`, `fileName?`, `accountEmail?` | Non-secret metadata |
+| `driveMode?`, `folderId?` | Google Drive private/shared; absent legacy rows migrate |
+| `iCloudMode?`, `iCloudShareTarget?` | iCloud private/shared; share target is credential-free routing |
+
+### Ownership
+
+**Persistence + credential crypto live in Rust/WASM** (still current — not a
+legacy note). Snapshot shaping and sealing are unit-tested in core; IndexedDB I/O
+and the load pipeline live in wasm; the web shim is adapters + i18n only.
 
 | Concern | Home |
 |---------|------|
-| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-core/src/sync_provider_store.rs` (Rust-tested) |
-| `nook_auth` IndexedDB I/O (rexie), device-key seal/unseal, `localStorage` read/clear, full load pipeline | `nook-app/nook-wasm/src/storage/auth_providers.rs` |
-| wasm bindings (`loadAuthProviders`, `saveAuthProviders`, `deleteAuthProvidersDb`, `normalizeAuthSnapshot`, `findDuplicateSyncProvider`, `ensureLocalProviderRow`) | `nook-app/nook-wasm/src/lib.rs` |
-| Type declarations, i18n presentation, wasm wrappers | `nook-app/nook-web/src/lib/auth-providers.ts` |
+| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-core/src/sync/sync_provider_store.rs` |
+| Seal/open credential fields with device identity | `nook-app/nook-core/src/sync/sync_provider_credentials.rs` |
+| `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear | `nook-app/nook-wasm/src/storage/auth_providers.rs` |
+| Manager APIs (`loadAuthProviders`, `loadAuthProvidersWithLocalRow`, `saveAuthProviders`) | `NookVaultManager` methods in `nook-app/nook-wasm/src/lib.rs` |
+| Free helpers (`deleteAuthProvidersDb`, `findDuplicateSyncProvider`, `ensureLocalProviderRow`, `sealAuthProvidersForDevicePublicKey`, mode binders) | wasm bindings + thin TS wrappers |
+| Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared) | `nook-app/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`) |
+| Type re-exports, i18n presentation, wasm wrappers | [`auth-providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth-providers.ts) |
+| Vault wiring (`ensureProviderSaved`, active-provider mapping) | `vault.svelte.ts` + `vault/providers.ts` under `nook-web-shared` |
 
-**Credentials are sealed at rest with the device key.** Secret fields — `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed inside `save_auth_providers` and unsealed inside the `load_auth_providers` pipeline. Non-secret fields (labels, repo, timestamps) stay plaintext. Crypto never lives in TypeScript (see [rules.md §1](../rules.md)).
+**Credentials are sealed at rest with the device key.** Secret fields —
+`githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed
+inside `save_auth_providers` / `seal_provider_credentials` and unsealed inside
+the `load_auth_providers` pipeline. Non-secret fields (labels, repo, timestamps)
+stay plaintext. Crypto never lives in TypeScript (see [rules.md §1](../rules.md)).
 
-**Device key = existing device identity.** No new key is minted for provider storage. The wasm layer reuses this browser's **age X25519 device identity** (`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). The identity must first be authorized with the saved passkey's WebAuthn PRF result, or with the local PIN fallback on PRF-missing platforms. Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which distinguishes sealed from plaintext credential fields).
+**Device key = existing device identity.** No new key is minted for provider
+storage. The wasm layer reuses this browser's **age X25519 device identity**
+(`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same
+identity that unwraps `auth:` envelopes). The identity must first be authorized
+with the saved passkey's WebAuthn PRF result, or with the local PIN fallback on
+PRF-missing platforms. Sealing encrypts the credential to the device's own public
+key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with
+the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are
+age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which
+distinguishes sealed from plaintext credential fields).
 
-**Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`had_plaintext` upgrade path).
+**Extension pairing:** `sealAuthProvidersForDevicePublicKey` can seal a snapshot
+for another device's public key without writing IndexedDB (used when staging
+credentials for the browser extension).
 
-**Provider switch:** Changing the active saved provider calls `resetVaultSession` in wasm and clears login password-entry preview state so backup-password lists always reflect the remote vault for that provider — never a prior provider's in-memory session.
+**Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`,
+`nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`.
+Existing **plaintext** provider rows (pre-encryption, or those seeded directly in
+e2e) are read transparently and re-saved in sealed form on the next load
+(`had_plaintext` upgrade path).
 
-**Google Drive modes:** Provider setup offers `private` and `shared`
-independently of vault replication or membership. Private mode requests
-`drive.appdata` and stores events below the hidden `appDataFolder`. Shared mode
-requests `drive.file` for app-created writes plus `drive.readonly` because Drive
-authorizes `drive.file` per user and collaborators must read folders and event
-files created by another account. It creates or verifies a visible My Drive
-folder and stores its stable `folderId`; writes remain limited to app-created
-files below that selected folder. Each collaborator saves a separate OAuth token
-for their own Google account. Switching modes clears the scope-bound token and
-target in Rust before the user signs in again; it never reuses an app-data token
-for a shared folder or vice versa.
+**Provider switch:** Changing the active saved provider calls `resetVaultSession`
+in wasm and clears login password-entry preview state so backup-password lists
+always reflect the remote vault for that provider — never a prior provider's
+in-memory session.
+
+### Google Drive modes
+
+Provider setup offers `private` and `shared` independently of vault replication
+or membership. Private mode requests `drive.appdata` and stores events below the
+hidden `appDataFolder`. Shared mode requests `drive.file` for app-created writes
+plus `drive.readonly` because Drive authorizes `drive.file` per user and
+collaborators must read folders and event files created by another account. It
+creates or verifies a visible My Drive folder and stores its stable `folderId`;
+writes remain limited to app-created files below that selected folder. Each
+collaborator saves a separate OAuth token for their own Google account. Switching
+modes clears the scope-bound token and target in Rust before the user signs in
+again; it never reuses an app-data token for a shared folder or vice versa.
 
 **Shared-folder grant outcomes:** After Rust validates a shared Google Drive
 grant request, WASM attempts `files.create` (folder) and `permissions.create`
-(writer for the joiner email) with the owner's token. Success returns
-`SharedStorageGrantOutcome::Granted` with the stable `storageTargetId`
-(`folderId`). When the owner token is missing, the token lacks `drive.file`, or
-Drive rejects the create/share call, WASM returns
-`SharedStorageGrantOutcome::ManualGrantRequired` with
+(writer for the joiner email) with the owner's token. Outcomes are
+`SharedStorageGrantOutcome::{Granted, ManualGrantRequired, Unsupported}`.
+Success returns `Granted` with the stable `storageTargetId` (`folderId`). When
+the owner token is missing, the token lacks `drive.file`, or Drive rejects the
+create/share call, WASM returns `ManualGrantRequired` with
 `architecture_modes.shared_grant_manual_instructions`. The UI then shows those
-manual share steps; if folder create succeeded but share failed, the outcome
-may still carry `storageTargetId` so enrollment can bind the existing folder
-without creating a replacement. Personal / private providers keep using
-`drive.appdata` and never enter this grant path.
+manual share steps; if folder create succeeded but share failed, the outcome may
+still carry `storageTargetId` so enrollment can bind the existing folder without
+creating a replacement. Personal / private providers keep using `drive.appdata`
+and never enter this grant path.
 
-**Shared-provider onboarding:** The selected provider target determines the
-handoff. A shared Google Drive row persists its stable `folderId`; enrollment
-codes carry that folder id and never the owner's OAuth access or refresh token,
-even when the vault's legacy/default `replication_type` is `personal`. The
-joining browser signs into its own Google account and saves its own token. The
-owner may grant that account access to the already-persisted folder, but
-onboarding must not create a replacement folder or transfer owner credentials.
+### Shared-provider onboarding
+
+The selected provider target determines the handoff. A shared Google Drive row
+persists its stable `folderId`; enrollment codes carry that folder id and never
+the owner's OAuth access or refresh token, even when the vault's legacy/default
+`replication_type` is `personal`. The joining browser signs into its own Google
+account and saves its own token. The owner may grant that account access to the
+already-persisted folder, but onboarding must not create a replacement folder or
+transfer owner credentials.
+
 The decrypted enrollment payload exposes the Rust-owned `OnboardingType`; the
-joiner dispatches on `PersonalCredentialTransfer` versus
-`SharedProviderGrant`. Rust models those as sealed typestates:
-`TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local,
-GitHub, or credential-bearing OAuth data, while
+joiner dispatches on `PersonalCredentialTransfer` versus `SharedProviderGrant`.
+Rust models those as sealed typestates in `nook-auth2`:
+`TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local, GitHub,
+or credential-bearing OAuth data, while
 `TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google Drive
 folder grant or iCloud share target. The encrypted wire payload records the
-onboarding type beside its correspondingly typed provider data. A shared wire
-tag paired with the legacy OAuth shape fails deserialization, and legacy OAuth
-codes are classified as personal only. Shared-target types have no PAT, OAuth
+onboarding type beside its correspondingly typed provider data. A shared wire tag
+paired with the legacy OAuth shape fails deserialization, and legacy OAuth codes
+are classified as personal only. Shared-target types have no PAT, OAuth
 access-token, or refresh-token fields or constructors, so the credential-free
 rule is enforced by Rust construction and deserialization rather than a
-TypeScript convention or a late runtime branch. Core provider classification
-also terminates in separate `PersonalEnrollmentProvider` and
-`SharedEnrollmentProvider` builder functions; the shared builder's return type
-cannot return or be wrapped from the personal OAuth typestate.
+TypeScript convention or a late runtime branch.
 
-**iCloud modes:** Private mode preserves the legacy default private CloudKit
-database behavior. Shared mode creates a custom private record zone and a
-shareable root record. The owner accesses that hierarchy through the private
-database; after accepting the share, each participant accesses it through their
-shared database. Every event record is parented to the shared root. The saved
-`iCloudShareTarget` contains only the stable short GUID, zone owner/name, root
-record name, and owner/participant routing role. Enrollment copies that target,
-never the owner's CloudKit web-auth token; the recipient signs into Apple and
-accepts the share with their own account before sync.
+### iCloud modes
 
-**Local-folder provider availability:** Local backup uses the browser File
-System Access directory API (`showDirectoryPicker`) and persisted structured
-clone directory handles. The provider picker must gate this option with
-`isLocalFolderBackupSupported()` and show it as unavailable when the browser
-cannot grant writable folder access; do not let unsupported browsers enter setup
-and surface the lower-level WASM/database error.
+Private mode preserves the legacy default private CloudKit database behavior.
+Shared mode creates a custom private record zone and a shareable root record. The
+owner accesses that hierarchy through the private database; after accepting the
+share, each participant accesses it through their shared database. Every event
+record is parented to the shared root. The saved `iCloudShareTarget` contains
+only the stable short GUID, zone owner/name, root record name, and
+owner/participant routing role. Enrollment copies that target, never the owner's
+CloudKit web-auth token; the recipient signs into Apple and accepts the share
+with their own account before sync.
+
+### Local-folder provider availability
+
+Local backup uses the browser File System Access directory API
+(`showDirectoryPicker`) and persisted structured-clone directory handles. The
+provider picker must gate this option with `isLocalFolderBackupSupported()` and
+show it as unavailable when the browser cannot grant writable folder access; do
+not let unsupported browsers enter setup and surface the lower-level
+WASM/database error.
 
 ---
 
@@ -155,6 +202,9 @@ stateDiagram-v2
   Settings --> Vault: secrets tab
 ```
 
+Shared components live under
+`nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/`.
+
 | Component | When shown | Purpose |
 |-----------|------------|---------|
 | `DeviceProtectionGate` | Device-key unlock selected while identity is locked, or identity needs migration | Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data |
@@ -165,9 +215,16 @@ stateDiagram-v2
 
 ### Lock
 
-See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears the WASM typed session database, the in-memory device identity, and sensitive Svelte state. The normal vault login gate remains visible; choosing device keys starts passkey authorization directly, while PIN input, passkey recovery, and failed/cancelled attempts use the device-protection gate. A backup password can unlock the local vault without opening it.
+See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not**
+“delete vault” — it clears the WASM typed session database, the in-memory device
+identity, and sensitive Svelte state. The normal vault login gate remains
+visible; choosing device keys starts passkey authorization directly, while PIN
+input, passkey recovery, and failed/cancelled attempts use the device-protection
+gate. A backup password can unlock the local vault without opening it.
 
-**Test ids:** `header-lock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `unlock-vault-btn`, `add-provider-btn`, `remove-provider-{id}`.
+**Test ids:** `header-lock-vault-btn`, `login-create-device-vault-btn`,
+`login-connect-storage-btn`, `unlock-vault-btn`, `add-provider-btn`,
+`remove-provider-{id}`.
 
 ### Login gate (current)
 
@@ -176,7 +233,8 @@ See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** 
 | No | **Get started** — create local vault (device keys) or connect cloud storage |
 | Yes | Unlock with device keys and/or backup password |
 
-Legacy login wizard docs (connection × authorization accordion) are superseded by the unified login gate; see git history before Phase 8 if needed.
+Legacy login wizard docs (connection × authorization accordion) are superseded
+by the unified login gate; see git history before Phase 8 if needed.
 
 ---
 
@@ -189,37 +247,59 @@ does it load providers, apply `activeProvider` credentials to `storageMode` /
 connect/enroll/join. Backup-password unlock may hydrate the local vault session
 without those provider steps; sealed-provider sync remains paused.
 
-WASM still receives `(storageMode, githubPat)` per call. Provider persistence
-and shaping live in `nook-wasm`/`nook-core`; the web layer maps snapshots onto
-`VaultState`.
+WASM still receives `(storageMode, githubPat)` per call for the active connect
+path. Provider persistence and shaping live in `nook-wasm`/`nook-core`; the web
+layer maps snapshots onto `VaultState` via `manager.loadAuthProviders()` /
+`manager.saveAuthProviders()` (wrapped by `auth-providers.ts`).
 
 ---
 
-## 5. Sync replication (implemented)
+## 5. Sync replication (status)
 
-Event-log sync is in `nook-app/nook-core/src`. UI uses the local
-`vault:{store_id}` projection cache and fans events out to sync providers in
-`nook_auth`.
+Event-log sync is the live provider path — see
+[vault-event-log.md](vault-event-log.md). UI uses the local `vault:{store_id}`
+projection cache and fans events out to sync providers listed in `nook_auth`
+(`fanOutSyncToProviders`).
 
 | Capability | Status |
 |------------|--------|
 | Multiple sync providers per vault | Done — fan-out after local save |
-| Single `store_id` across replicas | Enforced — mismatch errors |
-| `vault_version` reconciliation | Done |
-| Multi-vault picker on one browser | Planned — see [vault-session-and-lock.md](vault-session-and-lock.md) §3 |
+| Single `store_id` across replicas | Enforced — `StoreIdMismatch` in `sync/vault_sync.rs` |
+| Event-log causal sync | Done — [vault-event-log.md](vault-event-log.md) |
+| Multi-vault on one browser profile | Partial — e2e coverage in `nook-web-app/e2e/multi-vault.spec.ts`; full picker UX still evolving ([vault-session-and-lock.md](vault-session-and-lock.md) §3) |
 
-**Do not confuse:** adding a sync provider **replicates** the active vault; opening a **different** vault requires Lock and connect/import flow (future vault picker).
+**Do not confuse:** adding a sync provider **replicates** the active vault;
+opening a **different** vault requires Lock and connect/import flow (or the
+multi-vault picker when available).
+
+Whole-blob `reconcileVaultBlobs` / scalar `vault_version` reconciliation is
+historical context in [unified-vault.md](unified-vault.md), not the primary
+provider sync path.
 
 ---
 
 ## 6. Security notes
 
-- Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with the device's age X25519 identity** (in Rust/WASM) before hitting IndexedDB — never stored as plaintext. A raw `nook_auth` dump exposes age-armored ciphertext, not tokens.
-- The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped` with AES-256-GCM. The preferred wrapping key is derived in Rust/WASM from a WebAuthn PRF result with HKDF-SHA256. On PRF-missing platforms, a versioned PIN fallback uses PBKDF2-SHA256 parameters authenticated in the wrapped record. Neither PRF output, PIN, nor derived key is persisted.
-- This protects passive copies of both IndexedDB databases. Code already executing in the page after authorization can use the in-memory identity; code before authorization can request a user-verifying passkey ceremony. Passkey protection is therefore not a substitute for XSS prevention.
-- GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise exposes GitHub repo access, not plaintext vault secrets (still independently encrypted in the vault file).
-- Reusing the existing device identity means no extra key material and no new key-management surface; the same identity already gates vault-key envelopes.
-- Device identity and encrypted vault blob remain in a separate IDB database (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.
+- Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with
+  the device's age X25519 identity** (in Rust/WASM) before hitting IndexedDB —
+  never stored as plaintext. A raw `nook_auth` dump exposes age-armored
+  ciphertext, not tokens.
+- The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped`
+  with AES-256-GCM. The preferred wrapping key is derived in Rust/WASM from a
+  WebAuthn PRF result with HKDF-SHA256. On PRF-missing platforms, a versioned PIN
+  fallback uses PBKDF2-SHA256 parameters authenticated in the wrapped record.
+  Neither PRF output, PIN, nor derived key is persisted.
+- This protects passive copies of both IndexedDB databases. Code already executing
+  in the page after authorization can use the in-memory identity; code before
+  authorization can request a user-verifying passkey ceremony. Passkey protection
+  is therefore not a substitute for XSS prevention.
+- GitHub PAT in IndexedDB is **storage convenience**, not vault encryption.
+  Compromise exposes GitHub repo access, not plaintext vault secrets (still
+  independently encrypted in the vault file).
+- Reusing the existing device identity means no extra key material and no new
+  key-management surface; the same identity already gates vault-key envelopes.
+- Device identity and encrypted vault blob remain in a separate IDB database
+  (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.
 
 ## 7. OAuth origins and PR previews
 
@@ -237,9 +317,9 @@ origins.
 The interactive development origins are `https://localhost:5173` and the
 multi-worktree fallback `https://localhost:5175`; they must be registered
 explicitly in both provider consoles. `task web:dev` creates a trusted local
-certificate through the repository's pinned `mkcert` Docker image. Loopback HTTP remains an internal
-Playwright transport only and does not represent the provider-enabled manual
-development environment.
+certificate through the repository's pinned `mkcert` Docker image. Loopback HTTP
+remains an internal Playwright transport only and does not represent the
+provider-enabled manual development environment.
 
 Google/Auth Platform branding should use `https://nokey.sh/` as the public app
 home page. The root path is the crawlable product and branding page; the vault

@@ -102,7 +102,7 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 | Prefixed `store_id` / `secret_` / `key_` in vault YAML | Implemented |
 | `StorageProvider.storeId` | Implemented |
 | Legacy unprefixed read + normalize on write | Implemented |
-| Replication / mismatch guards | Planned (sync logic in `vault_sync.rs`) |
+| Replication / mismatch guards | Implemented (`StoreIdMismatch` in `sync/vault_sync.rs`) |
 | Event-log causal heads | Implemented |
 
-Implementation: `nook-app/nook-core/src/vault_ids.rs`.
+Implementation: `nook-app/nook-core/src/vault/vault_ids.rs`.

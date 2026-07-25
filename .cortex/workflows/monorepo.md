@@ -7,8 +7,8 @@ Use this workflow for feature work that touches more than one package.
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
 3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.
-4. Consume generated WASM APIs directly when they are already ergonomic; add `nook-app/nook-web/src/lib` wrappers only for UI/browser glue, localization, or reactive state.
-5. Keep shadcn-svelte UI primitives and default styling in `nook-app/nook-web/src/lib/components/ui` and `nook-app/nook-web/src/app.css`.
+4. Consume generated WASM APIs directly when they are already ergonomic; add wrappers under `nook-app/nook-web/nook-web-shared/src/vault-app/lib` only for UI/browser glue, localization, or reactive state.
+5. Keep shadcn-svelte UI primitives and default styling in `nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui` and `nook-app/nook-web/nook-web-shared/src/vault-app/app.css`.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` or `nook-app/nook-web/.task/`, Docker tasks under `nook-app/docker/Taskfile.yml`, cross-package app/CI tasks under `nook-app/.task/`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.

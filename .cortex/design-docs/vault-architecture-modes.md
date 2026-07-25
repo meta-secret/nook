@@ -137,7 +137,7 @@ shared mode uses a visible folder and the following grant flow:
 If automatic grant cannot run (missing owner token, token lacks `drive.file`,
 or Drive API error), the outcome is `ManualGrantRequired`: the UI shows
 localized manual-share instructions and may still bind an already-created
-`folderId`. See [auth-providers.md](auth-providers.md) § Google Drive modes.
+`folderId`. See [auth-providers.md](auth-providers.md#google-drive-modes).
 
 This provider-account flow must not be used as Sentinel membership or quorum.
 
