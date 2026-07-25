@@ -350,7 +350,7 @@ task extension:smoke:hosted CHANNEL=dev # disposable Chromium hosted extension +
 task extension:setup:brave CHANNEL=dev # Brave PIN bootstrap: install, create vault, approve, leave open
 task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded Chrome opens one-time setup
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile (no vault setup)
-task ci:pr                 # health-checked BuildKit mirror of the non-browser PR gate (optional)
+task ci:pr                 # optional local mirror of the non-browser PR gate (daemon BuildKit; never shared nook-pr)
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
 task pr:review PR=410      # optional idempotent exact-head Codex review request

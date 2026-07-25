@@ -8,24 +8,61 @@ if [ "$#" -eq 0 ]; then
 fi
 
 docker_bin="${DOCKER:-docker}"
-builder="${NOOK_PR_BUILDX_BUILDER:-nook-pr}"
 health_timeout="${NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60}"
 cleanup_timeout="${NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS:-15}"
-container="buildx_buildkit_${builder}0"
-state_volume="${container}_state"
+
+# Never default to a shared docker-container builder. Delivery used to reuse
+# `nook-pr` across local and self-hosted runs; one wedged or concurrent build
+# could exhaust the host. Hosted CI must pass a job-scoped builder from
+# docker/setup-buildx-action. Local optional CI uses the daemon-embedded
+# BuildKit builder for the active Docker context so layer cache stays warm
+# without a separate BuildKit container.
+builder="${NOOK_PR_BUILDX_BUILDER:-}"
 
 case "$builder" in
-  ''|*[!a-zA-Z0-9_.-]*)
-    echo "invalid PR BuildKit builder name: $builder" >&2
+  nook-pr)
+    echo "refusing shared BuildKit builder name 'nook-pr'; hosted jobs must use the job-scoped setup-buildx builder, and local CI uses the docker-context daemon builder" >&2
     exit 2
     ;;
 esac
+
 case "$health_timeout:$cleanup_timeout" in
   *[!0-9:]*|0:*|*:0)
     echo "BuildKit timeouts must be positive whole seconds" >&2
     exit 2
     ;;
 esac
+
+run_with_daemon_builder() {
+  local daemon_builder="${BUILDX_BUILDER:-}"
+  if [ -z "$daemon_builder" ]; then
+    daemon_builder="$("$docker_bin" context show 2>/dev/null || echo default)"
+  fi
+  case "$daemon_builder" in
+    ''|*[!a-zA-Z0-9_.-]*|nook-pr)
+      echo "invalid daemon BuildKit builder name: $daemon_builder" >&2
+      exit 2
+      ;;
+  esac
+
+  echo "Using daemon BuildKit builder $daemon_builder (no shared docker-container)" >&2
+  BUILDX_BUILDER="$daemon_builder" "$@"
+}
+
+if [ -z "$builder" ]; then
+  run_with_daemon_builder "$@"
+  exit $?
+fi
+
+case "$builder" in
+  ''|*[!a-zA-Z0-9_.-]*)
+    echo "invalid job-scoped BuildKit builder name: $builder" >&2
+    exit 2
+    ;;
+esac
+
+container="buildx_buildkit_${builder}0"
+state_volume="${container}_state"
 
 probe_context="$(mktemp -d "${TMPDIR:-/tmp}/nook-buildkit-probe.XXXXXX")"
 printf 'FROM scratch\n' > "$probe_context/Dockerfile"
@@ -96,7 +133,10 @@ run_with_timeout "$health_timeout" probe_builder || probe_status=$?
 rm -rf "$probe_context"
 
 if [ "$probe_status" -eq 0 ]; then
-  echo "Reusing healthy BuildKit builder $builder"
+  # Within one hosted job this reuses the ephemeral setup-buildx builder so
+  # GHA cache restores and later Bake targets keep warm layers. It must never
+  # fall back to a cross-job shared name.
+  echo "Using healthy job-scoped BuildKit builder $builder" >&2
 else
   if [ "$probe_status" -eq 124 ]; then
     echo "BuildKit builder $builder did not respond within ${health_timeout}s" >&2
