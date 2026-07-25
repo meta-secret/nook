@@ -65,25 +65,17 @@ The local vault is created on first setup and persists regardless of which sync 
 
 ### IndexedDB layout (`nook_auth`) — sync providers only
 
-| Key | Value |
-|-----|-------|
-| `sync_providers` | `{ providers: SyncProvider[], enabled: string[] }` |
+Canonical layout and field list: [auth-providers.md](auth-providers.md) §2.
 
-```typescript
-interface SyncProvider {
-  id: string
-  type: 'github' | 'oauth-file'
-  label: string
-  githubPat?: string
-  githubRepo?: string
-  oauthFile?: OAuthFileConfig
-  /** Last known remote vault_version after successful sync */
-  lastSyncedVersion?: number
-  createdAt: string
-}
-```
+| Piece | Value |
+|-------|-------|
+| Database / store / key | `nook_auth` / `auth` / `providers` |
+| Value | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
 
-Provider credentials are **sync convenience**, not vault encryption. The master password and vault keys stay in the vault file.
+Types are Rust/Tsify (`StorageProvider`, `OAuthFileConfig`, …), not a separate
+hand-authored TypeScript interface. Provider credentials are **sync
+convenience**, not vault encryption. The master password and vault keys stay in
+the vault file.
 
 ---
 
@@ -104,7 +96,7 @@ secrets:
 | **Genesis** | `vault_version: 1` on first persist |
 | **Every save** | Increment before write |
 
-Implementation: `nook-app/nook-core/src/vault_format.rs` (`read_vault_version`), `nook-app/nook-core/src/vault_sync.rs`.
+Implementation: `nook-app/nook-core/src/vault/vault_format.rs` (`read_vault_version`), `nook-app/nook-core/src/sync/vault_sync.rs`.
 
 ---
 
@@ -203,16 +195,19 @@ Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside
 After any local vault save (secret CRUD, join approve/deny, device roster change — phased rollout), the web layer pushes to **all connected sync providers**:
 
 1. Read the local projection cache from `vault:{store_id}` (`readLocalVaultYaml`).
-2. For each non-local provider in `nook_auth`: `reconcileVaultBlobs` → push/adopt/conflict.
+2. For each non-local provider in `nook_auth`: fan out via the live event-log path
+   (`fanOutSyncToProviders` in `nook-web-shared` → core/wasm sync). Whole-blob
+   `reconcileVaultBlobs` is retained only as historical/local-projection context;
+   see [vault-event-log.md](vault-event-log.md).
 3. Background fan-out is **quiet** (no per-provider toast spam); status bar shows `Syncing to {provider}…`.
 
 Background **pull** (sync timer, `PendingJoinsBanner` refresh) reconciles every sync provider into the local vault, then `hydrateMultiDeviceState()` reads pending `joins:` from the unlocked session.
 
-Manual **Sync all** in the status bar runs the same reconcile loop with user-visible toasts.
+Manual **Sync all** in the status bar runs the same sync loop with user-visible toasts.
 
 ### In-memory sync tests
 
-`MemoryVaultStore` in `nook-app/nook-core/src/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-app/nook-core/tests/vault_sync_workflow.rs` (no browser required).
+`MemoryVaultStore` in `nook-app/nook-core/src/sync/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-app/nook-core/tests/vault_sync_workflow.rs` (no browser required).
 
 ---
 

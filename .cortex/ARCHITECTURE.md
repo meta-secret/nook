@@ -153,7 +153,7 @@ root/
   the Svelte shell applies their outcomes to browser/UI state. Cohesive browser
   workflows live in focused `lib/vault/*` action modules; `vault.svelte.ts`
   remains the reactive facade and must not grow duplicate implementations.
-- **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
+- **`auth-providers.ts` (shared):** Thin TS adapters + i18n over WASM `NookVaultManager` load/save APIs. IndexedDB `nook_auth` persistence and credential sealing live in `nook-wasm` / `nook-core` — see [auth-providers.md](design-docs/auth-providers.md).
 - **`passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. Rust/WASM builds the PRF option payloads; TypeScript invokes `navigator.credentials`, extracts the returned PRF output, and performs no encryption. `nook-wasm/src/passkey_browser.rs` classifies WebAuthn `NotAllowedError` as the stable `PASSKEY_CEREMONY_NOT_ALLOWED` result because the browser intentionally uses it for cancellation, timeout, policy refusal, and unavailable credentials. UI callers localize that ambiguity for create, recovery, and unlock flows; they must not infer PRF absence or offer the PIN fallback unless the browser returns the distinct PRF-unavailable result.
 - **`DeviceProtectionGate`:** Mandatory passkey setup/unlock before provider credentials or device keys are loaded.
 - **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
@@ -281,7 +281,7 @@ root/
 | On-disk user secrets                   | YAML `secrets:` list                                          | Values encrypted with `secrets_key`                                                                                                                                            |
 | Local search catalog                   | Age-encrypted, authenticated `SecretListItem` buckets         | IndexedDB `secret_search_v2:{store_id}:{bucket}`; decrypted into WASM memory only while unlocked, with bucket assignment derived from opaque secret ids                         |
 | Logical secret store                   | YAML `store_id`                                               | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md))                                                             |
-| Vault revision                         | YAML `vault_version`                                          | Monotonic counter; incremented on every save ([unified-vault.md](design-docs/unified-vault.md))                                                                                |
+| Vault revision                         | Event-log causal heads (+ legacy YAML `vault_version`)        | Live sync is the event log ([vault-event-log.md](design-docs/vault-event-log.md)); scalar `vault_version` is historical/local projection context ([unified-vault.md](design-docs/unified-vault.md)) |
 | Active unlock mode                     | YAML `unlock:` tagged union (omitted when keys — the default) | `{type: password, …}` for password-only vaults; device-key vaults use `auth:` (+ optional `password_entries`). See [password-envelope.md](product-specs/password-envelope.md). |
 | On-disk key envelopes (keys mode only) | YAML `auth:` list                                             | `key_{sha256}` → age-armored `secrets_key` + `members_key`                                                                                                                     |
 | Member catalog                         | YAML `members:` list                                          | `pk_id` + `members_key`-encrypted `{pk_id, pk}`                                                                                                                                |
@@ -291,8 +291,9 @@ root/
 
 See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.
 See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
-See [auth-providers.md](design-docs/auth-providers.md) for login UX and sync provider roadmap.
-See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture and version sync.
+See [auth-providers.md](design-docs/auth-providers.md) for login UX and sync-provider credential persistence.
+See [vault-event-log.md](design-docs/vault-event-log.md) for provider event-log sync.
+See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture (scalar sync historical).
 
 ```
 secrets:  user passwords (secrets_key)

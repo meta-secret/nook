@@ -14,6 +14,7 @@ pub(crate) mod login_site_hosts;
 pub(crate) mod onepassword_import;
 pub(crate) mod passkey_authenticator;
 pub(crate) mod password;
+pub(crate) mod popular_login_sites;
 pub(crate) mod proton_pass_import;
 pub(crate) mod secret_fingerprint;
 pub(crate) mod secret_types;
