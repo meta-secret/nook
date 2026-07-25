@@ -131,6 +131,7 @@ export type RuntimeMessage =
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
+  | ExtensionUnpairVaultMessage
 
 function isExtensionEventLogRecord(
   value: unknown,
