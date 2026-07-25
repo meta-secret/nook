@@ -52,6 +52,7 @@ test('offer browser extension install on vault home and in Devices', async ({
       'demo-extension-id',
     )
   })
+  // Extension pairing contract: browser runtime ID is set and extension launcher is triggered for pair intent.
   await expect(setupCard).toHaveAttribute('data-status', 'installed_unpaired')
   await expect(page.getByTestId('extension-install-setup-connect')).toHaveText(
     'Connect extension',
