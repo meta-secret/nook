@@ -2202,11 +2202,6 @@ async function cancelWebsitePasskey(
   return { ok: true }
 }
 
-async function removePairingStorage(keys: string[]): Promise<void> {
-  await ensureLegacyPairingMigration()
-  await removeExtensionPairingState(keys)
-}
-
 async function reconcilePairingStorage(
   items: Record<string, unknown>,
   removedKeys: string[],
