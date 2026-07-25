@@ -2,6 +2,7 @@
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { ExtensionI18n } from '../lib/i18n'
+  import type { LoginDetectionStatus } from '../lib/login-detection-messages'
   import {
     createExtensionPasskey,
     createExtensionPin,
@@ -44,10 +45,46 @@
   let pin = $state('')
   let pinConfirm = $state('')
   let pendingDevice = $state<ExtensionDeviceProtectionResult | undefined>()
+  let loginDetectionStatus = $state<LoginDetectionStatus | 'loading'>('loading')
 
   const needsSetup = $derived(status === 'missing' || status === 'plaintext')
   const showCompanionHome = $derived(status === 'unlocked')
   const showExistingConnection = $derived(isConnected && !pairingRequested)
+
+  const loginDetectionKey = $derived(
+    loginDetectionStatus === 'detected'
+      ? 'extension.companion.login_detected'
+      : loginDetectionStatus === 'not-detected'
+        ? 'extension.companion.login_not_detected'
+        : loginDetectionStatus === 'unavailable'
+          ? 'extension.companion.login_unavailable'
+          : 'extension.companion.login_checking',
+  )
+
+  function refreshLoginDetection(): void {
+    loginDetectionStatus = 'loading'
+    chrome.runtime.sendMessage(
+      { type: 'nook:query-active-tab-login-detection' },
+      (
+        response: { ok?: boolean; status?: LoginDetectionStatus } | undefined,
+      ) => {
+        if (
+          chrome.runtime.lastError ||
+          response?.ok !== true ||
+          !response.status
+        ) {
+          loginDetectionStatus = 'unavailable'
+          return
+        }
+        loginDetectionStatus = response.status
+      },
+    )
+  }
+
+  $effect(() => {
+    if (!showCompanionHome) return
+    refreshLoginDetection()
+  })
 
   function errorMessage(caught: unknown, fallbackKey: string): string {
     if (!(caught instanceof Error)) return i18n.t(fallbackKey)
@@ -206,6 +243,13 @@
       {showExistingConnection && vaultName
         ? i18n.t('extension.companion.ready_vault', { vault: vaultName })
         : i18n.t('extension.companion.not_connected')}
+    </p>
+    <p
+      class="login-detection"
+      data-testid="companion-login-detection"
+      data-status={loginDetectionStatus}
+    >
+      {i18n.t(loginDetectionKey)}
     </p>
 
     {#if showExistingConnection}

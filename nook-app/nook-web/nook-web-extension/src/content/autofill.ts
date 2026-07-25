@@ -21,6 +21,7 @@ import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
 } from '../lib/authenticator-picker-messages'
+import { isQueryLoginDetectionMessage } from '../lib/login-detection-messages'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import {
   compactProgressState,
@@ -1399,6 +1400,14 @@ function removeScannedWidget(): void {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id === chrome.runtime.id && isQueryLoginDetectionMessage(message)) {
+    const detected = summarizeAuthenticationWorkflowForms().length > 0
+    sendResponse({
+      ok: true,
+      status: detected ? 'detected' : 'not-detected',
+    })
+    return false
+  }
   if (
     sender.id === chrome.runtime.id &&
     isWebsiteLoginCanceledMessage(message) &&
