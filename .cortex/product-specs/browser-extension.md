@@ -238,25 +238,25 @@ Nook Pilot HUD; the companion may also show a one-line current-tab hint
 
 ### Popular-site detection coverage
 
-CI does **not** hit live third-party login pages. Structural mock-auth fixtures
-under `nook-web-extension/e2e/mock-auth` are the merge gate for popular-site
-shells that mirror host families in `nook-core/data/login_site_hosts.json`:
+CI does **not** hit live third-party login pages. Coverage is data-driven:
 
-| Family | Mock path | Shape covered |
-|---|---|---|
-| Microsoft | `/microsoft` | email-first `loginfmt` |
-| Slack | `/slack` | `data-qa="login_email"` |
-| Facebook | `/facebook` | `email`/`pass`, including `aria-hidden` ancestor |
-| Google | `/google` | email-first `identifier` |
-| Apple | `/apple` | Apple ID + password |
-| Amazon | `/amazon` | email-first then password |
-| GitHub | `/github` | `login` + password |
-| LinkedIn | `/linkedin` | `session_key` / `session_password` |
-| X | `/x` | username-first then password |
+1. Catalog: [`nook-core/data/popular_login_sites.json`](../../nook-app/nook-core/data/popular_login_sites.json)
+   — exactly **100** password-manager-relevant destinations (`id`, `family`,
+   `loginUrl`, `hosts`, `rank`).
+2. Structural fixtures: `nook-web-extension/e2e/mock-auth/fixtures/sites/<id>.json`
+   — field attrs, multi-step shells, quirks (`aria-hidden-ancestor`, etc.),
+   with `source: capture | research`.
+3. Renderer: mock-auth route `/site/:id` (`DetectionFromFixture.svelte`).
+   Legacy paths (`/facebook`, `/google`, …) still resolve to the same fixtures.
+4. Capture tool (local/agent only):
+   `nook-web-extension/scripts/capture-login-shell.mjs` opens a live `loginUrl`
+   once and drafts a fixture. Bot-blocked sites keep research fixtures.
+5. Automated gates: Rust catalog invariant (100 unique ranked ids); Vitest over
+   every fixture’s rendered HTML; extension e2e Pilot visibility for all 100
+   and fill-to-success for single-step password shells.
 
-Live sites remain manual/QA only. Unit HTML snapshots in
-`password-forms.test.ts` and extension smoke/pilot e2e assert Pilot appears
-(and Facebook fill-to-success) against these fixtures.
+Related host credential matching remains in
+[`login_site_hosts.json`](../../nook-app/nook-core/data/login_site_hosts.json).
 
 ### In-Page HUD
 

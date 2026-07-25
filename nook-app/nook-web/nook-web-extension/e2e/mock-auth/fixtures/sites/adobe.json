@@ -1,0 +1,45 @@
+{
+  "id": "adobe",
+  "source": "research",
+  "loginUrl": "https://auth.services.adobe.com/en_US/index.html",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Email",
+          "aria-label": "Email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Email",
+          "aria-label": "Email"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

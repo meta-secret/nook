@@ -1,0 +1,30 @@
+{
+  "id": "capitalone",
+  "source": "research",
+  "loginUrl": "https://verified.capitalone.com/auth/signin",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "username",
+          "autocomplete": "username",
+          "placeholder": "Username",
+          "aria-label": "Username"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

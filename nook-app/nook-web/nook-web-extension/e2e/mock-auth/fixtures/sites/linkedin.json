@@ -1,0 +1,32 @@
+{
+  "id": "linkedin",
+  "source": "capture",
+  "loginUrl": "https://www.linkedin.com/login",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "session_key",
+          "id": "username",
+          "autocomplete": "username",
+          "placeholder": "Email or phone",
+          "aria-label": "Email or phone"
+        },
+        {
+          "type": "password",
+          "name": "session_password",
+          "id": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

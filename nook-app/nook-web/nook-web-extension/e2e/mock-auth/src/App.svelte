@@ -1,21 +1,13 @@
 <script lang="ts">
-  import DetectionAmazon from './pages/DetectionAmazon.svelte'
-  import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionCombined from './pages/DetectionCombined.svelte'
-  import DetectionFacebook from './pages/DetectionFacebook.svelte'
-  import DetectionGitHub from './pages/DetectionGitHub.svelte'
-  import DetectionGoogle from './pages/DetectionGoogle.svelte'
+  import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
-  import DetectionLinkedIn from './pages/DetectionLinkedIn.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
-  import DetectionMicrosoft from './pages/DetectionMicrosoft.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
-  import DetectionSlack from './pages/DetectionSlack.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
-  import DetectionX from './pages/DetectionX.svelte'
   import NotFound from './pages/NotFound.svelte'
   import PlainLogin from './pages/PlainLogin.svelte'
   import Success from './pages/Success.svelte'
@@ -31,6 +23,23 @@
   function syncPath() {
     pathname = location.pathname
   }
+
+  const siteMatch = $derived(pathname.match(/^\/site\/([a-z0-9-]+)$/u))
+  const legacySiteId = $derived(
+    (
+      {
+        '/microsoft': 'microsoft',
+        '/slack': 'slack',
+        '/facebook': 'facebook',
+        '/google': 'google',
+        '/apple': 'apple',
+        '/amazon': 'amazon',
+        '/github': 'github',
+        '/linkedin': 'linkedin',
+        '/x': 'x',
+      } as Record<string, string>
+    )[pathname],
+  )
 </script>
 
 <svelte:window onpopstate={syncPath} />
@@ -71,26 +80,12 @@
   <DetectionCombined />
 {:else if pathname === '/spa'}
   <DetectionSpa />
-{:else if pathname === '/microsoft'}
-  <DetectionMicrosoft />
-{:else if pathname === '/slack'}
-  <DetectionSlack />
-{:else if pathname === '/facebook'}
-  <DetectionFacebook />
-{:else if pathname === '/google'}
-  <DetectionGoogle />
-{:else if pathname === '/apple'}
-  <DetectionApple />
-{:else if pathname === '/amazon'}
-  <DetectionAmazon />
-{:else if pathname === '/github'}
-  <DetectionGitHub />
-{:else if pathname === '/linkedin'}
-  <DetectionLinkedIn />
-{:else if pathname === '/x'}
-  <DetectionX />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
+{:else if siteMatch?.[1]}
+  <DetectionFromFixture siteId={siteMatch[1]} />
+{:else if legacySiteId}
+  <DetectionFromFixture siteId={legacySiteId} />
 {:else}
   <NotFound />
 {/if}

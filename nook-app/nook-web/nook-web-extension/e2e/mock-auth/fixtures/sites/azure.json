@@ -1,0 +1,47 @@
+{
+  "id": "azure",
+  "source": "capture",
+  "loginUrl": "https://portal.azure.com/",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "loginfmt",
+          "id": "i0116",
+          "placeholder": "Email, phone, or Skype",
+          "aria-label": "Enter your email, phone, or Skype."
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "id": "idSIButton9",
+        "label": "Next"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "loginfmt",
+          "id": "i0116",
+          "placeholder": "Email, phone, or Skype",
+          "aria-label": "Enter your email, phone, or Skype."
+        },
+        {
+          "type": "password",
+          "name": "passwd",
+          "id": "i0118",
+          "autocomplete": "current-password",
+          "placeholder": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "id": "idSIButton9",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

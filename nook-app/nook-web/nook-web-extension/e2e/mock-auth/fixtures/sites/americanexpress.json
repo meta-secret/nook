@@ -1,0 +1,30 @@
+{
+  "id": "americanexpress",
+  "source": "research",
+  "loginUrl": "https://www.americanexpress.com/en-us/account/login",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "username",
+          "autocomplete": "username",
+          "placeholder": "Username",
+          "aria-label": "Username"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

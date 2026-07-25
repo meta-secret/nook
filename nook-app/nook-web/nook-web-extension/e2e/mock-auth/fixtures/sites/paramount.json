@@ -1,0 +1,30 @@
+{
+  "id": "paramount",
+  "source": "research",
+  "loginUrl": "https://www.paramountplus.com/account/signin/",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Email",
+          "aria-label": "Email"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

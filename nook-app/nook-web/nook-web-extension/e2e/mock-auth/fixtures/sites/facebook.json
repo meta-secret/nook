@@ -1,0 +1,33 @@
+{
+  "id": "facebook",
+  "source": "capture",
+  "loginUrl": "https://www.facebook.com/login",
+  "quirks": ["aria-hidden-ancestor"],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "email",
+          "id": "email",
+          "placeholder": "Email or phone number",
+          "aria-label": "Email or phone number"
+        },
+        {
+          "type": "password",
+          "name": "pass",
+          "id": "pass",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "name": "login",
+        "id": "loginbutton",
+        "label": "Log in"
+      }
+    }
+  ]
+}

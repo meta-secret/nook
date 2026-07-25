@@ -1,0 +1,30 @@
+{
+  "id": "citi",
+  "source": "research",
+  "loginUrl": "https://online.citi.com/US/login.do",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "username",
+          "autocomplete": "username",
+          "placeholder": "Username",
+          "aria-label": "Username"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

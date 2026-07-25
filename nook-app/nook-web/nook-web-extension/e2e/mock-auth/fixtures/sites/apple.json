@@ -1,0 +1,32 @@
+{
+  "id": "apple",
+  "source": "capture",
+  "loginUrl": "https://appleid.apple.com/sign-in",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "accountName",
+          "id": "account_name_text_field",
+          "autocomplete": "username",
+          "placeholder": "Apple ID",
+          "aria-label": "Apple ID or email"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "id": "password_text_field",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign In"
+      }
+    }
+  ]
+}

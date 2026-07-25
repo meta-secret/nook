@@ -1,0 +1,30 @@
+{
+  "id": "reddit",
+  "source": "research",
+  "loginUrl": "https://www.reddit.com/login/",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Email",
+          "aria-label": "Email"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "shopify",
+  "source": "research",
+  "loginUrl": "https://accounts.shopify.com/store-login",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Email",
+          "aria-label": "Email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "username",
+          "placeholder": "Email",
+          "aria-label": "Email"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "placeholder": "Password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign in"
+      }
+    }
+  ]
+}

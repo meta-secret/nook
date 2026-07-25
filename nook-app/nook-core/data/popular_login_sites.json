@@ -1,0 +1,1051 @@
+[
+  {
+    "id": "google",
+    "name": "Google",
+    "family": "google",
+    "loginUrl": "https://accounts.google.com/ServiceLogin",
+    "hosts": [
+      "accounts.google.com",
+      "google.com",
+      "gmail.com"
+    ],
+    "rank": 1
+  },
+  {
+    "id": "facebook",
+    "name": "Facebook",
+    "family": "facebook",
+    "loginUrl": "https://www.facebook.com/login",
+    "hosts": [
+      "facebook.com",
+      "m.facebook.com",
+      "fb.com"
+    ],
+    "rank": 2
+  },
+  {
+    "id": "amazon",
+    "name": "Amazon",
+    "family": "amazon",
+    "loginUrl": "https://www.amazon.com/ap/signin",
+    "hosts": [
+      "amazon.com",
+      "smile.amazon.com"
+    ],
+    "rank": 3
+  },
+  {
+    "id": "microsoft",
+    "name": "Microsoft",
+    "family": "microsoft",
+    "loginUrl": "https://login.live.com/",
+    "hosts": [
+      "login.live.com",
+      "microsoft.com",
+      "outlook.com",
+      "live.com"
+    ],
+    "rank": 4
+  },
+  {
+    "id": "apple",
+    "name": "Apple",
+    "family": "apple",
+    "loginUrl": "https://appleid.apple.com/sign-in",
+    "hosts": [
+      "appleid.apple.com",
+      "apple.com",
+      "icloud.com"
+    ],
+    "rank": 5
+  },
+  {
+    "id": "youtube",
+    "name": "YouTube",
+    "family": "google",
+    "loginUrl": "https://accounts.google.com/ServiceLogin?service=youtube",
+    "hosts": [
+      "youtube.com"
+    ],
+    "rank": 6
+  },
+  {
+    "id": "instagram",
+    "name": "Instagram",
+    "family": "instagram",
+    "loginUrl": "https://www.instagram.com/accounts/login/",
+    "hosts": [
+      "instagram.com"
+    ],
+    "rank": 7
+  },
+  {
+    "id": "x",
+    "name": "X",
+    "family": "x",
+    "loginUrl": "https://x.com/i/flow/login",
+    "hosts": [
+      "x.com",
+      "twitter.com"
+    ],
+    "rank": 8
+  },
+  {
+    "id": "yahoo",
+    "name": "Yahoo",
+    "family": "yahoo",
+    "loginUrl": "https://login.yahoo.com/",
+    "hosts": [
+      "login.yahoo.com",
+      "yahoo.com"
+    ],
+    "rank": 9
+  },
+  {
+    "id": "reddit",
+    "name": "Reddit",
+    "family": "reddit",
+    "loginUrl": "https://www.reddit.com/login/",
+    "hosts": [
+      "reddit.com"
+    ],
+    "rank": 10
+  },
+  {
+    "id": "linkedin",
+    "name": "LinkedIn",
+    "family": "linkedin",
+    "loginUrl": "https://www.linkedin.com/login",
+    "hosts": [
+      "linkedin.com"
+    ],
+    "rank": 11
+  },
+  {
+    "id": "netflix",
+    "name": "Netflix",
+    "family": "netflix",
+    "loginUrl": "https://www.netflix.com/login",
+    "hosts": [
+      "netflix.com"
+    ],
+    "rank": 12
+  },
+  {
+    "id": "tiktok",
+    "name": "TikTok",
+    "family": "tiktok",
+    "loginUrl": "https://www.tiktok.com/login",
+    "hosts": [
+      "tiktok.com"
+    ],
+    "rank": 13
+  },
+  {
+    "id": "office",
+    "name": "Microsoft 365",
+    "family": "microsoft",
+    "loginUrl": "https://login.microsoftonline.com/",
+    "hosts": [
+      "office.com",
+      "office365.com",
+      "login.microsoftonline.com"
+    ],
+    "rank": 14
+  },
+  {
+    "id": "ebay",
+    "name": "eBay",
+    "family": "ebay",
+    "loginUrl": "https://signin.ebay.com/ws/eBayISAPI.dll",
+    "hosts": [
+      "ebay.com",
+      "signin.ebay.com"
+    ],
+    "rank": 15
+  },
+  {
+    "id": "paypal",
+    "name": "PayPal",
+    "family": "paypal",
+    "loginUrl": "https://www.paypal.com/signin",
+    "hosts": [
+      "paypal.com"
+    ],
+    "rank": 16
+  },
+  {
+    "id": "discord",
+    "name": "Discord",
+    "family": "discord",
+    "loginUrl": "https://discord.com/login",
+    "hosts": [
+      "discord.com"
+    ],
+    "rank": 17
+  },
+  {
+    "id": "twitch",
+    "name": "Twitch",
+    "family": "twitch",
+    "loginUrl": "https://www.twitch.tv/login",
+    "hosts": [
+      "twitch.tv"
+    ],
+    "rank": 18
+  },
+  {
+    "id": "spotify",
+    "name": "Spotify",
+    "family": "spotify",
+    "loginUrl": "https://accounts.spotify.com/login",
+    "hosts": [
+      "accounts.spotify.com",
+      "spotify.com"
+    ],
+    "rank": 19
+  },
+  {
+    "id": "pinterest",
+    "name": "Pinterest",
+    "family": "pinterest",
+    "loginUrl": "https://www.pinterest.com/login/",
+    "hosts": [
+      "pinterest.com"
+    ],
+    "rank": 20
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "family": "github",
+    "loginUrl": "https://github.com/login",
+    "hosts": [
+      "github.com"
+    ],
+    "rank": 21
+  },
+  {
+    "id": "zoom",
+    "name": "Zoom",
+    "family": "zoom",
+    "loginUrl": "https://zoom.us/signin",
+    "hosts": [
+      "zoom.us"
+    ],
+    "rank": 22
+  },
+  {
+    "id": "dropbox",
+    "name": "Dropbox",
+    "family": "dropbox",
+    "loginUrl": "https://www.dropbox.com/login",
+    "hosts": [
+      "dropbox.com"
+    ],
+    "rank": 23
+  },
+  {
+    "id": "adobe",
+    "name": "Adobe",
+    "family": "adobe",
+    "loginUrl": "https://auth.services.adobe.com/en_US/index.html",
+    "hosts": [
+      "adobe.com",
+      "auth.services.adobe.com"
+    ],
+    "rank": 24
+  },
+  {
+    "id": "salesforce",
+    "name": "Salesforce",
+    "family": "salesforce",
+    "loginUrl": "https://login.salesforce.com/",
+    "hosts": [
+      "login.salesforce.com",
+      "salesforce.com"
+    ],
+    "rank": 25
+  },
+  {
+    "id": "slack",
+    "name": "Slack",
+    "family": "slack",
+    "loginUrl": "https://slack.com/signin",
+    "hosts": [
+      "slack.com",
+      "app.slack.com"
+    ],
+    "rank": 26
+  },
+  {
+    "id": "steam",
+    "name": "Steam",
+    "family": "steam",
+    "loginUrl": "https://store.steampowered.com/login/",
+    "hosts": [
+      "steampowered.com",
+      "store.steampowered.com"
+    ],
+    "rank": 27
+  },
+  {
+    "id": "walmart",
+    "name": "Walmart",
+    "family": "walmart",
+    "loginUrl": "https://www.walmart.com/account/login",
+    "hosts": [
+      "walmart.com"
+    ],
+    "rank": 28
+  },
+  {
+    "id": "target",
+    "name": "Target",
+    "family": "target",
+    "loginUrl": "https://www.target.com/account",
+    "hosts": [
+      "target.com"
+    ],
+    "rank": 29
+  },
+  {
+    "id": "bestbuy",
+    "name": "Best Buy",
+    "family": "bestbuy",
+    "loginUrl": "https://www.bestbuy.com/identity/global/signin",
+    "hosts": [
+      "bestbuy.com"
+    ],
+    "rank": 30
+  },
+  {
+    "id": "costco",
+    "name": "Costco",
+    "family": "costco",
+    "loginUrl": "https://www.costco.com/LogonForm",
+    "hosts": [
+      "costco.com"
+    ],
+    "rank": 31
+  },
+  {
+    "id": "homedepot",
+    "name": "Home Depot",
+    "family": "homedepot",
+    "loginUrl": "https://www.homedepot.com/auth/view/signin",
+    "hosts": [
+      "homedepot.com"
+    ],
+    "rank": 32
+  },
+  {
+    "id": "lowes",
+    "name": "Lowe's",
+    "family": "lowes",
+    "loginUrl": "https://www.lowes.com/myaccount",
+    "hosts": [
+      "lowes.com"
+    ],
+    "rank": 33
+  },
+  {
+    "id": "etsy",
+    "name": "Etsy",
+    "family": "etsy",
+    "loginUrl": "https://www.etsy.com/signin",
+    "hosts": [
+      "etsy.com"
+    ],
+    "rank": 34
+  },
+  {
+    "id": "airbnb",
+    "name": "Airbnb",
+    "family": "airbnb",
+    "loginUrl": "https://www.airbnb.com/login",
+    "hosts": [
+      "airbnb.com"
+    ],
+    "rank": 35
+  },
+  {
+    "id": "uber",
+    "name": "Uber",
+    "family": "uber",
+    "loginUrl": "https://auth.uber.com/v2/",
+    "hosts": [
+      "auth.uber.com",
+      "uber.com"
+    ],
+    "rank": 36
+  },
+  {
+    "id": "lyft",
+    "name": "Lyft",
+    "family": "lyft",
+    "loginUrl": "https://account.lyft.com/auth",
+    "hosts": [
+      "lyft.com",
+      "account.lyft.com"
+    ],
+    "rank": 37
+  },
+  {
+    "id": "doordash",
+    "name": "DoorDash",
+    "family": "doordash",
+    "loginUrl": "https://www.doordash.com/consumer/login/",
+    "hosts": [
+      "doordash.com"
+    ],
+    "rank": 38
+  },
+  {
+    "id": "grubhub",
+    "name": "Grubhub",
+    "family": "grubhub",
+    "loginUrl": "https://www.grubhub.com/login",
+    "hosts": [
+      "grubhub.com"
+    ],
+    "rank": 39
+  },
+  {
+    "id": "chase",
+    "name": "Chase",
+    "family": "chase",
+    "loginUrl": "https://secure.chase.com/web/auth/",
+    "hosts": [
+      "chase.com",
+      "secure.chase.com"
+    ],
+    "rank": 40
+  },
+  {
+    "id": "bankofamerica",
+    "name": "Bank of America",
+    "family": "bankofamerica",
+    "loginUrl": "https://www.bankofamerica.com/",
+    "hosts": [
+      "bankofamerica.com"
+    ],
+    "rank": 41
+  },
+  {
+    "id": "wellsfargo",
+    "name": "Wells Fargo",
+    "family": "wellsfargo",
+    "loginUrl": "https://connect.secure.wellsfargo.com/auth/login",
+    "hosts": [
+      "wellsfargo.com"
+    ],
+    "rank": 42
+  },
+  {
+    "id": "citi",
+    "name": "Citi",
+    "family": "citi",
+    "loginUrl": "https://online.citi.com/US/login.do",
+    "hosts": [
+      "citi.com",
+      "online.citi.com"
+    ],
+    "rank": 43
+  },
+  {
+    "id": "capitalone",
+    "name": "Capital One",
+    "family": "capitalone",
+    "loginUrl": "https://verified.capitalone.com/auth/signin",
+    "hosts": [
+      "capitalone.com"
+    ],
+    "rank": 44
+  },
+  {
+    "id": "usbank",
+    "name": "U.S. Bank",
+    "family": "usbank",
+    "loginUrl": "https://www.usbank.com/index.html",
+    "hosts": [
+      "usbank.com"
+    ],
+    "rank": 45
+  },
+  {
+    "id": "americanexpress",
+    "name": "American Express",
+    "family": "americanexpress",
+    "loginUrl": "https://www.americanexpress.com/en-us/account/login",
+    "hosts": [
+      "americanexpress.com"
+    ],
+    "rank": 46
+  },
+  {
+    "id": "discover",
+    "name": "Discover",
+    "family": "discover",
+    "loginUrl": "https://portal.discover.com/customersvcs/universalLogin/ac_main",
+    "hosts": [
+      "discover.com"
+    ],
+    "rank": 47
+  },
+  {
+    "id": "schwab",
+    "name": "Charles Schwab",
+    "family": "schwab",
+    "loginUrl": "https://www.schwab.com/login",
+    "hosts": [
+      "schwab.com"
+    ],
+    "rank": 48
+  },
+  {
+    "id": "fidelity",
+    "name": "Fidelity",
+    "family": "fidelity",
+    "loginUrl": "https://digital.fidelity.com/prgw/digital/login",
+    "hosts": [
+      "fidelity.com"
+    ],
+    "rank": 49
+  },
+  {
+    "id": "vanguard",
+    "name": "Vanguard",
+    "family": "vanguard",
+    "loginUrl": "https://investor.vanguard.com/my-account/log-on",
+    "hosts": [
+      "vanguard.com"
+    ],
+    "rank": 50
+  },
+  {
+    "id": "robinhood",
+    "name": "Robinhood",
+    "family": "robinhood",
+    "loginUrl": "https://robinhood.com/login",
+    "hosts": [
+      "robinhood.com"
+    ],
+    "rank": 51
+  },
+  {
+    "id": "coinbase",
+    "name": "Coinbase",
+    "family": "coinbase",
+    "loginUrl": "https://login.coinbase.com/",
+    "hosts": [
+      "coinbase.com",
+      "login.coinbase.com"
+    ],
+    "rank": 52
+  },
+  {
+    "id": "binance",
+    "name": "Binance",
+    "family": "binance",
+    "loginUrl": "https://accounts.binance.com/en/login",
+    "hosts": [
+      "binance.com",
+      "accounts.binance.com"
+    ],
+    "rank": 53
+  },
+  {
+    "id": "paypalme",
+    "name": "Venmo",
+    "family": "venmo",
+    "loginUrl": "https://account.venmo.com/sign-in",
+    "hosts": [
+      "venmo.com",
+      "account.venmo.com"
+    ],
+    "rank": 54
+  },
+  {
+    "id": "cashapp",
+    "name": "Cash App",
+    "family": "cashapp",
+    "loginUrl": "https://cash.app/login",
+    "hosts": [
+      "cash.app"
+    ],
+    "rank": 55
+  },
+  {
+    "id": "stripe",
+    "name": "Stripe",
+    "family": "stripe",
+    "loginUrl": "https://dashboard.stripe.com/login",
+    "hosts": [
+      "stripe.com",
+      "dashboard.stripe.com"
+    ],
+    "rank": 56
+  },
+  {
+    "id": "shopify",
+    "name": "Shopify",
+    "family": "shopify",
+    "loginUrl": "https://accounts.shopify.com/store-login",
+    "hosts": [
+      "shopify.com",
+      "accounts.shopify.com"
+    ],
+    "rank": 57
+  },
+  {
+    "id": "squarespace",
+    "name": "Squarespace",
+    "family": "squarespace",
+    "loginUrl": "https://login.squarespace.com/",
+    "hosts": [
+      "squarespace.com",
+      "login.squarespace.com"
+    ],
+    "rank": 58
+  },
+  {
+    "id": "wordpress",
+    "name": "WordPress.com",
+    "family": "wordpress",
+    "loginUrl": "https://wordpress.com/log-in",
+    "hosts": [
+      "wordpress.com"
+    ],
+    "rank": 59
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "family": "cloudflare",
+    "loginUrl": "https://dash.cloudflare.com/login",
+    "hosts": [
+      "cloudflare.com",
+      "dash.cloudflare.com"
+    ],
+    "rank": 60
+  },
+  {
+    "id": "aws",
+    "name": "AWS",
+    "family": "amazon",
+    "loginUrl": "https://signin.aws.amazon.com/",
+    "hosts": [
+      "signin.aws.amazon.com",
+      "aws.amazon.com"
+    ],
+    "rank": 61
+  },
+  {
+    "id": "azure",
+    "name": "Azure",
+    "family": "microsoft",
+    "loginUrl": "https://portal.azure.com/",
+    "hosts": [
+      "azure.com",
+      "portal.azure.com"
+    ],
+    "rank": 62
+  },
+  {
+    "id": "digitalocean",
+    "name": "DigitalOcean",
+    "family": "digitalocean",
+    "loginUrl": "https://cloud.digitalocean.com/login",
+    "hosts": [
+      "digitalocean.com"
+    ],
+    "rank": 63
+  },
+  {
+    "id": "heroku",
+    "name": "Heroku",
+    "family": "heroku",
+    "loginUrl": "https://id.heroku.com/login",
+    "hosts": [
+      "heroku.com",
+      "id.heroku.com"
+    ],
+    "rank": 64
+  },
+  {
+    "id": "vercel",
+    "name": "Vercel",
+    "family": "vercel",
+    "loginUrl": "https://vercel.com/login",
+    "hosts": [
+      "vercel.com"
+    ],
+    "rank": 65
+  },
+  {
+    "id": "netlify",
+    "name": "Netlify",
+    "family": "netlify",
+    "loginUrl": "https://app.netlify.com/login",
+    "hosts": [
+      "netlify.com",
+      "app.netlify.com"
+    ],
+    "rank": 66
+  },
+  {
+    "id": "gitlab",
+    "name": "GitLab",
+    "family": "gitlab",
+    "loginUrl": "https://gitlab.com/users/sign_in",
+    "hosts": [
+      "gitlab.com"
+    ],
+    "rank": 67
+  },
+  {
+    "id": "bitbucket",
+    "name": "Bitbucket",
+    "family": "bitbucket",
+    "loginUrl": "https://bitbucket.org/account/signin/",
+    "hosts": [
+      "bitbucket.org"
+    ],
+    "rank": 68
+  },
+  {
+    "id": "atlassian",
+    "name": "Atlassian",
+    "family": "atlassian",
+    "loginUrl": "https://id.atlassian.com/login",
+    "hosts": [
+      "atlassian.com",
+      "id.atlassian.com"
+    ],
+    "rank": 69
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "family": "notion",
+    "loginUrl": "https://www.notion.so/login",
+    "hosts": [
+      "notion.so"
+    ],
+    "rank": 70
+  },
+  {
+    "id": "figma",
+    "name": "Figma",
+    "family": "figma",
+    "loginUrl": "https://www.figma.com/login",
+    "hosts": [
+      "figma.com"
+    ],
+    "rank": 71
+  },
+  {
+    "id": "canva",
+    "name": "Canva",
+    "family": "canva",
+    "loginUrl": "https://www.canva.com/login",
+    "hosts": [
+      "canva.com"
+    ],
+    "rank": 72
+  },
+  {
+    "id": "asana",
+    "name": "Asana",
+    "family": "asana",
+    "loginUrl": "https://app.asana.com/-/login",
+    "hosts": [
+      "asana.com",
+      "app.asana.com"
+    ],
+    "rank": 73
+  },
+  {
+    "id": "trello",
+    "name": "Trello",
+    "family": "atlassian",
+    "loginUrl": "https://trello.com/login",
+    "hosts": [
+      "trello.com"
+    ],
+    "rank": 74
+  },
+  {
+    "id": "monday",
+    "name": "monday.com",
+    "family": "monday",
+    "loginUrl": "https://auth.monday.com/login",
+    "hosts": [
+      "monday.com",
+      "auth.monday.com"
+    ],
+    "rank": 75
+  },
+  {
+    "id": "hubspot",
+    "name": "HubSpot",
+    "family": "hubspot",
+    "loginUrl": "https://app.hubspot.com/login",
+    "hosts": [
+      "hubspot.com",
+      "app.hubspot.com"
+    ],
+    "rank": 76
+  },
+  {
+    "id": "zendesk",
+    "name": "Zendesk",
+    "family": "zendesk",
+    "loginUrl": "https://www.zendesk.com/login/",
+    "hosts": [
+      "zendesk.com"
+    ],
+    "rank": 77
+  },
+  {
+    "id": "okta",
+    "name": "Okta",
+    "family": "okta",
+    "loginUrl": "https://login.okta.com/",
+    "hosts": [
+      "okta.com",
+      "login.okta.com"
+    ],
+    "rank": 78
+  },
+  {
+    "id": "auth0",
+    "name": "Auth0",
+    "family": "auth0",
+    "loginUrl": "https://manage.auth0.com/login",
+    "hosts": [
+      "auth0.com"
+    ],
+    "rank": 79
+  },
+  {
+    "id": "1password",
+    "name": "1Password",
+    "family": "onepassword",
+    "loginUrl": "https://my.1password.com/signin",
+    "hosts": [
+      "1password.com",
+      "my.1password.com"
+    ],
+    "rank": 80
+  },
+  {
+    "id": "lastpass",
+    "name": "LastPass",
+    "family": "lastpass",
+    "loginUrl": "https://lastpass.com/login.php",
+    "hosts": [
+      "lastpass.com"
+    ],
+    "rank": 81
+  },
+  {
+    "id": "bitwarden",
+    "name": "Bitwarden",
+    "family": "bitwarden",
+    "loginUrl": "https://vault.bitwarden.com/#/login",
+    "hosts": [
+      "bitwarden.com",
+      "vault.bitwarden.com"
+    ],
+    "rank": 82
+  },
+  {
+    "id": "proton",
+    "name": "Proton",
+    "family": "proton",
+    "loginUrl": "https://account.proton.me/login",
+    "hosts": [
+      "proton.me",
+      "account.proton.me"
+    ],
+    "rank": 83
+  },
+  {
+    "id": "icloud",
+    "name": "iCloud",
+    "family": "apple",
+    "loginUrl": "https://www.icloud.com/",
+    "hosts": [
+      "icloud.com"
+    ],
+    "rank": 84
+  },
+  {
+    "id": "gmail",
+    "name": "Gmail",
+    "family": "google",
+    "loginUrl": "https://accounts.google.com/ServiceLogin?service=mail",
+    "hosts": [
+      "mail.google.com"
+    ],
+    "rank": 85
+  },
+  {
+    "id": "outlook",
+    "name": "Outlook",
+    "family": "microsoft",
+    "loginUrl": "https://outlook.live.com/owa/",
+    "hosts": [
+      "outlook.live.com"
+    ],
+    "rank": 86
+  },
+  {
+    "id": "hulu",
+    "name": "Hulu",
+    "family": "hulu",
+    "loginUrl": "https://auth.hulu.com/web/login",
+    "hosts": [
+      "hulu.com",
+      "auth.hulu.com"
+    ],
+    "rank": 87
+  },
+  {
+    "id": "disneyplus",
+    "name": "Disney+",
+    "family": "disney",
+    "loginUrl": "https://www.disneyplus.com/login",
+    "hosts": [
+      "disneyplus.com"
+    ],
+    "rank": 88
+  },
+  {
+    "id": "hbomax",
+    "name": "Max",
+    "family": "max",
+    "loginUrl": "https://auth.max.com/login",
+    "hosts": [
+      "max.com",
+      "auth.max.com"
+    ],
+    "rank": 89
+  },
+  {
+    "id": "paramount",
+    "name": "Paramount+",
+    "family": "paramount",
+    "loginUrl": "https://www.paramountplus.com/account/signin/",
+    "hosts": [
+      "paramountplus.com"
+    ],
+    "rank": 90
+  },
+  {
+    "id": "primevideo",
+    "name": "Prime Video",
+    "family": "amazon",
+    "loginUrl": "https://www.amazon.com/ap/signin",
+    "hosts": [
+      "primevideo.com"
+    ],
+    "rank": 91
+  },
+  {
+    "id": "nytimes",
+    "name": "New York Times",
+    "family": "nytimes",
+    "loginUrl": "https://myaccount.nytimes.com/auth/login",
+    "hosts": [
+      "nytimes.com",
+      "myaccount.nytimes.com"
+    ],
+    "rank": 92
+  },
+  {
+    "id": "bbc",
+    "name": "BBC",
+    "family": "bbc",
+    "loginUrl": "https://account.bbc.com/signin",
+    "hosts": [
+      "bbc.com",
+      "bbc.co.uk",
+      "account.bbc.com"
+    ],
+    "rank": 93
+  },
+  {
+    "id": "booking",
+    "name": "Booking.com",
+    "family": "booking",
+    "loginUrl": "https://account.booking.com/sign-in",
+    "hosts": [
+      "booking.com",
+      "account.booking.com"
+    ],
+    "rank": 94
+  },
+  {
+    "id": "expedia",
+    "name": "Expedia",
+    "family": "expedia",
+    "loginUrl": "https://www.expedia.com/user/login",
+    "hosts": [
+      "expedia.com"
+    ],
+    "rank": 95
+  },
+  {
+    "id": "united",
+    "name": "United Airlines",
+    "family": "united",
+    "loginUrl": "https://www.united.com/ual/en/us/account/account/signin",
+    "hosts": [
+      "united.com"
+    ],
+    "rank": 96
+  },
+  {
+    "id": "delta",
+    "name": "Delta Air Lines",
+    "family": "delta",
+    "loginUrl": "https://www.delta.com/login/loginPage",
+    "hosts": [
+      "delta.com"
+    ],
+    "rank": 97
+  },
+  {
+    "id": "southwest",
+    "name": "Southwest",
+    "family": "southwest",
+    "loginUrl": "https://www.southwest.com/loyalty/login",
+    "hosts": [
+      "southwest.com"
+    ],
+    "rank": 98
+  },
+  {
+    "id": "marriott",
+    "name": "Marriott",
+    "family": "marriott",
+    "loginUrl": "https://www.marriott.com/sign-in.mi",
+    "hosts": [
+      "marriott.com"
+    ],
+    "rank": 99
+  },
+  {
+    "id": "hilton",
+    "name": "Hilton",
+    "family": "hilton",
+    "loginUrl": "https://www.hilton.com/en/hilton-honors/login/",
+    "hosts": [
+      "hilton.com"
+    ],
+    "rank": 100
+  }
+]
