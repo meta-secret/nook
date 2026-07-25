@@ -1,0 +1,185 @@
+schema_version: 3
+source_pr:
+  number: 780
+  url: https://github.com/meta-secret/nook/pull/780
+  title: "Add Nook-specific UI design skills"
+  change_surface: agent_skills_nook_svelte_impeccable
+  head_sha: 64b4aae2cff7af2e8919d826d6f55e63eaeda308
+  started_at: "2026-07-25T22:05:20Z"
+  opened_at: "2026-07-25T22:09:09Z"
+  merged_at: "2026-07-25T22:12:54Z"
+  elapsed_seconds: 454
+  open_to_merge_seconds: 225
+summary:
+  local_execution_count: 7
+  local_check_count: 7
+  local_test_count: 0
+  local_combined_count: 0
+  local_execution_seconds: 114
+  github_actions_run_count: 1
+  github_actions_seconds: 201
+  pr_retrigger_count: 0
+  agent_requested_rerun_count: 0
+  merge_attempt_count: 1
+test_inventory:
+  measured_at: "2026-07-25T22:16:37Z"
+  head_sha: 64b4aae2cff7af2e8919d826d6f55e63eaeda308
+  by_type:
+    rust: 634
+    preflight: 40
+    web_unit: 282
+    e2e: 205
+  total: 1161
+local_executions:
+  - command: task format
+    category: check
+    started_at: "2026-07-25T22:05:21Z"
+    finished_at: "2026-07-25T22:06:11Z"
+    duration_seconds: 50
+    outcome: passed
+    reason: pre_push_hygiene_initial
+  - command: python3 skill-creator/scripts/quick_validate.py .agents/skills/design-taste-frontend; validate skill frontmatter and Codex hook manifest; git diff --check
+    category: check
+    started_at: "2026-07-25T22:06:12Z"
+    finished_at: "2026-07-25T22:06:13Z"
+    duration_seconds: 1
+    outcome: passed
+    reason: skill_and_hook_package_validation
+  - command: inspect packaged skill files and scan for credential patterns
+    category: check
+    started_at: "2026-07-25T22:06:20Z"
+    finished_at: "2026-07-25T22:06:21Z"
+    duration_seconds: 1
+    outcome: passed
+    reason: vendored_skill_scope_and_secret_hygiene
+  - command: git diff --cached --check
+    category: check
+    started_at: "2026-07-25T22:06:30Z"
+    finished_at: "2026-07-25T22:06:31Z"
+    duration_seconds: 1
+    outcome: failed
+    reason: upstream_impeccable_reference_whitespace
+  - command: task format
+    category: check
+    started_at: "2026-07-25T22:07:57Z"
+    finished_at: "2026-07-25T22:08:50Z"
+    duration_seconds: 53
+    outcome: passed
+    reason: pre_commit_hygiene_after_reference_whitespace_normalization
+  - command: git diff --cached --check
+    category: check
+    started_at: "2026-07-25T22:08:52Z"
+    finished_at: "2026-07-25T22:08:53Z"
+    duration_seconds: 1
+    outcome: passed
+    reason: final_staged_patch_hygiene
+  - command: task pr:ready PR=780
+    category: check
+    started_at: "2026-07-25T22:12:36Z"
+    finished_at: "2026-07-25T22:12:43Z"
+    duration_seconds: 7
+    outcome: passed
+    reason: exact_head_readiness_before_squash_merge
+github_actions_runs:
+  - workflow: PR
+    run_id: 30177017928
+    run_attempt: 1
+    head_sha: 31a45378093eb727aca742150066dc5a6bd54bd6
+    trigger: pull_request
+    started_at: "2026-07-25T22:09:12Z"
+    finished_at: "2026-07-25T22:12:33Z"
+    duration_seconds: 201
+    conclusion: success
+cache_telemetry:
+  totals:
+    job_count: 3
+    remote_backend_job_count: 0
+    direct_compile_job_count: 3
+    sccache_compile_requests: 0
+    sccache_cache_hits: 0
+    sccache_cache_misses: 0
+    sccache_hit_rate_percent: null
+    buildkit_completed_steps: 80
+    buildkit_cached_steps: 19
+    buildkit_cache_hit_rate_percent: 23.75
+  jobs:
+    - workflow: PR
+      run_id: 30177017928
+      run_attempt: 1
+      job: rust
+      cache_backend: direct_compile
+      cache_backend_reason: hosted_secret_free_by_design
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 0
+        cache_hits: 0
+        cache_misses: 0
+        hit_rate_percent: null
+      buildkit:
+        completed_steps: 15
+        cached_steps: 0
+        cache_hit_rate_percent: 0.0
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 30177017928
+      run_attempt: 1
+      job: wasm
+      cache_backend: direct_compile
+      cache_backend_reason: hosted_secret_free_by_design
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 0
+        cache_hits: 0
+        cache_misses: 0
+        hit_rate_percent: null
+      buildkit:
+        completed_steps: 0
+        cached_steps: 0
+        cache_hit_rate_percent: null
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+    - workflow: PR
+      run_id: 30177017928
+      run_attempt: 1
+      job: verify
+      cache_backend: direct_compile
+      cache_backend_reason: hosted_secret_free_by_design
+      cache_backend_persistent: false
+      sccache:
+        compile_requests: 0
+        cache_hits: 0
+        cache_misses: 0
+        hit_rate_percent: null
+      buildkit:
+        completed_steps: 65
+        cached_steps: 19
+        cache_hit_rate_percent: 29.23
+        measurement: buildx_target_record_steps
+      collection_complete: true
+      collection_warnings: []
+pr_retriggers: []
+merge_attempts:
+  - at: "2026-07-25T22:12:54Z"
+    method: squash
+    outcome: success
+    reason: readiness_passed
+comparison:
+  baseline_prs: [720, 724]
+  baseline_quality: comparable
+  baseline_note: Both baselines changed the same project-local Taste Skill installation and agent-discovery surface under the same PR gate.
+  elapsed_seconds_change_percent: -40.5
+  local_execution_seconds_change_percent: -72.5
+  github_actions_seconds_change_percent: -42.2
+  test_inventory_total_change: 40
+  regression: false
+  regression_reasons: []
+waste_assessment:
+  wasteful: false
+  findings:
+    - One staged hygiene check found upstream reference-only whitespace before push; it was normalized locally and did not trigger a remote validation cycle.
+    - The implementation used one green GitHub Actions run, no retriggers, one successful readiness check, and one successful merge attempt.
+    - Hosted pull-request jobs compiled directly by design because untrusted PR workflows do not receive persistent cache credentials.
+  required_actions: []
