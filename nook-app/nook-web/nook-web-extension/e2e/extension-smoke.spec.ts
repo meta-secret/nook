@@ -584,6 +584,63 @@ test('sets up the extension device first and sends its public keys to Simple Vau
   }
 })
 
+test('handles vault unpair message and updates storage setup state', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const userDataDir = testInfo.outputPath('chromium-profile-unpair')
+  await mkdir(userDataDir, { recursive: true })
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    executablePath: chromiumExecutablePath,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+    ],
+  })
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const page = await context.newPage()
+    await page.goto(`chrome-extension://${extensionId}/popup/index.html`)
+
+    const grantKey = 'nook:extension-pairing-grant:store-e2e'
+    await writeExtensionStorage(page, {
+      [grantKey]: {
+        vaultType: 'simple',
+        deviceId: 'device-e2e',
+        devicePublicKey: 'age1extension',
+        deviceSigningPublicKey: 'extension-signing-key',
+        deviceLabel: 'Nook Extension',
+        vaultStoreId: 'store-e2e',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-07T00:00:00.000Z',
+        scopes: ['vault-access'],
+        syncProviderCount: 0,
+      },
+      [setupStorageKey]: connectedSetupState,
+    })
+
+    const simpleVaultUrl = matchingSimpleVaultBaseUrl('http://127.0.0.1:5173/')
+    const simplePage = await context.newPage()
+    await simplePage.goto(simpleVaultUrl)
+
+    const unpairResponse = await sendExternalMessage(simplePage, extensionId, {
+      type: 'nook:extension-unpair-vault',
+      payload: { vaultStoreId: 'store-e2e' },
+    })
+    expect(unpairResponse).toEqual({ ok: true })
+
+    const storage = await readExtensionStorage(context)
+    expect(storage[grantKey]).toBeUndefined()
+    expect(storage[setupStorageKey]).toBeUndefined()
+  } finally {
+    await context.close()
+  }
+})
+
 test('shows extension unlock when a paired device identity is unavailable', async ({
   browserName,
 }, testInfo) => {

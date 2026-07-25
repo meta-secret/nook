@@ -18,14 +18,77 @@ export function publishExtensionEventLogUpdate(
   window.postMessage(message, window.location.origin)
 }
 
-/** Publish an unpair notification for the extension when local vault data is
- * deleted from this browser profile. */
-export function publishExtensionUnpairVault(vaultStoreId: string): void {
-  if (typeof window === 'undefined' || !vaultStoreId) return
-  const message: ExtensionUnpairVaultMessage = {
-    type: 'nook:extension-unpair-vault',
-    payload: { vaultStoreId },
+/** Request an acknowledged unpair from the extension during local browser data
+ * deletion, falling back to window postMessage broadcast. */
+export async function requestExtensionUnpairVault(
+  vaultStoreId: string,
+): Promise<boolean> {
+  if (typeof window === 'undefined' || !vaultStoreId) return true
+  const runtime = (
+    globalThis as typeof globalThis & {
+      chrome?: {
+        runtime?: {
+          sendMessage?: (
+            extensionId: string,
+            message: unknown,
+            callback: (response?: unknown) => void,
+          ) => void
+          lastError?: { message?: string }
+        }
+      }
+    }
+  ).chrome?.runtime
+
+  const root = document.documentElement
+  const extensionRuntimeId = root?.getAttribute('data-nook-extension-runtime-id')
+
+  if (runtime?.sendMessage && extensionRuntimeId) {
+    const message: ExtensionUnpairVaultMessage = {
+      type: 'nook:extension-unpair-vault',
+      payload: { vaultStoreId },
+    }
+    return new Promise((resolve) => {
+      let done = false
+      const timer = window.setTimeout(() => {
+        if (!done) {
+          done = true
+          publishExtensionUnpairVault(vaultStoreId)
+          resolve(false)
+        }
+      }, 1500)
+
+      try {
+        runtime.sendMessage?.(extensionRuntimeId, message, (response) => {
+          if (done) return
+          done = true
+          window.clearTimeout(timer)
+          const runtimeError = runtime.lastError?.message
+          if (
+            !runtimeError &&
+            typeof response === 'object' &&
+            response !== null &&
+            'ok' in response &&
+            (response as { ok?: unknown }).ok === true
+          ) {
+            resolve(true)
+          } else {
+            publishExtensionUnpairVault(vaultStoreId)
+            resolve(false)
+          }
+        })
+      } catch {
+        if (!done) {
+          done = true
+          window.clearTimeout(timer)
+          publishExtensionUnpairVault(vaultStoreId)
+          resolve(false)
+        }
+      }
+    })
   }
-  window.postMessage(message, window.location.origin)
+
+  publishExtensionUnpairVault(vaultStoreId)
+  return true
 }
+
 

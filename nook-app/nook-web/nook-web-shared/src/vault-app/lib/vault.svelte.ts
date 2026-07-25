@@ -90,7 +90,7 @@ import {
 } from "$lib/vault-architecture";
 import {
   publishExtensionEventLogUpdate,
-  publishExtensionUnpairVault,
+  requestExtensionUnpairVault,
 } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 import * as localeActions from "$lib/vault/locale";
@@ -1982,7 +1982,7 @@ export class VaultState {
         this.activeVaultStoreId ??
         (await this.enqueueStorage(() => manager.vaultStoreId));
       if (vaultStoreId) {
-        publishExtensionUnpairVault(vaultStoreId);
+        await requestExtensionUnpairVault(vaultStoreId);
       }
       await deleteBrowserData(() => {
         const deletion = this.enqueueStorage(() =>

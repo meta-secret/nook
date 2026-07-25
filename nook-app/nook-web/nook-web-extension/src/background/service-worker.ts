@@ -2173,10 +2173,33 @@ async function unpairExtensionVault(
   vaultStoreId: string,
 ): Promise<{ ok: boolean }> {
   try {
-    await removeLocalStorage([
-      pairingGrantStorageKey(vaultStoreId),
-      setupStorageKey,
-    ])
+    const targetKey = pairingGrantStorageKey(vaultStoreId)
+    await removeLocalStorage([targetKey])
+
+    const allStorage = await getLocalStorage(null)
+    const remainingGrants: StoredExtensionPairingGrant[] = []
+    for (const [key, value] of Object.entries(allStorage)) {
+      if (
+        key.startsWith('nook:extension-pairing-grant:') &&
+        isStoredExtensionPairingGrant(value)
+      ) {
+        remainingGrants.push(value)
+      }
+    }
+
+    if (remainingGrants.length > 0) {
+      const latest = remainingGrants[0]
+      const setup = setupStateFromPairingGrant(latest, {
+        vaultStoreId: latest.vaultStoreId,
+        eventCount: 1,
+        heads: [],
+        accessGranted: true,
+      })
+      await setLocalStorage({ [setupStorageKey]: setup })
+    } else {
+      await removeLocalStorage([setupStorageKey])
+    }
+
     await ensureExtensionSessionDocument()
     await sendSessionMessage({ type: 'nook:extension-session-reset' })
     return { ok: true }
