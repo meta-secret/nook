@@ -21,11 +21,9 @@ test('approve extension pairing when the browser handoff accepts the grant', asy
   const extensionContext = await browser.newContext()
   await extensionContext.addInitScript(installMockPasskeyRuntime)
   const extensionPage = await extensionContext.newPage()
-  await extensionPage.goto(new URL(page.url()).origin)
+  await extensionPage.goto(`${new URL(page.url()).origin}/app/`)
   await expect(
-    extensionPage
-      .getByTestId('login-create-vault-chooser')
-      .or(extensionPage.getByTestId('login-gate')),
+    extensionPage.getByTestId('login-create-vault-chooser'),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
   const extensionDevice = await extensionPage.evaluate(async () => {
     type DemoVault = {
