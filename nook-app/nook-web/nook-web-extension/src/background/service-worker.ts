@@ -25,7 +25,9 @@ import {
   extensionStoredPairingGrantStorageItems,
   isExtensionReadySetupState,
   isStoredExtensionPairingGrant,
+  migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  setupAfterPairingGrantRemoval,
   setupStorageKey,
 } from './pairing-grants'
 import type { StoredExtensionPairingGrant } from './pairing-grants'
@@ -659,13 +661,51 @@ function hasPairingApprovedType(
   )
 }
 
-function setPairingStorage(items: Record<string, unknown>): Promise<void> {
-  return writeExtensionPairingState(items)
+async function setPairingStorage(
+  items: Record<string, unknown>,
+): Promise<void> {
+  await ensureLegacyPairingMigration()
+  await writeExtensionPairingState(items)
+}
+
+let legacyPairingMigration: Promise<void> | undefined
+
+function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
+  return Object.keys(stored).filter(
+    (key) =>
+      key === setupStorageKey ||
+      key.startsWith('nook:extension-pairing-grant:'),
+  )
+}
+
+function ensureLegacyPairingMigration(): Promise<void> {
+  legacyPairingMigration ??= (async () => {
+    // Browser storage is a read-once upgrade source only. Rexie remains the
+    // sole ongoing owner of pairing state after the legacy rows are removed.
+    const legacy = (await chrome.storage.local.get(null)) as Record<
+      string,
+      unknown
+    >
+    const legacyKeys = legacyPairingStorageKeys(legacy)
+    if (legacyKeys.length === 0) return
+    const current = await readExtensionPairingState()
+    if (Object.keys(current).length > 0) {
+      await chrome.storage.local.remove(legacyKeys)
+      return
+    }
+    const migrated = migratedLegacyPairingStorageItems(legacy)
+    if (Object.keys(migrated).length > 0) {
+      await writeExtensionPairingState(migrated)
+    }
+    await chrome.storage.local.remove(legacyKeys)
+  })()
+  return legacyPairingMigration
 }
 
 async function getPairingStorage(
   key?: string,
 ): Promise<Record<string, unknown>> {
+  await ensureLegacyPairingMigration()
   const stored = await readExtensionPairingState()
   if (key === undefined) return stored
   return key in stored ? { [key]: stored[key] } : {}
@@ -2116,8 +2156,9 @@ async function cancelWebsitePasskey(
   return { ok: true }
 }
 
-function removePairingStorage(keys: string[]): Promise<void> {
-  return removeExtensionPairingState(keys)
+async function removePairingStorage(keys: string[]): Promise<void> {
+  await ensureLegacyPairingMigration()
+  await removeExtensionPairingState(keys)
 }
 
 async function importApprovedPairing(
@@ -2133,9 +2174,6 @@ async function importApprovedPairing(
     }
     await ensureExtensionSessionDocument()
     await sendSessionMessage({ type: 'nook:extension-session-reset' })
-    await setPairingStorage(
-      extensionPairingGrantStorageItems(message.payload, imported),
-    )
     const providers =
       stageProviderCredentials(message.payload.providers) ??
       message.payload.providers
@@ -2161,10 +2199,6 @@ async function importApprovedPairing(
         !('ok' in sessionImport) ||
         sessionImport.ok !== true
       ) {
-        await removePairingStorage([
-          pairingGrantStorageKey(message.payload.vaultStoreId),
-          setupStorageKey,
-        ])
         const reason =
           sessionImport &&
           typeof sessionImport === 'object' &&
@@ -2175,6 +2209,9 @@ async function importApprovedPairing(
             : 'extension-vault-import-failed'
         return { ok: false, reason }
       }
+      await setPairingStorage(
+        extensionPairingGrantStorageItems(message.payload, imported),
+      )
     } finally {
       scrubProviderCredentials(providers)
     }
@@ -2197,11 +2234,19 @@ async function importLocalEventLogUpdate(
     }
     const imported = await importExtensionEventLog(grant, eventLogRecords)
     if (!imported.accessGranted) {
-      await removePairingStorage([key, setupStorageKey])
+      const setup = setupAfterPairingGrantRemoval(stored, vaultStoreId)
+      await removePairingStorage([key, ...(setup ? [] : [setupStorageKey])])
+      if (setup) {
+        await setPairingStorage({ [setupStorageKey]: setup })
+      }
       return { ok: false, reason: 'event-log-access-revoked' }
     }
+    const setup = stored[setupStorageKey]
+    const select =
+      isExtensionReadySetupState(setup) &&
+      setup.selectedVaultStoreId === vaultStoreId
     await setPairingStorage(
-      extensionStoredPairingGrantStorageItems(grant, imported),
+      extensionStoredPairingGrantStorageItems(grant, imported, select),
     )
     await ensureExtensionSessionDocument()
     await sendSessionMessage({

@@ -348,7 +348,10 @@ public key. The extension passkey unlocks the extension age identity, and
 Rust/WASM uses that identity to open the envelope and decrypt the local
 projection. Non-secret grant and selected-vault status metadata also remain in
 WASM-managed extension-origin Rexie/IndexedDB; browser-vendor storage is not a
-vault persistence boundary.
+vault persistence boundary. An upgrade may read the legacy
+`chrome.storage.local` pairing rows once, validate and copy the selected grant
+into Rexie, then delete every legacy pairing row; ongoing reads and writes use
+Rexie only.
 
 The `/extension-connect` creation path may temporarily use the unlocked
 extension identity. The website first creates a one-time age recipient whose

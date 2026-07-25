@@ -1282,27 +1282,38 @@ pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
 
 /// Read all extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen]
-pub struct NookExtensionPairingState(std::collections::HashMap<String, serde_json::Value>);
+pub struct NookExtensionPairingState(
+    std::collections::HashMap<String, crate::storage::extension_state::ExtensionPairingRecord>,
+);
 
 #[wasm_bindgen]
 impl NookExtensionPairingState {
     #[wasm_bindgen(js_name = fromObject)]
     pub fn from_object(entries: &js_sys::Object) -> Result<Self, wasm_bindgen::JsError> {
         serde_wasm_bindgen::from_value(entries.clone().into())
-            .map(Self)
             .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+            .and_then(|entries| {
+                crate::storage::extension_state::validate_entries(&entries)?;
+                Ok(Self(entries))
+            })
     }
 
     #[wasm_bindgen(js_name = toObject)]
     pub fn to_object(&self) -> Result<js_sys::Object, wasm_bindgen::JsError> {
-        serde_wasm_bindgen::to_value(&self.0)
-            .map(wasm_bindgen::JsCast::unchecked_into)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+        serde::Serialize::serialize(
+            &self.0,
+            &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
+        )
+        .map(wasm_bindgen::JsCast::unchecked_into)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
     }
 }
 
 impl NookExtensionPairingState {
-    fn entries(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+    fn entries(
+        &self,
+    ) -> &std::collections::HashMap<String, crate::storage::extension_state::ExtensionPairingRecord>
+    {
         &self.0
     }
 }
@@ -2188,7 +2199,41 @@ pub fn apply_backup_codes(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
+    use wasm_bindgen::JsCast;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn extension_pairing_state_round_trips_as_a_plain_object() {
+        let key = "nook:extension-pairing-grant:store-test";
+        let input = serde_json::json!({
+            (key): {
+                "vaultType": "simple",
+                "deviceId": "device-test",
+                "devicePublicKey": "age1test",
+                "deviceSigningPublicKey": "signing-test",
+                "deviceLabel": "Nook Extension",
+                "vaultStoreId": "store-test",
+                "vaultName": "Personal",
+                "approvedAt": "2026-07-25T00:00:00.000Z",
+                "scopes": ["password-filling"],
+                "syncProviderCount": 0,
+                "eventCount": 1,
+                "eventLogHeads": ["event-1"],
+                "lastLocalSyncAt": "2026-07-25T00:00:01.000Z"
+            }
+        });
+        let input = serde::Serialize::serialize(
+            &input,
+            &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
+        )
+        .expect("serialize pairing input")
+        .unchecked_into::<js_sys::Object>();
+        let state = NookExtensionPairingState::from_object(&input).expect("validate pairing input");
+        let output = state.to_object().expect("serialize pairing output");
+
+        assert!(js_sys::Reflect::has(&output, &key.into()).expect("inspect output key"));
+        assert!(!output.is_instance_of::<js_sys::Map>());
+    }
 
     #[wasm_bindgen_test]
     fn provider_storage_modes_round_trip_in_wasm() {
