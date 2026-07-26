@@ -16,6 +16,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust → WASM → browser-free web verify run read-only, then each serially exports its already-solved local BuildKit graph after lane validation; local-provider web e2e, extension e2e, and headless UI demos consume the verified WASM handoff on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then commit one `stats/main-build/**` record directly to Nook Workbench | Yes (`NOOK_GITHUB_PAT`)                   |
+| [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)       | Failed `Main` attempt                       | From trusted default-branch code, create or refresh one ready automated Workbench incident per failed Main revision using run metadata and failed job names only | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -34,6 +35,8 @@ flowchart LR
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
   main_stats --> workbench_stats[Commit metrics to Nook Workbench]
+  main_yml -->|failure| main_failure[Queue Workbench incident]
+  main_failure --> agent_worker[Scheduled agent worker]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -54,12 +57,16 @@ Cancellation is scoped to work that a newer run actually supersedes. In
 particular, PR validation uses `pr-<number>`: a new commit cancels the older run
 for that PR, while separate PRs continue to receive independent required checks.
 Do not replace this with one global PR group; that would leave older PRs with a
-cancelled required check whenever another contributor pushes.
+cancelled required check whenever another contributor pushes. Main is the
+exception: an active run completes so its serialized cache writers cannot be
+interrupted, while the single pending slot is replaced by the newest merged
+revision during a burst.
 
 | Workflow           | Concurrency scope                    | Cancel active run? | Reason                                                                           |
 | ------------------ | ------------------------------------ | ------------------ | -------------------------------------------------------------------------------- |
 | PR                 | PR number                            | Yes                | Only the newest commit on the same PR needs validation                           |
-| Main               | `main`                               | Yes                | A newer main deployment supersedes the older development deployment              |
+| Main               | `main`                               | No; one pending    | Finish active cache publication and coalesce bursts to the newest pending revision |
+| Main failure handoff | Failed Main head SHA               | No; one pending    | Serialize retries that update the same Workbench incident                         |
 | Main build stats   | Main run ID + attempt                 | No                 | Every completed attempt is immutable evidence; separate runs never supersede it   |
 | Manual PR e2e      | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                |
 | Web research       | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                        |
@@ -633,7 +640,7 @@ do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 ## CI agent (`ci-fix` / `ci-agent:implement`)
 
-[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. Main-branch failures remain visible for manual handling. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for Workbench issues or manual prompts (see below).
+[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. A failed Main run is handled separately by [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml): trusted default-branch code writes a deduplicated `status: ready`, `automation: agent` Workbench incident without copying raw logs, and the scheduled implementation worker claims it through the ordinary PR path. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for Workbench issues or manual prompts (see below).
 
 **Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner and `pr.yml` runs. Merge still requires the standard exact-head readiness audit.
 

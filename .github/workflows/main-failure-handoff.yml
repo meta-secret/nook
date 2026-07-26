@@ -1,0 +1,151 @@
+# Trusted handoff from a completed Main failure into the Workbench issue queue.
+# The workflow checks out default-branch code, records only run metadata and failed
+# job names, and never copies logs or credentials into the automated issue.
+
+name: Main failure handoff
+
+on:
+  workflow_run:
+    workflows: [Main]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: main-failure-handoff-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+  queue: single
+
+jobs:
+  record:
+    name: Queue failed Main revision
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted handoff implementation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Require Workbench publisher credential
+        env:
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+        run: |
+          if [ -z "${NOOK_GITHUB_PAT:-}" ]; then
+            echo "::error::NOOK_GITHUB_PAT is required to queue a failed Main revision"
+            exit 1
+          fi
+
+      - name: Create or refresh Workbench incident
+        id: incident
+        uses: actions/github-script@v9
+        env:
+          WORKBENCH_REPOSITORY: meta-secret/nook-workbench
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const {
+              buildMainFailureIssue,
+              incidentPathForRun,
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-failure-handoff.cjs`)
+
+            const eventRun = context.payload.workflow_run
+            const run = (
+              await github.request(
+                'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}',
+                {
+                  ...context.repo,
+                  run_id: eventRun.id,
+                  attempt_number: eventRun.run_attempt,
+                },
+              )
+            ).data
+            const jobs = await github.paginate(
+              'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs',
+              {
+                ...context.repo,
+                run_id: eventRun.id,
+                attempt_number: eventRun.run_attempt,
+                per_page: 100,
+              },
+            )
+            let sourcePullRequests = []
+            try {
+              sourcePullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  ...context.repo,
+                  commit_sha: run.head_sha,
+                  per_page: 100,
+                },
+              )
+            } catch (error) {
+              core.warning(`Could not associate pull requests with ${run.head_sha}: ${error.message}`)
+            }
+
+            const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
+            const incidentPath = incidentPathForRun(run)
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              let existing
+              try {
+                const { data } = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: incidentPath,
+                  ref: 'main',
+                })
+                if (Array.isArray(data) || data.type !== 'file') {
+                  core.setFailed(`Workbench incident is not a file: ${incidentPath}`)
+                  return
+                }
+                existing = {
+                  body: Buffer.from(data.content, 'base64').toString('utf8'),
+                  sha: data.sha,
+                }
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+
+              const incident = buildMainFailureIssue({
+                run,
+                jobs,
+                sourcePullRequests,
+                recordedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+                existingBody: existing?.body,
+              })
+              if (existing?.body === incident.body) {
+                core.info(`${incident.path} already records this Main attempt`)
+                core.setOutput('path', incident.path)
+                return
+              }
+
+              try {
+                await github.rest.repos.createOrUpdateFileContents({
+                  owner,
+                  repo,
+                  path: incident.path,
+                  branch: 'main',
+                  sha: existing?.sha,
+                  message: `ci: queue failed Nook Main ${run.head_sha.slice(0, 12)}`,
+                  content: Buffer.from(incident.body).toString('base64'),
+                })
+                core.info(`Queued ${incident.path}: ${incident.failedJobs.join(', ') || 'workflow failure'}`)
+                core.setOutput('path', incident.path)
+                core.setOutput(
+                  'url',
+                  `https://github.com/${owner}/${repo}/blob/main/${incident.path}`,
+                )
+                return
+              } catch (error) {
+                if (![409, 422].includes(error.status) || attempt === 3) throw error
+                core.warning(`Workbench changed concurrently; retrying ${incident.path}`)
+              }
+            }
