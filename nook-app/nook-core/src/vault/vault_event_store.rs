@@ -25,7 +25,7 @@ impl LocalEventStore {
     }
 
     pub fn put_event(&mut self, event_id: EventId, storage_bytes: Vec<u8>) {
-        self.replica.put_event(event_id, storage_bytes);
+        let _ = self.replica.put_event(event_id, storage_bytes);
     }
 
     pub fn remove_event(&mut self, event_id: &EventId) {
@@ -56,8 +56,8 @@ impl LocalEventStore {
     }
 
     #[must_use]
-    pub fn repair_entries(&self, remote_ids: &BTreeSet<EventId>) -> Vec<(EventId, Vec<u8>)> {
-        self.replica.repair_entries(remote_ids)
+    pub fn missing_event_ids(&self, remote_ids: &BTreeSet<EventId>) -> Vec<EventId> {
+        self.replica.missing_event_ids(remote_ids)
     }
 
     /// Build a causal graph from stored YAML bytes.

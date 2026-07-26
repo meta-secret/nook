@@ -840,6 +840,14 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
         dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
     );
+
+    let wasm_task = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    assert!(
+        wasm_task.contains(
+            "find \"nook-wasm/src\" \"nook-core/src\" \"nook-core/locales\" \"nook-auth2/src\" \"nook-replication/src\"",
+        ),
+        "mounted WASM builds must invalidate when portable replication source changes"
+    );
 }
 
 #[test]

@@ -87,17 +87,19 @@ where
         &self.quarantined
     }
 
-    pub fn insert(&mut self, id: Id, parents: Vec<Id>) -> CausalInsertStatus<Id> {
+    pub fn insert(&mut self, id: Id, parents: impl Into<Vec<Id>>) -> CausalInsertStatus<Id> {
         if self.parents.contains_key(&id) {
             return CausalInsertStatus::Duplicate;
         }
+        let parents = parents.into();
         let missing_parents = parents
             .iter()
             .filter(|parent| !self.parents.contains_key(*parent))
             .cloned()
             .collect::<Vec<_>>();
-        self.parents.insert(id, parents);
-        if missing_parents.is_empty() {
+        self.parents.insert(id, parents.clone());
+        self.propagate_quarantine();
+        if self.ancestor_ids_present(&parents) {
             CausalInsertStatus::Applied
         } else {
             CausalInsertStatus::Pending { missing_parents }
@@ -106,6 +108,7 @@ where
 
     pub fn quarantine(&mut self, id: Id, reason: String) {
         self.quarantined.insert(id, reason);
+        self.propagate_quarantine();
     }
 
     #[must_use]
@@ -177,9 +180,20 @@ where
         let Some(parents) = self.parents.get(descendant) else {
             return false;
         };
-        parents
-            .iter()
-            .any(|parent| self.is_ancestor(ancestor, parent))
+        let mut visited = BTreeSet::new();
+        let mut stack = parents.clone();
+        while let Some(id) = stack.pop() {
+            if &id == ancestor {
+                return true;
+            }
+            if !visited.insert(id.clone()) {
+                continue;
+            }
+            if let Some(parent_ids) = self.parents.get(&id) {
+                stack.extend(parent_ids.iter().cloned());
+            }
+        }
+        false
     }
 
     #[must_use]
@@ -227,18 +241,58 @@ where
     pub fn union(&self, other: &Self) -> Self {
         let mut merged = self.clone();
         for (id, parents) in &other.parents {
-            merged
-                .parents
-                .entry(id.clone())
-                .or_insert_with(|| parents.clone());
+            match merged.parents.get_mut(id) {
+                Some(existing) if existing != parents => {
+                    if parents < existing {
+                        existing.clone_from(parents);
+                    }
+                    merged.quarantined.insert(
+                        id.clone(),
+                        "Conflicting causal parent sets for the same event id".to_owned(),
+                    );
+                }
+                Some(_) => {}
+                None => {
+                    merged.parents.insert(id.clone(), parents.clone());
+                }
+            }
         }
         for (id, reason) in &other.quarantined {
             merged
                 .quarantined
                 .entry(id.clone())
+                .and_modify(|existing| {
+                    if reason < existing {
+                        existing.clone_from(reason);
+                    }
+                })
                 .or_insert_with(|| reason.clone());
         }
+        merged.propagate_quarantine();
         merged
+    }
+
+    fn propagate_quarantine(&mut self) {
+        loop {
+            let rejected_descendants = self
+                .parents
+                .iter()
+                .filter(|(id, parents)| {
+                    !self.quarantined.contains_key(*id)
+                        && parents
+                            .iter()
+                            .any(|parent| self.quarantined.contains_key(parent))
+                })
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>();
+            if rejected_descendants.is_empty() {
+                return;
+            }
+            for id in rejected_descendants {
+                self.quarantined
+                    .insert(id, "Ancestor event was rejected".to_owned());
+            }
+        }
     }
 }
 
@@ -273,6 +327,25 @@ mod tests {
     }
 
     #[test]
+    fn descendant_stays_pending_until_transitive_ancestor_arrives() {
+        let mut graph = CausalGraph::new();
+        assert!(matches!(
+            graph.insert(id("parent"), vec![id("root")]),
+            CausalInsertStatus::Pending { .. }
+        ));
+        assert_eq!(
+            graph.insert(id("child"), vec![id("parent")]),
+            CausalInsertStatus::Pending {
+                missing_parents: Vec::new()
+            }
+        );
+        assert_eq!(graph.pending_ids(), vec![&id("child"), &id("parent")]);
+
+        graph.insert(id("root"), Vec::new());
+        assert!(graph.pending_ids().is_empty());
+    }
+
+    #[test]
     fn concurrent_branches_and_join_have_deterministic_heads() {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
@@ -300,6 +373,35 @@ mod tests {
     }
 
     #[test]
+    fn quarantine_propagates_through_indexed_and_future_descendants() {
+        let mut graph = CausalGraph::new();
+        graph.insert(id("root"), Vec::new());
+        graph.insert(id("rejected"), vec![id("root")]);
+        graph.insert(id("descendant"), vec![id("rejected")]);
+
+        graph.quarantine(id("rejected"), id("invalid signature"));
+        assert!(graph.quarantined().contains_key("descendant"));
+        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+
+        graph.insert(id("future"), vec![id("descendant")]);
+        assert!(graph.quarantined().contains_key("future"));
+        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+    }
+
+    #[test]
+    fn ancestry_queries_terminate_for_cycles() {
+        let mut graph = CausalGraph::new();
+        graph.insert(id("left"), vec![id("right")]);
+        graph.insert(id("right"), vec![id("left")]);
+        graph.insert(id("unrelated"), Vec::new());
+
+        assert!(!graph.is_ancestor(&id("unrelated"), &id("left")));
+        assert!(graph.is_ancestor(&id("right"), &id("left")));
+        assert!(!graph.are_concurrent(&id("left"), &id("right")));
+        assert_eq!(graph.topological_order(), Err(CausalGraphError::Cycle));
+    }
+
+    #[test]
     fn union_is_commutative_associative_and_idempotent() {
         let mut left = CausalGraph::new();
         left.insert(id("root"), Vec::new());
@@ -318,5 +420,22 @@ mod tests {
             left.union(&right.union(&third))
         );
         assert_eq!(left.union(&left), left);
+    }
+
+    #[test]
+    fn union_quarantines_conflicting_parent_sets_commutatively() {
+        let mut left = CausalGraph::new();
+        left.insert(id("a"), Vec::new());
+        left.insert(id("same"), vec![id("a")]);
+
+        let mut right = CausalGraph::new();
+        right.insert(id("b"), Vec::new());
+        right.insert(id("same"), vec![id("b")]);
+
+        let left_right = left.union(&right);
+        let right_left = right.union(&left);
+        assert_eq!(left_right, right_left);
+        assert!(left_right.quarantined().contains_key("same"));
+        assert_eq!(left_right.parents(&id("same")), Some([id("a")].as_slice()));
     }
 }

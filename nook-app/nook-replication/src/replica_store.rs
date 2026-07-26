@@ -2,6 +2,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Result of inserting immutable bytes for an event identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplicaInsertStatus {
+    Inserted,
+    Duplicate,
+    Conflict,
+}
+
 /// Provider event-set classification before a connect or sync path mutates
 /// remote state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,8 +53,15 @@ where
         Self::default()
     }
 
-    pub fn put_event(&mut self, event_id: Id, storage_bytes: Vec<u8>) {
-        self.events.insert(event_id, storage_bytes);
+    pub fn put_event(&mut self, event_id: Id, storage_bytes: Vec<u8>) -> ReplicaInsertStatus {
+        match self.events.get(&event_id) {
+            Some(existing) if existing == &storage_bytes => ReplicaInsertStatus::Duplicate,
+            Some(_) => ReplicaInsertStatus::Conflict,
+            None => {
+                self.events.insert(event_id, storage_bytes);
+                ReplicaInsertStatus::Inserted
+            }
+        }
     }
 
     pub fn remove_event(&mut self, event_id: &Id) {
@@ -94,13 +109,14 @@ where
             .unwrap_or_default()
     }
 
-    /// Events available locally but absent from the observed remote event set.
+    /// Event identifiers available locally but absent from the observed remote
+    /// event set.
     #[must_use]
-    pub fn repair_entries(&self, remote_ids: &BTreeSet<Id>) -> Vec<(Id, Vec<u8>)> {
+    pub fn missing_event_ids(&self, remote_ids: &BTreeSet<Id>) -> Vec<Id> {
         self.events
-            .iter()
-            .filter(|(event_id, _)| !remote_ids.contains(*event_id))
-            .map(|(event_id, bytes)| (event_id.clone(), bytes.clone()))
+            .keys()
+            .filter(|event_id| !remote_ids.contains(*event_id))
+            .cloned()
             .collect()
     }
 }
@@ -129,9 +145,24 @@ mod tests {
         store.put_event(2_u8, vec![2]);
         store.put_event(3_u8, vec![3]);
 
+        assert_eq!(store.missing_event_ids(&BTreeSet::from([2_u8])), vec![1, 3]);
+    }
+
+    #[test]
+    fn immutable_event_id_keeps_first_payload_and_reports_conflicts() {
+        let mut store = ReplicaStore::new();
         assert_eq!(
-            store.repair_entries(&BTreeSet::from([2_u8])),
-            vec![(1, vec![1]), (3, vec![3])]
+            store.put_event(1_u8, vec![1]),
+            ReplicaInsertStatus::Inserted
         );
+        assert_eq!(
+            store.put_event(1_u8, vec![1]),
+            ReplicaInsertStatus::Duplicate
+        );
+        assert_eq!(
+            store.put_event(1_u8, vec![2]),
+            ReplicaInsertStatus::Conflict
+        );
+        assert_eq!(store.get_bytes(&1), Some([1_u8].as_slice()));
     }
 }
