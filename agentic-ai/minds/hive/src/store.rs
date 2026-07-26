@@ -40,6 +40,14 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         agent_id: &AgentId,
         error: &str,
     ) -> anyhow::Result<bool>;
+
+    async fn block(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+        blocker: &EnqueueTask,
+        reason: &str,
+    ) -> anyhow::Result<bool>;
 }
 
 #[cfg(test)]
@@ -149,6 +157,7 @@ mod tests {
                 id: task.definition.id.clone(),
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
+                source_commit: task.definition.source_commit.clone(),
                 attempt_id: AttemptId::new(Uuid::new_v4().to_string())
                     .map_err(anyhow::Error::msg)?,
                 attempt_number: task.attempt_count,
@@ -192,6 +201,24 @@ mod tests {
                 task.lease_token = None;
                 task.lease_until = None;
             }
+            let completed = tasks
+                .iter()
+                .filter(|(_, candidate)| candidate.status == "COMPLETED")
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>();
+            for candidate in tasks
+                .values_mut()
+                .filter(|candidate| candidate.status == "BLOCKED")
+            {
+                if candidate
+                    .definition
+                    .dependencies
+                    .iter()
+                    .all(|dependency| completed.iter().any(|id| id == dependency.as_str()))
+                {
+                    candidate.status = "READY";
+                }
+            }
             Ok(accepted)
         }
 
@@ -232,6 +259,37 @@ mod tests {
             task.lease_until = None;
             Ok(true)
         }
+
+        async fn block(
+            &self,
+            claimed: &ClaimedTask,
+            _agent_id: &AgentId,
+            blocker: &EnqueueTask,
+            _reason: &str,
+        ) -> anyhow::Result<bool> {
+            blocker.validate().map_err(anyhow::Error::msg)?;
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let task = tasks.get_mut(claimed.id.as_str()).expect("task");
+            if task.lease_token.as_ref() != Some(&claimed.lease_token) {
+                return Ok(false);
+            }
+            task.status = "BLOCKED";
+            task.attempt_count -= 1;
+            task.lease_token = None;
+            task.lease_until = None;
+            task.definition.dependencies.push(blocker.id.clone());
+            tasks.insert(
+                blocker.id.as_str().to_owned(),
+                TestTask {
+                    definition: blocker.clone(),
+                    status: "READY",
+                    attempt_count: 0,
+                    lease_token: None,
+                    lease_until: None,
+                },
+            );
+            Ok(true)
+        }
     }
 
     fn task(id: &str, dependencies: Vec<TaskId>) -> EnqueueTask {
@@ -239,6 +297,7 @@ mod tests {
             id: TaskId::new(id).expect("valid id"),
             kind: "code".to_owned(),
             prompt: "Implement it".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 0,
             max_attempts: 3,
             dependencies,
@@ -289,6 +348,34 @@ mod tests {
         let replacement = store.claim(&agent, 300).await.unwrap().unwrap();
 
         assert_eq!(replacement.attempt_number, 1);
+    }
+
+    #[tokio::test]
+    async fn discovered_blocker_is_prioritized_and_resumes_original_task() {
+        let store = MemoryStore::default();
+        store.enqueue(&task("original", Vec::new())).await.unwrap();
+        let agent = AgentId::new("agent").unwrap();
+        let original = store.claim(&agent, 300).await.unwrap().unwrap();
+        let mut blocker = task("blocker", Vec::new());
+        blocker.priority = 100;
+
+        assert!(
+            store
+                .block(&original, &agent, &blocker, "blocked by prerequisite")
+                .await
+                .unwrap()
+        );
+        let blocker_claim = store.claim(&agent, 300).await.unwrap().unwrap();
+        assert_eq!(blocker_claim.id, blocker.id);
+        assert!(
+            store
+                .complete(&blocker_claim, &agent, "blocker fixed", None)
+                .await
+                .unwrap()
+        );
+        let resumed = store.claim(&agent, 300).await.unwrap().unwrap();
+        assert_eq!(resumed.id, original.id);
+        assert_eq!(resumed.attempt_number, 1);
     }
 
     #[tokio::test]

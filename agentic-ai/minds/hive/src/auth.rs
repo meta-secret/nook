@@ -19,6 +19,7 @@ const AUTH_CONNECT_DELAY: Duration = Duration::from_millis(500);
 const AUTH_PERSIST_URL_ENV: &str = "HIVE_AUTH_PERSIST_URL";
 const AUTH_API_TOKEN: &str = "/run/secrets/hive-auth-api/token";
 const AUTH_API_CA: &str = "/run/secrets/hive-auth-api/ca.crt";
+const AUTH_PERSIST_RETRY_MAX: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Deserialize, Serialize)]
 struct BrokerRequest {
@@ -108,7 +109,7 @@ pub async fn run_auth_broker(
     }
     tokio::fs::set_permissions(&private_auth, permissions).await?;
 
-    let auth_manager = AuthManager::shared(
+    let mut auth_manager = AuthManager::shared(
         auth_home.clone(),
         false,
         AuthCredentialsStoreMode::File,
@@ -146,11 +147,29 @@ pub async fn run_auth_broker(
         let request: BrokerRequest =
             serde_json::from_str(&request).context("invalid auth broker request")?;
         if request.refresh {
-            auth_manager
-                .refresh_token_from_authority()
+            let projected_auth = tokio::fs::read(&auth_source)
                 .await
-                .map_err(|error| anyhow!("Codex authentication refresh failed: {error}"))?;
-            persist_rotated_auth(&private_auth, &auth_home).await?;
+                .context("failed to reload projected Codex authentication")?;
+            let private_auth_bytes = tokio::fs::read(&private_auth).await?;
+            if projected_auth != private_auth_bytes {
+                tokio::fs::write(&private_auth, projected_auth).await?;
+                auth_manager = AuthManager::shared(
+                    auth_home.clone(),
+                    false,
+                    AuthCredentialsStoreMode::File,
+                    None,
+                    None,
+                    AuthKeyringBackendKind::default(),
+                    None,
+                )
+                .await;
+            } else {
+                auth_manager
+                    .refresh_token_from_authority()
+                    .await
+                    .map_err(|error| anyhow!("Codex authentication refresh failed: {error}"))?;
+                persist_rotated_auth(&private_auth, &auth_home).await;
+            }
         }
         let auth = auth_manager
             .auth_cached()
@@ -168,7 +187,23 @@ pub async fn run_auth_broker(
     }
 }
 
-async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) -> anyhow::Result<()> {
+async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) {
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match persist_rotated_auth_once(private_auth, auth_home).await {
+            Ok(()) => return,
+            Err(error) => {
+                eprintln!(
+                    "Hive auth broker is retaining rotated credentials until Kubernetes persistence succeeds: {error:#}"
+                );
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(AUTH_PERSIST_RETRY_MAX);
+            }
+        }
+    }
+}
+
+async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> anyhow::Result<()> {
     let url = std::env::var(AUTH_PERSIST_URL_ENV)
         .context("HIVE_AUTH_PERSIST_URL is required to persist rotated credentials")?;
     let token = tokio::fs::read_to_string(AUTH_API_TOKEN)

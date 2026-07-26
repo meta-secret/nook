@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-workbench-dispatcher
+  namespace: hive-system
+  labels:
+    app.kubernetes.io/name: hive-workbench-dispatcher
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive-workbench-dispatcher
+  template:
+    metadata:
+      annotations:
+        hive.nook.sh/neo4j-ca-sha256: HIVE_NEO4J_CA_CHECKSUM
+      labels:
+        app.kubernetes.io/name: hive-workbench-dispatcher
+    spec:
+      runtimeClassName: kata-qemu-runtime-rs
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: neo4j-trust
+          image: HIVE_IMAGE
+          command:
+            - /bin/bash
+            - -ceu
+            - |
+              cat /etc/ssl/certs/ca-certificates.crt /run/neo4j/ca.crt \
+                > /trust/ca-certificates.crt
+              chmod 0444 /trust/ca-certificates.crt
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: neo4j-ca
+              mountPath: /run/neo4j
+              readOnly: true
+            - name: trust-bundle
+              mountPath: /trust
+      containers:
+        - name: dispatcher
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["workbench-dispatcher"]
+          env:
+            - name: HIVE_WORKBENCH_POLL_SECONDS
+              value: "120"
+            - name: NEO4J_URI
+              value: neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+            - name: SSL_CERT_FILE
+              value: /trust/ca-certificates.crt
+            - name: NEO4J_USERNAME
+              value: neo4j
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hive-neo4j-client
+                  key: NEO4J_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: trust-bundle
+              mountPath: /trust
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      volumes:
+        - name: trust-bundle
+          emptyDir:
+            sizeLimit: 2Mi
+        - name: temporary
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: neo4j-ca
+          secret:
+            secretName: hive-neo4j-ca
+            defaultMode: 0400

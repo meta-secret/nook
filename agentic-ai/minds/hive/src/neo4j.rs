@@ -18,7 +18,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 1;
+const LATEST_SCHEMA_VERSION: i64 = 2;
 const CLAIM_RETRY_LIMIT: usize = 5;
 
 fn is_transient_claim_error(error: &anyhow::Error) -> bool {
@@ -103,6 +103,7 @@ impl Neo4jTaskStore {
             id: TaskId::new(row.get::<String>("id")?).map_err(anyhow::Error::msg)?,
             kind: row.get("kind")?,
             prompt: row.get("prompt")?,
+            source_commit: row.get("source_commit")?,
             attempt_number: row.get("attempt_number")?,
             attempt_id,
             lease_token,
@@ -181,6 +182,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
                                    task.prompt = $prompt,
+                                   task.source_commit = $source_commit,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
                                    task.updated_at = timestamp()
@@ -190,6 +192,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("enqueue_token", enqueue_token.as_str())
                 .param("kind", task.kind.as_str())
                 .param("prompt", task.prompt.as_str())
+                .param("source_commit", task.source_commit.as_str())
                 .param("priority", task.priority)
                 .param("max_attempts", task.max_attempts),
             )
@@ -208,6 +211,7 @@ impl TaskStore for Neo4jTaskStore {
                 .execute(
                     query(
                         "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
+                         WHERE dependency.source_commit = task.source_commit
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
                          RETURN dependency.id AS id",
                     )
@@ -218,7 +222,9 @@ impl TaskStore for Neo4jTaskStore {
                 .with_context(|| format!("dependency {} does not exist", dependency))?;
             if rows.next(transaction.handle()).await?.is_none() {
                 transaction.rollback().await?;
-                return Err(anyhow::anyhow!("dependency {dependency} does not exist"));
+                return Err(anyhow::anyhow!(
+                    "dependency {dependency} does not exist or targets a different source commit"
+                ));
             }
         }
 
@@ -363,6 +369,7 @@ impl TaskStore for Neo4jTaskStore {
                      RETURN task.id AS id,
                             task.kind AS kind,
                             task.prompt AS prompt,
+                            task.source_commit AS source_commit,
                             attempt.number AS attempt_number,
                             dependency_ids,
                             dependency_summaries,
@@ -594,6 +601,74 @@ impl TaskStore for Neo4jTaskStore {
             .await?;
         Ok(rows.next().await?.is_some())
     }
+
+    async fn block(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+        blocker: &EnqueueTask,
+        reason: &str,
+    ) -> anyhow::Result<bool> {
+        blocker.validate().map_err(anyhow::Error::msg)?;
+        if blocker.source_commit != task.source_commit {
+            anyhow::bail!("a blocker must target the same pinned repository revision");
+        }
+        if !blocker.dependencies.is_empty() {
+            anyhow::bail!("a newly discovered blocker must not have undeclared dependencies");
+        }
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
+                     WHERE task.status = 'RUNNING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND attempt.lease_token = $lease_token
+                     MERGE (blocker:Task {id: $blocker_id})
+                     ON CREATE SET blocker.created_at = timestamp(),
+                                   blocker.attempt_count = 0,
+                                   blocker.version = 0,
+                                   blocker.kind = $blocker_kind,
+                                   blocker.prompt = $blocker_prompt,
+                                   blocker.source_commit = $source_commit,
+                                   blocker.priority = $blocker_priority,
+                                   blocker.max_attempts = $blocker_max_attempts,
+                                   blocker.status = 'READY',
+                                   blocker.updated_at = timestamp()
+                     WITH task, attempt, blocker
+                     WHERE blocker.source_commit = $source_commit
+                     MERGE (task)-[:DEPENDS_ON]->(blocker)
+                     SET task.status = 'BLOCKED',
+                         task.attempt_count = task.attempt_count - 1,
+                         task.blocked_reason = $reason,
+                         task.updated_at = timestamp(),
+                         task.lease_owner = null,
+                         task.lease_token = null,
+                         task.lease_until = null,
+                         attempt.status = 'BLOCKED',
+                         attempt.error = $reason,
+                         attempt.completed_at = timestamp()
+                     WITH task
+                     MATCH (agent:Agent {id: $agent_id})
+                     SET agent.status = 'IDLE', agent.last_seen_at = timestamp()
+                     RETURN task.id AS id",
+                )
+                .param("task_id", task.id.as_str())
+                .param("attempt_id", task.attempt_id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str())
+                .param("blocker_id", blocker.id.as_str())
+                .param("blocker_kind", blocker.kind.as_str())
+                .param("blocker_prompt", blocker.prompt.as_str())
+                .param("source_commit", blocker.source_commit.as_str())
+                .param("blocker_priority", blocker.priority)
+                .param("blocker_max_attempts", blocker.max_attempts)
+                .param("reason", reason),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
 }
 
 #[cfg(test)]
@@ -614,6 +689,7 @@ mod tests {
             id: TaskId::new(id).expect("valid task id"),
             kind: "integration".to_owned(),
             prompt: "Exercise the production task store".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 0,
             max_attempts: 3,
             dependencies,
@@ -663,6 +739,12 @@ mod tests {
             .enqueue(&dependency)
             .await
             .expect("enqueue dependency");
+        let mut mismatched = task(format!("mismatched-{suffix}"), vec![dependency.id.clone()]);
+        mismatched.source_commit = "fedcba9876543210fedcba9876543210fedcba98".to_owned();
+        assert!(
+            store.enqueue(&mismatched).await.is_err(),
+            "one dependency DAG must target exactly one repository revision"
+        );
         store.enqueue(&dependent).await.expect("enqueue dependent");
         assert!(
             store.enqueue(&dependency).await.is_err(),
@@ -824,6 +906,60 @@ mod tests {
                 .expect("complete descendant")
         );
 
+        let left = task(format!("left-{suffix}"), vec![dependency.id.clone()]);
+        let right = task(format!("right-{suffix}"), vec![dependency.id.clone()]);
+        store.enqueue(&left).await.expect("enqueue left branch");
+        store.enqueue(&right).await.expect("enqueue right branch");
+        for (branch, branch_artifact_id) in [
+            (&left, format!("left-artifact-{suffix}")),
+            (&right, format!("right-artifact-{suffix}")),
+        ] {
+            let claim = store
+                .claim(&agent_a, 300)
+                .await
+                .expect("claim branch")
+                .expect("branch available");
+            assert_eq!(claim.id, branch.id);
+            let branch_artifact = Artifact {
+                id: branch_artifact_id.clone(),
+                kind: "git-patch".to_owned(),
+                uri: format!("hive://artifact/{branch_artifact_id}"),
+                digest: format!("sha256:{branch_artifact_id}"),
+                content: format!("diff --git a/{branch_artifact_id} b/{branch_artifact_id}"),
+            };
+            assert!(
+                store
+                    .complete(&claim, &agent_a, "branch complete", Some(&branch_artifact))
+                    .await
+                    .expect("complete branch")
+            );
+        }
+        let diamond = task(
+            format!("diamond-{suffix}"),
+            vec![left.id.clone(), right.id.clone()],
+        );
+        store.enqueue(&diamond).await.expect("enqueue diamond");
+        let diamond_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim diamond")
+            .expect("diamond available");
+        assert_eq!(
+            diamond_claim
+                .dependency_artifacts
+                .iter()
+                .filter(|candidate| candidate.id == artifact.id)
+                .count(),
+            1,
+            "a shared ancestor artifact must be materialized only once"
+        );
+        assert!(
+            store
+                .complete(&diamond_claim, &agent_a, "diamond complete", None)
+                .await
+                .expect("complete diamond")
+        );
+
         let mut rows = store
             .graph
             .execute(
@@ -884,6 +1020,46 @@ mod tests {
             rollout_statuses.push(row.get::<String>("status").expect("rollout status"));
         }
         assert_eq!(rollout_statuses, ["COMPLETED", "INTERRUPTED"]);
+
+        let original = task(format!("blocked-original-{suffix}"), Vec::new());
+        let mut blocker = task(format!("blocker-{suffix}"), Vec::new());
+        blocker.priority = 100;
+        store.enqueue(&original).await.expect("enqueue original");
+        let original_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim original")
+            .expect("original available");
+        assert!(
+            store
+                .block(
+                    &original_claim,
+                    &agent_a,
+                    &blocker,
+                    "requires a prerequisite repair",
+                )
+                .await
+                .expect("persist blocker")
+        );
+        let blocker_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim blocker")
+            .expect("blocker available");
+        assert_eq!(blocker_claim.id, blocker.id);
+        assert!(
+            store
+                .complete(&blocker_claim, &agent_a, "blocker complete", None)
+                .await
+                .expect("complete blocker")
+        );
+        let resumed_original = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("resume original")
+            .expect("original resumed");
+        assert_eq!(resumed_original.id, original.id);
+        assert_eq!(resumed_original.attempt_number, 1);
 
         store
             .graph

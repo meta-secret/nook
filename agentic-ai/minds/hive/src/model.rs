@@ -33,7 +33,7 @@ string_id!(AgentId);
 string_id!(AttemptId);
 string_id!(LeaseToken);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: String,
     pub kind: String,
@@ -42,11 +42,12 @@ pub struct Artifact {
     pub content: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClaimedTask {
     pub id: TaskId,
     pub kind: String,
     pub prompt: String,
+    pub source_commit: String,
     pub attempt_id: AttemptId,
     pub attempt_number: i64,
     pub lease_token: LeaseToken,
@@ -60,11 +61,12 @@ pub struct DependencyResult {
     pub summary: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnqueueTask {
     pub id: TaskId,
     pub kind: String,
     pub prompt: String,
+    pub source_commit: String,
     pub priority: i64,
     pub max_attempts: i64,
     pub dependencies: Vec<TaskId>,
@@ -77,6 +79,14 @@ impl EnqueueTask {
         }
         if self.prompt.trim().is_empty() {
             return Err("task prompt must not be empty".to_owned());
+        }
+        if self.source_commit.len() != 40
+            || !self
+                .source_commit
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err("source_commit must be a full 40-character Git object id".to_owned());
         }
         if self.max_attempts < 1 {
             return Err("max_attempts must be at least one".to_owned());
@@ -98,6 +108,14 @@ pub struct TerminalResult {
     pub summary: String,
     pub changed_files: Vec<String>,
     pub tests: Vec<String>,
+    pub blocker: Option<BlockerRequest>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockerRequest {
+    pub id: TaskId,
+    pub title: String,
+    pub prompt: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,6 +136,7 @@ mod tests {
             id: task_id.clone(),
             kind: "code".to_owned(),
             prompt: "Implement it".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 1,
             max_attempts: 2,
             dependencies: vec![task_id],

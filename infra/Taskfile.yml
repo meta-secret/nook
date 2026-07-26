@@ -543,7 +543,9 @@ tasks:
           hive-data/hive-neo4j-auth \
           hive-data/hive-neo4j-tls \
           hive-system/hive-neo4j-client \
-          hive-system/hive-neo4j-ca; do
+          hive-system/hive-neo4j-ca \
+          hive-system/hive-codex-auth \
+          hive-system/hive-github-publication; do
           namespace="${secret%%/*}"
           name="${secret#*/}"
           if sudo -n k0s kubectl get secret "$name" \
@@ -691,7 +693,27 @@ tasks:
         kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"
 
         secret_dir="$(mktemp -d)"
-        trap 'rm -rf "$secret_dir"' EXIT
+        kubeconfig=""
+        hive_replicas=""
+        restore_hive() {
+          if test -n "$hive_replicas"; then
+            kubectl scale deployment/hive \
+              --namespace hive-system \
+              --replicas="$hive_replicas"
+            kubectl rollout status deployment/hive \
+              --namespace hive-system \
+              --timeout=15m
+            hive_replicas=""
+          fi
+        }
+        cleanup() {
+          rm -rf "$secret_dir"
+          if test -n "$kubeconfig"; then
+            rm -f "$kubeconfig"
+          fi
+          restore_hive
+        }
+        trap cleanup EXIT
         umask 077
         reuse_tls=false
         tls_changed=false
@@ -753,6 +775,29 @@ tasks:
           /var/lib/hive/neo4j-tls/ca.key \
           /var/lib/hive/neo4j-tls/private.key
 
+        if test "$tls_changed" = true &&
+          kubectl get deployment hive --namespace hive-system >/dev/null 2>&1; then
+          hive_replicas="$(
+            kubectl get deployment hive \
+              --namespace hive-system \
+              -o jsonpath='{.spec.replicas}'
+          )"
+          kubectl scale deployment/hive --namespace hive-system --replicas=0
+          kubectl rollout status deployment/hive \
+            --namespace hive-system \
+            --timeout=15m
+          if kubectl get pod \
+            --namespace hive-system \
+            --selector app.kubernetes.io/name=hive \
+            -o name | grep -q .; then
+            kubectl wait pod \
+              --namespace hive-system \
+              --selector app.kubernetes.io/name=hive \
+              --for=delete \
+              --timeout=5m
+          fi
+        fi
+
         kubectl create secret generic hive-neo4j-tls \
           --namespace hive-data \
           --from-file=private.key="$secret_dir/private.key" \
@@ -807,14 +852,12 @@ tasks:
             --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD"
         fi
         rm -rf "$secret_dir"
-        trap - EXIT
 
         curl -fsSL --retry 3 -o "$chart.next" \
           "https://helm.neo4j.com/neo4j/neo4j-$version.tgz"
         printf '%s  %s\n' "{{.NEO4J_CHART_SHA256}}" "$chart.next" | sha256sum -c -
         mv "$chart.next" "$chart"
         kubeconfig="$(mktemp)"
-        trap 'rm -f "$kubeconfig"' EXIT
         sudo -n k0s kubeconfig admin > "$kubeconfig"
         chmod 0600 "$kubeconfig"
         export KUBECONFIG="$kubeconfig"
@@ -831,6 +874,7 @@ tasks:
         kubectl rollout status statefulset/hive-neo4j \
           --namespace hive-data \
           --timeout=10m
+        restore_hive
         test "$(kubectl get service hive-neo4j \
           --namespace hive-data \
           -o jsonpath='{.spec.type}')" = ClusterIP
@@ -932,6 +976,50 @@ tasks:
         fi
         BASH
 
+  hive:github:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        token_file="${HIVE_GITHUB_TOKEN_FILE:-}"
+        if test -n "$token_file"; then
+          test -s "$token_file"
+          test "$(wc -l < "$token_file" | tr -d ' ')" = 1
+          ssh -n -o BatchMode=yes "$ssh_target" \
+            "install -d -m 0700 '$remote_dir/secrets'"
+          remote_token_file="$remote_dir/secrets/github-publication.next"
+          cleanup_token() {
+            ssh -n -o BatchMode=yes "$ssh_target" \
+              "rm -f '$remote_token_file'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_token EXIT
+          scp -q -o BatchMode=yes "$token_file" \
+            "$ssh_target:$remote_token_file"
+          ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
+        set -euo pipefail
+        remote_dir="$remote_dir"
+        token_file="\$remote_dir/secrets/github-publication.next"
+        trap 'rm -f "\$token_file"' EXIT
+        chmod 0600 "\$token_file"
+        sudo -n k0s kubectl create secret generic hive-github-publication \
+          --namespace hive-system \
+          --from-file=token="\$token_file" \
+          --dry-run=client \
+          -o yaml |
+          sudo -n k0s kubectl apply -f -
+        REMOTE
+          trap - EXIT
+          cleanup_token
+        else
+          ssh -o BatchMode=yes "$ssh_target" \
+            "sudo -n k0s kubectl get secret hive-github-publication --namespace hive-system >/dev/null"
+        fi
+        BASH
+
   hive:deploy:
     desc: Publish and deploy the four-replica Kata-backed Hive warm pool.
     deps: [k0s:sync]
@@ -939,6 +1027,7 @@ tasks:
     cmds:
       - task: hive:image
       - task: hive:auth:sync
+      - task: hive:github:sync
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
@@ -949,6 +1038,13 @@ tasks:
           kubectl get secret hive-codex-auth \
             --namespace hive-system \
             -o jsonpath='{.data.auth\\.json}' |
+            sha256sum |
+            cut -d' ' -f1
+        )"
+        github_checksum="$(
+          kubectl get secret hive-github-publication \
+            --namespace hive-system \
+            -o jsonpath='{.data.token}' |
             sha256sum |
             cut -d' ' -f1
         )"
@@ -973,6 +1069,13 @@ tasks:
             exit 1
             ;;
         esac
+        case "$github_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "GitHub publication credential checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
         case "$image" in
           127.0.0.1:5000/nook-hive@sha256:*) ;;
           *)
@@ -985,13 +1088,22 @@ tasks:
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           -e "s|HIVE_AUTH_CHECKSUM|$auth_checksum|g" \
+          -e "s|HIVE_GITHUB_CHECKSUM|$github_checksum|g" \
           -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/deployment.yaml" > "$rendered"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          "$remote_dir/infra/k0s/manifests/hive/dispatcher.yaml" >> "$rendered"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
         kubectl rollout status deployment/hive \
+          --namespace hive-system \
+          --timeout=15m
+        kubectl rollout status deployment/hive-workbench-dispatcher \
           --namespace hive-system \
           --timeout=15m
         test "$(kubectl get deployment hive \
@@ -1018,11 +1130,18 @@ tasks:
         test "$(
           printf '%s' "$deployment_json" |
             jq -r '.spec.template.spec.containers[]
-              | select(.name == "hive")
+              | select(.name == "coordinator")
               | .env[]
               | select(.name == "NEO4J_URI")
               | .value'
         )" = neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+        test "$(
+          printf '%s' "$deployment_json" |
+            jq '[.spec.template.spec.containers[]
+              | select(.name == "hive")
+              | .env[]
+              | select(.name | startswith("NEO4J_"))] | length'
+        )" = 0
 
         old_pod="$(kubectl get pods \
           --namespace hive-system \

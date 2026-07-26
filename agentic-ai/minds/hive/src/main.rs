@@ -4,8 +4,11 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use codex::{Arg0DispatchPaths, arg0_dispatch_or_else};
 use hive::auth::run_auth_broker;
+use hive::coordinator::run_coordinator;
+use hive::dispatcher::run_workbench_dispatcher;
 use hive::model::{AgentId, EnqueueTask, TaskId};
-use hive::{Neo4jTaskStore, TaskStore, Worker, WorkerConfig};
+use hive::publication::{GitHubRequest, run_publication_broker, run_publication_client};
+use hive::{CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig};
 
 #[derive(Debug, Parser)]
 #[command(name = "hive", about = "Run isolated Nook coding agents")]
@@ -59,6 +62,36 @@ enum Command {
             default_value = "/run/hive-auth/broker.sock"
         )]
         auth_socket: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_PUBLICATION_SOCKET",
+            default_value = "/run/hive-publication/broker.sock"
+        )]
+        publication_socket: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_COORDINATOR_SOCKET",
+            default_value = "/run/hive-coordinator/coordinator.sock"
+        )]
+        coordinator_socket: PathBuf,
+    },
+    Coordinator {
+        #[arg(
+            long,
+            env = "HIVE_COORDINATOR_SOCKET",
+            default_value = "/run/hive-coordinator/coordinator.sock"
+        )]
+        socket: PathBuf,
+    },
+    WorkbenchDispatcher {
+        #[arg(
+            long,
+            env = "HIVE_WORKBENCH_CONTENTS_URL",
+            default_value = "https://api.github.com/repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform?ref=main"
+        )]
+        contents_url: String,
+        #[arg(long, env = "HIVE_WORKBENCH_POLL_SECONDS", default_value_t = 120)]
+        poll_seconds: u64,
     },
     AuthBroker {
         #[arg(
@@ -76,6 +109,38 @@ enum Command {
         #[arg(long, env = "HIVE_AUTH_HOME", default_value = "/var/lib/hive-auth")]
         auth_home: PathBuf,
     },
+    PublicationBroker {
+        #[arg(
+            long,
+            env = "HIVE_PUBLICATION_SOCKET",
+            default_value = "/run/hive-publication/broker.sock"
+        )]
+        socket: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_GITHUB_TOKEN_FILE",
+            default_value = "/run/secrets/github/token"
+        )]
+        token_file: PathBuf,
+        #[arg(long, env = "HIVE_WORKSPACE", default_value = "/workspace")]
+        workspace: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_PUBLICATION_HOME",
+            default_value = "/var/lib/hive-publication"
+        )]
+        private_home: PathBuf,
+    },
+    Github {
+        #[arg(
+            long,
+            env = "HIVE_PUBLICATION_SOCKET",
+            default_value = "/run/hive-publication/broker.sock"
+        )]
+        socket: PathBuf,
+        #[command(subcommand)]
+        action: GitHubAction,
+    },
     Migrate,
     Enqueue {
         #[arg(long)]
@@ -84,12 +149,43 @@ enum Command {
         kind: String,
         #[arg(long)]
         prompt: String,
+        #[arg(long)]
+        source_commit: String,
         #[arg(long, default_value_t = 0)]
         priority: i64,
         #[arg(long, default_value_t = 3)]
         max_attempts: i64,
         #[arg(long, value_delimiter = ',')]
         depends_on: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubAction {
+    Publish {
+        #[arg(long)]
+        title: String,
+        #[arg(long)]
+        body: String,
+    },
+    Inspect,
+    ReplyThread {
+        #[arg(long)]
+        thread_id: String,
+        #[arg(long)]
+        body: String,
+    },
+    ResolveThread {
+        #[arg(long)]
+        thread_id: String,
+    },
+    Merge {
+        #[arg(long)]
+        expected_head: String,
+    },
+    VerifyMain {
+        #[arg(long)]
+        merge_commit: String,
     },
 }
 
@@ -106,6 +202,52 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             auth_source,
             auth_home,
         } => run_auth_broker(socket, auth_source, auth_home).await,
+        Command::PublicationBroker {
+            socket,
+            token_file,
+            workspace,
+            private_home,
+        } => run_publication_broker(socket, workspace, token_file, private_home).await,
+        Command::Github { socket, action } => {
+            let request = match action {
+                GitHubAction::Publish { title, body } => GitHubRequest::Publish { title, body },
+                GitHubAction::Inspect => GitHubRequest::Inspect,
+                GitHubAction::ReplyThread { thread_id, body } => {
+                    GitHubRequest::ReplyThread { thread_id, body }
+                }
+                GitHubAction::ResolveThread { thread_id } => {
+                    GitHubRequest::ResolveThread { thread_id }
+                }
+                GitHubAction::Merge { expected_head } => GitHubRequest::Merge { expected_head },
+                GitHubAction::VerifyMain { merge_commit } => {
+                    GitHubRequest::VerifyMain { merge_commit }
+                }
+            };
+            run_publication_client(&socket, request).await
+        }
+        Command::Coordinator { socket } => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for the coordinator")?;
+            let store =
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                    .await?;
+            run_coordinator(socket, store).await
+        }
+        Command::WorkbenchDispatcher {
+            contents_url,
+            poll_seconds,
+        } => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
+            let store =
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                    .await?;
+            run_workbench_dispatcher(store, &contents_url, poll_seconds).await
+        }
         Command::Worker {
             agent_id,
             pod_name,
@@ -119,14 +261,10 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             model,
             reasoning_effort,
             auth_socket,
+            publication_socket,
+            coordinator_socket,
         } => {
-            let neo4j_password = cli
-                .neo4j_password
-                .as_deref()
-                .context("NEO4J_PASSWORD is required for the worker")?;
-            let store =
-                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                    .await?;
+            let store = CoordinatorTaskStore::connect(&coordinator_socket).await?;
             if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
                 anyhow::bail!("heartbeat interval must be positive and shorter than the lease");
             }
@@ -149,6 +287,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     reasoning_effort,
                     arg0_paths,
                     auth_socket,
+                    publication_socket,
                 },
             )
             .run()
@@ -168,6 +307,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             id,
             kind,
             prompt,
+            source_commit,
             priority,
             max_attempts,
             depends_on,
@@ -190,6 +330,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     id: TaskId::new(id).map_err(anyhow::Error::msg)?,
                     kind,
                     prompt,
+                    source_commit,
                     priority,
                     max_attempts,
                     dependencies,

@@ -2,11 +2,14 @@
 
 Hive is Nook's single-task, Kata-isolated AI worker. Kubernetes maintains a
 warm pool of four workers; each worker claims one runnable Neo4j task, runs one
-embedded Codex thread, commits the terminal result using its lease token, and
-exits. The Deployment then creates a clean microVM-backed replacement.
+embedded Codex thread, and owns Main-repair delivery through a green merged
+revision. It commits the terminal result using its lease token and exits. The
+Deployment then creates a clean microVM-backed replacement.
 
-Hive deliberately has no application-level coordinator or message broker.
-Neo4j owns the DAG, claim transaction, leases, attempts, and results.
+Hive deliberately has no separate message broker. Neo4j owns the DAG, claim
+transaction, leases, attempts, and results. A narrow coordinator sidecar owns
+the Neo4j credential and exposes only typed worker operations over one private
+Unix connection; repository commands cannot issue raw graph queries.
 
 ## Stored readiness invariant
 
@@ -44,21 +47,38 @@ during the reaper's polling window. Workers receive no Docker socket.
 On `SIGTERM`, a claimed worker transactionally releases its lease and marks the
 attempt interrupted without consuming the task's retry budget before rollout.
 
-The prototype clones the configured repository over HTTPS into a disposable
-`emptyDir`. Before marking an implementation task complete, Hive collects a
+A one-replica Kata dispatcher reconciles trusted `ready/agent` Workbench Main
+incidents into Neo4j. The failed Main SHA is the idempotency key, so retries do
+not duplicate work. A repository-scoped GitHub credential lives only in a
+separate publication broker. Codex can request deterministic branch
+publication, PR inspection, targeted review replies and resolution, exact-head
+squash merge, and resulting Main verification, but cannot read the credential
+or invoke arbitrary GitHub APIs. A short Git-ref lock serializes the base
+recheck and merge; stale locks self-expire.
+
+If Codex discovers blocking work, its structured result names the blocker.
+Hive atomically creates a higher-priority task, adds a `DEPENDS_ON` edge, and
+releases the original attempt without consuming its retry budget. Completing
+the blocker promotes the original task back to `READY`.
+
+The prototype fetches the task's full pinned Git object ID over HTTPS into a
+disposable `emptyDir`; every task in one dependency DAG must target that same
+revision. Before marking an implementation task complete, Hive collects a
 bounded binary Git patch, stores its digest and content as an `Artifact` node
 linked to the attempt, and commits that artifact in the same Neo4j transaction
-as the terminal result. Direct GitHub publication remains an explicit
-follow-up decision.
+as the terminal result. Main-repair tasks are not terminal until the broker has
+squash-merged their PR and the resulting Main workflow is green. Deterministic
+branches let replacement Pods resume an existing delivery instead of creating
+duplicates.
 
-Neo4j requires Bolt TLS. The deployment creates a private host-persisted CA and
+Neo4j requires Bolt TLS. The deployment creates a private CA and
 service certificate, configures the chart with `server.bolt.tls_level=REQUIRED`,
-and gives workers only the CA certificate. Workers connect with `neo4j+s://`,
-so both the service hostname and certificate chain are verified.
+and stores the keys only in encrypted Kubernetes Secrets and the authenticated
+recovery bundle. Only the coordinator gets the Neo4j credential and CA.
 
 ## Graph schema
 
-Hive graph schema version `1` creates unique constraints for `Task`, `Agent`,
+Hive graph schema version `2` creates unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, plus the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
 run when the stored version is newer than the binary supports. Because Neo4j
@@ -66,9 +86,10 @@ does not allow schema and data writes in one transaction, Hive applies the
 idempotent `IF NOT EXISTS` schema statements first and records the version only
 after every statement succeeds.
 
-Version 1 is additive. To roll it back, first stop every Hive worker, back up
+Version 2 adds the pinned `source_commit` task property. To roll it back, first
+stop every Hive worker, back up
 the Neo4j data volume, drop `hive_task_claim` and the four `hive_*_id`
-constraints, then delete the version-1 `HiveSchemaMigration` node. Task and
+constraints, then delete the version-2 `HiveSchemaMigration` node. Task and
 attempt data do not need to be deleted. Restore the backup if any schema removal
 step fails.
 
@@ -87,6 +108,6 @@ Runtime operations use the binary directly:
 
 ```text
 hive migrate
-hive enqueue --id task-1 --prompt "Implement the feature"
+hive enqueue --id task-1 --source-commit <full-git-object-id> --prompt "Implement the feature"
 hive worker
 ```

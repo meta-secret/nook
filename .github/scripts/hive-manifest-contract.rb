@@ -9,6 +9,7 @@ load_yaml = lambda do |path|
 end
 
 deployment = load_yaml.call("infra/k0s/manifests/hive/deployment.yaml")
+dispatcher_deployment = load_yaml.call("infra/k0s/manifests/hive/dispatcher.yaml")
 pod = deployment.fetch("spec").fetch("template").fetch("spec")
 raise "Hive must keep four warm workers" unless deployment.dig("spec", "replicas") == 4
 raise "Hive must use Kata" unless pod["runtimeClassName"] == "kata-qemu-runtime-rs"
@@ -29,20 +30,49 @@ end
 
 worker = pod.fetch("containers").find { |container| container.fetch("name") == "hive" }
 broker = pod.fetch("containers").find { |container| container.fetch("name") == "auth-broker" }
+coordinator = pod.fetch("containers").find { |container| container.fetch("name") == "coordinator" }
+publisher = pod.fetch("containers").find { |container| container.fetch("name") == "publication-broker" }
 worker_mounts = worker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 broker_mounts = broker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
+coordinator_mounts = coordinator.fetch("volumeMounts").map { |mount| mount.fetch("name") }
+publisher_mounts = publisher.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 raise "Hive worker must not mount Codex credentials" if worker_mounts.include?("codex-auth-source")
 raise "Hive worker must not mount the broker auth home" if worker_mounts.include?("broker-auth-home")
 raise "Hive worker must not mount the broker API token" if worker_mounts.include?("broker-auth-api")
+raise "Hive worker must not mount GitHub credentials" if worker_mounts.include?("github-publication")
 unless broker_mounts.include?("codex-auth-source") &&
        broker_mounts.include?("broker-auth-home") &&
        broker_mounts.include?("broker-auth-api") &&
        worker_mounts.include?("auth-channel")
   raise "Hive auth broker boundary is incomplete"
 end
+worker_environment = worker.fetch("env").map { |entry| entry.fetch("name") }
+coordinator_environment = coordinator.fetch("env").map { |entry| entry.fetch("name") }
+if worker_environment.any? { |name| name.start_with?("NEO4J_") } ||
+   worker_mounts.include?("trust-bundle")
+  raise "Hive worker must not receive Neo4j credentials or trust material"
+end
+unless coordinator_environment.include?("NEO4J_PASSWORD") &&
+       coordinator_mounts.include?("trust-bundle") &&
+       coordinator_mounts.include?("coordinator-channel") &&
+       worker_mounts.include?("coordinator-channel")
+  raise "Hive coordinator credential boundary is incomplete"
+end
+unless publisher_mounts.include?("github-publication") &&
+       publisher_mounts.include?("publication-channel") &&
+       worker_mounts.include?("publication-channel")
+  raise "Hive publication broker boundary is incomplete"
+end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
+end
+unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
+       dispatcher_deployment.dig("spec", "template", "spec", "runtimeClassName") ==
+       "kata-qemu-runtime-rs" &&
+       dispatcher_deployment.dig("spec", "template", "spec", "automountServiceAccountToken") ==
+       false
+  raise "Hive Workbench dispatcher must remain one token-free Kata replica"
 end
 
 manifest_text = File.read(File.join(root, "infra/k0s/manifests/hive/deployment.yaml"))
@@ -90,7 +120,9 @@ unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
 end
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
-       infra_taskfile.include?("hmac.compare_digest")
+       infra_taskfile.include?("hmac.compare_digest") &&
+       infra_taskfile.include?("hive-system/hive-codex-auth") &&
+       infra_taskfile.include?("hive-system/hive-github-publication")
   raise "Hive recovery snapshots are not authenticated before restore"
 end
 

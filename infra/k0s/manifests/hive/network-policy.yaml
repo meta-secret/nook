@@ -16,8 +16,10 @@ metadata:
   namespace: hive-system
 spec:
   podSelector:
-    matchLabels:
-      app.kubernetes.io/name: hive
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [hive, hive-workbench-dispatcher]
   policyTypes:
     - Egress
   egress:

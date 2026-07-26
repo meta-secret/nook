@@ -14,7 +14,10 @@ use tokio::sync::watch;
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::model::{AgentId, Artifact, ClaimedTask, TerminalResult, TerminalStatus};
+use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, TerminalResult, TerminalStatus};
+use crate::publication::{
+    bind_publication_task, publication_branch_name, publication_delivery_verified,
+};
 use crate::store::TaskStore;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -35,6 +38,7 @@ pub struct WorkerConfig {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub auth_socket: PathBuf,
+    pub publication_socket: PathBuf,
 }
 
 pub struct Worker<S> {
@@ -76,9 +80,16 @@ impl<S: TaskStore> Worker<S> {
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
+        bind_publication_task(&self.config.publication_socket, &task).await?;
 
         let result = self.execute(&task, external_auth).await;
         if let Err(error) = result {
+            if error.downcast_ref::<WorkerBlocked>().is_some() {
+                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                    .await
+                    .context("failed to mark the blocked Pod for replacement")?;
+                return Ok(());
+            }
             if error.downcast_ref::<WorkerInterrupted>().is_some() {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
                     .await
@@ -121,13 +132,50 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
-                let baseline = prepare_workspace(
+                let resume_branch =
+                    (task.kind == "main-repair").then(|| publication_branch_name(task.id.as_str()));
+                let preparation = prepare_workspace(
                     &self.config.workspace,
                     &self.config.repository_url,
+                    &task.source_commit,
+                    resume_branch.as_deref(),
                     &task.dependency_artifacts,
                 )
                 .await?;
                 let repository = self.config.workspace.join("repository");
+                let baseline = if preparation.conflicted {
+                    let mut codex_options =
+                        CodexOptions::new(repository.clone()).with_workspace_write();
+                    if let Some(model) = &self.config.model {
+                        codex_options.model = Some(model.clone());
+                    }
+                    codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
+                    codex_options
+                        .reasoning_effort
+                        .clone_from(&self.config.reasoning_effort);
+                    let resolution = InProcessCodexRunner::with_external_auth(
+                        codex_options,
+                        external_auth.clone(),
+                    )
+                    .execute_task(
+                        task.id.as_str(),
+                        "Resolve only the dependency integration conflicts in this repository. \
+                         Apply every patch in .hive-pending in lexical order, resolve all Git \
+                         conflicts correctly, remove .hive-pending, and do not implement the \
+                         actual task yet. Return the required completed terminal result.",
+                    )
+                    .await
+                    .context("embedded Codex dependency resolution failed")?;
+                    let result: TerminalResult = serde_json::from_str(&resolution)
+                        .context("Codex returned an invalid dependency resolution result")?;
+                    if result.status != TerminalStatus::Completed {
+                        return Err(anyhow!("Codex could not integrate dependency artifacts"));
+                    }
+                    ensure_dependencies_resolved(&repository).await?;
+                    commit_dependency_baseline(&repository).await?
+                } else {
+                    preparation.baseline
+                };
                 let prompt = task_prompt(task);
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
                 if let Some(model) = &self.config.model {
@@ -145,7 +193,47 @@ impl<S: TaskStore> Worker<S> {
                 let result: TerminalResult = serde_json::from_str(&raw_result)
                     .context("Codex returned an invalid terminal result")?;
                 if result.status == TerminalStatus::Blocked {
-                    return Err(anyhow!("Codex reported a blocked task: {}", result.summary));
+                    let blocker = result
+                        .blocker
+                        .as_ref()
+                        .context("Codex blocked the task without a structured blocker")?;
+                    if blocker.id == task.id {
+                        return Err(anyhow!("a blocked task cannot name itself as its blocker"));
+                    }
+                    let blocker = EnqueueTask {
+                        id: blocker.id.clone(),
+                        kind: "blocker".to_owned(),
+                        prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
+                        source_commit: task.source_commit.clone(),
+                        priority: if task.kind == "main-repair" { 200 } else { 10 },
+                        max_attempts: 3,
+                        dependencies: Vec::new(),
+                    };
+                    let accepted = self
+                        .store
+                        .block(
+                            task,
+                            &self.config.agent_id,
+                            &blocker,
+                            &bounded(&result.summary),
+                        )
+                        .await?;
+                    if !accepted {
+                        return Err(anyhow!(
+                            "task blocker was rejected because the lease is stale"
+                        ));
+                    }
+                    return Err(WorkerBlocked.into());
+                }
+                if result.blocker.is_some() {
+                    return Err(anyhow!("Codex returned a blocker for a completed task"));
+                }
+                if task.kind == "main-repair"
+                    && !publication_delivery_verified(&self.config.publication_socket).await?
+                {
+                    return Err(anyhow!(
+                        "Main repair cannot complete before its squash merge and green Main run"
+                    ));
                 }
                 let summary = bounded(&format!(
                     "{}\n\nChanged files:\n{}\n\nTests:\n{}",
@@ -175,10 +263,13 @@ impl<S: TaskStore> Worker<S> {
             biased;
             execution = &mut execution => {
                 let _ = stop_tx.send(true);
-                heartbeat
+                let completion_committed = matches!(&execution, Ok(Ok(())));
+                let heartbeat_result = heartbeat
                     .await
-                    .context("heartbeat task panicked")?
-                    .context("lease heartbeat failed")?;
+                    .context("heartbeat task panicked")?;
+                if !completion_committed {
+                    heartbeat_result.context("lease heartbeat failed")?;
+                }
                 execution.map_err(|_| anyhow!("task timed out"))??
             }
             heartbeat_result = &mut heartbeat => {
@@ -214,6 +305,10 @@ impl<S: TaskStore> Worker<S> {
 #[derive(Debug, thiserror::Error)]
 #[error("worker interrupted for rollout")]
 struct WorkerInterrupted;
+
+#[derive(Debug, thiserror::Error)]
+#[error("worker persisted a blocking dependency")]
+struct WorkerBlocked;
 
 fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(workspace)?;
@@ -265,8 +360,10 @@ async fn heartbeat_loop<S: TaskStore>(
 async fn prepare_workspace(
     workspace: &Path,
     repository_url: &str,
+    source_commit: &str,
+    resume_branch: Option<&str>,
     dependency_artifacts: &[Artifact],
-) -> anyhow::Result<String> {
+) -> anyhow::Result<WorkspacePreparation> {
     tokio::fs::create_dir_all(workspace.join("task")).await?;
     tokio::fs::create_dir_all(workspace.join("output")).await?;
     tokio::fs::create_dir_all(workspace.join("temporary")).await?;
@@ -278,21 +375,74 @@ async fn prepare_workspace(
     }
     tokio::fs::create_dir_all(&repository).await?;
     let status = Command::new("git")
-        .arg("clone")
-        .arg("--depth=1")
-        .arg("--")
-        .arg(repository_url)
+        .arg("init")
+        .arg("--quiet")
         .arg(&repository)
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
         .await
-        .context("failed to start git clone")?;
+        .context("failed to initialize the task repository")?;
     if !status.success() {
-        return Err(anyhow!("git clone failed with status {status}"));
+        return Err(anyhow!("git init failed with status {status}"));
     }
-    for artifact in dependency_artifacts {
+    run_git_status(
+        &repository,
+        &["remote", "add", "origin", repository_url],
+        "configure the task repository remote",
+    )
+    .await?;
+    run_git_status(
+        &repository,
+        &["fetch", "--depth=1", "origin", source_commit],
+        "fetch the pinned task revision",
+    )
+    .await?;
+    let mut did_resume = false;
+    if let Some(branch) = resume_branch {
+        let resumed = Command::new("git")
+            .args([
+                "fetch",
+                "--depth=100",
+                "origin",
+                &format!("refs/heads/{branch}"),
+            ])
+            .current_dir(&repository)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await?;
+        if resumed.success() {
+            run_git_status(
+                &repository,
+                &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
+                "resume the durable Hive repair branch",
+            )
+            .await?;
+            run_git_status(
+                &repository,
+                &["merge-base", "--is-ancestor", source_commit, "HEAD"],
+                "verify the repair branch descends from its pinned revision",
+            )
+            .await?;
+            did_resume = true;
+        }
+    }
+    if did_resume {
+        return Ok(WorkspacePreparation {
+            baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
+            conflicted: false,
+        });
+    }
+    run_git_status(
+        &repository,
+        &["checkout", "--quiet", "--detach", source_commit],
+        "check out the pinned task revision",
+    )
+    .await?;
+    for (index, artifact) in dependency_artifacts.iter().enumerate() {
         if artifact.kind != "git-patch" {
             return Err(anyhow!(
                 "dependency artifact {} has unsupported kind {}",
@@ -318,7 +468,7 @@ async fn prepare_workspace(
             ));
         }
         let mut child = Command::new("git")
-            .args(["apply", "--index", "--binary", "-"])
+            .args(["apply", "--3way", "--index", "--binary", "-"])
             .current_dir(&repository)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -337,53 +487,121 @@ async fn prepare_workspace(
             .await
             .context("dependency patch process failed")?;
         if !status.success() {
-            return Err(anyhow!(
-                "dependency artifact {} failed to apply with status {status}",
-                artifact.id
-            ));
+            let unmerged = git_output(&repository, &["diff", "--name-only", "--diff-filter=U"])
+                .await
+                .context("inspect dependency conflicts")?;
+            if unmerged.trim().is_empty() {
+                return Err(anyhow!(
+                    "dependency artifact {} failed to apply with status {status}",
+                    artifact.id
+                ));
+            }
+            let pending = repository.join(".hive-pending");
+            tokio::fs::create_dir(&pending).await?;
+            for (pending_index, pending_artifact) in
+                dependency_artifacts.iter().enumerate().skip(index + 1)
+            {
+                tokio::fs::write(
+                    pending.join(format!("{pending_index:04}.patch")),
+                    pending_artifact.content.as_bytes(),
+                )
+                .await?;
+            }
+            return Ok(WorkspacePreparation {
+                baseline: String::new(),
+                conflicted: true,
+            });
         }
     }
     if !dependency_artifacts.is_empty() {
-        let status = Command::new("git")
-            .args([
-                "-c",
-                "user.name=Hive",
-                "-c",
-                "user.email=hive@example.invalid",
-                "commit",
-                "--quiet",
-                "-m",
-                "Apply completed Hive dependencies",
-            ])
-            .current_dir(&repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status()
-            .await
-            .context("failed to commit dependency artifacts")?;
-        if !status.success() {
-            return Err(anyhow!(
-                "dependency artifact baseline commit failed with status {status}"
-            ));
-        }
+        let baseline = commit_dependency_baseline(&repository).await?;
+        return Ok(WorkspacePreparation {
+            baseline,
+            conflicted: false,
+        });
     }
-    let baseline = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(&repository)
+    Ok(WorkspacePreparation {
+        baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
+        conflicted: false,
+    })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct WorkspacePreparation {
+    baseline: String,
+    conflicted: bool,
+}
+
+async fn ensure_dependencies_resolved(repository: &Path) -> anyhow::Result<()> {
+    let unmerged = git_output(repository, &["diff", "--name-only", "--diff-filter=U"]).await?;
+    if !unmerged.trim().is_empty() {
+        anyhow::bail!("dependency integration left unresolved Git conflicts");
+    }
+    if repository.join(".hive-pending").exists() {
+        anyhow::bail!("dependency integration did not apply every pending patch");
+    }
+    Ok(())
+}
+
+async fn commit_dependency_baseline(repository: &Path) -> anyhow::Result<String> {
+    run_git_status(
+        repository,
+        &["add", "--all", "--", "."],
+        "stage dependency artifacts",
+    )
+    .await?;
+    run_git_status(
+        repository,
+        &[
+            "-c",
+            "user.name=Hive",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Apply completed Hive dependencies",
+        ],
+        "commit dependency artifact baseline",
+    )
+    .await?;
+    git_output(repository, &["rev-parse", "HEAD"]).await
+}
+
+async fn git_output(repository: &Path, arguments: &[&str]) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(arguments)
+        .current_dir(repository)
         .stdin(Stdio::null())
         .output()
         .await
-        .context("failed to record the task baseline")?;
-    if !baseline.status.success() {
-        return Err(anyhow!(
-            "git rev-parse failed with status {}",
-            baseline.status
-        ));
+        .context("failed to execute git")?;
+    if !output.status.success() {
+        anyhow::bail!("git {:?} failed with status {}", arguments, output.status);
     }
-    String::from_utf8(baseline.stdout)
-        .context("task baseline is not UTF-8")
+    String::from_utf8(output.stdout)
+        .context("git output is not UTF-8")
         .map(|value| value.trim().to_owned())
+}
+
+async fn run_git_status(
+    repository: &Path,
+    arguments: &[&str],
+    operation: &str,
+) -> anyhow::Result<()> {
+    let status = Command::new("git")
+        .args(arguments)
+        .current_dir(repository)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .status()
+        .await
+        .with_context(|| format!("failed to {operation}"))?;
+    if !status.success() {
+        anyhow::bail!("{operation} failed with status {status}");
+    }
+    Ok(())
 }
 
 async fn persistable_patch(
@@ -461,14 +679,29 @@ fn task_prompt(task: &ClaimedTask) -> String {
             .collect::<Vec<_>>()
             .join("\n")
     };
+    let delivery = if task.kind == "main-repair" {
+        "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
+         Use only repository Taskfile commands for formatting and validation. Use \
+         `hive github publish --title <title> --body <body>` to push the deterministic \
+         task branch and create or update its PR, `hive github inspect` to wait for and \
+         address exact-head checks and reviews, `hive github reply-thread` and \
+         `hive github resolve-thread` after each targeted fix, `hive github merge \
+         --expected-head <sha>` \
+         only after every check succeeds, and `hive github verify-main --merge-commit <sha>` \
+         until the resulting Main run succeeds. Do not report completed before the squash \
+         merge and green Main verification. If blocked by another change, report structured \
+         blocked status and identify the blocker precisely."
+    } else {
+        ""
+    };
     format!(
         "You are Hive worker attempt {} for task {}.\n\
          Work only inside the supplied repository workspace.\n\
          Complete the task and return the required structured terminal result.\n\n\
          Task kind: {}\n\
          Task:\n{}\n\n\
-         Completed dependency context:\n{}",
-        task.attempt_number, task.id, task.kind, task.prompt, dependencies
+         Completed dependency context:\n{}{}",
+        task.attempt_number, task.id, task.kind, task.prompt, dependencies, delivery
     )
 }
 
@@ -586,6 +819,7 @@ mod tests {
             id: TaskId::new("task-1").unwrap(),
             kind: "code".to_owned(),
             prompt: "change files".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::new("attempt-1").unwrap(),
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1").unwrap(),
@@ -597,6 +831,7 @@ mod tests {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
+            blocker: None,
         };
 
         let artifact = persistable_patch(repository.path(), baseline, &task, &result)
@@ -640,6 +875,10 @@ mod tests {
             "-m",
             "fixture",
         ]);
+        let source_commit = String::from_utf8(run_git(&["rev-parse", "HEAD"]))
+            .unwrap()
+            .trim()
+            .to_owned();
         std::fs::write(source.path().join("dependency.txt"), "from dependency\n").unwrap();
         let patch = String::from_utf8(run_git(&["diff", "--binary"])).unwrap();
         std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
@@ -659,13 +898,17 @@ mod tests {
             content: patch,
         };
         let workspace = tempfile::tempdir().unwrap();
-        let baseline = prepare_workspace(
+        let preparation = prepare_workspace(
             workspace.path(),
             source.path().to_str().unwrap(),
+            &source_commit,
+            None,
             &[dependency],
         )
         .await
         .unwrap();
+        assert!(!preparation.conflicted);
+        let baseline = preparation.baseline;
         let repository = workspace.path().join("repository");
         assert_eq!(
             std::fs::read_to_string(repository.join("dependency.txt")).unwrap(),
@@ -676,6 +919,7 @@ mod tests {
             id: TaskId::new("task-2").unwrap(),
             kind: "code".to_owned(),
             prompt: "build on dependency".to_owned(),
+            source_commit,
             attempt_id: AttemptId::new("attempt-2").unwrap(),
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-2").unwrap(),
@@ -687,6 +931,7 @@ mod tests {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
+            blocker: None,
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result)
             .await
