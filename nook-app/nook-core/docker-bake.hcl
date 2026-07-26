@@ -64,8 +64,8 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  // Retain cache-to so native-source export stays wired when this target is solved with
-  // writes enabled; Main's deferred publish-cache path refreshes via builder-debug.
+  // Main verifies this graph read-only, then exports the already-solved local builder state in a
+  // separate post-verification step without a second reconstruction job.
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }

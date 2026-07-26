@@ -953,7 +953,6 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
         "type=gha,scope=nook-web-v1",
         "type=gha,scope=nook-web-e2e-v1",
         "mode=max,version=2",
-        "group \"publish-gha-cache\"",
     ] {
         assert!(
             bake.contains(required),
@@ -1022,7 +1021,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
-    assert_main_deferred_rust_cache_publish(root);
+    assert_main_producer_owned_cache_publish(root);
     assert_main_split_pipeline(root);
 }
 
@@ -1035,68 +1034,81 @@ fn assert_rust_cache_export_hardening(bake: &str) {
         ),
         "Rust dependency cache exporters must not ignore upload failures"
     );
-    let prepare_publish = bake
-        .split("group \"prepare-and-publish-cache\"")
-        .nth(1)
-        .and_then(|rest| rest.split("group \"").next())
-        .expect("prepare-and-publish-cache group");
     assert!(
-        bake.contains("group \"publish-gha-cache\"")
-            && prepare_publish.contains("\"builder-wasm-deps\",")
-            && prepare_publish.contains("\"builder-deps\",")
-            && prepare_publish.contains("\"builder-debug\",")
-            && prepare_publish.contains("\"web-deps\",")
-            && !prepare_publish.contains("web-artifacts")
-            && !prepare_publish.contains("rust-format-check")
-            && bake.contains("\"rust-base\","),
-        "Main publish-cache warm must select dependency and native-source targets without re-baking producer graphs"
+        !bake.contains("group \"publish-gha-cache\"")
+            && !bake.contains("group \"prepare-and-publish-cache\""),
+        "BuildKit cache publication must not reconstruct completed producer graphs in a dedicated Bake"
     );
 }
 
-fn assert_main_deferred_rust_cache_publish(root: &Path) {
+fn assert_main_producer_owned_cache_publish(root: &Path) {
     let main = read(root, ".github/workflows/main.yml");
+    let rust = section(&main, "  rust:\n", "\n  wasm:\n");
+    let wasm = section(&main, "  wasm:\n", "\n  web:\n");
+    let web = section(&main, "  web:\n", "\n  web-e2e:\n");
+    let rust_verify = rust
+        .find("task ci:pr:rust")
+        .expect("Main native verification");
+    let rust_publish = rust
+        .find("task ci:main:publish-native-cache")
+        .expect("Main native cache publish");
+    let wasm_verify = wasm
+        .find("task ci:pr:wasm")
+        .expect("Main WASM verification");
+    let wasm_node = wasm
+        .find("task ci:wasm:node-test")
+        .expect("Main WASM Node verification");
+    let wasm_publish = wasm
+        .find("task ci:main:publish-wasm-cache")
+        .expect("Main WASM cache publish");
+    let web_verify = web
+        .find("task ci:main:web:artifacts")
+        .expect("Main web verification");
+    let web_publish = web
+        .find("task ci:main:publish-web-cache")
+        .expect("Main web cache publish");
     assert!(
-        main.contains("task ci:main:warm-gha-cache")
-            && main.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && main.contains("task ci:main:publish-gha-cache")
-            && main.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && main.contains("\n  publish-cache:\n")
-            && !main.contains("PREPARE_GROUP=prepare-and-publish-cache"),
-        "Main must warm dependency scopes without publishing, then export them only after success"
+        rust_verify < rust_publish
+            && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm.contains("needs: [rust]")
+            && wasm_verify < wasm_node
+            && wasm_node < wasm_publish
+            && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && web_verify < web_publish
+            && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && !main.contains("\n  publish-cache:\n")
+            && !main.contains("task ci:main:warm-gha-cache")
+            && !main.contains("task ci:main:publish-gha-cache"),
+        "Main producers must verify read-only, serialize native before WASM, and publish from their warm builders only after all lane validation succeeds"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
     assert!(
-        ci_tasks.contains("_ci:main:warm-gha-cache:host:")
-            && ci_tasks
-                .contains("bash \"{{.REPO_ROOT}}/.github/scripts/warm-buildkit-gha-cache.sh\"",)
-            && ci_tasks.contains("_ci:main:publish-gha-cache:host:")
-            && ci_tasks.contains("dir: '{{.REPO_ROOT}}'")
-            && ci_tasks
-                .contains("bash \"{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh\"",),
-        "Main cache warm/publish must invoke scripts from REPO_ROOT, not a relative nook-app cwd"
+        !ci_tasks.contains("warm-gha-cache")
+            && !ci_tasks.contains("publish-gha-cache")
+            && !root
+                .join(".github/scripts/warm-buildkit-gha-cache.sh")
+                .exists()
+            && !root
+                .join(".github/scripts/publish-buildkit-gha-cache.sh")
+                .exists(),
+        "obsolete deferred cache reconstruction commands and scripts must stay removed"
     );
-    let warm_script = read(root, ".github/scripts/warm-buildkit-gha-cache.sh");
+    let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
     assert!(
-        warm_script.contains("prepare-and-publish-cache")
-            && warm_script.contains("GHA_CACHE_WRITE_ENABLED must be empty")
-            && warm_script.contains("type=cacheonly"),
-        "Main cache warm must bake prepare-and-publish-cache read-only into the job builder"
-    );
-    let publish_script = read(root, ".github/scripts/publish-buildkit-gha-cache.sh");
-    assert!(
-        publish_script.contains("builder-wasm-deps")
-            && publish_script.contains("cache-from=")
-            && publish_script.contains("nook-rust-wasm-deps-v3")
-            && publish_script.contains("force-compression=true")
-            && publish_script.contains("writing layer")
-            && publish_script.contains("accepting index-only export")
-            && publish_script.contains("rust-base builder-wasm-deps")
-            && publish_script.contains("rust-base builder-deps builder-debug")
-            && publish_script.contains("\n  web-deps\n")
-            && !publish_script.contains("web-artifacts web-deps")
-            && !publish_script.contains("builder-debug rust-format-check")
-            && publish_script.contains("(^|[[:space:]])#${step_id} "),
-        "Main cache publish must export wasm-deps alone into v3 without re-exporting producer graphs"
+        docker_tasks.contains("ci-rust builder-deps rust-base")
+            && docker_tasks.contains("wasm-export builder-wasm-deps")
+            && docker_tasks.contains("nook-web-ci web-deps")
+            && docker_tasks.contains("docker:ci:cache:publish:native:")
+            && docker_tasks.contains("docker:ci:cache:publish:wasm:")
+            && docker_tasks.contains("docker:ci:cache:publish:web:")
+            && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
+            && docker_tasks.contains("compression=zstd,force-compression=true")
+            && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
+            && docker_tasks.contains("--set \"wasm-export.cache-from=\""),
+        "producer-owned publishers must select local verified graphs and preserve the isolated no-import WASM dependency export"
     );
     assert!(
         read(root, "nook-app/nook-core/Dockerfile").contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
@@ -1122,14 +1134,12 @@ fn assert_main_split_pipeline(root: &Path) {
             && main.contains("\n  wasm:\n")
             && main.contains("\n  web:\n")
             && main.contains("\n  web-e2e:\n")
-            && main.contains("\n  publish-cache:\n")
             && main.contains("task ci:pr:rust")
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task ci:main:e2e:web:artifacts")
-            && main.contains("needs: [web, web-e2e]")
-            && main.contains("needs: [rust, wasm]"),
-        "Main must split native Rust, WASM, web verify, and browser suites while deferring GHA cache publish"
+            && main.contains("needs: [web, web-e2e]"),
+        "Main must split native Rust, WASM, web verify, and browser suites without a duplicate cache publisher"
     );
     let coverage_export = read(root, "nook-app/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")
@@ -1138,7 +1148,7 @@ fn assert_main_split_pipeline(root: &Path) {
         .to_owned();
     assert!(
         coverage_export.contains("cache-to   = rust_native_source_cache_to"),
-        "coverage-export must retain the native-source GHA exporter for deferred Main publish"
+        "coverage-export must retain the native-source GHA exporter for the Main native producer"
     );
 }
 
