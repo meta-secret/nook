@@ -5,6 +5,7 @@ vars:
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
   HIVE_TEST_IMAGE: '{{default "nook-hive-test:local" .HIVE_TEST_IMAGE}}'
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
+  NOOK_APP_CONTEXT: ../../nook-app
 
 tasks:
   format:
@@ -19,6 +20,7 @@ tasks:
           --platform linux/amd64 \
           --target formatter \
           --tag "$image" \
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         container="$(docker create "$image")"
@@ -48,11 +50,18 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           cache_args+=(--cache-to "$HIVE_CACHE_TO")
         fi
+        secret_args=()
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          secret_args+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
         docker buildx build \
           --platform linux/amd64 \
           --target check \
           --output type=cacheonly \
           "${cache_args[@]}" \
+          "${secret_args[@]}" \
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         BASH
@@ -66,6 +75,7 @@ tasks:
         --platform linux/amd64
         --target builder
         --output type=cacheonly
+        --build-context nook-app={{.NOOK_APP_CONTEXT}}
         --file hive/Dockerfile
         .
 
@@ -83,22 +93,38 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           cache_args+=(--cache-to "$HIVE_CACHE_TO")
         fi
+        secret_args=()
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          secret_args+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
         docker buildx build \
           --platform linux/amd64 \
           --target test-runner \
           --load \
           --tag "{{.HIVE_TEST_IMAGE}}" \
           "${cache_args[@]}" \
+          "${secret_args[@]}" \
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         BASH
-      - >-
-        docker run --rm
-        --network host
-        -e HIVE_NEO4J_TEST_URI
-        -e HIVE_NEO4J_TEST_USERNAME
-        -e HIVE_NEO4J_TEST_PASSWORD
-        {{.HIVE_TEST_IMAGE}}
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        secret_args=()
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          secret_args+=(--mount "type=bind,src=$SCCACHE_REDIS_PASSWORD_FILE,dst=/run/secrets/sccache_redis_password,readonly")
+        fi
+        docker run --rm \
+          --network host \
+          -e HIVE_NEO4J_TEST_URI \
+          -e HIVE_NEO4J_TEST_USERNAME \
+          -e HIVE_NEO4J_TEST_PASSWORD \
+          "${secret_args[@]}" \
+          "{{.HIVE_TEST_IMAGE}}"
+        BASH
 
   cache:publish:
     desc: Publish the already-verified Hive BuildKit graph.
@@ -114,11 +140,18 @@ tasks:
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           cache_args+=(--cache-from "$HIVE_CACHE_FROM")
         fi
+        secret_args=()
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          secret_args+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
         docker buildx build \
           --platform linux/amd64 \
           --target test-runner \
           --output type=cacheonly \
           "${cache_args[@]}" \
+          "${secret_args[@]}" \
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         BASH
@@ -131,5 +164,6 @@ tasks:
         docker build
         --platform linux/amd64
         --tag {{.HIVE_IMAGE}}
+        --build-context nook-app={{.NOOK_APP_CONTEXT}}
         --file hive/Dockerfile
         .

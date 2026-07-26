@@ -58,6 +58,17 @@ jobs:
       - name: Install Task
         uses: go-task/setup-task@v2
 
+      - name: Configure persistent Rust compiler cache
+        uses: ./.github/actions/nook-cache-connect
+        with:
+          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
+
+      - name: Report Rust compiler cache selection
+        run: >-
+          echo "Hive compiler cache:
+          ${NOOK_SCCACHE_BACKEND}
+          (${NOOK_SCCACHE_BACKEND_REASON})"
+
       - name: Docker setup
         uses: docker/setup-buildx-action@v4
 

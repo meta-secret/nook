@@ -510,7 +510,12 @@ copied. Pull requests restore Main's scope read-only; only Main exports it, in a
 final step after check and behavior tests both pass. Hive check and test tasks
 use the same job-scoped Buildx builder, so the behavior image reuses the
 dependency and Clippy graph produced earlier in the run without allowing
-parallel PRs or failed validation to replace the trusted cache.
+parallel PRs or failed validation to replace the trusted cache. Unlike the
+product delivery graph, trusted same-repository Hive runs also mount
+`NOOK_CACHE_REDIS_PASSWORD` into compiler steps and use Redis `sccache` with the
+isolated `nook-hive` key prefix. GitHub withholds that secret from forked pull
+requests, and the shared wrapper then falls back to direct compilation. The
+credential is a BuildKit secret or read-only runtime mount, never image content.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
 prepared image and without a second setup. The combined `dist` tree is reserved

@@ -111,7 +111,11 @@ The Dockerfile uses the same pinned cargo-chef planner/recipe/cook boundary as
 `nook-app`, then warms real-lock debug/test and release profiles before copying
 authored sources. `hive:check` and `hive:test` share one Buildx builder.
 Dependency changes rebuild those layers; ordinary source changes reuse them.
-Main exports the graph only after both check and behavior tests pass.
+Main exports the graph only after both check and behavior tests pass. Trusted
+repository runs also mount the existing direct-TLS Redis credential into Rust
+compile steps and report `sccache` statistics under the isolated `nook-hive`
+key prefix. Forks and local runs without the credential compile normally; the
+credential is never copied into an image or BuildKit cache layer.
 
 Runtime operations use the binary directly:
 
