@@ -131,6 +131,11 @@ pub fn union_remote_events(
             .to_vec();
         accepted.put_event(event_id, bytes);
     }
+    for (provider_id, event_id, bytes) in local.replica.outbox_entries() {
+        if !quarantined.contains(&event_id) {
+            accepted.queue_outbox(&provider_id, event_id, bytes);
+        }
+    }
     *local = accepted;
     let imported = candidates
         .into_iter()
@@ -624,6 +629,31 @@ mod tests {
         assert!(local.get_bytes(&genesis_id).is_some());
         assert!(local.get_bytes(&child_id).is_none());
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn union_preserves_existing_outbox_entries() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&signing_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let child = signed_child(&signing_key, genesis_id.clone(), "secret_remoteout1")?;
+        let child_id = child.id()?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
+
+        let mut local = LocalEventStore::new();
+        local.put_event(genesis_id.clone(), genesis_bytes.clone());
+        local.queue_outbox("drive", genesis_id.clone(), genesis_bytes.clone());
+
+        assert_eq!(
+            union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE)?,
+            vec![child_id]
+        );
+        assert_eq!(
+            local.pending_outbox("drive"),
+            vec![(genesis_id, genesis_bytes)]
+        );
         Ok(())
     }
 

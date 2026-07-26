@@ -115,6 +115,20 @@ where
             .unwrap_or_default()
     }
 
+    /// Snapshot durable outbox entries so an application can carry them across
+    /// a validated rebuild of its accepted event set.
+    #[must_use]
+    pub fn outbox_entries(&self) -> Vec<(String, Id, Vec<u8>)> {
+        self.outbox
+            .iter()
+            .flat_map(|(provider_id, entries)| {
+                entries
+                    .iter()
+                    .map(|(event_id, bytes)| (provider_id.clone(), event_id.clone(), bytes.clone()))
+            })
+            .collect()
+    }
+
     /// Event identifiers available locally but absent from the observed remote
     /// event set.
     #[must_use]
