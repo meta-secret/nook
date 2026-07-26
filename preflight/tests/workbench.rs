@@ -27,19 +27,24 @@ fn directory_has_files(path: &Path) -> bool {
 #[test]
 fn agent_implementation_claims_only_explicit_workbench_records() {
     let workflow = read(".github/workflows/agent-implement.yml");
+    let record_validator = read(".github/scripts/workbench-records.cjs");
 
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
+        "WORKBENCH_PLAN_FILE: .nook-workbench-plan.md",
         "CI_AGENT_TIMEOUT_MS: \"18000000\"",
         "status: ready",
         "automation: agent",
         "status: in_progress",
         "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
+        "Run task-planning agent",
+        "Validate and publish Workbench task plan",
         "Publish Workbench result",
         "steps.workbench.outputs.found == 'true'",
-        "validateSummary",
-        "contains a workflow credential",
+        "validateAgentRecord",
+        "if: steps.plan.outcome == 'success'",
+        "`plan: ${process.env.PLAN_PATH || 'null'}`",
         "publishing trusted fallback metadata",
         "## Decisions",
         "worklogs/${feature}/",
@@ -47,6 +52,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
         assert!(
             workflow.contains(required),
             "Workbench agent workflow is missing: {required}"
+        );
+    }
+    for required in [
+        "content contains a workflow credential",
+        "content resembles a transcript, credential, environment dump, or raw log",
+    ] {
+        assert!(
+            record_validator.contains(required),
+            "Workbench record validator is missing: {required}"
         );
     }
 
@@ -57,6 +71,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
     assert!(
         workflow.find("Claim ready Workbench issue") < workflow.find("Docker setup"),
         "the workflow must atomically claim a Workbench record before expensive setup"
+    );
+    assert!(
+        workflow.find("Validate and publish Workbench task plan")
+            < workflow.find("Run ci-agent implement"),
+        "the workflow must publish the interpreted task plan before implementation"
     );
 }
 
@@ -86,8 +105,8 @@ fn statistics_leave_the_product_repository() {
         "statistics must live only in Nook Workbench"
     );
     assert!(
-        publisher.contains("sha && remotePath.startsWith('stats/')")
-            && publisher.contains("Refusing to overwrite immutable Workbench statistics")
+        publisher.contains("remotePath.startsWith('stats/')")
+            && publisher.contains("Refusing to overwrite immutable Workbench record")
             && publisher.contains("NOOK_WORKBENCH_EXPECTED_SHA")
             && publisher.contains("Refusing stale Workbench update"),
         "the Workbench publisher must refuse to replace immutable statistics"
@@ -104,6 +123,7 @@ fn statistics_leave_the_product_repository() {
 #[test]
 fn agent_prompt_requires_a_publishable_worklog() {
     let prompt = read(".github/prompts/agent-implement.md");
+    let plan_prompt = read(".github/prompts/agent-plan.md");
     let ignore = read(".gitignore");
 
     for required in [
@@ -123,5 +143,27 @@ fn agent_prompt_requires_a_publishable_worklog() {
             .lines()
             .any(|line| line == "/.nook-workbench-worklog.md"),
         "the workflow-owned worklog must not be committed to the Nook PR"
+    );
+
+    for required in [
+        ".nook-workbench-plan.md",
+        "## Interpreted request",
+        "## Requirements",
+        "## Constraints and exclusions",
+        "## Initial plan",
+        "## Completion evidence",
+        "## Safety review",
+        "Do not quote, copy, or lightly",
+    ] {
+        assert!(
+            plan_prompt.contains(required),
+            "agent task-plan prompt is missing: {required}"
+        );
+    }
+    assert!(
+        ignore
+            .lines()
+            .any(|line| line == "/.nook-workbench-plan.md"),
+        "the workflow-owned task plan must not be committed to the Nook PR"
     );
 }
