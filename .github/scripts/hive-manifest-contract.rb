@@ -87,6 +87,10 @@ end
 unless worker_environment["HIVE_TASK_TIMEOUT_SECONDS"] == "21600"
   raise "Hive worker must allow the complete six-hour repair lifecycle"
 end
+unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6" &&
+       worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "low"
+  raise "Hive workers must pin Codex GPT-5.6 with Light reasoning"
+end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
