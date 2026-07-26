@@ -20,6 +20,13 @@ def rollback_source():
     return "rollback_k0s_firewall() {\n" + textwrap.dedent(embedded)
 
 
+def uninstall_include_filter():
+    taskfile = TASKFILE.read_text(encoding="utf-8")
+    start = "        sudo -n awk \\\n          '"
+    end = "' \\\n          /etc/nftables.conf > \"$firewall_config\"\n"
+    return taskfile.split(start, 1)[1].split(end, 1)[0]
+
+
 def write(path, content):
     path.write_text(content, encoding="utf-8")
 
@@ -163,7 +170,24 @@ trap 'exit 143' TERM
 def main():
     run_case("error")
     run_case("signal")
+    nftables_config = textwrap.dedent(
+        """\
+        table inet bynull_filter {}
+          include   "/etc/nftables.d/nook-k0s.nft"   # managed
+        include "/etc/nftables.d/unrelated.nft"
+        """
+    )
+    filtered = subprocess.run(
+        ["awk", uninstall_include_filter()],
+        input=nftables_config,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert "nook-k0s.nft" not in filtered
+    assert 'include "/etc/nftables.d/unrelated.nft"' in filtered
     print("k0s firewall error and signal rollback: ok")
+    print("k0s firewall include uninstall variants: ok")
 
 
 if __name__ == "__main__":
