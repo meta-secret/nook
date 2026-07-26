@@ -172,6 +172,13 @@ unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
        infra_taskfile.include?("hive-system/hive-github-publication")
   raise "Hive recovery snapshots are not authenticated before restore"
 end
+unless infra_taskfile.include?("chown root:kube-apiserver") &&
+       infra_taskfile.include?("chmod 0640")
+  raise "k0s encryption provider must remain root-owned and API-server-readable"
+end
+if infra_taskfile.include?("chown kube-apiserver:root")
+  raise "kube-apiserver must not own the writable encryption provider"
+end
 
 hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
 unless hive_taskfile.include?("for crate in hive lace")
