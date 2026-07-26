@@ -438,7 +438,7 @@ tasks:
     cmds:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
-        set -euo pipefail
+        set -Eeuo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         k0s_version="{{.K0S_VERSION}}"
         k0s_sha="{{.K0S_AMD64_SHA256}}"
@@ -451,14 +451,55 @@ tasks:
 
         firewall_fragment="$(mktemp)"
         firewall_config="$(mktemp)"
-        trap 'rm -f "$firewall_fragment" "$firewall_config"' EXIT
+        firewall_previous_config="$(mktemp)"
+        firewall_previous_fragment="$(mktemp)"
+        firewall_fragment_existed=false
+        trap 'rm -f "$firewall_fragment" "$firewall_config" "$firewall_previous_config" "$firewall_previous_fragment"' EXIT
+        sudo -n cat /etc/nftables.conf > "$firewall_previous_config"
+        if sudo -n test -f /etc/nftables.d/nook-k0s.nft; then
+          sudo -n cat /etc/nftables.d/nook-k0s.nft \
+            > "$firewall_previous_fragment"
+          firewall_fragment_existed=true
+        fi
+        rollback_k0s_firewall() {
+          status=$?
+          trap - ERR
+          set +e
+          sudo -n nft --handle list chain inet bynull_filter input |
+            awk '/comment "nook k0s pod control plane install"/ { print $NF }' |
+            while read -r handle; do
+              sudo -n nft delete rule inet bynull_filter input handle "$handle"
+            done
+          sudo -n nft --handle list chain inet bynull_filter forward |
+            awk '/comment "nook k0s pod egress install"/ { print $NF }' |
+            while read -r handle; do
+              sudo -n nft delete rule inet bynull_filter forward handle "$handle"
+            done
+          sudo -n install -m 0644 \
+            "$firewall_previous_config" \
+            /etc/nftables.conf
+          if test "$firewall_fragment_existed" = true; then
+            sudo -n install -m 0644 \
+              "$firewall_previous_fragment" \
+              /etc/nftables.d/nook-k0s.nft
+          else
+            sudo -n rm -f /etc/nftables.d/nook-k0s.nft
+          fi
+          rm -f \
+            "$firewall_fragment" \
+            "$firewall_config" \
+            "$firewall_previous_config" \
+            "$firewall_previous_fragment"
+          return "$status"
+        }
+        trap rollback_k0s_firewall ERR
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
           grep -E "policy drop" >/dev/null
         cat > "$firewall_fragment" <<'NFT'
-        add rule inet bynull_filter input ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"
-        add rule inet bynull_filter forward ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"
+        add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"
+        add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"
         NFT
         sudo -n install -d -m 0755 /etc/nftables.d
         sudo -n install -m 0644 \
@@ -473,25 +514,23 @@ tasks:
         sudo -n nft --check --file "$firewall_config"
         sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
         sudo -n nft --handle list chain inet bynull_filter input |
-          awk '/comment "nook k0s pod control plane v2"/ { print $NF }' |
+          awk '/comment "nook k0s pod control plane install"/ { print $NF }' |
           while read -r handle; do
             sudo -n nft delete rule inet bynull_filter input handle "$handle"
           done
         sudo -n nft --handle list chain inet bynull_filter forward |
-          awk '/comment "nook k0s pod egress v2"/ { print $NF }' |
+          awk '/comment "nook k0s pod egress install"/ { print $NF }' |
           while read -r handle; do
             sudo -n nft delete rule inet bynull_filter forward handle "$handle"
           done
         printf '%s\n' \
-          'add rule inet bynull_filter input ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' \
-          'add rule inet bynull_filter forward ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' |
+          'add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane install"' \
+          'add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress install"' |
           sudo -n nft --file -
         sudo -n nft list chain inet bynull_filter input |
-          grep -F 'ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' >/dev/null
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane install"' >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
-          grep -F 'ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' >/dev/null
-        rm -f "$firewall_fragment" "$firewall_config"
-        trap - EXIT
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress install"' >/dev/null
 
         k0s_asset="k0s-${k0s_version}-amd64"
         k0s_url="https://github.com/k0sproject/k0s/releases/download/${k0s_version//+/%2B}/$k0s_asset"
@@ -595,6 +634,7 @@ tasks:
           sleep 2
         done
         sudo -n test -s "$cni_config"
+        cni_migrated=false
         if ! sudo -n jq -e '
           .plugins[]
           | select(.type == "bridge")
@@ -613,6 +653,7 @@ tasks:
           sudo -n install -m 0644 "$cni_config_next" "$cni_config"
           rm -f "$cni_config_next"
           trap - EXIT
+          cni_migrated=true
         fi
         sudo -n k0s kubectl rollout restart deployment/coredns \
           --namespace kube-system
@@ -625,6 +666,21 @@ tasks:
             -o yaml |
             sudo -n k0s kubectl apply -f -
         done
+        if test "$cni_migrated" = true; then
+          for deployment in \
+            hive \
+            hive-workbench-dispatcher \
+            hive-reaper-controller; do
+            if sudo -n k0s kubectl get "deployment/$deployment" \
+              --namespace hive-system >/dev/null 2>&1; then
+              sudo -n k0s kubectl rollout restart "deployment/$deployment" \
+                --namespace hive-system
+              sudo -n k0s kubectl rollout status "deployment/$deployment" \
+                --namespace hive-system \
+                --timeout=10m
+            fi
+          done
+        fi
         if sudo -n test -e /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc; then
           sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc
           sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac
@@ -674,8 +730,50 @@ tasks:
           hive.nook.sh/storage=local \
           hive.nook.sh/kata=enabled \
           --overwrite
+        printf '%s\n' \
+          'add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3 next"' \
+          'add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3 next"' |
+          sudo -n nft --file -
+        sudo -n nft list chain inet bynull_filter input |
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3 next"' >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3 next"' >/dev/null
+        sudo -n nft --handle list chain inet bynull_filter input |
+          awk '/comment "nook k0s pod control plane( v[0-9]+| install)?"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter input handle "$handle"
+          done
+        sudo -n nft --handle list chain inet bynull_filter forward |
+          awk '/comment "nook k0s pod egress( v[0-9]+| install)?"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
+          done
+        printf '%s\n' \
+          'add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' \
+          'add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' |
+          sudo -n nft --file -
+        sudo -n nft list chain inet bynull_filter input |
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' >/dev/null
+        sudo -n nft --handle list chain inet bynull_filter input |
+          awk '/comment "nook k0s pod control plane v3 next"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter input handle "$handle"
+          done
+        sudo -n nft --handle list chain inet bynull_filter forward |
+          awk '/comment "nook k0s pod egress v3 next"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
+          done
         sudo -n k0s status
         sudo -n k0s kubectl get nodes -o wide
+        trap - ERR
+        rm -f \
+          "$firewall_fragment" \
+          "$firewall_config" \
+          "$firewall_previous_config" \
+          "$firewall_previous_fragment"
         REMOTE
 
   k0s:status:
@@ -692,9 +790,9 @@ tasks:
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter input |
-          grep -F 'ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' >/dev/null
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
-          grep -F 'ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' >/dev/null
+          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' >/dev/null
         REMOTE
 
   k0s:network:refresh:
@@ -878,12 +976,12 @@ tasks:
         sudo -n k0s stop
         sudo -n k0s reset
         sudo -n nft --handle list chain inet bynull_filter input |
-          awk '/comment "nook k0s pod control plane v2"/ { print $NF }' |
+          awk '/comment "nook k0s pod control plane( v[0-9]+( next)?| install)?"/ { print $NF }' |
           while read -r handle; do
             sudo -n nft delete rule inet bynull_filter input handle "$handle"
           done
         sudo -n nft --handle list chain inet bynull_filter forward |
-          awk '/comment "nook k0s pod egress v2"/ { print $NF }' |
+          awk '/comment "nook k0s pod egress( v[0-9]+( next)?| install)?"/ { print $NF }' |
           while read -r handle; do
             sudo -n nft delete rule inet bynull_filter forward handle "$handle"
           done
@@ -902,12 +1000,12 @@ tasks:
         sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
         sudo -n rm -f /etc/nftables.d/nook-k0s.nft
         if sudo -n nft list chain inet bynull_filter input |
-          grep -F 'nook k0s pod control plane v2' >/dev/null; then
+          grep -F 'nook k0s pod control plane' >/dev/null; then
           echo "k0s input firewall exception survived uninstall" >&2
           exit 1
         fi
         if sudo -n nft list chain inet bynull_filter forward |
-          grep -F 'nook k0s pod egress v2' >/dev/null; then
+          grep -F 'nook k0s pod egress' >/dev/null; then
           echo "k0s forward firewall exception survived uninstall" >&2
           exit 1
         fi

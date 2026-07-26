@@ -178,6 +178,10 @@ unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
 end
 
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
+k0s_install_task = infra_taskfile.match(
+  /^  k0s:install:\n(?<body>.*?)(?=^  k0s:status:)/m
+)&.[](:body)
+raise "k0s install task is missing" unless k0s_install_task
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
 end
@@ -211,14 +215,29 @@ unless infra_taskfile.include?("kubectl get nodes -o name") &&
   raise "k0s install must wait for worker registration before Node readiness"
 end
 unless infra_taskfile.include?("nook-k0s.nft") &&
-       infra_taskfile.include?("ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 }") &&
-       infra_taskfile.include?("forward ip saddr 10.244.0.0/16 accept") &&
+       infra_taskfile.include?(
+         'input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 }'
+       ) &&
+       infra_taskfile.include?(
+         'forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept'
+       ) &&
        infra_taskfile.include?("nft --handle list chain") &&
        infra_taskfile.include?("nft delete rule") &&
+       k0s_install_task.include?("set -Eeuo pipefail") &&
+       k0s_install_task.include?("trap rollback_k0s_firewall ERR") &&
        infra_taskfile.include?("rm -f /etc/nftables.d/nook-k0s.nft") &&
        infra_taskfile.include?("nft --check --file") &&
        !infra_taskfile.include?("systemctl reload nftables")
   raise "k0s install must persist narrow Pod control-plane and egress firewall rules"
+end
+firewall_rollback = k0s_install_task.index("trap rollback_k0s_firewall ERR")
+k0s_download = k0s_install_task.index('k0s_asset="k0s-${k0s_version}-amd64"')
+k0s_final_status = k0s_install_task.rindex("sudo -n k0s status")
+firewall_commit = k0s_install_task.rindex("trap - ERR")
+unless firewall_rollback && k0s_download && k0s_final_status && firewall_commit &&
+       firewall_rollback < k0s_download &&
+       k0s_final_status < firewall_commit
+  raise "k0s firewall rollback must remain armed through final install verification"
 end
 unless infra_taskfile.scan('nft list chain inet bynull_filter forward |').length >= 3 &&
        infra_taskfile.scan('grep -E "policy drop" >/dev/null').length >= 4
@@ -245,7 +264,10 @@ end
 unless infra_taskfile.include?("rollout restart deployment/coredns") &&
        infra_taskfile.include?("rollout status deployment/coredns") &&
        infra_taskfile.include?("cni_config=/etc/cni/net.d/10-kuberouter.conflist") &&
-       infra_taskfile.include?(".ipMasq = true")
+       infra_taskfile.include?(".ipMasq = true") &&
+       infra_taskfile.include?('if test "$cni_migrated" = true') &&
+       infra_taskfile.include?("hive-workbench-dispatcher") &&
+       infra_taskfile.include?("hive-reaper-controller")
   raise "k0s install must refresh CoreDNS after applying CNI configuration"
 end
 unless infra_taskfile.include?("k0s:network:refresh:") &&

@@ -492,11 +492,14 @@ journal evidence without reading secret contents.
 
 The host firewall keeps its default-drop input and forward policies. k0s adds
 only persisted rules for traffic sourced from the cluster Pod CIDR
-`10.244.0.0/16`: local control-plane access on TCP
+`10.244.0.0/16` arriving on the kube-router `kube-bridge`: local control-plane access on TCP
 `6443`/`8132`, kubelet access on `10250`, and Pod egress. Kube-router
 masquerades traffic leaving the cluster so CoreDNS and intentionally allowlisted
 worker egress receive replies through the node. These rules do not expose any
-control-plane port on the public interface.
+control-plane port on the public interface. The installer uses a temporary
+owned rule while k0s starts and restores the previous persisted firewall state
+if installation aborts. A CNI `ipMasq` migration automatically replaces
+existing Hive, dispatcher, and lifecycle-controller Pod sandboxes.
 
 Credential synchronization requires explicit local file inputs:
 

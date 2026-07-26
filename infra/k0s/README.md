@@ -16,13 +16,17 @@ Pinned platform:
 
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
 firewall must retain default-drop input and forward policies. The installer adds
-only two persisted `10.244.0.0/16` source exceptions: Pod traffic to local
+only two persisted `10.244.0.0/16` source exceptions arriving on kube-router's
+`kube-bridge`: Pod traffic to local
 control-plane ports `6443` and `8132` and the kubelet API on `10250`, plus Pod
 egress through the forward chain. Kube-router masquerades Pod traffic destined
 outside the cluster so replies return through the node. No public control-plane
 port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
-dynamic networking rules. Neo4j data uses the retained local PV at
+dynamic networking rules, and restores the previous persisted firewall state
+if installation aborts. When an existing CNI configuration is migrated to
+enable masquerading, the installer replaces existing Hive workload Pod
+sandboxes automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
