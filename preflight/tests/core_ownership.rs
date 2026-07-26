@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 use nook_preflight::{
     portable_core_browser_dependencies, rust_wasm_domain_boundary_escape_hatches,
