@@ -285,7 +285,10 @@ unless k0s_config.dig("spec", "api", "address") == "10.201.0.1" &&
          "ExecStart=/usr/sbin/ip address replace 10.201.0.1/32 dev lo"
        ) &&
        infra_taskfile.include?(
-         "systemctl enable --now nook-k0s-api-address.service"
+         "systemctl enable nook-k0s-api-address.service"
+       ) &&
+       infra_taskfile.include?(
+         "systemctl restart nook-k0s-api-address.service"
        ) &&
        infra_taskfile.include?(
          "systemctl is-enabled --quiet nook-k0s-api-address.service"

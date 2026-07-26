@@ -645,7 +645,8 @@ tasks:
           /etc/systemd/system/nook-k0s-api-address.service
         rm -f "$api_address_unit"
         sudo -n systemctl daemon-reload
-        sudo -n systemctl enable --now nook-k0s-api-address.service
+        sudo -n systemctl enable nook-k0s-api-address.service
+        sudo -n systemctl restart nook-k0s-api-address.service
         sudo -n systemctl is-enabled --quiet nook-k0s-api-address.service
         sudo -n systemctl is-active --quiet nook-k0s-api-address.service
         sudo -n ip -4 address show dev lo |
