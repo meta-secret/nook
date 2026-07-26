@@ -195,10 +195,14 @@ enum GitHubAction {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+fn install_rustls_crypto_provider() -> anyhow::Result<()> {
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
-        .map_err(|_| anyhow::anyhow!("failed to install the AWS-LC rustls crypto provider"))?;
+        .map_err(|_| anyhow::anyhow!("failed to install the AWS-LC rustls crypto provider"))
+}
+
+fn main() -> anyhow::Result<()> {
+    install_rustls_crypto_provider()?;
     arg0_dispatch_or_else(run_main)
 }
 
@@ -349,5 +353,19 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 })
                 .await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::install_rustls_crypto_provider;
+
+    #[test]
+    fn production_tls_crypto_provider_is_available() {
+        install_rustls_crypto_provider().expect("AWS-LC provider should install");
+
+        let _client = rustls::ClientConfig::builder()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
     }
 }

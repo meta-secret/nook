@@ -43,7 +43,7 @@ spec:
         - ipBlock:
             cidr: HIVE_NEO4J_SERVICE_CIDR
         - ipBlock:
-            cidr: 10.244.0.0/16
+            cidr: HIVE_NEO4J_ENDPOINT_CIDR
       ports:
         - protocol: TCP
           port: 7687

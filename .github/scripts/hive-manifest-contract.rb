@@ -249,7 +249,7 @@ end
 neo4j_rule = network.dig("spec", "egress").any? do |rule|
   cidrs = rule.fetch("to", []).map { |destination| destination.dig("ipBlock", "cidr") }.compact
   cidrs.include?("HIVE_NEO4J_SERVICE_CIDR") &&
-    cidrs.include?("10.244.0.0/16") &&
+    cidrs.include?("HIVE_NEO4J_ENDPOINT_CIDR") &&
     rule.fetch("ports", []).any? do |port|
       port["protocol"] == "TCP" && port["port"] == 7687
     end
@@ -258,9 +258,13 @@ unless neo4j_rule
   raise "Hive workers must reach Neo4j before and after Service DNAT"
 end
 unless infra_taskfile.include?("kubectl get service hive-neo4j") &&
+       infra_taskfile.include?("kubectl get endpoints hive-neo4j") &&
        infra_taskfile.include?("kubectl get endpoints kubernetes") &&
        infra_taskfile.include?(
          's|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g'
+       ) &&
+       infra_taskfile.include?(
+         's|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g'
        ) &&
        infra_taskfile.include?(
          's|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g'
