@@ -338,7 +338,7 @@ impl TaskStore for Neo4jTaskStore {
                     ))
                     .await?;
                 let Some(candidate) = candidates.next(transaction.handle()).await? else {
-                    transaction.rollback().await?;
+                    transaction.commit().await?;
                     return Ok(None);
                 };
                 let task_id: String = candidate.get("id")?;
