@@ -219,21 +219,23 @@ jobs:
         if: steps.task.outputs.ready == 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          REPO_ROOT: ${{ github.workspace }}
           CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
           CI_AGENT_TIMEOUT_MS: "600000"
         run: |
           set -euo pipefail
           rm -f -- "$WORKBENCH_PLAN_FILE"
-          task ci-agent:run
+          planning_parent="$(mktemp -d)"
+          planning_root="$planning_parent/checkout"
+          cleanup() {
+            git worktree remove --force "$planning_root" 2>/dev/null || true
+            rm -rf -- "$planning_parent"
+          }
+          trap cleanup EXIT
+          git worktree add --detach "$planning_root" HEAD
+          REPO_ROOT="$planning_root" task ci-agent:run
+          test -s "$planning_root/$WORKBENCH_PLAN_FILE"
+          cp -- "$planning_root/$WORKBENCH_PLAN_FILE" "$WORKBENCH_PLAN_FILE"
           test -s "$WORKBENCH_PLAN_FILE"
-          git diff --quiet
-          git diff --cached --quiet
-          untracked="$(git ls-files --others --exclude-standard)"
-          if [ -n "$untracked" ]; then
-            echo "::error::Planning agent created unexpected untracked files."
-            exit 1
-          fi
 
       - name: Validate and publish Workbench task plan
         id: plan
@@ -259,7 +261,8 @@ jobs:
             const localPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_PLAN_FILE}`
             const candidate = fs.readFileSync(localPath, 'utf8').trim()
             const secrets = [process.env.CURSOR_SECRET]
-            const rejection = validateAgentRecord(candidate, 'plan', secrets)
+            const sourceTask = process.env.AGENT_PROMPT
+            const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask)
             if (rejection) {
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return

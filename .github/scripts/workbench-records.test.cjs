@@ -42,6 +42,25 @@ test('rejects transcript-shaped task plans', () => {
   assert.match(validateAgentRecord(transcript, 'plan'), /resembles a transcript/)
 })
 
+test('rejects an unlabeled verbatim excerpt from the source task', () => {
+  const sourceTask =
+    'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
+  const copied = validPlan.replace(
+    'Deliver a durable two-phase agent context record.',
+    sourceTask,
+  )
+  assert.match(
+    validateAgentRecord(copied, 'plan', [], sourceTask),
+    /verbatim source-task excerpt/,
+  )
+})
+
+test('accepts an independently synthesized representation of the source task', () => {
+  const sourceTask =
+    'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
+  assert.equal(validateAgentRecord(validPlan, 'plan', [], sourceTask), '')
+})
+
 test('rejects empty required sections', () => {
   const empty = validPlan.replace(
     '1. Add and validate the lifecycle.',

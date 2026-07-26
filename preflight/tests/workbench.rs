@@ -39,6 +39,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
         "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
         "Run task-planning agent",
+        "git worktree add --detach",
+        "REPO_ROOT=\"$planning_root\" task ci-agent:run",
         "Validate and publish Workbench task plan",
         "Publish Workbench result",
         "steps.workbench.outputs.found == 'true'",
@@ -57,6 +59,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
     for required in [
         "content contains a workflow credential",
         "content resembles a transcript, credential, environment dump, or raw log",
+        "content contains a verbatim source-task excerpt",
+        "containsSourceTaskExcerpt",
     ] {
         assert!(
             record_validator.contains(required),

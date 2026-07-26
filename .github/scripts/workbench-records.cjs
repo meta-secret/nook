@@ -33,7 +33,51 @@ const planForbiddenPatterns = [
   /<(?:user|assistant|system)>/i,
 ]
 
-function validateAgentRecord(candidate, kind, secrets = []) {
+function normalizedWords(value) {
+  return value
+    .toLocaleLowerCase('en-US')
+    .match(/[\p{L}\p{N}]+/gu) ?? []
+}
+
+function containsSourceTaskExcerpt(candidate, sourceTask) {
+  if (!sourceTask) return false
+
+  const sourceWords = normalizedWords(sourceTask)
+  const candidateWords = normalizedWords(candidate)
+  const excerptLength = 12
+  if (
+    sourceWords.length < excerptLength ||
+    candidateWords.length < excerptLength
+  ) {
+    return false
+  }
+
+  const sourceExcerpts = new Set()
+  for (
+    let index = 0;
+    index <= sourceWords.length - excerptLength;
+    index += 1
+  ) {
+    sourceExcerpts.add(
+      sourceWords.slice(index, index + excerptLength).join(' '),
+    )
+  }
+
+  for (
+    let index = 0;
+    index <= candidateWords.length - excerptLength;
+    index += 1
+  ) {
+    const excerpt = candidateWords
+      .slice(index, index + excerptLength)
+      .join(' ')
+    if (sourceExcerpts.has(excerpt)) return true
+  }
+
+  return false
+}
+
+function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
   if (!candidate || Buffer.byteLength(candidate, 'utf8') > 12_000) {
     return 'missing or larger than 12 KB'
   }
@@ -72,6 +116,10 @@ function validateAgentRecord(candidate, kind, secrets = []) {
       : commonForbiddenPatterns
   if (forbidden.some((pattern) => pattern.test(candidate))) {
     return 'content resembles a transcript, credential, environment dump, or raw log'
+  }
+
+  if (kind === 'plan' && containsSourceTaskExcerpt(candidate, sourceTask)) {
+    return 'content contains a verbatim source-task excerpt'
   }
 
   return ''
