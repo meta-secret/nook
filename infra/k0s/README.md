@@ -18,9 +18,10 @@ No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
 firewall must retain a default-drop input policy. Neo4j data uses the retained
 local PV at `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
 Kubernetes Secrets are encrypted in etcd with the generated
-`/var/lib/k0s/pki/hive-encryption-provider.yaml`; that root-only file must be
-included in encrypted host backups or disaster recovery cannot decrypt the
-cluster's Secrets. A guarded k0s uninstall preserves that provider and an
+`/var/lib/k0s/pki/hive-encryption-provider.yaml`; that file is readable only by
+the dedicated `kube-apiserver` OS user and root and must be included in encrypted
+host backups or disaster recovery cannot decrypt the cluster's Secrets. A
+guarded k0s uninstall preserves that provider and an
 AES-encrypted, HMAC-authenticated export of the Neo4j TLS/authentication and
 Codex and GitHub publication Secrets under `/var/lib/hive/k0s-recovery`; reinstall
 restores them before Neo4j or Hive starts. Neo4j Bolt traffic is TLS-only. Its
