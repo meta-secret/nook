@@ -73,10 +73,10 @@ tasks:
         set -euo pipefail
         command=(docker buildx build
           --platform linux/amd64
-          --network host
+          --add-host host.docker.internal=host-gateway
           --target verify
           --output type=cacheonly
-          --build-arg "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}"
+          --build-arg "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-host.docker.internal:7687}"
           --build-arg "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
           --build-arg "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
@@ -118,10 +118,10 @@ tasks:
         set -euo pipefail
         command=(docker buildx build
           --platform linux/amd64
-          --network host
+          --add-host host.docker.internal=host-gateway
           --target test
           --output type=cacheonly
-          --build-arg "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}"
+          --build-arg "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-host.docker.internal:7687}"
           --build-arg "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
           --build-arg "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then

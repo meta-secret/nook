@@ -432,6 +432,10 @@ unless hive_taskfile.include?("--target dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export the manifest-keyed dependency graph"
 end
+unless hive_taskfile.include?("--add-host host.docker.internal=host-gateway") &&
+       hive_taskfile.include?("host.docker.internal:7687")
+  raise "BuildKit Hive tests must reach the host-published Neo4j service"
+end
 
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
 unless root_agentic_taskfile.include?("hive:guest:format:") &&

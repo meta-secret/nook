@@ -111,15 +111,14 @@ RUN cargo fmt --all
 
 FROM source AS test
 
-ARG HIVE_NEO4J_TEST_URI=127.0.0.1:7687
+ARG HIVE_NEO4J_TEST_URI=host.docker.internal:7687
 ARG HIVE_NEO4J_TEST_USERNAME=neo4j
 ARG HIVE_NEO4J_TEST_PASSWORD=hive-integration-password
 
 # Tests execute inside BuildKit instead of loading the multi-gigabyte Cargo
 # target directory into Docker's runtime image store. This stage and `check`
 # are siblings; the `verify` join below makes BuildKit run them concurrently.
-RUN --network=host \
-    --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     HIVE_NEO4J_TEST_URI="${HIVE_NEO4J_TEST_URI}" \
     HIVE_NEO4J_TEST_USERNAME="${HIVE_NEO4J_TEST_USERNAME}" \
     HIVE_NEO4J_TEST_PASSWORD="${HIVE_NEO4J_TEST_PASSWORD}" \
