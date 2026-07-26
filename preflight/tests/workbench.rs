@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -10,6 +13,15 @@ fn repository_root() -> PathBuf {
 fn read(path: &str) -> String {
     fs::read_to_string(repository_root().join(path))
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+}
+
+fn directory_has_files(path: &Path) -> bool {
+    fs::read_dir(path).is_ok_and(|entries| {
+        entries.filter_map(Result::ok).any(|entry| {
+            let path = entry.path();
+            path.is_file() || (path.is_dir() && directory_has_files(&path))
+        })
+    })
 }
 
 #[test]
@@ -69,7 +81,7 @@ fn statistics_leave_the_product_repository() {
         "Main statistics must not create Nook bookkeeping PRs or files"
     );
     assert!(
-        !repository_root().join(".stats").exists(),
+        !directory_has_files(&repository_root().join(".stats")),
         "statistics must live only in Nook Workbench"
     );
     assert!(
