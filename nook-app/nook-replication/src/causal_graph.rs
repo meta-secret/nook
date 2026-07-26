@@ -43,6 +43,7 @@ impl Error for CausalGraphError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CausalGraph<Id> {
     parents: BTreeMap<Id, Vec<Id>>,
+    quarantine_roots: BTreeMap<Id, String>,
     quarantined: BTreeMap<Id, String>,
 }
 
@@ -50,6 +51,7 @@ impl<Id> Default for CausalGraph<Id> {
     fn default() -> Self {
         Self {
             parents: BTreeMap::new(),
+            quarantine_roots: BTreeMap::new(),
             quarantined: BTreeMap::new(),
         }
     }
@@ -98,11 +100,12 @@ where
             if parents < *existing {
                 existing.clone_from(&parents);
             }
-            self.merge_quarantine_reason(
+            Self::merge_quarantine_reason(
+                &mut self.quarantine_roots,
                 id,
                 "Conflicting causal parent sets for the same event id".to_owned(),
             );
-            self.propagate_quarantine();
+            self.recompute_quarantine();
             return CausalInsertStatus::Conflict;
         }
         let missing_parents = parents
@@ -111,7 +114,7 @@ where
             .cloned()
             .collect::<Vec<_>>();
         self.parents.insert(id.clone(), parents.clone());
-        self.propagate_quarantine();
+        self.recompute_quarantine();
         if let Some(reason) = self.quarantined.get(&id) {
             CausalInsertStatus::Quarantined {
                 reason: reason.clone(),
@@ -124,8 +127,8 @@ where
     }
 
     pub fn quarantine(&mut self, id: Id, reason: String) {
-        self.merge_quarantine_reason(id, reason);
-        self.propagate_quarantine();
+        Self::merge_quarantine_reason(&mut self.quarantine_roots, id, reason);
+        self.recompute_quarantine();
     }
 
     #[must_use]
@@ -264,7 +267,8 @@ where
                     if parents < *existing {
                         existing.clone_from(&parents);
                     }
-                    merged.merge_quarantine_reason(
+                    Self::merge_quarantine_reason(
+                        &mut merged.quarantine_roots,
                         id.clone(),
                         "Conflicting causal parent sets for the same event id".to_owned(),
                     );
@@ -275,10 +279,10 @@ where
                 }
             }
         }
-        for (id, reason) in &other.quarantined {
-            merged.merge_quarantine_reason(id.clone(), reason.clone());
+        for (id, reason) in &other.quarantine_roots {
+            Self::merge_quarantine_reason(&mut merged.quarantine_roots, id.clone(), reason.clone());
         }
-        merged.propagate_quarantine();
+        merged.recompute_quarantine();
         merged
     }
 
@@ -288,8 +292,8 @@ where
         parents
     }
 
-    fn merge_quarantine_reason(&mut self, id: Id, reason: String) {
-        self.quarantined
+    fn merge_quarantine_reason(reasons: &mut BTreeMap<Id, String>, id: Id, reason: String) {
+        reasons
             .entry(id)
             .and_modify(|existing| {
                 if reason < *existing {
@@ -299,7 +303,15 @@ where
             .or_insert(reason);
     }
 
-    fn propagate_quarantine(&mut self) {
+    fn recompute_quarantine(&mut self) {
+        self.quarantined.clone_from(&self.quarantine_roots);
+        for id in self.cyclic_ids() {
+            Self::merge_quarantine_reason(
+                &mut self.quarantined,
+                id,
+                "Causal graph contains a cycle".to_owned(),
+            );
+        }
         loop {
             let rejected_descendants = self
                 .parents
@@ -316,10 +328,40 @@ where
                 return;
             }
             for id in rejected_descendants {
-                self.quarantined
-                    .insert(id, "Ancestor event was rejected".to_owned());
+                Self::merge_quarantine_reason(
+                    &mut self.quarantined,
+                    id,
+                    "Ancestor event was rejected".to_owned(),
+                );
             }
         }
+    }
+
+    fn cyclic_ids(&self) -> BTreeSet<Id> {
+        self.parents
+            .keys()
+            .filter(|origin| {
+                let mut visited = BTreeSet::new();
+                let mut stack = self
+                    .parents
+                    .get(*origin)
+                    .expect("origin came from the parent index")
+                    .clone();
+                while let Some(id) = stack.pop() {
+                    if &id == *origin {
+                        return true;
+                    }
+                    if !visited.insert(id.clone()) {
+                        continue;
+                    }
+                    if let Some(parents) = self.parents.get(&id) {
+                        stack.extend(parents.iter().cloned());
+                    }
+                }
+                false
+            })
+            .cloned()
+            .collect()
     }
 }
 
@@ -464,16 +506,26 @@ mod tests {
     }
 
     #[test]
-    fn ancestry_queries_terminate_for_cycles() {
+    fn cycles_are_quarantined_and_excluded_from_applicability() {
         let mut graph = CausalGraph::new();
         graph.insert(id("left"), vec![id("right")]);
-        graph.insert(id("right"), vec![id("left")]);
+        assert_eq!(
+            graph.insert(id("right"), vec![id("left")]),
+            CausalInsertStatus::Quarantined {
+                reason: id("Causal graph contains a cycle")
+            }
+        );
         graph.insert(id("unrelated"), Vec::new());
 
         assert!(!graph.is_ancestor(&id("unrelated"), &id("left")));
         assert!(graph.is_ancestor(&id("right"), &id("left")));
         assert!(!graph.are_concurrent(&id("left"), &id("right")));
-        assert_eq!(graph.topological_order(), Err(CausalGraphError::Cycle));
+        assert_eq!(graph.applicable_ids(), vec![&id("unrelated")]);
+        assert_eq!(graph.topological_order().unwrap(), vec![id("unrelated")]);
+        assert_eq!(
+            graph.quarantined().keys().cloned().collect::<Vec<_>>(),
+            vec![id("left"), id("right")]
+        );
     }
 
     #[test]
@@ -532,6 +584,29 @@ mod tests {
         assert_eq!(
             left_right.quarantined().get("same").map(String::as_str),
             Some("A-policy")
+        );
+    }
+
+    #[test]
+    fn union_recomputes_derived_quarantine_associatively() {
+        let mut left = CausalGraph::new();
+        left.insert(id("0"), Vec::new());
+        left.insert(id("1"), Vec::new());
+
+        let mut middle = CausalGraph::new();
+        middle.insert(id("0"), Vec::new());
+        middle.quarantine(id("0"), id("policy rejected"));
+
+        let mut right = CausalGraph::new();
+        right.insert(id("0"), Vec::new());
+        right.insert(id("1"), vec![id("0")]);
+
+        let left_associative = left.union(&middle).union(&right);
+        let right_associative = left.union(&middle.union(&right));
+        assert_eq!(left_associative, right_associative);
+        assert_eq!(
+            left_associative.quarantined().get("1").map(String::as_str),
+            Some("Conflicting causal parent sets for the same event id")
         );
     }
 }

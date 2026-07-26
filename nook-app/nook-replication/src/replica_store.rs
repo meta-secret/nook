@@ -64,10 +64,6 @@ where
         }
     }
 
-    pub fn remove_event(&mut self, event_id: &Id) {
-        self.events.remove(event_id);
-    }
-
     #[must_use]
     pub fn contains_event(&self, event_id: &Id) -> bool {
         self.events.contains_key(event_id)

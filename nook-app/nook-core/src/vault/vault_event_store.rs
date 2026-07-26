@@ -28,10 +28,6 @@ impl LocalEventStore {
         let _ = self.replica.put_event(event_id, storage_bytes);
     }
 
-    pub fn remove_event(&mut self, event_id: &EventId) {
-        self.replica.remove_event(event_id);
-    }
-
     #[must_use]
     pub fn get_bytes(&self, event_id: &EventId) -> Option<&[u8]> {
         self.replica.get_bytes(event_id)
@@ -124,10 +120,18 @@ pub fn union_remote_events(
 
     let graph = candidate.load_graph(store_id)?;
     let quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
-    for event_id in &quarantined {
-        candidate.remove_event(event_id);
+    let mut accepted = LocalEventStore::new();
+    for event_id in candidate.event_ids() {
+        if quarantined.contains(&event_id) {
+            continue;
+        }
+        let bytes = candidate
+            .get_bytes(&event_id)
+            .expect("candidate event was inserted before graph validation")
+            .to_vec();
+        accepted.put_event(event_id, bytes);
     }
-    *local = candidate;
+    *local = accepted;
     let imported = candidates
         .into_iter()
         .filter(|event_id| !quarantined.contains(event_id))
