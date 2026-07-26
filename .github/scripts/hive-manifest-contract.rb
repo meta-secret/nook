@@ -339,8 +339,11 @@ unless k0s_status_task.include?(
 end
 unless k0s_status_task.include?("/etc/nftables.conf") &&
        k0s_status_task.include?("/etc/nftables.d/nook-k0s.nft") &&
-       k0s_status_task.include?("cmp --silent")
-  raise "k0s status must verify exact persisted firewall state"
+       k0s_status_task.include?("cmp --silent") &&
+       k0s_status_task.include?('input_rules="$(sudo -n nft list chain') &&
+       k0s_status_task.include?('forward_rules="$(sudo -n nft list chain') &&
+       k0s_status_task.scan("grep -Ec").length >= 2
+  raise "k0s status must verify exact persisted and unique live firewall state"
 end
 unless infra_taskfile.include?(
          '-f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"'
@@ -422,11 +425,27 @@ unless hive_taskfile.include?("for crate in hive lace")
   raise "Hive formatting does not apply the entire checked workspace"
 end
 unless hive_taskfile.include?("--target verify-export") &&
-       hive_taskfile.include?("--target test-compile") &&
+       hive_taskfile.include?("--target test-export") &&
        hive_taskfile.include?('type=local,dest=$verified') &&
        !hive_taskfile.include?("--target test-runner") &&
        !hive_taskfile.include?("--load")
   raise "Hive verification must export only test executables from BuildKit"
+end
+unless hive_taskfile.include?('if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]') &&
+       !hive_taskfile.include?(
+         'HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}'
+       )
+  raise "standalone Hive tests must keep destructive Neo4j integration opt-in"
+end
+hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
+unless hive_dockerfile.include?(
+         'SHELL ["/bin/bash", "-o", "pipefail", "-c"]'
+       ) &&
+       hive_dockerfile.include?("FROM scratch AS test-export") &&
+       hive_dockerfile.include?(
+         "COPY --from=test-compile /opt/nook/hive-tests /hive-tests"
+       )
+  raise "Hive test compilation must propagate Cargo failures and export from scratch"
 end
 unless hive_taskfile.include?("--target dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')

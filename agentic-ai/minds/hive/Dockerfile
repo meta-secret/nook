@@ -116,6 +116,7 @@ FROM source AS test-compile
 # Compile tests inside BuildKit, but export only the executable artifacts. The
 # Taskfile runs them in the pinned Rust base with normal container host
 # networking, so Neo4j remains reachable without loading Cargo target layers.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     mkdir -p /opt/nook/hive-tests \
     && cargo test --locked -p hive --no-run --message-format=json \
@@ -132,10 +133,14 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     && test -n "$(find /opt/nook/hive-tests -type f -perm /111 -print -quit)" \
     && nook-sccache-report hive-test-compile
 
+FROM scratch AS test-export
+
+COPY --from=test-compile /opt/nook/hive-tests /hive-tests
+
 FROM scratch AS verify-export
 
 COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
-COPY --from=test-compile /opt/nook/hive-tests /hive-tests
+COPY --from=test-export /hive-tests /hive-tests
 
 FROM dependencies AS release-source
 COPY lace/src lace/src

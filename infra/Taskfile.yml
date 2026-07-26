@@ -1005,10 +1005,28 @@ tasks:
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
           grep -E "policy drop" >/dev/null
-        sudo -n nft list chain inet bynull_filter input |
-          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' >/dev/null
-        sudo -n nft list chain inet bynull_filter forward |
-          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' >/dev/null
+        input_rules="$(sudo -n nft list chain inet bynull_filter input)"
+        forward_rules="$(sudo -n nft list chain inet bynull_filter forward)"
+        test "$(
+          grep -Fc \
+            'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' \
+            <<<"$input_rules"
+        )" -eq 1
+        test "$(
+          grep -Ec \
+            'comment "nook k0s pod control plane( v[0-9]+( next)?| install)?"' \
+            <<<"$input_rules"
+        )" -eq 1
+        test "$(
+          grep -Fc \
+            'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' \
+            <<<"$forward_rules"
+        )" -eq 1
+        test "$(
+          grep -Ec \
+            'comment "nook k0s pod egress( v[0-9]+( next)?| install)?"' \
+            <<<"$forward_rules"
+        )" -eq 1
         REMOTE
 
   k0s:network:refresh:

@@ -102,13 +102,19 @@ tasks:
           echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
           exit 1
         fi
+        test_environment=()
+        if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]; then
+          : "${HIVE_NEO4J_TEST_PASSWORD:?HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI}"
+          test_environment+=(
+            -e "HIVE_NEO4J_TEST_URI"
+            -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
+            -e "HIVE_NEO4J_TEST_PASSWORD")
+        fi
         docker run --rm \
           --platform linux/amd64 \
           --network host \
           --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
-          -e "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}" \
-          -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}" \
-          -e "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}" \
+          "${test_environment[@]}" \
           "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
           bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
@@ -140,7 +146,7 @@ tasks:
         trap cleanup EXIT
         command=(docker buildx build
           --platform linux/amd64
-          --target test-compile
+          --target test-export
           --output "type=local,dest=$compiled")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
@@ -157,19 +163,25 @@ tasks:
           --file hive/Dockerfile
           .)
         "${command[@]}"
-        test -n "$(find "$compiled/opt/nook/hive-tests" -type f -print -quit)"
-        test_kib="$(du -sk "$compiled/opt/nook/hive-tests" | awk '{print $1}')"
+        test -n "$(find "$compiled/hive-tests" -type f -print -quit)"
+        test_kib="$(du -sk "$compiled/hive-tests" | awk '{print $1}')"
         if [ "$test_kib" -gt 524288 ]; then
           echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
           exit 1
         fi
+        test_environment=()
+        if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]; then
+          : "${HIVE_NEO4J_TEST_PASSWORD:?HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI}"
+          test_environment+=(
+            -e "HIVE_NEO4J_TEST_URI"
+            -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
+            -e "HIVE_NEO4J_TEST_PASSWORD")
+        fi
         docker run --rm \
           --platform linux/amd64 \
           --network host \
-          --mount "type=bind,src=$compiled/opt/nook/hive-tests,dst=/tests,readonly" \
-          -e "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}" \
-          -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}" \
-          -e "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}" \
+          --mount "type=bind,src=$compiled/hive-tests,dst=/tests,readonly" \
+          "${test_environment[@]}" \
           "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
           bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
