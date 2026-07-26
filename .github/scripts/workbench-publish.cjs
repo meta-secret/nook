@@ -30,6 +30,11 @@ try {
   sha = undefined
 }
 
+if (sha && remotePath.startsWith('stats/')) {
+  console.error(`Refusing to overwrite immutable Workbench statistics: ${remotePath}`)
+  process.exit(3)
+}
+
 const args = [
   'api',
   '--method',

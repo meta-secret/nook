@@ -18,11 +18,17 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
 
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
+        "CI_AGENT_TIMEOUT_MS: \"18000000\"",
         "status: ready",
         "automation: agent",
         "status: in_progress",
+        "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
         "Publish Workbench result",
+        "validateSummary",
+        "contains a workflow credential",
+        "publishing trusted fallback metadata",
+        "## Decisions",
         "worklogs/${feature}/",
     ] {
         assert!(
@@ -44,6 +50,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
 #[test]
 fn statistics_leave_the_product_repository() {
     let collector = read(".github/workflows/main-build-stats.yml");
+    let publisher = read(".github/scripts/workbench-publish.cjs");
 
     for required in [
         "repository: meta-secret/nook-workbench",
@@ -64,6 +71,11 @@ fn statistics_leave_the_product_repository() {
     assert!(
         !repository_root().join(".stats").exists(),
         "statistics must live only in Nook Workbench"
+    );
+    assert!(
+        publisher.contains("sha && remotePath.startsWith('stats/')")
+            && publisher.contains("Refusing to overwrite immutable Workbench statistics"),
+        "the Workbench publisher must refuse to replace immutable statistics"
     );
 
     for path in [".github/workflows/main.yml", ".github/workflows/pr.yml"] {

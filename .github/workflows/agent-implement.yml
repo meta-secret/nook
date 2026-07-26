@@ -37,7 +37,9 @@ jobs:
       GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_RUN_ID: ${{ github.run_id }}
       CI_AGENT_PROMPT_FILE: .github/prompts/agent-implement.md
-      CI_AGENT_TIMEOUT_MS: "21600000"
+      # Leave one hour of the job budget for setup plus result publication so
+      # a timed-out worker cannot strand an issue in progress.
+      CI_AGENT_TIMEOUT_MS: "18000000"
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
     steps:
@@ -46,6 +48,12 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.NOOK_GITHUB_PAT }}
+
+      - name: Validate dispatch inputs
+        if: inputs.prompt != '' && inputs.issue_path != ''
+        run: |
+          echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
+          exit 1
 
       - name: Claim ready Workbench issue
         id: workbench
@@ -215,6 +223,8 @@ jobs:
           ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
+          CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -238,9 +248,7 @@ jobs:
             const pull = pulls.data[0]
             const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
             const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
-            const summary = fs.existsSync(summaryPath)
-              ? fs.readFileSync(summaryPath, 'utf8').trim()
-              : [
+            const fallbackSummary = [
                   '# Automated agent work summary',
                   '',
                   '## Outcome',
@@ -255,6 +263,10 @@ jobs:
                   '',
                   success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before a pull request was opened.',
                   '',
+                  '## Decisions',
+                  '',
+                  '- None recorded.',
+                  '',
                   '## Validation',
                   '',
                   `- [Agent implement run ${context.runId}](${runUrl})`,
@@ -263,6 +275,51 @@ jobs:
                   '',
                   success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
+            const validateSummary = (candidate) => {
+              if (!candidate || Buffer.byteLength(candidate, 'utf8') > 12_000) {
+                return 'missing or larger than 12 KB'
+              }
+              const required = [
+                '## Outcome',
+                '## Progress',
+                '## Implementation problems',
+                '## Decisions',
+                '## Validation',
+                '## Remaining work',
+              ]
+              const headings = [...candidate.matchAll(/^## (.+)$/gm)].map((match) => `## ${match[1]}`)
+              if (JSON.stringify(headings) !== JSON.stringify(required)) {
+                return 'required sections are missing, duplicated, reordered, or extended'
+              }
+              const secrets = [process.env.CURSOR_SECRET, process.env.NOOK_SECRET]
+                .filter((secret) => secret && secret.length >= 8)
+              if (secrets.some((secret) => candidate.includes(secret))) {
+                return 'content contains a workflow credential'
+              }
+              const forbidden = [
+                /```/,
+                /^\s{4}\S/m,
+                /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,
+                /\b(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{12,}\b/,
+                /(?:^|\n)\s*[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|API_KEY)[A-Z0-9_]*\s*[:=]\s*\S+/m,
+                /\b(?:authorization|bearer|password|secret|token|api[_ -]?key|private[_ -]?key)\s*[:=]\s*\S+/i,
+                /\b(?:process\.env|environment dump|raw (?:stdout|stderr|log))\b/i,
+              ]
+              if (forbidden.some((pattern) => pattern.test(candidate))) {
+                return 'content resembles a credential, environment dump, or raw log'
+              }
+              return ''
+            }
+            let summary = fallbackSummary
+            if (fs.existsSync(summaryPath)) {
+              const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
+              const rejection = validateSummary(candidate)
+              if (rejection) {
+                core.warning(`Rejected agent-authored Workbench summary: ${rejection}; publishing trusted fallback metadata.`)
+              } else {
+                summary = candidate
+              }
+            }
             const worklogPath = `worklogs/${feature}/${timestamp}-run-${context.runId}.md`
             const worklog = [
               '---',
