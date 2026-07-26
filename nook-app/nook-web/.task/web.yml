@@ -423,7 +423,7 @@ tasks:
       - task: _web:test:e2e:parallel
 
   _web:test:e2e:sync-live:parallel:
-    desc: Live sync Playwright project when wasm/dist already built (nightly).
+    desc: Live sync Playwright project when wasm/dist already built (manual).
     cmds:
       - echo "==> Playwright sync-live project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, repo=${NOOK_GITHUB_E2E_REPO:-unset})"
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:sync-live

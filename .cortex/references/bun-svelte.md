@@ -65,7 +65,7 @@ is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check
   `5173`). In the multi-worktree repo, use an unused host port such as
   `WEB_DEV_PORT=5175 task web:dev:fast`; never stop another worktree's container
   to reclaim `5173`.
-- Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
+- Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
 - Optional local Docker e2e (`E2E_SPEC=… task web:test:e2e:file`) is for

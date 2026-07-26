@@ -1,7 +1,8 @@
 # Manually run Playwright e2e against a pull request branch.
 #
-# PR CI intentionally omits browser e2e. Main runs the full suite after merge and nightly runs
-# sync-live. Use this workflow for explicit pre-merge validation or debugging on a PR branch.
+# PR CI intentionally omits browser e2e. Main runs the full suite after merge.
+# Use this workflow for explicit pre-merge validation or debugging on a PR branch,
+# including live-provider sync checks.
 # Inputs:
 #   pr_number — PR to checkout (refs/pull/<n>/head)
 #   suite     — e2e-pr, e2e, sync-live, or all
@@ -96,8 +97,34 @@ jobs:
         run: task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000 WASM_BUILD_MODE=prod
         env:
           CI: true
+          NOOK_E2E_SYNC_PROVIDER: github
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-pr-${{ inputs.pr_number }}-${{ github.run_id }}
           NOOK_GITHUB_POLL_MS: "3000"
           NOOK_GITHUB_SYNC_TIMEOUT_MS: "15000"
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: "30000"
+
+      # Cancellation can interrupt Playwright and Task deferred cleanup after
+      # the disposable repository is created. Keep cleanup in a separate
+      # always-run step so superseded manual runs cannot leak live test state.
+      - name: Clean up live-sync test repository
+        if: >-
+          always() &&
+          (inputs.suite == 'all' || inputs.suite == 'sync-live')
+        uses: actions/github-script@v9
+        env:
+          NOOK_GITHUB_E2E_REPO: nook-e2e-pr-${{ inputs.pr_number }}-${{ github.run_id }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          script: |
+            const repo = process.env.NOOK_GITHUB_E2E_REPO
+            const { data: user } = await github.rest.users.getAuthenticated()
+            try {
+              await github.rest.repos.delete({ owner: user.login, repo })
+              core.info(`Deleted live-sync test repository: ${user.login}/${repo}`)
+            } catch (error) {
+              if (error.status !== 404) throw error
+              core.info(
+                `Live-sync test repository already absent: ${user.login}/${repo}`,
+              )
+            }

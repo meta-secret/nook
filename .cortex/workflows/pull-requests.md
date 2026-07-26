@@ -327,10 +327,9 @@ After merge, `main.yml` independently runs full local-provider and extension
 incident keyed by failed SHA. The isolated Hive dispatcher enqueues it once, and
 one logical task owns diagnosis, a normal exact-head PR, actionable review
 resolution, squash merge, and verification of the resulting Main run. The
-scheduled `agent-implement.yml` worker does not claim Hive incidents. Nightly
-covers sync-live and retains its separate `ci-fix` worker, which opens a repair
-PR; any task-owning agent that continues that PR follows the same
-readiness-and-squash-merge contract.
+scheduled `agent-implement.yml` worker does not claim Hive incidents.
+Credentialed sync-live checks are available only through explicit manual
+validation.
 
 ### 9. Post-merge Workbench context and statistics
 

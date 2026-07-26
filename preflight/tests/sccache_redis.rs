@@ -158,23 +158,12 @@ fn assert_workflows_scope_cache_credentials() {
         }
     }
 
-    for path in [
-        ".github/workflows/main.yml",
-        ".github/workflows/e2e-nightly.yml",
-    ] {
-        let workflow = read(path);
-        assert!(
-            !workflow.contains("NOOK_CACHE_REDIS_PASSWORD"),
-            "hosted cache publishers must stay secret-free so their BuildKit compiler layers are reusable by PRs"
-        );
-        assert!(!workflow.contains("NOOK_CLOUDFLARE_ACCESS"));
-    }
-
-    let nightly = read(".github/workflows/e2e-nightly.yml");
+    let main = read(".github/workflows/main.yml");
     assert!(
-        nightly.contains("\n  ci-fix:\n"),
-        "nightly workflow must define its AI fix job"
+        !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
+        "hosted cache publishers must stay secret-free so their BuildKit compiler layers are reusable by PRs"
     );
+    assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 }
 
 fn assert_rust_build_cache_boundary() {
