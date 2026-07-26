@@ -290,6 +290,14 @@ async function handleMessage(message: unknown): Promise<unknown> {
       resetSessionState()
       return { ok: true }
     }
+    case 'nook:extension-session-migrate-auth-providers': {
+      const activeManager = await getManager()
+      if ((await activeManager.deviceProtectionStatus()) !== 'unlocked') {
+        return { ok: true, migrated: false }
+      }
+      await activeManager.loadAuthProviders()
+      return { ok: true, migrated: true }
+    }
     case 'nook:extension-session-status': {
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
@@ -921,6 +929,7 @@ function sessionMessagePriority(type: string): SessionOperationPriority {
   switch (type) {
     case 'nook:extension-session-reset':
       return 'expiry'
+    case 'nook:extension-session-migrate-auth-providers':
     case 'nook:extension-session-seal-identity-handoff':
     case 'nook:extension-session-plan-login-save':
     case 'nook:extension-session-commit-login-save':

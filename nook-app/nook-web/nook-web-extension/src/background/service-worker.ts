@@ -40,7 +40,6 @@ import {
   importExtensionEventLog,
   readExtensionPairingState,
   reconcileExtensionPairingState,
-  removeExtensionPairingState,
   writeExtensionPairingState,
 } from './vault-runtime'
 import {
@@ -732,10 +731,22 @@ function ensureLegacyPairingMigration(): Promise<void> {
     const legacyKeys = legacyPairingStorageKeys(legacy)
     if (legacyKeys.length === 0) return
     const current = await readExtensionPairingState()
+    const migrated = migratedLegacyPairingStorageItems(legacy)
     if (Object.keys(current).length > 0) {
+      const completedKeys = Object.keys(migrated).filter(
+        (key) =>
+          legacyKeys.includes(key) &&
+          key in current &&
+          JSON.stringify(current[key]) === JSON.stringify(migrated[key]),
+      )
+      if (
+        completedKeys.length > 0 &&
+        completedKeys.length === Object.keys(migrated).length
+      ) {
+        await removeLegacyPairingStorage(completedKeys)
+      }
       return
     }
-    const migrated = migratedLegacyPairingStorageItems(legacy)
     if (Object.keys(migrated).length > 0) {
       await writeExtensionPairingState(migrated)
       await removeLegacyPairingStorage(
@@ -2220,13 +2231,8 @@ async function restorePairingStorage(
       .filter((key) => key in previous)
       .map((key) => [key, previous[key]]),
   )
-  if (Object.keys(restore).length > 0) {
-    await writeExtensionPairingState(restore)
-  }
   const addedKeys = touchedKeys.filter((key) => !(key in previous))
-  if (addedKeys.length > 0) {
-    await removeExtensionPairingState(addedKeys)
-  }
+  await reconcilePairingStorage(restore, addedKeys)
 }
 
 async function importApprovedPairing(
@@ -2251,6 +2257,9 @@ async function importApprovedPairing(
     const previousPairingState = await getPairingStorage()
     await setPairingStorage(pairingItems)
     try {
+      await sendSessionMessage({
+        type: 'nook:extension-session-migrate-auth-providers',
+      })
       await sendSessionMessage({ type: 'nook:extension-session-reset' })
       // Snapshot before scrubbing so lazy extension IPC cannot observe emptied
       // credential fields mid-handoff.
