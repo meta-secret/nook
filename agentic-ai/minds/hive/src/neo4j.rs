@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use async_trait::async_trait;
-use neo4rs::{ConfigBuilder, Graph, Row, query};
+use neo4rs::{ConfigBuilder, Error as Neo4jDriverError, Graph, Neo4jErrorKind, Row, query};
+use rand::RngExt;
 use uuid::Uuid;
 
 use crate::model::{
@@ -16,6 +19,21 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
 const LATEST_SCHEMA_VERSION: i64 = 1;
+const CLAIM_RETRY_LIMIT: usize = 5;
+
+fn is_transient_claim_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<Neo4jDriverError>()
+            .is_some_and(|driver_error| {
+                matches!(
+                    driver_error,
+                    Neo4jDriverError::Neo4j(neo4j_error)
+                        if neo4j_error.kind() == Neo4jErrorKind::Transient
+                )
+            })
+    })
+}
 
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
@@ -201,13 +219,16 @@ impl TaskStore for Neo4jTaskStore {
         agent_id: &AgentId,
         lease_seconds: i64,
     ) -> anyhow::Result<Option<ClaimedTask>> {
-        let attempt_id = AttemptId::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
-        let lease_token =
-            LeaseToken::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
-        let mut transaction = self.graph.start_txn().await?;
+        for retry in 0..CLAIM_RETRY_LIMIT {
+            let result = async {
+                let attempt_id =
+                    AttemptId::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
+                let lease_token =
+                    LeaseToken::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
+                let mut transaction = self.graph.start_txn().await?;
 
-        transaction
-            .run(query(
+                transaction
+                    .run(query(
                 "MATCH (task:Task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
                  WHERE task.status = 'RUNNING'
                    AND task.lease_until <= timestamp()
@@ -223,11 +244,11 @@ impl TaskStore for Neo4jTaskStore {
                      attempt.completed_at = timestamp(),
                      agent.status = 'IDLE',
                      agent.last_seen_at = timestamp()",
-            ))
-            .await?;
+                    ))
+                    .await?;
 
-        let mut candidates = transaction
-            .execute(query(
+                let mut candidates = transaction
+                    .execute(query(
                 "MATCH (task:Task)
                  WHERE (
                    task.status = 'READY'
@@ -243,17 +264,17 @@ impl TaskStore for Neo4jTaskStore {
                  LIMIT 1
                  SET task.claim_lock = coalesce(task.claim_lock, 0) + 1
                  RETURN task.id AS id",
-            ))
-            .await?;
-        let Some(candidate) = candidates.next(transaction.handle()).await? else {
-            transaction.rollback().await?;
-            return Ok(None);
-        };
-        let task_id: String = candidate.get("id")?;
+                    ))
+                    .await?;
+                let Some(candidate) = candidates.next(transaction.handle()).await? else {
+                    transaction.rollback().await?;
+                    return Ok(None);
+                };
+                let task_id: String = candidate.get("id")?;
 
-        let mut rows = transaction
-            .execute(
-                query(
+                let mut rows = transaction
+                    .execute(
+                        query(
                     "MATCH (task:Task {id: $id})
                      WHERE (
                        task.status = 'READY'
@@ -301,21 +322,34 @@ impl TaskStore for Neo4jTaskStore {
                             attempt.number AS attempt_number,
                             dependency_ids,
                             dependency_summaries",
-                )
-                .param("id", task_id)
-                .param("agent_id", agent_id.as_str())
-                .param("lease_token", lease_token.as_str())
-                .param("lease_seconds", lease_seconds)
-                .param("attempt_id", attempt_id.as_str()),
-            )
-            .await?;
-        let Some(row) = rows.next(transaction.handle()).await? else {
-            transaction.rollback().await?;
-            return Ok(None);
-        };
-        let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
-        transaction.commit().await?;
-        Ok(Some(claimed))
+                        )
+                        .param("id", task_id)
+                        .param("agent_id", agent_id.as_str())
+                        .param("lease_token", lease_token.as_str())
+                        .param("lease_seconds", lease_seconds)
+                        .param("attempt_id", attempt_id.as_str()),
+                    )
+                    .await?;
+                let Some(row) = rows.next(transaction.handle()).await? else {
+                    transaction.rollback().await?;
+                    return Ok(None);
+                };
+                let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
+                transaction.commit().await?;
+                Ok(Some(claimed))
+            }
+            .await;
+
+            match result {
+                Ok(claimed) => return Ok(claimed),
+                Err(error) if retry + 1 < CLAIM_RETRY_LIMIT && is_transient_claim_error(&error) => {
+                    let delay_ms = rand::rng().random_range(20..=80);
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        unreachable!("bounded claim retry loop always returns")
     }
 
     async fn heartbeat(
