@@ -234,6 +234,73 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_MESH_SSH_TARGET}}"
         'sudo -n warp-cli status && ip -brief address | grep CloudflareWARP'
 
+  services:repair-network:
+    desc: Recreate only the Nook Compose network after an external firewall reload.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        compose_file="$remote_dir/compose.yaml"
+        test -s "$compose_file"
+        docker compose --file "$compose_file" config --quiet
+        docker compose --file "$compose_file" down --remove-orphans
+        if ! sudo -n iptables --table nat --list DOCKER >/dev/null 2>&1; then
+          case "$(docker version --format '{{"{{.Server.Version}}"}}')" in
+            26.*) ;;
+            *)
+              echo "Refusing chain recovery for an unverified Docker version" >&2
+              exit 1
+              ;;
+          esac
+          sudo -n iptables --table nat --new-chain DOCKER
+          for chain in \
+            DOCKER \
+            DOCKER-ISOLATION-STAGE-1 \
+            DOCKER-ISOLATION-STAGE-2; do
+            if ! sudo -n iptables --table filter --list "$chain" \
+              >/dev/null 2>&1; then
+              sudo -n iptables --table filter --new-chain "$chain"
+            fi
+          done
+          for chain in \
+            DOCKER-ISOLATION-STAGE-1 \
+            DOCKER-ISOLATION-STAGE-2; do
+            if ! sudo -n iptables --table filter \
+              --check "$chain" --jump RETURN 2>/dev/null; then
+              sudo -n iptables --table filter \
+                --append "$chain" --jump RETURN
+            fi
+          done
+        fi
+        sudo -n iptables --table nat --list DOCKER >/dev/null
+        docker compose --file "$compose_file" up --detach --wait
+        docker compose --file "$compose_file" ps
+        curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
+        REMOTE
+
+  services:diagnose:
+    desc: Show bounded Docker and Nook Compose network diagnostics.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        sudo -n systemctl status docker --no-pager --full || true
+        sudo -n systemctl cat docker || true
+        docker info --format '{{"{{json .}}"}}' |
+          jq '{ServerVersion, Driver, FirewallBackend, DockerRootDir}' || true
+        docker compose --file "$remote_dir/compose.yaml" ps --all || true
+        sudo -n iptables --version || true
+        sudo -n nft --handle list chain inet bynull_filter forward || true
+        sudo -n iptables --table filter --verbose --numeric --list FORWARD || true
+        sudo -n iptables-save |
+          grep -E '(^\\*|^:DOCKER|DOCKER)' || true
+        sudo -n nft list tables || true
+        REMOTE
+
   deploy:
     desc: Deploy Nook services and the complete k0s/Kata/Neo4j/Hive platform.
     silent: true
@@ -348,7 +415,7 @@ tasks:
         test -c /dev/vhost-vsock
         sudo -n test -r /dev/kvm
         sudo -n nft list chain inet bynull_filter input |
-          grep -Eq "policy drop"
+          grep -E "policy drop" >/dev/null
         printf 'KVM available: '
         ls -l /dev/kvm
         printf 'Virtualization flags: '
@@ -372,7 +439,37 @@ tasks:
         download_dir="$remote_dir/downloads"
         install -d -m 0750 "$download_dir"
         sudo -n apt-get update -qq
-        sudo -n apt-get install -y -qq --no-install-recommends jq python3
+        sudo -n apt-get install -y -qq --no-install-recommends acl jq python3
+
+        firewall_fragment="$(mktemp)"
+        firewall_config="$(mktemp)"
+        trap 'rm -f "$firewall_fragment" "$firewall_config"' EXIT
+        cat > "$firewall_fragment" <<'NFT'
+        add rule inet bynull_filter input ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"
+        add rule inet bynull_filter forward ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"
+        NFT
+        sudo -n install -d -m 0755 /etc/nftables.d
+        sudo -n install -m 0644 \
+          "$firewall_fragment" \
+          /etc/nftables.d/nook-k0s.nft
+        sudo -n cat /etc/nftables.conf > "$firewall_config"
+        if ! grep -Fq 'include "/etc/nftables.d/nook-k0s.nft"' \
+          "$firewall_config"; then
+          printf '\ninclude "/etc/nftables.d/nook-k0s.nft"\n' \
+            >> "$firewall_config"
+        fi
+        sudo -n nft --check --file "$firewall_config"
+        sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
+        if ! sudo -n nft list chain inet bynull_filter input |
+          grep -F "nook k0s pod control plane v2" >/dev/null; then
+          sudo -n nft --file /etc/nftables.d/nook-k0s.nft
+        fi
+        sudo -n nft list chain inet bynull_filter input |
+          grep -F 'nook k0s pod control plane v2' >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -F 'nook k0s pod egress v2' >/dev/null
+        rm -f "$firewall_fragment" "$firewall_config"
+        trap - EXIT
 
         k0s_asset="k0s-${k0s_version}-amd64"
         k0s_url="https://github.com/k0sproject/k0s/releases/download/${k0s_version//+/%2B}/$k0s_asset"
@@ -430,16 +527,21 @@ tasks:
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
           /etc/k0s/containerd.d/certs.d/127.0.0.1:5000/hosts.toml
 
-        if ! systemctl cat k0scontroller >/dev/null 2>&1; then
+        if ! sudo -n test -f /etc/systemd/system/k0scontroller.service; then
           sudo -n k0s install controller \
             --enable-worker \
             --no-taints \
             --config /etc/k0s/k0s.yaml
         fi
         sudo -n test "$(id -u kube-apiserver)" -ge 1
-        sudo -n chown root:kube-apiserver \
+        sudo -n chown root:root \
           /var/lib/k0s/pki/hive-encryption-provider.yaml
-        sudo -n chmod 0640 \
+        sudo -n setfacl --remove-all \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml
+        sudo -n chmod 0600 \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml
+        sudo -n setfacl \
+          --modify user:kube-apiserver:r--,mask::r-- \
           /var/lib/k0s/pki/hive-encryption-provider.yaml
         if sudo -n systemctl is-active --quiet k0scontroller; then
           sudo -n systemctl restart k0scontroller
@@ -453,7 +555,48 @@ tasks:
           sleep 2
         done
         sudo -n k0s kubectl get --raw=/readyz >/dev/null
+        for _ in $(seq 1 150); do
+          if sudo -n k0s kubectl get nodes -o name |
+            grep -q '^node/'; then
+            break
+          fi
+          sleep 2
+        done
+        sudo -n k0s kubectl get nodes -o name |
+          grep -q '^node/'
         sudo -n k0s kubectl wait node --all --for=condition=Ready --timeout=5m
+        cni_config=/etc/cni/net.d/10-kuberouter.conflist
+        for _ in $(seq 1 60); do
+          if sudo -n test -s "$cni_config"; then
+            break
+          fi
+          sleep 2
+        done
+        sudo -n test -s "$cni_config"
+        if ! sudo -n jq -e '
+          .plugins[]
+          | select(.type == "bridge")
+          | .ipMasq == true
+        ' "$cni_config" >/dev/null; then
+          cni_config_next="$(mktemp)"
+          trap 'rm -f "$cni_config_next"' EXIT
+          sudo -n jq '
+            .plugins |= map(
+              if .type == "bridge"
+              then .ipMasq = true
+              else .
+              end
+            )
+          ' "$cni_config" > "$cni_config_next"
+          sudo -n install -m 0644 "$cni_config_next" "$cni_config"
+          rm -f "$cni_config_next"
+          trap - EXIT
+        fi
+        sudo -n k0s kubectl rollout restart deployment/coredns \
+          --namespace kube-system
+        sudo -n k0s kubectl rollout status deployment/coredns \
+          --namespace kube-system \
+          --timeout=5m
         for namespace in hive-data hive-system; do
           sudo -n k0s kubectl create namespace "$namespace" \
             --dry-run=client \
@@ -524,7 +667,37 @@ tasks:
         sudo -n k0s kubectl get runtimeclasses
         sudo -n k0s kubectl get pv,pvc --all-namespaces
         sudo -n k0s kubectl get pods --all-namespaces -o wide
-        sudo -n nft list chain inet bynull_filter input | grep -Eq "policy drop"
+        sudo -n nft list chain inet bynull_filter input |
+          grep -E "policy drop" >/dev/null
+        sudo -n nft list chain inet bynull_filter input |
+          grep -F "nook k0s pod control plane v2" >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -F "nook k0s pod egress v2" >/dev/null
+        REMOTE
+
+  k0s:network:refresh:
+    desc: Recreate egress-capable Pods after a k0s CNI configuration migration.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl rollout restart deployment/coredns \
+          --namespace kube-system
+        kubectl rollout status deployment/coredns \
+          --namespace kube-system \
+          --timeout=5m
+        for deployment in hive hive-workbench-dispatcher hive-reaper-controller; do
+          if kubectl get "deployment/$deployment" \
+            --namespace hive-system >/dev/null 2>&1; then
+            kubectl rollout restart "deployment/$deployment" \
+              --namespace hive-system
+            kubectl rollout status "deployment/$deployment" \
+              --namespace hive-system \
+              --timeout=10m
+          fi
+        done
         REMOTE
 
   k0s:diagnose:
@@ -546,7 +719,46 @@ tasks:
           '( sport = :6443 )' || true
         sudo -n namei -l \
           /var/lib/k0s/pki/hive-encryption-provider.yaml || true
+        sudo -n getfacl --absolute-names \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml || true
         id kube-apiserver || true
+        ip -brief address || true
+        sudo -n systemctl cat nftables || true
+        sudo -n sed -n '1,240p' /etc/nftables.conf || true
+        sudo -n nft list chain inet bynull_filter input || true
+        sudo -n nft list chain inet bynull_filter forward || true
+        sudo -n nft list ruleset |
+          grep -E '10\.244|masquerade|CNI-' || true
+        sudo -n nft list table ip nat || true
+        ip route || true
+        sudo -n k0s kubectl get daemonset kube-router \
+          --namespace kube-system \
+          -o json |
+          jq '{
+            initContainers: [
+              .spec.template.spec.initContainers[]
+              | {name, command, args, env}
+            ],
+            containers: [
+              .spec.template.spec.containers[]
+              | {name, command, args, env}
+            ]
+          }' || true
+        sudo -n find /etc/cni /var/lib/k0s \
+          -maxdepth 6 \
+          -type f \
+          \( -name '*.conf' -o -name '*.conflist' -o -name '*.json' \) \
+          -path '*cni*' \
+          -print \
+          -exec sed -n '1,160p' {} \; || true
+        for component in coredns metrics-server konnectivity-agent; do
+          sudo -n k0s kubectl logs \
+            --namespace kube-system \
+            --selector "k8s-app=$component" \
+            --all-containers \
+            --prefix \
+            --tail=100 || true
+        done
         sudo -n find /var/lib/k0s/pki \
           -maxdepth 1 \
           -type f \
@@ -679,6 +891,56 @@ tasks:
           --timeout=10m
         kubectl get runtimeclasses
         kubectl get runtimeclass kata-dragonball
+        REMOTE
+
+  kata:diagnose:
+    desc: Show bounded Kata installer diagnostics when its rollout fails.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get daemonset,pod \
+          --namespace kube-system \
+          -l name=kata-deploy \
+          -o wide || true
+        kubectl logs daemonset/kata-deploy \
+          --namespace kube-system \
+          --all-containers \
+          --prefix \
+          --tail=200 || true
+        kubectl logs daemonset/kata-deploy \
+          --namespace kube-system \
+          --all-containers \
+          --prefix \
+          --previous \
+          --tail=200 || true
+        crictl=/var/lib/k0s/bin/crictl
+        if sudo -n test -x "$crictl"; then
+          container_id="$(
+            sudo -n "$crictl" \
+              --runtime-endpoint unix:///run/k0s/containerd.sock \
+              ps \
+              --all \
+              --name kata-deploy \
+              --quiet |
+              head -1
+          )"
+          if test -n "$container_id"; then
+            sudo -n "$crictl" \
+              --runtime-endpoint unix:///run/k0s/containerd.sock \
+              logs \
+              --tail=200 \
+              "$container_id" || true
+          fi
+        fi
+        kubectl describe daemonset/kata-deploy \
+          --namespace kube-system || true
+        kubectl get events \
+          --namespace kube-system \
+          --sort-by=.lastTimestamp |
+          tail -100 || true
         REMOTE
 
   kata:verify:
@@ -968,8 +1230,12 @@ tasks:
           sha256sum |
           cut -c1-16)"
         image="127.0.0.1:5000/nook-hive:$source_id-$manifest_id"
+        redis_password="$remote_dir/secrets/redis-password"
+        test -s "$redis_password"
         docker build \
           --platform linux/amd64 \
+          --network host \
+          --secret "id=sccache_redis_password,src=$redis_password" \
           --tag "$image" \
           --build-context "nook-app=$remote_dir/nook-app" \
           --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
@@ -1107,27 +1373,43 @@ tasks:
           unset reaper_token
         fi
         image="$(cat "$remote_dir/hive-image")"
-        auth_checksum="$(
+        auth_data="$(
           kubectl get secret hive-codex-auth \
             --namespace hive-system \
-            -o jsonpath='{.data.auth\\.json}' |
+            -o jsonpath='{.data.auth\.json}'
+        )"
+        test -n "$auth_data"
+        auth_checksum="$(
+          printf '%s' "$auth_data" |
+            base64 --decode |
             sha256sum |
             cut -d' ' -f1
         )"
-        github_checksum="$(
+        github_data="$(
           kubectl get secret hive-github-publication \
             --namespace hive-system \
-            -o jsonpath='{.data.token}' |
+            -o jsonpath='{.data.token}'
+        )"
+        test -n "$github_data"
+        github_checksum="$(
+          printf '%s' "$github_data" |
+            base64 --decode |
             sha256sum |
             cut -d' ' -f1
         )"
-        neo4j_ca_checksum="$(
+        neo4j_ca_data="$(
           kubectl get secret hive-neo4j-ca \
             --namespace hive-system \
-            -o jsonpath='{.data.ca\\.crt}' |
+            -o jsonpath='{.data.ca\.crt}'
+        )"
+        test -n "$neo4j_ca_data"
+        neo4j_ca_checksum="$(
+          printf '%s' "$neo4j_ca_data" |
+            base64 --decode |
             sha256sum |
             cut -d' ' -f1
         )"
+        unset auth_data github_data neo4j_ca_data
         case "$auth_checksum" in
           ????????????????????????????????????????????????????????????????) ;;
           *)
@@ -1156,6 +1438,24 @@ tasks:
             exit 1
             ;;
         esac
+        neo4j_service_ip="$(
+          kubectl get service hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.spec.clusterIP}'
+        )"
+        k0s_api_ip="$(
+          kubectl get endpoints kubernetes \
+            --namespace default \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        for discovered_ip in "$neo4j_service_ip" "$k0s_api_ip"; do
+          case "$discovered_ip" in
+            *[!0-9.]*|'')
+              echo "Refusing invalid discovered cluster endpoint: $discovered_ip" >&2
+              exit 1
+              ;;
+          esac
+        done
         rendered="$(mktemp)"
         trap 'rm -f "$rendered"' EXIT
         sed \
@@ -1173,7 +1473,11 @@ tasks:
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" >> "$rendered"
-        kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g" \
+          -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
+          "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" >> "$rendered"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
         kubectl rollout status deployment/hive \
@@ -1225,10 +1529,25 @@ tasks:
               | select(.name | startswith("NEO4J_"))] | length'
         )" = 0
 
-        old_pod="$(kubectl get pods \
-          --namespace hive-system \
-          -l app.kubernetes.io/name=hive \
-          -o jsonpath='{.items[0].metadata.name}')"
+        old_pod="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json |
+            jq -r '
+              .items[]
+              | select(.metadata.deletionTimestamp == null)
+              | select(
+                  any(
+                    .status.containerStatuses[]?;
+                    .name == "hive" and .ready == true
+                  )
+                )
+              | .metadata.name
+            ' |
+            head -1
+        )"
+        test -n "$old_pod"
         old_uid="$(kubectl get pod "$old_pod" \
           --namespace hive-system \
           -o jsonpath='{.metadata.uid}')"
@@ -1257,6 +1576,171 @@ tasks:
         kubectl get pods --namespace hive-system \
           -l app.kubernetes.io/name=hive \
           -o wide
+        REMOTE
+
+  hive:diagnose:
+    desc: Show bounded Hive worker and controller diagnostics.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get deployment,pod \
+          --namespace hive-system \
+          -o wide || true
+        kubectl get pods \
+          --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o json |
+          jq '[
+            .items[]
+            | {
+                pod: .metadata.name,
+                containers: [
+                  .status.containerStatuses[]?
+                  | {
+                      name,
+                      ready,
+                      restartCount,
+                      state,
+                      lastState
+                    }
+                ]
+              }
+          ]' || true
+        kubectl get service,endpoints kubernetes \
+          --namespace default \
+          -o wide || true
+        kubectl get service,endpoints kube-dns \
+          --namespace kube-system \
+          -o wide || true
+        kubectl get service,endpoints \
+          --namespace hive-data \
+          -o wide || true
+        kubectl logs statefulset/hive-neo4j \
+          --namespace hive-data \
+          --tail=100 || true
+        api_endpoint="$(
+          kubectl get endpoints kubernetes \
+            --namespace default \
+            -o jsonpath='{.subsets[0].addresses[0].ip}' \
+            2>/dev/null || true
+        )"
+        if test -n "$api_endpoint"; then
+          kubectl exec -i deployment/hive-reaper-controller \
+            --namespace hive-system \
+            -- python3 - "$api_endpoint" <<'PY' || true
+        import socket
+        import sys
+
+        for host, port in (
+            ("kubernetes.default.svc", 443),
+            (sys.argv[1], 6443),
+        ):
+            try:
+                with socket.create_connection((host, port), timeout=5):
+                    print(f"connected to {host}:{port}")
+            except OSError as error:
+                print(f"failed to connect to {host}:{port}: {error}")
+        PY
+        fi
+        probe_pod="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json |
+          jq -r '
+            [.items[] | select(.metadata.deletionTimestamp == null)]
+            | sort_by(.metadata.creationTimestamp)
+            | last
+            | .metadata.name
+          '
+        )"
+        kubectl exec -i "$probe_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- python3 - <<'PY' || true
+        import socket
+
+        host = "hive-neo4j.hive-data.svc.cluster.local"
+        port = 7687
+        try:
+            with socket.create_connection((host, port), timeout=5):
+                print(f"connected to {host}:{port}")
+        except OSError as error:
+            print(f"failed to connect to {host}:{port}: {error}")
+        PY
+        kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- cat /etc/resolv.conf || true
+        kubectl logs deployment/coredns \
+          --namespace kube-system \
+          --tail=100 || true
+        kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --max-time 15 \
+            --output /dev/null \
+            https://api.github.com/repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform?ref=main ||
+          true
+        kubectl logs deployment/hive \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=3m \
+          --tail=100 || true
+        kubectl logs deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=3m \
+          --tail=100 || true
+        kubectl logs deployment/hive-reaper-controller \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=3m \
+          --tail=100 || true
+        unhealthy_pods="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json 2>/dev/null |
+          jq -r '
+            .items[]
+            | select(
+                (.status.phase != "Running") or
+                ([.status.containerStatuses[]? | select(.ready != true)] | length > 0)
+              )
+            | .metadata.name
+          ' || true
+        )"
+        for pod in $unhealthy_pods; do
+          kubectl logs "pod/$pod" \
+            --namespace hive-system \
+            --all-containers \
+            --prefix \
+            --tail=100 || true
+          kubectl logs "pod/$pod" \
+            --namespace hive-system \
+            --all-containers \
+            --prefix \
+            --previous \
+            --tail=100 || true
+          kubectl describe "pod/$pod" \
+            --namespace hive-system || true
+        done
+        kubectl get events \
+          --namespace hive-system \
+          --sort-by=.lastTimestamp |
+          tail -100 || true
         REMOTE
 
   status:

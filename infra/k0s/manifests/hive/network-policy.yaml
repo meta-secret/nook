@@ -41,10 +41,24 @@ spec:
           port: 7687
     - to:
         - ipBlock:
+            cidr: HIVE_NEO4J_SERVICE_CIDR
+        - ipBlock:
+            cidr: 10.244.0.0/16
+      ports:
+        - protocol: TCP
+          port: 7687
+    - to:
+        - ipBlock:
             cidr: 10.96.0.1/32
       ports:
         - protocol: TCP
           port: 443
+    - to:
+        - ipBlock:
+            cidr: HIVE_K0S_API_CIDR
+      ports:
+        - protocol: TCP
+          port: 6443
     - to:
         - podSelector:
             matchLabels:
@@ -105,3 +119,9 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    - to:
+        - ipBlock:
+            cidr: HIVE_K0S_API_CIDR
+      ports:
+        - protocol: TCP
+          port: 6443

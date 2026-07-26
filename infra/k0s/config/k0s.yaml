@@ -13,6 +13,8 @@ spec:
     provider: kuberouter
     podCIDR: 10.244.0.0/16
     serviceCIDR: 10.96.0.0/12
+    kuberouter:
+      ipMasq: true
   storage:
     type: etcd
   telemetry:

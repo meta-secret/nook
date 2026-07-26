@@ -196,6 +196,9 @@ enum GitHubAction {
 }
 
 fn main() -> anyhow::Result<()> {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("failed to install the AWS-LC rustls crypto provider"))?;
     arg0_dispatch_or_else(run_main)
 }
 

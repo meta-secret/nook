@@ -15,13 +15,21 @@ Pinned platform:
 - Kata runtime-rs class `kata-dragonball`
 
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
-firewall must retain a default-drop input policy. Neo4j data uses the retained
-local PV at `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
+firewall must retain default-drop input and forward policies. The installer adds
+only two persisted `10.244.0.0/16` source exceptions: Pod traffic to local
+control-plane ports `6443` and `8132` and the kubelet API on `10250`, plus Pod
+egress through the forward chain. Kube-router masquerades Pod traffic destined
+outside the cluster so replies return through the node. No public control-plane
+port is opened. The installer applies its
+fragment without reloading the global nftables ruleset, preserving Docker's
+dynamic networking rules. Neo4j data uses the retained local PV at
+`/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
 Kubernetes Secrets are encrypted in etcd with the generated
 `/var/lib/k0s/pki/hive-encryption-provider.yaml`; that file is readable only by
-the dedicated `kube-apiserver` OS user and root and must be included in encrypted
-host backups or disaster recovery cannot decrypt the cluster's Secrets. A
-guarded k0s uninstall preserves that provider and an
+the dedicated `kube-apiserver` OS user through a read-only ACL and by root; only
+root retains write authority. It must be included in encrypted host backups or
+disaster recovery cannot decrypt the cluster's Secrets. A guarded k0s uninstall
+preserves that provider and an
 AES-encrypted, HMAC-authenticated export of the Neo4j TLS/authentication and
 Codex and GitHub publication Secrets under `/var/lib/hive/k0s-recovery`; reinstall
 restores them before Neo4j or Hive starts. Neo4j Bolt traffic is TLS-only. Its

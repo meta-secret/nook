@@ -23,6 +23,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -118,10 +120,10 @@ spec:
         - name: reaper-auth
           secret:
             secretName: hive-reaper-auth
-            defaultMode: 0400
+            defaultMode: 0440
         - name: kubernetes-api
           projected:
-            defaultMode: 0400
+            defaultMode: 0440
             sources:
               - serviceAccountToken:
                   path: token

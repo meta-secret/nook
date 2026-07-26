@@ -6027,6 +6027,7 @@ dependencies = [
  "futures",
  "neo4rs",
  "rand 0.10.2",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.11.0",

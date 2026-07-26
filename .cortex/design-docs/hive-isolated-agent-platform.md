@@ -461,7 +461,10 @@ task infra:kvm:verify
 task infra:k0s:install
 task infra:k0s:status
 task infra:k0s:diagnose
+task infra:services:diagnose
+task infra:services:repair-network
 task infra:kata:install
+task infra:kata:diagnose
 task infra:kata:verify
 task infra:neo4j:deploy
 task infra:hive:deploy
@@ -474,10 +477,19 @@ and verifies k0s/Kata, deploys persistent Neo4j, builds and publishes the exact
 Hive image to the loopback registry, synchronizes credentials, deploys the warm
 pool, and verifies Pod replacement.
 
-The encryption-provider file remains `root`-owned with group-readable access
-limited to the dedicated `kube-apiserver` OS user. If the API server cannot
-start, `task infra:k0s:diagnose` emits bounded service, listener, permission,
-and journal evidence without reading secret contents.
+The encryption-provider file remains `root:root 0600`; a read-only POSIX ACL
+grants the dedicated `kube-apiserver` OS user access without granting ownership
+or write authority. If the API server cannot start,
+`task infra:k0s:diagnose` emits bounded service, listener, permission, ACL, and
+journal evidence without reading secret contents.
+
+The host firewall keeps its default-drop input and forward policies. k0s adds
+only persisted rules for traffic sourced from the cluster Pod CIDR
+`10.244.0.0/16`: local control-plane access on TCP
+`6443`/`8132`, kubelet access on `10250`, and Pod egress. Kube-router
+masquerades traffic leaving the cluster so CoreDNS and intentionally allowlisted
+worker egress receive replies through the node. These rules do not expose any
+control-plane port on the public interface.
 
 Credential synchronization requires explicit local file inputs:
 

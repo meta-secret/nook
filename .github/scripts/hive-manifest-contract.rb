@@ -128,6 +128,16 @@ unless reaper_deployment.dig("spec", "template", "spec", "serviceAccountName") =
        "hive-reaper-controller"
   raise "Hive reaper controller must use a distinct Pod-deletion identity"
 end
+reaper_pod = reaper_deployment.dig("spec", "template", "spec")
+unless reaper_pod.dig("securityContext", "fsGroup") == 1000 &&
+       reaper_pod.dig("securityContext", "fsGroupChangePolicy") == "OnRootMismatch"
+  raise "Hive reaper controller must read projected credentials as its non-root group"
+end
+reaper_volumes = reaper_pod.fetch("volumes").to_h { |volume| [volume.fetch("name"), volume] }
+unless reaper_volumes.dig("reaper-auth", "secret", "defaultMode") == 0o440 &&
+       reaper_volumes.dig("kubernetes-api", "projected", "defaultMode") == 0o440
+  raise "Hive reaper credentials must remain group-readable and not world-readable"
+end
 reaper_command = reaper_deployment
   .dig("spec", "template", "spec", "containers")
   .find { |container| container["name"] == "controller" }
@@ -172,14 +182,91 @@ unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
        infra_taskfile.include?("hive-system/hive-github-publication")
   raise "Hive recovery snapshots are not authenticated before restore"
 end
-unless infra_taskfile.include?("chown root:kube-apiserver") &&
-       infra_taskfile.include?("chmod 0640")
-  raise "k0s encryption provider must remain root-owned and API-server-readable"
+unless infra_taskfile.include?("chown root:root") &&
+       infra_taskfile.include?("chmod 0600") &&
+       infra_taskfile.include?(
+         "--modify user:kube-apiserver:r--,mask::r--"
+       )
+  raise "k0s encryption provider must use root ownership and a read-only API-server ACL"
 end
 if infra_taskfile.include?("chown kube-apiserver:root")
   raise "kube-apiserver must not own the writable encryption provider"
 end
-
+unless infra_taskfile.include?(
+  "sudo -n test -f /etc/systemd/system/k0scontroller.service"
+)
+  raise "k0s install must detect the existing controller unit idempotently"
+end
+unless infra_taskfile.include?("kubectl get nodes -o name") &&
+       infra_taskfile.include?("grep -q '^node/'")
+  raise "k0s install must wait for worker registration before Node readiness"
+end
+unless infra_taskfile.include?("nook-k0s.nft") &&
+       infra_taskfile.include?("ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 }") &&
+       infra_taskfile.include?("forward ip saddr 10.244.0.0/16 accept") &&
+       infra_taskfile.include?("nft --check --file") &&
+       !infra_taskfile.include?("systemctl reload nftables")
+  raise "k0s install must persist narrow Pod control-plane and egress firewall rules"
+end
+k0s_config = load_yaml.call("infra/k0s/config/k0s.yaml")
+unless k0s_config.dig("spec", "network", "kuberouter", "ipMasq") == true
+  raise "k0s must masquerade Pod traffic destined outside the cluster"
+end
+unless infra_taskfile.include?("rollout restart deployment/coredns") &&
+       infra_taskfile.include?("rollout status deployment/coredns") &&
+       infra_taskfile.include?("cni_config=/etc/cni/net.d/10-kuberouter.conflist") &&
+       infra_taskfile.include?(".ipMasq = true")
+  raise "k0s install must refresh CoreDNS after applying CNI configuration"
+end
+unless infra_taskfile.include?("k0s:network:refresh:") &&
+       infra_taskfile.include?("Recreate egress-capable Pods")
+  raise "k0s must expose a Taskfile-owned CNI migration refresh"
+end
+unless infra_taskfile.include?("docker build") &&
+       infra_taskfile.include?("--network host") &&
+       infra_taskfile.include?(
+         "--secret \"id=sccache_redis_password,src=$redis_password\""
+       )
+  raise "Hive image builds must use host networking and authenticated Redis sccache"
+end
+unless infra_taskfile.include?("hive:diagnose:") &&
+       infra_taskfile.include?("kubectl get endpoints kubernetes") &&
+       infra_taskfile.include?('.name == "hive" and .ready == true') &&
+       infra_taskfile.match?(/base64 --decode\s+\|\s+sha256sum/)
+  raise "Hive deployment diagnostics, lifecycle selection, or secret rollout checks are incomplete"
+end
+k0s_api_rule = network.dig("spec", "egress").any? do |rule|
+  rule.fetch("to", []).any? do |destination|
+    destination.dig("ipBlock", "cidr") == "HIVE_K0S_API_CIDR"
+  end &&
+    rule.fetch("ports", []).any? do |port|
+      port["protocol"] == "TCP" && port["port"] == 6443
+    end
+end
+unless k0s_api_rule
+  raise "Hive workers must reach the real k0s API endpoint after Service DNAT"
+end
+neo4j_rule = network.dig("spec", "egress").any? do |rule|
+  cidrs = rule.fetch("to", []).map { |destination| destination.dig("ipBlock", "cidr") }.compact
+  cidrs.include?("HIVE_NEO4J_SERVICE_CIDR") &&
+    cidrs.include?("10.244.0.0/16") &&
+    rule.fetch("ports", []).any? do |port|
+      port["protocol"] == "TCP" && port["port"] == 7687
+    end
+end
+unless neo4j_rule
+  raise "Hive workers must reach Neo4j before and after Service DNAT"
+end
+unless infra_taskfile.include?("kubectl get service hive-neo4j") &&
+       infra_taskfile.include?("kubectl get endpoints kubernetes") &&
+       infra_taskfile.include?(
+         's|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g'
+       ) &&
+       infra_taskfile.include?(
+         's|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g'
+       )
+  raise "Hive NetworkPolicy endpoints must be discovered from the live cluster"
+end
 hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
 unless hive_taskfile.include?("for crate in hive lace")
   raise "Hive formatting does not apply the entire checked workspace"
