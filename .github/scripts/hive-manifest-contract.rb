@@ -108,12 +108,19 @@ unless manifest_text.include?("neo4j+s://hive-neo4j.hive-data.svc.cluster.local:
   raise "Hive must verify encrypted Bolt traffic"
 end
 
-network = File
+network_policies = File
   .read(File.join(root, "infra/k0s/manifests/hive/network-policy.yaml"))
   .split(/^---\s*$/)
   .map { |document| YAML.safe_load(document, aliases: true) }
   .compact
+network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-worker-egress" }
+api_network = network_policies
+  .find { |document| document.dig("metadata", "name") == "hive-worker-kubernetes-api" }
+raise "Hive worker Kubernetes API policy is missing" unless api_network
+unless api_network.dig("spec", "podSelector", "matchLabels", "app.kubernetes.io/name") == "hive"
+  raise "Only Hive worker Pods may reach the Kubernetes API"
+end
 internet_block = network
   .dig("spec", "egress")
   .flat_map { |rule| rule.fetch("to", []) }
@@ -208,6 +215,19 @@ unless infra_taskfile.include?("nook-k0s.nft") &&
        !infra_taskfile.include?("systemctl reload nftables")
   raise "k0s install must persist narrow Pod control-plane and egress firewall rules"
 end
+unless infra_taskfile.scan('nft list chain inet bynull_filter forward |').length >= 3 &&
+       infra_taskfile.scan('grep -E "policy drop" >/dev/null').length >= 4
+  raise "k0s operations must enforce default-drop input and forward policies"
+end
+docker_version_check = infra_taskfile.index(
+  "case \"$(docker version --format"
+)
+compose_shutdown = infra_taskfile.index(
+  'docker compose --file "$compose_file" down --remove-orphans'
+)
+unless docker_version_check && compose_shutdown && docker_version_check < compose_shutdown
+  raise "Docker recovery must verify compatibility before stopping services"
+end
 k0s_config = load_yaml.call("infra/k0s/config/k0s.yaml")
 unless k0s_config.dig("spec", "network", "kuberouter", "ipMasq") == true
   raise "k0s must masquerade Pod traffic destined outside the cluster"
@@ -235,7 +255,7 @@ unless infra_taskfile.include?("hive:diagnose:") &&
        infra_taskfile.match?(/base64 --decode\s+\|\s+sha256sum/)
   raise "Hive deployment diagnostics, lifecycle selection, or secret rollout checks are incomplete"
 end
-k0s_api_rule = network.dig("spec", "egress").any? do |rule|
+k0s_api_rule = api_network.dig("spec", "egress").any? do |rule|
   rule.fetch("to", []).any? do |destination|
     destination.dig("ipBlock", "cidr") == "HIVE_K0S_API_CIDR"
   end &&
@@ -257,18 +277,22 @@ end
 unless neo4j_rule
   raise "Hive workers must reach Neo4j before and after Service DNAT"
 end
-unless infra_taskfile.include?("kubectl get service hive-neo4j") &&
-       infra_taskfile.include?("kubectl get endpoints hive-neo4j") &&
-       infra_taskfile.include?("kubectl get endpoints kubernetes") &&
-       infra_taskfile.include?(
+network_policy_script = File.read(
+  File.join(root, "infra/k0s/scripts/apply-hive-network-policy.sh")
+)
+unless network_policy_script.include?("kubectl get service hive-neo4j") &&
+       network_policy_script.include?("kubectl get endpoints hive-neo4j") &&
+       network_policy_script.include?("kubectl get endpoints kubernetes") &&
+       network_policy_script.include?(
          's|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g'
        ) &&
-       infra_taskfile.include?(
+       network_policy_script.include?(
          's|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g'
        ) &&
-       infra_taskfile.include?(
+       network_policy_script.include?(
          's|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g'
-       )
+       ) &&
+       infra_taskfile.scan("apply-hive-network-policy.sh").length >= 2
   raise "Hive NetworkPolicy endpoints must be discovered from the live cluster"
 end
 hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))

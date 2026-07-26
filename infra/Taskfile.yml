@@ -245,7 +245,6 @@ tasks:
         compose_file="$remote_dir/compose.yaml"
         test -s "$compose_file"
         docker compose --file "$compose_file" config --quiet
-        docker compose --file "$compose_file" down --remove-orphans
         case "$(docker version --format '{{"{{.Server.Version}}"}}')" in
           26.*) ;;
           *)
@@ -253,6 +252,7 @@ tasks:
             exit 1
             ;;
         esac
+        docker compose --file "$compose_file" down --remove-orphans
         if ! sudo -n iptables --table nat --list DOCKER >/dev/null 2>&1; then
           sudo -n iptables --table nat --new-chain DOCKER
         fi
@@ -421,6 +421,8 @@ tasks:
         sudo -n test -r /dev/kvm
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -E "policy drop" >/dev/null
         printf 'KVM available: '
         ls -l /dev/kvm
         printf 'Virtualization flags: '
@@ -449,6 +451,10 @@ tasks:
         firewall_fragment="$(mktemp)"
         firewall_config="$(mktemp)"
         trap 'rm -f "$firewall_fragment" "$firewall_config"' EXIT
+        sudo -n nft list chain inet bynull_filter input |
+          grep -E "policy drop" >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -E "policy drop" >/dev/null
         cat > "$firewall_fragment" <<'NFT'
         add rule inet bynull_filter input ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"
         add rule inet bynull_filter forward ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"
@@ -1212,6 +1218,8 @@ tasks:
         kubectl rollout status statefulset/hive-neo4j \
           --namespace hive-data \
           --timeout=10m
+        bash "$remote_dir/infra/k0s/scripts/apply-hive-network-policy.sh" \
+          "$remote_dir"
         restore_hive
         test "$(kubectl get service hive-neo4j \
           --namespace hive-data \
@@ -1451,32 +1459,6 @@ tasks:
             exit 1
             ;;
         esac
-        neo4j_service_ip="$(
-          kubectl get service hive-neo4j \
-            --namespace hive-data \
-            -o jsonpath='{.spec.clusterIP}'
-        )"
-        neo4j_endpoint_ip="$(
-          kubectl get endpoints hive-neo4j \
-            --namespace hive-data \
-            -o jsonpath='{.subsets[0].addresses[0].ip}'
-        )"
-        k0s_api_ip="$(
-          kubectl get endpoints kubernetes \
-            --namespace default \
-            -o jsonpath='{.subsets[0].addresses[0].ip}'
-        )"
-        for discovered_ip in \
-          "$neo4j_service_ip" \
-          "$neo4j_endpoint_ip" \
-          "$k0s_api_ip"; do
-          case "$discovered_ip" in
-            *[!0-9.]*|'')
-              echo "Refusing invalid discovered cluster endpoint: $discovered_ip" >&2
-              exit 1
-              ;;
-          esac
-        done
         rendered="$(mktemp)"
         trap 'rm -f "$rendered"' EXIT
         sed \
@@ -1494,12 +1476,8 @@ tasks:
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" >> "$rendered"
-        printf '%s\n' '---' >> "$rendered"
-        sed \
-          -e "s|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g" \
-          -e "s|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g" \
-          -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
-          "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" >> "$rendered"
+        bash "$remote_dir/infra/k0s/scripts/apply-hive-network-policy.sh" \
+          "$remote_dir"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
         kubectl rollout status deployment/hive \

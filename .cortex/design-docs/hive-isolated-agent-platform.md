@@ -359,10 +359,13 @@ may use:
 
 - cluster DNS;
 - TLS Bolt to Neo4j on port 7687;
-- the Kubernetes API service only for auth persistence and the dedicated
-  reaper controller;
 - external TCP 443 for Codex, GitHub, and HTTPS repository access; and
 - external TCP 22 for task-authorized Git/SSH operations.
+
+Only Hive worker Pods may reach the Kubernetes API service and its post-DNAT
+endpoint, for the auth-persistence sidecar. The token-free Workbench dispatcher
+has no API-server route. The dedicated reaper controller has a separate
+API-server policy for its narrow Pod-deletion identity.
 
 Private, loopback, link-local, multicast, and cluster address ranges are
 excluded from general external egress. Neo4j Bolt and HTTP are never exposed on

@@ -48,18 +48,6 @@ spec:
         - protocol: TCP
           port: 7687
     - to:
-        - ipBlock:
-            cidr: 10.96.0.1/32
-      ports:
-        - protocol: TCP
-          port: 443
-    - to:
-        - ipBlock:
-            cidr: HIVE_K0S_API_CIDR
-      ports:
-        - protocol: TCP
-          port: 6443
-    - to:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: hive-reaper-controller
@@ -82,6 +70,31 @@ spec:
           port: 443
         - protocol: TCP
           port: 22
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hive-worker-kubernetes-api
+  namespace: hive-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: HIVE_K0S_API_CIDR
+      ports:
+        - protocol: TCP
+          port: 6443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
