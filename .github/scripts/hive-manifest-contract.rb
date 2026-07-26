@@ -227,6 +227,10 @@ unless infra_taskfile.include?("nook-k0s.nft") &&
        infra_taskfile.include?("nft delete rule") &&
        k0s_install_task.include?("set -Eeuo pipefail") &&
        k0s_install_task.include?("trap rollback_k0s_firewall ERR") &&
+       k0s_install_task.include?("trap rollback_k0s_firewall EXIT") &&
+       k0s_install_task.include?("trap 'exit 129' HUP") &&
+       k0s_install_task.include?("trap 'exit 130' INT") &&
+       k0s_install_task.include?("trap 'exit 143' TERM") &&
        k0s_install_task.include?('> "$firewall_previous_live"') &&
        k0s_install_task.include?('nft --file "$firewall_previous_live"') &&
        infra_taskfile.include?("rm -f /etc/nftables.d/nook-k0s.nft") &&
@@ -246,6 +250,9 @@ end
 unless k0s_install_task.index('> "$firewall_previous_live"') <
        k0s_install_task.index("trap rollback_k0s_firewall ERR")
   raise "k0s firewall rollback must snapshot live owned rules before mutation"
+end
+unless k0s_install_task.scan(/trap .*EXIT/).length == 2
+  raise "k0s temporary cleanup must not replace the armed firewall EXIT rollback"
 end
 unless infra_taskfile.scan('nft list chain inet bynull_filter forward |').length >= 3 &&
        infra_taskfile.scan('grep -E "policy drop" >/dev/null').length >= 4
@@ -272,6 +279,8 @@ end
 unless infra_taskfile.include?("rollout restart deployment/coredns") &&
        infra_taskfile.include?("rollout status deployment/coredns") &&
        infra_taskfile.include?("cni_config=/etc/cni/net.d/10-kuberouter.conflist") &&
+       k0s_install_task.index("cni_was_unmasqueraded=false") <
+       k0s_install_task.index("systemctl restart k0scontroller") &&
        infra_taskfile.include?(".ipMasq = true") &&
        infra_taskfile.include?('if test "$cni_migrated" = true') &&
        infra_taskfile.include?("hive-workbench-dispatcher") &&

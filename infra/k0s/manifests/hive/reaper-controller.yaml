@@ -96,12 +96,13 @@ spec:
                       for subset in endpoints.get("subsets", [])
                       for address in subset.get("addresses", [])
                   )
-                  if not endpoint_ips:
-                      raise RuntimeError("Neo4j has no ready endpoint")
                   destinations = [
                       {"ipBlock": {"cidr": f"{service_ip}/32"}},
-                      {"ipBlock": {"cidr": f"{endpoint_ips[0]}/32"}},
                   ]
+                  if endpoint_ips:
+                      destinations.append(
+                          {"ipBlock": {"cidr": f"{endpoint_ips[0]}/32"}}
+                      )
                   for _ in range(3):
                       policy = json_request("GET", policy_path)
                       egress = policy["spec"]["egress"]

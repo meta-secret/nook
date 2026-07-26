@@ -455,7 +455,12 @@ tasks:
         firewall_previous_fragment="$(mktemp)"
         firewall_previous_live="$(mktemp)"
         firewall_fragment_existed=false
-        trap 'rm -f "$firewall_fragment" "$firewall_config" "$firewall_previous_config" "$firewall_previous_fragment" "$firewall_previous_live"' EXIT
+        firewall_rollback_armed=false
+        encryption_config=""
+        cni_config_next=""
+        recovery_key=""
+        encrypted_backup=""
+        expected_mac=""
         sudo -n cat /etc/nftables.conf > "$firewall_previous_config"
         if sudo -n test -f /etc/nftables.d/nook-k0s.nft; then
           sudo -n cat /etc/nftables.d/nook-k0s.nft \
@@ -474,40 +479,53 @@ tasks:
         done
         rollback_k0s_firewall() {
           status=$?
-          trap - ERR
+          trap - ERR HUP INT TERM
           set +e
-          sudo -n nft --handle list chain inet bynull_filter input |
-            awk '/comment "nook k0s pod control plane/ { print $NF }' |
-            while read -r handle; do
-              sudo -n nft delete rule inet bynull_filter input handle "$handle"
-            done
-          sudo -n nft --handle list chain inet bynull_filter forward |
-            awk '/comment "nook k0s pod egress/ { print $NF }' |
-            while read -r handle; do
-              sudo -n nft delete rule inet bynull_filter forward handle "$handle"
-            done
-          if test -s "$firewall_previous_live"; then
-            sudo -n nft --file "$firewall_previous_live"
-          fi
-          sudo -n install -m 0644 \
-            "$firewall_previous_config" \
-            /etc/nftables.conf
-          if test "$firewall_fragment_existed" = true; then
+          if test "$firewall_rollback_armed" = true; then
+            firewall_rollback_armed=false
+            sudo -n nft --handle list chain inet bynull_filter input |
+              awk '/comment "nook k0s pod control plane/ { print $NF }' |
+              while read -r handle; do
+                sudo -n nft delete rule inet bynull_filter input handle "$handle"
+              done
+            sudo -n nft --handle list chain inet bynull_filter forward |
+              awk '/comment "nook k0s pod egress/ { print $NF }' |
+              while read -r handle; do
+                sudo -n nft delete rule inet bynull_filter forward handle "$handle"
+              done
+            if test -s "$firewall_previous_live"; then
+              sudo -n nft --file "$firewall_previous_live"
+            fi
             sudo -n install -m 0644 \
-              "$firewall_previous_fragment" \
-              /etc/nftables.d/nook-k0s.nft
-          else
-            sudo -n rm -f /etc/nftables.d/nook-k0s.nft
+              "$firewall_previous_config" \
+              /etc/nftables.conf
+            if test "$firewall_fragment_existed" = true; then
+              sudo -n install -m 0644 \
+                "$firewall_previous_fragment" \
+                /etc/nftables.d/nook-k0s.nft
+            else
+              sudo -n rm -f /etc/nftables.d/nook-k0s.nft
+            fi
           fi
           rm -f \
             "$firewall_fragment" \
             "$firewall_config" \
             "$firewall_previous_config" \
             "$firewall_previous_fragment" \
-            "$firewall_previous_live"
+            "$firewall_previous_live" \
+            ${encryption_config:+"$encryption_config"} \
+            ${cni_config_next:+"$cni_config_next"} \
+            ${recovery_key:+"$recovery_key"} \
+            ${encrypted_backup:+"$encrypted_backup"} \
+            ${expected_mac:+"$expected_mac"}
           return "$status"
         }
+        trap rollback_k0s_firewall EXIT
+        firewall_rollback_armed=true
         trap rollback_k0s_firewall ERR
+        trap 'exit 129' HUP
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
@@ -574,7 +592,6 @@ tasks:
         if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml; then
           encryption_key="$(openssl rand -base64 32)"
           encryption_config="$(mktemp)"
-          trap 'rm -f "$encryption_config"' EXIT
           umask 077
           cat > "$encryption_config" <<EOF
         apiVersion: apiserver.config.k8s.io/v1
@@ -593,7 +610,7 @@ tasks:
             "$encryption_config" \
             /var/lib/k0s/pki/hive-encryption-provider.yaml
           rm -f "$encryption_config"
-          trap - EXIT
+          encryption_config=""
         fi
         sudo -n install -m 0644 "$remote_dir/infra/k0s/config/k0s.yaml" /etc/k0s/k0s.yaml
         sudo -n install -m 0644 \
@@ -619,6 +636,16 @@ tasks:
         sudo -n setfacl \
           --modify user:kube-apiserver:r--,mask::r-- \
           /var/lib/k0s/pki/hive-encryption-provider.yaml
+        cni_config=/etc/cni/net.d/10-kuberouter.conflist
+        cni_was_unmasqueraded=false
+        if sudo -n test -s "$cni_config" &&
+          ! sudo -n jq -e '
+            .plugins[]
+            | select(.type == "bridge")
+            | .ipMasq == true
+          ' "$cni_config" >/dev/null; then
+          cni_was_unmasqueraded=true
+        fi
         if sudo -n systemctl is-active --quiet k0scontroller; then
           sudo -n systemctl restart k0scontroller
         else
@@ -641,7 +668,6 @@ tasks:
         sudo -n k0s kubectl get nodes -o name |
           grep -q '^node/'
         sudo -n k0s kubectl wait node --all --for=condition=Ready --timeout=5m
-        cni_config=/etc/cni/net.d/10-kuberouter.conflist
         for _ in $(seq 1 60); do
           if sudo -n test -s "$cni_config"; then
             break
@@ -649,14 +675,13 @@ tasks:
           sleep 2
         done
         sudo -n test -s "$cni_config"
-        cni_migrated=false
+        cni_migrated="$cni_was_unmasqueraded"
         if ! sudo -n jq -e '
           .plugins[]
           | select(.type == "bridge")
           | .ipMasq == true
         ' "$cni_config" >/dev/null; then
           cni_config_next="$(mktemp)"
-          trap 'rm -f "$cni_config_next"' EXIT
           sudo -n jq '
             .plugins |= map(
               if .type == "bridge"
@@ -667,7 +692,7 @@ tasks:
           ' "$cni_config" > "$cni_config_next"
           sudo -n install -m 0644 "$cni_config_next" "$cni_config"
           rm -f "$cni_config_next"
-          trap - EXIT
+          cni_config_next=""
           cni_migrated=true
         fi
         sudo -n k0s kubectl rollout restart deployment/coredns \
@@ -702,7 +727,6 @@ tasks:
           recovery_key="$(mktemp)"
           encrypted_backup="$(mktemp)"
           expected_mac="$(mktemp)"
-          trap 'rm -f "$recovery_key" "$encrypted_backup" "$expected_mac"' EXIT
           umask 077
           sudo -n awk '/secret:/ {print $2; exit}' \
             /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
@@ -737,7 +761,9 @@ tasks:
             /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc \
             /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac
           rm -f "$recovery_key" "$encrypted_backup" "$expected_mac"
-          trap - EXIT
+          recovery_key=""
+          encrypted_backup=""
+          expected_mac=""
         fi
         sudo -n k0s kubectl get secrets --all-namespaces -o json |
           sudo -n k0s kubectl replace -f -
@@ -783,7 +809,8 @@ tasks:
           done
         sudo -n k0s status
         sudo -n k0s kubectl get nodes -o wide
-        trap - ERR
+        firewall_rollback_armed=false
+        trap - ERR HUP INT TERM EXIT
         rm -f \
           "$firewall_fragment" \
           "$firewall_config" \
@@ -804,6 +831,8 @@ tasks:
         sudo -n k0s kubectl get pv,pvc --all-namespaces
         sudo -n k0s kubectl get pods --all-namespaces -o wide
         sudo -n nft list chain inet bynull_filter input |
+          grep -E "policy drop" >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter input |
           grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' >/dev/null

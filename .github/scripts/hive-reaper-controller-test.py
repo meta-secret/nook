@@ -52,18 +52,22 @@ def main():
     }
     patches = []
     policy_reads = 0
+    ready_endpoint = True
+    conflict_once = True
 
     def json_request(_method, path, _payload=None):
-        nonlocal policy_reads
+        nonlocal policy_reads, ready_endpoint
         if path.endswith("/services/hive-neo4j"):
             return {"spec": {"clusterIP": service_cidr.removesuffix("/32")}}
         if path.endswith("/endpoints/hive-neo4j"):
             return {
                 "subsets": [
                     {
-                        "addresses": [
-                            {"ip": new_endpoint.removesuffix("/32")},
-                        ]
+                        "addresses": (
+                            [{"ip": new_endpoint.removesuffix("/32")}]
+                            if ready_endpoint
+                            else []
+                        )
                     }
                 ]
             }
@@ -82,8 +86,10 @@ def main():
         raise AssertionError(f"unexpected API path: {path}")
 
     def api_request(method, path, payload=None):
+        nonlocal conflict_once
         patches.append((method, path, payload))
-        if len(patches) == 1:
+        if conflict_once:
+            conflict_once = False
             raise urllib.error.HTTPError(path, 409, "Conflict", {}, None)
         return b"{}"
 
@@ -108,6 +114,22 @@ def main():
     ]
     assert cidrs == [service_cidr, new_endpoint], cidrs
     assert old_endpoint not in cidrs
+
+    policy = copy.deepcopy(payload)
+    policy["metadata"]["resourceVersion"] = "12"
+    policy_reads = 2
+    ready_endpoint = False
+    patches.clear()
+    namespace["reconcile_neo4j_policy"]()
+    assert len(patches) == 1, patches
+    unready_payload = patches[0][2]
+    unready_cidrs = [
+        destination["ipBlock"]["cidr"]
+        for rule in unready_payload["spec"]["egress"]
+        for destination in rule.get("to", [])
+        if "ipBlock" in destination
+    ]
+    assert unready_cidrs == [service_cidr], unready_cidrs
     print("Hive lifecycle controller endpoint reconciliation: ok")
 
 

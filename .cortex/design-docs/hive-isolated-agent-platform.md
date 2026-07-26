@@ -335,7 +335,10 @@ identity restricted to `get`/`delete` labeled Hive Pods, reading only the
 Neo4j Service and Endpoints, and patching only the worker egress NetworkPolicy.
 It continuously reconciles the post-DNAT Neo4j Pod address, so an automatic
 StatefulSet or kubelet replacement cannot leave workers pinned to a stale
-endpoint. The controller reloads both its projected Kubernetes token and the
+endpoint. While Neo4j is unready, it removes the stale Pod address and retains
+only the stable Service address. Resource-version preconditions and bounded
+conflict retries prevent reconciliation from overwriting a concurrent policy
+change. The controller reloads both its projected Kubernetes token and the
 opaque reaper credential for every request, so normal token projection and
 Secret rotation do not require a controller restart.
 
@@ -497,8 +500,10 @@ only persisted rules for traffic sourced from the cluster Pod CIDR
 masquerades traffic leaving the cluster so CoreDNS and intentionally allowlisted
 worker egress receive replies through the node. These rules do not expose any
 control-plane port on the public interface. The installer uses a temporary
-owned rule while k0s starts and restores the previous persisted firewall state
-if installation aborts. A CNI `ipMasq` migration automatically replaces
+owned rule while k0s starts and restores the previous live and persisted
+firewall state if installation errors, exits, or receives a termination
+signal. It records the existing CNI state before restarting k0s, so a controller
+rewrite cannot hide an `ipMasq` migration; migrations automatically replace
 existing Hive, dispatcher, and lifecycle-controller Pod sandboxes.
 
 Credential synchronization requires explicit local file inputs:

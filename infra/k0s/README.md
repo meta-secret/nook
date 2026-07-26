@@ -23,16 +23,20 @@ egress through the forward chain. Kube-router masquerades Pod traffic destined
 outside the cluster so replies return through the node. No public control-plane
 port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
-dynamic networking rules, and restores the previous persisted firewall state
-if installation aborts. When an existing CNI configuration is migrated to
-enable masquerading, the installer replaces existing Hive workload Pod
-sandboxes automatically. Neo4j data uses the retained local PV at
+dynamic networking rules, and restores the previous live and persisted
+firewall state if installation errors, exits, or receives a termination
+signal. The installer records an existing CNI's masquerade state before
+restarting k0s; a migration replaces existing Hive workload Pod sandboxes
+automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
 Pod endpoint into the workers' narrow Bolt egress policy, including after
-automatic StatefulSet or kubelet replacement.
+automatic StatefulSet or kubelet replacement. Optimistic resource-version
+patches preserve concurrent policy changes; while Neo4j has no ready endpoint,
+the rule contracts to the stable Service address instead of retaining a stale
+Pod address.
 Kubernetes Secrets are encrypted in etcd with the generated
 `/var/lib/k0s/pki/hive-encryption-provider.yaml`; that file is readable only by
 the dedicated `kube-apiserver` OS user through a read-only ACL and by root; only
