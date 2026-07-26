@@ -1,61 +1,47 @@
-# Cursor SDK agent: implement a labeled issue or a manual prompt, then open a
-# PR for explicit review and merge authorization. No workflow merges it.
-#
-# The GHA job runs on GitHub-hosted ubuntu-latest — not the shared self-hosted
-# `nook` runners — so the agent does not share that machine with other CI.
-# Inside the job, the Cursor agent still runs in nook-ci-agent with docker.sock
-# (sibling containers on the hosted runner's Docker daemon — not DinD).
-#
-# Triggers:
-#   - issues labeled — only when the label being assigned is exactly `ai-agent`
-#   - workflow_dispatch with a required free-text `prompt`
-#
-# Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a
-# user so pr.yml runs and branch protection does not require manual bot-approval).
-# Maintainers must create the repo label named `ai-agent` (workflow does not auto-create it).
+# Cursor SDK agent: claim an explicitly ready Markdown issue from
+# meta-secret/nook-workbench (or accept a manual prompt), implement it, and open
+# a Nook PR. The bounded worker records its worklog in the Workbench and exits;
+# a continuing task-owning agent owns validation and merge.
 
 name: Agent implement
 
 on:
-  issues:
-    types: [labeled]
+  schedule:
+    - cron: "17,47 * * * *"
   workflow_dispatch:
     inputs:
+      issue_path:
+        description: Optional nook-workbench issue path (issues/<feature>/<issue>.md)
+        required: false
+        type: string
       prompt:
-        description: Free-text implementation prompt for the Cursor agent
-        required: true
+        description: Optional free-text implementation prompt
+        required: false
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: agent-implement-${{ github.event.issue.number || github.run_id }}
-  # Do not interrupt an agent after it may have pushed a branch or opened a PR.
+  group: agent-implement
+  # Claim and implementation must be serialized so one Workbench issue cannot
+  # be claimed by two scheduled runs.
   cancel-in-progress: false
 
 jobs:
   agent-implement:
-    name: Implement, PR, and merge
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' &&
-       github.event.action == 'labeled' &&
-       github.event.label.name == 'ai-agent' &&
-       github.event.issue.user.type != 'Bot')
+    name: Implement and open PR
     runs-on: ubuntu-latest
     timeout-minutes: 360
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      checks: read
     env:
       GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_RUN_ID: ${{ github.run_id }}
       CI_AGENT_PROMPT_FILE: .github/prompts/agent-implement.md
-      # Match the 6-hour GitHub-hosted job ceiling instead of the harness's 90-minute default.
-      CI_AGENT_TIMEOUT_MS: '21600000'
+      # Leave one hour of the job budget for setup plus result publication so
+      # a timed-out worker cannot strand an issue in progress.
+      CI_AGENT_TIMEOUT_MS: "18000000"
+      WORKBENCH_REPOSITORY: meta-secret/nook-workbench
+      WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -63,13 +49,153 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
+      - name: Validate dispatch inputs
+        if: inputs.prompt != '' && inputs.issue_path != ''
+        run: |
+          echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
+          exit 1
+
+      - name: Claim ready Workbench issue
+        id: workbench
+        if: inputs.prompt == ''
+        uses: actions/github-script@v9
+        env:
+          REQUESTED_PATH: ${{ inputs.issue_path }}
+          WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
+            const requestedPath = process.env.REQUESTED_PATH.trim()
+            const decode = (data) => Buffer.from(data.content, 'base64').toString('utf8')
+            const value = (body, key) => {
+              const match = body.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
+              if (!match) return ''
+              const raw = match[1].trim()
+              try { return JSON.parse(raw) } catch { return raw }
+            }
+
+            let paths = []
+            if (requestedPath) {
+              if (!/^issues\/[a-z0-9-]+\/[a-z0-9-]+\.md$/.test(requestedPath)) {
+                core.setFailed(`Invalid Workbench issue path: ${requestedPath}`)
+                return
+              }
+              paths = [requestedPath]
+            } else {
+              const { data: tree } = await github.rest.git.getTree({
+                owner,
+                repo,
+                tree_sha: 'main',
+                recursive: 'true',
+              })
+              paths = tree.tree
+                .filter(({ path, type }) =>
+                  type === 'blob' &&
+                  /^issues\/[a-z0-9-]+\/(?!README\.md|_templates\/)[a-z0-9-]+\.md$/.test(path),
+                )
+                .map(({ path }) => path)
+                .sort()
+            }
+
+            for (const path of paths) {
+              const { data } = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' })
+              if (Array.isArray(data) || data.type !== 'file') continue
+              const body = decode(data)
+              if (value(body, 'status') !== 'ready' || value(body, 'automation') !== 'agent') {
+                if (requestedPath) {
+                  core.setFailed(`${path} must have status: ready and automation: agent`)
+                  return
+                }
+                continue
+              }
+
+              const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+              const claimed = body
+                .replace(/^status:\s*ready$/m, 'status: in_progress')
+                .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
+              await github.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path,
+                branch: 'main',
+                sha: data.sha,
+                message: `claim: ${path}`,
+                content: Buffer.from(claimed).toString('base64'),
+              })
+
+              core.setOutput('found', 'true')
+              core.setOutput('path', path)
+              core.setOutput('title', String(value(body, 'title') || path))
+              core.setOutput('body', body)
+              core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
+              core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
+              return
+            }
+
+            core.info('No ready automated Workbench issue found.')
+            core.setOutput('found', 'false')
+
+      - name: Configure agent task
+        id: task
+        if: inputs.prompt != '' || steps.workbench.outputs.found == 'true'
+        env:
+          DISPATCH_PROMPT: ${{ inputs.prompt }}
+          ISSUE_BODY: ${{ steps.workbench.outputs.body }}
+          ISSUE_PATH: ${{ steps.workbench.outputs.path }}
+          ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
+          ISSUE_URL: ${{ steps.workbench.outputs.url }}
+          RUN_ID: ${{ github.run_id }}
+          WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
+        run: |
+          set -euo pipefail
+          delim="AGENT_EOF_${RUN_ID}"
+          if [ -n "$DISPATCH_PROMPT" ]; then
+            branch="agent/prompt-${RUN_ID}"
+            title="Agent implement (run ${RUN_ID})"
+            task="$DISPATCH_PROMPT"
+          else
+            branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
+            title="Implement ${ISSUE_TITLE}"
+            task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
+          fi
+          {
+            echo "AGENT_BRANCH=$branch"
+            echo "FIX_BRANCH=$branch"
+            echo "AGENT_PROMPT<<${delim}"
+            printf '%s\n' "$task"
+            echo "${delim}"
+            echo "AGENT_PR_TITLE<<${delim}"
+            printf '%s\n' "$title"
+            echo "${delim}"
+            echo "AGENT_COMMIT_MESSAGE<<${delim}"
+            printf '%s\n' "$title"
+            echo "${delim}"
+            echo "AGENT_PR_BODY<<${delim}"
+            printf '%s\n' "## Summary"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
+            else
+              printf '%s\n' "Agent implementation from a manual workflow prompt."
+            fi
+            printf '%s\n' ""
+            printf '%s\n' "## Test plan"
+            printf '%s\n' "- [ ] CI green on this PR"
+            echo "${delim}"
+          } >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
       - name: Docker setup
+        if: steps.task.outputs.ready == 'true'
         uses: ./.github/actions/nook-docker-setup
 
       - name: Build split Rust/WASM and web images
+        if: steps.task.outputs.ready == 'true'
         run: task setup WASM_BUILD_MODE=prod
 
       - name: Verify checkout for agent bind-mount
+        if: steps.task.outputs.ready == 'true'
         run: |
           set -euo pipefail
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
@@ -77,74 +203,179 @@ jobs:
           git -C "$GITHUB_WORKSPACE" rev-parse --git-dir
           git -C "$GITHUB_WORKSPACE" status -sb
 
-      - name: Configure agent env
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
-          DISPATCH_PROMPT: ${{ inputs.prompt }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          delim="AGENT_EOF_${RUN_ID}"
-          if [ "$EVENT_NAME" = "issues" ]; then
-            echo "AGENT_BRANCH=agent/issue-${ISSUE_NUMBER}-${RUN_ID}" >> "$GITHUB_ENV"
-            echo "FIX_BRANCH=agent/issue-${ISSUE_NUMBER}-${RUN_ID}" >> "$GITHUB_ENV"
-            echo "AGENT_ISSUE_NUMBER=${ISSUE_NUMBER}" >> "$GITHUB_ENV"
-            {
-              echo "AGENT_ISSUE_TITLE<<${delim}"
-              printf '%s\n' "$ISSUE_TITLE"
-              echo "${delim}"
-              echo "AGENT_ISSUE_BODY<<${delim}"
-              printf '%s\n' "$ISSUE_BODY"
-              echo "${delim}"
-              echo "AGENT_ISSUE_URL<<${delim}"
-              printf '%s\n' "$ISSUE_URL"
-              echo "${delim}"
-              echo "AGENT_PR_TITLE<<${delim}"
-              printf '%s\n' "Implement #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-              echo "${delim}"
-              echo "AGENT_COMMIT_MESSAGE<<${delim}"
-              printf '%s\n' "Implement #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-              echo "${delim}"
-              echo "AGENT_PR_BODY<<${delim}"
-              printf '%s\n' "## Summary"
-              printf '%s\n' "Agent implementation for #${ISSUE_NUMBER}."
-              printf '%s\n' ""
-              printf '%s\n' "Closes #${ISSUE_NUMBER}"
-              printf '%s\n' ""
-              printf '%s\n' "## Test plan"
-              printf '%s\n' "- [ ] CI green on this PR"
-              echo "${delim}"
-            } >> "$GITHUB_ENV"
-          else
-            echo "AGENT_BRANCH=agent/prompt-${RUN_ID}" >> "$GITHUB_ENV"
-            echo "FIX_BRANCH=agent/prompt-${RUN_ID}" >> "$GITHUB_ENV"
-            {
-              echo "AGENT_PROMPT<<${delim}"
-              printf '%s\n' "$DISPATCH_PROMPT"
-              echo "${delim}"
-              echo "AGENT_PR_TITLE<<${delim}"
-              printf '%s\n' "Agent implement (run ${RUN_ID})"
-              echo "${delim}"
-              echo "AGENT_COMMIT_MESSAGE<<${delim}"
-              printf '%s\n' "Agent implement (run ${RUN_ID})."
-              echo "${delim}"
-              echo "AGENT_PR_BODY<<${delim}"
-              printf '%s\n' "## Summary"
-              printf '%s\n' "Agent implementation from workflow_dispatch prompt."
-              printf '%s\n' ""
-              printf '%s\n' "## Test plan"
-              printf '%s\n' "- [ ] CI green on this PR"
-              echo "${delim}"
-            } >> "$GITHUB_ENV"
-          fi
-
-      - name: Run ci-agent implement (Docker + docker.sock)
+      - name: Run ci-agent implement
+        id: implement
+        if: steps.task.outputs.ready == 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ github.workspace }}
           WASM_BUILD_MODE: prod
         run: task ci-agent:implement
+
+      - name: Publish Workbench result
+        if: >-
+          always() &&
+          (steps.task.outputs.ready == 'true' ||
+           steps.workbench.outputs.found == 'true')
+        uses: actions/github-script@v9
+        env:
+          AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
+          IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
+          ISSUE_PATH: ${{ steps.workbench.outputs.path }}
+          ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
+          WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
+          WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
+          CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const fs = require('node:fs')
+            const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
+            const issuePath = process.env.ISSUE_PATH.trim()
+            const feature = issuePath ? issuePath.split('/')[1] : 'unplanned'
+            const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+            const timestamp = now.replaceAll('-', '').replaceAll(':', '')
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const pulls = await github.rest.pulls.list({
+              ...context.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${process.env.AGENT_BRANCH}`,
+            })
+            const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            })
+            const pull = pulls.data[0]
+            const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
+            const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const fallbackSummary = [
+                  '# Automated agent work summary',
+                  '',
+                  '## Outcome',
+                  '',
+                  success ? `Opened Nook PR [#${pull.number}](${pull.html_url}).` : 'The bounded implementation run did not open a pull request.',
+                  '',
+                  '## Progress',
+                  '',
+                  '- See the linked workflow run for the execution boundary.',
+                  '',
+                  '## Implementation problems',
+                  '',
+                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before a pull request was opened.',
+                  '',
+                  '## Decisions',
+                  '',
+                  '- None recorded.',
+                  '',
+                  '## Validation',
+                  '',
+                  `- [Agent implement run ${context.runId}](${runUrl})`,
+                  '',
+                  '## Remaining work',
+                  '',
+                  success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                ].join('\n')
+            const validateSummary = (candidate) => {
+              if (!candidate || Buffer.byteLength(candidate, 'utf8') > 12_000) {
+                return 'missing or larger than 12 KB'
+              }
+              const required = [
+                '## Outcome',
+                '## Progress',
+                '## Implementation problems',
+                '## Decisions',
+                '## Validation',
+                '## Remaining work',
+              ]
+              const headings = [...candidate.matchAll(/^## (.+)$/gm)].map((match) => `## ${match[1]}`)
+              if (JSON.stringify(headings) !== JSON.stringify(required)) {
+                return 'required sections are missing, duplicated, reordered, or extended'
+              }
+              const secrets = [process.env.CURSOR_SECRET, process.env.NOOK_SECRET]
+                .filter((secret) => secret && secret.length >= 8)
+              if (secrets.some((secret) => candidate.includes(secret))) {
+                return 'content contains a workflow credential'
+              }
+              const forbidden = [
+                /```/,
+                /^\s{4}\S/m,
+                /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,
+                /\b(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{12,}\b/,
+                /(?:^|\n)\s*[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|API_KEY)[A-Z0-9_]*\s*[:=]\s*\S+/m,
+                /\b(?:authorization|bearer|password|secret|token|api[_ -]?key|private[_ -]?key)\s*[:=]\s*\S+/i,
+                /\b(?:process\.env|environment dump|raw (?:stdout|stderr|log))\b/i,
+              ]
+              if (forbidden.some((pattern) => pattern.test(candidate))) {
+                return 'content resembles a credential, environment dump, or raw log'
+              }
+              return ''
+            }
+            let summary = fallbackSummary
+            if (fs.existsSync(summaryPath)) {
+              const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
+              const rejection = validateSummary(candidate)
+              if (rejection) {
+                core.warning(`Rejected agent-authored Workbench summary: ${rejection}; publishing trusted fallback metadata.`)
+              } else {
+                summary = candidate
+              }
+            }
+            const worklogPath = `worklogs/${feature}/${timestamp}-run-${context.runId}.md`
+            const worklog = [
+              '---',
+              `title: ${JSON.stringify(process.env.ISSUE_TITLE || `Manual agent run ${context.runId}`)}`,
+              `feature: ${feature}`,
+              `issue: ${issuePath || 'null'}`,
+              `nook_pr: ${pull?.html_url || 'null'}`,
+              `status: ${success ? 'in_progress' : 'blocked'}`,
+              `started_at: ${workflowRun.created_at || now}`,
+              `finished_at: ${now}`,
+              'agent: cursor',
+              '---',
+              '',
+              summary,
+              '',
+            ].join('\n')
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: worklogPath,
+              branch: 'main',
+              message: `worklog: agent run ${context.runId}`,
+              content: Buffer.from(worklog).toString('base64'),
+            })
+
+            if (!issuePath) return
+            const { data } = await github.rest.repos.getContent({ owner, repo, path: issuePath, ref: 'main' })
+            if (Array.isArray(data) || data.type !== 'file') {
+              core.setFailed(`Workbench issue is not a file: ${issuePath}`)
+              return
+            }
+            let body = Buffer.from(data.content, 'base64').toString('utf8')
+              .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
+            if (!success) body = body.replace(/^status:\s*in_progress$/m, 'status: blocked')
+            if (pull) {
+              body = body.replace(
+                /^related_prs:\s*\[(.*)\]$/m,
+                (_line, entries) => {
+                  const current = entries.trim()
+                  if (current.includes(pull.html_url)) return _line
+                  const separator = current ? ', ' : ''
+                  return `related_prs: [${current}${separator}${JSON.stringify(pull.html_url)}]`
+                },
+              )
+            }
+            const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${success ? `opened [Nook PR #${pull.number}](${pull.html_url})` : 'stopped before opening a PR'}; [worklog](/${owner}/${repo}/blob/main/${worklogPath}).`
+            body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: issuePath,
+              branch: 'main',
+              sha: data.sha,
+              message: `${success ? 'progress' : 'block'}: ${issuePath}`,
+              content: Buffer.from(body).toString('base64'),
+            })

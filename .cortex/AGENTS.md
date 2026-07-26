@@ -68,11 +68,13 @@ after opening the PR, so a continuing agent must take ownership of that PR and
 carry this lifecycle through merge. Full policy:
 [workflows/coding-bro.md](workflows/coding-bro.md).
 
-The successful squash merge is the implementation task's delivery boundary.
+The successful squash merge is the implementation task's product delivery
+boundary.
 Do not wait for, monitor, or verify the post-merge `main.yml` run or development
 deployment unless the user explicitly requested deployment/live verification
-or assigned a Main failure. Publish the required stats-only record immediately
-after merge without making Main completion a prerequisite.
+or assigned a Main failure. Publish the required Workbench issue update,
+worklog, and agent-statistics record immediately after merge without making Main
+completion a prerequisite.
 
 ## ⛔ Non-negotiable: never kill the Docker daemon
 
@@ -171,18 +173,28 @@ the gate itself (for example, widening an ignore for generated WASM output) and
 the PR documents why. Full policy:
 [workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
 
+## ⛔ Non-negotiable: preserve work context in Nook Workbench
+
+Nook issues, agent work summaries, and delivery statistics live in
+[`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench),
+not in GitHub Issues or `.stats` inside this repository. Feature directories
+contain Markdown issue files; every task-owning agent publishes a worklog with
+progress, problems, decisions, validation, and remaining work. Only a Workbench
+issue explicitly marked `status: ready` and `automation: agent` may trigger the
+scheduled implementation worker. Full policy:
+[workflows/issues.md](workflows/issues.md).
+
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
 
 Task-owning AI agents must measure every normal PR's local check/test runs,
 GitHub Actions runs and retriggers, merge attempts, elapsed time, and the
 repository test inventory (counts by type plus absolute total) on the merged
-head. After the implementation PR merges, write `.stats/ai-agent/<pr-number>.yaml`,
-compare it with one or two recent comparable PR records, and assess
-build/workflow waste.
-Publish the record in a separate stats-only PR that triggers no product checks
-and is squash-merged immediately; stats-only PRs do not recursively generate
-statistics. Any actionable regression or waste must be fixed in a separate
-normal build-performance PR. Full policy:
+head. After the implementation PR merges, write
+`stats/ai-agent/<pr-number>.yaml` to Nook Workbench, compare it with one or two
+recent comparable records, and assess build/workflow waste. Publish it directly
+to Workbench `main`; do not create a bookkeeping branch or PR in Nook.
+Any actionable regression or waste must be fixed in a separate normal
+build-performance PR. Full policy:
 [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
 ## 1. Rules & Architectural Layout
@@ -223,12 +235,12 @@ normal build-performance PR. Full policy:
 * [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; every product gate runs on GitHub Actions**.
 * [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
-* [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
+* [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, and required agent worklogs.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
-* [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory (by type + total), historical comparison, waste analysis, and the check-free stats-only PR exception.
-* [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics, trusted automatic publication, and the non-recursive `.stats/**` loop guard.
+* [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
+* [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
 
 ## 7. Agent duties beyond code
 
@@ -273,7 +285,8 @@ normal build-performance PR. Full policy:
 
 ### Deferred or out-of-scope functionality
 * If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of
-  scope for the current PR, the agent must not silently drop it. First inspect existing GitHub issues,
-  then update the existing aggregate issue or create one, and attach/create focused sub-issues for the
-  missing work. See [workflows/issues.md](workflows/issues.md) and
+  scope for the current PR, the agent must not silently drop it. First inspect
+  Nook Workbench issues and worklogs, then update the existing feature/focused
+  Markdown record or create the missing hierarchy and publish the task worklog.
+  See [workflows/issues.md](workflows/issues.md) and
   [dynamic-skills/issue-scope-management.md](dynamic-skills/issue-scope-management.md).

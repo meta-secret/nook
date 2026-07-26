@@ -60,7 +60,8 @@ Does not apply to:
 - [ ] Inspect and address all feedback already present without waiting for reviewers.
 - [ ] Run `task pr:ready` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
-- [ ] Publish required stats-only bookkeeping without waiting for post-merge Main.
+- [ ] Publish the required Workbench issue update, worklog, and statistics
+      without waiting for post-merge Main.
 
 ## Validation
 

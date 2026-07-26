@@ -61,10 +61,6 @@ export async function branchExistsOnOrigin(
   }
 }
 
-export function pullRequestUrl({ owner, repo }: RepoRef, prNumber: number): string {
-  return `https://github.com/${owner}/${repo}/pull/${prNumber}`;
-}
-
 export async function createFixPr(
   octokit: Octokit,
   repoRef: RepoRef,
@@ -102,21 +98,6 @@ export async function createFixPr(
     }
     throw err;
   }
-}
-
-export async function commentOnIssue(
-  octokit: Octokit,
-  { owner, repo }: RepoRef,
-  issueNumber: number,
-  body: string,
-): Promise<void> {
-  log.info(`Commenting on issue #${issueNumber}`);
-  await octokit.rest.issues.createComment({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    body,
-  });
 }
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";

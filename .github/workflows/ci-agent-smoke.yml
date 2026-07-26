@@ -1,12 +1,9 @@
 # Tiny smoke for agentic-ai/ci-agent exit behavior.
-# Triggered by issues labeled `ci-agent-smoke` (or opened with that label),
-# and by workflow_dispatch. Must live on the default branch to receive issue events.
+# Triggered manually. GitHub Issues are not used for Nook development work.
 
 name: CI agent smoke
 
 on:
-  issues:
-    types: [opened, labeled]
   workflow_dispatch:
 
 permissions:
@@ -19,12 +16,6 @@ concurrency:
 jobs:
   smoke:
     name: Exit and unit smoke
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && (
-        contains(join(github.event.issue.labels.*.name, ','), 'ci-agent-smoke') ||
-        contains(github.event.label.name, 'ci-agent-smoke')
-      ))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -88,29 +79,3 @@ jobs:
           console.log('PASS: exitCiAgent terminated despite open handles')
           EOF
           node /tmp/ci-agent-exit-smoke.mjs
-
-      - name: Comment smoke result on issue
-        if: github.event_name == 'issues' && always()
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const marker = '<!-- ci-agent-smoke -->'
-            const conclusion = '${{ job.status }}'
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            const body = [
-              marker,
-              '### CI agent smoke',
-              '',
-              `Job status: **${conclusion}**`,
-              '',
-              `- Unit tests + \`exitCiAgent\` open-handle smoke`,
-              `- Runner: \`ubuntu-latest\``,
-              '',
-              `[View run](${runUrl})`,
-            ].join('\n')
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            })

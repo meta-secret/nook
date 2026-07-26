@@ -5,7 +5,8 @@
 # full local-provider and extension suites, and nightly runs sync-live.
 # Only nightly failures invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
-# agentic-AI-only and agent-statistics-only changes do not need the product pipeline.
+# agentic-AI-only changes do not need the product pipeline. Agent statistics
+# live in meta-secret/nook-workbench.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
@@ -16,7 +17,6 @@ on:
     paths-ignore:
       - .cortex/**
       - .cursor/**
-      - .stats/**
       - .github/workflows/web-research.yml
       - agentic-ai/**
       - nook-app/nook-web/nook-web-research/**

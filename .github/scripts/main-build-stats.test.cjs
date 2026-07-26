@@ -314,15 +314,12 @@ test('rejects records whose summary cannot be derived from detailed jobs', () =>
   assert.throws(() => validateMainBuildStats(record), /summary\.step_count mismatch/)
 })
 
-test('workflow records completed trusted Main runs without a stats recursion path', () => {
+test('workflow records completed trusted Main runs in Nook Workbench', () => {
   const root = path.join(__dirname, '..', '..')
   const collector = fs.readFileSync(
     path.join(root, '.github/workflows/main-build-stats.yml'),
     'utf8',
   )
-  const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
-  const pullRequest = fs.readFileSync(path.join(root, '.github/workflows/pr.yml'), 'utf8')
-
   assert.match(collector, /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/)
   assert.match(collector, /github\.event\.workflow_run\.event == 'push'/)
   assert.match(collector, /github\.event\.workflow_run\.head_branch == 'main'/)
@@ -341,8 +338,13 @@ test('workflow records completed trusted Main runs without a stats recursion pat
   assert.doesNotMatch(collector, /filter: 'latest'/)
   assert.match(collector, /GH_TOKEN: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)
   assert.doesNotMatch(collector, /GH_TOKEN:.*github\.token/)
-  assert.match(collector, /NOOK_GITHUB_PAT is required to admin-merge/)
-  assert.match(collector, /\.stats\/main-build\/\$\{run\.id\}-attempt-\$\{run\.run_attempt\}\.yaml/)
-  assert.match(main, /paths-ignore:[\s\S]*- \.stats\/\*\*/)
-  assert.match(pullRequest, /paths-ignore:[\s\S]*- \.stats\/\*\*/)
+  assert.match(collector, /repository: meta-secret\/nook-workbench/)
+  assert.match(collector, /path: workbench/)
+  assert.match(collector, /NOOK_GITHUB_PAT is required to publish Main build statistics/)
+  assert.match(
+    collector,
+    /workbench\/stats\/main-build\/\$\{run\.id\}-attempt-\$\{run\.run_attempt\}\.yaml/,
+  )
+  assert.match(collector, /git -C workbench push origin HEAD:main/)
+  assert.doesNotMatch(collector, /gh pr create|gh pr merge|\.stats\//)
 })

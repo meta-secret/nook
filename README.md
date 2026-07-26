@@ -232,6 +232,10 @@ Deeper documentation lives in [`.cortex/`](.cortex/):
 - [Engineering principles](.cortex/design-docs/core-beliefs.md)
 - [Agent map](.cortex/AGENTS.md)
 
+Development issues, agent worklogs, and delivery statistics live in the
+versioned [Nook Workbench](https://github.com/meta-secret/nook-workbench)
+instead of this repository's GitHub Issues or source tree.
+
 ## Deployments
 
 | Channel | Site | Simple | Sentinel |

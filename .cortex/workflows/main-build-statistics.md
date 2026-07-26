@@ -3,10 +3,11 @@
 The full `Main` workflow is measured independently from per-PR agent delivery
 statistics. The trusted
 [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml) workflow
-runs after every completed Main attempt and stores one immutable record at:
+runs after every completed Main attempt and stores one immutable record in
+[`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench):
 
 ```text
-.stats/main-build/<run-id>-attempt-<run-attempt>.yaml
+stats/main-build/<run-id>-attempt-<run-attempt>.yaml
 ```
 
 This includes successful, failed, and cancelled attempts. Failures and
@@ -48,27 +49,25 @@ for a cancelled step whose completion timestamp is absent. All strings are
 JSON-quoted, preventing colons, timestamps, or PR titles from producing invalid
 YAML.
 
-## Publication and loop termination
+## Publication and isolation
 
-The collector creates a branch containing exactly its one generated record,
-opens a stats-only PR, and squash-merges it immediately with the trusted
-`NOOK_GITHUB_PAT`. The workflow fails explicitly if that admin-capable secret
-is unavailable instead of leaving an ambiguous, unmerged automation PR.
-Rerunning the collector is idempotent: a valid record already present on `main`
-is accepted without another PR, while a GitHub rerun attempt receives a distinct
-filename.
+The collector checks out Workbench, commits exactly its generated record, rebases
+on the latest Workbench `main`, and pushes it directly with the trusted
+`NOOK_GITHUB_PAT`. The workflow fails explicitly if the token is unavailable.
+Rerunning the collector is idempotent: a valid record already present in
+Workbench is accepted without another commit, while a GitHub rerun attempt
+receives a distinct filename.
 
-There is no recursive build loop:
+There is no recursive build loop or Nook PR noise:
 
 1. a product merge triggers `Main`;
 2. completed `Main` triggers `Main build statistics`;
-3. the collector merges one `.stats/main-build/**` file;
-4. both PR and Main workflows ignore `.stats/**`;
-5. therefore the stats merge creates no Main run and no subsequent collector
-   event.
+3. the collector commits one `stats/main-build/**` file in Workbench;
+4. no Nook ref changes;
+5. therefore no Nook Main run, PR, or subsequent collector event is created.
 
-The generated stats-only PR is not an AI-agent implementation PR and does not
-create `.stats/ai-agent/**` bookkeeping.
+The generated Workbench commit is not an AI-agent implementation PR and does not
+create `stats/ai-agent/**` bookkeeping.
 
 ## Analysis
 

@@ -1,77 +1,43 @@
-# Issue Scope Management
+# Workbench Scope Management
 
 ## Purpose
 
-Ensure agents do not silently drop work when functionality is too large, risky,
-blocked, or out of scope. Missing work must be captured in GitHub issues with a
-clear aggregate issue and focused sub-issues.
+Preserve deferred, risky, blocked, or out-of-scope work in the versioned
+development cycle instead of losing it in chat or a flat GitHub issue list.
 
-## Problem Pattern
+## Preferred pattern
 
-An agent implements part of a feature, then says the rest is "follow-up" or "out
-of scope" only in chat or a PR summary. Future agents cannot discover the missing
-work from GitHub's flat issue list, and existing issues may already have owners,
-comments, or related PRs that get ignored.
-
-## Preferred Pattern
-
-Before deferring work, search existing issues, inspect likely matches, update the
-right aggregate issue or create one, and create or attach focused sub-issues for
-each missing deliverable. Use GitHub sub-issue relationships for parent/child
-tracking; if the CLI cannot attach them, use the GitHub UI or API rather than
-skipping the relationship. Also keep explicit parent/sub-issue links in issue
-bodies for CLI and search visibility. Respect existing assignees, labels,
-milestones, and comments.
+Search `meta-secret/nook-workbench` first. Update the existing feature and
+focused Markdown record when it owns the work; otherwise create
+`issues/<feature>/README.md` plus the smallest independently deliverable issue
+files. Preserve existing progress and decisions, link the Nook PR, and publish a
+task worklog.
 
 ## Scope
 
-Applies to:
+Apply when work is described as too large, risky, blocked, deferred, future, or
+outside the current PR. Do not apply to a fully completed in-scope task merely
+to generate bookkeeping.
 
-- Any Nook task where requested functionality will not be fully implemented.
-- PR handoffs that mention follow-up work, blockers, risky scope, or deferred
-  acceptance criteria.
-- Issue authoring and issue cleanup performed by agents.
+## Safety
 
-Does not apply to:
+- Never claim another owner's `in_progress` record.
+- Never erase prior findings, decisions, blockers, or validation evidence.
+- Only `status: ready` plus `automation: agent` authorizes automation.
+- Never store prompts, chats, secrets, credentials, vault data, private user
+  information, environment values, or raw logs.
 
-- Tiny TODOs that are fully fixed in the same PR before handoff.
-- User-explicit requests to avoid GitHub issue changes.
+## Checklist
 
-## Examples
-
-- Before: "CRDT graph merge is out of scope for this PR."
-- After: update the event-log aggregate issue, create/attach a sub-issue for
-  CRDT graph merge semantics, link the PR, and explain the deferral.
-- Before: create a duplicate "sync follow-up" issue without searching.
-- After: search existing sync/event-log issues, update the matching aggregate,
-  and only create a new focused sub-issue if no focused issue exists.
-- Before: edit an issue owned by another agent and replace its checklist.
-- After: preserve the body, add a comment with new findings, and avoid changing
-  assignment/status unless explicitly requested.
-
-## Application Checklist
-
-- [ ] Identify each missing deliverable before calling it deferred or out of
-      scope.
-- [ ] Search all GitHub issues with broad and narrow keywords.
-- [ ] Inspect likely aggregate and focused issues, including comments,
-      assignees, labels, milestone, state, and related PRs.
-- [ ] Choose the existing aggregate issue or create one if none exists.
-- [ ] Update the aggregate with current status and sub-issue links without
-      deleting existing information.
-- [ ] Create or attach focused sub-issues for independently deliverable missing
-      work.
-- [ ] Use GitHub sub-issue relationships, and include explicit parent/sub-issue
-      links in issue bodies.
-- [ ] Add PR links, affected code paths, acceptance criteria, and the reason for
-      deferral.
-- [ ] Avoid closing, retitling, reassigning, relabeling, or remilestoning issues
-      owned by others unless explicitly required and documented.
-- [ ] Verify the final issue hierarchy and mention issue numbers in the handoff.
+- [ ] Search Workbench issues and worklogs with user and code vocabulary.
+- [ ] Inspect likely feature summaries, dependencies, owners, status, and PRs.
+- [ ] Update the existing record or create a focused non-duplicate.
+- [ ] Keep acceptance criteria independently deliverable and testable.
+- [ ] Link parent feature, dependencies, historical issue context, and Nook PR.
+- [ ] Publish a worklog before completion or blocked handoff.
+- [ ] Re-open Workbench `main` and verify links and state.
 
 ## Validation
 
-Use `gh issue list` and `gh issue view` to confirm the aggregate issue and
-sub-issues exist, cross-link correctly, and preserve existing team-owned
-metadata. For markdown-heavy issue bodies, use `--body-file` and re-read the
-issue after editing.
+Run `node scripts/validate.mjs` in a Workbench checkout and inspect the rendered
+Markdown on GitHub. Full workflow: [workflows/issues.md](../workflows/issues.md).

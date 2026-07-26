@@ -3,12 +3,10 @@ import { chdir } from "node:process";
 import { loadConfig } from "./config.js";
 import {
   branchExistsOnOrigin,
-  commentOnIssue,
   createFixPr,
   createOctokit,
   findOpenPr,
   parseRepository,
-  pullRequestUrl,
 } from "./github.js";
 import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
 import { createLogger } from "./logger.js";
@@ -32,12 +30,6 @@ export async function runCiImplement(): Promise<void> {
     process.env.AGENT_BRANCH?.trim() ||
     process.env.FIX_BRANCH?.trim() ||
     `agent/prompt-${runId}`;
-  const issueNumberRaw = process.env.AGENT_ISSUE_NUMBER?.trim();
-  const issueNumber = issueNumberRaw ? Number(issueNumberRaw) : undefined;
-  if (issueNumberRaw && (issueNumber === undefined || !Number.isInteger(issueNumber) || issueNumber <= 0)) {
-    throw new Error(`Invalid AGENT_ISSUE_NUMBER: ${issueNumberRaw}`);
-  }
-
   chdir(repoRoot);
 
   const octokit = createOctokit();
@@ -82,15 +74,6 @@ export async function runCiImplement(): Promise<void> {
     }
     log.info(`Opened implement PR #${prNumber}`);
 
-    if (issueNumber) {
-      const url = pullRequestUrl(repoRef, prNumber);
-      await commentOnIssue(
-        octokit,
-        repoRef,
-        issueNumber,
-        `Opened PR ${url} for this issue. This bounded implementation job has exited; a continuing task-owning agent must monitor checks, fix failures/comments/conflicts, run the exact-head readiness audit, and squash-merge without separate merge authorization.`,
-      );
-    }
   }
 
   log.info(

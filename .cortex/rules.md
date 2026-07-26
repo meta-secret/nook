@@ -246,15 +246,13 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
 - **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, monitor applicable repository-owned checks (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews. Do not require a local product gate.
-- **Record PR statistics after merge.** Follow
-  [workflows/agent-statistics.md](workflows/agent-statistics.md): publish the
-  completed YAML (including repository test counts by type and absolute total)
-  in a separate stats-only PR, compare against recent comparable PRs, and own
-  and land a normal performance-fix PR for actionable regression or waste.
-  Publish the stats record immediately after merge without waiting for
-  post-merge Main workflows or deployments.
-  Verified one-file `.stats/ai-agent/<source-pr>.yaml` and automated
-  `.stats/main-build/<run-id>-attempt-<attempt>.yaml` PRs are the only exceptions
-  to local checks, repository checks, exact-head review, and `task pr:ready`;
-  they must still use squash merge and must be merged immediately without
-  generating another statistics record or Main build.
+- **Publish Workbench context after merge.** Follow
+  [workflows/issues.md](workflows/issues.md) and
+  [workflows/agent-statistics.md](workflows/agent-statistics.md): update the
+  associated Markdown issue, add the agent worklog, and publish the completed
+  `stats/ai-agent/<source-pr>.yaml` to `meta-secret/nook-workbench`, including
+  repository test counts by type and absolute total. Compare recent comparable
+  PRs and own a normal performance-fix PR for actionable regression or waste.
+  Publish immediately after merge without waiting for post-merge Main workflows
+  or deployments. Workbench content commits are not Nook PRs and do not run
+  Nook product gates.

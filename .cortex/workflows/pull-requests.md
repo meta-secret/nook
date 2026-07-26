@@ -65,7 +65,7 @@ flowchart TD
   C --> R[Run exact-head readiness audit]
   R -->|blocked| H
   R -->|ready| M[Squash merge PR]
-  M --> S[Publish + merge stats-only PR]
+  M --> S[Publish Workbench issue + worklog + stats]
   S --> J
   J --> K[Done]
 ```
@@ -328,28 +328,25 @@ agent automatically. Nightly covers sync-live and retains its `ci-fix` worker,
 which opens a repair PR; any task-owning agent that continues that PR follows
 the same readiness-and-squash-merge contract.
 
-### 9. Post-merge statistics and analysis
+### 9. Post-merge Workbench context and statistics
 
-Every normal AI-agent-owned PR continues through a separate statistics commit
-after merge. Follow [agent-statistics.md](agent-statistics.md): create
-`.stats/ai-agent/<source-pr-number>.yaml`, include all local validation and
-repository workflow executions/retriggers plus merge attempts and elapsed time,
-record the repository test inventory (counts by type and absolute total) on the
-merged head, compare with one or two recent comparable records, and assess waste.
+Every normal AI-agent-owned PR continues through a Workbench publication after
+merge. Follow [issues.md](issues.md) and
+[agent-statistics.md](agent-statistics.md): update the associated issue, add the
+agent worklog, create `stats/ai-agent/<source-pr-number>.yaml`, include all local
+validation and repository workflow executions/retriggers plus merge attempts
+and elapsed time, record the repository test inventory on the merged head,
+compare with recent comparable records, and assess waste.
 
-Publish exactly that one YAML file in a stats-only PR and squash-merge it
-immediately. Product checks, review, deployments, and `task pr:ready` are skipped
-only for this verified one-file PR; the product pipelines ignore `.stats/**`.
-Do not wait for post-merge Main before creating it, and do not include a Main
-run merely because the implementation PR triggered one. The stats-only PR does
-not generate another record. If the comparison identifies
-actionable performance regression or workflow waste, create a separate normal
-build-performance PR and take it through the full pipeline.
+Publish these records directly to `meta-secret/nook-workbench` `main`. Do not
+create a bookkeeping Nook branch or PR, wait for post-merge Main, or include a
+Main run merely because the implementation PR triggered one. If the comparison
+identifies actionable performance regression or workflow waste, create a
+separate normal Nook build-performance PR and take it through the full pipeline.
 
-Completed Main attempts independently create one automated
-`.stats/main-build/<run-id>-attempt-<attempt>.yaml` PR after the workflow has
-finished. It uses the same immediate squash-only exception and cannot recurse:
-both PR and Main ignore `.stats/**`. See
+Completed Main attempts independently commit one automated
+`stats/main-build/<run-id>-attempt-<attempt>.yaml` record to Workbench after the
+workflow finishes. Because no Nook ref changes, publication cannot recurse. See
 [main-build-statistics.md](main-build-statistics.md).
 
 ### 10. Task completion report
@@ -390,8 +387,8 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 7. **Squash merge** into `main` immediately after the exact-head readiness audit
    succeeds; green checks alone are insufficient.
 8. Delete the branch (optional).
-9. **Publish, analyze, and immediately merge** the one-file stats-only PR; open
-   a separate normal performance PR when the evidence requires a fix.
+9. **Publish** the Workbench issue update, worklog, and statistics; open a
+   separate normal performance PR when the evidence requires a fix.
 10. **Report task duration** in the final message (see [§ Task completion report](#10-task-completion-report)).
 
 ## CLI reference

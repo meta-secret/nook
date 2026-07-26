@@ -27,7 +27,8 @@ with hand-written `docker run` commands.
 
 ## Steps
 
-1. Understand the task fully. Prefer the issue/prompt scope; do not expand into unrelated refactors.
+1. Understand the task fully. Prefer the Workbench issue/prompt scope; do not
+   expand into unrelated refactors.
 2. Implement the change end-to-end in the working tree. Match existing conventions and package boundaries in `.cortex/ARCHITECTURE.md` / `.cortex/rules.md`.
 3. **Always run `task format`** (host-applied) before finishing so the harness
    commits a formatted tree. When UI-facing paths change, pass the UI demo
@@ -35,7 +36,15 @@ with hand-written `docker run` commands.
 4. Do **not** require `task check`, `task ci:pr`, full suites, builds, or e2e
    before finishing. Optional `E2E_SPEC=… task web:test:e2e:file` is allowed for
    focused debug only.
-5. If part of the request is too large, risky, blocked, or out of scope, follow `.cortex/workflows/issues.md` (update/create issues) rather than silently dropping work.
+5. If part of the request is too large, risky, blocked, or out of scope, follow
+   `.cortex/workflows/issues.md` (update/create Workbench Markdown records)
+   rather than silently dropping work.
+6. Before finishing, write a concise Markdown work summary to
+   `.nook-workbench-worklog.md`. Include `# Work summary` and the sections
+   `## Outcome`, `## Progress`, `## Implementation problems`, `## Decisions`,
+   `## Validation`, and `## Remaining work`. Do not add YAML frontmatter; the
+   workflow adds it when publishing. Never include prompts, chat transcripts,
+   secrets, credentials, vault data, private user information, or raw logs.
 
 ## Rules
 

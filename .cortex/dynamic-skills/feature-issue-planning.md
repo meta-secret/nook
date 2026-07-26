@@ -1,101 +1,45 @@
-# Feature Issue Planning
+# Feature Workbench Planning
 
 ## Purpose
 
-Keep feature-sized GitHub work manageable for both humans and agents by creating
-a mandatory milestone, one parent issue, focused sub-issues, and a small label
-set for every feature issue pack.
+Organize a feature as durable, versioned context that agents can discover,
+review, implement, and update without reconstructing decisions from GitHub
+Issues or chat history.
 
-## Problem Pattern
+## Preferred pattern
 
-A user asks an agent to "create issues for a feature" and the agent creates a
-flat list of independent issues. GitHub's issue list stays technically correct,
-but developers lose the feature boundary, agents cannot tell which tickets
-belong together, and labels alone become too weak to manage progress.
+Create one `issues/<feature>/` directory in
+`meta-secret/nook-workbench`. Its `README.md` is the feature boundary and owns
+the goal, current state, shared decisions, references, and issue index. Each
+independently deliverable slice is a focused Markdown issue beside it.
 
-## Preferred Pattern
+Feature directories replace milestones and aggregate issues. Focused files
+replace sub-issues. Worklogs record what actually happened during execution.
 
-For every Nook feature issue pack, always create or reuse a milestone first. This
-is a hard project requirement. Use a predictable title such as
-`Feature: <feature name>` unless the user names the milestone.
+## Trigger
 
-Then create or update:
+Apply whenever the user asks to create, organize, or plan issue-level work for a
+Nook feature.
 
-- One parent issue that owns the feature narrative, product decisions, rollout
-  shape, open questions, and sub-issue checklist.
-- Focused sub-issues for independently deliverable implementation, test,
-  security, migration, documentation, or UX slices.
-- A feature label such as `feature:<slug>` plus existing area, type, risk, and
-  platform labels where useful.
-- Milestone assignment on the parent issue and every sub-issue.
-- Explicit parent/sub-issue links in issue bodies in addition to GitHub's
-  sub-issue relationship.
+## Checklist
 
-Milestones are the required feature container. Labels are filters, not ownership.
-Sub-issues are the execution plan. Projects are dashboards; prefer adding the
-feature pack to one shared roadmap/project when useful, and do not create a new
-GitHub Project for every feature unless the user asks or the work is truly
-program-scale.
+- [ ] Search existing Workbench issues and worklogs before creating anything.
+- [ ] Choose one stable, lowercase kebab-case feature directory.
+- [ ] Create or update the feature `README.md` from the Workbench template.
+- [ ] Record product decisions, open questions, current state, and references.
+- [ ] Create focused issue files with testable acceptance criteria.
+- [ ] Link dependencies explicitly; order the feature index by execution need.
+- [ ] Leave drafts `status: proposed` and `automation: manual`.
+- [ ] Set `status: ready` only when decisions and acceptance criteria are
+      sufficient to start.
+- [ ] Set `automation: agent` only when automated execution is explicitly
+      intended.
+- [ ] Run Workbench validation and verify the rendered files on `main`.
 
-GitHub's public documentation does not document a hard limit on the number of
-milestones. It does document one practical scale caveat: a milestone with more
-than 500 open issues cannot be manually prioritized. Keep feature milestones far
-below that size; split the feature if it grows that large.
+## Safety
 
-## Scope
+Do not flatten multiple features into `issues/backlog`, erase historical
+findings, or copy prompts, chats, secrets, credentials, vault data, private user
+information, environment values, or raw logs.
 
-Applies to:
-
-- User requests to create or organize GitHub issues for a Nook feature.
-- Feature decomposition work performed before implementation starts.
-- Follow-up issue packs created from large, risky, or deferred feature scope.
-
-Does not apply to:
-
-- A single small bug or chore where the user asked for exactly one issue.
-- Direct user instructions to use an existing milestone or skip GitHub changes.
-- Existing team-owned issues where changing the milestone would disrupt active
-  work; comment and ask instead unless the user explicitly requested the move.
-
-## Examples
-
-- Before: create eight independent "distributed unlock" issues with only a
-  shared label.
-- After: create milestone `Feature: Distributed unlock`, create one parent issue
-  for the security model and UX, create sub-issues for Rust primitives, WASM
-  API, QR session exchange, UI flow, and end-to-end tests, attach all of them to
-  the milestone and parent.
-- Before: create a new GitHub Project for every feature request.
-- After: use the milestone as the feature boundary and add the issues to an
-  existing roadmap project only if a dashboard view is useful.
-
-## Application Checklist
-
-- [ ] Search existing milestones, issues, and labels before creating anything.
-- [ ] Create or reuse the feature milestone first.
-- [ ] Create or reuse a feature label.
-- [ ] Create the parent issue with summary, product decisions, open questions,
-      acceptance criteria, and a sub-issue checklist.
-- [ ] Create focused sub-issues for each independently deliverable slice.
-- [ ] Attach every issue in the pack to the milestone.
-- [ ] Attach sub-issues to the parent with GitHub's sub-issue relationship and
-      keep explicit links in the bodies.
-- [ ] Preserve existing assignees, labels, milestones, comments, and ownership
-      when updating existing issues.
-- [ ] Report the milestone, parent issue, sub-issues, and labels back to the
-      user.
-
-## Validation
-
-Use `gh` to verify the hierarchy and grouping after editing:
-
-```bash
-gh issue list --milestone "<milestone>" \
-  --json number,title,state,labels,milestone,url
-gh issue view <parent-number> \
-  --json number,title,body,state,labels,milestone,url
-```
-
-If sub-issue attachment used the GraphQL API or the GitHub UI, re-open the
-parent issue and confirm that GitHub shows the child relationship, not only a
-markdown link.
+Full workflow: [workflows/issues.md](../workflows/issues.md).

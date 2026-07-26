@@ -20,8 +20,9 @@ Agents push a coherent change, then burn a full remote cycle on:
 - Running heavy local product gates (`task check`, `task ci:pr`) instead of
   pushing and letting GitHub Actions validate
 
-These show up in `.stats/ai-agent` as waste-flagged PRs with early cancelled or
-failed Verify runs, or as duplicated local+remote validation time.
+These show up in Nook Workbench `stats/ai-agent` records as waste-flagged PRs
+with early cancelled or failed Verify runs, or as duplicated local+remote
+validation time.
 
 ## Preferred Pattern
 
@@ -73,8 +74,8 @@ Applies to:
 
 Does not apply to:
 
-- Verified one-file stats-only PRs under `.stats/ai-agent/**` or
-  `.stats/main-build/**`.
+- Workbench issue, worklog, and statistics commits, which are not Nook product
+  changes or Nook PRs.
 - Read-only / question-only sessions with no commits.
 
 ## Examples
@@ -100,5 +101,5 @@ Does not apply to:
 ## Validation
 
 A first Verify attempt should not fail solely on Prettier, rustfmt, or the UI
-demo contract. If `.stats/ai-agent` still flags those as waste, tighten this card
-and the coding-bro pre-push section in the same task.
+demo contract. If Workbench `stats/ai-agent` records still flag those as waste,
+tighten this card and the coding-bro pre-push section in the same task.

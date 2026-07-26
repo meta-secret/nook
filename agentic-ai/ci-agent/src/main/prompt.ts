@@ -3,32 +3,14 @@ import { join } from "node:path";
 
 import type { CiAgentConfig } from "./config.js";
 
-/** Build the task body from AGENT_PROMPT or issue env vars. */
+/** Build the task body from the explicit workflow prompt. */
 export function resolveAgentTask(): string {
   const prompt = process.env.AGENT_PROMPT?.trim();
   if (prompt) {
     return prompt;
   }
 
-  const number = process.env.AGENT_ISSUE_NUMBER?.trim();
-  const title = process.env.AGENT_ISSUE_TITLE?.trim() ?? "";
-  const body = process.env.AGENT_ISSUE_BODY?.trim() ?? "";
-  const url = process.env.AGENT_ISSUE_URL?.trim() ?? "";
-
-  if (!number && !title && !body) {
-    throw new Error(
-      "AGENT_PROMPT or AGENT_ISSUE_NUMBER/TITLE/BODY is required for implement",
-    );
-  }
-
-  return [
-    number ? `GitHub issue #${number}: ${title}` : title ? `Task: ${title}` : "GitHub issue",
-    url ? `URL: ${url}` : null,
-    "",
-    body || "(no issue body)",
-  ]
-    .filter((line): line is string => line !== null)
-    .join("\n");
+  throw new Error("AGENT_PROMPT is required for implement");
 }
 
 export async function loadPrompt(config: CiAgentConfig): Promise<string> {

@@ -13,22 +13,23 @@ free-form task diary.
    retrigger, and merge attempt as it happens. Record failed and cancelled work,
    not only successful work.
 3. Squash-merge the implementation PR through the normal readiness workflow.
-4. Create `.stats/ai-agent/<pr-number>.yaml` from current `main` after the
-   implementation PR is merged. Include the repository test inventory for that
-   merged head. Do this immediately; do not wait for the post-merge Main
-   workflow or deployment.
+4. Create `stats/ai-agent/<pr-number>.yaml` for
+   [`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench)
+   from current Nook `main` after the implementation PR is merged. Include the
+   repository test inventory for that merged head. Do this immediately; do not
+   wait for the post-merge Main workflow or deployment.
 5. Compare the completed record with the one or two most recent comparable
    non-stats PR records. Record the comparison and a waste assessment in the
    YAML. When fewer records exist, compare all available records and state that
    the baseline is incomplete.
-6. Publish only that YAML file in a new stats-only PR and squash-merge it
-   immediately using the exception below.
+6. Publish that YAML directly to Workbench `main` as one immutable commit with
+   `.github/scripts/workbench-publish.cjs`. Do not create a Nook branch or PR.
 7. If the analysis finds an actionable regression or waste, open a separate
    normal build-performance PR and own it through validation and squash merge.
-   Never mix build or workflow changes into the stats-only PR.
+   Never mix build or workflow changes into the statistics commit.
 
-Stats-only PRs do not produce another statistics record. This terminates the
-workflow instead of creating stats about stats.
+Workbench statistics commits do not run Nook product workflows or produce
+another Nook statistics record.
 
 ## What to measure
 
@@ -67,9 +68,10 @@ The implementation PR's `mergedAt` is the terminal measurement boundary. Only
 record later deployment or live-verification work when the user explicitly made
 that work part of the assignment; do not extend ordinary task ownership to Main.
 Completed Main attempts are measured separately and automatically under
-`.stats/main-build/**`; see [main-build-statistics.md](main-build-statistics.md).
-Those generated stats-only PRs neither extend the source agent's elapsed time nor
-create another AI-agent statistics record.
+`stats/main-build/**` in Workbench; see
+[main-build-statistics.md](main-build-statistics.md). Those generated commits
+neither extend the source agent's elapsed time nor create another AI-agent
+statistics record.
 
 Never record secrets, credentials, environment values, vault data, raw logs, or
 prompt/chat contents. Commands must be redacted if an argument contains secret
@@ -271,8 +273,9 @@ count. Keep incomplete telemetry with its warnings instead of inventing zeros.
 
 Choose the newest one or two records with a similar change surface and gate set
 (for example docs-only, Rust/domain, web, browser-flow, extension, or CI/build).
-Do not use stats-only PRs as baselines. Record `baseline_quality: weak` and the
-reason in `baseline_note` when no genuinely comparable record exists.
+Do not use historical bookkeeping-only Nook PRs as baselines. Record
+`baseline_quality: weak` and the reason in `baseline_note` when no genuinely
+comparable record exists.
 
 Treat a metric as a performance regression when it is both:
 
@@ -298,31 +301,33 @@ normal PR that implements, validates, and lands it. An unavoidable scope
 increase or external outage may be marked non-actionable only with specific
 evidence in `findings`; do not use a vague “this PR was larger” rationale.
 
-## Stats-only PR exception
+## Workbench publication contract
 
-A manual AI-agent stats-only PR is valid only when its diff contains exactly one
-file matching `.stats/ai-agent/<source-pr-number>.yaml`, and that source PR is
-already merged. The trusted Main collector has a parallel one-file exception for
-`.stats/main-build/<run-id>-attempt-<run-attempt>.yaml`, defined in
+An AI-agent record is valid only when it contains one completed source PR and
+its filename is `stats/ai-agent/<source-pr-number>.yaml`. The source Nook PR must
+already be merged. The trusted Main collector publishes the parallel
+`stats/main-build/<run-id>-attempt-<run-attempt>.yaml` record defined in
 [main-build-statistics.md](main-build-statistics.md).
-For such a PR:
+
+Before publishing:
 
 - do not run local product checks or tests;
-- do not request Codex or external review;
+- do not create a Nook branch or PR;
 - do not wait for repository-owned checks or deployments;
 - verify the YAML parses, the filename matches `source_pr.number`, the summary
   matches the detailed events, `test_inventory.total` equals the sum of
   `by_type`, `test_inventory.head_sha` matches `source_pr.head_sha`, and the
   comparison/waste assessment is complete;
-- squash-merge immediately, using the repository's authorized ruleset/admin
-  bypass when GitHub expects a normally required check.
+- publish with:
 
-An invalid stats-only diff (for example multiple records or a filename/source PR
-mismatch) must be corrected to the exact one-file shape before merge; it is
-never eligible for a bypass merely because `.stats/**` skips product checks.
-Build, workflow, or product changes belong in a separate normal PR and cause the
-normal pipeline to run. The squash-merge rule still has no exception.
+  ```bash
+  node .github/scripts/workbench-publish.cjs \
+    /absolute/path/to/<source-pr>.yaml \
+    stats/ai-agent/<source-pr>.yaml \
+    "stats: record Nook PR <source-pr>"
+  ```
 
-The PR and main product pipelines ignore `.stats/**`, so publishing the record
-does not create an empty required validation cycle and merging it does not run
-the full main pipeline.
+An invalid record (for example a filename/source PR mismatch or inconsistent
+derived summary) must be corrected before publication. Build, workflow, or
+product changes belong in a separate normal Nook PR. Re-open the Workbench file
+on `main` and validate it before handoff.
