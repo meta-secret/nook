@@ -3,8 +3,8 @@ version: '3'
 vars:
   HIVE_DIR: ..
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
-  HIVE_TEST_IMAGE: '{{default "nook-hive-test:local" .HIVE_TEST_IMAGE}}'
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
+  HIVE_TEST_RUNTIME_IMAGE: rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
   NOOK_APP_CONTEXT: ../../nook-app
 
 tasks:
@@ -64,6 +64,61 @@ tasks:
         "${command[@]}"
         BASH
 
+  verify:
+    desc: Run Hive Clippy and behavior tests concurrently inside BuildKit.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        verified="$(mktemp -d)"
+        cleanup() {
+          rm -rf "$verified"
+        }
+        trap cleanup EXIT
+        command=(docker buildx build
+          --platform linux/amd64
+          --target verify-export
+          --output "type=local,dest=$verified")
+        if [ -n "${HIVE_CACHE_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        if [ -n "${HIVE_CACHE_TO:-}" ]; then
+          command+=(--cache-to "$HIVE_CACHE_TO")
+        fi
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
+        command+=(
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --file hive/Dockerfile
+          .)
+        "${command[@]}"
+        test -f "$verified/hive-check-passed"
+        test -n "$(find "$verified/hive-tests" -type f -print -quit)"
+        test_kib="$(du -sk "$verified/hive-tests" | awk '{print $1}')"
+        if [ "$test_kib" -gt 524288 ]; then
+          echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
+          exit 1
+        fi
+        test_environment=()
+        if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]; then
+          : "${HIVE_NEO4J_TEST_PASSWORD:?HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI}"
+          test_environment+=(
+            -e "HIVE_NEO4J_TEST_URI"
+            -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
+            -e "HIVE_NEO4J_TEST_PASSWORD")
+        fi
+        docker run --rm \
+          --platform linux/amd64 \
+          --network host \
+          --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
+          "${test_environment[@]}" \
+          "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
+          bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
+        BASH
+
   build:
     desc: Build the Hive worker in its pinned builder image.
     dir: '{{.HIVE_DIR}}'
@@ -84,11 +139,15 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
+        compiled="$(mktemp -d)"
+        cleanup() {
+          rm -rf "$compiled"
+        }
+        trap cleanup EXIT
         command=(docker buildx build
           --platform linux/amd64
-          --target test-runner
-          --load
-          --tag "{{.HIVE_TEST_IMAGE}}")
+          --target test-export
+          --output "type=local,dest=$compiled")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
@@ -104,25 +163,31 @@ tasks:
           --file hive/Dockerfile
           .)
         "${command[@]}"
-        BASH
-      - |
-        bash <<'BASH'
-        set -euo pipefail
-        command=(docker run --rm
-          --network host
-          -e HIVE_NEO4J_TEST_URI
-          -e HIVE_NEO4J_TEST_USERNAME
-          -e HIVE_NEO4J_TEST_PASSWORD)
-        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
-          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
-          command+=(--mount "type=bind,src=$SCCACHE_REDIS_PASSWORD_FILE,dst=/run/secrets/sccache_redis_password,readonly")
+        test -n "$(find "$compiled/hive-tests" -type f -print -quit)"
+        test_kib="$(du -sk "$compiled/hive-tests" | awk '{print $1}')"
+        if [ "$test_kib" -gt 524288 ]; then
+          echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
+          exit 1
         fi
-        command+=("{{.HIVE_TEST_IMAGE}}")
-        "${command[@]}"
+        test_environment=()
+        if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]; then
+          : "${HIVE_NEO4J_TEST_PASSWORD:?HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI}"
+          test_environment+=(
+            -e "HIVE_NEO4J_TEST_URI"
+            -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
+            -e "HIVE_NEO4J_TEST_PASSWORD")
+        fi
+        docker run --rm \
+          --platform linux/amd64 \
+          --network host \
+          --mount "type=bind,src=$compiled/hive-tests,dst=/tests,readonly" \
+          "${test_environment[@]}" \
+          "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
+          bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
 
   cache:publish:
-    desc: Publish the already-verified Hive BuildKit graph.
+    desc: Publish the manifest-keyed Hive dependency graph after verification.
     dir: '{{.HIVE_DIR}}'
     preconditions:
       - sh: test -n "${HIVE_CACHE_TO:-}"
@@ -133,7 +198,7 @@ tasks:
         set -euo pipefail
         command=(docker buildx build
           --platform linux/amd64
-          --target test-runner
+          --target dependencies
           --output type=cacheonly
           --cache-to "$HIVE_CACHE_TO")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then

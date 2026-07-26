@@ -73,29 +73,25 @@ RUN mkdir -p lace/src hive/src \
     && touch lace/src/lib.rs hive/src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM toolchain AS dependencies
-COPY --from=chef-planner /build/recipe.json recipe.json
+FROM toolchain AS fetched-dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-# Keep downloads, chef cooking, and the real-lock compiler profiles in separate
-# manifest-keyed layers. cargo-chef rewrites workspace versions, so the explicit
-# real-lock warm-ups are required for Clippy/tests and the release binary to
-# reuse compiled dependencies (the same boundary used by nook-app).
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo chef cook --recipe-path recipe.json \
-    && nook-sccache-report hive-chef
-RUN cargo fetch --locked
 RUN mkdir -p lace/src hive/src \
-    && touch lace/src/lib.rs hive/src/main.rs
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo build --locked -p hive --all-targets \
-    && nook-sccache-report hive-debug-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo build --locked --release -p hive \
-    && nook-sccache-report hive-release-dependencies
+    && touch lace/src/lib.rs hive/src/lib.rs hive/src/main.rs \
+    && cargo fetch --locked
 
-FROM dependencies AS source
+# Production image builds use a release-profile cargo-chef layer. Verification
+# deliberately branches before this cook: Redis already supplies compiler
+# objects, while waiting for a dummy cook and then compiling the real Clippy/test
+# graphs serializes redundant Cargo work on every cold PR runner.
+FROM fetched-dependencies AS dependencies
+COPY --from=chef-planner /build/recipe.json recipe.json
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo chef cook --release --recipe-path recipe.json \
+    && nook-sccache-report hive-chef-release
+
+FROM fetched-dependencies AS source
 COPY lace/src lace/src
 COPY hive/src hive/src
 RUN find lace/src hive/src -type f -exec touch {} +
@@ -104,7 +100,8 @@ FROM source AS check
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo fmt --all -- --check \
     && cargo clippy --locked -p hive --all-targets -- -D warnings \
-    && nook-sccache-report hive-clippy
+    && nook-sccache-report hive-clippy \
+    && install -D /dev/null /opt/nook/hive-check-passed
 
 FROM toolchain AS formatter
 COPY Cargo.toml Cargo.lock ./
@@ -114,10 +111,43 @@ COPY lace/src lace/src
 COPY hive/src hive/src
 RUN cargo fmt --all
 
-FROM check AS test-runner
-CMD ["bash", "-c", "cargo test --locked -p hive && nook-sccache-report hive-test"]
+FROM source AS test-compile
 
-FROM source AS builder
+# Compile tests inside BuildKit, but export only the executable artifacts. The
+# Taskfile runs them in the pinned Rust base with normal container host
+# networking, so Neo4j remains reachable without loading Cargo target layers.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    mkdir -p /opt/nook/hive-tests \
+    && cargo test --locked -p hive --no-run --message-format=json \
+      | tee /tmp/hive-test-artifacts.jsonl \
+    && jq -r \
+      'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \
+      /tmp/hive-test-artifacts.jsonl \
+      | sort -u \
+      | while IFS= read -r executable; do \
+          destination="/opt/nook/hive-tests/$(basename "$executable")"; \
+          install -m 0755 "$executable" "$destination"; \
+          strip --strip-unneeded "$destination"; \
+        done \
+    && test -n "$(find /opt/nook/hive-tests -type f -perm /111 -print -quit)" \
+    && nook-sccache-report hive-test-compile
+
+FROM scratch AS test-export
+
+COPY --from=test-compile /opt/nook/hive-tests /hive-tests
+
+FROM scratch AS verify-export
+
+COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
+COPY --from=test-export /hive-tests /hive-tests
+
+FROM dependencies AS release-source
+COPY lace/src lace/src
+COPY hive/src hive/src
+RUN find lace/src hive/src -type f -exec touch {} +
+
+FROM release-source AS builder
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo build --locked --release -p hive \
     && nook-sccache-report hive-release

@@ -96,7 +96,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
 | Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations from a broker-owned checkout | Arbitrary GitHub API access by Codex or task-controlled Git metadata |
 | Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
-| Reaper controller | Dedicated runc Pod | Validates Hive Pod identity and deletes only labeled Hive Pods | Codex auth or task execution |
+| Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker egress policy | Codex auth or task execution |
 | Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
@@ -331,10 +331,16 @@ The Pod disables automatic service-account token mounting. Its service account
 can patch only the Codex-auth Secret, and that projected token is mounted only
 by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
 controller with an opaque credential. The controller has a distinct workload
-identity restricted to `get`/`delete` labeled Hive Pods. The controller reloads
-both its projected Kubernetes token and the opaque reaper credential for every
-request, so normal token projection and Secret rotation do not require a
-controller restart.
+identity restricted to `get`/`delete` labeled Hive Pods, reading only the
+Neo4j Service and Endpoints, and patching only the worker egress NetworkPolicy.
+It continuously reconciles the post-DNAT Neo4j Pod address, so an automatic
+StatefulSet or kubelet replacement cannot leave workers pinned to a stale
+endpoint. While Neo4j is unready, it removes the stale Pod address and retains
+only the stable Service address. Resource-version preconditions and bounded
+conflict retries prevent reconciliation from overwriting a concurrent policy
+change. The controller reloads both its projected Kubernetes token and the
+opaque reaper credential for every request, so normal token projection and
+Secret rotation do not require a controller restart.
 
 Embedded Codex validation commands produce typed, secret-sanitized JSONL events
 outside the repository checkout. The publication broker reads those events
@@ -359,10 +365,17 @@ may use:
 
 - cluster DNS;
 - TLS Bolt to Neo4j on port 7687;
-- the Kubernetes API service only for auth persistence and the dedicated
-  reaper controller;
 - external TCP 443 for Codex, GitHub, and HTTPS repository access; and
 - external TCP 22 for task-authorized Git/SSH operations.
+
+Only Hive worker Pods may reach the Kubernetes API service and its post-DNAT
+endpoint, for the auth-persistence sidecar. The token-free Workbench dispatcher
+has no API-server route. The dedicated lifecycle controller has a separate
+API-server policy for its narrow Pod-deletion and Neo4j-endpoint reconciliation
+identity. k0s binds that post-DNAT endpoint to the stable host loopback address
+`10.201.0.1`; policy permits only `10.201.0.1/32` on port `6443`, avoiding a
+bootstrap dependency on discovering an endpoint through an already-stale
+allowlist.
 
 Private, loopback, link-local, multicast, and cluster address ranges are
 excluded from general external egress. Neo4j Bolt and HTTP are never exposed on
@@ -461,7 +474,10 @@ task infra:kvm:verify
 task infra:k0s:install
 task infra:k0s:status
 task infra:k0s:diagnose
+task infra:services:diagnose
+task infra:services:repair-network
 task infra:kata:install
+task infra:kata:diagnose
 task infra:kata:verify
 task infra:neo4j:deploy
 task infra:hive:deploy
@@ -474,10 +490,31 @@ and verifies k0s/Kata, deploys persistent Neo4j, builds and publishes the exact
 Hive image to the loopback registry, synchronizes credentials, deploys the warm
 pool, and verifies Pod replacement.
 
-The encryption-provider file remains `root`-owned with group-readable access
-limited to the dedicated `kube-apiserver` OS user. If the API server cannot
-start, `task infra:k0s:diagnose` emits bounded service, listener, permission,
-and journal evidence without reading secret contents.
+The encryption-provider file remains `root:root 0600`; a read-only POSIX ACL
+grants the dedicated `kube-apiserver` OS user access without granting ownership
+or write authority. If the API server cannot start,
+`task infra:k0s:diagnose` emits bounded service, listener, permission, ACL, and
+journal evidence without reading secret contents.
+
+The host firewall keeps its default-drop input and forward policies. k0s adds
+only persisted rules for traffic sourced from the cluster Pod CIDR
+`10.244.0.0/16` arriving on the kube-router `kube-bridge`: local control-plane access on TCP
+`6443`/`8132`, kubelet access on `10250`, and Pod egress. Kube-router
+masquerades traffic leaving the cluster so CoreDNS and intentionally allowlisted
+worker egress receive replies through the node. These rules do not expose any
+control-plane port on the public interface. The installer uses a temporary
+owned rule while k0s starts and restores the previous live and persisted
+firewall state if installation errors, exits, or receives a termination
+signal. The rollback transaction flushes and recreates both managed host chains
+from a complete ordered snapshot, preserving unrelated rule positions. It
+records the existing CNI state before restarting k0s, so a controller rewrite
+cannot hide an `ipMasq` migration; migrations automatically replace existing
+Hive, dispatcher, and lifecycle-controller Pod sandboxes. The API server's
+stable loopback address is `10.201.0.1`, and the worker egress template uses its
+exact `/32` rather than a deployment-time endpoint lookup. The
+`nook-k0s-api-address.service` systemd unit assigns the `/32` before k0s starts
+and is enabled across reboots; installation verifies both unit state and the
+live `lo` address.
 
 Credential synchronization requires explicit local file inputs:
 
@@ -491,7 +528,9 @@ security-sensitive deployment action and requires immediate user confirmation
 before `task infra:deploy` or `task infra:hive:deploy` is invoked.
 
 Destructive k0s uninstall requires `K0S_UNINSTALL_FORCE=1` and preserves
-encrypted Neo4j recovery material by default.
+encrypted Neo4j recovery material by default. It removes the owned live k0s
+firewall rules, persisted fragment, and nftables include without reloading the
+global ruleset.
 
 ## 11. Source map
 

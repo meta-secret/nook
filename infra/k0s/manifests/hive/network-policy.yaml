@@ -41,10 +41,12 @@ spec:
           port: 7687
     - to:
         - ipBlock:
-            cidr: 10.96.0.1/32
+            cidr: HIVE_NEO4J_SERVICE_CIDR
+        - ipBlock:
+            cidr: HIVE_NEO4J_ENDPOINT_CIDR
       ports:
         - protocol: TCP
-          port: 443
+          port: 7687
     - to:
         - podSelector:
             matchLabels:
@@ -68,6 +70,31 @@ spec:
           port: 443
         - protocol: TCP
           port: 22
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hive-worker-kubernetes-api
+  namespace: hive-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: HIVE_K0S_API_CIDR
+      ports:
+        - protocol: TCP
+          port: 6443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -105,3 +132,9 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    - to:
+        - ipBlock:
+            cidr: HIVE_K0S_API_CIDR
+      ports:
+        - protocol: TCP
+          port: 6443

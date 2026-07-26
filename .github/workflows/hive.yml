@@ -9,6 +9,10 @@ on:
     paths:
       - .github/workflows/hive.yml
       - .github/scripts/hive-manifest-contract.rb
+      - .github/scripts/hive-reaper-controller-test.py
+      - .github/scripts/k0s-firewall-rollback-test.py
+      - .github/scripts/k0s-cni-migration-test.py
+      - .github/scripts/services-network-repair-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
@@ -18,6 +22,10 @@ on:
     paths:
       - .github/workflows/hive.yml
       - .github/scripts/hive-manifest-contract.rb
+      - .github/scripts/hive-reaper-controller-test.py
+      - .github/scripts/k0s-firewall-rollback-test.py
+      - .github/scripts/k0s-cni-migration-test.py
+      - .github/scripts/services-network-repair-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
@@ -80,15 +88,12 @@ jobs:
           task --list | grep -q 'infra:hive:deploy'
           task infra:k0s:manifests:check
 
-      - name: Hive format and Clippy
-        run: task hive:check
-
-      - name: Hive behavior tests
+      - name: Hive Rust verification
         env:
           HIVE_NEO4J_TEST_URI: 127.0.0.1:7687
           HIVE_NEO4J_TEST_USERNAME: neo4j
           HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
-        run: task hive:test
+        run: task hive:verify
 
       - name: Publish verified Hive cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -8,7 +8,10 @@ use hive::coordinator::run_coordinator;
 use hive::dispatcher::run_workbench_dispatcher;
 use hive::model::{AgentId, EnqueueTask, TaskId};
 use hive::publication::{GitHubRequest, run_publication_broker, run_publication_client};
-use hive::{CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig};
+use hive::{
+    CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
+    install_rustls_crypto_provider,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "hive", about = "Run isolated Nook coding agents")]
@@ -196,6 +199,7 @@ enum GitHubAction {
 }
 
 fn main() -> anyhow::Result<()> {
+    install_rustls_crypto_provider()?;
     arg0_dispatch_or_else(run_main)
 }
 
@@ -346,5 +350,19 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 })
                 .await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::install_rustls_crypto_provider;
+
+    #[test]
+    fn production_tls_crypto_provider_is_available() {
+        install_rustls_crypto_provider().expect("AWS-LC provider should install");
+
+        let _client = rustls::ClientConfig::builder()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
     }
 }

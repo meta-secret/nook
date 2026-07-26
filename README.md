@@ -374,7 +374,13 @@ task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
 task infra:deploy           # deploy Redis/registry plus k0s, Kata, Neo4j, and Hive
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
+task infra:k0s:diagnose     # bounded k0s, CNI, firewall, and control-plane evidence
+task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migration
 task infra:kata:verify      # prove a Pod is using the Kata guest kernel
+task infra:kata:diagnose    # bounded Kata installer and runtime evidence
+task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
+task infra:services:diagnose # bounded Docker and Compose network evidence
+task infra:services:repair-network # recover Docker 26 chains without daemon restart
 task hive:check             # format-check and lint the Rust Hive worker
 task hive:test              # run Hive lease/DAG behavior tests
 task infra:status           # inspect the remote infrastructure stack
