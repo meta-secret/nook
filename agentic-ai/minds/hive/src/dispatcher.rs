@@ -63,7 +63,7 @@ async fn dispatch_once<S: TaskStore>(store: &S, contents_url: &str) -> anyhow::R
             .await?,
         )
         .context("decode current Main workflow-run state")?;
-        if !main_run_requires_repair(&run) {
+        if !main_run_requires_repair(&run, &source_commit) {
             continue;
         }
         let task = EnqueueTask {
@@ -107,8 +107,16 @@ fn main_failure_run_id(body: &str) -> Option<u64> {
         .ok()
 }
 
-fn main_run_requires_repair(run: &serde_json::Value) -> bool {
-    run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
+fn main_run_requires_repair(run: &serde_json::Value, source_commit: &str) -> bool {
+    run.get("name").and_then(serde_json::Value::as_str) == Some("Main")
+        && run.get("event").and_then(serde_json::Value::as_str) == Some("push")
+        && run.get("head_branch").and_then(serde_json::Value::as_str) == Some("main")
+        && run.get("head_sha").and_then(serde_json::Value::as_str) == Some(source_commit)
+        && run
+            .pointer("/repository/full_name")
+            .and_then(serde_json::Value::as_str)
+            == Some("meta-secret/nook")
+        && run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
         && !matches!(
             run.get("conclusion").and_then(serde_json::Value::as_str),
             Some("success" | "neutral" | "skipped")
@@ -151,6 +159,16 @@ mod tests {
 
     #[test]
     fn recognizes_only_ready_automated_main_incidents() {
+        let source_commit = "0123456789abcdef0123456789abcdef01234567";
+        let failed_main = json!({
+            "name": "Main",
+            "event": "push",
+            "head_branch": "main",
+            "head_sha": source_commit,
+            "repository": {"full_name": "meta-secret/nook"},
+            "status": "completed",
+            "conclusion": "failure"
+        });
         let sha = "abcdef0123456789abcdef0123456789abcdef01";
         assert_eq!(
             main_failure_commit(&format!("main-failure-{sha}.md")).as_deref(),
@@ -167,14 +185,33 @@ mod tests {
             main_failure_run_id("<!-- main-run:123456:attempt:2 -->\n- failed workflow evidence"),
             Some(123456)
         );
-        assert!(main_run_requires_repair(
-            &json!({"status": "completed", "conclusion": "failure"})
+        assert!(main_run_requires_repair(&failed_main, source_commit));
+        assert!(!main_run_requires_repair(
+            &json!({
+                "name": "Main",
+                "event": "push",
+                "head_branch": "main",
+                "head_sha": source_commit,
+                "repository": {"full_name": "meta-secret/nook"},
+                "status": "completed",
+                "conclusion": "success"
+            }),
+            source_commit
         ));
         assert!(!main_run_requires_repair(
-            &json!({"status": "completed", "conclusion": "success"})
+            &json!({
+                "name": "Main",
+                "event": "push",
+                "head_branch": "main",
+                "head_sha": source_commit,
+                "repository": {"full_name": "meta-secret/nook"},
+                "status": "in_progress",
+                "conclusion": null
+            }),
+            source_commit
         ));
-        assert!(!main_run_requires_repair(
-            &json!({"status": "in_progress", "conclusion": null})
-        ));
+        let mut unrelated = failed_main;
+        unrelated["head_sha"] = json!("ffffffffffffffffffffffffffffffffffffffff");
+        assert!(!main_run_requires_repair(&unrelated, source_commit));
     }
 }

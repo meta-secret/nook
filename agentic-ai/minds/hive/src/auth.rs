@@ -79,6 +79,10 @@ impl BrokerExternalAuth {
             serde_json::from_str(&response).map_err(std::io::Error::other)?;
         CodexAuth::from_external_chatgpt_tokens(&response.access_token, &response.account_id, None)
     }
+
+    pub async fn validate(&self) -> std::io::Result<()> {
+        self.request(false).await.map(drop)
+    }
 }
 
 impl ExternalAuth for BrokerExternalAuth {

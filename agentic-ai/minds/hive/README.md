@@ -55,15 +55,18 @@ attempt interrupted without consuming the task's retry budget before rollout.
 
 A one-replica Kata dispatcher reconciles trusted `ready/agent` Workbench Main
 incidents into Neo4j. The failed Main SHA is the idempotency key, so retries do
-not duplicate work. It revalidates the referenced Actions run before enqueueing,
-so a successful rerun makes a stale incident a no-op. A repository-scoped
+not duplicate work. It requires the referenced Actions run to be the exact
+`meta-secret/nook` Main push on `main` at that SHA before enqueueing, so a
+successful rerun makes a stale incident a no-op. A repository-scoped
 GitHub credential lives only in a
 separate publication broker. Codex can request deterministic branch
 publication, PR inspection, targeted review replies and resolution, exact-head
 squash merge, and resulting Main verification, but cannot read the credential
 or invoke arbitrary GitHub APIs. Review, comment, and repair-PR history is
-paginated. A short Git-ref lock serializes the base recheck and merge; stale
-locks self-expire.
+paginated, as are exact-head check runs. Automated-reviewer comments remain
+actionable, outdated threads do not block delivery, and resolution requires the
+task's authenticated reply marker to be visible first. A short Git-ref lock
+serializes the base recheck and merge; stale locks self-expire.
 Before Codex starts, the worker enables that capability only for Main-repair
 tasks and permanently disables it for every other task kind. Publication uses
 a broker-owned private Git checkout populated from the worker's read-only tree;
@@ -83,13 +86,17 @@ linked to the attempt, and commits that artifact in the same Neo4j transaction
 as the terminal result. Main-repair tasks are not terminal until the broker has
 squash-merged their PR and the resulting Main workflow is green. Deterministic
 branches let replacement Pods resume an existing delivery instead of creating
-duplicates.
+duplicates. Binding returns a recovered merge commit to the replacement worker,
+which resumes post-merge Main verification without opening another PR.
 
 The complete Main-repair lifecycle has a six-hour execution bound. Embedded
 Codex validation commands append typed, secret-sanitized local execution events
 outside the repository checkout; the publication broker includes their command
 identity, category, timestamps, duration, outcome, and reason in the immutable
 Workbench statistics record.
+The record is first published at the successful squash-merge boundary and is
+retried idempotently during post-merge verification, completion, and recovered
+binding.
 
 Neo4j requires Bolt TLS. The deployment creates a private CA and
 service certificate, configures the chart with `server.bolt.tls_level=REQUIRED`,

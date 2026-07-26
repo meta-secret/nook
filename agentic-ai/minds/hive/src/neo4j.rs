@@ -686,6 +686,7 @@ impl TaskStore for Neo4jTaskStore {
                      WHERE task.status = 'RUNNING'
                        AND task.lease_owner = $agent_id
                        AND task.lease_token = $lease_token
+                       AND task.lease_until > timestamp()
                        AND attempt.lease_token = $lease_token
                      MERGE (blocker:Task {id: $blocker_id})
                      ON CREATE SET blocker.created_at = timestamp(),
@@ -1341,6 +1342,54 @@ mod tests {
                 .expect("reused exhausted-blocker status"),
             "FAILED"
         );
+
+        let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new());
+        let expired_blocker = task(format!("expired-blocker-{suffix}"), Vec::new());
+        store
+            .enqueue(&expired_block_parent)
+            .await
+            .expect("enqueue expired blocker parent");
+        let expired_block_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim expired blocker parent")
+            .expect("expired blocker parent available");
+        store
+            .graph
+            .run(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     SET task.lease_until = timestamp() - 1",
+                )
+                .param("id", expired_block_parent.id.as_str()),
+            )
+            .await
+            .expect("expire blocker-reporting lease");
+        assert!(
+            !store
+                .block(
+                    &expired_block_claim,
+                    &agent_a,
+                    &expired_blocker,
+                    "stale worker must not mutate dependencies",
+                )
+                .await
+                .expect("reject blocker after lease expiry")
+        );
+        store
+            .graph
+            .run(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     SET task.status = 'FAILED',
+                         task.lease_owner = null,
+                         task.lease_token = null,
+                         task.lease_until = null",
+                )
+                .param("id", expired_block_parent.id.as_str()),
+            )
+            .await
+            .expect("retire expired blocker fixture");
 
         let mut lease_exhausted = task(format!("lease-exhausted-{suffix}"), Vec::new());
         lease_exhausted.max_attempts = 1;

@@ -99,7 +99,7 @@ pub async fn bind_publication_task(
     socket: &Path,
     task: &ClaimedTask,
     enabled: bool,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<PublicationBinding> {
     let response = request(
         socket,
         &GitHubRequest::Bind {
@@ -109,11 +109,25 @@ pub async fn bind_publication_task(
         },
     )
     .await?;
-    response
+    let branch = response
         .get("branch")
         .and_then(Value::as_str)
         .map(str::to_owned)
-        .context("publication broker returned an invalid bind response")
+        .context("publication broker returned an invalid bind response")?;
+    let merge_commit = response
+        .get("merge_commit")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    Ok(PublicationBinding {
+        branch,
+        merge_commit,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationBinding {
+    pub branch: String,
+    pub merge_commit: Option<String>,
 }
 
 pub async fn publication_delivery_verified(socket: &Path) -> anyhow::Result<bool> {
@@ -321,6 +335,9 @@ impl PublicationBroker {
         }
         if candidate.id.starts_with("main-failure-") {
             self.ensure_workbench_plan(&candidate).await?;
+            if recovered_merge_commit.is_some() {
+                self.publish_merged_statistics(&candidate).await?;
+            }
         }
         Ok(json!({
             "branch": candidate.branch,
@@ -441,10 +458,9 @@ impl PublicationBroker {
             .and_then(Value::as_str)
             .context("pull request has no head SHA")?;
         let checks = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/commits/{head}/check-runs?per_page=100"),
-                None,
+            .paginated_api_object_array(
+                &format!("/repos/{REPOSITORY}/commits/{head}/check-runs"),
+                "check_runs",
             )
             .await?;
         let reviews = self
@@ -463,7 +479,7 @@ impl PublicationBroker {
             "mergeable": pull.get("mergeable"),
             "mergeable_state": pull.get("mergeable_state"),
             "head_sha": head,
-            "checks": checks.get("check_runs"),
+            "checks": checks,
             "reviews": reviews,
             "comments": comments,
             "feedback": feedback,
@@ -532,17 +548,12 @@ impl PublicationBroker {
         ) {
             anyhow::bail!("Main moved; update the repair branch and rerun exact-head checks");
         }
-        let checks = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/commits/{head}/check-runs?per_page=100"),
-                None,
+        let check_runs = self
+            .paginated_api_object_array(
+                &format!("/repos/{REPOSITORY}/commits/{head}/check-runs"),
+                "check_runs",
             )
             .await?;
-        let check_runs = checks
-            .get("check_runs")
-            .and_then(Value::as_array)
-            .context("GitHub check-runs response is invalid")?;
         let repository_checks = check_runs
             .iter()
             .filter(|check| {
@@ -565,9 +576,10 @@ impl PublicationBroker {
             .await?
             .as_array()
             .is_some_and(|threads| {
-                threads
-                    .iter()
-                    .any(|thread| thread.get("isResolved").and_then(Value::as_bool) != Some(true))
+                threads.iter().any(|thread| {
+                    thread.get("isResolved").and_then(Value::as_bool) != Some(true)
+                        && thread.get("isOutdated").and_then(Value::as_bool) != Some(true)
+                })
             });
         if unresolved {
             anyhow::bail!("pull request still has unresolved review threads");
@@ -608,6 +620,12 @@ impl PublicationBroker {
             .and_then(Value::as_str)
             .context("merged pull request has no merge commit SHA")?;
         *self.merged_commit.lock().await = Some(merge_commit.to_owned());
+        if let Err(error) = self.publish_merged_statistics(&task).await {
+            eprintln!(
+                "Hive merged PR #{number}, but immediate statistics publication failed and will \
+                 be retried during post-merge recovery: {error:#}"
+            );
+        }
         Ok(merged)
     }
 
@@ -722,7 +740,13 @@ impl PublicationBroker {
             "/graphql",
             Some(json!({
                 "query": "mutation($thread:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$thread,body:$body}){comment{id url}}}",
-                "variables": { "thread": thread_id, "body": body },
+                "variables": {
+                    "thread": thread_id,
+                    "body": format!(
+                        "<!-- hive-thread-reply:{thread_id} -->\n{}",
+                        body.trim()
+                    ),
+                },
             })),
         )
         .await
@@ -739,18 +763,10 @@ impl PublicationBroker {
             .and_then(Value::as_u64)
             .context("pull request has no number")?;
         let reviews = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/pulls/{number}/reviews"))
             .await?;
         let comments = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/issues/{number}/comments?per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/issues/{number}/comments"))
             .await?;
         if !review_feedback(&pull, &reviews, &comments)
             .iter()
@@ -776,6 +792,7 @@ impl PublicationBroker {
             anyhow::bail!("a valid review thread id is required");
         }
         self.require_bound_review_thread(thread_id).await?;
+        self.require_bound_thread_reply(thread_id).await?;
         self.api(
             "POST",
             "/graphql",
@@ -790,6 +807,10 @@ impl PublicationBroker {
     async fn verify_main(&self, merge_commit: &str) -> anyhow::Result<Value> {
         if self.merged_commit.lock().await.as_deref() != Some(merge_commit) {
             anyhow::bail!("Main verification must target the merge produced by this task");
+        }
+        let task = self.bound_task().await?;
+        if task.id.starts_with("main-failure-") {
+            self.publish_merged_statistics(&task).await?;
         }
         let runs = self
             .api(
@@ -1282,6 +1303,18 @@ impl PublicationBroker {
         Ok(())
     }
 
+    async fn publish_merged_statistics(&self, task: &BoundTask) -> anyhow::Result<()> {
+        let pulls = self.task_pulls(&publication_branch_name(&task.id)).await?;
+        let pull = pulls
+            .iter()
+            .filter(|pull| pull.get("merged_at").is_some_and(|value| !value.is_null()))
+            .max_by_key(|pull| pull.get("number").and_then(Value::as_u64).unwrap_or(0))
+            .context("Main repair has no merged pull request for statistics")?;
+        let measured_at = utc_timestamp().await?;
+        self.publish_agent_statistics(task, pull, &measured_at)
+            .await
+    }
+
     async fn local_executions(&self) -> anyhow::Result<Vec<LocalExecutionEvent>> {
         let path = self.source_workspace.join(".hive-local-executions.jsonl");
         let contents = match tokio::fs::read_to_string(&path).await {
@@ -1468,7 +1501,7 @@ impl PublicationBroker {
                     "POST",
                     "/graphql",
                     Some(json!({
-                        "query": "query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){nodes{id isResolved comments(last:1){nodes{body url author{login}}}} pageInfo{hasNextPage endCursor}}}}}",
+                        "query": "query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){nodes{id isResolved isOutdated comments(last:1){nodes{body url author{login}}}} pageInfo{hasNextPage endCursor}}}}}",
                         "variables": {
                             "owner": "meta-secret",
                             "name": "nook",
@@ -1530,6 +1563,33 @@ impl PublicationBroker {
         Ok(Value::Array(values))
     }
 
+    async fn paginated_api_object_array(
+        &self,
+        path: &str,
+        key: &str,
+    ) -> anyhow::Result<Vec<Value>> {
+        let mut values = Vec::new();
+        for page in 1.. {
+            let separator = if path.contains('?') { '&' } else { '?' };
+            let response = self
+                .api(
+                    "GET",
+                    &format!("{path}{separator}per_page=100&page={page}"),
+                    None,
+                )
+                .await?;
+            let page_values = response
+                .get(key)
+                .and_then(Value::as_array)
+                .with_context(|| format!("GitHub paginated response has no {key} array"))?;
+            values.extend(page_values.iter().cloned());
+            if page_values.len() < 100 {
+                break;
+            }
+        }
+        Ok(values)
+    }
+
     async fn require_bound_review_thread(&self, thread_id: &str) -> anyhow::Result<()> {
         let task = self.bound_task().await?;
         let pull = self.pull_for_branch(&task.branch).await?;
@@ -1550,6 +1610,67 @@ impl PublicationBroker {
             anyhow::bail!("review thread does not belong to this task's pull request");
         }
         Ok(())
+    }
+
+    async fn require_bound_thread_reply(&self, thread_id: &str) -> anyhow::Result<()> {
+        let task = self.bound_task().await?;
+        let pull = self.pull_for_branch(&task.branch).await?;
+        let pull_author = pull
+            .pointer("/user/login")
+            .and_then(Value::as_str)
+            .context("pull request has no author")?;
+        let marker = format!("<!-- hive-thread-reply:{thread_id} -->");
+        let mut cursor: Option<String> = None;
+        loop {
+            let response = self
+                .api(
+                    "POST",
+                    "/graphql",
+                    Some(json!({
+                        "query": "query($thread:ID!,$after:String){node(id:$thread){... on PullRequestReviewThread{comments(first:100,after:$after){nodes{body author{login}} pageInfo{hasNextPage endCursor}}}}}",
+                        "variables": {
+                            "thread": thread_id,
+                            "after": cursor.as_deref(),
+                        }
+                    })),
+                )
+                .await?;
+            if response.get("errors").is_some() {
+                anyhow::bail!("GitHub rejected the review-thread reply query");
+            }
+            let comments = response
+                .pointer("/data/node/comments")
+                .context("GitHub review-thread reply response is invalid")?;
+            let has_reply = comments
+                .get("nodes")
+                .and_then(Value::as_array)
+                .context("GitHub review-thread comments are invalid")?
+                .iter()
+                .any(|comment| {
+                    comment.pointer("/author/login").and_then(Value::as_str) == Some(pull_author)
+                        && comment
+                            .get("body")
+                            .and_then(Value::as_str)
+                            .is_some_and(|body| body.contains(&marker))
+                });
+            if has_reply {
+                return Ok(());
+            }
+            if comments
+                .pointer("/pageInfo/hasNextPage")
+                .and_then(Value::as_bool)
+                != Some(true)
+            {
+                anyhow::bail!("review thread cannot be resolved before the task reply is visible");
+            }
+            cursor = Some(
+                comments
+                    .pointer("/pageInfo/endCursor")
+                    .and_then(Value::as_str)
+                    .context("GitHub review-thread reply page has no end cursor")?
+                    .to_owned(),
+            );
+        }
     }
 
     async fn api(&self, method: &str, path: &str, body: Option<Value>) -> anyhow::Result<Value> {
@@ -1791,11 +1912,11 @@ fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value
         let feedback_id = format!("comment-{id}");
         let body = comment.get("body").and_then(Value::as_str).unwrap_or("");
         let author = comment.pointer("/user/login").and_then(Value::as_str);
-        let automated = author.is_some_and(|login| {
-            login == "github-actions" || login.ends_with("[bot]") || Some(login) == pull_author
+        let bookkeeping = author.is_some_and(|login| {
+            matches!(login, "github-actions" | "github-actions[bot]") || Some(login) == pull_author
         });
         let actionable =
-            !automated && !body.trim().is_empty() && !body.contains("<!-- hive-feedback:");
+            !bookkeeping && !body.trim().is_empty() && !body.contains("<!-- hive-feedback:");
         feedback.push(json!({
             "id": feedback_id,
             "kind": "comment",
@@ -2078,6 +2199,36 @@ mod tests {
         let feedback = review_feedback(&pull, &reviews, &json!([]));
         assert_eq!(
             feedback[0].get("actionable").and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn automated_reviewer_comments_remain_actionable() {
+        let pull = json!({
+            "user": {"login": "nook-hive"},
+            "head": {"sha": "current-head"}
+        });
+        let comments = json!([
+            {
+                "id": 11,
+                "body": "Please repair this security boundary.",
+                "user": {"login": "security-reviewer[bot]"}
+            },
+            {
+                "id": 12,
+                "body": "Automated workflow bookkeeping.",
+                "user": {"login": "github-actions[bot]"}
+            }
+        ]);
+        let feedback = review_feedback(&pull, &json!([]), &comments);
+
+        assert_eq!(
+            feedback[0].get("actionable").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            feedback[1].get("actionable").and_then(Value::as_bool),
             Some(false)
         );
     }

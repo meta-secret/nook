@@ -89,7 +89,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Component | Runs where | Owns | Must not own |
 | --- | --- | --- | --- |
 | Main failure handoff | GitHub Actions | Converts an unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA | Agent execution, raw failure logs, deployment |
-| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, revalidates the referenced Main run, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
+| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
 | Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, terminal result, dependency patch integration | Neo4j/GitHub/Codex credential files |
@@ -210,6 +210,10 @@ sequenceDiagram
 The worker creates a sentinel with create-once semantics before claiming. If
 the worker container restarts in the same Pod, it refuses to claim again and
 the reaper deletes the Pod. This preserves the one-task-per-microVM invariant.
+While idle, the worker validates its already-established auth channel before
+every claim attempt. A restarted or failed auth sidecar therefore removes
+readiness and triggers whole-Pod replacement before any task attempt is
+consumed.
 The task lifecycle has a six-hour bound so diagnosis, implementation, review,
 merge, and resulting Main verification remain one durable unit of work.
 
@@ -240,9 +244,11 @@ flowchart LR
   worklog --> complete["Neo4j task COMPLETED"]
 ```
 
-Before enqueueing, the dispatcher fetches the referenced workflow run again.
-A later successful rerun therefore turns a stale Workbench incident into a
-no-op instead of spending an isolated worker on an already-recovered revision.
+Before enqueueing, the dispatcher fetches the referenced workflow run again and
+requires repository `meta-secret/nook`, workflow `Main`, push event, branch
+`main`, and the incident's exact source SHA. A later successful rerun therefore
+turns a stale Workbench incident into a no-op instead of spending an isolated
+worker on an already-recovered revision.
 
 One logical Hive task owns the entire repair. Opening a PR is intermediate
 state, not completion. The task must:
@@ -264,18 +270,29 @@ The broker allows a successful descendant Main run to verify the merge when the
 exact merge-commit run was coalesced or cancelled, but only after GitHub proves
 the successful head contains the merge commit.
 
+The successful squash-merge boundary immediately publishes the immutable agent
+statistics record. Publication is idempotent and is retried by `verify-main`,
+completion, and replacement-Pod binding, so a red post-merge Main run cannot
+erase the already-completed PR measurement.
+
 ### Publication recovery
 
 The base branch is deterministic: `codex/hive-<task-id>`. If a prior repair PR
 is closed or merged but the durable task still requires work, the broker creates
 `-g2`, `-g3`, and later generations instead of trying to reuse a closed PR.
 Replacement Pods discover the latest generation and merged commit from GitHub.
+The bind response carries that recovered merge commit into the worker prompt,
+which resumes `verify-main` without creating a replacement PR.
 
 The GitHub token is used only by the publication broker. Its typed socket API
 permits task binding, publish/update, inspection, targeted replies, thread
 resolution, exact-head squash merge, Main verification, and bounded Workbench
 file updates. Review threads, submitted reviews, comments, and prior repair PR
 history are cursor/page traversed rather than truncated at the first API page.
+The merge gate evaluates every repository check run, ignores only outdated
+inline threads, treats automated-reviewer comments as actionable, and requires
+an authenticated task reply marker to be visible before a thread can be
+resolved.
 Codex cannot read the token or issue arbitrary authenticated requests.
 
 The worker binds this API before repository execution. Main-repair tasks enable
@@ -324,6 +341,11 @@ outside the repository checkout. The publication broker reads those events
 through its read-only workspace mount and records their category, timestamps,
 duration, outcome, and bounded command identity in the immutable Workbench
 statistics record.
+
+Completion, failure, release, blocker discovery, and heartbeat mutations are
+lease-token guarded. Blocker discovery additionally requires an unexpired
+lease, preventing a stale worker from changing dependencies after replacement
+has become eligible to claim the task.
 
 Secrets are encrypted at rest by the k0s API server with a host-generated
 AES-GCM encryption provider. Neo4j recovery material is authenticated and

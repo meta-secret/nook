@@ -15,7 +15,9 @@ use tokio::sync::watch;
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, TerminalResult, TerminalStatus};
-use crate::publication::{bind_publication_task, publication_delivery_verified};
+use crate::publication::{
+    PublicationBinding, bind_publication_task, publication_delivery_verified,
+};
 use crate::store::TaskStore;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -67,6 +69,17 @@ impl<S: TaskStore> Worker<S> {
             .context("failed to publish worker readiness")?;
 
         let task = loop {
+            if let Err(error) = external_auth.validate().await {
+                let _ =
+                    tokio::fs::remove_file(self.config.workspace.join(".hive-worker-ready")).await;
+                tokio::fs::write(&lifecycle_marker, b"auth-channel-unavailable")
+                    .await
+                    .context("mark failed auth channel for Pod replacement")?;
+                return Err(anyhow!(
+                    "Hive auth channel failed before a task claim; replacing the Pod without \
+                     consuming an attempt: {error}"
+                ));
+            }
             if let Some(task) = self
                 .store
                 .claim(&self.config.agent_id, self.config.lease_seconds)
@@ -78,14 +91,14 @@ impl<S: TaskStore> Worker<S> {
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
-        let publication_branch = match bind_publication_task(
+        let publication_binding = match bind_publication_task(
             &self.config.publication_socket,
             &task,
             task.kind == "main-repair",
         )
         .await
         {
-            Ok(branch) => branch,
+            Ok(binding) => binding,
             Err(error) => {
                 let released = self
                     .store
@@ -109,7 +122,7 @@ impl<S: TaskStore> Worker<S> {
         };
 
         let result = self
-            .execute(&task, external_auth, &publication_branch)
+            .execute(&task, external_auth, &publication_binding)
             .await;
         if let Err(error) = result {
             if error.downcast_ref::<WorkerBlocked>().is_some() {
@@ -146,7 +159,7 @@ impl<S: TaskStore> Worker<S> {
         &self,
         task: &ClaimedTask,
         external_auth: std::sync::Arc<BrokerExternalAuth>,
-        publication_branch: &str,
+        publication: &PublicationBinding,
     ) -> anyhow::Result<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
@@ -161,7 +174,8 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
-                let resume_branch = (task.kind == "main-repair").then_some(publication_branch);
+                let resume_branch =
+                    (task.kind == "main-repair").then_some(publication.branch.as_str());
                 let preparation = prepare_workspace(
                     &self.config.workspace,
                     &self.config.repository_url,
@@ -204,7 +218,7 @@ impl<S: TaskStore> Worker<S> {
                 } else {
                     preparation.baseline
                 };
-                let prompt = task_prompt(task);
+                let prompt = task_prompt(task, publication.merge_commit.as_deref());
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
                 if let Some(model) = &self.config.model {
                     codex_options.model = Some(model.clone());
@@ -742,7 +756,7 @@ async fn persistable_patch(
     }))
 }
 
-fn task_prompt(task: &ClaimedTask) -> String {
+fn task_prompt(task: &ClaimedTask, recovered_merge_commit: Option<&str>) -> String {
     let dependencies = if task.dependency_context.is_empty() {
         "No dependency results.".to_owned()
     } else {
@@ -752,8 +766,16 @@ fn task_prompt(task: &ClaimedTask) -> String {
             .collect::<Vec<_>>()
             .join("\n")
     };
+    let recovery = recovered_merge_commit.map_or_else(String::new, |merge_commit| {
+        format!(
+            "\n\nA prior repair PR already merged as `{merge_commit}`. Resume the post-merge \
+             lifecycle with `hive github verify-main --merge-commit {merge_commit}`; do not \
+             create or merge a replacement PR."
+        )
+    });
     let delivery = if task.kind == "main-repair" {
-        "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
+        format!(
+            "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
          Use only repository Taskfile commands for formatting and validation. Use \
          `hive github publish --title <title> --body <body>` to push the deterministic \
          task branch and create or update its PR, `hive github inspect` to wait for and \
@@ -764,9 +786,10 @@ fn task_prompt(task: &ClaimedTask) -> String {
          only after every check succeeds, and `hive github verify-main --merge-commit <sha>` \
          until the resulting Main run succeeds. Do not report completed before the squash \
          merge and green Main verification. If blocked by another change, report structured \
-         blocked status and identify the blocker precisely."
+         blocked status and identify the blocker precisely.{recovery}"
+        )
     } else {
-        ""
+        String::new()
     };
     format!(
         "You are Hive worker attempt {} for task {}.\n\
@@ -807,7 +830,7 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, bounded, establish_worker_lifecycle, persistable_patch,
-        prepare_workspace, validate_dependency_artifacts,
+        prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, ClaimedTask, LeaseToken, TaskId, TerminalResult, TerminalStatus,
@@ -838,6 +861,27 @@ mod tests {
                 .contains("refusing to restart a Hive worker")
         );
         assert!(workspace.path().join(".hive-task-finished").is_file());
+    }
+
+    #[test]
+    fn recovered_merge_commit_is_part_of_replacement_worker_context() {
+        let task = ClaimedTask {
+            id: TaskId::new("main-failure-recovery").unwrap(),
+            kind: "main-repair".to_owned(),
+            prompt: "restore Main".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("attempt-recovery").unwrap(),
+            attempt_number: 2,
+            lease_token: LeaseToken::new("lease-recovery").unwrap(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let merge_commit = "abcdef0123456789abcdef0123456789abcdef01";
+        let prompt = task_prompt(&task, Some(merge_commit));
+
+        assert!(prompt.contains(merge_commit));
+        assert!(prompt.contains("Resume the post-merge lifecycle"));
+        assert!(prompt.contains("do not create or merge a replacement PR"));
     }
 
     #[test]
