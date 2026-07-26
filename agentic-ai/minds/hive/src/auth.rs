@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,10 +11,14 @@ use codex::{
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
+use tokio::process::Command;
 use tokio::sync::Mutex;
 
 const AUTH_CONNECT_ATTEMPTS: usize = 120;
 const AUTH_CONNECT_DELAY: Duration = Duration::from_millis(500);
+const AUTH_PERSIST_URL_ENV: &str = "HIVE_AUTH_PERSIST_URL";
+const AUTH_API_TOKEN: &str = "/run/secrets/hive-auth-api/token";
+const AUTH_API_CA: &str = "/run/secrets/hive-auth-api/ca.crt";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct BrokerRequest {
@@ -104,7 +109,7 @@ pub async fn run_auth_broker(
     tokio::fs::set_permissions(&private_auth, permissions).await?;
 
     let auth_manager = AuthManager::shared(
-        auth_home,
+        auth_home.clone(),
         false,
         AuthCredentialsStoreMode::File,
         None,
@@ -145,6 +150,7 @@ pub async fn run_auth_broker(
                 .refresh_token_from_authority()
                 .await
                 .map_err(|error| anyhow!("Codex authentication refresh failed: {error}"))?;
+            persist_rotated_auth(&private_auth, &auth_home).await?;
         }
         let auth = auth_manager
             .auth_cached()
@@ -160,6 +166,68 @@ pub async fn run_auth_broker(
         channel.get_mut().write_all(b"\n").await?;
         channel.get_mut().flush().await?;
     }
+}
+
+async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) -> anyhow::Result<()> {
+    let url = std::env::var(AUTH_PERSIST_URL_ENV)
+        .context("HIVE_AUTH_PERSIST_URL is required to persist rotated credentials")?;
+    let token = tokio::fs::read_to_string(AUTH_API_TOKEN)
+        .await
+        .context("failed to read the broker-only Kubernetes API token")?;
+    let auth = tokio::fs::read_to_string(private_auth)
+        .await
+        .context("failed to read rotated broker credentials")?;
+    serde_json::from_str::<serde_json::Value>(&auth)
+        .context("rotated broker credentials are not valid JSON")?;
+    let patch = serde_json::json!({ "stringData": { "auth.json": auth } });
+    let patch_path = auth_home.join("secret-patch.json");
+    let header_path = auth_home.join("kubernetes-auth-header");
+    tokio::fs::write(&patch_path, serde_json::to_vec(&patch)?).await?;
+    tokio::fs::write(
+        &header_path,
+        format!("Authorization: Bearer {}", token.trim()),
+    )
+    .await?;
+    for path in [&patch_path, &header_path] {
+        let mut permissions = tokio::fs::metadata(path).await?.permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(0o600);
+        }
+        tokio::fs::set_permissions(path, permissions).await?;
+    }
+    let status = Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--request",
+            "PATCH",
+            "--cacert",
+            AUTH_API_CA,
+            "--header",
+            &format!("@{}", header_path.display()),
+            "--header",
+            "Content-Type: application/merge-patch+json",
+            "--data-binary",
+            &format!("@{}", patch_path.display()),
+            "--output",
+            "/dev/null",
+            &url,
+        ])
+        .stdin(Stdio::null())
+        .status()
+        .await;
+    let _ = tokio::fs::remove_file(&patch_path).await;
+    let _ = tokio::fs::remove_file(&header_path).await;
+    let status = status.context("failed to start the Kubernetes credential persistence request")?;
+    if !status.success() {
+        return Err(anyhow!(
+            "Kubernetes rejected rotated credential persistence with status {status}"
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

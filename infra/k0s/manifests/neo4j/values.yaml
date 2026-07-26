@@ -11,6 +11,9 @@ neo4j:
       cpu: "8"
       memory: 24Gi
 
+image:
+  customImage: neo4j@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+
 volumes:
   data:
     mode: volume
@@ -20,6 +23,8 @@ volumes:
         claimName: hive-neo4j-data
 
 services:
+  # The chart always creates the release-named ClusterIP service. This switch
+  # controls a separate externally reachable LoadBalancer and must remain off.
   neo4j:
     enabled: false
 

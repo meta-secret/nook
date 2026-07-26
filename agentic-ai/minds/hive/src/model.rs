@@ -51,6 +51,7 @@ pub struct ClaimedTask {
     pub attempt_number: i64,
     pub lease_token: LeaseToken,
     pub dependency_context: Vec<DependencyResult>,
+    pub dependency_artifacts: Vec<Artifact>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

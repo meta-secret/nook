@@ -79,6 +79,25 @@ impl Neo4jTaskStore {
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let artifact_ids: Vec<String> = row.get("artifact_ids")?;
+        let artifact_kinds: Vec<String> = row.get("artifact_kinds")?;
+        let artifact_uris: Vec<String> = row.get("artifact_uris")?;
+        let artifact_digests: Vec<String> = row.get("artifact_digests")?;
+        let artifact_contents: Vec<String> = row.get("artifact_contents")?;
+        let dependency_artifacts = artifact_ids
+            .into_iter()
+            .zip(artifact_kinds)
+            .zip(artifact_uris)
+            .zip(artifact_digests)
+            .zip(artifact_contents)
+            .map(|((((id, kind), uri), digest), content)| Artifact {
+                id,
+                kind,
+                uri,
+                digest,
+                content,
+            })
+            .collect();
 
         Ok(ClaimedTask {
             id: TaskId::new(row.get::<String>("id")?).map_err(anyhow::Error::msg)?,
@@ -88,6 +107,7 @@ impl Neo4jTaskStore {
             attempt_id,
             lease_token,
             dependency_context,
+            dependency_artifacts,
         })
     }
 }
@@ -296,6 +316,21 @@ impl TaskStore for Neo4jTaskStore {
                      WITH task,
                           [value IN collect(dependency.id) WHERE value IS NOT NULL] AS dependency_ids,
                           [value IN collect(coalesce(dependency.result_summary, '')) WHERE value IS NOT NULL] AS dependency_summaries
+                     OPTIONAL MATCH dependency_path =
+                       (task)-[:DEPENDS_ON*1..]->(artifact_task:Task)
+                     OPTIONAL MATCH (artifact_task)
+                       <-[:FOR_TASK]-(dependency_attempt:Attempt {status: 'COMPLETED'})
+                       -[:PRODUCED]->(dependency_artifact:Artifact {kind: 'git-patch'})
+                     WITH task, dependency_ids, dependency_summaries,
+                          dependency_artifact,
+                          max(length(dependency_path)) AS dependency_depth
+                     ORDER BY dependency_depth DESC, dependency_artifact.id ASC
+                     WITH task, dependency_ids, dependency_summaries,
+                          [value IN collect(dependency_artifact.id) WHERE value IS NOT NULL] AS artifact_ids,
+                          [value IN collect(dependency_artifact.kind) WHERE value IS NOT NULL] AS artifact_kinds,
+                          [value IN collect(dependency_artifact.uri) WHERE value IS NOT NULL] AS artifact_uris,
+                          [value IN collect(dependency_artifact.digest) WHERE value IS NOT NULL] AS artifact_digests,
+                          [value IN collect(dependency_artifact.content) WHERE value IS NOT NULL] AS artifact_contents
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
                      WHERE expired_attempt.lease_token = task.lease_token
                      OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
@@ -318,7 +353,9 @@ impl TaskStore for Neo4jTaskStore {
                        started_at: timestamp(),
                        lease_token: $lease_token
                      })
-                     WITH task, attempt, dependency_ids, dependency_summaries
+                     WITH task, attempt, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents
                      MATCH (agent:Agent {id: $agent_id})
                      MERGE (agent)-[:EXECUTED]->(attempt)
                      MERGE (attempt)-[:FOR_TASK]->(task)
@@ -328,7 +365,12 @@ impl TaskStore for Neo4jTaskStore {
                             task.prompt AS prompt,
                             attempt.number AS attempt_number,
                             dependency_ids,
-                            dependency_summaries",
+                            dependency_summaries,
+                            artifact_ids,
+                            artifact_kinds,
+                            artifact_uris,
+                            artifact_digests,
+                            artifact_contents",
                         )
                         .param("id", task_id)
                         .param("agent_id", agent_id.as_str())
@@ -707,6 +749,11 @@ mod tests {
             (None, Some(claim)) => (claim, &agent_c, &agent_b),
             _ => panic!("only one worker may win a claim"),
         };
+        assert_eq!(
+            stale_claim.dependency_artifacts,
+            vec![artifact.clone()],
+            "a dependent task must receive the completed dependency patch"
+        );
 
         store
             .graph
@@ -737,11 +784,44 @@ mod tests {
                 .await
                 .expect("stale completion")
         );
+        let dependent_artifact = Artifact {
+            id: format!("dependent-artifact-{suffix}"),
+            kind: "git-patch".to_owned(),
+            uri: format!("hive://artifact/dependent-artifact-{suffix}"),
+            digest: "sha256:dependent-fixture".to_owned(),
+            content: "diff --git a/dependent b/dependent".to_owned(),
+        };
         assert!(
             store
-                .complete(&retry_claim, retry_agent, "retry complete", None)
+                .complete(
+                    &retry_claim,
+                    retry_agent,
+                    "retry complete",
+                    Some(&dependent_artifact),
+                )
                 .await
                 .expect("current completion")
+        );
+        let descendant = task(format!("descendant-{suffix}"), vec![dependent.id.clone()]);
+        store
+            .enqueue(&descendant)
+            .await
+            .expect("enqueue descendant");
+        let descendant_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim descendant")
+            .expect("descendant available");
+        assert_eq!(
+            descendant_claim.dependency_artifacts,
+            vec![artifact.clone(), dependent_artifact],
+            "transitive dependency patches must be returned in ancestor-first order"
+        );
+        assert!(
+            store
+                .complete(&descendant_claim, &agent_a, "descendant complete", None)
+                .await
+                .expect("complete descendant")
         );
 
         let mut rows = store

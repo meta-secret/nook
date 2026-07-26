@@ -107,6 +107,12 @@ spec:
             capabilities:
               drop: ["ALL"]
             readOnlyRootFilesystem: true
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/workspace/.hive-worker-ready"]
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 3
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -141,6 +147,8 @@ spec:
               value: /var/lib/hive-auth
             - name: HIVE_AUTH_SOURCE
               value: /run/secrets/codex/auth.json
+            - name: HIVE_AUTH_PERSIST_URL
+              value: https://kubernetes.default.svc/api/v1/namespaces/hive-system/secrets/hive-codex-auth
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -154,6 +162,9 @@ spec:
               mountPath: /run/hive-auth
             - name: broker-auth-home
               mountPath: /var/lib/hive-auth
+            - name: broker-auth-api
+              mountPath: /run/secrets/hive-auth-api
+              readOnly: true
           resources:
             requests:
               cpu: 10m
@@ -250,6 +261,18 @@ spec:
             secretName: hive-codex-auth
             defaultMode: 0400
         - name: reaper-api
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+        - name: broker-auth-api
           projected:
             defaultMode: 0400
             sources:

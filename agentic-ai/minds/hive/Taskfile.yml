@@ -8,7 +8,7 @@ vars:
 
 tasks:
   format:
-    desc: Format Hive in the pinned builder and apply only formatted sources.
+    desc: Format the Hive workspace in the pinned builder and apply formatted sources.
     dir: '{{.HIVE_DIR}}'
     cmds:
       - |
@@ -28,8 +28,10 @@ tasks:
           rm -rf "$formatted"
         }
         trap cleanup EXIT
-        docker cp "$container:/build/hive/src" "$formatted/src"
-        cp -R "$formatted/src/." hive/src/
+        for crate in hive lace; do
+          docker cp "$container:/build/$crate/src" "$formatted/$crate-src"
+          cp -R "$formatted/$crate-src/." "$crate/src/"
+        done
         BASH
 
   check:

@@ -33,10 +33,16 @@ worker_mounts = worker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 broker_mounts = broker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 raise "Hive worker must not mount Codex credentials" if worker_mounts.include?("codex-auth-source")
 raise "Hive worker must not mount the broker auth home" if worker_mounts.include?("broker-auth-home")
+raise "Hive worker must not mount the broker API token" if worker_mounts.include?("broker-auth-api")
 unless broker_mounts.include?("codex-auth-source") &&
        broker_mounts.include?("broker-auth-home") &&
+       broker_mounts.include?("broker-auth-api") &&
        worker_mounts.include?("auth-channel")
   raise "Hive auth broker boundary is incomplete"
+end
+unless worker.dig("readinessProbe", "exec", "command") ==
+       ["test", "-f", "/workspace/.hive-worker-ready"]
+  raise "Hive readiness does not prove broker and Neo4j registration"
 end
 
 manifest_text = File.read(File.join(root, "infra/k0s/manifests/hive/deployment.yaml"))
@@ -68,6 +74,12 @@ unless kata.dig("image", "reference")&.match?(/\A[^@]+@sha256:[0-9a-f]{64}\z/)
 end
 
 neo4j = load_yaml.call("infra/k0s/manifests/neo4j/values.yaml")
+unless neo4j.dig("image", "customImage")&.match?(/\A[^@]+@sha256:[0-9a-f]{64}\z/)
+  raise "Neo4j image is not pinned by digest"
+end
+unless neo4j.dig("services", "neo4j", "enabled") == false
+  raise "Neo4j external LoadBalancer must remain disabled"
+end
 unless neo4j.dig("ssl", "bolt", "privateKey", "secretName") == "hive-neo4j-tls" &&
        neo4j.dig("ssl", "bolt", "publicCertificate", "secretName") == "hive-neo4j-tls"
   raise "Neo4j Bolt TLS certificate configuration is incomplete"
@@ -76,6 +88,15 @@ end
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
+end
+unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
+       infra_taskfile.include?("hmac.compare_digest")
+  raise "Hive recovery snapshots are not authenticated before restore"
+end
+
+hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
+unless hive_taskfile.include?("for crate in hive lace")
+  raise "Hive formatting does not apply the entire checked workspace"
 end
 
 puts "Hive Kubernetes manifest contract: ok"

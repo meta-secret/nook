@@ -367,6 +367,8 @@ tasks:
         helm_sha="{{.HELM_AMD64_SHA256}}"
         download_dir="$remote_dir/downloads"
         install -d -m 0750 "$download_dir"
+        sudo -n apt-get update -qq
+        sudo -n apt-get install -y -qq --no-install-recommends jq python3
 
         k0s_asset="k0s-${k0s_version}-amd64"
         k0s_url="https://github.com/k0sproject/k0s/releases/download/${k0s_version//+/%2B}/$k0s_asset"
@@ -449,18 +451,47 @@ tasks:
             -o yaml |
             sudo -n k0s kubectl apply -f -
         done
-        if sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc; then
+        if sudo -n test -e /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc; then
+          sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc
+          sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac
           recovery_key="$(mktemp)"
-          trap 'rm -f "$recovery_key"' EXIT
+          encrypted_backup="$(mktemp)"
+          expected_mac="$(mktemp)"
+          trap 'rm -f "$recovery_key" "$encrypted_backup" "$expected_mac"' EXIT
           umask 077
           sudo -n awk '/secret:/ {print $2; exit}' \
             /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
+          sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc \
+            > "$encrypted_backup"
+          sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac \
+            > "$expected_mac"
           test -s "$recovery_key"
+          python3 - "$recovery_key" "$encrypted_backup" "$expected_mac" <<'PY'
+        import hashlib
+        import hmac
+        import pathlib
+        import sys
+
+        master = pathlib.Path(sys.argv[1]).read_bytes().strip()
+        ciphertext = pathlib.Path(sys.argv[2]).read_bytes()
+        expected = pathlib.Path(sys.argv[3]).read_text().strip()
+        mac_key = hmac.new(
+            master,
+            b"nook-hive-recovery-hmac-v1",
+            hashlib.sha256,
+        ).digest()
+        actual = hmac.new(mac_key, ciphertext, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(actual, expected):
+            raise SystemExit("Neo4j recovery snapshot authentication failed")
+        PY
           sudo -n openssl enc -d -aes-256-cbc -pbkdf2 \
             -pass "file:$recovery_key" \
-            -in /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc |
+            -in "$encrypted_backup" |
             sudo -n k0s kubectl apply -f -
-          rm -f "$recovery_key"
+          sudo -n rm -f \
+            /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc \
+            /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac
+          rm -f "$recovery_key" "$encrypted_backup" "$expected_mac"
           trap - EXIT
         fi
         sudo -n k0s kubectl get secrets --all-namespaces -o json |
@@ -535,8 +566,9 @@ tasks:
         done
         if test "$found_secret" = true; then
           encrypted_backup="$(mktemp)"
+          backup_mac="$(mktemp)"
           recovery_key="$(mktemp)"
-          trap 'rm -f "$secret_backup" "$encrypted_backup" "$recovery_key"' EXIT
+          trap 'rm -f "$secret_backup" "$encrypted_backup" "$backup_mac" "$recovery_key"' EXIT
           umask 077
           sudo -n awk '/secret:/ {print $2; exit}' \
             /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
@@ -545,9 +577,29 @@ tasks:
             -pass "file:$recovery_key" \
             -in "$secret_backup" \
             -out "$encrypted_backup"
+          python3 - "$recovery_key" "$encrypted_backup" "$backup_mac" <<'PY'
+        import hashlib
+        import hmac
+        import pathlib
+        import sys
+
+        master = pathlib.Path(sys.argv[1]).read_bytes().strip()
+        ciphertext = pathlib.Path(sys.argv[2]).read_bytes()
+        mac_key = hmac.new(
+            master,
+            b"nook-hive-recovery-hmac-v1",
+            hashlib.sha256,
+        ).digest()
+        pathlib.Path(sys.argv[3]).write_text(
+            hmac.new(mac_key, ciphertext, hashlib.sha256).hexdigest() + "\n"
+        )
+        PY
           sudo -n install -m 0600 \
             "$encrypted_backup" \
             "$recovery_dir/neo4j-secrets.yaml.enc"
+          sudo -n install -m 0600 \
+            "$backup_mac" \
+            "$recovery_dir/neo4j-secrets.yaml.hmac"
         fi
         sudo -n k0s stop
         sudo -n k0s reset
@@ -641,14 +693,35 @@ tasks:
         secret_dir="$(mktemp -d)"
         trap 'rm -rf "$secret_dir"' EXIT
         umask 077
-        tls_dir=/var/lib/hive/neo4j-tls
-        sudo -n install -d -m 0700 "$tls_dir"
-        if ! sudo -n test -s "$tls_dir/ca.key" ||
-          ! sudo -n test -s "$tls_dir/ca.crt" ||
-          ! sudo -n test -s "$tls_dir/private.key" ||
-          ! sudo -n test -s "$tls_dir/public.crt" ||
-          ! sudo -n openssl x509 -checkend 2592000 -noout \
-            -in "$tls_dir/public.crt"; then
+        reuse_tls=false
+        tls_changed=false
+        if kubectl get secret hive-neo4j-tls \
+          --namespace hive-data >/dev/null 2>&1 &&
+          kubectl get secret hive-neo4j-ca \
+            --namespace hive-system >/dev/null 2>&1; then
+          kubectl get secret hive-neo4j-tls \
+            --namespace hive-data \
+            -o jsonpath='{.data.private\.key}' |
+            base64 --decode > "$secret_dir/private.key"
+          kubectl get secret hive-neo4j-tls \
+            --namespace hive-data \
+            -o jsonpath='{.data.public\.crt}' |
+            base64 --decode > "$secret_dir/public.crt"
+          kubectl get secret hive-neo4j-ca \
+            --namespace hive-system \
+            -o jsonpath='{.data.ca\.crt}' |
+            base64 --decode > "$secret_dir/ca.crt"
+          if openssl pkey -check -noout \
+            -in "$secret_dir/private.key" >/dev/null 2>&1 &&
+            openssl x509 -checkend 2592000 -noout \
+              -in "$secret_dir/public.crt" &&
+            openssl verify -CAfile "$secret_dir/ca.crt" \
+              "$secret_dir/public.crt" >/dev/null; then
+            reuse_tls=true
+          fi
+        fi
+        if test "$reuse_tls" = false; then
+          tls_changed=true
           openssl req -x509 -newkey rsa:3072 -nodes \
             -days 3650 \
             -subj "/CN=Nook Hive Neo4j CA" \
@@ -672,14 +745,13 @@ tasks:
             -CAcreateserial \
             -extfile "$secret_dir/server.ext" \
             -out "$secret_dir/public.crt"
-          sudo -n install -m 0600 "$secret_dir/ca.key" "$tls_dir/ca.key"
-          sudo -n install -m 0644 "$secret_dir/ca.crt" "$tls_dir/ca.crt"
-          sudo -n install -m 0600 "$secret_dir/private.key" "$tls_dir/private.key"
-          sudo -n install -m 0644 "$secret_dir/public.crt" "$tls_dir/public.crt"
         fi
-        for certificate in ca.crt private.key public.crt; do
-          sudo -n cat "$tls_dir/$certificate" > "$secret_dir/$certificate"
-        done
+        # Legacy prototypes persisted signing and server keys on the host.
+        # Kubernetes Secrets are encrypted at rest by the k0s AES-GCM provider,
+        # so remove those plaintext copies after the Secret-backed migration.
+        sudo -n rm -f \
+          /var/lib/hive/neo4j-tls/ca.key \
+          /var/lib/hive/neo4j-tls/private.key
 
         kubectl create secret generic hive-neo4j-tls \
           --namespace hive-data \
@@ -751,6 +823,10 @@ tasks:
           --values "$remote_dir/infra/k0s/manifests/neo4j/values.yaml" \
           --wait \
           --timeout 15m
+        if test "$tls_changed" = true; then
+          kubectl rollout restart statefulset/hive-neo4j \
+            --namespace hive-data
+        fi
         kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/network-policy.yaml"
         kubectl rollout status statefulset/hive-neo4j \
           --namespace hive-data \

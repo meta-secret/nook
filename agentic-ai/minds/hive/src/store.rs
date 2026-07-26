@@ -154,6 +154,7 @@ mod tests {
                 attempt_number: task.attempt_count,
                 lease_token,
                 dependency_context: Vec::new(),
+                dependency_artifacts: Vec::new(),
             }))
         }
 

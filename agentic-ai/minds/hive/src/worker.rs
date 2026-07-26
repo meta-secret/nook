@@ -8,6 +8,7 @@ use anyhow::{Context, anyhow};
 use codex::Arg0DispatchPaths;
 use rand::RngExt;
 use sha2::{Digest, Sha256};
+use tokio::io::AsyncWriteExt as _;
 use tokio::process::Command;
 use tokio::sync::watch;
 
@@ -59,6 +60,9 @@ impl<S: TaskStore> Worker<S> {
         self.store
             .register_agent(&self.config.agent_id, &self.config.pod_name)
             .await?;
+        tokio::fs::write(self.config.workspace.join(".hive-worker-ready"), b"ready")
+            .await
+            .context("failed to publish worker readiness")?;
 
         let task = loop {
             if let Some(task) = self
@@ -117,7 +121,12 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
-                prepare_workspace(&self.config.workspace, &self.config.repository_url).await?;
+                let baseline = prepare_workspace(
+                    &self.config.workspace,
+                    &self.config.repository_url,
+                    &task.dependency_artifacts,
+                )
+                .await?;
                 let repository = self.config.workspace.join("repository");
                 let prompt = task_prompt(task);
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
@@ -128,17 +137,42 @@ impl<S: TaskStore> Worker<S> {
                 codex_options
                     .reasoning_effort
                     .clone_from(&self.config.reasoning_effort);
-                InProcessCodexRunner::with_external_auth(codex_options, external_auth)
-                    .execute_task(task.id.as_str(), &prompt)
-                    .await
-                    .context("embedded Codex execution failed")
+                let raw_result =
+                    InProcessCodexRunner::with_external_auth(codex_options, external_auth)
+                        .execute_task(task.id.as_str(), &prompt)
+                        .await
+                        .context("embedded Codex execution failed")?;
+                let result: TerminalResult = serde_json::from_str(&raw_result)
+                    .context("Codex returned an invalid terminal result")?;
+                if result.status == TerminalStatus::Blocked {
+                    return Err(anyhow!("Codex reported a blocked task: {}", result.summary));
+                }
+                let summary = bounded(&format!(
+                    "{}\n\nChanged files:\n{}\n\nTests:\n{}",
+                    result.summary,
+                    bullet_list(&result.changed_files),
+                    bullet_list(&result.tests)
+                ));
+                let repository = self.config.workspace.join("repository");
+                let artifact = persistable_patch(&repository, &baseline, task, &result).await?;
+                let accepted = self
+                    .store
+                    .complete(task, &self.config.agent_id, &summary, artifact.as_ref())
+                    .await?;
+                if !accepted {
+                    return Err(anyhow!(
+                        "task completion was rejected because the lease is stale"
+                    ));
+                }
+                Ok::<(), anyhow::Error>(())
             },
         );
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
                 .context("failed to install the worker termination handler")?;
         tokio::pin!(execution);
-        let raw_result = tokio::select! {
+        tokio::select! {
+            biased;
             execution = &mut execution => {
                 let _ = stop_tx.send(true);
                 heartbeat
@@ -172,28 +206,6 @@ impl<S: TaskStore> Worker<S> {
                 }
                 return Err(WorkerInterrupted.into());
             }
-        };
-        let result: TerminalResult = serde_json::from_str(&raw_result)
-            .context("Codex returned an invalid terminal result")?;
-        if result.status == TerminalStatus::Blocked {
-            return Err(anyhow!("Codex reported a blocked task: {}", result.summary));
-        }
-        let summary = bounded(&format!(
-            "{}\n\nChanged files:\n{}\n\nTests:\n{}",
-            result.summary,
-            bullet_list(&result.changed_files),
-            bullet_list(&result.tests)
-        ));
-        let repository = self.config.workspace.join("repository");
-        let artifact = persistable_patch(&repository, task, &result).await?;
-        let accepted = self
-            .store
-            .complete(task, &self.config.agent_id, &summary, artifact.as_ref())
-            .await?;
-        if !accepted {
-            return Err(anyhow!(
-                "task completion was rejected because the lease is stale"
-            ));
         }
         Ok(())
     }
@@ -250,7 +262,11 @@ async fn heartbeat_loop<S: TaskStore>(
     }
 }
 
-async fn prepare_workspace(workspace: &Path, repository_url: &str) -> anyhow::Result<()> {
+async fn prepare_workspace(
+    workspace: &Path,
+    repository_url: &str,
+    dependency_artifacts: &[Artifact],
+) -> anyhow::Result<String> {
     tokio::fs::create_dir_all(workspace.join("task")).await?;
     tokio::fs::create_dir_all(workspace.join("output")).await?;
     tokio::fs::create_dir_all(workspace.join("temporary")).await?;
@@ -276,11 +292,103 @@ async fn prepare_workspace(workspace: &Path, repository_url: &str) -> anyhow::Re
     if !status.success() {
         return Err(anyhow!("git clone failed with status {status}"));
     }
-    Ok(())
+    for artifact in dependency_artifacts {
+        if artifact.kind != "git-patch" {
+            return Err(anyhow!(
+                "dependency artifact {} has unsupported kind {}",
+                artifact.id,
+                artifact.kind
+            ));
+        }
+        let digest = Sha256::digest(artifact.content.as_bytes());
+        let digest = format!(
+            "sha256:{}",
+            digest.iter().fold(
+                String::with_capacity(digest.len() * 2),
+                |mut encoded, byte| {
+                    let _ = write!(encoded, "{byte:02x}");
+                    encoded
+                },
+            )
+        );
+        if digest != artifact.digest {
+            return Err(anyhow!(
+                "dependency artifact {} failed digest verification",
+                artifact.id
+            ));
+        }
+        let mut child = Command::new("git")
+            .args(["apply", "--index", "--binary", "-"])
+            .current_dir(&repository)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .context("failed to apply a dependency artifact")?;
+        child
+            .stdin
+            .take()
+            .context("dependency patch stdin was unavailable")?
+            .write_all(artifact.content.as_bytes())
+            .await
+            .context("failed to stream a dependency patch")?;
+        let status = child
+            .wait()
+            .await
+            .context("dependency patch process failed")?;
+        if !status.success() {
+            return Err(anyhow!(
+                "dependency artifact {} failed to apply with status {status}",
+                artifact.id
+            ));
+        }
+    }
+    if !dependency_artifacts.is_empty() {
+        let status = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Hive",
+                "-c",
+                "user.email=hive@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "Apply completed Hive dependencies",
+            ])
+            .current_dir(&repository)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status()
+            .await
+            .context("failed to commit dependency artifacts")?;
+        if !status.success() {
+            return Err(anyhow!(
+                "dependency artifact baseline commit failed with status {status}"
+            ));
+        }
+    }
+    let baseline = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&repository)
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .context("failed to record the task baseline")?;
+    if !baseline.status.success() {
+        return Err(anyhow!(
+            "git rev-parse failed with status {}",
+            baseline.status
+        ));
+    }
+    String::from_utf8(baseline.stdout)
+        .context("task baseline is not UTF-8")
+        .map(|value| value.trim().to_owned())
 }
 
 async fn persistable_patch(
     repository: &Path,
+    baseline: &str,
     task: &ClaimedTask,
     result: &TerminalResult,
 ) -> anyhow::Result<Option<Artifact>> {
@@ -300,7 +408,7 @@ async fn persistable_patch(
     }
 
     let output = Command::new("git")
-        .args(["diff", "--binary", "--no-ext-diff", "--", "."])
+        .args(["diff", "--binary", "--no-ext-diff", baseline, "--", "."])
         .current_dir(repository)
         .stdin(Stdio::null())
         .output()
@@ -390,10 +498,12 @@ fn bullet_list(values: &[String]) -> String {
 mod tests {
     use super::{
         MAX_PERSISTED_RESULT_BYTES, bounded, establish_worker_lifecycle, persistable_patch,
+        prepare_workspace,
     };
     use crate::model::{
-        AttemptId, ClaimedTask, LeaseToken, TaskId, TerminalResult, TerminalStatus,
+        Artifact, AttemptId, ClaimedTask, LeaseToken, TaskId, TerminalResult, TerminalStatus,
     };
+    use sha2::{Digest, Sha256};
 
     #[test]
     fn persisted_results_are_utf8_safe_and_bounded() {
@@ -447,6 +557,29 @@ mod tests {
         std::fs::write(repository.path().join("tracked.txt"), "after\n").unwrap();
         std::fs::write(repository.path().join("new.txt"), "new\n").unwrap();
 
+        let baseline = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repository.path())
+            .output()
+            .unwrap();
+        let baseline = String::from_utf8(baseline.stdout).unwrap();
+        let baseline = baseline.trim();
+        std::fs::write(repository.path().join("committed.txt"), "committed\n").unwrap();
+        run_git(&["add", "committed.txt"]);
+        run_git(&[
+            "-c",
+            "user.name=Hive Test",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "task commit",
+        ]);
+        std::fs::write(repository.path().join("tracked.txt"), "after\n").unwrap();
+        run_git(&["add", "tracked.txt"]);
+        std::fs::write(repository.path().join("new.txt"), "new\n").unwrap();
+
         let task = ClaimedTask {
             id: TaskId::new("task-1").unwrap(),
             kind: "code".to_owned(),
@@ -455,6 +588,7 @@ mod tests {
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1").unwrap(),
             dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
         };
         let result = TerminalResult {
             status: TerminalStatus::Completed,
@@ -463,7 +597,7 @@ mod tests {
             tests: Vec::new(),
         };
 
-        let artifact = persistable_patch(repository.path(), &task, &result)
+        let artifact = persistable_patch(repository.path(), baseline, &task, &result)
             .await
             .unwrap()
             .expect("patch artifact");
@@ -472,5 +606,91 @@ mod tests {
         assert!(artifact.digest.starts_with("sha256:"));
         assert!(artifact.content.contains("diff --git a/tracked.txt"));
         assert!(artifact.content.contains("diff --git a/new.txt"));
+        assert!(artifact.content.contains("diff --git a/committed.txt"));
+    }
+
+    #[tokio::test]
+    async fn completed_dependency_patch_becomes_the_task_baseline() {
+        let source = tempfile::tempdir().unwrap();
+        let run_git = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(arguments)
+                .current_dir(source.path())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output.stdout
+        };
+        run_git(&["init", "--quiet"]);
+        std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
+        run_git(&["add", "dependency.txt"]);
+        run_git(&[
+            "-c",
+            "user.name=Hive Test",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "fixture",
+        ]);
+        std::fs::write(source.path().join("dependency.txt"), "from dependency\n").unwrap();
+        let patch = String::from_utf8(run_git(&["diff", "--binary"])).unwrap();
+        std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
+        let digest = Sha256::digest(patch.as_bytes());
+        let digest = digest.iter().fold(
+            String::with_capacity(digest.len() * 2),
+            |mut encoded, byte| {
+                let _ = write!(encoded, "{byte:02x}");
+                encoded
+            },
+        );
+        let dependency = Artifact {
+            id: "dependency:git-patch".to_owned(),
+            kind: "git-patch".to_owned(),
+            uri: "hive://artifact/dependency:git-patch".to_owned(),
+            digest: format!("sha256:{digest}"),
+            content: patch,
+        };
+        let workspace = tempfile::tempdir().unwrap();
+        let baseline = prepare_workspace(
+            workspace.path(),
+            source.path().to_str().unwrap(),
+            &[dependency],
+        )
+        .await
+        .unwrap();
+        let repository = workspace.path().join("repository");
+        assert_eq!(
+            std::fs::read_to_string(repository.join("dependency.txt")).unwrap(),
+            "from dependency\n"
+        );
+        std::fs::write(repository.join("task.txt"), "task result\n").unwrap();
+        let task = ClaimedTask {
+            id: TaskId::new("task-2").unwrap(),
+            kind: "code".to_owned(),
+            prompt: "build on dependency".to_owned(),
+            attempt_id: AttemptId::new("attempt-2").unwrap(),
+            attempt_number: 1,
+            lease_token: LeaseToken::new("lease-2").unwrap(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let result = TerminalResult {
+            status: TerminalStatus::Completed,
+            summary: "task complete".to_owned(),
+            changed_files: vec!["task.txt".to_owned()],
+            tests: Vec::new(),
+        };
+        let artifact = persistable_patch(&repository, &baseline, &task, &result)
+            .await
+            .unwrap()
+            .expect("task patch");
+        assert!(artifact.content.contains("diff --git a/task.txt"));
+        assert!(!artifact.content.contains("dependency.txt"));
     }
 }
