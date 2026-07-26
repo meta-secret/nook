@@ -458,6 +458,7 @@ tasks:
         firewall_previous_config="$(mktemp)"
         firewall_previous_fragment="$(mktemp)"
         firewall_previous_live="$(mktemp)"
+        firewall_live_next="$(mktemp)"
         firewall_fragment_existed=false
         firewall_rollback_armed=false
         encryption_config=""
@@ -519,12 +520,80 @@ tasks:
             "$firewall_previous_config" \
             "$firewall_previous_fragment" \
             "$firewall_previous_live" \
+            "$firewall_live_next" \
             ${encryption_config:+"$encryption_config"} \
             ${cni_config_next:+"$cni_config_next"} \
             ${recovery_key:+"$recovery_key"} \
             ${encrypted_backup:+"$encrypted_backup"} \
             ${expected_mac:+"$expected_mac"}
           return "$status"
+        }
+        replace_k0s_firewall_rules() {
+          phase="$1"
+          case "$phase" in
+            install)
+              input_comment="nook k0s pod control plane install"
+              forward_comment="nook k0s pod egress install"
+              ;;
+            committed)
+              input_comment="nook k0s pod control plane v3"
+              forward_comment="nook k0s pod egress v3"
+              ;;
+            *)
+              echo "Unknown k0s firewall phase: $phase" >&2
+              return 2
+              ;;
+          esac
+          : > "$firewall_live_next"
+          for chain in input forward; do
+            case "$chain" in
+              input)
+                owner="nook k0s pod control plane"
+                replacement='iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "'"$input_comment"'"'
+                ;;
+              forward)
+                owner="nook k0s pod egress"
+                replacement='iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "'"$forward_comment"'"'
+                ;;
+            esac
+            printf 'flush chain inet bynull_filter %s\n' "$chain" \
+              >> "$firewall_live_next"
+            sudo -n nft --handle list chain inet bynull_filter "$chain" |
+              awk \
+                -v chain="$chain" \
+                -v owner="$owner" \
+                -v replacement="$replacement" '
+                /^[[:space:]]*table / ||
+                /^[[:space:]]*chain / ||
+                /^[[:space:]]*type / ||
+                /^[[:space:]]*policy / ||
+                /^[[:space:]]*[{}][[:space:]]*$/ {
+                  next
+                }
+                {
+                  sub(/^[[:space:]]*/, "")
+                  sub(/[[:space:]]+# handle [0-9]+$/, "")
+                  owned = "comment \"" owner "( v[0-9]+( next)?| install)?\""
+                  if ($0 ~ owned) {
+                    if (!replaced) {
+                      print "add rule inet bynull_filter " chain " " replacement
+                      replaced = 1
+                    }
+                    next
+                  }
+                  if (length($0) > 0) {
+                    print "add rule inet bynull_filter " chain " " $0
+                  }
+                }
+                END {
+                  if (!replaced) {
+                    print "add rule inet bynull_filter " chain " " replacement
+                  }
+                }
+              ' >> "$firewall_live_next"
+          done
+          sudo -n nft --check --file "$firewall_live_next"
+          sudo -n nft --file "$firewall_live_next"
         }
         trap rollback_k0s_firewall EXIT
         firewall_rollback_armed=true
@@ -552,20 +621,7 @@ tasks:
         fi
         sudo -n nft --check --file "$firewall_config"
         sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
-        sudo -n nft --handle list chain inet bynull_filter input |
-          awk '/comment "nook k0s pod control plane install"/ { print $NF }' |
-          while read -r handle; do
-            sudo -n nft delete rule inet bynull_filter input handle "$handle"
-          done
-        sudo -n nft --handle list chain inet bynull_filter forward |
-          awk '/comment "nook k0s pod egress install"/ { print $NF }' |
-          while read -r handle; do
-            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
-          done
-        printf '%s\n' \
-          'add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane install"' \
-          'add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress install"' |
-          sudo -n nft --file -
+        replace_k0s_firewall_rules install
         sudo -n nft list chain inet bynull_filter input |
           grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane install"' >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
@@ -651,6 +707,55 @@ tasks:
         sudo -n systemctl is-active --quiet nook-k0s-api-address.service
         sudo -n ip -4 address show dev lo |
           grep -F '10.201.0.1/32' >/dev/null
+        if sudo -n systemctl is-active --quiet k0scontroller; then
+          for policy in \
+            hive-worker-kubernetes-api \
+            hive-reaper-controller; do
+            if ! sudo -n k0s kubectl get networkpolicy "$policy" \
+              --namespace hive-system >/dev/null 2>&1; then
+              continue
+            fi
+            policy_json="$(
+              sudo -n k0s kubectl get networkpolicy "$policy" \
+                --namespace hive-system \
+                -o json
+            )"
+            if jq -e \
+              --arg cidr "{{.K0S_API_ADDRESS}}/32" \
+              '[.spec.egress[]?.to[]?.ipBlock.cidr] | index($cidr) != null' \
+              <<<"$policy_json" >/dev/null; then
+              continue
+            fi
+            egress_index="$(
+              jq -r '
+                .spec.egress
+                | to_entries[]
+                | select(any(.value.ports[]?; .port == 6443))
+                | .key
+              ' <<<"$policy_json"
+            )"
+            case "$egress_index" in
+              ''|*[!0-9]*)
+                echo "Refusing network policy without one API egress rule: $policy" >&2
+                exit 1
+                ;;
+            esac
+            patch="$(
+              jq -cn \
+                --arg path "/spec/egress/$egress_index/to/-" \
+                --arg cidr "{{.K0S_API_ADDRESS}}/32" \
+                '[{
+                  op: "add",
+                  path: $path,
+                  value: {ipBlock: {cidr: $cidr}}
+                }]'
+            )"
+            sudo -n k0s kubectl patch networkpolicy "$policy" \
+              --namespace hive-system \
+              --type=json \
+              --patch "$patch"
+          done
+        fi
 
         if ! sudo -n test -f /etc/systemd/system/k0scontroller.service; then
           sudo -n k0s install controller \
@@ -803,42 +908,11 @@ tasks:
           hive.nook.sh/storage=local \
           hive.nook.sh/kata=enabled \
           --overwrite
-        printf '%s\n' \
-          'add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3 next"' \
-          'add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3 next"' |
-          sudo -n nft --file -
-        sudo -n nft list chain inet bynull_filter input |
-          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3 next"' >/dev/null
-        sudo -n nft list chain inet bynull_filter forward |
-          grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3 next"' >/dev/null
-        sudo -n nft --handle list chain inet bynull_filter input |
-          awk '/comment "nook k0s pod control plane( v[0-9]+| install)?"/ { print $NF }' |
-          while read -r handle; do
-            sudo -n nft delete rule inet bynull_filter input handle "$handle"
-          done
-        sudo -n nft --handle list chain inet bynull_filter forward |
-          awk '/comment "nook k0s pod egress( v[0-9]+| install)?"/ { print $NF }' |
-          while read -r handle; do
-            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
-          done
-        printf '%s\n' \
-          'add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' \
-          'add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' |
-          sudo -n nft --file -
+        replace_k0s_firewall_rules committed
         sudo -n nft list chain inet bynull_filter input |
           grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"' >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
           grep -F 'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"' >/dev/null
-        sudo -n nft --handle list chain inet bynull_filter input |
-          awk '/comment "nook k0s pod control plane v3 next"/ { print $NF }' |
-          while read -r handle; do
-            sudo -n nft delete rule inet bynull_filter input handle "$handle"
-          done
-        sudo -n nft --handle list chain inet bynull_filter forward |
-          awk '/comment "nook k0s pod egress v3 next"/ { print $NF }' |
-          while read -r handle; do
-            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
-          done
         sudo -n k0s status
         sudo -n k0s kubectl get nodes -o wide
         firewall_rollback_armed=false
@@ -848,7 +922,8 @@ tasks:
           "$firewall_config" \
           "$firewall_previous_config" \
           "$firewall_previous_fragment" \
-          "$firewall_previous_live"
+          "$firewall_previous_live" \
+          "$firewall_live_next"
         REMOTE
 
   k0s:status:
@@ -862,6 +937,10 @@ tasks:
         sudo -n k0s kubectl get runtimeclasses
         sudo -n k0s kubectl get pv,pvc --all-namespaces
         sudo -n k0s kubectl get pods --all-namespaces -o wide
+        sudo -n systemctl is-enabled --quiet nook-k0s-api-address.service
+        sudo -n systemctl is-active --quiet nook-k0s-api-address.service
+        sudo -n ip -4 address show dev lo |
+          grep -F '{{.K0S_API_ADDRESS}}/32' >/dev/null
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter forward |

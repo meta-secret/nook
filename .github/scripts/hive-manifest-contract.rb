@@ -184,6 +184,10 @@ k0s_install_task = infra_taskfile.match(
   /^  k0s:install:\n(?<body>.*?)(?=^  k0s:status:)/m
 )&.[](:body)
 raise "k0s install task is missing" unless k0s_install_task
+k0s_status_task = infra_taskfile.match(
+  /^  k0s:status:\n(?<body>.*?)(?=^  k0s:network:refresh:)/m
+)&.[](:body)
+raise "k0s status task is missing" unless k0s_status_task
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
 end
@@ -297,6 +301,26 @@ unless k0s_config.dig("spec", "api", "address") == "10.201.0.1" &&
          "systemctl is-active --quiet nook-k0s-api-address.service"
        )
   raise "k0s must expose its API on the stable Hive loopback address"
+end
+policy_refresh = k0s_install_task.index(
+  "kubectl patch networkpolicy \"$policy\""
+)
+controller_restart = k0s_install_task.index(
+  "systemctl restart k0scontroller"
+)
+unless policy_refresh && controller_restart && policy_refresh < controller_restart
+  raise "k0s upgrades must allow the stable API endpoint before controller restart"
+end
+unless k0s_status_task.include?(
+         "systemctl is-enabled --quiet nook-k0s-api-address.service"
+       ) &&
+       k0s_status_task.include?(
+         "systemctl is-active --quiet nook-k0s-api-address.service"
+       ) &&
+       k0s_status_task.include?(
+         "grep -F '{{.K0S_API_ADDRESS}}/32'"
+       )
+  raise "k0s status must verify persistent stable API address state"
 end
 unless infra_taskfile.include?("rollout restart deployment/coredns") &&
        infra_taskfile.include?("rollout status deployment/coredns") &&
