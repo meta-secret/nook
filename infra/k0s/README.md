@@ -11,9 +11,20 @@ Pinned platform:
 - k0s `v1.36.2+k0s.0`
 - kubectl `v1.36.2`
 - Helm `v3.21.3`
+- k9s `v0.51.0`
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
 - Kata runtime-rs class `kata-dragonball`
+
+Install the pinned operator console and its private admin kubeconfig through the
+root Taskfile, then use it directly after SSH login:
+
+```text
+task infra:kubernetes:console:install
+ssh debian@ssh-ovh-borg-1.bynull.link
+kubectl get pods --all-namespaces
+k9s
+```
 
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
 firewall must retain default-drop input and forward policies. The installer adds

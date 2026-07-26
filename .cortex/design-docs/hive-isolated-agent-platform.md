@@ -471,7 +471,7 @@ Remote platform lifecycle:
 
 ```text
 task infra:kvm:verify
-task infra:kubernetes:tools:install
+task infra:kubernetes:console:install
 task infra:kubernetes:tools:status
 task infra:k0s:install
 task infra:k0s:status

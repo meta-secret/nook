@@ -186,10 +186,17 @@ kubernetes_tools_task = infra_taskfile.match(
 raise "Kubernetes operator tools install task is missing" unless kubernetes_tools_task
 unless kubernetes_tools_task.include?("https://dl.k8s.io/release/$kubectl_version/bin/linux/amd64/kubectl") &&
        kubernetes_tools_task.include?("https://get.helm.sh/$helm_asset") &&
-       kubernetes_tools_task.scan("sha256sum --check").length >= 2 &&
+       kubernetes_tools_task.include?("https://github.com/derailed/k9s/releases/download/$k9s_version/$k9s_asset") &&
+       kubernetes_tools_task.scan("sha256sum --check").length >= 3 &&
        kubernetes_tools_task.include?("/usr/local/bin/kubectl") &&
-       kubernetes_tools_task.include?("/usr/local/bin/helm")
+       kubernetes_tools_task.include?("/usr/local/bin/helm") &&
+       kubernetes_tools_task.include?("/usr/local/bin/k9s")
   raise "Kubernetes operator tools must use pinned verified standalone binaries"
+end
+unless infra_taskfile.include?("sudo -n k0s kubeconfig admin") &&
+       infra_taskfile.include?('chmod 0600 "$kubeconfig_dir/config"') &&
+       infra_taskfile.include?("kubectl get --raw=/readyz")
+  raise "Kubernetes operator console must configure private direct SSH access"
 end
 k0s_install_task = infra_taskfile.match(
   /^  k0s:install:\n(?<body>.*?)(?=^  k0s:status:)/m

@@ -13,6 +13,8 @@ vars:
   KUBECTL_AMD64_SHA256: 1e9045ec32bea85da43de85f0065358529ea7c7a152eca78154fba5b58c27d82
   HELM_VERSION: v3.21.3
   HELM_AMD64_SHA256: 15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
+  K9S_VERSION: v0.51.0
+  K9S_AMD64_SHA256: c3752ad51a5a4015a113819c4eeb6e55a4d0e4b8e652494797532f6fc8161dd7
   KATA_VERSION: 4.0.0
   KATA_CHART_SHA256: 68ee406af84761d85ddd6942bd3f0b11ba4f19ce19bf46ec2a4ea29f93926a4b
   NEO4J_VERSION: 2026.6.0
@@ -410,7 +412,7 @@ tasks:
         BASH
 
   kubernetes:tools:install:
-    desc: Idempotently install pinned standalone kubectl and Helm clients.
+    desc: Idempotently install pinned standalone kubectl, Helm, and k9s clients.
     silent: true
     cmds:
       - |
@@ -421,6 +423,8 @@ tasks:
         kubectl_sha="{{.KUBECTL_AMD64_SHA256}}"
         helm_version="{{.HELM_VERSION}}"
         helm_sha="{{.HELM_AMD64_SHA256}}"
+        k9s_version="{{.K9S_VERSION}}"
+        k9s_sha="{{.K9S_AMD64_SHA256}}"
         download_dir="$remote_dir/downloads"
         extract_dir="$(mktemp -d)"
         trap 'rm -rf "$extract_dir"' EXIT
@@ -468,6 +472,24 @@ tasks:
           "$extract_dir/linux-amd64/helm" \
           /usr/local/bin/helm
 
+        k9s_asset="k9s_Linux_amd64.tar.gz"
+        k9s_archive="k9s-${k9s_version}-Linux-amd64.tar.gz"
+        if ! printf '%s  %s\n' "$k9s_sha" "$download_dir/$k9s_archive" |
+          sha256sum --check --status 2>/dev/null; then
+          curl -fsSL --retry 3 \
+            -o "$download_dir/$k9s_archive.next" \
+            "https://github.com/derailed/k9s/releases/download/$k9s_version/$k9s_asset"
+          printf '%s  %s\n' \
+            "$k9s_sha" \
+            "$download_dir/$k9s_archive.next" |
+            sha256sum --check
+          mv "$download_dir/$k9s_archive.next" "$download_dir/$k9s_archive"
+        fi
+        tar -xzf "$download_dir/$k9s_archive" -C "$extract_dir" k9s
+        sudo -n install -m 0755 \
+          "$extract_dir/k9s" \
+          /usr/local/bin/k9s
+
         test "$(
           kubectl version --client=true --output=yaml |
             awk '/gitVersion:/ { print $2; exit }'
@@ -476,19 +498,54 @@ tasks:
           helm version --short |
             cut -d+ -f1
         )" = "$helm_version"
+        test "$(
+          k9s version --short |
+            awk '$1 == "Version" { sub(/^v/, "", $2); print $2; exit }'
+        )" = "${k9s_version#v}"
         kubectl version --client=true
         helm version --short
+        k9s version --short
         REMOTE
 
-  kubernetes:tools:status:
-    desc: Verify standalone kubectl and Helm clients on the Hive host.
+  kubernetes:access:configure:
+    internal: true
     silent: true
     cmds:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
+        kubeconfig_dir="$HOME/.kube"
+        kubeconfig_next="$kubeconfig_dir/config.next"
+        install -d -m 0700 "$kubeconfig_dir"
+        trap 'rm -f "$kubeconfig_next"' EXIT
+        umask 077
+        sudo -n k0s kubeconfig admin > "$kubeconfig_next"
+        test -s "$kubeconfig_next"
+        mv "$kubeconfig_next" "$kubeconfig_dir/config"
+        chmod 0600 "$kubeconfig_dir/config"
+        kubectl get --raw=/readyz
+        REMOTE
+
+  kubernetes:console:install:
+    desc: Install the pinned Kubernetes console and configure direct SSH access.
+    cmds:
+      - task: kubernetes:tools:install
+      - task: kubernetes:access:configure
+      - task: kubernetes:tools:status
+
+  kubernetes:tools:status:
+    desc: Verify standalone kubectl, Helm, and k9s clients on the Hive host.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        k9s_version="{{.K9S_VERSION}}"
         test "$(command -v kubectl)" = /usr/local/bin/kubectl
         test "$(command -v helm)" = /usr/local/bin/helm
+        test "$(command -v k9s)" = /usr/local/bin/k9s
+        test -s "$HOME/.kube/config"
+        test "$(stat -c '%a' "$HOME/.kube/config")" = 600
         test "$(
           kubectl version --client=true --output=yaml |
             awk '/gitVersion:/ { print $2; exit }'
@@ -497,8 +554,14 @@ tasks:
           helm version --short |
             cut -d+ -f1
         )" = "{{.HELM_VERSION}}"
+        test "$(
+          k9s version --short |
+            awk '$1 == "Version" { sub(/^v/, "", $2); print $2; exit }'
+        )" = "${k9s_version#v}"
+        kubectl get --raw=/readyz
         kubectl version --client=true
         helm version --short
+        k9s version --short
         REMOTE
 
   kvm:verify:
@@ -1057,6 +1120,7 @@ tasks:
           "$firewall_previous_live" \
           "$firewall_live_next"
         REMOTE
+      - task: kubernetes:access:configure
 
   k0s:status:
     desc: Show k0s, node, runtime, storage, and Hive workload state.
