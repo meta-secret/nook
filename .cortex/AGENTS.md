@@ -240,7 +240,7 @@ build-performance PR. Full policy:
 * [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
-* [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
+* [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / manual e2e split; local-provider vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
 * [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.

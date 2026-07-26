@@ -391,10 +391,6 @@ records, and publish it to `meta-secret/nook-workbench` as
 `stats/ai-agent/<pr>.yaml`. Do not wait for post-merge Main. Any performance fix
 belongs in a separate normal Nook PR.
 
-## CI fix PRs (nightly failures only)
-
-When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent and opens a fix PR for normal review. It never merges the PR automatically. Main-branch failures remain visible for manual handling. The nightly path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you and `pr.yml` triggers. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
-
 ## Non-negotiables
 
 - **Never push directly to `main`.** Branch → PR → squash merge.

@@ -130,7 +130,7 @@ RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/
 WORKDIR /meta-secret/nook
 
 # Browser binaries are deliberately outside web-base. PR checks use web-base for unit tests and
-# preview builds. Main/nightly e2e uses Debian's Chromium and ffmpeg packages instead of Playwright's
+# preview builds. Main/manual e2e uses Debian's Chromium and ffmpeg packages instead of Playwright's
 # bundled Chromium + headless-shell download, which otherwise produces a ~1.3 GB image layer.
 FROM web-base AS web-e2e-base
 

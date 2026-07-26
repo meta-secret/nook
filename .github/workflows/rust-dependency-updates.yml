@@ -5,7 +5,7 @@ name: Rust dependency updates
 
 on:
   schedule:
-    # GitHub cron is UTC. Keep this independent of the nightly live-sync e2e run.
+    # GitHub cron is UTC.
     - cron: '0 9 * * 1'
   workflow_dispatch:
 

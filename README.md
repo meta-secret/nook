@@ -288,7 +288,7 @@ deployed from [`infra/`](infra/) directly over verified TLS at
 `rediss://redis-ovh-borg-1.bynull.link:6380`. Run
 `task infra:redis:credential:sync` once to create the ignored mode-`0600`
 `.nook/cache/redis-password` file. Without that file, local and untrusted CI
-builds compile normally without sccache. Hosted Main, nightly, pull-request,
+builds compile normally without sccache. Hosted Main, pull-request,
 arbitrary-ref, dependency-update, and AI-authored jobs do not receive the
 password; keeping Main's cache publisher secret-free makes its BuildKit layers
 reusable by PRs. Override the endpoint with

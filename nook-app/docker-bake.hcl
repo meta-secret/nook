@@ -334,7 +334,7 @@ target "nook-web-ci" {
   cache-to   = web_cache_to
 }
 
-# Main/nightly-only image. It has the same sealed app as nook-web, but swaps in the Chromium base.
+# Main/manual-e2e image. It has the same sealed app as nook-web, but swaps in the Chromium base.
 # Tag it as DOCKER_IMAGE too so the existing deploy/extract tasks consume the already-tested image.
 target "nook-web-e2e" {
   inherits = ["_nook-web-common"]

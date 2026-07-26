@@ -2,8 +2,8 @@
 # build and deploy the preview. Full browser regression e2e is opt-in through the `ci:full-e2e`
 # label for PRs that repair a Main failure; UI-changing PRs otherwise run only their dedicated
 # headless demo specs and retain the resulting videos on the PR workflow run. Main also runs the
-# full local-provider and extension suites, and nightly runs sync-live.
-# Only nightly failures invoke the ci-fix AI worker.
+# full local-provider and extension suites. Live-provider sync checks remain
+# available through the manually dispatched e2e-pr.yml workflow.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline. Agent statistics
 # live in meta-secret/nook-workbench.

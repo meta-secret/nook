@@ -72,7 +72,7 @@ const SYNC_PROVIDER_SPECS = [
   'remote-vault-recovery-sync.spec.ts',
 ] as const
 
-/** Real sync provider API — nightly / manual only. */
+/** Real sync provider API — explicit manual runs only. */
 const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
 
 const specPaths = (files: readonly string[]) =>
