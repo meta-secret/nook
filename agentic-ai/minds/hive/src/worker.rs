@@ -496,6 +496,8 @@ fn bullet_list(values: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::{
         MAX_PERSISTED_RESULT_BYTES, bounded, establish_worker_lifecycle, persistable_patch,
         prepare_workspace,
