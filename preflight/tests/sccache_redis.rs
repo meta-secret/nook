@@ -158,14 +158,12 @@ fn assert_workflows_scope_cache_credentials() {
         }
     }
 
-    for path in [".github/workflows/main.yml"] {
-        let workflow = read(path);
-        assert!(
-            !workflow.contains("NOOK_CACHE_REDIS_PASSWORD"),
-            "hosted cache publishers must stay secret-free so their BuildKit compiler layers are reusable by PRs"
-        );
-        assert!(!workflow.contains("NOOK_CLOUDFLARE_ACCESS"));
-    }
+    let main = read(".github/workflows/main.yml");
+    assert!(
+        !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
+        "hosted cache publishers must stay secret-free so their BuildKit compiler layers are reusable by PRs"
+    );
+    assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 }
 
 fn assert_rust_build_cache_boundary() {
