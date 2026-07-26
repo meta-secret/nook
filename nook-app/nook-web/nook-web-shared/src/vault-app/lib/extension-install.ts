@@ -17,7 +17,14 @@ export type ExtensionInstallTarget = {
 export type ExtensionSetupStatus =
   | "not_installed"
   | "installed_unpaired"
+  | "paired_elsewhere"
   | "paired";
+
+export type ExtensionSetupState = {
+  status: ExtensionSetupStatus;
+  connectedVaultName?: string;
+  connectedVaultStoreId?: string;
+};
 
 type BrowserExtensionEnvironment = {
   maxTouchPoints: number;
@@ -166,17 +173,24 @@ export async function loadExtensionInstallTarget(): Promise<ExtensionInstallTarg
   };
 }
 
-export async function resolveExtensionSetupStatus(
+export async function resolveExtensionSetupState(
   vaultStoreId: string | undefined,
-): Promise<ExtensionSetupStatus> {
-  if (!readInstalledExtensionRuntimeId()) return "not_installed";
-  if (!vaultStoreId) return "installed_unpaired";
+): Promise<ExtensionSetupState> {
+  if (!readInstalledExtensionRuntimeId()) return { status: "not_installed" };
+  if (!vaultStoreId) return { status: "installed_unpaired" };
 
   const discovery = await discoverPairedExtensionIdentity(vaultStoreId);
   if (discovery.status === "locked" || discovery.status === "unlocked") {
-    return "paired";
+    return { status: "paired" };
   }
-  return "installed_unpaired";
+  if (discovery.status === "different-vault") {
+    return {
+      status: "paired_elsewhere",
+      connectedVaultName: discovery.connectedVaultName,
+      connectedVaultStoreId: discovery.connectedVaultStoreId,
+    };
+  }
+  return { status: "installed_unpaired" };
 }
 
 export function openExtensionInstallTarget(

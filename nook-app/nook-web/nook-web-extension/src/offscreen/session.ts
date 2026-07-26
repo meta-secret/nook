@@ -260,8 +260,44 @@ async function flushPasskeyEventToProviders(
   )
 }
 
+function resetSessionState(): void {
+  for (const offer of Array.from(pendingLoginSaveOffers.values())) {
+    clearLoginSaveOffer(offer)
+  }
+  pendingLoginSaveOffers.clear()
+  canceledWebsitePasskeyRequests.clear()
+  if (sessionTimer) {
+    clearTimeout(sessionTimer)
+    sessionTimer = undefined
+  }
+  sessionDeadlineAt = 0
+  sessionGeneration += 1
+  replaceSessionOperations(new Error('Extension session reset.'))
+  if (manager) {
+    try {
+      manager.lockDeviceIdentity()
+      manager.free()
+    } catch {
+      // Ignore error during manager cleanup
+    }
+    manager = undefined
+  }
+}
+
 async function handleMessage(message: unknown): Promise<unknown> {
   switch (messageType(message)) {
+    case 'nook:extension-session-reset': {
+      resetSessionState()
+      return { ok: true }
+    }
+    case 'nook:extension-session-migrate-auth-providers': {
+      const activeManager = await getManager()
+      if ((await activeManager.deviceProtectionStatus()) !== 'unlocked') {
+        return { ok: true, migrated: false }
+      }
+      await activeManager.loadAuthProviders()
+      return { ok: true, migrated: true }
+    }
     case 'nook:extension-session-status': {
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
@@ -430,22 +466,14 @@ async function handleMessage(message: unknown): Promise<unknown> {
           typeof provider.id === 'string',
       )
       if (protection === 'unlocked') {
-        const existing = await activeManager.loadAuthProviders()
-        const merged = new Map<string, StorageProvider>(
-          existing.providers.map((provider) => [provider.id, provider]),
-        )
-        for (const provider of grantedProviders) {
-          // The Rust/Tsify ABI performs the complete shape validation when the
-          // snapshot is saved; this guard only narrows the merge key here.
-          merged.set(provider.id, provider)
-        }
-        await activeManager.saveAuthProviders({
-          providers: Array.from(merged.values()),
+        await activeManager.replaceAuthProvidersForVault({
+          providers: grantedProviders,
           activeVaultStoreId: grant.vaultStoreId,
         })
-      } else if (grantedProviders.length > 0) {
+      } else {
         // Pairing may race a closed/locked offscreen session. Website grants are
-        // already sealed for this device public key, so persist without unlock.
+        // already sealed for this device public key, so replace this vault's
+        // complete provider set without unlock, including an empty set.
         const lockedManager = activeManager as NookVaultManager & {
           savePresealedAuthProviders: (snapshot: {
             providers: StorageProvider[]
@@ -899,6 +927,9 @@ async function handleMessage(message: unknown): Promise<unknown> {
 
 function sessionMessagePriority(type: string): SessionOperationPriority {
   switch (type) {
+    case 'nook:extension-session-reset':
+      return 'expiry'
+    case 'nook:extension-session-migrate-auth-providers':
     case 'nook:extension-session-seal-identity-handoff':
     case 'nook:extension-session-plan-login-save':
     case 'nook:extension-session-commit-login-save':

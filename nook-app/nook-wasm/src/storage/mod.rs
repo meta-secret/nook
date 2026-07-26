@@ -12,6 +12,7 @@ pub(crate) mod drive;
 pub(crate) mod drive_events;
 pub(crate) mod drive_shared;
 pub(crate) mod event_db;
+pub(crate) mod extension_state;
 pub(crate) mod github;
 pub(crate) mod github_events;
 pub(crate) mod icloud;

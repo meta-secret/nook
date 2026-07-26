@@ -4,7 +4,7 @@ import {
   extensionInstallLandingUrl,
   loadExtensionInstallTarget,
   openExtensionInstallTarget,
-  resolveExtensionSetupStatus,
+  resolveExtensionSetupState,
   shouldOfferExtensionSetup,
 } from '$lib/extension-install'
 
@@ -14,7 +14,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function stubExtensionIdentityStatus(status: 'unavailable' | 'locked'): void {
+function stubExtensionIdentityStatus(
+  status: 'unavailable' | 'locked' | 'different-vault',
+): void {
   document.documentElement.setAttribute(
     'data-nook-extension-runtime-id',
     'extension-1',
@@ -32,6 +34,12 @@ function stubExtensionIdentityStatus(status: 'unavailable' | 'locked'): void {
             requestId: message.payload.requestId,
             vaultStoreId: message.payload.vaultStoreId,
             status,
+            ...(status === 'different-vault'
+              ? {
+                  connectedVaultStoreId: 'store-previous',
+                  connectedVaultName: 'Previous vault',
+                }
+              : {}),
           },
         })
       },
@@ -163,22 +171,34 @@ describe('extension install target', () => {
 
 describe('extension setup status', () => {
   test('reports not_installed when the content-script attribute is missing', async () => {
-    await expect(resolveExtensionSetupStatus('store-1')).resolves.toBe(
-      'not_installed',
-    )
+    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+      status: 'not_installed',
+    })
   })
 
   test('reports installed_unpaired when the extension is present but not paired', async () => {
     stubExtensionIdentityStatus('unavailable')
 
-    await expect(resolveExtensionSetupStatus('store-1')).resolves.toBe(
-      'installed_unpaired',
-    )
+    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+      status: 'installed_unpaired',
+    })
   })
 
   test('reports paired when the extension holds a locked grant', async () => {
     stubExtensionIdentityStatus('locked')
 
-    await expect(resolveExtensionSetupStatus('store-1')).resolves.toBe('paired')
+    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+      status: 'paired',
+    })
+  })
+
+  test('reports the vault identity when the extension is paired elsewhere', async () => {
+    stubExtensionIdentityStatus('different-vault')
+
+    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+      status: 'paired_elsewhere',
+      connectedVaultStoreId: 'store-previous',
+      connectedVaultName: 'Previous vault',
+    })
   })
 })

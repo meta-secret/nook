@@ -42,7 +42,26 @@ test('offer browser extension install on vault home and in Devices', async ({
           callback(
             type === 'nook:open-companion-launcher'
               ? { ok: true }
-              : { ok: false },
+              : type === 'nook:extension-paired-vault-identity-discovery'
+                ? {
+                    type: 'nook:extension-paired-vault-identity-status',
+                    payload: {
+                      requestId: (
+                        message as {
+                          payload: { requestId: string }
+                        }
+                      ).payload.requestId,
+                      vaultStoreId: (
+                        message as {
+                          payload: { vaultStoreId: string }
+                        }
+                      ).payload.vaultStoreId,
+                      status: 'different-vault',
+                      connectedVaultStoreId: 'store_previous_9a4f',
+                      connectedVaultName: 'Previous vault',
+                    },
+                  }
+                : { ok: false },
           )
         },
       },
@@ -52,9 +71,12 @@ test('offer browser extension install on vault home and in Devices', async ({
       'demo-extension-id',
     )
   })
-  await expect(setupCard).toHaveAttribute('data-status', 'installed_unpaired')
+  await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
+  await expect(page.getByTestId('extension-connected-vault')).toContainText(
+    'Previous vault',
+  )
   await expect(page.getByTestId('extension-install-setup-connect')).toHaveText(
-    'Connect extension',
+    'Switch extension vault',
   )
   await page.getByTestId('extension-install-setup-connect').click()
   await expect(page.locator('html')).toHaveAttribute(
@@ -77,9 +99,12 @@ test('offer browser extension install on vault home and in Devices', async ({
   })
   const settingsRow = page.getByTestId('extension-setup-settings')
   await expect(settingsRow).toBeVisible()
-  await expect(settingsRow).toHaveAttribute('data-status', 'installed_unpaired')
+  await expect(settingsRow).toHaveAttribute('data-status', 'paired_elsewhere')
+  await expect(
+    page.getByTestId('extension-setup-settings-connected-vault'),
+  ).toContainText('Previous vault')
   await expect(page.getByTestId('extension-setup-settings-cta')).toHaveText(
-    'Connect extension',
+    'Switch extension vault',
   )
   await demoBeat(page)
 })

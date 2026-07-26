@@ -95,6 +95,14 @@ export type ExtensionPairedVaultIdentityStatusMessage =
   | {
       type: 'nook:extension-paired-vault-identity-status'
       payload: ExtensionPairedVaultIdentityStatusBase & {
+        status: 'different-vault'
+        connectedVaultStoreId: string
+        connectedVaultName: string
+      }
+    }
+  | {
+      type: 'nook:extension-paired-vault-identity-status'
+      payload: ExtensionPairedVaultIdentityStatusBase & {
         status: 'unlocked'
         extensionRuntimeId: string
         deviceId: string
@@ -328,6 +336,14 @@ export function isExtensionPairedVaultIdentityStatusMessage(
   }
   if (payload.status === 'unavailable' || payload.status === 'locked') {
     return true
+  }
+  if (payload.status === 'different-vault') {
+    return (
+      typeof payload.connectedVaultStoreId === 'string' &&
+      payload.connectedVaultStoreId.length > 0 &&
+      typeof payload.connectedVaultName === 'string' &&
+      payload.connectedVaultName.length > 0
+    )
   }
   return (
     payload.status === 'unlocked' &&

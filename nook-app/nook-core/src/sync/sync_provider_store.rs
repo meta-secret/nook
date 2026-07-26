@@ -352,6 +352,57 @@ pub fn active_vault_providers(
     }
 }
 
+/// Replace the complete provider grant set for `incoming`'s active vault while
+/// preserving provider rows owned by every other vault.
+#[must_use]
+pub fn replace_active_vault_provider_grants(
+    existing: &AuthProvidersSnapshotData,
+    incoming: &AuthProvidersSnapshotData,
+) -> AuthProvidersSnapshotData {
+    let Some(active_store_id) = incoming
+        .active_vault_store_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    else {
+        return incoming.clone();
+    };
+    let existing_active_store_id = existing
+        .active_vault_store_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let mut providers = existing
+        .providers
+        .iter()
+        .filter_map(|provider| {
+            let provider_store_id = provider
+                .store_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty());
+            match provider_store_id {
+                Some(store_id) if store_id == active_store_id => None,
+                Some(_) => Some(provider.clone()),
+                None if existing_active_store_id == Some(active_store_id) => None,
+                None => existing_active_store_id.map(|store_id| {
+                    let mut scoped = provider.clone();
+                    scoped.store_id = Some(store_id.to_owned());
+                    scoped
+                }),
+            }
+        })
+        .collect::<Vec<_>>();
+    providers.extend(incoming.providers.iter().cloned().map(|mut provider| {
+        provider.store_id = Some(active_store_id.to_owned());
+        provider
+    }));
+    AuthProvidersSnapshotData {
+        providers,
+        active_vault_store_id: Some(active_store_id.to_owned()),
+    }
+}
+
 pub fn sync_providers_for_active_vault(
     providers: &[StorageProviderData],
     active_store_id: Option<&str>,
@@ -2336,6 +2387,83 @@ mod tests {
             providers_visible_while_device_locked(&providers),
             vec![local_a]
         );
+    }
+
+    #[test]
+    fn incoming_pairing_replaces_only_that_vaults_provider_grants() {
+        let mut removed_a = github_provider("removed-a", "owner/old", "pat-old");
+        removed_a.store_id = Some("store-a".to_owned());
+        let mut retained_b = github_provider("retained-b", "owner/b", "pat-b");
+        retained_b.store_id = Some("store-b".to_owned());
+        let mut replacement_a = github_provider("replacement-a", "owner/new", "pat-new");
+        replacement_a.store_id = None;
+        let existing = AuthProvidersSnapshotData {
+            providers: vec![removed_a, retained_b.clone()],
+            active_vault_store_id: Some("store-a".to_owned()),
+        };
+        let incoming = AuthProvidersSnapshotData {
+            providers: vec![replacement_a],
+            active_vault_store_id: Some("store-a".to_owned()),
+        };
+
+        let replaced = replace_active_vault_provider_grants(&existing, &incoming);
+
+        assert_eq!(replaced.providers.len(), 2);
+        assert!(replaced.providers.contains(&retained_b));
+        let replacement = replaced
+            .providers
+            .iter()
+            .find(|provider| provider.id == "replacement-a")
+            .expect("replacement provider");
+        assert_eq!(replacement.store_id.as_deref(), Some("store-a"));
+        assert!(
+            replaced
+                .providers
+                .iter()
+                .all(|provider| provider.id != "removed-a")
+        );
+    }
+
+    #[test]
+    fn incoming_pairing_scopes_preserved_legacy_rows_to_the_previous_vault() {
+        let legacy_a = github_provider("legacy-a", "owner/a", "pat-a");
+        let existing = AuthProvidersSnapshotData {
+            providers: vec![legacy_a],
+            active_vault_store_id: Some("store-a".to_owned()),
+        };
+        let incoming = AuthProvidersSnapshotData {
+            providers: Vec::new(),
+            active_vault_store_id: Some("store-b".to_owned()),
+        };
+
+        let replaced = replace_active_vault_provider_grants(&existing, &incoming);
+
+        assert_eq!(replaced.providers.len(), 1);
+        assert_eq!(replaced.providers[0].store_id.as_deref(), Some("store-a"));
+        assert!(
+            active_vault_providers(&replaced.providers, Some("store-b")).is_empty(),
+            "the new vault must not inherit the previous vault's legacy provider",
+        );
+    }
+
+    #[test]
+    fn empty_incoming_pairing_removes_every_provider_for_that_vault() {
+        let mut removed_a = github_provider("removed-a", "owner/a", "pat-a");
+        removed_a.store_id = Some("store-a".to_owned());
+        let mut retained_b = github_provider("retained-b", "owner/b", "pat-b");
+        retained_b.store_id = Some("store-b".to_owned());
+        let existing = AuthProvidersSnapshotData {
+            providers: vec![removed_a, retained_b.clone()],
+            active_vault_store_id: Some("store-a".to_owned()),
+        };
+        let incoming = AuthProvidersSnapshotData {
+            providers: Vec::new(),
+            active_vault_store_id: Some("store-a".to_owned()),
+        };
+
+        let replaced = replace_active_vault_provider_grants(&existing, &incoming);
+
+        assert_eq!(replaced.providers, vec![retained_b]);
     }
 
     #[test]

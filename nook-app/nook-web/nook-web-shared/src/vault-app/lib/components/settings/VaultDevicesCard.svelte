@@ -16,8 +16,9 @@
   import {
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
-    resolveExtensionSetupStatus,
+    resolveExtensionSetupState,
     shouldOfferExtensionSetup,
+    type ExtensionSetupState,
     type ExtensionSetupStatus,
   } from '$lib/extension-install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
@@ -53,7 +54,7 @@
   let renameAuthId = $state<string | undefined>(undefined)
   let renameLabel = $state('')
   let revokeAuthId = $state<string | undefined>(undefined)
-  let extensionSetupStatus = $state<ExtensionSetupStatus | undefined>(
+  let extensionSetupState = $state<ExtensionSetupState | undefined>(
     undefined,
   )
   let extensionInstallBusy = $state(false)
@@ -64,11 +65,11 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
-    const status = await resolveExtensionSetupStatus(
+    const state = await resolveExtensionSetupState(
       vault.activeVaultStoreId,
     )
-    extensionSetupStatus = shouldOfferExtensionSetup(status)
-      ? status
+    extensionSetupState = shouldOfferExtensionSetup(state.status)
+      ? state
       : undefined
   }
 
@@ -92,12 +93,25 @@
     }
   }
 
+  async function handleExtensionSetupAction() {
+    const state = extensionSetupState
+    if (!state) return
+    if (state.status === 'not_installed') {
+      await handleExtensionInstall()
+      return
+    }
+    await handleExtensionConnect()
+  }
+
   function extensionStatusLabel(status: ExtensionSetupStatus): string {
     if (status === 'not_installed') {
       return vault.t('extension_setup.status_not_installed')
     }
     if (status === 'installed_unpaired') {
       return vault.t('extension_setup.status_installed_unpaired')
+    }
+    if (status === 'paired_elsewhere') {
+      return vault.t('extension_setup.status_paired_elsewhere')
     }
     return vault.t('extension_setup.status_paired')
   }
@@ -199,11 +213,11 @@
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION && extensionSetupStatus}
+  {#if SUPPORTS_EXTENSION && extensionSetupState}
     <section
       class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
       data-testid="extension-setup-settings"
-      data-status={extensionSetupStatus ?? 'unknown'}
+      data-status={extensionSetupState.status}
     >
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
@@ -214,16 +228,27 @@
             {vault.t('extension_setup.settings_body')}
           </p>
         </div>
-        {#if extensionSetupStatus}
+        {#if extensionSetupState}
           <span
             class="shrink-0 rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
             data-testid="extension-setup-settings-status"
           >
-            {extensionStatusLabel(extensionSetupStatus)}
+            {extensionStatusLabel(extensionSetupState.status)}
           </span>
         {/if}
       </div>
-      {#if extensionSetupStatus === 'installed_unpaired'}
+      {#if extensionSetupState.status === 'paired_elsewhere'}
+        <p
+          class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
+          data-testid="extension-setup-settings-connected-vault"
+        >
+          {vault.t('extension_setup.connected_vault', {
+            vault: extensionSetupState.connectedVaultName ?? '',
+            store: extensionSetupState.connectedVaultStoreId ?? '',
+          })}
+        </p>
+      {/if}
+      {#if extensionSetupState.status === 'installed_unpaired' || extensionSetupState.status === 'paired_elsewhere'}
         <p class="text-[11px] leading-relaxed text-muted-foreground/80">
           {vault.t('extension_setup.pair_hint')}
         </p>
@@ -233,33 +258,34 @@
           </p>
         {/if}
       {/if}
-      {#if extensionSetupStatus && extensionSetupStatus !== 'paired'}
+      {#if extensionSetupState.status !== 'paired'}
         <Button
           type="button"
           size="sm"
-          variant={extensionSetupStatus === 'not_installed'
+          variant={extensionSetupState.status === 'not_installed'
             ? 'default'
             : 'outline'}
-          class={extensionSetupStatus === 'installed_unpaired'
+          class={extensionSetupState.status !== 'not_installed'
             ? 'border-border'
             : undefined}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
-          onclick={() =>
-            void (extensionSetupStatus === 'not_installed'
-              ? handleExtensionInstall()
-              : handleExtensionConnect())}
+          onclick={() => void handleExtensionSetupAction()}
         >
           {#if extensionInstallBusy}
             {vault.t(
-              extensionSetupStatus === 'not_installed'
+              extensionSetupState.status === 'not_installed'
                 ? 'extension_setup.loading_install'
                 : 'extension_setup.opening_extension',
             )}
-          {:else if extensionSetupStatus === 'not_installed'}
+          {:else if extensionSetupState.status === 'not_installed'}
             {vault.t('extension_setup.install_cta')}
           {:else}
-            {vault.t('extension_setup.connect_cta')}
+            {vault.t(
+              extensionSetupState.status === 'paired_elsewhere'
+                ? 'extension_setup.switch_cta'
+                : 'extension_setup.connect_cta',
+            )}
           {/if}
         </Button>
       {/if}

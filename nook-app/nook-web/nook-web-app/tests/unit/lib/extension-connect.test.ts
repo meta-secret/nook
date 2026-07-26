@@ -18,8 +18,13 @@ import {
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantStorageItems,
+  extensionStoredPairingGrantStorageItems,
   isExtensionReadySetupState,
+  migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  selectedPairingGrant,
+  selectedPairingGrantFirst,
+  setupAfterPairingGrantRemoval,
   setupStorageKey,
 } from '../../../../nook-web-extension/src/background/pairing-grants'
 
@@ -243,6 +248,7 @@ describe('extension pairing approved message', () => {
       status: 'ready',
       deviceLabel: 'Nook Extension',
       pairedVaults: ['Personal'],
+      selectedVaultStoreId: 'store-1',
       selectedVaultName: 'Personal',
       syncProviderCount: 2,
       eventCount: 3,
@@ -259,6 +265,7 @@ describe('extension pairing approved message', () => {
         status: 'ready',
         deviceLabel: 'Nook Extension',
         pairedVaults: [],
+        selectedVaultStoreId: '',
         selectedVaultName: '',
         syncProviderCount: 0,
         eventCount: 0,
@@ -271,6 +278,7 @@ describe('extension pairing approved message', () => {
         status: 'revoked',
         deviceLabel: 'Nook Extension',
         pairedVaults: ['Personal'],
+        selectedVaultStoreId: 'store-1',
         selectedVaultName: 'Personal',
         syncProviderCount: 0,
         eventCount: 1,
@@ -278,6 +286,160 @@ describe('extension pairing approved message', () => {
         lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
       }),
     ).toBe(false)
+  })
+
+  test('keeps passive updates from selecting another paired vault', () => {
+    const approved = extensionPairingGrantStorageItems(
+      {
+        vaultType: 'simple',
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        vaultStoreId: 'store-1',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-25T00:00:00.000Z',
+        scopes: ['vault-access'],
+        providers: [],
+      },
+      {
+        vaultStoreId: 'store-1',
+        eventCount: 2,
+        heads: ['event-2'],
+        accessGranted: true,
+      },
+    )
+    const grant = approved[pairingGrantStorageKey('store-1')]
+    expect(grant).toBeDefined()
+
+    const passive = extensionStoredPairingGrantStorageItems(
+      grant as Parameters<typeof extensionStoredPairingGrantStorageItems>[0],
+      {
+        vaultStoreId: 'store-1',
+        eventCount: 3,
+        heads: ['event-3'],
+        accessGranted: true,
+      },
+      false,
+    )
+
+    expect(passive[pairingGrantStorageKey('store-1')]).toMatchObject({
+      eventCount: 3,
+      eventLogHeads: ['event-3'],
+    })
+    expect(passive[setupStorageKey]).toBeUndefined()
+  })
+
+  test('restores the newest surviving grant when the selected vault is removed', () => {
+    const first = extensionPairingGrantStorageItems(
+      {
+        vaultType: 'simple',
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        vaultStoreId: 'store-1',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-24T00:00:00.000Z',
+        scopes: ['vault-access'],
+        providers: [],
+      },
+      {
+        vaultStoreId: 'store-1',
+        eventCount: 2,
+        heads: ['event-2'],
+        accessGranted: true,
+      },
+    )
+    const second = extensionPairingGrantStorageItems(
+      {
+        vaultType: 'simple',
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        vaultStoreId: 'store-2',
+        vaultName: 'Work',
+        approvedAt: '2026-07-25T00:00:00.000Z',
+        scopes: ['vault-access'],
+        providers: [],
+      },
+      {
+        vaultStoreId: 'store-2',
+        eventCount: 4,
+        heads: ['event-4'],
+        accessGranted: true,
+      },
+    )
+    const stored = { ...first, ...second }
+
+    expect(setupAfterPairingGrantRemoval(stored, 'store-2')).toMatchObject({
+      selectedVaultStoreId: 'store-1',
+      selectedVaultName: 'Personal',
+      eventCount: 2,
+    })
+    const grants = [
+      stored[pairingGrantStorageKey('store-1')],
+      stored[pairingGrantStorageKey('store-2')],
+    ] as Parameters<typeof selectedPairingGrantFirst>[1]
+    expect(selectedPairingGrantFirst(stored, grants)[0]?.vaultStoreId).toBe(
+      'store-2',
+    )
+    expect(selectedPairingGrant(stored)?.vaultStoreId).toBe('store-2')
+  })
+
+  test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
+    const current = extensionPairingGrantStorageItems(
+      {
+        vaultType: 'simple',
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        vaultStoreId: 'store-1',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-25T00:00:00.000Z',
+        scopes: ['vault-access'],
+        providers: [],
+      },
+      {
+        vaultStoreId: 'store-1',
+        eventCount: 3,
+        heads: ['event-3'],
+        accessGranted: true,
+      },
+    )
+    const key = pairingGrantStorageKey('store-1')
+    const { eventCount, eventLogHeads, lastLocalSyncAt, ...legacyGrant } =
+      current[key] as Record<string, unknown>
+    const legacySetup = {
+      ...(current[setupStorageKey] as Record<string, unknown>),
+    }
+    delete legacySetup.selectedVaultStoreId
+    const migrated = migratedLegacyPairingStorageItems({
+      [key]: legacyGrant,
+      [setupStorageKey]: legacySetup,
+    })
+
+    expect(eventCount).toBe(3)
+    expect(eventLogHeads).toEqual(['event-3'])
+    expect(lastLocalSyncAt).toEqual(expect.any(String))
+    expect(migrated[key]).toMatchObject({
+      eventCount: 3,
+      eventLogHeads: ['event-3'],
+      lastLocalSyncAt,
+    })
+
+    expect(
+      migratedLegacyPairingStorageItems({
+        [key]: legacyGrant,
+        [pairingGrantStorageKey('store-2')]: {
+          ...legacyGrant,
+          vaultStoreId: 'store-2',
+        },
+        [setupStorageKey]: legacySetup,
+      }),
+    ).toEqual({})
   })
 })
 
@@ -383,6 +545,30 @@ describe('extension-owned pairing start', () => {
         },
       }),
     ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityStatusMessage({
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-current',
+          status: 'different-vault',
+          connectedVaultStoreId: 'store-previous',
+          connectedVaultName: 'Previous vault',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExtensionPairedVaultIdentityStatusMessage({
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId: 'request-1',
+          vaultStoreId: 'store-current',
+          status: 'different-vault',
+          connectedVaultStoreId: '',
+          connectedVaultName: 'Previous vault',
+        },
+      }),
+    ).toBe(false)
     expect(
       isExtensionPairedVaultIdentityHandoffRequestMessage({
         type: 'nook:extension-paired-vault-identity-handoff-request',

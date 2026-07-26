@@ -63,12 +63,50 @@ async function getServiceWorker(context) {
 
 async function readExtensionStorage(context) {
   const worker = await getServiceWorker(context)
-  return worker.evaluate(
-    () =>
-      new Promise((resolve) => {
-        globalThis.chrome.storage.local.get(undefined, resolve)
-      }),
-  )
+  return worker.evaluate(async () => {
+    const openDatabase = () =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open('nook_extension', 1)
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains('pairing')) {
+            request.result.createObjectStore('pairing')
+          }
+        }
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+    let database = await openDatabase()
+    if (!database.objectStoreNames.contains('pairing')) {
+      database.close()
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.deleteDatabase('nook_extension')
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject(request.error)
+        request.onblocked = () =>
+          reject(new Error('Unable to repair extension pairing storage.'))
+      })
+      database = await openDatabase()
+    }
+    try {
+      const transaction = database.transaction('pairing', 'readonly')
+      const store = transaction.objectStore('pairing')
+      const keys = await new Promise((resolve, reject) => {
+        const request = store.getAllKeys()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const values = await new Promise((resolve, reject) => {
+        const request = store.getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      return Object.fromEntries(
+        keys.map((key, index) => [String(key), values[index]]),
+      )
+    } finally {
+      database.close()
+    }
+  })
 }
 
 async function advanceCreateVaultWizardToFinalStep(page) {

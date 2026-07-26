@@ -1,33 +1,37 @@
 <script lang="ts">
   import { Puzzle } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import type { ExtensionSetupStatus } from "$lib/extension-install";
+  import type { ExtensionSetupState } from "$lib/extension-install";
   import type { VaultState } from "$lib/vault.svelte";
 
   let {
     vault,
-    status,
+    state,
     installBusy = false,
     onInstall,
     onConnect,
     connectError = false,
   }: {
     vault: VaultState;
-    status: ExtensionSetupStatus;
+    state: ExtensionSetupState;
     installBusy?: boolean;
     onInstall: () => void;
     onConnect: () => void;
     connectError?: boolean;
   } = $props();
 
-  const isNotInstalled = $derived(status === "not_installed");
-  const isInstalledUnpaired = $derived(status === "installed_unpaired");
+  const isNotInstalled = $derived(state.status === "not_installed");
+  const isInstalledUnpaired = $derived(
+    state.status === "installed_unpaired" ||
+      state.status === "paired_elsewhere",
+  );
+  const isPairedElsewhere = $derived(state.status === "paired_elsewhere");
 </script>
 
 <aside
   class="rounded-lg border border-primary/25 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2"
   data-testid="extension-install-setup"
-  data-status={status}
+  data-status={state.status}
 >
   <div class="flex items-start gap-3">
     <Puzzle class="mt-0.5 size-5 shrink-0 text-primary" />
@@ -37,16 +41,31 @@
           {vault.t(
             isNotInstalled
               ? "extension_setup.title"
-              : "extension_setup.pair_title",
+              : isPairedElsewhere
+                ? "extension_setup.switch_title"
+                : "extension_setup.pair_title",
           )}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
           {vault.t(
             isNotInstalled
               ? "extension_setup.body"
-              : "extension_setup.pair_body",
+              : isPairedElsewhere
+                ? "extension_setup.switch_body"
+                : "extension_setup.pair_body",
           )}
         </p>
+        {#if isPairedElsewhere}
+          <p
+            class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
+            data-testid="extension-connected-vault"
+          >
+            {vault.t("extension_setup.connected_vault", {
+              vault: state.connectedVaultName ?? "",
+              store: state.connectedVaultStoreId ?? "",
+            })}
+          </p>
+        {/if}
         {#if isInstalledUnpaired}
           <p class="text-[11px] leading-relaxed text-muted-foreground/80">
             {vault.t("extension_setup.pair_hint")}
@@ -82,7 +101,11 @@
         >
           {installBusy
             ? vault.t("extension_setup.opening_extension")
-            : vault.t("extension_setup.connect_cta")}
+            : vault.t(
+                isPairedElsewhere
+                  ? "extension_setup.switch_cta"
+                  : "extension_setup.connect_cta",
+              )}
         </Button>
       {/if}
     </div>

@@ -8,9 +8,14 @@ import initNookWasm, {
   classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
   configureVaultApplication,
   generatePassword as wasmGeneratePassword,
+  readExtensionPairingState as wasmReadExtensionPairingState,
+  reconcileExtensionPairingState as wasmReconcileExtensionPairingState,
+  removeExtensionPairingState as wasmRemoveExtensionPairingState,
+  writeExtensionPairingState as wasmWriteExtensionPairingState,
   NookAuthenticationOutcomeObservation,
   NookAuthenticationPageObservation,
   NookAuthenticationPageObservations,
+  NookExtensionPairingState,
   NookExternalEventLogRecords,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -35,6 +40,50 @@ function ensureExtensionWasm(): Promise<unknown> {
     return value
   })
   return initPromise
+}
+
+export async function readExtensionPairingState(): Promise<
+  Record<string, unknown>
+> {
+  await ensureExtensionWasm()
+  const state = await wasmReadExtensionPairingState()
+  try {
+    return state.toObject() as Record<string, unknown>
+  } finally {
+    state.free()
+  }
+}
+
+export async function writeExtensionPairingState(
+  entries: Record<string, unknown>,
+): Promise<void> {
+  await ensureExtensionWasm()
+  const state = NookExtensionPairingState.fromObject(entries)
+  try {
+    await wasmWriteExtensionPairingState(state)
+  } finally {
+    state.free()
+  }
+}
+
+export async function removeExtensionPairingState(
+  keys: string[],
+): Promise<void> {
+  await ensureExtensionWasm()
+  await wasmRemoveExtensionPairingState(keys)
+}
+
+export async function reconcileExtensionPairingState(
+  entries: Record<string, unknown>,
+  removedKeys: string[],
+): Promise<void> {
+  await ensureExtensionWasm()
+  const state = NookExtensionPairingState.fromObject(entries)
+  try {
+    await wasmReconcileExtensionPairingState(state, removedKeys)
+  } finally {
+    state.free()
+  }
 }
 
 export async function authenticationWorkflowSnapshot(

@@ -23,8 +23,13 @@ import type {
 import {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
+  isExtensionReadySetupState,
   isStoredExtensionPairingGrant,
+  migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
+  selectedPairingGrant,
+  selectedPairingGrantFirst,
+  setupAfterPairingGrantRemoval,
   setupStorageKey,
 } from './pairing-grants'
 import type { StoredExtensionPairingGrant } from './pairing-grants'
@@ -33,6 +38,9 @@ import {
   classifyAuthenticationOutcome,
   generateSuggestedPassword,
   importExtensionEventLog,
+  readExtensionPairingState,
+  reconcileExtensionPairingState,
+  writeExtensionPairingState,
 } from './vault-runtime'
 import {
   isRuntimeSimpleVaultUrl,
@@ -55,6 +63,7 @@ import {
   type LoginDetectionResponse,
   type LoginDetectionStatus,
 } from '../lib/login-detection-messages'
+import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   isWebsiteAuthenticatorBackupAttachMessage,
   isWebsiteAuthenticatorEnrollCodeMessage,
@@ -400,7 +409,7 @@ async function pairedVaultGrantIsCurrent(
   pending: Extract<PendingIdentityHandoff, { kind: 'paired-vault' }>,
 ): Promise<boolean> {
   const key = pairingGrantStorageKey(pending.vaultStoreId)
-  const stored = await getLocalStorage(key)
+  const stored = await getPairingStorage(key)
   const grant = stored[key]
   return (
     isStoredExtensionPairingGrant(grant) &&
@@ -538,9 +547,43 @@ async function discoverPairedVaultIdentity(
   } satisfies ExtensionPairedVaultIdentityStatusMessage
   try {
     const key = pairingGrantStorageKey(vaultStoreId)
-    const stored = await getLocalStorage(key)
+    const stored = await getPairingStorage()
     const grant = stored[key]
-    if (!isStoredExtensionPairingGrant(grant)) return unavailable
+    const selectedGrant = selectedPairingGrant(stored)
+    if (selectedGrant && selectedGrant.vaultStoreId !== vaultStoreId) {
+      return {
+        type: 'nook:extension-paired-vault-identity-status',
+        payload: {
+          requestId,
+          vaultStoreId,
+          status: 'different-vault',
+          connectedVaultStoreId: selectedGrant.vaultStoreId,
+          connectedVaultName: selectedGrant.vaultName,
+        },
+      }
+    }
+    if (!isStoredExtensionPairingGrant(grant)) {
+      const connectedGrant =
+        selectedGrant ??
+        Object.entries(stored).find(
+          ([storedKey, value]) =>
+            storedKey.startsWith('nook:extension-pairing-grant:') &&
+            isStoredExtensionPairingGrant(value),
+        )?.[1]
+      if (isStoredExtensionPairingGrant(connectedGrant)) {
+        return {
+          type: 'nook:extension-paired-vault-identity-status',
+          payload: {
+            requestId,
+            vaultStoreId,
+            status: 'different-vault',
+            connectedVaultStoreId: connectedGrant.vaultStoreId,
+            connectedVaultName: connectedGrant.vaultName,
+          },
+        }
+      }
+      return unavailable
+    }
 
     await ensureExtensionSessionDocument()
     const statusResponse = (await sendSessionMessage({
@@ -596,7 +639,7 @@ async function requestPairedVaultUnlock(
 ): Promise<Record<string, unknown>> {
   const { requestId, vaultStoreId } = message.payload
   const key = pairingGrantStorageKey(vaultStoreId)
-  const stored = await getLocalStorage(key)
+  const stored = await getPairingStorage(key)
   if (!isStoredExtensionPairingGrant(stored[key])) {
     return {
       ok: false,
@@ -629,24 +672,98 @@ function hasPairingApprovedType(
   )
 }
 
-function setLocalStorage(items: Record<string, unknown>): Promise<void> {
+async function setPairingStorage(
+  items: Record<string, unknown>,
+): Promise<void> {
+  await ensureLegacyPairingMigration()
+  await writeExtensionPairingState(items)
+}
+
+let legacyPairingMigration: Promise<void> | undefined
+
+function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
+  return Object.keys(stored).filter(
+    (key) =>
+      key === setupStorageKey ||
+      key.startsWith('nook:extension-pairing-grant:'),
+  )
+}
+
+function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set(items, () => {
-      const message = chrome.runtime.lastError?.message
-      if (message) reject(new Error(message))
-      else resolve()
+    chrome.storage.local.get((items) => {
+      if (chrome.runtime.lastError) {
+        reject(
+          new Error(
+            chrome.runtime.lastError.message ??
+              'Unable to read legacy extension pairing state.',
+          ),
+        )
+        return
+      }
+      resolve(items)
     })
   })
 }
 
-function getLocalStorage(key: string | null): Promise<Record<string, unknown>> {
+function removeLegacyPairingStorage(keys: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(key, (items) => {
-      const message = chrome.runtime.lastError?.message
-      if (message) reject(new Error(message))
-      else resolve(items)
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) {
+        reject(
+          new Error(
+            chrome.runtime.lastError.message ??
+              'Unable to remove legacy extension pairing state.',
+          ),
+        )
+        return
+      }
+      resolve()
     })
   })
+}
+
+function ensureLegacyPairingMigration(): Promise<void> {
+  legacyPairingMigration ??= (async () => {
+    // Browser storage is a read-once upgrade source only. Rexie remains the
+    // sole ongoing owner of pairing state after the legacy rows are removed.
+    const legacy = await readLegacyPairingStorage()
+    const legacyKeys = legacyPairingStorageKeys(legacy)
+    if (legacyKeys.length === 0) return
+    const current = await readExtensionPairingState()
+    const migrated = migratedLegacyPairingStorageItems(legacy)
+    if (Object.keys(current).length > 0) {
+      const completedKeys = Object.keys(migrated).filter(
+        (key) =>
+          legacyKeys.includes(key) &&
+          key in current &&
+          JSON.stringify(current[key]) === JSON.stringify(migrated[key]),
+      )
+      if (
+        completedKeys.length > 0 &&
+        completedKeys.length === Object.keys(migrated).length
+      ) {
+        await removeLegacyPairingStorage(completedKeys)
+      }
+      return
+    }
+    if (Object.keys(migrated).length > 0) {
+      await writeExtensionPairingState(migrated)
+      await removeLegacyPairingStorage(
+        Object.keys(migrated).filter((key) => legacyKeys.includes(key)),
+      )
+    }
+  })()
+  return legacyPairingMigration
+}
+
+async function getPairingStorage(
+  key?: string,
+): Promise<Record<string, unknown>> {
+  await ensureLegacyPairingMigration()
+  const stored = await readExtensionPairingState()
+  if (key === undefined) return stored
+  return key in stored ? { [key]: stored[key] } : {}
 }
 
 function requestOriginAndRpId(
@@ -690,21 +807,23 @@ function isAuthorizedWebsiteSender(
 }
 
 async function passkeyPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
-  const stored = await getLocalStorage(null)
-  return Object.values(stored).filter(
+  const stored = await getPairingStorage()
+  const grants = Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
       value.scopes.includes('passkey-management'),
   )
+  return selectedPairingGrantFirst(stored, grants)
 }
 
 async function passwordPairingGrants(): Promise<StoredExtensionPairingGrant[]> {
-  const stored = await getLocalStorage(null)
-  return Object.values(stored).filter(
+  const stored = await getPairingStorage()
+  const grants = Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
       value.scopes.includes('password-filling'),
   )
+  return selectedPairingGrantFirst(stored, grants)
 }
 
 async function availableWebsiteGrants(
@@ -2094,14 +2213,26 @@ async function cancelWebsitePasskey(
   return { ok: true }
 }
 
-function removeLocalStorage(keys: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.remove(keys, () => {
-      const message = chrome.runtime.lastError?.message
-      if (message) reject(new Error(message))
-      else resolve()
-    })
-  })
+async function reconcilePairingStorage(
+  items: Record<string, unknown>,
+  removedKeys: string[],
+): Promise<void> {
+  await ensureLegacyPairingMigration()
+  await reconcileExtensionPairingState(items, removedKeys)
+}
+
+async function restorePairingStorage(
+  previous: Record<string, unknown>,
+  written: Record<string, unknown>,
+): Promise<void> {
+  const touchedKeys = Object.keys(written)
+  const restore = Object.fromEntries(
+    touchedKeys
+      .filter((key) => key in previous)
+      .map((key) => [key, previous[key]]),
+  )
+  const addedKeys = touchedKeys.filter((key) => !(key in previous))
+  await reconcilePairingStorage(restore, addedKeys)
 }
 
 async function importApprovedPairing(
@@ -2115,14 +2246,21 @@ async function importApprovedPairing(
     if (!imported.accessGranted) {
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
-    await setLocalStorage(
-      extensionPairingGrantStorageItems(message.payload, imported),
-    )
     await ensureExtensionSessionDocument()
     const providers =
       stageProviderCredentials(message.payload.providers) ??
       message.payload.providers
+    const pairingItems = extensionPairingGrantStorageItems(
+      message.payload,
+      imported,
+    )
+    const previousPairingState = await getPairingStorage()
+    await setPairingStorage(pairingItems)
     try {
+      await sendSessionMessage({
+        type: 'nook:extension-session-migrate-auth-providers',
+      })
+      await sendSessionMessage({ type: 'nook:extension-session-reset' })
       // Snapshot before scrubbing so lazy extension IPC cannot observe emptied
       // credential fields mid-handoff.
       const importMessage = {
@@ -2144,10 +2282,6 @@ async function importApprovedPairing(
         !('ok' in sessionImport) ||
         sessionImport.ok !== true
       ) {
-        await removeLocalStorage([
-          pairingGrantStorageKey(message.payload.vaultStoreId),
-          setupStorageKey,
-        ])
         const reason =
           sessionImport &&
           typeof sessionImport === 'object' &&
@@ -2156,8 +2290,12 @@ async function importApprovedPairing(
           sessionImport.error.length > 0
             ? sessionImport.error
             : 'extension-vault-import-failed'
+        await restorePairingStorage(previousPairingState, pairingItems)
         return { ok: false, reason }
       }
+    } catch (error) {
+      await restorePairingStorage(previousPairingState, pairingItems)
+      throw error
     } finally {
       scrubProviderCredentials(providers)
     }
@@ -2173,18 +2311,26 @@ async function importLocalEventLogUpdate(
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   const key = pairingGrantStorageKey(vaultStoreId)
   try {
-    const stored = await getLocalStorage(key)
+    const stored = await getPairingStorage()
     const grant = stored[key]
     if (!isStoredExtensionPairingGrant(grant)) {
       return { ok: false, reason: 'vault-not-paired' }
     }
     const imported = await importExtensionEventLog(grant, eventLogRecords)
     if (!imported.accessGranted) {
-      await removeLocalStorage([key, setupStorageKey])
+      const setup = setupAfterPairingGrantRemoval(stored, vaultStoreId)
+      await reconcilePairingStorage(setup ? { [setupStorageKey]: setup } : {}, [
+        key,
+        ...(setup ? [] : [setupStorageKey]),
+      ])
       return { ok: false, reason: 'event-log-access-revoked' }
     }
-    await setLocalStorage(
-      extensionStoredPairingGrantStorageItems(grant, imported),
+    const setup = stored[setupStorageKey]
+    const select =
+      isExtensionReadySetupState(setup) &&
+      setup.selectedVaultStoreId === vaultStoreId
+    await setPairingStorage(
+      extensionStoredPairingGrantStorageItems(grant, imported, select),
     )
     await ensureExtensionSessionDocument()
     await sendSessionMessage({
@@ -2203,17 +2349,22 @@ async function importLocalEventLogUpdate(
   }
 }
 
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason !== 'install') {
-    return
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isExtensionPairingStateQueryMessage(message)) {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+    void getPairingStorage(setupStorageKey)
+      .then((stored) =>
+        sendResponse({ ok: true, setup: stored[setupStorageKey] }),
+      )
+      .catch(() =>
+        sendResponse({ ok: false, reason: 'pairing-state-read-failed' }),
+      )
+    return true
   }
 
-  chrome.storage.local.set({
-    installedAt: new Date().toISOString(),
-  })
-})
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isWebsiteLoginPickerOpenMessage(message)) {
     void openWebsiteLoginPicker(message, sender)
       .then(sendResponse)

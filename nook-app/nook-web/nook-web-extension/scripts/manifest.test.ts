@@ -69,8 +69,9 @@ describe('extension origin isolation', () => {
     })
   }
 
-  test('declares the offscreen permission for its memory-only device session', () => {
+  test('declares offscreen and storage permissions for its memory-only session coordination', () => {
     expect(createManifest('1.0.0').permissions).toContain('offscreen')
+    expect(createManifest('1.0.0').permissions).toContain('storage')
   })
 
   test('exposes the official Nook icon to in-page auth gate content scripts', () => {

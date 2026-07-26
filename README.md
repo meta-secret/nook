@@ -99,6 +99,12 @@ Issuer and account labels never enter the website DOM. Settings-page QR
 enrollment and backup-code capture require the same explicit Pilot consent and
 confirmation before anything is saved.
 
+The extension keeps its own encrypted vault projection, pairing grants, and
+sync-provider grants in extension-owned IndexedDB. Clearing website-local vault
+data does not erase or revoke that independent extension device. Reopening the
+same vault store reconnects it automatically; opening a different vault shows
+the extension's current vault identity and requires an explicit, valid switch.
+
 Production installs through the Chrome Web Store (Brave uses the same listing).
 Development and PR previews offer an unsigned ZIP with Developer-mode install
 instructions; see [Deployments](#deployments).

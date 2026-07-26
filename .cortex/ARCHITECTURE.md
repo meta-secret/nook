@@ -219,8 +219,8 @@ root/
   restricted to the configured Simple origin transports that snapshot to the
   service worker; Rust/WASM validates canonical ids/signatures, store identity,
   the extension's protected device id, current approval, and revocation before
-  persisting an extension-origin IndexedDB projection. `chrome.storage.local`
-  contains connection metadata only. Sync providers complement this bridge for
+  persisting an extension-origin IndexedDB projection. Non-secret connection
+  metadata also remains in WASM-managed extension-origin Rexie/IndexedDB. Sync providers complement this bridge for
   changes originating on other devices; they are not required for same-browser
   website/extension coherence.
 
