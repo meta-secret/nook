@@ -78,7 +78,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p lace/src hive/src \
-    && touch lace/src/lib.rs hive/src/main.rs \
+    && touch lace/src/lib.rs hive/src/lib.rs hive/src/main.rs \
     && cargo fetch --locked
 
 # Production image builds use a release-profile cargo-chef layer. Verification
