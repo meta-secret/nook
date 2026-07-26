@@ -34,6 +34,15 @@ string_id!(AttemptId);
 string_id!(LeaseToken);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Artifact {
+    pub id: String,
+    pub kind: String,
+    pub uri: String,
+    pub digest: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaimedTask {
     pub id: TaskId,
     pub kind: String,

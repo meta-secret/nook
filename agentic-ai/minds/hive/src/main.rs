@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use codex::{Arg0DispatchPaths, arg0_dispatch_or_else};
 use hive::model::{AgentId, EnqueueTask, TaskId};
 use hive::{Neo4jTaskStore, TaskStore, Worker, WorkerConfig};
 
@@ -11,7 +12,7 @@ struct Cli {
     #[arg(
         long,
         env = "NEO4J_URI",
-        default_value = "neo4j://hive-neo4j.hive-data.svc.cluster.local:7687"
+        default_value = "neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687"
     )]
     neo4j_uri: String,
     #[arg(long, env = "NEO4J_USERNAME", default_value = "neo4j")]
@@ -69,8 +70,11 @@ enum Command {
     },
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    arg0_dispatch_or_else(run_main)
+}
+
+async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     let cli = Cli::parse();
     let store =
         Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, &cli.neo4j_password).await?;
@@ -109,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
                     poll_max_seconds,
                     model,
                     reasoning_effort,
+                    arg0_paths,
                 },
             )
             .run()

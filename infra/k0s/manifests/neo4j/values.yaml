@@ -23,6 +23,15 @@ services:
   neo4j:
     enabled: false
 
+ssl:
+  bolt:
+    privateKey:
+      secretName: hive-neo4j-tls
+      subPath: private.key
+    publicCertificate:
+      secretName: hive-neo4j-tls
+      subPath: public.crt
+
 config:
   server.default_listen_address: 0.0.0.0
   server.bolt.enabled: "true"

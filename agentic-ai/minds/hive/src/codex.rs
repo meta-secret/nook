@@ -414,10 +414,6 @@ struct TaskProgressReporter<W> {
     decorate: bool,
     task_id: String,
     step: usize,
-    reasoning_buffer: String,
-    reasoning_truncated: bool,
-    reasoning_excerpts: usize,
-    saw_reasoning_delta: bool,
     finalizing_announced: bool,
 }
 
@@ -428,10 +424,6 @@ impl<W: Write> TaskProgressReporter<W> {
             decorate,
             task_id,
             step: 0,
-            reasoning_buffer: String::new(),
-            reasoning_truncated: false,
-            reasoning_excerpts: 0,
-            saw_reasoning_delta: false,
             finalizing_announced: false,
         }
     }
@@ -439,107 +431,35 @@ impl<W: Write> TaskProgressReporter<W> {
     fn observe(&mut self, event: &EventMsg) -> io::Result<()> {
         match event {
             EventMsg::TurnStarted(_) => self.line("36", "●", "start", "Agent started"),
-            EventMsg::ReasoningContentDelta(event) => self.reasoning_delta(&event.delta),
-            EventMsg::AgentReasoning(event) if !self.saw_reasoning_delta => {
-                self.reasoning_excerpt(&event.text)
-            }
-            EventMsg::AgentReasoningSectionBreak(_) => self.flush_reasoning(),
-            EventMsg::ExecCommandBegin(event) => {
-                self.flush_reasoning()?;
+            EventMsg::ExecCommandBegin(_) => {
                 self.step += 1;
-                let summary = summarize_inspection(&event.command);
-                let message = match summary.detail {
-                    Some(detail) => format!("{:02} {} · {detail}", self.step, summary.title),
-                    None => format!("{:02} {}", self.step, summary.title),
-                };
+                let message = format!("{:02} Running repository command", self.step);
                 self.line("36", "↳", "action", &message)
             }
             EventMsg::ExecCommandEnd(event) => self.command_finished(
                 &event.command,
                 event.exit_code,
-                &event.aggregated_output,
                 event.duration.as_secs_f64(),
             ),
-            EventMsg::PatchApplyBegin(event) => {
-                self.flush_reasoning()?;
-                let mut paths = event
-                    .changes
-                    .keys()
-                    .map(|path| path.display().to_string())
-                    .collect::<Vec<_>>();
-                paths.sort();
-                let detail = if paths.is_empty() {
-                    "Applying code changes".to_owned()
-                } else {
-                    format!("Editing {}", paths.join(" · "))
-                };
-                self.line("35", "✎", "edit", &detail)
+            EventMsg::PatchApplyBegin(_) => {
+                self.line("35", "✎", "edit", "Applying repository changes")
             }
             EventMsg::PatchApplyEnd(event) if !event.success => {
                 self.line("31", "✗", "edit", "Code patch failed")
             }
-            EventMsg::Warning(event) | EventMsg::GuardianWarning(event) => {
-                self.line("33", "!", "warning", &event.message)
+            EventMsg::Warning(_) | EventMsg::GuardianWarning(_) => {
+                self.line("33", "!", "warning", "Embedded turn reported a warning")
             }
-            EventMsg::StreamError(event) => self.line(
-                "33",
-                "↻",
-                "retry",
-                &format!("Connection retry: {}", event.message),
-            ),
-            EventMsg::ModelReroute(event) => self.line(
-                "36",
-                "↪",
-                "model",
-                &format!("{} → {}", event.from_model, event.to_model),
-            ),
+            EventMsg::StreamError(_) => {
+                self.line("33", "↻", "retry", "Embedded turn connection retry")
+            }
+            EventMsg::ModelReroute(_) => {
+                self.line("36", "↪", "model", "Embedded turn model rerouted")
+            }
             EventMsg::AgentMessageContentDelta(_) => self.announce_finalizing(),
-            EventMsg::Error(event) => self.line("31", "✗", "error", &event.message),
-            EventMsg::TurnAborted(event) => {
-                self.line("31", "✗", "aborted", &format!("{:?}", event.reason))
-            }
-            EventMsg::TurnComplete(_) => self.flush_reasoning(),
+            EventMsg::Error(_) => self.line("31", "✗", "error", "Embedded turn failed"),
+            EventMsg::TurnAborted(_) => self.line("31", "✗", "aborted", "Embedded turn aborted"),
             _ => Ok(()),
-        }
-    }
-
-    fn reasoning_delta(&mut self, delta: &str) -> io::Result<()> {
-        self.saw_reasoning_delta = true;
-        self.reasoning_buffer.push_str(delta);
-        const BUFFER_LIMIT: usize = 2_048;
-        if self.reasoning_buffer.len() > BUFFER_LIMIT {
-            let mut boundary = BUFFER_LIMIT;
-            while !self.reasoning_buffer.is_char_boundary(boundary) {
-                boundary -= 1;
-            }
-            self.reasoning_buffer.truncate(boundary);
-            self.reasoning_truncated = true;
-        }
-        Ok(())
-    }
-
-    fn flush_reasoning(&mut self) -> io::Result<()> {
-        let mut message = std::mem::take(&mut self.reasoning_buffer);
-        if self.reasoning_truncated {
-            message.push_str(" …");
-            self.reasoning_truncated = false;
-        }
-        if message.trim().is_empty() {
-            return Ok(());
-        }
-        self.reasoning_excerpt(&message)
-    }
-
-    fn reasoning_excerpt(&mut self, message: &str) -> io::Result<()> {
-        const MAX_EXCERPTS: usize = 6;
-        if self.reasoning_excerpts < MAX_EXCERPTS {
-            self.reasoning_excerpts += 1;
-            self.line("35", "◇", "think", message)
-        } else if self.reasoning_excerpts == MAX_EXCERPTS {
-            self.reasoning_excerpts += 1;
-            self.line("35", "…", "think", "Additional reasoning summaries hidden")
-        } else {
-            Ok(())
         }
     }
 
@@ -547,29 +467,28 @@ impl<W: Write> TaskProgressReporter<W> {
         &mut self,
         command: &[String],
         exit_code: i32,
-        output: &str,
         duration_seconds: f64,
     ) -> io::Result<()> {
         if exit_code != 0 {
-            let output = last_non_empty_line(output).unwrap_or("No command output");
-            self.line("31", "✗", "failed", &format!("Exit {exit_code} · {output}"))?;
-            let command = compact_text(&command.join(" "), 180);
-            return self.line("2", "│", "command", &command);
+            return self.line(
+                "31",
+                "✗",
+                "failed",
+                &format!("Repository command exited with status {exit_code}"),
+            );
         }
         if is_verification_command(command) {
-            let output = last_non_empty_line(output).unwrap_or("completed successfully");
             return self.line(
                 "32",
                 "✓",
                 "result",
-                &format!("{duration_seconds:.1}s · {output}"),
+                &format!("{duration_seconds:.1}s · verification completed"),
             );
         }
         Ok(())
     }
 
     fn announce_finalizing(&mut self) -> io::Result<()> {
-        self.flush_reasoning()?;
         if self.finalizing_announced {
             return Ok(());
         }
@@ -624,10 +543,6 @@ fn compact_text(message: &str, limit: usize) -> String {
         .take(limit.saturating_sub(1))
         .collect::<String>();
     format!("{prefix}…")
-}
-
-fn last_non_empty_line(output: &str) -> Option<&str> {
-    output.lines().rev().find(|line| !line.trim().is_empty())
 }
 
 fn is_verification_command(command: &[String]) -> bool {
@@ -990,56 +905,45 @@ mod tests {
     }
 
     #[test]
-    fn task_progress_shows_compact_labeled_agent_excerpts() {
+    fn task_progress_logs_only_fixed_secret_safe_metadata() {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
 
         progress.line("36", "●", "start", "Agent started").unwrap();
         progress
-            .reasoning_delta(
-                "Inspecting the lifecycle contract before changing the implementation.\n",
-            )
-            .unwrap();
-        progress.flush_reasoning().unwrap();
-        progress
             .command_finished(
                 &["cargo".into(), "test".into(), "-p".into(), "core".into()],
                 0,
-                "running tests\ntest result: ok. 8 passed; 0 failed\n",
                 1.24,
             )
+            .unwrap();
+        progress
+            .line("33", "!", "warning", "Embedded turn reported a warning")
             .unwrap();
         progress.announce_finalizing().unwrap();
         progress.announce_finalizing().unwrap();
 
         let output = String::from_utf8(progress.writer).unwrap();
         assert!(output.contains("core-agent"));
-        assert!(output.contains("think   · Inspecting the lifecycle contract"));
-        assert!(output.contains("result  · 1.2s · test result: ok. 8 passed; 0 failed"));
+        assert!(output.contains("result  · 1.2s · verification completed"));
+        assert!(output.contains("Embedded turn reported a warning"));
         assert_eq!(output.matches("Finalizing task result").count(), 1);
     }
 
     #[test]
-    fn task_progress_limits_reasoning_noise_and_reveals_failed_commands() {
+    fn task_progress_does_not_reveal_failed_commands_or_output() {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "ui-agent".into());
 
-        for index in 0..8 {
-            progress
-                .reasoning_excerpt(&format!("Reasoning section {index}"))
-                .unwrap();
-        }
         progress
             .command_finished(
-                &["bun".into(), "run".into(), "test".into()],
+                &["secret-command".into(), "credential-value".into()],
                 1,
-                "Tests failed in onboarding.spec.ts\n",
                 0.5,
             )
             .unwrap();
 
         let output = String::from_utf8(progress.writer).unwrap();
-        assert!(output.contains("Additional reasoning summaries hidden"));
-        assert!(!output.contains("Reasoning section 7"));
-        assert!(output.contains("failed  · Exit 1 · Tests failed"));
-        assert!(output.contains("command · bun run test"));
+        assert!(output.contains("failed  · Repository command exited with status 1"));
+        assert!(!output.contains("secret-command"));
+        assert!(!output.contains("credential-value"));
     }
 }

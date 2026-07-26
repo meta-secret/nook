@@ -35,13 +35,21 @@ No host `CODEX_HOME`, host path, or host Docker socket is mounted. A dedicated
 reaper sidecar alone receives a projected, short-lived service-account token
 with `get`/`delete` access to Pods in `hive-system`. It deletes the entire Pod
 after the worker writes its terminal marker or if the worker container
-restarts, so a second task cannot run in the same microVM. The worker receives
-an isolated rootless Docker daemon inside its Kata guest for repository-owned
-validation.
+restarts, so a second task cannot run in the same microVM. A create-once
+workspace sentinel also prevents a restarted worker process from claiming
+during the reaper's polling window. Workers receive no Docker socket.
 
 The prototype clones the configured repository over HTTPS into a disposable
-`emptyDir`. It does not publish branches or patches. GitHub publication and a
-durable artifact store remain explicit follow-up decisions.
+`emptyDir`. Before marking an implementation task complete, Hive collects a
+bounded binary Git patch, stores its digest and content as an `Artifact` node
+linked to the attempt, and commits that artifact in the same Neo4j transaction
+as the terminal result. Direct GitHub publication remains an explicit
+follow-up decision.
+
+Neo4j requires Bolt TLS. The deployment creates a private host-persisted CA and
+service certificate, configures the chart with `server.bolt.tls_level=REQUIRED`,
+and gives workers only the CA certificate. Workers connect with `neo4j+s://`,
+so both the service hostname and certificate chain are verified.
 
 ## Graph schema
 

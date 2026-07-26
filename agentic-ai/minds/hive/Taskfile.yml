@@ -4,13 +4,33 @@ vars:
   HIVE_DIR: ..
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
   HIVE_TEST_IMAGE: '{{default "nook-hive-test:local" .HIVE_TEST_IMAGE}}'
+  HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
 
 tasks:
   format:
-    desc: Format the Hive Rust workspace.
+    desc: Format Hive in the pinned builder and apply only formatted sources.
     dir: '{{.HIVE_DIR}}'
     cmds:
-      - cargo fmt --all
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        image="{{.HIVE_FORMAT_IMAGE}}"
+        docker build \
+          --platform linux/amd64 \
+          --target formatter \
+          --tag "$image" \
+          --file hive/Dockerfile \
+          .
+        container="$(docker create "$image")"
+        formatted="$(mktemp -d)"
+        cleanup() {
+          docker rm "$container" >/dev/null 2>&1 || true
+          rm -rf "$formatted"
+        }
+        trap cleanup EXIT
+        docker cp "$container:/build/hive/src" "$formatted/src"
+        cp -R "$formatted/src/." hive/src/
+        BASH
 
   check:
     desc: Format-check and lint the Hive worker in its pinned builder image.

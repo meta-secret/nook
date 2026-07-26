@@ -15,6 +15,7 @@ spec:
     metadata:
       annotations:
         hive.nook.sh/codex-auth-sha256: HIVE_AUTH_CHECKSUM
+        hive.nook.sh/neo4j-ca-sha256: HIVE_NEO4J_CA_CHECKSUM
       labels:
         app.kubernetes.io/name: hive
     spec:
@@ -31,6 +32,33 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        - name: neo4j-trust
+          image: HIVE_IMAGE
+          command:
+            - /bin/bash
+            - -ceu
+            - |
+              cat /etc/ssl/certs/ca-certificates.crt /run/neo4j/ca.crt \
+                > /trust/ca-certificates.crt
+              chmod 0444 /trust/ca-certificates.crt
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: neo4j-ca
+              mountPath: /run/neo4j
+              readOnly: true
+            - name: trust-bundle
+              mountPath: /trust
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
         - name: codex-auth
           image: HIVE_IMAGE
           command:
@@ -87,10 +115,10 @@ spec:
               value: /home/hive/.codex
             - name: HOME
               value: /home/hive
-            - name: DOCKER_HOST
-              value: unix:///docker/run/docker.sock
             - name: NEO4J_URI
-              value: neo4j://hive-neo4j.hive-data.svc.cluster.local:7687
+              value: neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+            - name: SSL_CERT_FILE
+              value: /trust/ca-certificates.crt
             - name: NEO4J_USERNAME
               value: neo4j
             - name: NEO4J_PASSWORD
@@ -112,8 +140,9 @@ spec:
               mountPath: /home/hive
             - name: temporary
               mountPath: /tmp
-            - name: docker-run
-              mountPath: /docker/run
+            - name: trust-bundle
+              mountPath: /trust
+              readOnly: true
           resources:
             requests:
               cpu: "2"
@@ -122,32 +151,6 @@ spec:
             limits:
               cpu: "4"
               memory: 12Gi
-              ephemeral-storage: 100Gi
-        - name: docker
-          image: docker:28.5.1-dind-rootless@sha256:87d03cfe51f2bf87eec6dda1922dc572da4d37a1d21c5ca8e8b22c8a1fa107cc
-          imagePullPolicy: IfNotPresent
-          args:
-            - --host=unix:///docker/run/docker.sock
-          env:
-            - name: DOCKER_TLS_CERTDIR
-              value: ""
-          securityContext:
-            privileged: true
-            runAsUser: 1000
-            runAsGroup: 1000
-          volumeMounts:
-            - name: docker-run
-              mountPath: /docker/run
-            - name: docker-data
-              mountPath: /home/rootless/.local/share/docker
-          resources:
-            requests:
-              cpu: "1"
-              memory: 2Gi
-              ephemeral-storage: 20Gi
-            limits:
-              cpu: "4"
-              memory: 8Gi
               ephemeral-storage: 100Gi
         - name: pod-reaper
           image: HIVE_IMAGE
@@ -220,12 +223,13 @@ spec:
         - name: temporary
           emptyDir:
             sizeLimit: 2Gi
-        - name: docker-run
+        - name: trust-bundle
           emptyDir:
-            sizeLimit: 64Mi
-        - name: docker-data
-          emptyDir:
-            sizeLimit: 100Gi
+            sizeLimit: 2Mi
+        - name: neo4j-ca
+          secret:
+            secretName: hive-neo4j-ca
+            defaultMode: 0400
         - name: codex-auth-source
           secret:
             secretName: hive-codex-auth

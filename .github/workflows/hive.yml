@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/hive.yml
+      - .github/scripts/hive-manifest-contract.rb
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/hive.yml
+      - .github/scripts/hive-manifest-contract.rb
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
@@ -53,6 +55,7 @@ jobs:
           task --list | grep -q 'infra:kata:verify'
           task --list | grep -q 'infra:neo4j:deploy'
           task --list | grep -q 'infra:hive:deploy'
+          task infra:k0s:manifests:check
 
       - name: Hive format and Clippy
         run: task hive:check

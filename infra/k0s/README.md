@@ -20,7 +20,11 @@ local PV at `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
 Kubernetes Secrets are encrypted in etcd with the generated
 `/var/lib/k0s/pki/hive-encryption-provider.yaml`; that root-only file must be
 included in encrypted host backups or disaster recovery cannot decrypt the
-cluster's Secrets.
+cluster's Secrets. A guarded k0s uninstall preserves that provider and an
+AES-encrypted export of the Neo4j credentials under
+`/var/lib/hive/k0s-recovery`; reinstall restores them before Neo4j starts.
+Neo4j Bolt traffic is TLS-only with a persistent private CA under
+`/var/lib/hive/neo4j-tls`.
 
 The first Hive deployment requires an explicit auth file:
 

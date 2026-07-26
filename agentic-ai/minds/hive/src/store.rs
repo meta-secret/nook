@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::model::{AgentId, ClaimedTask, EnqueueTask, LeaseToken, TaskId};
+use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, LeaseToken, TaskId};
 
 #[async_trait]
 pub trait TaskStore: Clone + Send + Sync + 'static {
@@ -29,6 +29,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         task: &ClaimedTask,
         agent_id: &AgentId,
         summary: &str,
+        artifact: Option<&Artifact>,
     ) -> anyhow::Result<bool>;
 
     async fn fail(
@@ -49,7 +50,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::TaskStore;
-    use crate::model::{AgentId, AttemptId, ClaimedTask, EnqueueTask, LeaseToken, TaskId};
+    use crate::model::{
+        AgentId, Artifact, AttemptId, ClaimedTask, EnqueueTask, LeaseToken, TaskId,
+    };
 
     #[derive(Debug, Clone)]
     struct TestTask {
@@ -175,6 +178,7 @@ mod tests {
             claimed: &ClaimedTask,
             _agent_id: &AgentId,
             _summary: &str,
+            _artifact: Option<&Artifact>,
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
@@ -273,7 +277,17 @@ mod tests {
                 .await
                 .unwrap()
         );
-        assert!(!store.complete(&stale, &agent_a, "late").await.unwrap());
-        assert!(store.complete(&current, &agent_b, "done").await.unwrap());
+        assert!(
+            !store
+                .complete(&stale, &agent_a, "late", None)
+                .await
+                .unwrap()
+        );
+        assert!(
+            store
+                .complete(&current, &agent_b, "done", None)
+                .await
+                .unwrap()
+        );
     }
 }

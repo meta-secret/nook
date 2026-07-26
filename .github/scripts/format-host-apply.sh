@@ -29,10 +29,10 @@ awk -f "$extract_awk" "$tmp" >"$patch"
 
 if [[ ! -s "$patch" ]]; then
   echo '==> Already formatted; host working tree unchanged.'
-  exit 0
+else
+  git apply "$patch"
+  echo '==> Applied sealed-image format changes to the host working tree.'
 fi
 
-git apply "$patch"
-
-echo '==> Applied sealed-image format changes to the host working tree.'
+task hive:format
 git status --short --untracked-files=no

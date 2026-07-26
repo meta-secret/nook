@@ -7,7 +7,7 @@ use rand::RngExt;
 use uuid::Uuid;
 
 use crate::model::{
-    AgentId, AttemptId, ClaimedTask, DependencyResult, EnqueueTask, LeaseToken, TaskId,
+    AgentId, Artifact, AttemptId, ClaimedTask, DependencyResult, EnqueueTask, LeaseToken, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -35,6 +35,11 @@ fn is_transient_claim_error(error: &anyhow::Error) -> bool {
                 _ => false,
             })
     })
+}
+
+fn transient_claim_retry_delay(retry: usize, error: &anyhow::Error) -> Option<Duration> {
+    (retry + 1 < CLAIM_RETRY_LIMIT && is_transient_claim_error(error))
+        .then(|| Duration::from_millis(rand::rng().random_range(20..=80)))
 }
 
 #[derive(Clone)]
@@ -344,9 +349,12 @@ impl TaskStore for Neo4jTaskStore {
 
             match result {
                 Ok(claimed) => return Ok(claimed),
-                Err(error) if retry + 1 < CLAIM_RETRY_LIMIT && is_transient_claim_error(&error) => {
-                    let delay_ms = rand::rng().random_range(20..=80);
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                Err(error) if transient_claim_retry_delay(retry, &error).is_some() => {
+                    tokio::time::sleep(
+                        transient_claim_retry_delay(retry, &error)
+                            .expect("retry guard proved a delay exists"),
+                    )
+                    .await;
                 }
                 Err(error) => return Err(error),
             }
@@ -391,6 +399,7 @@ impl TaskStore for Neo4jTaskStore {
         task: &ClaimedTask,
         agent_id: &AgentId,
         summary: &str,
+        artifact: Option<&Artifact>,
     ) -> anyhow::Result<bool> {
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
@@ -427,6 +436,31 @@ impl TaskStore for Neo4jTaskStore {
         if !accepted {
             transaction.rollback().await?;
             return Ok(false);
+        }
+
+        if let Some(artifact) = artifact {
+            transaction
+                .run(
+                    query(
+                        "MATCH (attempt:Attempt {id: $attempt_id})
+                         CREATE (artifact:Artifact {
+                           id: $artifact_id,
+                           kind: $kind,
+                           uri: $uri,
+                           digest: $digest,
+                           content: $content,
+                           created_at: timestamp()
+                         })
+                         CREATE (attempt)-[:PRODUCED]->(artifact)",
+                    )
+                    .param("attempt_id", task.attempt_id.as_str())
+                    .param("artifact_id", artifact.id.as_str())
+                    .param("kind", artifact.kind.as_str())
+                    .param("uri", artifact.uri.as_str())
+                    .param("digest", artifact.digest.as_str())
+                    .param("content", artifact.content.as_str()),
+                )
+                .await?;
         }
 
         transaction
@@ -494,8 +528,10 @@ mod tests {
     use neo4rs::{Error as Neo4jDriverError, query};
     use uuid::Uuid;
 
-    use super::{Neo4jTaskStore, is_transient_claim_error};
-    use crate::model::{AgentId, EnqueueTask, TaskId};
+    use super::{
+        CLAIM_RETRY_LIMIT, Neo4jTaskStore, is_transient_claim_error, transient_claim_retry_delay,
+    };
+    use crate::model::{AgentId, Artifact, EnqueueTask, TaskId};
     use crate::store::TaskStore;
 
     fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
@@ -521,6 +557,10 @@ mod tests {
 
         assert!(is_transient_claim_error(&transient));
         assert!(!is_transient_claim_error(&permanent));
+        assert!(transient_claim_retry_delay(0, &transient).is_some());
+        assert!(transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 2, &transient).is_some());
+        assert!(transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 1, &transient).is_none());
+        assert!(transient_claim_retry_delay(0, &permanent).is_none());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -578,11 +618,51 @@ mod tests {
                 .is_none(),
             "dependent task must remain blocked"
         );
+        let artifact = Artifact {
+            id: format!("artifact-{suffix}"),
+            kind: "git-patch".to_owned(),
+            uri: format!("hive://artifact/artifact-{suffix}"),
+            digest: "sha256:fixture".to_owned(),
+            content: "diff --git a/file b/file".to_owned(),
+        };
         assert!(
             store
-                .complete(&dependency_claim, &agent_a, "dependency complete")
+                .complete(
+                    &dependency_claim,
+                    &agent_a,
+                    "dependency complete",
+                    Some(&artifact),
+                )
                 .await
                 .expect("complete dependency")
+        );
+        let mut artifact_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (:Attempt {id: $attempt_id})-[:PRODUCED]->(artifact:Artifact)
+                     RETURN artifact.digest AS digest, artifact.content AS content",
+                )
+                .param("attempt_id", dependency_claim.attempt_id.as_str()),
+            )
+            .await
+            .expect("query durable artifact");
+        let artifact_row = artifact_rows
+            .next()
+            .await
+            .expect("read durable artifact")
+            .expect("artifact row");
+        assert_eq!(
+            artifact_row
+                .get::<String>("digest")
+                .expect("artifact digest"),
+            artifact.digest
+        );
+        assert_eq!(
+            artifact_row
+                .get::<String>("content")
+                .expect("artifact content"),
+            artifact.content
         );
 
         let (claim_b_result, claim_c_result) =
@@ -620,13 +700,13 @@ mod tests {
         );
         assert!(
             !store
-                .complete(&stale_claim, stale_agent, "stale completion")
+                .complete(&stale_claim, stale_agent, "stale completion", None)
                 .await
                 .expect("stale completion")
         );
         assert!(
             store
-                .complete(&retry_claim, retry_agent, "retry complete")
+                .complete(&retry_claim, retry_agent, "retry complete", None)
                 .await
                 .expect("current completion")
         );

@@ -3,8 +3,7 @@ k8sDistribution: k0s
 imagePullPolicy: IfNotPresent
 
 image:
-  reference: quay.io/kata-containers/kata-deploy
-  tag: 4.0.0
+  reference: quay.io/kata-containers/kata-deploy@sha256:e677a892072610f948b192d5bedb7fbcc62c894315c22bf703af484c49bd8776
 
 monitor:
   enabled: false

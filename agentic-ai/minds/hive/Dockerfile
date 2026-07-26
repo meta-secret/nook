@@ -45,6 +45,9 @@ FROM source AS check
 RUN cargo fmt --all -- --check \
     && cargo clippy --locked -p hive --all-targets -- -D warnings
 
+FROM source AS formatter
+RUN cargo fmt --all
+
 FROM check AS test-runner
 CMD ["cargo", "test", "--locked", "-p", "hive"]
 

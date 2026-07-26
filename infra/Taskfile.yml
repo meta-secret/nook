@@ -16,6 +16,11 @@ vars:
   NEO4J_CHART_SHA256: 62de9ecce52cc0078742a7b98649719cdb55c0458df69ee16230e26b010aedd9
 
 tasks:
+  k0s:manifests:check:
+    desc: Validate Hive isolation and TLS invariants in repository manifests.
+    cmds:
+      - ruby .github/scripts/hive-manifest-contract.rb
+
   mesh:node:add:
     desc: Idempotently add a Linux server as a distinct Cloudflare Mesh node.
     silent: true
@@ -373,6 +378,13 @@ tasks:
         mv "$download_dir/$helm_asset.next" "$download_dir/$helm_asset"
 
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
+        sudo -n install -d -m 0700 /var/lib/hive/k0s-recovery
+        if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml &&
+          sudo -n test -s /var/lib/hive/k0s-recovery/encryption-provider.yaml; then
+          sudo -n install -D -m 0600 \
+            /var/lib/hive/k0s-recovery/encryption-provider.yaml \
+            /var/lib/k0s/pki/hive-encryption-provider.yaml
+        fi
         if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml; then
           encryption_key="$(openssl rand -base64 32)"
           encryption_config="$(mktemp)"
@@ -411,7 +423,11 @@ tasks:
             --no-taints \
             --config /etc/k0s/k0s.yaml
         fi
-        sudo -n systemctl enable --now k0scontroller
+        if sudo -n systemctl is-active --quiet k0scontroller; then
+          sudo -n systemctl restart k0scontroller
+        else
+          sudo -n systemctl enable --now k0scontroller
+        fi
         for _ in $(seq 1 120); do
           if sudo -n k0s kubectl get --raw=/readyz >/dev/null 2>&1; then
             break
@@ -420,6 +436,28 @@ tasks:
         done
         sudo -n k0s kubectl get --raw=/readyz >/dev/null
         sudo -n k0s kubectl wait node --all --for=condition=Ready --timeout=5m
+        for namespace in hive-data hive-system; do
+          sudo -n k0s kubectl create namespace "$namespace" \
+            --dry-run=client \
+            -o yaml |
+            sudo -n k0s kubectl apply -f -
+        done
+        if sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc; then
+          recovery_key="$(mktemp)"
+          trap 'rm -f "$recovery_key"' EXIT
+          umask 077
+          sudo -n awk '/secret:/ {print $2; exit}' \
+            /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
+          test -s "$recovery_key"
+          sudo -n openssl enc -d -aes-256-cbc -pbkdf2 \
+            -pass "file:$recovery_key" \
+            -in /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc |
+            sudo -n k0s kubectl apply -f -
+          rm -f "$recovery_key"
+          trap - EXIT
+        fi
+        sudo -n k0s kubectl get secrets --all-namespaces -o json |
+          sudo -n k0s kubectl replace -f -
         sudo -n k0s kubectl label node --all \
           hive.nook.sh/storage=local \
           hive.nook.sh/kata=enabled \
@@ -455,6 +493,55 @@ tasks:
         fi
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
+        recovery_dir=/var/lib/hive/k0s-recovery
+        sudo -n install -d -m 0700 "$recovery_dir"
+        sudo -n install -m 0600 \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml \
+          "$recovery_dir/encryption-provider.yaml"
+        secret_backup="$(mktemp)"
+        trap 'rm -f "$secret_backup"' EXIT
+        found_secret=false
+        for secret in \
+          hive-data/hive-neo4j-auth \
+          hive-data/hive-neo4j-tls \
+          hive-system/hive-neo4j-client \
+          hive-system/hive-neo4j-ca; do
+          namespace="${secret%%/*}"
+          name="${secret#*/}"
+          if sudo -n k0s kubectl get secret "$name" \
+            --namespace "$namespace" >/dev/null 2>&1; then
+            if test "$found_secret" = true; then
+              printf '%s\n' '---' >> "$secret_backup"
+            fi
+            sudo -n k0s kubectl get secret "$name" \
+              --namespace "$namespace" \
+              -o json |
+              jq 'del(
+                .metadata.uid,
+                .metadata.resourceVersion,
+                .metadata.creationTimestamp,
+                .metadata.managedFields,
+                .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration"
+              )' >> "$secret_backup"
+            found_secret=true
+          fi
+        done
+        if test "$found_secret" = true; then
+          encrypted_backup="$(mktemp)"
+          recovery_key="$(mktemp)"
+          trap 'rm -f "$secret_backup" "$encrypted_backup" "$recovery_key"' EXIT
+          umask 077
+          sudo -n awk '/secret:/ {print $2; exit}' \
+            /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
+          test -s "$recovery_key"
+          openssl enc -aes-256-cbc -salt -pbkdf2 \
+            -pass "file:$recovery_key" \
+            -in "$secret_backup" \
+            -out "$encrypted_backup"
+          sudo -n install -m 0600 \
+            "$encrypted_backup" \
+            "$recovery_dir/neo4j-secrets.yaml.enc"
+        fi
         sudo -n k0s stop
         sudo -n k0s reset
         test -d /var/lib/hive/neo4j
@@ -547,6 +634,60 @@ tasks:
         secret_dir="$(mktemp -d)"
         trap 'rm -rf "$secret_dir"' EXIT
         umask 077
+        tls_dir=/var/lib/hive/neo4j-tls
+        sudo -n install -d -m 0700 "$tls_dir"
+        if ! sudo -n test -s "$tls_dir/ca.key" ||
+          ! sudo -n test -s "$tls_dir/ca.crt" ||
+          ! sudo -n test -s "$tls_dir/private.key" ||
+          ! sudo -n test -s "$tls_dir/public.crt" ||
+          ! sudo -n openssl x509 -checkend 2592000 -noout \
+            -in "$tls_dir/public.crt"; then
+          openssl req -x509 -newkey rsa:3072 -nodes \
+            -days 3650 \
+            -subj "/CN=Nook Hive Neo4j CA" \
+            -keyout "$secret_dir/ca.key" \
+            -out "$secret_dir/ca.crt"
+          openssl req -newkey rsa:3072 -nodes \
+            -subj "/CN=hive-neo4j.hive-data.svc.cluster.local" \
+            -keyout "$secret_dir/private.key" \
+            -out "$secret_dir/server.csr"
+          cat > "$secret_dir/server.ext" <<'EOF'
+        basicConstraints=critical,CA:FALSE
+        keyUsage=critical,digitalSignature,keyEncipherment
+        extendedKeyUsage=serverAuth
+        subjectAltName=DNS:hive-neo4j,DNS:hive-neo4j.hive-data,DNS:hive-neo4j.hive-data.svc,DNS:hive-neo4j.hive-data.svc.cluster.local
+        EOF
+          openssl x509 -req \
+            -days 825 \
+            -in "$secret_dir/server.csr" \
+            -CA "$secret_dir/ca.crt" \
+            -CAkey "$secret_dir/ca.key" \
+            -CAcreateserial \
+            -extfile "$secret_dir/server.ext" \
+            -out "$secret_dir/public.crt"
+          sudo -n install -m 0600 "$secret_dir/ca.key" "$tls_dir/ca.key"
+          sudo -n install -m 0644 "$secret_dir/ca.crt" "$tls_dir/ca.crt"
+          sudo -n install -m 0600 "$secret_dir/private.key" "$tls_dir/private.key"
+          sudo -n install -m 0644 "$secret_dir/public.crt" "$tls_dir/public.crt"
+        fi
+        for certificate in ca.crt private.key public.crt; do
+          sudo -n cat "$tls_dir/$certificate" > "$secret_dir/$certificate"
+        done
+
+        kubectl create secret generic hive-neo4j-tls \
+          --namespace hive-data \
+          --from-file=private.key="$secret_dir/private.key" \
+          --from-file=public.crt="$secret_dir/public.crt" \
+          --dry-run=client \
+          -o yaml |
+          kubectl apply -f -
+        kubectl create secret generic hive-neo4j-ca \
+          --namespace hive-system \
+          --from-file=ca.crt="$secret_dir/ca.crt" \
+          --dry-run=client \
+          -o yaml |
+          kubectl apply -f -
+
         auth_exists=false
         client_exists=false
         if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
@@ -673,12 +814,19 @@ tasks:
           jq -e 'type == "object"' "$auth_file" >/dev/null
           ssh -n -o BatchMode=yes "$ssh_target" \
             "install -d -m 0700 '$remote_dir/secrets'"
+          remote_auth_file="$remote_dir/secrets/codex-auth.json.next"
+          cleanup_auth() {
+            ssh -n -o BatchMode=yes "$ssh_target" \
+              "rm -f '$remote_auth_file'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_auth EXIT
           scp -q -o BatchMode=yes "$auth_file" \
-            "$ssh_target:$remote_dir/secrets/codex-auth.json.next"
+            "$ssh_target:$remote_auth_file"
           ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
         set -euo pipefail
         remote_dir="$remote_dir"
         auth_file="\$remote_dir/secrets/codex-auth.json.next"
+        trap 'rm -f "\$auth_file"' EXIT
         chmod 0600 "\$auth_file"
         sudo -n k0s kubectl create secret generic hive-codex-auth \
           --namespace hive-system \
@@ -686,8 +834,9 @@ tasks:
           --dry-run=client \
           -o yaml |
           sudo -n k0s kubectl apply -f -
-        rm -f "\$auth_file"
         REMOTE
+          trap - EXIT
+          cleanup_auth
         else
           ssh -o BatchMode=yes "$ssh_target" \
             "sudo -n k0s kubectl get secret hive-codex-auth --namespace hive-system >/dev/null"
@@ -714,10 +863,24 @@ tasks:
             sha256sum |
             cut -d' ' -f1
         )"
+        neo4j_ca_checksum="$(
+          kubectl get secret hive-neo4j-ca \
+            --namespace hive-system \
+            -o jsonpath='{.data.ca\\.crt}' |
+            sha256sum |
+            cut -d' ' -f1
+        )"
         case "$auth_checksum" in
           ????????????????????????????????????????????????????????????????) ;;
           *)
             echo "Codex authentication checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
+        case "$neo4j_ca_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Neo4j CA checksum is invalid" >&2
             exit 1
             ;;
         esac
@@ -733,6 +896,7 @@ tasks:
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           -e "s|HIVE_AUTH_CHECKSUM|$auth_checksum|g" \
+          -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/deployment.yaml" > "$rendered"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml"
@@ -750,6 +914,56 @@ tasks:
         test "$(kubectl get deployment hive \
           --namespace hive-system \
           -o jsonpath='{.spec.template.spec.automountServiceAccountToken}')" = false
+        deployment_json="$(kubectl get deployment hive --namespace hive-system -o json)"
+        if printf '%s' "$deployment_json" | jq -e \
+          '[.spec.template.spec.containers[], .spec.template.spec.initContainers[]]
+           | any(.securityContext.privileged == true)' >/dev/null; then
+          echo "Hive deployment contains a privileged container" >&2
+          exit 1
+        fi
+        if printf '%s' "$deployment_json" | jq -e \
+          '.spec.template.spec.volumes // [] | any(has("hostPath"))' >/dev/null; then
+          echo "Hive deployment contains a hostPath volume" >&2
+          exit 1
+        fi
+        test "$(
+          printf '%s' "$deployment_json" |
+            jq -r '.spec.template.spec.containers[]
+              | select(.name == "hive")
+              | .env[]
+              | select(.name == "NEO4J_URI")
+              | .value'
+        )" = neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+
+        old_pod="$(kubectl get pods \
+          --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o jsonpath='{.items[0].metadata.name}')"
+        old_uid="$(kubectl get pod "$old_pod" \
+          --namespace hive-system \
+          -o jsonpath='{.metadata.uid}')"
+        kubectl exec "$old_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /usr/bin/touch /workspace/.hive-task-finished
+        kubectl wait "pod/$old_pod" \
+          --namespace hive-system \
+          --for=delete \
+          --timeout=5m
+        kubectl rollout status deployment/hive \
+          --namespace hive-system \
+          --timeout=10m
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.status.readyReplicas}')" = 4
+        if kubectl get pods \
+          --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}' |
+          grep -Fx "$old_uid"; then
+          echo "Hive lifecycle verification reused the terminated Pod" >&2
+          exit 1
+        fi
         kubectl get pods --namespace hive-system \
           -l app.kubernetes.io/name=hive \
           -o wide
