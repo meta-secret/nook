@@ -186,5 +186,5 @@ structs must convert into a typed enum before domain decisions are made.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
 - Run targeted portable Rust tests plus `cd nook-app && cargo clippy -p
-  nook-core -p nook-auth2 -p nook-replication --all-targets -- -D warnings`.
+  nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings`.
 - When exposed to web, regenerate wasm bindings and run the web type check.

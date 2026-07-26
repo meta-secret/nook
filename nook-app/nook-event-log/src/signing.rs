@@ -1,11 +1,9 @@
 //! Ed25519 signing identity for vault events (separate from X25519 encryption keys).
 
-use crate::errors::{EventError, VaultResult};
-use crate::event_canonical::format_ed25519_signature;
-use crate::format_auth_key_id;
-use crate::vault_ids::AuthKeyId;
-use crate::vault_wire::{DeviceSigningPublicKey, SigningSeedHex};
+use crate::canonical::format_ed25519_signature;
+use crate::{EventError, EventResult};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, SigningSeedHex, format_auth_key_id};
 use sha2::{Digest, Sha256};
 
 const SIGNING_SEED_LEN: usize = 32;
@@ -17,14 +15,14 @@ pub struct SigningIdentity {
 }
 
 impl SigningIdentity {
-    pub fn generate() -> VaultResult<(Self, SigningSeedHex)> {
+    pub fn generate() -> EventResult<(Self, SigningSeedHex)> {
         let mut seed = [0u8; SIGNING_SEED_LEN];
         getrandom::getrandom(&mut seed)
             .map_err(|error| EventError::SigningSeedGeneration(error.to_string()))?;
         Self::from_seed_hex(&hex::encode(seed))
     }
 
-    pub fn from_seed_hex(seed_hex: &str) -> VaultResult<(Self, SigningSeedHex)> {
+    pub fn from_seed_hex(seed_hex: &str) -> EventResult<(Self, SigningSeedHex)> {
         let seed = SigningSeedHex::parse(seed_hex)?;
         let bytes = hex::decode(seed.as_str()).map_err(EventError::from)?;
         let seed_bytes: [u8; SIGNING_SEED_LEN] = bytes
@@ -34,7 +32,7 @@ impl SigningIdentity {
         Ok((Self { signing_key }, seed))
     }
 
-    pub fn from_seed_hex_stored(seed_hex: &str) -> VaultResult<Self> {
+    pub fn from_seed_hex_stored(seed_hex: &str) -> EventResult<Self> {
         Ok(Self::from_seed_hex(seed_hex)?.0)
     }
 
@@ -58,26 +56,25 @@ impl SigningIdentity {
         &self.signing_key
     }
 
-    pub fn actor_id_for_verifying_key(verifying_key: &VerifyingKey) -> VaultResult<AuthKeyId> {
+    pub fn actor_id_for_verifying_key(verifying_key: &VerifyingKey) -> EventResult<AuthKeyId> {
         let digest = hex::encode(Sha256::digest(verifying_key.as_bytes()));
         format_auth_key_id(&digest).map_err(Into::into)
     }
 
-    pub fn verifying_key_from_public_key_hex(raw: &str) -> VaultResult<VerifyingKey> {
+    pub fn verifying_key_from_public_key_hex(raw: &str) -> EventResult<VerifyingKey> {
         let bytes = hex::decode(raw.trim()).map_err(EventError::from)?;
         let array: [u8; 32] = bytes
             .try_into()
             .map_err(|_| EventError::ActorSigningPublicKeyWrongLength)?;
-        VerifyingKey::from_bytes(&array)
-            .map_err(|_| EventError::ActorSigningPublicKeyInvalid.into())
+        VerifyingKey::from_bytes(&array).map_err(|_| EventError::ActorSigningPublicKeyInvalid)
     }
 
-    pub fn actor_id_for_public_key_hex(raw: &str) -> VaultResult<AuthKeyId> {
+    pub fn actor_id_for_public_key_hex(raw: &str) -> EventResult<AuthKeyId> {
         Self::actor_id_for_verifying_key(&Self::verifying_key_from_public_key_hex(raw)?)
     }
 
     /// `key_{sha256_hex}` actor id derived from the Ed25519 public key.
-    pub fn actor_id(&self) -> VaultResult<AuthKeyId> {
+    pub fn actor_id(&self) -> EventResult<AuthKeyId> {
         Self::actor_id_for_verifying_key(&self.verifying_key())
     }
 
@@ -90,8 +87,8 @@ impl SigningIdentity {
         body_bytes: &[u8],
         signature: &str,
         verifying_key: &VerifyingKey,
-    ) -> VaultResult<()> {
-        crate::event_canonical::verify_body_signature(body_bytes, signature, verifying_key)
+    ) -> EventResult<()> {
+        crate::canonical::verify_body_signature(body_bytes, signature, verifying_key)
     }
 }
 
@@ -100,7 +97,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn signing_identity_roundtrip() -> VaultResult<()> {
+    fn signing_identity_roundtrip() -> EventResult<()> {
         let (identity, seed) = SigningIdentity::generate()?;
         let restored = SigningIdentity::from_seed_hex_stored(seed.as_str())?;
         assert_eq!(identity.actor_id()?, restored.actor_id()?);

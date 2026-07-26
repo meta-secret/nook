@@ -83,7 +83,7 @@ Events are hashed and signed over **canonical JSON**:
 - array order preserved (`parents` sorted before signing);
 - `created_at` is audit/UI only — never used for merge correctness.
 
-Implementation: `nook-app/nook-core/src/event_canonical.rs`.
+Implementation: `nook-app/nook-event-log/src/canonical.rs`.
 
 ## Causal model
 
@@ -98,12 +98,12 @@ Unknown-parent events stay **pending** until dependencies arrive.
 Provider-neutral parent indexing, heads, ancestry, concurrency, pending events,
 topological order, and set union live in
 `nook-app/nook-replication/src/causal_graph.rs`. Vault event-envelope validation
-and actor authorization remain in
-`nook-app/nook-core/src/vault/vault_event_graph.rs`.
+and actor authorization live in `nook-app/nook-event-log/src/graph.rs`.
 
 ## Domain projection
 
-The reducer (`nook-app/nook-core/src/vault_projection.rs`) must yield the same result for every permutation of the same valid event set.
+The reducer (`nook-app/nook-event-log/src/projection.rs`) must yield the same
+result for every permutation of the same valid event set.
 
 | Operation | Semantics |
 |-----------|-----------|
@@ -187,7 +187,7 @@ event source.
 | Phase | Scope |
 |-------|--------|
 | 0 | This ADR |
-| 1 | `nook-replication` causal/replica mechanics plus `nook-core` event model, authorization, and projection |
+| 1 | `nook-replication` causal/replica mechanics plus `nook-event-log` event model, authorization, and projection |
 | 2 | Ed25519 device keys, epoch crypto, actor authorization |
 | 3 | IndexedDB event store, outbox, projection cache |
 | 4 | GitHub / Drive event adapters |
@@ -204,21 +204,21 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
 |----------|---------------|
 | Generic causal ordering, pending parents, union | `nook-replication/src/causal_graph.rs` |
 | Generic outbox idempotence and repair planning | `nook-replication/src/replica_store.rs` |
-| Concurrent append, both secrets live | `vault_event_graph.rs`, `vault_projection.rs`, `event_log_workflow.rs` |
-| Out-of-order delivery → pending → applied | `causal_graph.rs`, `vault_event_graph.rs`, `vault_event_store.rs`, `event_log_workflow.rs` |
-| Join event collapses multiple heads | `vault_event_graph.rs`, `event_log_workflow.rs` |
-| Replacement / security conflicts | `vault_projection.rs`, `vault_epoch.rs` |
+| Concurrent append, both secrets live | `nook-event-log/src/graph.rs`, `nook-event-log/src/projection.rs`, `event_log_workflow.rs` |
+| Out-of-order delivery → pending → applied | `causal_graph.rs`, `nook-event-log/src/graph.rs`, `nook-event-log/src/store.rs`, `event_log_workflow.rs` |
+| Join event collapses multiple heads | `nook-event-log/src/graph.rs`, `event_log_workflow.rs` |
+| Replacement / security conflicts | `nook-event-log/src/projection.rs`, `nook-event-log/src/epoch.rs` |
 | Multi-device decentralized union | `event_log_workflow.rs` (harness) |
-| Projection replay invariance | `vault_projection.rs` (`assert_projection_permutation_invariant`) |
-| Provider outbox + union | `event_log_workflow.rs`, `vault_event_store.rs` |
+| Projection replay invariance | `nook-event-log/src/projection.rs` (`assert_projection_permutation_invariant`) |
+| Provider outbox + union | `event_log_workflow.rs`, `nook-event-log/src/store.rs` |
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 
 **Coverage:** `task rust:coverage:check` enforces a combined **90%** line floor
-for `nook-replication`, `nook-core`, and `nook-auth2`
+for `nook-replication`, `nook-event-log`, `nook-core`, and `nook-auth2`
 (`nook-app/nook-core/coverage-floor.json`). Replication mechanics
 (`causal_graph`, `replica_store`) and vault policy modules
-(`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority
+(`graph`, `projection`, `store`) are high-priority
 for behavior-focused tests when sync semantics change or coverage drops below
 90%.
 

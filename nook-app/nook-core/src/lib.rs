@@ -19,7 +19,7 @@ pub(crate) use auth::{
     multi_device, outcome_evidence, password_envelope, website_login_save,
     website_passkey_proposal,
 };
-pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
+pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, google_authenticator_import, lastpass_import,
@@ -32,10 +32,9 @@ pub(crate) use sync::{
 };
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
-    vault_epoch, vault_event, vault_event_builder, vault_event_graph, vault_event_session,
-    vault_event_store, vault_format, vault_ids, vault_projection, vault_runtime_policy,
-    vault_search_catalog, vault_security, vault_sentinel_genesis, vault_sentinel_onboarding,
-    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
+    vault_event_session, vault_format, vault_ids, vault_runtime_policy, vault_search_catalog,
+    vault_security, vault_sentinel_genesis, vault_sentinel_onboarding, vault_sentinel_unlock,
+    vault_session, vault_session_cache, vault_wire,
 };
 
 pub use apple_passwords_import::{
@@ -138,9 +137,7 @@ pub use passkey_authenticator::{
 pub use proton_pass_import::{
     ProtonPassImportError, ProtonPassImportPlan, plan_proton_pass_import,
 };
-pub use secret_fingerprint::{
-    SecretFingerprint, enrich_secret, secret_fingerprint, secret_identity_fingerprint,
-};
+pub use secret_fingerprint::{enrich_secret, secret_fingerprint, secret_identity_fingerprint};
 pub use secret_types::{
     ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentSecret, LoginSecret,
     PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose,
@@ -204,10 +201,20 @@ pub use multi_device::{
     sentinel_share_record_key, user_stored_records, vault_has_multi_device_records,
 };
 
-pub use event_canonical::{
-    Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
-    format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,
-    verify_body_signature,
+pub use nook_event_log::{
+    AppendEventInput, Ed25519Signature, EncryptedSecretPayload, EpochRecord, EpochRotationReason,
+    EventGraph, EventId, EventInsertStatus, EventPendingReason, GenesisImportPayload, KeyEpoch,
+    LocalEventStore, ObservedHeads, ProjectedSecret, RemoteEventLogClassification,
+    SecretFingerprint, SecretFingerprintAssignment, SecretReplacementConflict, SecurityConflict,
+    SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
+    VaultEventSchemaVersion, VaultOperation, VaultProjection,
+    assert_projection_permutation_invariant, build_genesis_import_event, build_signed_event,
+    canonical_json_bytes, canonicalize_json, classify_remote_event_log,
+    concurrent_epoch_rotations_conflict, encrypted_secret_from_armored, event_id_from_body_bytes,
+    format_ed25519_signature, operation_starts_epoch, parents_from_heads, parse_ed25519_signature,
+    parse_event_storage_bytes, parse_remote_event_storage_bytes, project_vault,
+    remote_event_belongs_to_store, remote_event_store_id, serialize_event_storage_yaml, sha256_hex,
+    sign_body, union_remote_events, union_remote_events_and_heads, verify_body_signature,
 };
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use password_envelope::{
@@ -281,31 +288,11 @@ pub use vault_connect::{
     load_stored_vault, unlock_stored_vault,
 };
 pub use vault_crypto::VaultCrypto;
-pub use vault_epoch::{
-    EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
-    operation_starts_epoch,
-};
 pub use vault_epoch_crypto::{
     members_checkpoint_hash_from_roster, reencrypt_user_secrets_for_epoch,
     rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
 };
-pub use vault_event::{
-    EncryptedSecretPayload, GenesisImportPayload, SecretFingerprintAssignment,
-    SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
-    VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
-};
-pub use vault_event_builder::{
-    AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,
-    parents_from_heads,
-};
-pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
-pub use vault_event_store::{
-    LocalEventStore, RemoteEventLogClassification, classify_remote_event_log,
-    remote_event_belongs_to_store, remote_event_store_id, union_remote_events,
-    union_remote_events_and_heads,
-};
 pub use vault_format::{
     VaultFormat, current_vault_schema_version, default_vault_name_for_store_id, deserialize_stored,
     deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_architecture,
@@ -320,10 +307,6 @@ pub use vault_ids::{
     generate_secret_id, generate_store_id, is_auth_key_id, is_compact_token, is_device_id,
     normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
     validate_store_id,
-};
-pub use vault_projection::{
-    ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
-    assert_projection_permutation_invariant, project_vault,
 };
 pub use vault_runtime_policy::{
     ClientRunMode, DEFAULT_VAULT_IDLE_TIMEOUT_MS, DEFAULT_VAULT_IDLE_WARNING_MS,
@@ -345,7 +328,6 @@ pub use vault_session::{
     decrypt_encrypted_secret, query_encrypted_secrets,
 };
 pub use vault_session_cache::hydrate_keys_from_projection_yaml;
-pub use vault_signing::SigningIdentity;
 pub use vault_sync::{
     VaultRevision, VaultSyncAction, compare_vault_sync, compare_vault_sync_with_common,
     read_vault_revision, vault_content_hash,

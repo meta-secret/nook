@@ -5,6 +5,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum VaultSyncError {
+    #[error("expected yaml sync outcome Reloaded, got {outcome}")]
+    UnexpectedYamlSyncOutcome { outcome: String },
+
     #[error("Vault store_id mismatch: local {local_store}, remote {remote_store}")]
     StoreIdMismatch {
         local_store: String,

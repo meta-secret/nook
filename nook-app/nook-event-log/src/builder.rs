@@ -1,15 +1,14 @@
 //! Construct signed vault events from session state.
 
 use crate::SecretFingerprint;
-use crate::errors::{EventError, VaultResult};
-use crate::event_canonical::EventId;
-use crate::vault_event::{
+use crate::canonical::EventId;
+use crate::event::{
     EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
     serialize_event_storage_yaml,
 };
-use crate::vault_ids::{AuthKeyId, SecretId, StoreId};
-use crate::vault_signing::SigningIdentity;
-use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext};
+use crate::signing::SigningIdentity;
+use crate::{EventError, EventResult};
+use nook_auth2::{AuthKeyId, IsoTimestamp, OpaqueCiphertext, SecretId, StoreId};
 
 /// Inputs required to append a new event.
 pub struct AppendEventInput<'a> {
@@ -23,14 +22,13 @@ pub struct AppendEventInput<'a> {
 }
 
 /// Build and sign a vault event; returns the event and its provider-storage YAML bytes.
-pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEvent, Vec<u8>)> {
+pub fn build_signed_event(input: AppendEventInput<'_>) -> EventResult<(VaultEvent, Vec<u8>)> {
     let signing_actor_id = input.signing_identity.actor_id()?;
     if signing_actor_id != *input.actor_id {
         return Err(EventError::ActorSigningKeyMismatch {
             actor_id: input.actor_id.as_str().to_owned(),
             signing_key_actor_id: signing_actor_id.as_str().to_owned(),
-        }
-        .into());
+        });
     }
     let mut parents = input.parents;
     parents.sort();
@@ -54,7 +52,7 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEven
 #[must_use]
 pub fn encrypted_secret_from_armored(
     id: &SecretId,
-    secret_type: crate::SecretType,
+    secret_type: nook_auth2::SecretType,
     ciphertext: &str,
     identity_fingerprint: Option<SecretFingerprint>,
     fingerprint: Option<SecretFingerprint>,
@@ -85,7 +83,7 @@ pub struct ObservedHeads(Vec<EventId>);
 
 impl ObservedHeads {
     /// Parse and deduplicate raw head strings from session state.
-    pub fn parse(raw: &[String]) -> VaultResult<Self> {
+    pub fn parse(raw: &[String]) -> EventResult<Self> {
         let mut ids: Vec<EventId> = raw
             .iter()
             .map(|s| EventId::parse(s))
@@ -114,12 +112,12 @@ impl ObservedHeads {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event_canonical::EventId;
-    use crate::vault_signing::SigningIdentity;
-    use crate::{VaultResult, parse_event_storage_bytes};
+    use crate::canonical::EventId;
+    use crate::signing::SigningIdentity;
+    use crate::{EventResult, parse_event_storage_bytes};
 
     #[test]
-    fn parents_from_heads_is_sorted_deduped() -> VaultResult<()> {
+    fn parents_from_heads_is_sorted_deduped() -> EventResult<()> {
         let a = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let b = EventId::parse("sha256u:u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s")?;
         let parents = parents_from_heads(&[b.clone(), a.clone(), a]);
@@ -129,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn build_signed_event_roundtrip() -> VaultResult<()> {
+    fn build_signed_event_roundtrip() -> EventResult<()> {
         let (signing, _) = SigningIdentity::generate()?;
         let actor = signing.actor_id()?;
         let store_id = StoreId::parse("store_testtoken11")?;
@@ -161,12 +159,12 @@ mod tests {
         let err = ObservedHeads::parse(&["not-an-event-id".to_owned()]).unwrap_err();
         assert!(matches!(
             err,
-            crate::VaultError::Event(crate::EventError::EventIdMissingPrefix { .. })
+            crate::EventError::EventIdMissingPrefix { .. }
         ));
     }
 
     #[test]
-    fn observed_heads_deduplicates_sorted() -> VaultResult<()> {
+    fn observed_heads_deduplicates_sorted() -> EventResult<()> {
         let a = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let b = EventId::parse("sha256u:u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s")?;
         let heads = ObservedHeads::parse(&[

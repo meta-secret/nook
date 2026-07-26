@@ -1,7 +1,7 @@
 //! Cryptographic key epochs for password rotation and device revocation.
 
-use crate::event_canonical::EventId;
-use crate::vault_event::VaultOperation;
+use crate::canonical::EventId;
+use crate::event::VaultOperation;
 
 /// Identifies the epoch protecting private event payloads.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -148,7 +148,7 @@ mod tests {
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SecretCreated {
-                secret: crate::vault_event::EncryptedSecretPayload {
+                secret: crate::event::EncryptedSecretPayload {
                     id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),

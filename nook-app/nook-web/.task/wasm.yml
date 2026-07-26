@@ -48,7 +48,7 @@ tasks:
     cmds:
       - >-
         sh -c '
-        current="$(cd "{{.APP_ROOT}}" && find "nook-wasm/src" "nook-core/src" "nook-core/locales" "nook-auth2/src" "nook-replication/src" \
+        current="$(cd "{{.APP_ROOT}}" && find "nook-wasm/src" "nook-core/src" "nook-core/locales" "nook-auth2/src" "nook-replication/src" "nook-event-log/src" \
           \( -name "*.rs" -o -name "*.json" -o -name "Cargo.toml" \) -print0 \
           | LC_ALL=C sort -z \
           | xargs -0 sha256sum \

@@ -4,10 +4,10 @@
 //! representation with lexicographically sorted object keys at every level.
 //! Array order is preserved (parent lists are sorted before hashing).
 
-use crate::errors::{EventError, VaultResult};
-use crate::vault_wire::Sha256Hex;
+use crate::{EventError, EventResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use nook_auth2::Sha256Hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -22,7 +22,7 @@ const SHA256_BYTES_LEN: usize = 32;
 pub struct EventId(String);
 
 impl EventId {
-    pub fn parse(raw: &str) -> VaultResult<Self> {
+    pub fn parse(raw: &str) -> EventResult<Self> {
         let trimmed = raw.trim();
         let encoded = trimmed.strip_prefix(EVENT_ID_PREFIX).ok_or_else(|| {
             EventError::EventIdMissingPrefix {
@@ -32,8 +32,7 @@ impl EventId {
         if encoded.len() != SHA256_BASE64URL_LEN {
             return Err(EventError::EventIdInvalidDigest {
                 hex: encoded.to_owned(),
-            }
-            .into());
+            });
         }
         let bytes =
             URL_SAFE_NO_PAD
@@ -44,8 +43,7 @@ impl EventId {
         if bytes.len() != SHA256_BYTES_LEN {
             return Err(EventError::EventIdInvalidDigest {
                 hex: encoded.to_owned(),
-            }
-            .into());
+            });
         }
         Ok(Self(format!("{EVENT_ID_PREFIX}{encoded}")))
     }
@@ -65,7 +63,7 @@ impl EventId {
         Self(value)
     }
 
-    pub fn from_sha256_hex(hex_digest: &str) -> VaultResult<Self> {
+    pub fn from_sha256_hex(hex_digest: &str) -> EventResult<Self> {
         let bytes = hex::decode(hex_digest).map_err(EventError::from)?;
         let bytes: [u8; SHA256_BYTES_LEN] =
             bytes
@@ -127,7 +125,7 @@ impl<'de> Deserialize<'de> for EventId {
 pub struct Ed25519Signature(String);
 
 impl Ed25519Signature {
-    pub fn parse(raw: &str) -> VaultResult<Self> {
+    pub fn parse(raw: &str) -> EventResult<Self> {
         parse_ed25519_signature(raw)?;
         let trimmed = raw.trim();
         Ok(Self(trimmed.to_owned()))
@@ -208,13 +206,13 @@ pub fn canonicalize_json(value: &Value) -> Value {
 }
 
 /// Serialize a JSON value to canonical compact UTF-8 bytes.
-pub fn canonical_json_bytes(value: &Value) -> VaultResult<Vec<u8>> {
+pub fn canonical_json_bytes(value: &Value) -> EventResult<Vec<u8>> {
     let canonical = canonicalize_json(value);
-    Ok(serde_json::to_vec(&canonical).map_err(EventError::from)?)
+    serde_json::to_vec(&canonical).map_err(EventError::from)
 }
 
 /// Parse an `ed25519:{hex}` signature string.
-pub fn parse_ed25519_signature(raw: &str) -> VaultResult<Signature> {
+pub fn parse_ed25519_signature(raw: &str) -> EventResult<Signature> {
     let hex = raw
         .strip_prefix("ed25519:")
         .ok_or_else(|| EventError::SignatureMissingPrefix {
@@ -244,7 +242,7 @@ pub fn verify_body_signature(
     body_bytes: &[u8],
     signature: impl AsRef<str>,
     verifying_key: &VerifyingKey,
-) -> VaultResult<()> {
+) -> EventResult<()> {
     let parsed = parse_ed25519_signature(signature.as_ref())?;
     verifying_key
         .verify(body_bytes, &parsed)

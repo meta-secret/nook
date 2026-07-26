@@ -254,6 +254,7 @@ fn is_base_coverage_input(path: &Path) -> bool {
         || path == Path::new("nook-app/Cargo.toml")
         || path.starts_with("nook-app/nook-auth2")
         || path.starts_with("nook-app/nook-replication")
+        || path.starts_with("nook-app/nook-event-log")
         || (path.starts_with("nook-app/nook-core")
             && path != Path::new("nook-app/nook-core/Dockerfile")
             && path != Path::new("nook-app/nook-core/docker-bake.hcl"))

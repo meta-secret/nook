@@ -13,10 +13,11 @@ WORKDIR /meta-secret/nook/nook-app
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-replication/Cargo.toml nook-replication/Cargo.toml
+COPY nook-app/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
-RUN mkdir -p nook-auth2/src nook-replication/src nook-core/src nook-wasm/src \
-    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
+RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-core/src nook-wasm/src \
+    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Shared manifest-only dependency cache (chef cook + fetch once) ---
@@ -30,6 +31,7 @@ COPY --from=chef-planner /meta-secret/nook/nook-app/recipe.json ./recipe.json
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-replication/Cargo.toml nook-replication/Cargo.toml
+COPY nook-app/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 # Stable epoch for the hosted WASM cook lineage. Bump when reseeding
@@ -52,8 +54,8 @@ RUN cargo fetch --locked
 # manifest-keyed so Main can publish the test-only dependencies for read-only PR restores.
 FROM builder-deps-common AS builder-wasm-deps
 
-RUN mkdir -p nook-auth2/src nook-replication/src nook-core/src nook-wasm/src \
-    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
+RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-core/src nook-wasm/src \
+    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm \
     && nook-sccache-report wasm-release-test-dependencies
@@ -66,7 +68,8 @@ FROM builder-wasm-deps AS builder-deps
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
 # native deps here instead of with chef. Stub in dummy crate roots so the workspace resolves,
 # compile the deps, and keep the stubs for downstream workspace packages. Real crate source is
-# copied over in builder-debug in dependency order (nook-auth2/nook-replication -> nook-core -> nook-wasm).
+# copied over in builder-debug in dependency order
+# (nook-auth2 + nook-replication -> nook-event-log -> nook-core -> nook-wasm).
 # Kept as separate cache layers.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo nextest run --no-run -p nook-auth2 --profile ci \
@@ -74,6 +77,9 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo nextest run --no-run -p nook-replication --profile ci \
     && nook-sccache-report native-replication-nextest-dependencies
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo nextest run --no-run -p nook-event-log --profile ci \
+    && nook-sccache-report native-event-log-nextest-dependencies
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo nextest run --no-run -p nook-core --profile ci \
     && nook-sccache-report native-core-nextest-dependencies
@@ -84,6 +90,9 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     cargo clippy -p nook-replication --all-targets -- -D warnings \
     && nook-sccache-report native-replication-clippy-dependencies
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo clippy -p nook-event-log --all-targets -- -D warnings \
+    && nook-sccache-report native-event-log-clippy-dependencies
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy-dependencies
 # Also warm the COVERAGE-instrumented deps: cargo-llvm-cov builds with -Cinstrument-coverage +
@@ -93,7 +102,7 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-core --no-tests=pass \
+    cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 # --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---
 FROM builder-deps AS builder-debug
@@ -124,6 +133,14 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
     && nook-sccache-report native-replication-coverage
 
+COPY nook-app/nook-event-log nook-event-log
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo clippy -p nook-event-log --all-targets -- -D warnings \
+    && nook-sccache-report native-event-log-clippy
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log \
+    && nook-sccache-report native-event-log-coverage
+
 COPY nook-app/nook-core nook-core
 # Docker COPY preserves source mtimes, while the inherited target directory can
 # contain newer artifacts. Touch the module that embeds locale JSON so changes
@@ -133,8 +150,8 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     touch nook-core/src/i18n.rs \
     && cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy
-# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth2
-# and nook-replication above, then runs nook-core with --no-clean so the final report combines all
+# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth2,
+# nook-replication, and nook-event-log above, then runs nook-core with --no-clean so the final report combines all
 # portable crates while preserving cacheable dependency coverage. The same run also bakes the
 # coverage artifacts that PR CI copies out later;
 # export must not rerun the Rust tests.
@@ -142,9 +159,9 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
     && nook-sccache-report native-core-coverage
 

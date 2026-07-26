@@ -1,9 +1,15 @@
-//! Event-sourcing, signing, and session orchestration errors.
+//! Signed vault event-log errors.
 
+use nook_auth2::ValidationError;
 use thiserror::Error;
+
+pub type EventResult<T> = Result<T, EventError>;
 
 #[derive(Debug, Error)]
 pub enum EventError {
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
+
     #[error("event id must start with sha256u: (got {raw:?})")]
     EventIdMissingPrefix { raw: String },
 
@@ -96,33 +102,9 @@ pub enum EventError {
     #[error("projection changed across replays")]
     ProjectionReplayMismatch,
 
-    #[error("projection cache is empty")]
-    EmptyProjectionCache,
-
     #[error("outbox entry missing")]
     MissingOutboxEntry,
 
     #[error("genesis event bytes missing")]
     MissingGenesisBytes,
-
-    #[error("github provider bucket missing")]
-    MissingProviderBucket,
-
-    #[error("expected yaml sync outcome Reloaded, got {outcome}")]
-    UnexpectedYamlSyncOutcome { outcome: String },
-
-    #[error("failed to serialize member records")]
-    MemberRecordsSerialize(#[source] serde_json::Error),
-
-    #[error("expected import operation")]
-    ExpectedImportOperation,
-
-    #[error("import event content hash does not match source vault")]
-    ImportContentHashMismatch,
-
-    #[error("import event secret ids do not match source vault")]
-    ImportSecretSetMismatch,
-
-    #[error("import event password entries do not match source vault")]
-    ImportPasswordEntriesMismatch,
 }

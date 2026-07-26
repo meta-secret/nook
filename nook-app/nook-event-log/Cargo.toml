@@ -1,0 +1,29 @@
+[package]
+name = "nook-event-log"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[dependencies]
+nook-auth2 = { path = "../nook-auth2" }
+nook-replication = { path = "../nook-replication" }
+base64 = "0.22"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+getrandom = "0.2.17"
+hex = "0.4.3"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serde_yaml = "0.9.34"
+sha2 = "0.10.9"
+thiserror = "2.0.18"
+
+[dev-dependencies]
+rand_core = "0.6"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2.17", features = ["js"] }
+
+[lints]
+workspace = true

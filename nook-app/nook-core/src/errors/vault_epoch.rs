@@ -7,6 +7,9 @@ pub type VaultEpochResult<T> = Result<T, VaultEpochError>;
 
 #[derive(Debug, Error)]
 pub enum VaultEpochError {
+    #[error("failed to serialize member records")]
+    MemberRecordsSerialize(#[source] serde_json::Error),
+
     #[error("Secret {key} missing type metadata.")]
     MissingSecretType { key: String },
 

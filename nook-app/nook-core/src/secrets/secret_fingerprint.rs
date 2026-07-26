@@ -1,10 +1,10 @@
 //! Vault-keyed identity and secret-version fingerprints for import reconciliation.
 
 use hmac::{Hmac, Mac};
-use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
 use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
+pub use nook_event_log::SecretFingerprint;
 
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
 const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
@@ -74,31 +74,6 @@ const LOGIN_IMPORT_METADATA_MARKERS: [&ImportMetadataMarker; 6] = [
     &BROWSER_METADATA,
     &APPLE_PASSWORDS_METADATA,
 ];
-
-/// Opaque HMAC-SHA-256 tag. It can reveal equality inside one vault, but it
-/// cannot be tested against guessed plaintext without that vault's secret key.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SecretFingerprint(String);
-
-impl SecretFingerprint {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[must_use]
-    pub fn from_trusted(value: String) -> Self {
-        Self(value)
-    }
-
-    /// Whether this fingerprint uses the current secret-version semantics.
-    /// Older values are recomputed and backfilled during the next import.
-    #[must_use]
-    pub fn is_current_secret_version(&self) -> bool {
-        self.0.starts_with(SECRET_VERSION_FINGERPRINT_SCHEME)
-    }
-}
 
 fn normalized_text(value: &str) -> String {
     value.replace("\r\n", "\n").trim().to_owned()

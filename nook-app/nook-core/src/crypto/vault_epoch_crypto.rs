@@ -1,13 +1,13 @@
 //! Key-epoch rotation: fresh `secrets_key` / `members_key` for append-only security events.
 
-use crate::errors::{EventError, VaultEpochError, VaultEpochResult, VaultResult};
+use crate::EncryptedSecretPayload;
+use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
 use crate::multi_device::{DeviceIdentity, VaultKeys};
 #[cfg(test)]
 use crate::secret_types::StoredRecordPayload;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
-use crate::vault_event::EncryptedSecretPayload;
 use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
 use crate::{VaultMetaRecord, build_members_records, genesis_auth_record, resolve_member_roster};
 
@@ -65,7 +65,7 @@ pub fn members_checkpoint_hash_from_roster(
     let roster = resolve_member_roster(records, old_members_key)?;
     let member_records = build_members_records(&roster, new_members_key)?;
     let json =
-        serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
+        serde_json::to_string(&member_records).map_err(VaultEpochError::MemberRecordsSerialize)?;
     Ok(crate::sha256_hex(json.as_bytes()))
 }
 
