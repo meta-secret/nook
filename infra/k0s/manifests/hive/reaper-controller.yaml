@@ -157,8 +157,12 @@ spec:
                   def log_message(self, _format, *_args):
                       return
 
-              threading.Thread(target=reconcile_loop, daemon=True).start()
-              http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+              if __name__ == "__main__":
+                  threading.Thread(target=reconcile_loop, daemon=True).start()
+                  http.server.ThreadingHTTPServer(
+                      ("0.0.0.0", 8080),
+                      Handler,
+                  ).serve_forever()
               PY
           securityContext:
             allowPrivilegeEscalation: false

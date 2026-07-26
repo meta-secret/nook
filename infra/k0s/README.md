@@ -24,6 +24,8 @@ port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
 dynamic networking rules. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
+Guarded uninstall removes the owned live k0s rules, persisted fragment, and
+nftables include without reloading the global ruleset.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
 Pod endpoint into the workers' narrow Bolt egress policy, including after
 automatic StatefulSet or kubelet replacement.

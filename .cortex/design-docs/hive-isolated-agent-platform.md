@@ -510,7 +510,9 @@ security-sensitive deployment action and requires immediate user confirmation
 before `task infra:deploy` or `task infra:hive:deploy` is invoked.
 
 Destructive k0s uninstall requires `K0S_UNINSTALL_FORCE=1` and preserves
-encrypted Neo4j recovery material by default.
+encrypted Neo4j recovery material by default. It removes the owned live k0s
+firewall rules, persisted fragment, and nftables include without reloading the
+global ruleset.
 
 ## 11. Source map
 

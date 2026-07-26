@@ -215,6 +215,7 @@ unless infra_taskfile.include?("nook-k0s.nft") &&
        infra_taskfile.include?("forward ip saddr 10.244.0.0/16 accept") &&
        infra_taskfile.include?("nft --handle list chain") &&
        infra_taskfile.include?("nft delete rule") &&
+       infra_taskfile.include?("rm -f /etc/nftables.d/nook-k0s.nft") &&
        infra_taskfile.include?("nft --check --file") &&
        !infra_taskfile.include?("systemctl reload nftables")
   raise "k0s install must persist narrow Pod control-plane and egress firewall rules"

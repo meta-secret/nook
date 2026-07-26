@@ -20,6 +20,7 @@ tasks:
     desc: Validate Hive isolation and TLS invariants in repository manifests.
     cmds:
       - ruby .github/scripts/hive-manifest-contract.rb
+      - python3 .github/scripts/hive-reaper-controller-test.py
 
   mesh:node:add:
     desc: Idempotently add a Linux server as a distinct Cloudflare Mesh node.
@@ -876,6 +877,47 @@ tasks:
         fi
         sudo -n k0s stop
         sudo -n k0s reset
+        sudo -n nft --handle list chain inet bynull_filter input |
+          awk '/comment "nook k0s pod control plane v2"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter input handle "$handle"
+          done
+        sudo -n nft --handle list chain inet bynull_filter forward |
+          awk '/comment "nook k0s pod egress v2"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
+          done
+        rm -f \
+          "$secret_backup" \
+          "${encrypted_backup:-}" \
+          "${backup_mac:-}" \
+          "${recovery_key:-}"
+        trap - EXIT
+        firewall_config="$(mktemp)"
+        trap 'rm -f "$firewall_config"' EXIT
+        sudo -n awk \
+          '$0 != "include \"/etc/nftables.d/nook-k0s.nft\""' \
+          /etc/nftables.conf > "$firewall_config"
+        sudo -n nft --check --file "$firewall_config"
+        sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
+        sudo -n rm -f /etc/nftables.d/nook-k0s.nft
+        if sudo -n nft list chain inet bynull_filter input |
+          grep -F 'nook k0s pod control plane v2' >/dev/null; then
+          echo "k0s input firewall exception survived uninstall" >&2
+          exit 1
+        fi
+        if sudo -n nft list chain inet bynull_filter forward |
+          grep -F 'nook k0s pod egress v2' >/dev/null; then
+          echo "k0s forward firewall exception survived uninstall" >&2
+          exit 1
+        fi
+        if sudo -n grep -F 'include "/etc/nftables.d/nook-k0s.nft"' \
+          /etc/nftables.conf >/dev/null; then
+          echo "k0s firewall include survived uninstall" >&2
+          exit 1
+        fi
+        rm -f "$firewall_config"
+        trap - EXIT
         test -d /var/lib/hive/neo4j
         echo "k0s removed; retained /var/lib/hive/neo4j"
         REMOTE
