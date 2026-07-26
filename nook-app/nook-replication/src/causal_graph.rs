@@ -44,6 +44,7 @@ impl Error for CausalGraphError {}
 pub struct CausalGraph<Id> {
     parents: BTreeMap<Id, Vec<Id>>,
     quarantine_roots: BTreeMap<Id, String>,
+    cyclic: BTreeSet<Id>,
     quarantined: BTreeMap<Id, String>,
 }
 
@@ -52,6 +53,7 @@ impl<Id> Default for CausalGraph<Id> {
         Self {
             parents: BTreeMap::new(),
             quarantine_roots: BTreeMap::new(),
+            cyclic: BTreeSet::new(),
             quarantined: BTreeMap::new(),
         }
     }
@@ -114,6 +116,7 @@ where
             .cloned()
             .collect::<Vec<_>>();
         self.parents.insert(id.clone(), parents.clone());
+        self.cyclic.extend(self.cycle_members(&id));
         self.recompute_quarantine();
         if let Some(reason) = self.quarantined.get(&id) {
             CausalInsertStatus::Quarantined {
@@ -282,6 +285,7 @@ where
         for (id, reason) in &other.quarantine_roots {
             Self::merge_quarantine_reason(&mut merged.quarantine_roots, id.clone(), reason.clone());
         }
+        merged.cyclic = merged.all_cyclic_ids();
         merged.recompute_quarantine();
         merged
     }
@@ -305,10 +309,10 @@ where
 
     fn recompute_quarantine(&mut self) {
         self.quarantined.clone_from(&self.quarantine_roots);
-        for id in self.cyclic_ids() {
+        for id in &self.cyclic {
             Self::merge_quarantine_reason(
                 &mut self.quarantined,
-                id,
+                id.clone(),
                 "Causal graph contains a cycle".to_owned(),
             );
         }
@@ -337,30 +341,47 @@ where
         }
     }
 
-    fn cyclic_ids(&self) -> BTreeSet<Id> {
+    /// A newly inserted parent set can only introduce cycles through that
+    /// event. Intersect its ancestors and descendants to find the complete
+    /// strongly connected component in one linear graph scan.
+    fn cycle_members(&self, origin: &Id) -> BTreeSet<Id> {
+        let mut ancestors = BTreeSet::new();
+        let mut stack = self.parents.get(origin).cloned().unwrap_or_default();
+        while let Some(id) = stack.pop() {
+            if !ancestors.insert(id.clone()) {
+                continue;
+            }
+            if let Some(parents) = self.parents.get(&id) {
+                stack.extend(parents.iter().cloned());
+            }
+        }
+        if !ancestors.contains(origin) {
+            return BTreeSet::new();
+        }
+
+        let mut reverse = BTreeMap::<Id, Vec<Id>>::new();
+        for (id, parents) in &self.parents {
+            for parent in parents {
+                reverse.entry(parent.clone()).or_default().push(id.clone());
+            }
+        }
+        let mut descendants = BTreeSet::new();
+        let mut stack = vec![origin.clone()];
+        while let Some(id) = stack.pop() {
+            if !descendants.insert(id.clone()) {
+                continue;
+            }
+            if let Some(children) = reverse.get(&id) {
+                stack.extend(children.iter().cloned());
+            }
+        }
+        ancestors.intersection(&descendants).cloned().collect()
+    }
+
+    fn all_cyclic_ids(&self) -> BTreeSet<Id> {
         self.parents
             .keys()
-            .filter(|origin| {
-                let mut visited = BTreeSet::new();
-                let mut stack = self
-                    .parents
-                    .get(*origin)
-                    .expect("origin came from the parent index")
-                    .clone();
-                while let Some(id) = stack.pop() {
-                    if &id == *origin {
-                        return true;
-                    }
-                    if !visited.insert(id.clone()) {
-                        continue;
-                    }
-                    if let Some(parents) = self.parents.get(&id) {
-                        stack.extend(parents.iter().cloned());
-                    }
-                }
-                false
-            })
-            .cloned()
+            .flat_map(|id| self.cycle_members(id))
             .collect()
     }
 }
