@@ -436,6 +436,11 @@ tasks:
             --no-taints \
             --config /etc/k0s/k0s.yaml
         fi
+        sudo -n test "$(id -u kube-apiserver)" -ge 1
+        sudo -n chown kube-apiserver:root \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml
+        sudo -n chmod 0640 \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml
         if sudo -n systemctl is-active --quiet k0scontroller; then
           sudo -n systemctl restart k0scontroller
         else
@@ -520,6 +525,34 @@ tasks:
         sudo -n k0s kubectl get pv,pvc --all-namespaces
         sudo -n k0s kubectl get pods --all-namespaces -o wide
         sudo -n nft list chain inet bynull_filter input | grep -Eq "policy drop"
+        REMOTE
+
+  k0s:diagnose:
+    desc: Show bounded k0s controller diagnostics when the API is unavailable.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        sudo -n systemctl status k0scontroller \
+          --no-pager \
+          --full || true
+        sudo -n journalctl \
+          --unit k0scontroller \
+          --lines 200 \
+          --no-pager || true
+        sudo -n k0s status || true
+        sudo -n ss -lntp \
+          '( sport = :6443 )' || true
+        sudo -n namei -l \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml || true
+        sudo -n find /var/lib/k0s/pki \
+          -maxdepth 1 \
+          -type f \
+          -printf '%M %u %g %f\n' |
+          sort || true
+        ps -eo user,group,pid,args |
+          grep -E '[k]ube-apiserver|[k]0s controller' || true
         REMOTE
 
   k0s:uninstall:
