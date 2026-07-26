@@ -1046,11 +1046,15 @@ fn assert_main_producer_owned_cache_publish(root: &Path) {
     let rust = section(&main, "  rust:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
-    let rust_verify = rust.find("task ci:pr:rust").expect("Main native verification");
+    let rust_verify = rust
+        .find("task ci:pr:rust")
+        .expect("Main native verification");
     let rust_publish = rust
         .find("task ci:main:publish-native-cache")
         .expect("Main native cache publish");
-    let wasm_verify = wasm.find("task ci:pr:wasm").expect("Main WASM verification");
+    let wasm_verify = wasm
+        .find("task ci:pr:wasm")
+        .expect("Main WASM verification");
     let wasm_node = wasm
         .find("task ci:wasm:node-test")
         .expect("Main WASM Node verification");
