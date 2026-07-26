@@ -551,7 +551,7 @@ impl PublicationBroker {
             .and_then(Value::as_str)
             .and_then(|message| message.strip_prefix("Hive merge lock "))
             .and_then(|value| value.parse::<u64>().ok());
-        if !timestamp.is_some_and(|timestamp| now.saturating_sub(timestamp) >= 30 * 60) {
+        if timestamp.is_none_or(|timestamp| now.saturating_sub(timestamp) < 30 * 60) {
             return Ok(false);
         }
         self.api(

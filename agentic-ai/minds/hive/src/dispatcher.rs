@@ -64,10 +64,10 @@ async fn dispatch_once<S: TaskStore>(store: &S, contents_url: &str) -> anyhow::R
             max_attempts: 3,
             dependencies: Vec::new(),
         };
-        if let Err(error) = store.enqueue(&task).await {
-            if !format!("{error:#}").contains("already exists") {
-                return Err(error).with_context(|| format!("enqueue {}", task.id));
-            }
+        if let Err(error) = store.enqueue(&task).await
+            && !format!("{error:#}").contains("already exists")
+        {
+            return Err(error).with_context(|| format!("enqueue {}", task.id));
         }
     }
     Ok(())
