@@ -3,8 +3,8 @@ version: '3'
 vars:
   HIVE_DIR: ..
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
-  HIVE_TEST_IMAGE: '{{default "nook-hive-test:local" .HIVE_TEST_IMAGE}}'
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
+  HIVE_TEST_RUNTIME_IMAGE: rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
   NOOK_APP_CONTEXT: ../../nook-app
 
 tasks:
@@ -71,14 +71,15 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
+        verified="$(mktemp -d)"
+        cleanup() {
+          rm -rf "$verified"
+        }
+        trap cleanup EXIT
         command=(docker buildx build
           --platform linux/amd64
-          --add-host host.docker.internal=host-gateway
-          --target verify
-          --output type=cacheonly
-          --build-arg "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-host.docker.internal:7687}"
-          --build-arg "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
-          --build-arg "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}")
+          --target verify-export
+          --output "type=local,dest=$verified")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
@@ -94,6 +95,17 @@ tasks:
           --file hive/Dockerfile
           .)
         "${command[@]}"
+        test -f "$verified/hive-check-passed"
+        test -n "$(find "$verified/hive-tests" -type f -print -quit)"
+        docker run --rm \
+          --platform linux/amd64 \
+          --network host \
+          --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
+          -e "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}" \
+          -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}" \
+          -e "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}" \
+          "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
+          bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
 
   build:
@@ -116,14 +128,15 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
+        compiled="$(mktemp -d)"
+        cleanup() {
+          rm -rf "$compiled"
+        }
+        trap cleanup EXIT
         command=(docker buildx build
           --platform linux/amd64
-          --add-host host.docker.internal=host-gateway
-          --target test
-          --output type=cacheonly
-          --build-arg "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-host.docker.internal:7687}"
-          --build-arg "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
-          --build-arg "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}")
+          --target test-compile
+          --output "type=local,dest=$compiled")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
@@ -139,6 +152,16 @@ tasks:
           --file hive/Dockerfile
           .)
         "${command[@]}"
+        test -n "$(find "$compiled/opt/nook/hive-tests" -type f -print -quit)"
+        docker run --rm \
+          --platform linux/amd64 \
+          --network host \
+          --mount "type=bind,src=$compiled/opt/nook/hive-tests,dst=/tests,readonly" \
+          -e "HIVE_NEO4J_TEST_URI=${HIVE_NEO4J_TEST_URI:-127.0.0.1:7687}" \
+          -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}" \
+          -e "HIVE_NEO4J_TEST_PASSWORD=${HIVE_NEO4J_TEST_PASSWORD:-hive-integration-password}" \
+          "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
+          bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
 
   cache:publish:

@@ -421,20 +421,19 @@ hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
 unless hive_taskfile.include?("for crate in hive lace")
   raise "Hive formatting does not apply the entire checked workspace"
 end
-unless hive_taskfile.include?("--target verify") &&
-       hive_taskfile.include?("--target test") &&
-       hive_taskfile.include?("--output type=cacheonly") &&
+unless hive_taskfile.include?("--target verify-export") &&
+       hive_taskfile.include?("--target test-compile") &&
+       hive_taskfile.include?('type=local,dest=$verified') &&
        !hive_taskfile.include?("--target test-runner") &&
        !hive_taskfile.include?("--load")
-  raise "Hive verification must run inside BuildKit without loading Cargo target layers"
+  raise "Hive verification must export only test executables from BuildKit"
 end
 unless hive_taskfile.include?("--target dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export the manifest-keyed dependency graph"
 end
-unless hive_taskfile.include?("--add-host host.docker.internal=host-gateway") &&
-       hive_taskfile.include?("host.docker.internal:7687")
-  raise "BuildKit Hive tests must reach the host-published Neo4j service"
+if hive_taskfile.include?("host.docker.internal")
+  raise "Hive verification must not depend on Docker Desktop host aliases"
 end
 
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))

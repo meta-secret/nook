@@ -90,7 +90,7 @@ jobs:
 
       - name: Hive Rust verification
         env:
-          HIVE_NEO4J_TEST_URI: host.docker.internal:7687
+          HIVE_NEO4J_TEST_URI: 127.0.0.1:7687
           HIVE_NEO4J_TEST_USERNAME: neo4j
           HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
         run: task hive:verify
