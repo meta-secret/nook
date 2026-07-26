@@ -930,6 +930,20 @@ jobs:
             nook-app/nook-web/nook-web-app/docker-bake.hcl; do
             cp "$file" "../nook-base-coverage/$file"
           done
+          # When a PR introduces a new portable workspace crate, the current
+          # coverage Dockerfile cannot resolve against a base checkout that
+          # predates that crate. Hold the new crate and dependency-only
+          # manifests constant while leaving the base nook-core Rust source at
+          # BASE_SHA, so the fallback remains buildable without inventing a
+          # historical coverage artifact.
+          if [ ! -f "../nook-base-coverage/nook-app/nook-replication/Cargo.toml" ]; then
+            cp nook-app/Cargo.toml "../nook-base-coverage/nook-app/Cargo.toml"
+            cp nook-app/Cargo.lock "../nook-base-coverage/nook-app/Cargo.lock"
+            cp nook-app/nook-core/Cargo.toml \
+              "../nook-base-coverage/nook-app/nook-core/Cargo.toml"
+            cp -R nook-app/nook-replication \
+              "../nook-base-coverage/nook-app/nook-replication"
+          fi
           base_coverage_out="$PWD/coverage/base"
           task docker:coverage:export \
             REPO_ROOT="$PWD/../nook-base-coverage" \

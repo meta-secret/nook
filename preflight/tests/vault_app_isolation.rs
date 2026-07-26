@@ -1296,6 +1296,8 @@ fn assert_pr_workflow_contract(root: &Path) {
         "--github-output \"$GITHUB_OUTPUT\"",
         "coverage/current/tools/nook-preflight validate-coverage-artifact",
         "coverage/current/tools/nook-preflight coverage-report",
+        "if [ ! -f \"../nook-base-coverage/nook-app/nook-replication/Cargo.toml\" ]; then",
+        "cp -R nook-app/nook-replication",
     ] {
         assert!(
             pr.contains(required),
