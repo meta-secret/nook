@@ -614,7 +614,8 @@ tasks:
           "$firewall_fragment" \
           /etc/nftables.d/nook-k0s.nft
         sudo -n cat /etc/nftables.conf > "$firewall_config"
-        if ! grep -Fq 'include "/etc/nftables.d/nook-k0s.nft"' \
+        if ! grep -Eq \
+          '^[[:space:]]*include[[:space:]]+"/etc/nftables.d/nook-k0s\.nft"([[:space:]]*(#.*)?)?$' \
           "$firewall_config"; then
           printf '\ninclude "/etc/nftables.d/nook-k0s.nft"\n' \
             >> "$firewall_config"
@@ -735,21 +736,37 @@ tasks:
               ' <<<"$policy_json"
             )"
             case "$egress_index" in
-              ''|*[!0-9]*)
-                echo "Refusing network policy without one API egress rule: $policy" >&2
+              '')
+                patch="$(
+                  jq -cn \
+                    --arg cidr "{{.K0S_API_ADDRESS}}/32" \
+                    '[{
+                      op: "add",
+                      path: "/spec/egress/-",
+                      value: {
+                        to: [{ipBlock: {cidr: $cidr}}],
+                        ports: [{protocol: "TCP", port: 6443}]
+                      }
+                    }]'
+                )"
+                ;;
+              *[!0-9]*)
+                echo "Refusing ambiguous API egress rules in policy: $policy" >&2
                 exit 1
                 ;;
+              *)
+                patch="$(
+                  jq -cn \
+                    --arg path "/spec/egress/$egress_index/to/-" \
+                    --arg cidr "{{.K0S_API_ADDRESS}}/32" \
+                    '[{
+                      op: "add",
+                      path: $path,
+                      value: {ipBlock: {cidr: $cidr}}
+                    }]'
+                )"
+                ;;
             esac
-            patch="$(
-              jq -cn \
-                --arg path "/spec/egress/$egress_index/to/-" \
-                --arg cidr "{{.K0S_API_ADDRESS}}/32" \
-                '[{
-                  op: "add",
-                  path: $path,
-                  value: {ipBlock: {cidr: $cidr}}
-                }]'
-            )"
             sudo -n k0s kubectl patch networkpolicy "$policy" \
               --namespace hive-system \
               --type=json \

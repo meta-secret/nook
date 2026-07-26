@@ -6,6 +6,7 @@ use neo4rs::{ConfigBuilder, Error as Neo4jDriverError, Graph, Neo4jErrorKind, Ro
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::install_rustls_crypto_provider;
 use crate::model::{
     AgentId, Artifact, AttemptId, ClaimedTask, DependencyResult, EnqueueTask, LeaseToken, TaskId,
 };
@@ -49,6 +50,7 @@ pub struct Neo4jTaskStore {
 
 impl Neo4jTaskStore {
     pub async fn connect(uri: &str, username: &str, password: &str) -> anyhow::Result<Self> {
+        install_rustls_crypto_provider()?;
         let config = ConfigBuilder::default()
             .uri(uri)
             .user(username)

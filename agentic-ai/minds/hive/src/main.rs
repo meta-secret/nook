@@ -8,7 +8,10 @@ use hive::coordinator::run_coordinator;
 use hive::dispatcher::run_workbench_dispatcher;
 use hive::model::{AgentId, EnqueueTask, TaskId};
 use hive::publication::{GitHubRequest, run_publication_broker, run_publication_client};
-use hive::{CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig};
+use hive::{
+    CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
+    install_rustls_crypto_provider,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "hive", about = "Run isolated Nook coding agents")]
@@ -193,12 +196,6 @@ enum GitHubAction {
         #[arg(long)]
         merge_commit: String,
     },
-}
-
-fn install_rustls_crypto_provider() -> anyhow::Result<()> {
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .map_err(|_| anyhow::anyhow!("failed to install the AWS-LC rustls crypto provider"))
 }
 
 fn main() -> anyhow::Result<()> {

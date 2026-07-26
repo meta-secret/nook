@@ -222,6 +222,9 @@ unless infra_taskfile.include?("kubectl get nodes -o name") &&
 end
 unless infra_taskfile.include?("nook-k0s.nft") &&
        infra_taskfile.include?(
+         '^[[:space:]]*include[[:space:]]+"/etc/nftables.d/nook-k0s\.nft"'
+       ) &&
+       infra_taskfile.include?(
          'input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 }'
        ) &&
        infra_taskfile.include?(
@@ -310,6 +313,10 @@ controller_restart = k0s_install_task.index(
 )
 unless policy_refresh && controller_restart && policy_refresh < controller_restart
   raise "k0s upgrades must allow the stable API endpoint before controller restart"
+end
+unless k0s_install_task.include?('path: "/spec/egress/-"') &&
+       k0s_install_task.include?('ports: [{protocol: "TCP", port: 6443}]')
+  raise "legacy Hive policies must gain a complete stable API egress rule"
 end
 unless k0s_status_task.include?(
          "systemctl is-enabled --quiet nook-k0s-api-address.service"
