@@ -68,9 +68,9 @@ jobs:
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
-          # Producers restore GHA scopes only. Hosted export is deferred to publish-cache so a
-          # cancelled Mid-build Main run cannot poison dependency indexes.
-          GHA_CACHE_WRITE_ENABLED: ""
+          # This successful producer owns the native dependency/source scopes. BuildKit exports
+          # only after the selected targets solve, so cancelled compilation cannot publish them.
+          GHA_CACHE_WRITE_ENABLED: "1"
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
@@ -120,7 +120,8 @@ jobs:
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
           CI: true
-          GHA_CACHE_WRITE_ENABLED: ""
+          # Publish the exact dependency/source graph that produced the verified WASM handoff.
+          GHA_CACHE_WRITE_ENABLED: "1"
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
@@ -188,9 +189,8 @@ jobs:
           WASM_BUILD_MODE=dev
         env:
           CI: true
-          # Warm the job-scoped builder only. Publishing mid-prepare lets cancelled Main runs
-          # overwrite GHA indexes without the cargo-chef cook blobs PRs need.
-          GHA_CACHE_WRITE_ENABLED: ""
+          # Publish web dependencies and the verified browser-free image from this successful solve.
+          GHA_CACHE_WRITE_ENABLED: "1"
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
@@ -240,42 +240,6 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  publish-cache:
-    name: Publish GHA BuildKit cache
-    # Dedicated deps-only warm+export job keeps deferred publish on one builder without blocking
-    # deploy and without re-running producer verification graphs. Needs producers only so a failed
-    # native/WASM graph does not refresh hosted indexes.
-    needs: [rust, wasm]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-
-      - name: Warm dependency graph without publishing
-        run: task ci:main:warm-gha-cache WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          # Warm the job-scoped builder only. Publishing mid-warm lets cancelled Main runs
-          # overwrite GHA indexes without the cargo-chef cook blobs PRs need.
-          GHA_CACHE_WRITE_ENABLED: ""
-
-      - name: Publish hosted BuildKit cache
-        if: success()
-        run: task ci:main:publish-gha-cache WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Preserve cache telemetry
         if: always()

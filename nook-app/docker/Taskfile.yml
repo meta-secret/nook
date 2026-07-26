@@ -260,7 +260,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-deps.output=type=cacheonly" ci-rust builder-deps'
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-deps.output=type=cacheonly" --set "rust-base.output=type=cacheonly" ci-rust builder-deps rust-base'
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
