@@ -8,6 +8,12 @@ repo_root="$(cd "$scripts_dir/../.." && pwd)"
 extract_awk="$scripts_dir/format-host-apply-extract.awk"
 cd "$repo_root"
 
+if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
+  task hive:guest:format
+  git status --short --untracked-files=no
+  exit 0
+fi
+
 tmp="$(mktemp)"
 patch="$(mktemp)"
 trap 'rm -f "$tmp" "$patch"' EXIT
@@ -29,10 +35,10 @@ awk -f "$extract_awk" "$tmp" >"$patch"
 
 if [[ ! -s "$patch" ]]; then
   echo '==> Already formatted; host working tree unchanged.'
-  exit 0
+else
+  git apply "$patch"
+  echo '==> Applied sealed-image format changes to the host working tree.'
 fi
 
-git apply "$patch"
-
-echo '==> Applied sealed-image format changes to the host working tree.'
+task hive:format
 git status --short --untracked-files=no

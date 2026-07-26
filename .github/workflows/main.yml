@@ -1,5 +1,6 @@
-# Main branch: serialize the native, WASM, and web cache-writing lanes so each verifies read-only
-# and then exports its already-solved local graph without competing uploads. After the verified
+# Main branch: keep one active run plus only the newest pending revision, then serialize the
+# native, WASM, and web cache-writing lanes so each verifies read-only and exports its
+# already-solved local graph without competing uploads. After the verified
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on separate
 # read-only hosted runners. Deploy the fast, unoptimized development channel to Cloudflare
 # Pages only after web verify and web e2e succeed; extension e2e and UI demos remain required
@@ -33,7 +34,9 @@ permissions:
 
 concurrency:
   group: main
-  cancel-in-progress: true
+  # Finish the active cache-writing run. GitHub keeps only the newest pending Main revision,
+  # coalescing a burst of agent merges without interrupting verified cache publication.
+  cancel-in-progress: false
 
 env:
   DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}

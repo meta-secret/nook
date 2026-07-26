@@ -5,6 +5,7 @@ This directory contains design specifications, architecture rationales, and core
 | Document | Description | Status |
 |---|---|---|
 | [core-beliefs.md](core-beliefs.md) | Agent-first core operating principles | Verified |
+| [hive-isolated-agent-platform.md](hive-isolated-agent-platform.md) | Stateful k0s/Kata Hive architecture, components, trust boundaries, task DAG, Main repair delivery, caching, and Taskfile operations | Implemented |
 | [unified-vault.md](unified-vault.md) | Local-first vault model; scalar `vault_version` sync retained as historical context | Partially historical — provider sync superseded by [vault-event-log.md](vault-event-log.md) |
 | [vault-session-and-lock.md](vault-session-and-lock.md) | Lock session, vault vs sync providers, multi-vault model | Verified |
 | [auth-providers.md](auth-providers.md) | Login gate, `nook_auth` sync-provider credentials, OAuth origins | Verified |
