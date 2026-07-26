@@ -43,7 +43,7 @@ impl LocalEventStore {
     }
 
     pub fn queue_outbox(&mut self, provider_id: &str, event_id: EventId, bytes: Vec<u8>) {
-        self.replica.queue_outbox(provider_id, event_id, bytes);
+        let _ = self.replica.queue_outbox(provider_id, event_id, bytes);
     }
 
     pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &EventId) -> Option<Vec<u8>> {

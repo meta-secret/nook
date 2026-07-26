@@ -100,6 +100,9 @@ impl EventGraph {
                 EventPendingReason::MissingParents(missing_parents),
             )),
             CausalInsertStatus::Duplicate => Ok(EventInsertStatus::Duplicate),
+            CausalInsertStatus::Conflict => Ok(EventInsertStatus::Quarantined(
+                "Conflicting causal parent sets for the same event id".to_owned(),
+            )),
         }
     }
 

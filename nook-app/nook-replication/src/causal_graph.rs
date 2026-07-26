@@ -10,6 +10,7 @@ pub enum CausalInsertStatus<Id> {
     Applied,
     Pending { missing_parents: Vec<Id> },
     Duplicate,
+    Conflict,
 }
 
 /// Structural causal-graph failures independent of an application's event
@@ -88,10 +89,21 @@ where
     }
 
     pub fn insert(&mut self, id: Id, parents: impl Into<Vec<Id>>) -> CausalInsertStatus<Id> {
-        if self.parents.contains_key(&id) {
-            return CausalInsertStatus::Duplicate;
-        }
         let parents = parents.into();
+        if let Some(existing) = self.parents.get_mut(&id) {
+            if existing == &parents {
+                return CausalInsertStatus::Duplicate;
+            }
+            if parents < *existing {
+                existing.clone_from(&parents);
+            }
+            self.quarantined.insert(
+                id,
+                "Conflicting causal parent sets for the same event id".to_owned(),
+            );
+            self.propagate_quarantine();
+            return CausalInsertStatus::Conflict;
+        }
         let missing_parents = parents
             .iter()
             .filter(|parent| !self.parents.contains_key(*parent))
@@ -343,6 +355,31 @@ mod tests {
 
         graph.insert(id("root"), Vec::new());
         assert!(graph.pending_ids().is_empty());
+    }
+
+    #[test]
+    fn direct_insertion_quarantines_conflicting_parent_sets_deterministically() {
+        let mut left = CausalGraph::new();
+        left.insert(id("a"), Vec::new());
+        left.insert(id("b"), Vec::new());
+        left.insert(id("same"), vec![id("a")]);
+        assert_eq!(
+            left.insert(id("same"), vec![id("b")]),
+            CausalInsertStatus::Conflict
+        );
+
+        let mut right = CausalGraph::new();
+        right.insert(id("a"), Vec::new());
+        right.insert(id("b"), Vec::new());
+        right.insert(id("same"), vec![id("b")]);
+        assert_eq!(
+            right.insert(id("same"), vec![id("a")]),
+            CausalInsertStatus::Conflict
+        );
+
+        assert_eq!(left, right);
+        assert!(left.quarantined().contains_key("same"));
+        assert_eq!(left.parents(&id("same")), Some([id("a")].as_slice()));
     }
 
     #[test]

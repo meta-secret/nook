@@ -83,11 +83,21 @@ where
         self.events.keys().cloned().collect()
     }
 
-    pub fn queue_outbox(&mut self, provider_id: &str, event_id: Id, bytes: Vec<u8>) {
-        self.outbox
-            .entry(provider_id.to_owned())
-            .or_default()
-            .insert(event_id, bytes);
+    pub fn queue_outbox(
+        &mut self,
+        provider_id: &str,
+        event_id: Id,
+        bytes: Vec<u8>,
+    ) -> ReplicaInsertStatus {
+        let entries = self.outbox.entry(provider_id.to_owned()).or_default();
+        match entries.get(&event_id) {
+            Some(existing) if existing == &bytes => ReplicaInsertStatus::Duplicate,
+            Some(_) => ReplicaInsertStatus::Conflict,
+            None => {
+                entries.insert(event_id, bytes);
+                ReplicaInsertStatus::Inserted
+            }
+        }
     }
 
     pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &Id) -> Option<Vec<u8>> {
@@ -128,12 +138,25 @@ mod tests {
     #[test]
     fn outbox_is_idempotent_per_provider_and_event() {
         let mut store = ReplicaStore::new();
-        store.queue_outbox("drive", 1_u8, vec![1]);
-        store.queue_outbox("drive", 1_u8, vec![2]);
-        store.queue_outbox("github", 1_u8, vec![3]);
+        assert_eq!(
+            store.queue_outbox("drive", 1_u8, vec![1]),
+            ReplicaInsertStatus::Inserted
+        );
+        assert_eq!(
+            store.queue_outbox("drive", 1_u8, vec![1]),
+            ReplicaInsertStatus::Duplicate
+        );
+        assert_eq!(
+            store.queue_outbox("drive", 1_u8, vec![2]),
+            ReplicaInsertStatus::Conflict
+        );
+        assert_eq!(
+            store.queue_outbox("github", 1_u8, vec![3]),
+            ReplicaInsertStatus::Inserted
+        );
 
-        assert_eq!(store.pending_outbox("drive"), vec![(1, vec![2])]);
-        assert_eq!(store.dequeue_outbox("drive", &1), Some(vec![2]));
+        assert_eq!(store.pending_outbox("drive"), vec![(1, vec![1])]);
+        assert_eq!(store.dequeue_outbox("drive", &1), Some(vec![1]));
         assert!(store.pending_outbox("drive").is_empty());
         assert_eq!(store.pending_outbox("github"), vec![(1, vec![3])]);
     }
