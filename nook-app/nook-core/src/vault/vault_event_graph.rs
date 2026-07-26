@@ -99,6 +99,9 @@ impl EventGraph {
             CausalInsertStatus::Pending { missing_parents } => Ok(EventInsertStatus::Pending(
                 EventPendingReason::MissingParents(missing_parents),
             )),
+            CausalInsertStatus::Quarantined { reason } => {
+                Ok(EventInsertStatus::Quarantined(reason))
+            }
             CausalInsertStatus::Duplicate => Ok(EventInsertStatus::Duplicate),
             CausalInsertStatus::Conflict => Ok(EventInsertStatus::Quarantined(
                 "Conflicting causal parent sets for the same event id".to_owned(),

@@ -9,6 +9,7 @@ use std::fmt;
 pub enum CausalInsertStatus<Id> {
     Applied,
     Pending { missing_parents: Vec<Id> },
+    Quarantined { reason: String },
     Duplicate,
     Conflict,
 }
@@ -89,7 +90,7 @@ where
     }
 
     pub fn insert(&mut self, id: Id, parents: impl Into<Vec<Id>>) -> CausalInsertStatus<Id> {
-        let parents = parents.into();
+        let parents = Self::normalize_parents(parents.into());
         if let Some(existing) = self.parents.get_mut(&id) {
             if existing == &parents {
                 return CausalInsertStatus::Duplicate;
@@ -97,7 +98,7 @@ where
             if parents < *existing {
                 existing.clone_from(&parents);
             }
-            self.quarantined.insert(
+            self.merge_quarantine_reason(
                 id,
                 "Conflicting causal parent sets for the same event id".to_owned(),
             );
@@ -109,9 +110,13 @@ where
             .filter(|parent| !self.parents.contains_key(*parent))
             .cloned()
             .collect::<Vec<_>>();
-        self.parents.insert(id, parents.clone());
+        self.parents.insert(id.clone(), parents.clone());
         self.propagate_quarantine();
-        if self.ancestor_ids_present(&parents) {
+        if let Some(reason) = self.quarantined.get(&id) {
+            CausalInsertStatus::Quarantined {
+                reason: reason.clone(),
+            }
+        } else if self.ancestor_ids_present(&parents) {
             CausalInsertStatus::Applied
         } else {
             CausalInsertStatus::Pending { missing_parents }
@@ -119,7 +124,7 @@ where
     }
 
     pub fn quarantine(&mut self, id: Id, reason: String) {
-        self.quarantined.insert(id, reason);
+        self.merge_quarantine_reason(id, reason);
         self.propagate_quarantine();
     }
 
@@ -253,35 +258,45 @@ where
     pub fn union(&self, other: &Self) -> Self {
         let mut merged = self.clone();
         for (id, parents) in &other.parents {
+            let parents = Self::normalize_parents(parents.clone());
             match merged.parents.get_mut(id) {
-                Some(existing) if existing != parents => {
-                    if parents < existing {
-                        existing.clone_from(parents);
+                Some(existing) if existing != &parents => {
+                    if parents < *existing {
+                        existing.clone_from(&parents);
                     }
-                    merged.quarantined.insert(
+                    merged.merge_quarantine_reason(
                         id.clone(),
                         "Conflicting causal parent sets for the same event id".to_owned(),
                     );
                 }
                 Some(_) => {}
                 None => {
-                    merged.parents.insert(id.clone(), parents.clone());
+                    merged.parents.insert(id.clone(), parents);
                 }
             }
         }
         for (id, reason) in &other.quarantined {
-            merged
-                .quarantined
-                .entry(id.clone())
-                .and_modify(|existing| {
-                    if reason < existing {
-                        existing.clone_from(reason);
-                    }
-                })
-                .or_insert_with(|| reason.clone());
+            merged.merge_quarantine_reason(id.clone(), reason.clone());
         }
         merged.propagate_quarantine();
         merged
+    }
+
+    fn normalize_parents(mut parents: Vec<Id>) -> Vec<Id> {
+        parents.sort();
+        parents.dedup();
+        parents
+    }
+
+    fn merge_quarantine_reason(&mut self, id: Id, reason: String) {
+        self.quarantined
+            .entry(id)
+            .and_modify(|existing| {
+                if reason < *existing {
+                    existing.clone_from(&reason);
+                }
+            })
+            .or_insert(reason);
     }
 
     fn propagate_quarantine(&mut self) {
@@ -383,6 +398,24 @@ mod tests {
     }
 
     #[test]
+    fn parent_sets_are_normalized_before_duplicate_detection() {
+        let mut graph = CausalGraph::new();
+        graph.insert(id("a"), Vec::new());
+        graph.insert(id("b"), Vec::new());
+        graph.insert(id("same"), vec![id("b"), id("a"), id("b")]);
+
+        assert_eq!(
+            graph.insert(id("same"), vec![id("a"), id("b")]),
+            CausalInsertStatus::Duplicate
+        );
+        assert_eq!(
+            graph.parents(&id("same")),
+            Some([id("a"), id("b")].as_slice())
+        );
+        assert!(!graph.quarantined().contains_key("same"));
+    }
+
+    #[test]
     fn concurrent_branches_and_join_have_deterministic_heads() {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
@@ -420,7 +453,12 @@ mod tests {
         assert!(graph.quarantined().contains_key("descendant"));
         assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
 
-        graph.insert(id("future"), vec![id("descendant")]);
+        assert_eq!(
+            graph.insert(id("future"), vec![id("descendant")]),
+            CausalInsertStatus::Quarantined {
+                reason: id("Ancestor event was rejected")
+            }
+        );
         assert!(graph.quarantined().contains_key("future"));
         assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
     }
@@ -474,5 +512,26 @@ mod tests {
         assert_eq!(left_right, right_left);
         assert!(left_right.quarantined().contains_key("same"));
         assert_eq!(left_right.parents(&id("same")), Some([id("a")].as_slice()));
+    }
+
+    #[test]
+    fn union_preserves_the_deterministic_minimum_quarantine_reason() {
+        let mut left = CausalGraph::new();
+        left.insert(id("a"), Vec::new());
+        left.insert(id("b"), Vec::new());
+        left.insert(id("same"), vec![id("a")]);
+        left.quarantine(id("same"), id("A-policy"));
+
+        let mut right = CausalGraph::new();
+        right.insert(id("a"), Vec::new());
+        right.insert(id("b"), Vec::new());
+        right.insert(id("same"), vec![id("b")]);
+
+        let left_right = left.union(&right);
+        assert_eq!(left_right, right.union(&left));
+        assert_eq!(
+            left_right.quarantined().get("same").map(String::as_str),
+            Some("A-policy")
+        );
     }
 }
