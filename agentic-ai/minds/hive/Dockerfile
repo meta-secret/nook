@@ -34,18 +34,31 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /build
 
-FROM toolchain AS source
+FROM toolchain AS dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
+RUN mkdir -p lace/src hive/src \
+    && printf '%s\n' 'pub fn dependency_cache_seed() {}' > lace/src/lib.rs \
+    && printf '%s\n' 'fn main() {}' > hive/src/main.rs \
+    && cargo build --locked -p hive --all-targets \
+    && cargo build --locked --release -p hive
+
+FROM dependencies AS source
 COPY lace/src lace/src
 COPY hive/src hive/src
+RUN find lace/src hive/src -type f -exec touch {} +
 
 FROM source AS check
 RUN cargo fmt --all -- --check \
     && cargo clippy --locked -p hive --all-targets -- -D warnings
 
-FROM source AS formatter
+FROM toolchain AS formatter
+COPY Cargo.toml Cargo.lock ./
+COPY lace/Cargo.toml lace/Cargo.toml
+COPY hive/Cargo.toml hive/Cargo.toml
+COPY lace/src lace/src
+COPY hive/src hive/src
 RUN cargo fmt --all
 
 FROM check AS test-runner

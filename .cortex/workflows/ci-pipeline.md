@@ -17,6 +17,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust → WASM → browser-free web verify run read-only, then each serially exports its already-solved local BuildKit graph after lane validation; local-provider web e2e, extension e2e, and headless UI demos consume the verified WASM handoff on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then commit one `stats/main-build/**` record directly to Nook Workbench | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)       | Failed `Main` attempt                       | From trusted default-branch code, create or refresh one ready automated Workbench incident per failed Main revision using run metadata and failed job names only | Yes (`NOOK_GITHUB_PAT`)                   |
+| [`hive.yml`](../../.github/workflows/hive.yml)                                      | Hive/infra PR changes and Main pushes       | Pinned Docker format/Clippy, behavior tests against Neo4j, and k0s manifest/Taskfile contracts; Main alone publishes the shared Hive dependency cache | No                                        |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml)                 | Scheduled ready-Workbench scan or manual dispatch | Atomically claim one `status: ready`, `automation: agent` Markdown issue → Cursor SDK implement → PR opened → Workbench progress/worklog published → workflow exits | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -502,6 +503,13 @@ available. Without one, the wrapper bypasses sccache. It does not replace
 cargo-chef or change the build result when unavailable to a secret-free job.
 Manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
+The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.
+Its manifest-only Docker stage compiles locked debug/test and release
+dependencies before authored sources are copied. Pull requests restore Main's
+scope read-only; only a successful Main-side build exports it. Hive check and
+test tasks use the same job-scoped Buildx builder, so the behavior image reuses
+the dependency and Clippy graph produced earlier in the run without allowing
+parallel PRs to replace the trusted cache.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
 prepared image and without a second setup. The combined `dist` tree is reserved
