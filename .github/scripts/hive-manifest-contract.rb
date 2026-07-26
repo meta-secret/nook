@@ -10,10 +10,14 @@ end
 
 deployment = load_yaml.call("infra/k0s/manifests/hive/deployment.yaml")
 dispatcher_deployment = load_yaml.call("infra/k0s/manifests/hive/dispatcher.yaml")
+reaper_deployment = load_yaml.call("infra/k0s/manifests/hive/reaper-controller.yaml")
 pod = deployment.fetch("spec").fetch("template").fetch("spec")
 raise "Hive must keep four warm workers" unless deployment.dig("spec", "replicas") == 4
 raise "Hive must use Kata Dragonball" unless pod["runtimeClassName"] == "kata-dragonball"
 raise "Hive must disable automatic service-account tokens" unless pod["automountServiceAccountToken"] == false
+unless pod["serviceAccountName"] == "hive-auth-persistence"
+  raise "Hive Pod identity must only persist rotated authentication"
+end
 raise "Hive must not use hostPath" if pod.fetch("volumes").any? { |volume| volume.key?("hostPath") }
 
 containers = pod.fetch("initContainers") + pod.fetch("containers")
@@ -32,10 +36,12 @@ worker = pod.fetch("containers").find { |container| container.fetch("name") == "
 broker = pod.fetch("containers").find { |container| container.fetch("name") == "auth-broker" }
 coordinator = pod.fetch("containers").find { |container| container.fetch("name") == "coordinator" }
 publisher = pod.fetch("containers").find { |container| container.fetch("name") == "publication-broker" }
+reaper = pod.fetch("containers").find { |container| container.fetch("name") == "pod-reaper" }
 worker_mounts = worker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 broker_mounts = broker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 coordinator_mounts = coordinator.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 publisher_mounts = publisher.fetch("volumeMounts").map { |mount| mount.fetch("name") }
+reaper_mounts = reaper.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 raise "Hive worker must not mount Codex credentials" if worker_mounts.include?("codex-auth-source")
 raise "Hive worker must not mount the broker auth home" if worker_mounts.include?("broker-auth-home")
 raise "Hive worker must not mount the broker API token" if worker_mounts.include?("broker-auth-api")
@@ -62,6 +68,11 @@ unless publisher_mounts.include?("github-publication") &&
        publisher_mounts.include?("publication-channel") &&
        worker_mounts.include?("publication-channel")
   raise "Hive publication broker boundary is incomplete"
+end
+unless reaper_mounts.include?("reaper-auth") &&
+       !reaper_mounts.include?("broker-auth-api") &&
+       !reaper_mounts.include?("reaper-api")
+  raise "Hive reaper must use only its opaque controller credential"
 end
 publisher_workspace = publisher
   .fetch("volumeMounts")
@@ -99,7 +110,7 @@ network = File
   .split(/^---\s*$/)
   .map { |document| YAML.safe_load(document, aliases: true) }
   .compact
-  .last
+  .find { |document| document.dig("metadata", "name") == "hive-worker-egress" }
 internet_block = network
   .dig("spec", "egress")
   .flat_map { |rule| rule.fetch("to", []) }
@@ -110,6 +121,10 @@ raise "Hive Internet egress rule is missing" unless internet_block
 private_ranges = %w[10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16]
 missing_ranges = private_ranges - internet_block.fetch("except")
 raise "Hive Internet egress includes private ranges: #{missing_ranges.join(", ")}" unless missing_ranges.empty?
+unless reaper_deployment.dig("spec", "template", "spec", "serviceAccountName") ==
+       "hive-reaper-controller"
+  raise "Hive reaper controller must use a distinct Pod-deletion identity"
+end
 
 kata = load_yaml.call("infra/k0s/manifests/kata/values.yaml")
 unless kata.dig("image", "reference")&.match?(/\A[^@]+@sha256:[0-9a-f]{64}\z/)
@@ -134,6 +149,10 @@ end
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
+end
+unless infra_taskfile.include?('--build-context "nook-app=$remote_dir/nook-app"') &&
+       infra_taskfile.include?("nook-app/docker/sccache-wrapper.sh")
+  raise "Hive deployment build is missing its named nook-app context"
 end
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
        infra_taskfile.include?("hmac.compare_digest") &&

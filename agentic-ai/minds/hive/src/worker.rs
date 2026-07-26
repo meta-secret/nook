@@ -270,7 +270,9 @@ impl<S: TaskStore> Worker<S> {
                     bullet_list(&result.tests)
                 ));
                 let repository = self.config.workspace.join("repository");
-                let artifact = persistable_patch(&repository, &baseline, task, &result).await?;
+                let artifact =
+                    persistable_patch(&repository, &baseline, task, &result, preparation.resumed)
+                        .await?;
                 let accepted = self
                     .store
                     .complete(task, &self.config.agent_id, &summary, artifact.as_ref())
@@ -341,11 +343,18 @@ struct WorkerBlocked;
 fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(workspace)?;
     let startup_marker = workspace.join(".hive-worker-started");
-    let mut startup_file = std::fs::OpenOptions::new()
+    let startup_file = std::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
-        .open(&startup_marker)
-        .context("refusing to restart a Hive worker inside an existing Pod")?;
+        .open(&startup_marker);
+    let mut startup_file = match startup_file {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            std::fs::write(workspace.join(".hive-task-finished"), pod_name)?;
+            return Err(error).context("refusing to restart a Hive worker inside an existing Pod");
+        }
+        Err(error) => return Err(error).context("failed to establish Hive worker lifecycle"),
+    };
     startup_file.write_all(pod_name.as_bytes())?;
     startup_file.sync_all()?;
     Ok(())
@@ -466,32 +475,9 @@ async fn prepare_workspace(
         )
         .await?;
     }
+    validate_dependency_artifacts(dependency_artifacts)?;
     let mut applied_dependency = false;
     for (index, artifact) in dependency_artifacts.iter().enumerate() {
-        if artifact.kind != "git-patch" {
-            return Err(anyhow!(
-                "dependency artifact {} has unsupported kind {}",
-                artifact.id,
-                artifact.kind
-            ));
-        }
-        let digest = Sha256::digest(artifact.content.as_bytes());
-        let digest = format!(
-            "sha256:{}",
-            digest.iter().fold(
-                String::with_capacity(digest.len() * 2),
-                |mut encoded, byte| {
-                    let _ = write!(encoded, "{byte:02x}");
-                    encoded
-                },
-            )
-        );
-        if digest != artifact.digest {
-            return Err(anyhow!(
-                "dependency artifact {} failed digest verification",
-                artifact.id
-            ));
-        }
         if did_resume && patch_is_already_applied(&repository, artifact).await? {
             continue;
         }
@@ -538,6 +524,7 @@ async fn prepare_workspace(
             return Ok(WorkspacePreparation {
                 baseline: String::new(),
                 conflicted: true,
+                resumed: did_resume,
             });
         }
         applied_dependency = true;
@@ -547,12 +534,44 @@ async fn prepare_workspace(
         return Ok(WorkspacePreparation {
             baseline,
             conflicted: false,
+            resumed: did_resume,
         });
     }
     Ok(WorkspacePreparation {
         baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
         conflicted: false,
+        resumed: did_resume,
     })
+}
+
+fn validate_dependency_artifacts(dependency_artifacts: &[Artifact]) -> anyhow::Result<()> {
+    for artifact in dependency_artifacts {
+        if artifact.kind != "git-patch" {
+            return Err(anyhow!(
+                "dependency artifact {} has unsupported kind {}",
+                artifact.id,
+                artifact.kind
+            ));
+        }
+        let digest = Sha256::digest(artifact.content.as_bytes());
+        let digest = format!(
+            "sha256:{}",
+            digest.iter().fold(
+                String::with_capacity(digest.len() * 2),
+                |mut encoded, byte| {
+                    let _ = write!(encoded, "{byte:02x}");
+                    encoded
+                },
+            )
+        );
+        if digest != artifact.digest {
+            return Err(anyhow!(
+                "dependency artifact {} failed digest verification",
+                artifact.id
+            ));
+        }
+    }
+    Ok(())
 }
 
 async fn patch_is_already_applied(repository: &Path, artifact: &Artifact) -> anyhow::Result<bool> {
@@ -582,6 +601,7 @@ async fn patch_is_already_applied(repository: &Path, artifact: &Artifact) -> any
 struct WorkspacePreparation {
     baseline: String,
     conflicted: bool,
+    resumed: bool,
 }
 
 async fn ensure_dependencies_resolved(repository: &Path) -> anyhow::Result<()> {
@@ -661,6 +681,7 @@ async fn persistable_patch(
     baseline: &str,
     task: &ClaimedTask,
     result: &TerminalResult,
+    resumed: bool,
 ) -> anyhow::Result<Option<Artifact>> {
     let add_status = Command::new("git")
         .args(["add", "--intent-to-add", "--", "."])
@@ -694,7 +715,7 @@ async fn persistable_patch(
         ));
     }
     if output.stdout.is_empty() {
-        if !result.changed_files.is_empty() {
+        if !resumed && !result.changed_files.is_empty() {
             return Err(anyhow!(
                 "Codex reported changed files but produced no persistable git patch"
             ));
@@ -786,7 +807,7 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, bounded, establish_worker_lifecycle, persistable_patch,
-        prepare_workspace,
+        prepare_workspace, validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, ClaimedTask, LeaseToken, TaskId, TerminalResult, TerminalStatus,
@@ -816,6 +837,33 @@ mod tests {
                 .to_string()
                 .contains("refusing to restart a Hive worker")
         );
+        assert!(workspace.path().join(".hive-task-finished").is_file());
+    }
+
+    #[test]
+    fn every_dependency_artifact_is_verified_before_application() {
+        let valid_content = "valid patch";
+        let valid_digest = Sha256::digest(valid_content.as_bytes());
+        let artifacts = vec![
+            Artifact {
+                id: "first".to_owned(),
+                kind: "git-patch".to_owned(),
+                uri: "hive://artifact/first".to_owned(),
+                digest: format!("sha256:{valid_digest:x}"),
+                content: valid_content.to_owned(),
+            },
+            Artifact {
+                id: "later-corrupt".to_owned(),
+                kind: "git-patch".to_owned(),
+                uri: "hive://artifact/later-corrupt".to_owned(),
+                digest: "sha256:not-the-content-digest".to_owned(),
+                content: "substituted patch".to_owned(),
+            },
+        ];
+
+        let error = validate_dependency_artifacts(&artifacts)
+            .expect_err("a corrupt later patch must fail before the first patch is applied");
+        assert!(error.to_string().contains("later-corrupt"));
     }
 
     #[tokio::test]
@@ -887,7 +935,7 @@ mod tests {
             blocker: None,
         };
 
-        let artifact = persistable_patch(repository.path(), baseline, &task, &result)
+        let artifact = persistable_patch(repository.path(), baseline, &task, &result, false)
             .await
             .unwrap()
             .expect("patch artifact");
@@ -897,6 +945,63 @@ mod tests {
         assert!(artifact.content.contains("diff --git a/tracked.txt"));
         assert!(artifact.content.contains("diff --git a/new.txt"));
         assert!(artifact.content.contains("diff --git a/committed.txt"));
+    }
+
+    #[tokio::test]
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch() {
+        let repository = tempfile::tempdir().unwrap();
+        let run_git = |arguments: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(arguments)
+                .current_dir(repository.path())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        };
+        run_git(&["init", "--quiet"]);
+        std::fs::write(repository.path().join("repair.txt"), "published\n").unwrap();
+        run_git(&["add", "repair.txt"]);
+        run_git(&[
+            "-c",
+            "user.name=Hive Test",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "published repair",
+        ]);
+        let baseline = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repository.path())
+            .output()
+            .unwrap();
+        let baseline = String::from_utf8(baseline.stdout).unwrap();
+        let task = ClaimedTask {
+            id: TaskId::new("resumed-task").unwrap(),
+            kind: "main-repair".to_owned(),
+            prompt: "finish delivery".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("resumed-attempt").unwrap(),
+            attempt_number: 1,
+            lease_token: LeaseToken::new("resumed-lease").unwrap(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let result = TerminalResult {
+            status: TerminalStatus::Completed,
+            summary: "published repair delivered".to_owned(),
+            changed_files: vec!["repair.txt".to_owned()],
+            tests: Vec::new(),
+            blocker: None,
+        };
+
+        assert!(
+            persistable_patch(repository.path(), baseline.trim(), &task, &result, true)
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -1020,7 +1125,7 @@ mod tests {
             tests: Vec::new(),
             blocker: None,
         };
-        let artifact = persistable_patch(&repository, &baseline, &task, &result)
+        let artifact = persistable_patch(&repository, &baseline, &task, &result, false)
             .await
             .unwrap()
             .expect("task patch");

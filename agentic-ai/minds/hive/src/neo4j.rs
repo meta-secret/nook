@@ -133,6 +133,27 @@ impl TaskStore for Neo4jTaskStore {
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
             );
         }
+        if installed_version == 1 {
+            let mut rows = self
+                .graph
+                .execute(query(
+                    "MATCH (task:Task)
+                     WHERE task.source_commit IS NULL
+                     RETURN count(task) AS legacy_tasks",
+                ))
+                .await?;
+            let legacy_tasks = rows
+                .next()
+                .await?
+                .and_then(|row| row.get::<i64>("legacy_tasks").ok())
+                .unwrap_or(0);
+            if legacy_tasks > 0 {
+                anyhow::bail!(
+                    "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
+                     drain or remove those legacy tasks before upgrading to schema 2"
+                );
+            }
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -269,6 +290,7 @@ impl TaskStore for Neo4jTaskStore {
                  OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                  SET task.status = 'FAILED',
                      task.updated_at = timestamp(),
+                     task.failure_reason = 'lease expired after final attempt',
                      task.lease_owner = null,
                      task.lease_token = null,
                      task.lease_until = null,
@@ -276,7 +298,14 @@ impl TaskStore for Neo4jTaskStore {
                      attempt.error = 'lease expired after final attempt',
                      attempt.completed_at = timestamp(),
                      agent.status = 'IDLE',
-                     agent.last_seen_at = timestamp()",
+                     agent.last_seen_at = timestamp()
+                 WITH task
+                 OPTIONAL MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(task)
+                 WHERE dependent.status IN ['READY', 'BLOCKED']
+                 SET dependent.status = 'FAILED',
+                     dependent.failure_reason =
+                       'upstream dependency failed after its final lease expired',
+                     dependent.updated_at = timestamp()",
                     ))
                     .await?;
 
@@ -669,10 +698,16 @@ impl TaskStore for Neo4jTaskStore {
                      MERGE (task)-[:DEPENDS_ON]->(blocker)
                      SET task.status = CASE
                              WHEN blocker.status = 'COMPLETED' THEN 'READY'
+                             WHEN blocker.status = 'FAILED' THEN 'FAILED'
                              ELSE 'BLOCKED'
                          END,
                          task.attempt_count = task.attempt_count - 1,
                          task.blocked_reason = $reason,
+                         task.failure_reason = CASE
+                           WHEN blocker.status = 'FAILED'
+                           THEN 'discovered blocker has already exhausted its retry budget'
+                           ELSE null
+                         END,
                          task.updated_at = timestamp(),
                          task.lease_owner = null,
                          task.lease_token = null,
@@ -680,6 +715,18 @@ impl TaskStore for Neo4jTaskStore {
                          attempt.status = 'BLOCKED',
                          attempt.error = $reason,
                          attempt.completed_at = timestamp()
+                     WITH task, blocker
+                     OPTIONAL MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(task)
+                     WITH task, blocker, collect(dependent) AS dependents
+                     FOREACH (dependent IN CASE
+                       WHEN blocker.status = 'FAILED' THEN dependents
+                       ELSE []
+                     END |
+                       SET dependent.status = 'FAILED',
+                           dependent.failure_reason =
+                             'upstream task reused an exhausted blocker',
+                           dependent.updated_at = timestamp()
+                     )
                      WITH task
                      MATCH (agent:Agent {id: $agent_id})
                      SET agent.status = 'IDLE', agent.last_seen_at = timestamp()
@@ -1243,10 +1290,142 @@ mod tests {
             "terminal dependency failure must propagate to every blocked descendant"
         );
 
+        let reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
+        store
+            .enqueue(&reused_failed_parent)
+            .await
+            .expect("enqueue parent that discovers an exhausted blocker");
+        let reused_failed_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim parent that discovers an exhausted blocker")
+            .expect("parent available");
+        assert!(
+            store
+                .block(
+                    &reused_failed_claim,
+                    &agent_a,
+                    &exhausted,
+                    "reuse an already exhausted blocker",
+                )
+                .await
+                .expect("bind exhausted blocker")
+        );
+        let mut reused_failed_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     RETURN task.status AS status",
+                )
+                .param("id", reused_failed_parent.id.as_str()),
+            )
+            .await
+            .expect("read reused exhausted-blocker parent");
+        assert_eq!(
+            reused_failed_rows
+                .next()
+                .await
+                .expect("read reused exhausted-blocker row")
+                .expect("reused exhausted-blocker row")
+                .get::<String>("status")
+                .expect("reused exhausted-blocker status"),
+            "FAILED"
+        );
+
+        let mut lease_exhausted = task(format!("lease-exhausted-{suffix}"), Vec::new());
+        lease_exhausted.max_attempts = 1;
+        let lease_stranded = task(
+            format!("lease-exhausted-dependent-{suffix}"),
+            vec![lease_exhausted.id.clone()],
+        );
+        store
+            .enqueue(&lease_exhausted)
+            .await
+            .expect("enqueue final-lease task");
+        store
+            .enqueue(&lease_stranded)
+            .await
+            .expect("enqueue final-lease dependent");
+        let _lease_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim final-lease task")
+            .expect("final-lease task available");
+        store
+            .graph
+            .run(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     SET task.lease_until = timestamp() - 1",
+                )
+                .param("id", lease_exhausted.id.as_str()),
+            )
+            .await
+            .expect("expire final lease");
+        assert!(
+            store
+                .claim(&agent_b, 300)
+                .await
+                .expect("final lease expiry transition")
+                .is_none()
+        );
+        let mut lease_failed_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task)
+                     WHERE task.id IN [$failed_id, $dependent_id]
+                     RETURN task.status AS status",
+                )
+                .param("failed_id", lease_exhausted.id.as_str())
+                .param("dependent_id", lease_stranded.id.as_str()),
+            )
+            .await
+            .expect("read final-lease propagated failures");
+        let mut lease_failed_statuses = Vec::new();
+        while let Some(row) = lease_failed_rows
+            .next()
+            .await
+            .expect("final-lease failed row")
+        {
+            lease_failed_statuses.push(
+                row.get::<String>("status")
+                    .expect("final-lease failed status"),
+            );
+        }
+        assert_eq!(lease_failed_statuses.len(), 2);
+        assert!(
+            lease_failed_statuses
+                .iter()
+                .all(|status| status == "FAILED")
+        );
+
         store
             .graph
             .run(query("MATCH (node) DETACH DELETE node"))
             .await
             .expect("clean isolated integration database");
+        store
+            .graph
+            .run(query(
+                "CREATE (:HiveSchemaMigration {version: 1})
+                 CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
+            ))
+            .await
+            .expect("create schema-1 fixture");
+        assert!(
+            store
+                .migrate()
+                .await
+                .expect_err("schema-1 legacy tasks must block schema 2")
+                .to_string()
+                .contains("without source_commit")
+        );
+        store
+            .graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .expect("clean schema migration fixture");
     }
 }

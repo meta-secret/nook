@@ -79,6 +79,28 @@ test('deduplicates attempts and preserves an active claim', () => {
   )
 })
 
+test('records a later failed rerun without reopening a completed incident', () => {
+  const source = run()
+  const initial = buildMainFailureIssue({
+    run: source,
+    jobs: [{ name: 'Verify web build', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T06:00:00Z',
+  })
+  const completed = initial.body
+    .replace(/^status: ready$/m, 'status: done')
+    .replace(/^owner: unassigned$/m, 'owner: hive-worker-1')
+  const updated = buildMainFailureIssue({
+    run: run({ run_attempt: 2 }),
+    jobs: [{ name: 'Verify web build', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T07:00:00Z',
+    existingBody: completed,
+  })
+
+  assert.match(updated.body, /^status: done$/m)
+  assert.match(updated.body, /^owner: hive-worker-1$/m)
+  assert.match(updated.body, /<!-- main-run:30190000000:attempt:2 -->/)
+})
+
 test('rejects untrusted or non-failing workflow shapes', () => {
   assert.equal(
     requireMainFailure(run({ conclusion: 'timed_out' })),

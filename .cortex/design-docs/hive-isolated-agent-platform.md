@@ -54,9 +54,9 @@ flowchart TB
         coordinator["Coordinator"]
         auth["Auth broker"]
         publication["Publication broker"]
-        builder["Sealed Docker builder"]
         reaper["Pod reaper"]
       end
+      reaper_controller["Reaper controller (runc)"]
     end
   end
 
@@ -68,7 +68,8 @@ flowchart TB
   worker <--> publication
   publication <--> github["GitHub"]
   auth --> codex_api["Codex service"]
-  reaper --> k0s
+  reaper --> reaper_controller
+  reaper_controller --> k0s
   k0s --> pod
   registry --> k0s
 ```
@@ -94,7 +95,8 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, terminal result, dependency patch integration | Neo4j/GitHub/Codex credential files |
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
 | Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations from a broker-owned checkout | Arbitrary GitHub API access by Codex or task-controlled Git metadata |
-| Pod reaper | Worker Kata Pod | Deletes the whole Pod after terminal completion or worker restart | Task execution or broad Kubernetes authority |
+| Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
+| Reaper controller | Dedicated runc Pod | Validates Hive Pod identity and deletes only labeled Hive Pods | Codex auth or task execution |
 | Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
@@ -297,13 +299,14 @@ only on that task's disposable checkout.
 | Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
 | Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
 | GitHub publication token | Publication broker only | Typed bounded publication operations |
-| Kubernetes reaper token | Pod reaper only | No |
+| Reaper controller credential | Pod reaper and dedicated controller only | No |
 | Kubernetes auth-refresh token | Auth broker only | No |
 
-The Pod disables automatic service-account token mounting. The reaper and auth
-broker receive separate projected, one-hour tokens. RBAC restricts the reaper
-to `get`/`delete` Pods in `hive-system`, and the auth broker to updating only
-the Codex-auth Secret.
+The Pod disables automatic service-account token mounting. Its service account
+can patch only the Codex-auth Secret, and that projected token is mounted only
+by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
+controller with an opaque credential. The controller has a distinct workload
+identity restricted to `get`/`delete` labeled Hive Pods.
 
 Secrets are encrypted at rest by the k0s API server with a host-generated
 AES-GCM encryption provider. Neo4j recovery material is authenticated and
@@ -317,7 +320,8 @@ may use:
 
 - cluster DNS;
 - TLS Bolt to Neo4j on port 7687;
-- the Kubernetes API service only for the two narrow sidecars;
+- the Kubernetes API service only for auth persistence and the dedicated
+  reaper controller;
 - external TCP 443 for Codex, GitHub, and HTTPS repository access; and
 - external TCP 22 for task-authorized Git/SSH operations.
 

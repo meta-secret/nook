@@ -187,12 +187,6 @@ function updateExistingIssue({ body, run, recordedAt, failures, relatedPrs }) {
   }
 
   let updated = replaceFrontmatterField(body, 'updated_at', recordedAt)
-  const status = updated.match(/^status:\s*(\S+)$/m)?.[1]
-  if (status === 'done' || status === 'cancelled') {
-    updated = replaceFrontmatterField(updated, 'status', 'ready')
-    updated = replaceFrontmatterField(updated, 'owner', 'unassigned')
-  }
-
   updated = replaceFrontmatterField(updated, 'related_prs', `[${mergedPrs.join(', ')}]`)
 
   if (!updated.includes(marker)) {

@@ -321,7 +321,11 @@ tasks:
         tar -C "$repo_root" \
           --exclude='agentic-ai/minds/target' \
           --exclude='agentic-ai/minds/*/target' \
-          -cf - infra/k0s agentic-ai/minds |
+          -cf - \
+          infra/k0s \
+          agentic-ai/minds \
+          nook-app/docker/sccache-wrapper.sh \
+          nook-app/docker/sccache-report.sh |
           ssh -o BatchMode=yes "$ssh_target" \
             "tar -xf - -C '$remote_dir'"
         BASH
@@ -695,6 +699,7 @@ tasks:
         secret_dir="$(mktemp -d)"
         kubeconfig=""
         hive_replicas=""
+        dispatcher_replicas=""
         restore_hive() {
           if test -n "$hive_replicas"; then
             kubectl scale deployment/hive \
@@ -704,6 +709,15 @@ tasks:
               --namespace hive-system \
               --timeout=15m
             hive_replicas=""
+          fi
+          if test -n "$dispatcher_replicas"; then
+            kubectl scale deployment/hive-workbench-dispatcher \
+              --namespace hive-system \
+              --replicas="$dispatcher_replicas"
+            kubectl rollout status deployment/hive-workbench-dispatcher \
+              --namespace hive-system \
+              --timeout=15m
+            dispatcher_replicas=""
           fi
         }
         cleanup() {
@@ -796,6 +810,21 @@ tasks:
               --for=delete \
               --timeout=5m
           fi
+        fi
+        if test "$tls_changed" = true &&
+          kubectl get deployment hive-workbench-dispatcher \
+            --namespace hive-system >/dev/null 2>&1; then
+          dispatcher_replicas="$(
+            kubectl get deployment hive-workbench-dispatcher \
+              --namespace hive-system \
+              -o jsonpath='{.spec.replicas}'
+          )"
+          kubectl scale deployment/hive-workbench-dispatcher \
+            --namespace hive-system \
+            --replicas=0
+          kubectl rollout status deployment/hive-workbench-dispatcher \
+            --namespace hive-system \
+            --timeout=15m
         fi
 
         kubectl create secret generic hive-neo4j-tls \
@@ -908,6 +937,7 @@ tasks:
         docker build \
           --platform linux/amd64 \
           --tag "$image" \
+          --build-context "nook-app=$remote_dir/nook-app" \
           --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
           "$remote_dir/agentic-ai/minds"
         push_output="$(docker push "$image")"
@@ -1033,6 +1063,15 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        if ! kubectl get secret hive-reaper-auth \
+          --namespace hive-system >/dev/null 2>&1; then
+          reaper_token="$(openssl rand -hex 32)"
+          kubectl create secret generic hive-reaper-auth \
+            --namespace hive-system \
+            --from-literal=token="$reaper_token"
+          unset reaper_token
+        fi
         image="$(cat "$remote_dir/hive-image")"
         auth_checksum="$(
           kubectl get secret hive-codex-auth \
@@ -1096,7 +1135,10 @@ tasks:
           -e "s|HIVE_IMAGE|$image|g" \
           -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/dispatcher.yaml" >> "$rendered"
-        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" >> "$rendered"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
@@ -1104,6 +1146,9 @@ tasks:
           --namespace hive-system \
           --timeout=15m
         kubectl rollout status deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --timeout=15m
+        kubectl rollout status deployment/hive-reaper-controller \
           --namespace hive-system \
           --timeout=15m
         test "$(kubectl get deployment hive \

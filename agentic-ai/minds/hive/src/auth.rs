@@ -164,11 +164,39 @@ pub async fn run_auth_broker(
                 )
                 .await;
             } else {
-                auth_manager
-                    .refresh_token_from_authority()
-                    .await
-                    .map_err(|error| anyhow!("Codex authentication refresh failed: {error}"))?;
-                persist_rotated_auth(&private_auth, &auth_home).await;
+                match auth_manager.refresh_token_from_authority().await {
+                    Ok(()) => persist_rotated_auth(&private_auth, &auth_home).await,
+                    Err(refresh_error) => {
+                        // Another warm broker may have won a rotating refresh-token race.
+                        // Wait for its Secret update to reach this projected volume and retry
+                        // from the durable replacement instead of failing the active task.
+                        let mut replacement = None;
+                        for _ in 0..AUTH_CONNECT_ATTEMPTS {
+                            tokio::time::sleep(AUTH_CONNECT_DELAY).await;
+                            let candidate = tokio::fs::read(&auth_source)
+                                .await
+                                .context("failed to reload projected Codex authentication")?;
+                            if candidate != private_auth_bytes {
+                                replacement = Some(candidate);
+                                break;
+                            }
+                        }
+                        let replacement = replacement.ok_or_else(|| {
+                            anyhow!("Codex authentication refresh failed: {refresh_error}")
+                        })?;
+                        tokio::fs::write(&private_auth, replacement).await?;
+                        auth_manager = AuthManager::shared(
+                            auth_home.clone(),
+                            false,
+                            AuthCredentialsStoreMode::File,
+                            None,
+                            None,
+                            AuthKeyringBackendKind::default(),
+                            None,
+                        )
+                        .await;
+                    }
+                }
             }
         }
         let auth = auth_manager

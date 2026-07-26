@@ -20,7 +20,7 @@ spec:
       labels:
         app.kubernetes.io/name: hive
     spec:
-      serviceAccountName: hive-reaper
+      serviceAccountName: hive-auth-persistence
       runtimeClassName: kata-dragonball
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -248,40 +248,19 @@ spec:
             - /bin/bash
             - -ceu
             - |
-              api="https://kubernetes.default.svc"
-              token_file=/run/secrets/kubernetes.io/serviceaccount/token
-              ca_file=/run/secrets/kubernetes.io/serviceaccount/ca.crt
               while ! test -f /workspace/.hive-task-finished; do
-                pod="$(
-                  curl --fail --silent --show-error \
-                    --cacert "$ca_file" \
-                    --header "Authorization: Bearer $(cat "$token_file")" \
-                    "$api/api/v1/namespaces/$POD_NAMESPACE/pods/$POD_NAME"
-                )"
-                if printf '%s' "$pod" |
-                  jq -e '
-                    (.status.containerStatuses // [])
-                    | any(.name == "hive" and .restartCount > 0)
-                  ' >/dev/null; then
-                  break
-                fi
                 sleep 1
               done
               curl --fail --silent --show-error \
-                --request DELETE \
-                --cacert "$ca_file" \
-                --header "Authorization: Bearer $(cat "$token_file")" \
-                "$api/api/v1/namespaces/$POD_NAMESPACE/pods/$POD_NAME" \
+                --request POST \
+                --header "Authorization: Bearer $(cat /run/reaper-auth/token)" \
+                "http://hive-reaper.hive-system.svc.cluster.local:8080/reap/$POD_NAME" \
                 >/dev/null
           env:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -291,8 +270,8 @@ spec:
             - name: workspace
               mountPath: /workspace
               readOnly: true
-            - name: reaper-api
-              mountPath: /run/secrets/kubernetes.io/serviceaccount
+            - name: reaper-auth
+              mountPath: /run/reaper-auth
               readOnly: true
           resources:
             requests:
@@ -344,18 +323,10 @@ spec:
           secret:
             secretName: hive-github-publication
             defaultMode: 0400
-        - name: reaper-api
-          projected:
+        - name: reaper-auth
+          secret:
+            secretName: hive-reaper-auth
             defaultMode: 0400
-            sources:
-              - serviceAccountToken:
-                  path: token
-                  expirationSeconds: 3600
-              - configMap:
-                  name: kube-root-ca.crt
-                  items:
-                    - key: ca.crt
-                      path: ca.crt
         - name: broker-auth-api
           projected:
             defaultMode: 0400

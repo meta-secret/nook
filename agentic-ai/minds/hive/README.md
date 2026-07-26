@@ -37,13 +37,15 @@ cannot reconnect to the broker. The k0s API server encrypts Kubernetes Secrets
 in etcd with a host-generated AES-GCM key. Rotating the auth file changes a
 Pod-template checksum and replaces the warm pool.
 
-No host `CODEX_HOME`, host path, or host Docker socket is mounted. A dedicated
-reaper sidecar alone receives a projected, short-lived service-account token
-with `get`/`delete` access to Pods in `hive-system`. It deletes the entire Pod
-after the worker writes its terminal marker or if the worker container
-restarts, so a second task cannot run in the same microVM. A create-once
-workspace sentinel also prevents a restarted worker process from claiming
-during the reaper's polling window. Workers receive no Docker socket.
+No host `CODEX_HOME`, host path, or host Docker socket is mounted. The reaper
+sidecar receives only an opaque credential for a dedicated controller service;
+it has no Kubernetes API token. That controller runs under a separate workload
+identity restricted to `get`/`delete` labeled Hive Pods. It deletes the entire
+Pod after the worker writes its terminal marker. A create-once workspace
+sentinel makes a restarted worker write that marker before exiting, so a second
+task cannot run in the same microVM. The worker Pod identity can patch only the
+Codex-auth Secret, and its projected token is mounted only into the auth broker.
+Workers receive no Docker socket.
 The worker image includes Rust, Bun, Node, and Task; the normal `task format`
 entrypoint selects native sealed-guest formatting, so no nested Docker daemon
 or privileged builder is required.

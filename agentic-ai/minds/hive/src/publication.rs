@@ -528,8 +528,14 @@ impl PublicationBroker {
             .get("check_runs")
             .and_then(Value::as_array)
             .context("GitHub check-runs response is invalid")?;
-        if check_runs.is_empty()
-            || check_runs.iter().any(|check| {
+        let repository_checks = check_runs
+            .iter()
+            .filter(|check| {
+                check.pointer("/app/slug").and_then(Value::as_str) == Some("github-actions")
+            })
+            .collect::<Vec<_>>();
+        if repository_checks.is_empty()
+            || repository_checks.iter().any(|check| {
                 check.get("status").and_then(Value::as_str) != Some("completed")
                     || !matches!(
                         check.get("conclusion").and_then(Value::as_str),
@@ -703,6 +709,7 @@ impl PublicationBroker {
         if !thread_id.starts_with("PRRT_") || body.trim().is_empty() {
             anyhow::bail!("a review thread id and non-empty reply are required");
         }
+        self.require_bound_review_thread(thread_id).await?;
         self.api(
             "POST",
             "/graphql",
@@ -761,6 +768,7 @@ impl PublicationBroker {
         if !thread_id.starts_with("PRRT_") {
             anyhow::bail!("a valid review thread id is required");
         }
+        self.require_bound_review_thread(thread_id).await?;
         self.api(
             "POST",
             "/graphql",
@@ -1014,6 +1022,8 @@ impl PublicationBroker {
             }
             Err(error) => return Err(error),
         }
+        self.publish_agent_statistics(task, pull, &finished_at)
+            .await?;
         issue_body = replace_frontmatter(&issue_body, "status", "done")?;
         issue_body = replace_frontmatter(&issue_body, "owner", "nook-hive")?;
         issue_body = replace_frontmatter(&issue_body, "updated_at", &finished_at)?;
@@ -1037,6 +1047,298 @@ impl PublicationBroker {
         )
         .await?;
         Ok(())
+    }
+
+    async fn publish_agent_statistics(
+        &self,
+        task: &BoundTask,
+        pull: &Value,
+        measured_at: &str,
+    ) -> anyhow::Result<()> {
+        let number = pull
+            .get("number")
+            .and_then(Value::as_u64)
+            .context("merged repair has no pull-request number")?;
+        let path = format!("stats/ai-agent/{number}.yaml");
+        match self.workbench_contents(&path).await {
+            Ok(_) => return Ok(()),
+            Err(error) if format!("{error:#}").contains("status exit status: 22") => {}
+            Err(error) => return Err(error),
+        }
+        let issue = self.workbench_contents(&workbench_issue_path(task)).await?;
+        let issue_body = decode_base64(
+            issue
+                .get("content")
+                .and_then(Value::as_str)
+                .context("Workbench issue has no content")?,
+        )
+        .await?;
+        let started_at = frontmatter_value(&issue_body, "created_at").unwrap_or(measured_at);
+        let opened_at = pull
+            .get("created_at")
+            .and_then(Value::as_str)
+            .context("merged repair has no created_at timestamp")?;
+        let merged_at = pull
+            .get("merged_at")
+            .and_then(Value::as_str)
+            .context("merged repair has no merged_at timestamp")?;
+        let merge_commit = self
+            .merged_commit
+            .lock()
+            .await
+            .clone()
+            .context("completed Main repair has no merge commit")?;
+        let elapsed_seconds = timestamp_delta(started_at, merged_at).await?;
+        let open_to_merge_seconds = timestamp_delta(opened_at, merged_at).await?;
+
+        let runs = self
+            .api(
+                "GET",
+                &format!(
+                    "/repos/{REPOSITORY}/actions/runs?event=pull_request&branch={}&per_page=100",
+                    task.branch
+                ),
+                None,
+            )
+            .await?;
+        let mut action_records = Vec::new();
+        for run in runs
+            .get("workflow_runs")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+        {
+            let applies = run
+                .get("pull_requests")
+                .and_then(Value::as_array)
+                .is_some_and(|pulls| {
+                    pulls.iter().any(|candidate| {
+                        candidate.get("number").and_then(Value::as_u64) == Some(number)
+                    })
+                });
+            if !applies {
+                continue;
+            }
+            let run_started_at = run
+                .get("run_started_at")
+                .and_then(Value::as_str)
+                .or_else(|| run.get("created_at").and_then(Value::as_str))
+                .context("workflow run has no start timestamp")?;
+            let finished_at = run
+                .get("updated_at")
+                .and_then(Value::as_str)
+                .context("workflow run has no completion timestamp")?;
+            action_records.push(json!({
+                "workflow": run.get("name"),
+                "run_id": run.get("id"),
+                "run_attempt": run.get("run_attempt"),
+                "head_sha": run.get("head_sha"),
+                "trigger": run.get("event"),
+                "started_at": run_started_at,
+                "finished_at": finished_at,
+                "duration_seconds": timestamp_delta(run_started_at, finished_at).await?,
+                "conclusion": run.get("conclusion"),
+            }));
+        }
+        action_records.sort_by_key(|run| {
+            run.get("run_id")
+                .and_then(Value::as_u64)
+                .unwrap_or_default()
+        });
+        let github_actions_seconds = action_records
+            .iter()
+            .filter_map(|run| run.get("duration_seconds").and_then(Value::as_i64))
+            .sum::<i64>();
+        let retriggers = action_records
+            .iter()
+            .skip(1)
+            .map(|run| {
+                json!({
+                    "at": run.get("started_at"),
+                    "kind": if run.get("run_attempt").and_then(Value::as_u64).unwrap_or(1) > 1 {
+                        "manual_rerun"
+                    } else {
+                        "head_push"
+                    },
+                    "run_id": run.get("run_id"),
+                    "head_sha": run.get("head_sha"),
+                })
+            })
+            .collect::<Vec<_>>();
+        let inventory = self.test_inventory().await?;
+        let baseline_prs = self.statistics_baselines(number).await?;
+        let record = json!({
+            "schema_version": 3,
+            "source_pr": {
+                "number": number,
+                "url": pull.get("html_url"),
+                "title": pull.get("title"),
+                "change_surface": "main_repair",
+                "head_sha": merge_commit,
+                "started_at": started_at,
+                "opened_at": opened_at,
+                "merged_at": merged_at,
+                "elapsed_seconds": elapsed_seconds,
+                "open_to_merge_seconds": open_to_merge_seconds,
+            },
+            "summary": {
+                "local_execution_count": 0,
+                "local_check_count": 0,
+                "local_test_count": 0,
+                "local_combined_count": 0,
+                "local_execution_seconds": 0,
+                "github_actions_run_count": action_records.len(),
+                "github_actions_seconds": github_actions_seconds,
+                "pr_retrigger_count": retriggers.len(),
+                "agent_requested_rerun_count": 0,
+                "merge_attempt_count": 1,
+            },
+            "test_inventory": {
+                "measured_at": measured_at,
+                "head_sha": merge_commit,
+                "by_type": inventory,
+                "total": inventory.values().sum::<u64>(),
+            },
+            "local_executions": [],
+            "github_actions_runs": action_records,
+            "cache_telemetry": {
+                "totals": {
+                    "job_count": 0,
+                    "remote_backend_job_count": 0,
+                    "direct_compile_job_count": 0,
+                    "sccache_compile_requests": 0,
+                    "sccache_cache_hits": 0,
+                    "sccache_cache_misses": 0,
+                    "sccache_hit_rate_percent": Value::Null,
+                    "buildkit_completed_steps": 0,
+                    "buildkit_cached_steps": 0,
+                    "buildkit_cache_hit_rate_percent": Value::Null,
+                },
+                "jobs": [],
+                "collection": {
+                    "complete": false,
+                    "warnings": ["cache_telemetry_artifacts_require_a_follow-up_collector"],
+                },
+            },
+            "pr_retriggers": retriggers,
+            "merge_attempts": [{
+                "at": merged_at,
+                "method": "squash",
+                "outcome": "success",
+                "reason": "readiness_passed",
+            }],
+            "comparison": {
+                "baseline_prs": baseline_prs,
+                "baseline_quality": "weak",
+                "baseline_note": "The trusted broker selected the newest non-current Workbench records; automated change-surface comparability is not yet available.",
+                "elapsed_seconds_change_percent": Value::Null,
+                "local_execution_seconds_change_percent": Value::Null,
+                "github_actions_seconds_change_percent": Value::Null,
+                "test_inventory_total_change": Value::Null,
+                "regression": false,
+                "regression_reasons": [],
+            },
+            "waste_assessment": {
+                "wasteful": true,
+                "findings": [
+                    "The broker cannot observe sealed-guest local command timings.",
+                    "Cache artifacts are retained by Actions but are not yet decoded by the broker.",
+                ],
+                "required_actions": [
+                    "Add typed local-execution events and cache-artifact decoding to Hive statistics collection.",
+                ],
+            },
+        });
+        self.put_workbench_file(
+            &path,
+            &format!("{}\n", serde_json::to_string_pretty(&record)?),
+            &format!("stats: record Nook PR {number}"),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn test_inventory(&self) -> anyhow::Result<std::collections::BTreeMap<String, u64>> {
+        let mut inventory = std::collections::BTreeMap::new();
+        inventory.insert(
+            "rust".to_owned(),
+            self.count_source_tests(
+                r"#\[(?:tokio::)?test",
+                &["nook-app/nook-core", "nook-app/nook-auth2"],
+                &["*.rs"],
+            )
+            .await?,
+        );
+        inventory.insert(
+            "preflight".to_owned(),
+            self.count_source_tests(r"#\[(?:tokio::)?test", &["preflight"], &["*.rs"])
+                .await?,
+        );
+        inventory.insert(
+            "web_unit".to_owned(),
+            self.count_source_tests(
+                r"\b(?:it|test)\s*\(",
+                &["nook-app/nook-web"],
+                &["*.test.ts", "*.test.js"],
+            )
+            .await?,
+        );
+        inventory.insert(
+            "e2e".to_owned(),
+            self.count_source_tests(r"\btest\s*\(", &["nook-app/nook-web"], &["*.spec.ts"])
+                .await?,
+        );
+        Ok(inventory)
+    }
+
+    async fn count_source_tests(
+        &self,
+        pattern: &str,
+        paths: &[&str],
+        globs: &[&str],
+    ) -> anyhow::Result<u64> {
+        let mut command = Command::new("rg");
+        command.args(["--count-matches", "--no-messages"]);
+        for glob in globs {
+            command.args(["--glob", glob]);
+        }
+        command
+            .arg(pattern)
+            .args(paths)
+            .current_dir(&self.workspace);
+        let output = command.output().await?;
+        if !output.status.success() && output.status.code() != Some(1) {
+            anyhow::bail!("failed to count repository test inventory");
+        }
+        String::from_utf8(output.stdout)?
+            .lines()
+            .try_fold(0_u64, |total, line| {
+                let count = line
+                    .rsplit_once(':')
+                    .context("invalid ripgrep count output")?
+                    .1
+                    .parse::<u64>()?;
+                Ok(total + count)
+            })
+    }
+
+    async fn statistics_baselines(&self, current: u64) -> anyhow::Result<Vec<u64>> {
+        let listing = self.workbench_contents("stats/ai-agent").await?;
+        let mut numbers = listing
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|entry| entry.get("name").and_then(Value::as_str))
+            .filter_map(|name| name.strip_suffix(".yaml"))
+            .filter_map(|name| name.parse::<u64>().ok())
+            .filter(|number| *number != current)
+            .collect::<Vec<_>>();
+        numbers.sort_unstable();
+        numbers.reverse();
+        numbers.truncate(2);
+        Ok(numbers)
     }
 
     async fn workbench_contents(&self, path: &str) -> anyhow::Result<Value> {
@@ -1134,6 +1436,28 @@ impl PublicationBroker {
             .pointer("/data/repository/pullRequest/reviewThreads/nodes")
             .cloned()
             .context("GitHub review-thread response is invalid")
+    }
+
+    async fn require_bound_review_thread(&self, thread_id: &str) -> anyhow::Result<()> {
+        let task = self.bound_task().await?;
+        let pull = self.pull_for_branch(&task.branch).await?;
+        let number = pull
+            .get("number")
+            .and_then(Value::as_u64)
+            .context("pull request has no number")?;
+        let belongs = self
+            .review_threads(number)
+            .await?
+            .as_array()
+            .is_some_and(|threads| {
+                threads
+                    .iter()
+                    .any(|thread| thread.get("id").and_then(Value::as_str) == Some(thread_id))
+            });
+        if !belongs {
+            anyhow::bail!("review thread does not belong to this task's pull request");
+        }
+        Ok(())
     }
 
     async fn api(&self, method: &str, path: &str, body: Option<Value>) -> anyhow::Result<Value> {
@@ -1340,6 +1664,7 @@ fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value
         .map(str::to_owned)
         .collect::<Vec<_>>();
     let pull_author = pull.pointer("/user/login").and_then(Value::as_str);
+    let current_head = pull.pointer("/head/sha").and_then(Value::as_str);
     let mut feedback = Vec::new();
     for review in reviews.as_array().map(Vec::as_slice).unwrap_or(&[]) {
         let Some(id) = review.get("id").and_then(Value::as_u64) else {
@@ -1350,8 +1675,10 @@ fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value
         let state = review.get("state").and_then(Value::as_str).unwrap_or("");
         let standard_codex_summary = body.contains("### 💡 Codex Review")
             && body.contains("Here are some automated review suggestions");
-        let actionable = state == "CHANGES_REQUESTED"
-            || (state == "COMMENTED" && !body.trim().is_empty() && !standard_codex_summary);
+        let current = review.get("commit_id").and_then(Value::as_str) == current_head;
+        let actionable = current
+            && (state == "CHANGES_REQUESTED"
+                || (state == "COMMENTED" && !body.trim().is_empty() && !standard_codex_summary));
         feedback.push(json!({
             "id": feedback_id,
             "kind": "review",
@@ -1359,6 +1686,7 @@ fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value
             "url": review.get("html_url"),
             "author": review.pointer("/user/login"),
             "state": state,
+            "current_head": current,
             "actionable": actionable,
             "addressed": !actionable || addressed.iter().any(|value| value == &feedback_id),
         }));
@@ -1386,6 +1714,24 @@ fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value
         }));
     }
     feedback
+}
+
+async fn timestamp_delta(start: &str, finish: &str) -> anyhow::Result<i64> {
+    async fn epoch(value: &str) -> anyhow::Result<i64> {
+        let output = Command::new("date")
+            .args(["--date", value, "+%s"])
+            .output()
+            .await
+            .context("failed to parse statistics timestamp")?;
+        if !output.status.success() {
+            anyhow::bail!("invalid statistics timestamp");
+        }
+        String::from_utf8(output.stdout)?
+            .trim()
+            .parse::<i64>()
+            .context("statistics timestamp is outside the supported range")
+    }
+    Ok((epoch(finish).await? - epoch(start).await?).max(0))
 }
 
 fn workbench_issue_path(task: &BoundTask) -> String {
@@ -1554,10 +1900,14 @@ mod tests {
 
     #[test]
     fn actionable_top_level_feedback_requires_a_targeted_reply() {
-        let pull = json!({"user": {"login": "nook-hive"}});
+        let pull = json!({
+            "user": {"login": "nook-hive"},
+            "head": {"sha": "current-head"}
+        });
         let reviews = json!([{
             "id": 42,
             "state": "CHANGES_REQUESTED",
+            "commit_id": "current-head",
             "body": "Please cover the recovery path.",
             "user": {"login": "reviewer"}
         }]);
@@ -1598,5 +1948,25 @@ mod tests {
         );
         assert!(valid_feedback_id("review-42"));
         assert!(!valid_feedback_id("review-not-a-number"));
+    }
+
+    #[test]
+    fn review_bodies_from_older_heads_are_audit_context_only() {
+        let pull = json!({
+            "user": {"login": "nook-hive"},
+            "head": {"sha": "current-head"}
+        });
+        let reviews = json!([{
+            "id": 43,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": "older-head",
+            "body": "This was actionable before the repair changed.",
+            "user": {"login": "reviewer"}
+        }]);
+        let feedback = review_feedback(&pull, &reviews, &json!([]));
+        assert_eq!(
+            feedback[0].get("actionable").and_then(Value::as_bool),
+            Some(false)
+        );
     }
 }
