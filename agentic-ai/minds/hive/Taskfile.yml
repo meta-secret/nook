@@ -100,6 +100,29 @@ tasks:
         -e HIVE_NEO4J_TEST_PASSWORD
         {{.HIVE_TEST_IMAGE}}
 
+  cache:publish:
+    desc: Publish the already-verified Hive BuildKit graph.
+    dir: '{{.HIVE_DIR}}'
+    preconditions:
+      - sh: test -n "${HIVE_CACHE_TO:-}"
+        msg: HIVE_CACHE_TO is required for cache publication.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        cache_args=(--cache-to "$HIVE_CACHE_TO")
+        if [ -n "${HIVE_CACHE_FROM:-}" ]; then
+          cache_args+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        docker buildx build \
+          --platform linux/amd64 \
+          --target test-runner \
+          --output type=cacheonly \
+          "${cache_args[@]}" \
+          --file hive/Dockerfile \
+          .
+        BASH
+
   image:
     desc: Build the linux/amd64 Hive worker image.
     dir: '{{.HIVE_DIR}}'

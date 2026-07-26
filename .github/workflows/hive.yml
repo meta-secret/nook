@@ -26,7 +26,6 @@ env:
   # Pull requests restore the trusted Main lineage read-only. Only Main
   # publishes the shared dependency graph, so parallel PRs cannot evict it.
   HIVE_CACHE_FROM: type=gha,scope=nook-hive-linux-amd64-v1
-  HIVE_CACHE_TO: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'type=gha,scope=nook-hive-linux-amd64-v1,mode=max' || '' }}
 
 concurrency:
   group: hive-${{ github.ref }}
@@ -75,3 +74,9 @@ jobs:
           HIVE_NEO4J_TEST_USERNAME: neo4j
           HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
         run: task hive:test
+
+      - name: Publish verified Hive cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          HIVE_CACHE_TO: type=gha,scope=nook-hive-linux-amd64-v1,mode=max
+        run: task hive:cache:publish

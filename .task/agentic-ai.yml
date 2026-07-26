@@ -37,6 +37,11 @@ tasks:
     cmds:
       - task --taskfile agentic-ai/minds/hive/Taskfile.yml test
 
+  hive:cache:publish:
+    desc: Publish the already-verified Hive BuildKit graph.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml cache:publish
+
   hive:image:
     desc: Build the linux/amd64 Hive worker image.
     cmds:

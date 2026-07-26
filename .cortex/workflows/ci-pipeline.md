@@ -506,10 +506,11 @@ GitHub-hosted runners and may restore the same scoped BuildKit layers.
 The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.
 Its manifest-only Docker stage compiles locked debug/test and release
 dependencies before authored sources are copied. Pull requests restore Main's
-scope read-only; only a successful Main-side build exports it. Hive check and
-test tasks use the same job-scoped Buildx builder, so the behavior image reuses
-the dependency and Clippy graph produced earlier in the run without allowing
-parallel PRs to replace the trusted cache.
+scope read-only; only Main exports it, in a final step after check and behavior
+tests both pass. Hive check and test tasks use the same job-scoped Buildx
+builder, so the behavior image reuses the dependency and Clippy graph produced
+earlier in the run without allowing parallel PRs or failed validation to
+replace the trusted cache.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
 prepared image and without a second setup. The combined `dist` tree is reserved

@@ -110,6 +110,7 @@ trusted Main GHA BuildKit scope read-only, and only Main publishes that scope.
 The Dockerfile compiles locked dependencies from manifests before copying
 authored sources, while `hive:check` and `hive:test` share one Buildx builder.
 Dependency changes still rebuild the layer; ordinary source changes reuse it.
+Main exports the graph only after both check and behavior tests pass.
 
 Runtime operations use the binary directly:
 
