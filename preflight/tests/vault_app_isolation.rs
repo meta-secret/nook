@@ -526,8 +526,11 @@ fn scheduled_nightly_live_sync_is_retired() {
     assert!(
         manual_e2e.contains("- sync-live")
             && manual_e2e.contains("NOOK_E2E_SYNC_PROVIDER: github")
-            && manual_e2e.contains("task web:test:e2e:sync-live:parallel"),
-        "manual PR e2e must retain explicit GitHub live-provider validation"
+            && manual_e2e.contains("task web:test:e2e:sync-live:parallel")
+            && manual_e2e.contains("- name: Clean up live-sync test repository")
+            && manual_e2e.contains("if: >-\n          always() &&")
+            && manual_e2e.contains("github.rest.repos.delete"),
+        "manual PR e2e must retain explicit GitHub live-provider validation with cancellation-safe cleanup"
     );
 }
 
