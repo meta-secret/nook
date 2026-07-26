@@ -844,12 +844,19 @@ mod tests {
     fn every_dependency_artifact_is_verified_before_application() {
         let valid_content = "valid patch";
         let valid_digest = Sha256::digest(valid_content.as_bytes());
+        let valid_digest = valid_digest.iter().fold(
+            String::with_capacity(valid_digest.len() * 2),
+            |mut encoded, byte| {
+                let _ = write!(encoded, "{byte:02x}");
+                encoded
+            },
+        );
         let artifacts = vec![
             Artifact {
                 id: "first".to_owned(),
                 kind: "git-patch".to_owned(),
                 uri: "hive://artifact/first".to_owned(),
-                digest: format!("sha256:{valid_digest:x}"),
+                digest: format!("sha256:{valid_digest}"),
                 content: valid_content.to_owned(),
             },
             Artifact {
