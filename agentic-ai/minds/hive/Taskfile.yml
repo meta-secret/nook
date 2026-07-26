@@ -1,0 +1,41 @@
+version: '3'
+
+vars:
+  HIVE_DIR: agentic-ai/minds
+  HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
+
+tasks:
+  format:
+    desc: Format the Hive Rust workspace.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - cargo fmt --all
+
+  check:
+    desc: Format-check and lint the Hive worker.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - cargo fmt --all -- --check
+      - cargo clippy --locked -p hive --all-targets -- -D warnings
+
+  build:
+    desc: Build the Hive worker.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - cargo build --locked -p hive
+
+  test:
+    desc: Run Hive behavior tests.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - cargo test --locked -p hive
+
+  image:
+    desc: Build the linux/amd64 Hive worker image.
+    cmds:
+      - >-
+        docker build
+        --platform linux/amd64
+        --tag {{.HIVE_IMAGE}}
+        --file agentic-ai/minds/hive/Dockerfile
+        agentic-ai/minds

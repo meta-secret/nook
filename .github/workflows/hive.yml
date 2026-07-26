@@ -1,0 +1,54 @@
+name: Hive
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/hive.yml
+      - .task/agentic-ai.yml
+      - agentic-ai/minds/**
+      - infra/k0s/**
+      - infra/Taskfile.yml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/hive.yml
+      - .task/agentic-ai.yml
+      - agentic-ai/minds/**
+      - infra/k0s/**
+      - infra/Taskfile.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hive-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Hive Rust and infrastructure verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+
+      - name: Install pinned Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: clippy,rustfmt
+
+      - name: Validate Taskfile command surface
+        run: |
+          task --list | grep -q 'infra:k0s:install'
+          task --list | grep -q 'infra:kata:verify'
+          task --list | grep -q 'infra:neo4j:deploy'
+          task --list | grep -q 'infra:hive:deploy'
+
+      - name: Hive format and Clippy
+        run: task hive:check
+
+      - name: Hive behavior tests
+        run: task hive:test

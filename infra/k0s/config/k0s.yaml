@@ -1,0 +1,17 @@
+apiVersion: k0s.k0sproject.io/v1beta1
+kind: ClusterConfig
+metadata:
+  name: nook-hive
+spec:
+  api:
+    sans:
+      - 127.0.0.1
+      - localhost
+  network:
+    provider: kuberouter
+    podCIDR: 10.244.0.0/16
+    serviceCIDR: 10.96.0.0/12
+  storage:
+    type: etcd
+  telemetry:
+    enabled: false

@@ -17,6 +17,31 @@ vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
+  hive:format:
+    desc: Format the Hive Rust workspace.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml format
+
+  hive:check:
+    desc: Format-check and lint the Hive worker.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml check
+
+  hive:build:
+    desc: Build the Hive worker.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml build
+
+  hive:test:
+    desc: Run Hive behavior tests.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml test
+
+  hive:image:
+    desc: Build the linux/amd64 Hive worker image.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml image
+
   ci-agent:install:
     internal: true
     dir: '{{.CI_AGENT_DIR}}'

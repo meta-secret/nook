@@ -1,0 +1,25 @@
+deploymentMode: daemonset
+k8sDistribution: k0s
+imagePullPolicy: IfNotPresent
+
+image:
+  reference: quay.io/kata-containers/kata-deploy
+  tag: 4.0.0
+
+monitor:
+  enabled: false
+
+shims:
+  disableAll: true
+  qemu-runtime-rs:
+    enabled: true
+
+defaultShim:
+  amd64: qemu-runtime-rs
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+
+node-feature-discovery:
+  enabled: false

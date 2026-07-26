@@ -6,6 +6,14 @@ vars:
   INFRA_MESH_SSH_TARGET: '{{default "ssh.bynull.link" .INFRA_MESH_SSH_TARGET}}'
   INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'
   INFRA_CLOUDFLARE_ACCOUNT_ID: '{{default "8a84df74d5bcf7b212980e6f51979731" .INFRA_CLOUDFLARE_ACCOUNT_ID}}'
+  K0S_VERSION: v1.36.2+k0s.0
+  K0S_AMD64_SHA256: 8b5d985f803df27acb44f900b2574a5b48e600bd2f87a3335d2a853b888e9298
+  HELM_VERSION: v3.21.3
+  HELM_AMD64_SHA256: 15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
+  KATA_VERSION: 4.0.0
+  KATA_CHART_SHA256: 68ee406af84761d85ddd6942bd3f0b11ba4f19ce19bf46ec2a4ea29f93926a4b
+  NEO4J_VERSION: 2026.6.0
+  NEO4J_CHART_SHA256: 62de9ecce52cc0078742a7b98649719cdb55c0458df69ee16230e26b010aedd9
 
 tasks:
   mesh:node:add:
@@ -221,8 +229,8 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_MESH_SSH_TARGET}}"
         'sudo -n warp-cli status && ip -brief address | grep CloudflareWARP'
 
-  deploy:
-    desc: Deploy the public TLS Redis cache and loopback-only future registry.
+  services:deploy:
+    desc: Deploy the public TLS Redis cache and loopback-only Hive registry.
     silent: true
     cmds:
       - |
@@ -277,6 +285,439 @@ tasks:
            docker compose -f '$remote_compose' ps"
         BASH
 
+  k0s:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "infra k0s sync: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+        ssh -n -o BatchMode=yes "$ssh_target" \
+          "install -d -m 0750 '$remote_dir'"
+        tar -C "$repo_root" -cf - infra/k0s agentic-ai/minds |
+          ssh -o BatchMode=yes "$ssh_target" \
+            "tar -xf - -C '$remote_dir'"
+        BASH
+
+  kvm:verify:
+    desc: Verify the Hive host, nested virtualization, KVM modules, and firewall.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        . /etc/os-release
+        test "$ID" = debian
+        test "$VERSION_ID" = 13
+        test "$(uname -m)" = x86_64
+        test -c /dev/kvm
+        grep -Eq "(vmx|svm)" /proc/cpuinfo
+        sudo -n modprobe vhost_vsock
+        sudo -n modprobe vhost_net
+        test -c /dev/vhost-vsock
+        sudo -n test -r /dev/kvm
+        sudo -n nft list chain inet bynull_filter input |
+          grep -Eq "policy drop"
+        printf 'KVM available: '
+        ls -l /dev/kvm
+        printf 'Virtualization flags: '
+        grep -Eo "(vmx|svm)" /proc/cpuinfo | sort -u | tr "\n" " "
+        printf '\n'
+        REMOTE
+
+  k0s:install:
+    desc: Idempotently install the pinned single-node k0s cluster and Helm.
+    deps: [kvm:verify, k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        k0s_version="{{.K0S_VERSION}}"
+        k0s_sha="{{.K0S_AMD64_SHA256}}"
+        helm_version="{{.HELM_VERSION}}"
+        helm_sha="{{.HELM_AMD64_SHA256}}"
+        download_dir="$remote_dir/downloads"
+        install -d -m 0750 "$download_dir"
+
+        k0s_asset="k0s-${k0s_version}-amd64"
+        k0s_url="https://github.com/k0sproject/k0s/releases/download/${k0s_version//+/%2B}/$k0s_asset"
+        curl -fsSL --retry 3 -o "$download_dir/$k0s_asset.next" "$k0s_url"
+        printf '%s  %s\n' "$k0s_sha" "$download_dir/$k0s_asset.next" | sha256sum -c -
+        chmod 0755 "$download_dir/$k0s_asset.next"
+        sudo -n install -m 0755 "$download_dir/$k0s_asset.next" /usr/local/bin/k0s
+        mv "$download_dir/$k0s_asset.next" "$download_dir/$k0s_asset"
+
+        helm_asset="helm-${helm_version}-linux-amd64.tar.gz"
+        curl -fsSL --retry 3 -o "$download_dir/$helm_asset.next" \
+          "https://get.helm.sh/$helm_asset"
+        printf '%s  %s\n' "$helm_sha" "$download_dir/$helm_asset.next" | sha256sum -c -
+        tar -xzf "$download_dir/$helm_asset.next" -C "$download_dir"
+        sudo -n install -m 0755 "$download_dir/linux-amd64/helm" /usr/local/bin/helm
+        mv "$download_dir/$helm_asset.next" "$download_dir/$helm_asset"
+
+        sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
+        sudo -n install -m 0644 "$remote_dir/infra/k0s/config/k0s.yaml" /etc/k0s/k0s.yaml
+        sudo -n install -m 0644 \
+          "$remote_dir/infra/k0s/config/cri-registry.toml" \
+          /etc/k0s/containerd.d/cri-registry.toml
+        sudo -n install -m 0644 \
+          "$remote_dir/infra/k0s/config/registry-hosts.toml" \
+          /etc/k0s/containerd.d/certs.d/127.0.0.1:5000/hosts.toml
+
+        if ! systemctl cat k0scontroller >/dev/null 2>&1; then
+          sudo -n k0s install controller \
+            --enable-worker \
+            --no-taints \
+            --config /etc/k0s/k0s.yaml
+        fi
+        sudo -n systemctl enable --now k0scontroller
+        for _ in $(seq 1 120); do
+          if sudo -n k0s kubectl get --raw=/readyz >/dev/null 2>&1; then
+            break
+          fi
+          sleep 2
+        done
+        sudo -n k0s kubectl get --raw=/readyz >/dev/null
+        sudo -n k0s kubectl wait node --all --for=condition=Ready --timeout=5m
+        sudo -n k0s kubectl label node --all \
+          hive.nook.sh/storage=local \
+          hive.nook.sh/kata=enabled \
+          --overwrite
+        sudo -n k0s status
+        sudo -n k0s kubectl get nodes -o wide
+        REMOTE
+
+  k0s:status:
+    desc: Show k0s, node, runtime, storage, and Hive workload state.
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n k0s status
+        sudo -n k0s kubectl get nodes -o wide
+        sudo -n k0s kubectl get runtimeclasses
+        sudo -n k0s kubectl get pv,pvc --all-namespaces
+        sudo -n k0s kubectl get pods --all-namespaces -o wide
+        sudo -n nft list chain inet bynull_filter input | grep -Eq "policy drop"
+        REMOTE
+
+  k0s:uninstall:
+    desc: Uninstall k0s only when K0S_UNINSTALL_FORCE=1; preserve Neo4j data.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        if test "${K0S_UNINSTALL_FORCE:-}" != 1; then
+          echo "Refusing destructive uninstall; set K0S_UNINSTALL_FORCE=1" >&2
+          exit 64
+        fi
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n k0s stop
+        sudo -n k0s reset
+        test -d /var/lib/hive/neo4j
+        echo "k0s removed; retained /var/lib/hive/neo4j"
+        REMOTE
+        BASH
+
+  kata:install:
+    desc: Install the pinned Kata runtime-rs chart on k0s.
+    deps: [kvm:verify, k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        version="{{.KATA_VERSION}}"
+        chart="$remote_dir/downloads/kata-deploy-$version.tgz"
+        curl -fsSL --retry 3 -o "$chart.next" \
+          "https://github.com/kata-containers/kata-containers/releases/download/$version/kata-deploy-$version.tgz"
+        printf '%s  %s\n' "{{.KATA_CHART_SHA256}}" "$chart.next" | sha256sum -c -
+        mv "$chart.next" "$chart"
+        kubeconfig="$(mktemp)"
+        trap 'rm -f "$kubeconfig"' EXIT
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        chmod 0600 "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        helm upgrade --install kata-deploy "$chart" \
+          --namespace kube-system \
+          --values "$remote_dir/infra/k0s/manifests/kata/values.yaml" \
+          --wait \
+          --timeout 15m
+        kubectl rollout status daemonset/kata-deploy \
+          --namespace kube-system \
+          --timeout=10m
+        kubectl get runtimeclasses
+        kubectl get runtimeclass kata-qemu-runtime-rs
+        REMOTE
+
+  kata:verify:
+    desc: Prove a smoke Pod uses the Kata guest kernel and never runc.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        kubectl get runtimeclass kata-qemu-runtime-rs
+        kubectl delete pod hive-kata-smoke \
+          --namespace hive-system \
+          --ignore-not-found \
+          --wait=true
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/kata/smoke-test.yaml"
+        kubectl wait pod/hive-kata-smoke \
+          --namespace hive-system \
+          --for=jsonpath='{.status.phase}'=Succeeded \
+          --timeout=5m
+        runtime_class="$(kubectl get pod hive-kata-smoke \
+          --namespace hive-system \
+          -o jsonpath='{.spec.runtimeClassName}')"
+        test "$runtime_class" = kata-qemu-runtime-rs
+        host_kernel="$(uname -r)"
+        guest_kernel="$(kubectl logs hive-kata-smoke --namespace hive-system)"
+        test -n "$guest_kernel"
+        test "$guest_kernel" != "$host_kernel"
+        printf 'Kata guest kernel %s differs from host kernel %s\n' \
+          "$guest_kernel" "$host_kernel"
+        REMOTE
+
+  neo4j:deploy:
+    desc: Deploy persistent, cluster-internal Neo4j with generated credentials.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        version="{{.NEO4J_VERSION}}"
+        chart="$remote_dir/downloads/neo4j-$version.tgz"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        sudo -n install -d -m 0750 /var/lib/hive/neo4j
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"
+
+        secret_dir="$(mktemp -d)"
+        trap 'rm -rf "$secret_dir"' EXIT
+        umask 077
+        auth_exists=false
+        client_exists=false
+        if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
+          auth_exists=true
+        fi
+        if kubectl get secret hive-neo4j-client --namespace hive-system >/dev/null 2>&1; then
+          client_exists=true
+        fi
+
+        if test "$auth_exists" = false && test "$client_exists" = false; then
+          openssl rand -hex 32 > "$secret_dir/password"
+        elif test "$auth_exists" = true; then
+          kubectl get secret hive-neo4j-auth \
+            --namespace hive-data \
+            -o jsonpath='{.data.NEO4J_AUTH}' |
+            base64 --decode |
+            sed 's|^neo4j/||' > "$secret_dir/password"
+        else
+          kubectl get secret hive-neo4j-client \
+            --namespace hive-system \
+            -o jsonpath='{.data.NEO4J_PASSWORD}' |
+            base64 --decode > "$secret_dir/password"
+        fi
+
+        if test "$auth_exists" = false; then
+          {
+            printf 'neo4j/'
+            cat "$secret_dir/password"
+          } > "$secret_dir/NEO4J_AUTH"
+          kubectl create secret generic hive-neo4j-auth \
+            --namespace hive-data \
+            --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH"
+        fi
+        if test "$client_exists" = false; then
+          cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
+          kubectl create secret generic hive-neo4j-client \
+            --namespace hive-system \
+            --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD"
+        fi
+        rm -rf "$secret_dir"
+        trap - EXIT
+
+        curl -fsSL --retry 3 -o "$chart.next" \
+          "https://helm.neo4j.com/neo4j/neo4j-$version.tgz"
+        printf '%s  %s\n' "{{.NEO4J_CHART_SHA256}}" "$chart.next" | sha256sum -c -
+        mv "$chart.next" "$chart"
+        kubeconfig="$(mktemp)"
+        trap 'rm -f "$kubeconfig"' EXIT
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        chmod 0600 "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        helm upgrade --install hive-neo4j "$chart" \
+          --namespace hive-data \
+          --values "$remote_dir/infra/k0s/manifests/neo4j/values.yaml" \
+          --wait \
+          --timeout 15m
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/network-policy.yaml"
+        kubectl rollout status statefulset/hive-neo4j \
+          --namespace hive-data \
+          --timeout=10m
+        test "$(kubectl get service hive-neo4j \
+          --namespace hive-data \
+          -o jsonpath='{.spec.type}')" = ClusterIP
+        kubectl get service,pod,pvc --namespace hive-data -o wide
+        REMOTE
+
+  hive:image:
+    desc: Build and publish the exact Hive source to the target loopback registry.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
+        source_id="$(find \
+          "$remote_dir/agentic-ai/minds/hive" \
+          "$remote_dir/agentic-ai/minds/lace" \
+          -type f -print0 |
+          sort -z |
+          xargs -0 sha256sum |
+          sha256sum |
+          cut -c1-16)"
+        manifest_id="$(sha256sum \
+          "$remote_dir/agentic-ai/minds/Cargo.lock" \
+          "$remote_dir/agentic-ai/minds/Cargo.toml" |
+          sha256sum |
+          cut -c1-16)"
+        image="127.0.0.1:5000/nook-hive:$source_id-$manifest_id"
+        docker build \
+          --platform linux/amd64 \
+          --tag "$image" \
+          --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
+          "$remote_dir/agentic-ai/minds"
+        push_output="$(docker push "$image")"
+        digest="$(printf '%s\n' "$push_output" |
+          awk '/digest:/ {print $2}' |
+          tail -1)"
+        case "$digest" in
+          sha256:????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Hive image push did not return a sha256 digest" >&2
+            exit 1
+            ;;
+        esac
+        printf '%s@%s\n' "${image%:*}" "$digest" > "$remote_dir/hive-image"
+        chmod 0640 "$remote_dir/hive-image"
+        cat "$remote_dir/hive-image"
+        REMOTE
+
+  hive:auth:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        auth_file="${HIVE_CODEX_AUTH_FILE:-}"
+        if test -n "$auth_file"; then
+          test -f "$auth_file"
+          jq -e 'type == "object"' "$auth_file" >/dev/null
+          ssh -n -o BatchMode=yes "$ssh_target" \
+            "install -d -m 0700 '$remote_dir/secrets'"
+          scp -q -o BatchMode=yes "$auth_file" \
+            "$ssh_target:$remote_dir/secrets/codex-auth.json.next"
+          ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
+        set -euo pipefail
+        remote_dir="$remote_dir"
+        auth_file="\$remote_dir/secrets/codex-auth.json.next"
+        chmod 0600 "\$auth_file"
+        sudo -n k0s kubectl create secret generic hive-codex-auth \
+          --namespace hive-system \
+          --from-file=auth.json="\$auth_file" \
+          --dry-run=client \
+          -o yaml |
+          sudo -n k0s kubectl apply -f -
+        rm -f "\$auth_file"
+        REMOTE
+        else
+          ssh -o BatchMode=yes "$ssh_target" \
+            "sudo -n k0s kubectl get secret hive-codex-auth --namespace hive-system >/dev/null"
+        fi
+        BASH
+
+  hive:deploy:
+    desc: Publish and deploy the four-replica Kata-backed Hive warm pool.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - task: hive:image
+      - task: hive:auth:sync
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        image="$(cat "$remote_dir/hive-image")"
+        case "$image" in
+          127.0.0.1:5000/nook-hive@sha256:*) ;;
+          *)
+            echo "Refusing unpinned Hive image: $image" >&2
+            exit 1
+            ;;
+        esac
+        rendered="$(mktemp)"
+        trap 'rm -f "$rendered"' EXIT
+        sed "s|HIVE_IMAGE|$image|g" \
+          "$remote_dir/infra/k0s/manifests/hive/deployment.yaml" > "$rendered"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml"
+        kubectl apply -f "$rendered"
+        kubectl rollout status deployment/hive \
+          --namespace hive-system \
+          --timeout=15m
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.status.readyReplicas}')" = 4
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-qemu-runtime-rs
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.spec.template.spec.automountServiceAccountToken}')" = false
+        kubectl get pods --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o wide
+        REMOTE
+
+  deploy:
+    desc: Deploy Nook services and the complete k0s/Kata/Neo4j/Hive platform.
+    cmds:
+      - task: services:deploy
+      - task: k0s:install
+      - task: kata:install
+      - task: kata:verify
+      - task: neo4j:deploy
+      - task: hive:deploy
+
   status:
     desc: Show the remote infrastructure service state.
     cmds:
@@ -330,7 +771,7 @@ tasks:
         docker compose -f "$compose" exec -T redis sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; redis-cli DBSIZE; redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):"; redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'\'''
 
   registry:check:
-    desc: Verify the future loopback-only Docker registry API.
+    desc: Verify the loopback-only Hive image registry API.
     cmds:
       - >-
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"

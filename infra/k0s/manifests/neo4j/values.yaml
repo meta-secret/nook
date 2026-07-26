@@ -1,0 +1,34 @@
+neo4j:
+  name: hive-neo4j
+  passwordFromSecret: hive-neo4j-auth
+  edition: community
+  acceptLicenseAgreement: "no"
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      cpu: "8"
+      memory: 24Gi
+
+volumes:
+  data:
+    mode: volume
+    volume:
+      setOwnerAndGroupWritableFilePermissions: true
+      persistentVolumeClaim:
+        claimName: hive-neo4j-data
+
+services:
+  neo4j:
+    enabled: false
+
+config:
+  server.default_listen_address: 0.0.0.0
+  server.bolt.enabled: "true"
+  server.http.enabled: "false"
+  server.https.enabled: "false"
+  dbms.security.auth_enabled: "true"
+
+securityContext:
+  fsGroupChangePolicy: OnRootMismatch

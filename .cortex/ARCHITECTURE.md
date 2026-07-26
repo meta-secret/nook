@@ -12,8 +12,14 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 root/
 ├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
 ├── infra/
-│   ├── Taskfile.yml      (inline Redis, cache-client, and registry operations)
-│   └── compose.yaml      (private persistent infrastructure services)
+│   ├── Taskfile.yml      (inline Redis, registry, k0s, Kata, Neo4j, and Hive operations)
+│   ├── compose.yaml      (private persistent infrastructure services)
+│   └── k0s/              (pinned single-node cluster and Hive manifests)
+├── agentic-ai/
+│   ├── ci-agent/         (PR delivery agent)
+│   └── minds/
+│       ├── lace/         (agent task graph)
+│       └── hive/         (Kata-isolated embedded-Codex worker)
 ├── preflight/            (standalone Rust tests for whole-repository invariants)
 │   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
 │   ├── Dockerfile
@@ -421,3 +427,9 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
   `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the
   default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set. Agents
   require only `task format` locally; product verification runs on Actions.
+Hive lives in `agentic-ai/minds/hive` and is deployed only through the inline
+`infra/Taskfile.yml` command surface. k0s schedules a four-replica warm pool
+with `kata-qemu-runtime-rs`; each Pod claims at most one Neo4j DAG task, drives
+one in-process Codex core thread, commits through a lease token, and exits.
+Neo4j is the only persistent coordinator. Workers receive neither host mounts,
+Docker sockets, nor Kubernetes service-account tokens.
