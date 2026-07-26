@@ -14,7 +14,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful same-repository PR workflow      | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust ‖ WASM producers publish the exact successful BuildKit graphs they verify; then **overlap** browser-free web verify (which publishes its successful graph), local-provider web e2e, extension e2e, and all headless UI demos on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust → WASM → browser-free web verify run read-only, then each serially exports its already-solved local BuildKit graph after lane validation; local-provider web e2e, extension e2e, and headless UI demos consume the verified WASM handoff on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then commit one `stats/main-build/**` record directly to Nook Workbench | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -421,8 +421,11 @@ attempt must match the successful producer attempt exactly. Absence of both a
 current producer and a matching successful attempt fails immediately instead of
 polling for a job GitHub did not reschedule. GitHub job and artifact polling uses
 a ten-second interval so a cold build remains below the `GITHUB_TOKEN` REST budget.
-Do not serialize the producers or move Rust coverage into preview: a cold Rust
-cache must not dominate the web critical path. `task docker:extract:coverage`
+Do not serialize the **PR** producers or move Rust coverage into preview: a cold
+Rust cache must not dominate the PR web critical path. Main deliberately
+serializes its native, WASM, and web publisher lanes because they write the
+shared default-branch scopes; each lane verifies read-only first and exports
+from the same warm builder afterward. `task docker:extract:coverage`
 remains a copy-only path that invokes neither BuildKit nor Rust tests.
 
 `task docker:extract:coverage` remains the copy-only path for workflows that
@@ -476,7 +479,11 @@ The local ci-agent image tag is derived from the worktree path, preventing
 parallel worktrees from replacing each other's review/readiness binaries.
 
 **Delivery jobs are ephemeral but cache-aware.** PR verification, main, and
-release use GitHub-hosted runners. Main exports the default-branch cache that
+release use GitHub-hosted runners. Main verifies each native/WASM/web lane
+read-only, then serially exports its already-solved graph from the same
+job-scoped builder. The WASM dependency export clears `cache-from` and forces
+zstd recompression so a thin reimported index cannot replace the complete cook
+lineage. Main thereby exports the default-branch cache that
 new PRs can restore under GitHub's cache visibility rules. All PR jobs are
 default-branch-cache-only, with writes disabled; exact trusted handoffs make
 branch-local cache generations unnecessary. Native coverage and WASM

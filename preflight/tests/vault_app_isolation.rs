@@ -1046,17 +1046,39 @@ fn assert_main_producer_owned_cache_publish(root: &Path) {
     let rust = section(&main, "  rust:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
+    let rust_verify = rust.find("task ci:pr:rust").expect("Main native verification");
+    let rust_publish = rust
+        .find("task ci:main:publish-native-cache")
+        .expect("Main native cache publish");
+    let wasm_verify = wasm.find("task ci:pr:wasm").expect("Main WASM verification");
+    let wasm_node = wasm
+        .find("task ci:wasm:node-test")
+        .expect("Main WASM Node verification");
+    let wasm_publish = wasm
+        .find("task ci:main:publish-wasm-cache")
+        .expect("Main WASM cache publish");
+    let web_verify = web
+        .find("task ci:main:web:artifacts")
+        .expect("Main web verification");
+    let web_publish = web
+        .find("task ci:main:publish-web-cache")
+        .expect("Main web cache publish");
     assert!(
-        rust.contains("task ci:pr:rust")
-            && rust.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm.contains("task ci:pr:wasm")
-            && wasm.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && web.contains("task ci:main:web:artifacts")
-            && web.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+        rust_verify < rust_publish
+            && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm.contains("needs: [rust]")
+            && wasm_verify < wasm_node
+            && wasm_node < wasm_publish
+            && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && web_verify < web_publish
+            && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
-        "successful Main native, WASM, and web producers must publish their own verified BuildKit graphs without a reconstruction job"
+        "Main producers must verify read-only, serialize native before WASM, and publish from their warm builders only after all lane validation succeeds"
     );
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
     assert!(
@@ -1074,8 +1096,15 @@ fn assert_main_producer_owned_cache_publish(root: &Path) {
     assert!(
         docker_tasks.contains("ci-rust builder-deps rust-base")
             && docker_tasks.contains("wasm-export builder-wasm-deps")
-            && docker_tasks.contains("nook-web-ci web-deps"),
-        "each Main producer task must explicitly select its dependency and source cache exporters"
+            && docker_tasks.contains("nook-web-ci web-deps")
+            && docker_tasks.contains("docker:ci:cache:publish:native:")
+            && docker_tasks.contains("docker:ci:cache:publish:wasm:")
+            && docker_tasks.contains("docker:ci:cache:publish:web:")
+            && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
+            && docker_tasks.contains("compression=zstd,force-compression=true")
+            && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
+            && docker_tasks.contains("--set \"wasm-export.cache-from=\""),
+        "producer-owned publishers must select local verified graphs and preserve the isolated no-import WASM dependency export"
     );
     assert!(
         read(root, "nook-app/nook-core/Dockerfile").contains("NOOK_WASM_DEPS_CACHE_EPOCH=")

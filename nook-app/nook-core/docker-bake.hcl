@@ -64,8 +64,8 @@ target "coverage-export" {
     rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  // The successful Main native producer selects this target with writes enabled, so the exact
-  // verified native-source graph is published without a second reconstruction job.
+  // Main verifies this graph read-only, then exports the already-solved local builder state in a
+  // separate post-verification step without a second reconstruction job.
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }

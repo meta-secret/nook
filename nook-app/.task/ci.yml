@@ -162,6 +162,24 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:prepare-images:host }
 
+  ci:main:publish-native-cache:
+    desc: Publish verified native cache scopes from the current job-scoped builder.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:publish-native-cache:host }
+
+  ci:main:publish-wasm-cache:
+    desc: Publish verified WASM cache scopes from the current job-scoped builder.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:publish-wasm-cache:host }
+
+  ci:main:publish-web-cache:
+    desc: Publish verified web cache scopes from the current job-scoped builder.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:publish-web-cache:host }
+
   ci:main:web-e2e:
     desc: Main web gate without extension e2e — prepare images then run web e2e alone (manual/debug).
     cmds:
@@ -232,6 +250,18 @@ tasks:
       - task: preflight
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
+
+  _ci:main:publish-native-cache:host:
+    cmds:
+      - task: docker:ci:cache:publish:native
+
+  _ci:main:publish-wasm-cache:host:
+    cmds:
+      - task: docker:ci:cache:publish:wasm
+
+  _ci:main:publish-web-cache:host:
+    cmds:
+      - task: docker:ci:cache:publish:web
 
   _ci:main:web-e2e:host:
     cmds:

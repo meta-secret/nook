@@ -285,6 +285,48 @@ tasks:
         --set "builder-wasm.output=type=cacheonly"
         builder-wasm
 
+  docker:ci:cache:publish:native:
+    desc: Export the already-verified native dependency/source graph from this job's builder.
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        --set "rust-base.cache-from="
+        --set "builder-deps.cache-from="
+        --set "builder-debug.cache-from="
+        rust-base builder-deps builder-debug
+
+  docker:ci:cache:publish:wasm:
+    desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        --set "rust-base.cache-from="
+        --set "builder-wasm-deps.cache-from="
+        --set "builder-wasm-deps.cache-to=type=gha,scope=nook-rust-wasm-deps-v3,mode=max,version=2,compression=zstd,force-compression=true,timeout=10m"
+        rust-base builder-wasm-deps
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        --set "rust-base.cache-to="
+        --set "builder-wasm-deps.cache-to="
+        --set "wasm-export.cache-from="
+        wasm-export
+
+  docker:ci:cache:publish:web:
+    desc: Export the already-verified web dependency graph from this job's builder.
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        --set "web-deps.cache-from="
+        web-deps
+
   docker:ci:web:build:
     desc: Build the sealed web image from the same-runner CI WASM artifact.
     vars:
