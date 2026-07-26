@@ -300,7 +300,29 @@ function buildMainBuildStats({
   if (run.event !== 'push') throw new Error(`expected push event, got ${run.event}`)
   if (run.head_branch !== 'main') throw new Error(`expected main branch, got ${run.head_branch}`)
 
-  const normalizedJobs = jobs
+  const attemptStartedAt = run.run_started_at || run.created_at
+  const attemptStartedMilliseconds = timestampMilliseconds(
+    attemptStartedAt,
+    'source_run.attempt_started_at',
+  )
+  const attemptJobs = run.run_attempt > 1
+    ? jobs.filter((job) => {
+        if (!job.started_at) return false
+        const jobStartedMilliseconds = timestampMilliseconds(
+          job.started_at,
+          `job ${job.name}.started_at`,
+        )
+        // GitHub's rerun-attempt endpoint also returns successful jobs reused
+        // from earlier attempts. Keep only jobs that actually ran in this
+        // attempt, allowing one second for API timestamp rounding.
+        return jobStartedMilliseconds >= attemptStartedMilliseconds - 1000
+      })
+    : jobs
+  if (attemptJobs.length === 0) {
+    throw new Error(`Main attempt ${run.run_attempt} has no executed jobs`)
+  }
+
+  const normalizedJobs = attemptJobs
     .map(normalizeJob)
     .sort((left, right) => {
       if (!left.started_at) return 1
@@ -316,7 +338,7 @@ function buildMainBuildStats({
     ? earliestJobStartedAt
     : run.run_started_at || earliestJobStartedAt
   const wallStartedAt = run.run_attempt > 1
-    ? run.run_started_at || earliestJobStartedAt
+    ? attemptStartedAt
     : run.created_at
   const completedAt = maximumTimestamp(
     normalizedJobs.map((job) => job.completed_at),

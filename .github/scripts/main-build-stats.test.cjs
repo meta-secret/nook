@@ -272,18 +272,29 @@ test('rejects impossible timestamps for executed jobs', () => {
   assert.throws(() => buildMainBuildStats(input), /completion precedes its start/)
 })
 
-test('uses attempt-specific start and job timestamps for rerun wall time', () => {
+test('excludes jobs reused from earlier attempts from rerun timing', () => {
   const input = fixture()
   input.run.run_attempt = 2
-  input.run.created_at = '2026-07-21T10:00:00Z'
-  input.run.run_started_at = '2026-07-22T10:01:00Z'
+  input.run.created_at = '2026-07-22T11:00:01Z'
+  input.run.run_started_at = '2026-07-22T11:00:00Z'
+  input.run.updated_at = '2026-07-22T11:10:00Z'
+  input.jobs.push({
+    ...structuredClone(input.jobs[0]),
+    id: 9002,
+    name: 'Web e2e',
+    started_at: '2026-07-22T11:00:04Z',
+    completed_at: '2026-07-22T11:10:00Z',
+    steps: [],
+  })
 
   const record = buildMainBuildStats(input)
 
-  assert.equal(record.source_run.started_at, '2026-07-22T10:02:00Z')
-  assert.equal(record.summary.queue_seconds, 60)
-  assert.equal(record.summary.execution_seconds, 1080)
-  assert.equal(record.summary.wall_seconds, 1140)
+  assert.equal(record.source_run.started_at, '2026-07-22T11:00:04Z')
+  assert.equal(record.summary.queue_seconds, 4)
+  assert.equal(record.summary.execution_seconds, 596)
+  assert.equal(record.summary.wall_seconds, 600)
+  assert.equal(record.summary.job_count, 1)
+  assert.equal(record.jobs[0].name, 'Web e2e')
 })
 
 test('flags successful build regressions against the two latest successful attempts', () => {
