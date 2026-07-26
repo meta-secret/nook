@@ -70,31 +70,30 @@ impl Neo4jTaskStore {
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
     async fn migrate(&self) -> anyhow::Result<()> {
-        let mut transaction = self.graph.start_txn().await?;
-        let mut rows = transaction
+        let mut rows = self
+            .graph
             .execute(query(
                 "MATCH (migration:HiveSchemaMigration)
                  RETURN max(migration.version) AS version",
             ))
             .await?;
         let installed_version = rows
-            .next(transaction.handle())
+            .next()
             .await?
             .and_then(|row| row.get::<i64>("version").ok())
             .unwrap_or(0);
         if installed_version > LATEST_SCHEMA_VERSION {
-            transaction.rollback().await?;
             anyhow::bail!(
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
             );
         }
         for statement in CONSTRAINTS {
-            transaction
+            self.graph
                 .run(query(statement))
                 .await
                 .with_context(|| format!("failed to apply graph migration: {statement}"))?;
         }
-        transaction
+        self.graph
             .run(
                 query(
                     "MERGE (migration:HiveSchemaMigration {version: $version})
@@ -103,7 +102,6 @@ impl TaskStore for Neo4jTaskStore {
                 .param("version", LATEST_SCHEMA_VERSION),
             )
             .await?;
-        transaction.commit().await?;
         Ok(())
     }
 

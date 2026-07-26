@@ -48,7 +48,10 @@ durable artifact store remain explicit follow-up decisions.
 Hive graph schema version `1` creates unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, plus the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
-run when the stored version is newer than the binary supports.
+run when the stored version is newer than the binary supports. Because Neo4j
+does not allow schema and data writes in one transaction, Hive applies the
+idempotent `IF NOT EXISTS` schema statements first and records the version only
+after every statement succeeds.
 
 Version 1 is additive. To roll it back, first stop every Hive worker, back up
 the Neo4j data volume, drop `hive_task_claim` and the four `hive_*_id`
