@@ -80,7 +80,9 @@ Every focused issue follows
 - links to relevant Nook code, PRs, and historical discussions.
 
 Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
-`cancelled`. `automation` is `manual` or `agent`.
+`cancelled`. `automation` is `manual`, `agent`, or `hive`. The `hive` mode is
+reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
+dispatcher; the scheduled implementation workflow must not claim those records.
 
 Only this exact combination authorizes the scheduled Nook implementation worker:
 
@@ -91,6 +93,11 @@ automation: agent
 
 Creating or editing any other record must not start implementation. The worker
 claims a ready record by committing `status: in_progress` before it runs.
+
+Main-failure handoff records instead use `status: ready` with `automation:
+hive`. A single token-free dispatcher reconciles those records into Neo4j by
+failed Main SHA; the isolated task owns diagnosis through exact-head PR checks,
+review resolution, squash merge, and verification of the resulting Main run.
 
 ## Choose update versus create
 

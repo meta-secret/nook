@@ -1,0 +1,49 @@
+neo4j:
+  name: hive-neo4j
+  passwordFromSecret: hive-neo4j-auth
+  edition: community
+  acceptLicenseAgreement: "no"
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      cpu: "8"
+      memory: 24Gi
+
+image:
+  customImage: neo4j@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+
+volumes:
+  data:
+    mode: volume
+    volume:
+      setOwnerAndGroupWritableFilePermissions: true
+      persistentVolumeClaim:
+        claimName: hive-neo4j-data
+
+services:
+  # The chart always creates the release-named ClusterIP service. This switch
+  # controls a separate externally reachable LoadBalancer and must remain off.
+  neo4j:
+    enabled: false
+
+ssl:
+  bolt:
+    privateKey:
+      secretName: hive-neo4j-tls
+      subPath: private.key
+    publicCertificate:
+      secretName: hive-neo4j-tls
+      subPath: public.crt
+
+config:
+  server.default_listen_address: 0.0.0.0
+  server.bolt.enabled: "true"
+  server.bolt.tls_level: "REQUIRED"
+  server.http.enabled: "false"
+  server.https.enabled: "false"
+  dbms.security.auth_enabled: "true"
+
+securityContext:
+  fsGroupChangePolicy: OnRootMismatch

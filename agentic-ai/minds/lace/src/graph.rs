@@ -12,8 +12,12 @@ pub mod architecture {
         type Output = ArchitectureOutput;
         fn execute(&self, prompt: &Prompt) -> TaskResult<Self::Output> {
             println!(
-                concat!("[Task: ", stringify!(ArchitectureTask),
-                "] Executing prompt: {}"), prompt.text
+                concat!(
+                    "[Task: ",
+                    stringify!(ArchitectureTask),
+                    "] Executing prompt: {}"
+                ),
+                prompt.text
             );
             Agent.call(prompt);
             Ok(ArchitectureOutput::default())
@@ -84,7 +88,11 @@ pub mod unit_test {
         fn execute(&self, prompt: &Prompt) -> TaskResult<Self::Output> {
             let _ = self.deps.backend.execute(prompt)?;
             println!(
-                concat!("[Task: ", stringify!(UnitTestTask), "] Executing prompt: {}"),
+                concat!(
+                    "[Task: ",
+                    stringify!(UnitTestTask),
+                    "] Executing prompt: {}"
+                ),
                 prompt.text
             );
             Agent.call(prompt);

@@ -12,8 +12,14 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 root/
 ├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
 ├── infra/
-│   ├── Taskfile.yml      (inline Redis, cache-client, and registry operations)
-│   └── compose.yaml      (private persistent infrastructure services)
+│   ├── Taskfile.yml      (inline Redis, registry, k0s, Kata, Neo4j, and Hive operations)
+│   ├── compose.yaml      (private persistent infrastructure services)
+│   └── k0s/              (pinned single-node cluster and Hive manifests)
+├── agentic-ai/
+│   ├── ci-agent/         (PR delivery agent)
+│   └── minds/
+│       ├── lace/         (agent task graph)
+│       └── hive/         (Kata-isolated embedded-Codex worker)
 ├── preflight/            (standalone Rust tests for whole-repository invariants)
 │   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
 │   ├── Dockerfile
@@ -445,3 +451,28 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
   `task rust:coverage:check`, svelte-check, eslint, vitest, vite build) using the
   default dev/no-opt WASM mode unless `WASM_BUILD_MODE=prod` is set. Agents
   require only `task format` locally; product verification runs on Actions.
+
+## 8. Hive isolated agent platform
+
+Hive lives in `agentic-ai/minds/hive` and is deployed only through the inline
+`infra/Taskfile.yml` command surface to the dedicated k0s host. It is a
+stateful platform built from persistent Neo4j coordination and disposable
+Kata-backed execution Pods:
+
+- a token-free dispatcher reconciles trusted Main-failure Workbench incidents;
+- Neo4j owns the DAG, readiness, claims, leases, attempts, results, and bounded
+  Git-patch artifacts;
+- a four-replica `kata-dragonball` pool gives every task a separate guest
+  kernel and one embedded Codex thread;
+- narrow coordinator, authentication, and publication brokers keep Neo4j,
+  Codex, and GitHub credentials out of the repository-facing worker;
+- the worker image carries the native Rust, Bun, Node, and Task toolchain, so
+  mandatory `task format` runs directly in the Kata guest without any Docker
+  daemon or socket; and
+- the task is not complete until its normal PR is checked, reviewed,
+  squash-merged, its resulting Main state is green, and Workbench is updated.
+
+See
+[design-docs/hive-isolated-agent-platform.md](design-docs/hive-isolated-agent-platform.md)
+for the complete component model, task lifecycle, trust boundaries, recovery
+semantics, cache topology, and deployment command surface.

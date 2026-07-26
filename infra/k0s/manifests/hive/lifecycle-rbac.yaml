@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hive-auth-persistence
+  namespace: hive-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-auth-persistence
+  namespace: hive-system
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["hive-codex-auth"]
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-auth-persistence
+  namespace: hive-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-auth-persistence
+subjects:
+  - kind: ServiceAccount
+    name: hive-auth-persistence
+    namespace: hive-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hive-reaper-controller
+  namespace: hive-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-reaper-controller
+  namespace: hive-system
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-reaper-controller
+  namespace: hive-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-reaper-controller
+subjects:
+  - kind: ServiceAccount
+    name: hive-reaper-controller
+    namespace: hive-system

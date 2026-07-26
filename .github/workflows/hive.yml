@@ -1,0 +1,97 @@
+name: Hive
+run-name: >-
+  Hive verification · ${{ github.event_name == 'pull_request'
+  && format('PR #{0}', github.event.pull_request.number)
+  || format('Main {0}', github.sha) }}
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/hive.yml
+      - .github/scripts/hive-manifest-contract.rb
+      - .task/agentic-ai.yml
+      - agentic-ai/minds/**
+      - infra/k0s/**
+      - infra/Taskfile.yml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/hive.yml
+      - .github/scripts/hive-manifest-contract.rb
+      - .task/agentic-ai.yml
+      - agentic-ai/minds/**
+      - infra/k0s/**
+      - infra/Taskfile.yml
+
+permissions:
+  contents: read
+
+env:
+  # Pull requests restore the trusted Main lineage read-only. Only Main
+  # publishes the shared dependency graph, so parallel PRs cannot evict it.
+  HIVE_CACHE_FROM: type=gha,scope=nook-hive-linux-amd64-v1
+
+concurrency:
+  group: hive-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Hive Rust and infrastructure verification
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        env:
+          NEO4J_AUTH: neo4j/hive-integration-password
+        ports:
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p hive-integration-password 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+
+      - name: Configure persistent Rust compiler cache
+        uses: ./.github/actions/nook-cache-connect
+        with:
+          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
+
+      - name: Report Rust compiler cache selection
+        run: >-
+          echo "Hive compiler cache:
+          ${NOOK_SCCACHE_BACKEND}
+          (${NOOK_SCCACHE_BACKEND_REASON})"
+
+      - name: Docker setup
+        uses: docker/setup-buildx-action@v4
+
+      - name: Validate Taskfile command surface
+        run: |
+          task --list | grep -q 'infra:k0s:install'
+          task --list | grep -q 'infra:kata:verify'
+          task --list | grep -q 'infra:neo4j:deploy'
+          task --list | grep -q 'infra:hive:deploy'
+          task infra:k0s:manifests:check
+
+      - name: Hive format and Clippy
+        run: task hive:check
+
+      - name: Hive behavior tests
+        env:
+          HIVE_NEO4J_TEST_URI: 127.0.0.1:7687
+          HIVE_NEO4J_TEST_USERNAME: neo4j
+          HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
+        run: task hive:test
+
+      - name: Publish verified Hive cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          HIVE_CACHE_TO: type=gha,scope=nook-hive-linux-amd64-v1,mode=max
+        run: task hive:cache:publish

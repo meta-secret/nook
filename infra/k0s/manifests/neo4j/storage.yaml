@@ -1,0 +1,47 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hive-local-retain
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: hive-neo4j-data
+  labels:
+    app.kubernetes.io/name: hive-neo4j
+spec:
+  capacity:
+    storage: 1Ti
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: hive-local-retain
+  local:
+    path: /var/lib/hive/neo4j
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: hive.nook.sh/storage
+              operator: In
+              values: ["local"]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hive-neo4j-data
+  namespace: hive-data
+  labels:
+    app.kubernetes.io/name: hive-neo4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Ti
+  storageClassName: hive-local-retain
+  volumeName: hive-neo4j-data

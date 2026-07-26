@@ -369,7 +369,11 @@ task pr:review PR=410      # optional idempotent exact-head Codex review request
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
-task infra:deploy           # deploy private Redis and future loopback-only registry
+task infra:deploy           # deploy Redis/registry plus k0s, Kata, Neo4j, and Hive
+task infra:k0s:status       # inspect the remote Hive cluster and workloads
+task infra:kata:verify      # prove a Pod is using the Kata guest kernel
+task hive:check             # format-check and lint the Rust Hive worker
+task hive:test              # run Hive lease/DAG behavior tests
 task infra:status           # inspect the remote infrastructure stack
 task infra:redis:stats      # remote compiler-cache memory and hit statistics
 ```
@@ -435,8 +439,10 @@ runs concurrently and waits only at the first WASM-consuming step. A successful
 run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
-The loopback-only OCI registry in [`infra/`](infra/) is deployed for a future
-Docker cache migration but is intentionally unused by CI today. Details:
+The loopback-only OCI registry in [`infra/`](infra/) publishes the exact Hive
+worker image consumed by the local k0s containerd runtime. It remains
+unreachable from the public network. Other application images are reserved for a future
+Docker cache migration, and the registry remains intentionally unused by CI today. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

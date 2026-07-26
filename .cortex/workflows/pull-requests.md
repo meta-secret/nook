@@ -323,9 +323,13 @@ monitor, or live-verify the resulting Main run unless the user explicitly
 requested deployment/live verification or assigned a Main failure.
 
 After merge, `main.yml` independently runs full local-provider and extension
-**e2e**. Main failures remain visible for manual handling and never start an AI
-agent automatically. Credentialed sync-live checks are available only through
-explicit manual validation.
+**e2e**. An unsuccessful Main run creates one `automation: hive` Workbench
+incident keyed by failed SHA. The isolated Hive dispatcher enqueues it once, and
+one logical task owns diagnosis, a normal exact-head PR, actionable review
+resolution, squash merge, and verification of the resulting Main run. The
+scheduled `agent-implement.yml` worker does not claim Hive incidents.
+Credentialed sync-live checks are available only through explicit manual
+validation.
 
 ### 9. Post-merge Workbench context and statistics
 

@@ -1,0 +1,24 @@
+deploymentMode: daemonset
+k8sDistribution: k0s
+imagePullPolicy: IfNotPresent
+
+image:
+  reference: quay.io/kata-containers/kata-deploy@sha256:e677a892072610f948b192d5bedb7fbcc62c894315c22bf703af484c49bd8776
+
+monitor:
+  enabled: false
+
+shims:
+  disableAll: true
+  dragonball:
+    enabled: true
+
+defaultShim:
+  amd64: dragonball
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+
+node-feature-discovery:
+  enabled: false

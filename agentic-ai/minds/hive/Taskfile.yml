@@ -1,0 +1,163 @@
+version: '3'
+
+vars:
+  HIVE_DIR: ..
+  HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
+  HIVE_TEST_IMAGE: '{{default "nook-hive-test:local" .HIVE_TEST_IMAGE}}'
+  HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
+  NOOK_APP_CONTEXT: ../../nook-app
+
+tasks:
+  format:
+    desc: Format the Hive workspace in the pinned builder and apply formatted sources.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        image="{{.HIVE_FORMAT_IMAGE}}"
+        docker build \
+          --platform linux/amd64 \
+          --target formatter \
+          --tag "$image" \
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
+          --file hive/Dockerfile \
+          .
+        container="$(docker create "$image")"
+        formatted="$(mktemp -d)"
+        cleanup() {
+          docker rm "$container" >/dev/null 2>&1 || true
+          rm -rf "$formatted"
+        }
+        trap cleanup EXIT
+        for crate in hive lace; do
+          docker cp "$container:/build/$crate/src" "$formatted/$crate-src"
+          cp -R "$formatted/$crate-src/." "$crate/src/"
+        done
+        BASH
+
+  check:
+    desc: Format-check and lint the Hive worker in its pinned builder image.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        command=(docker buildx build
+          --platform linux/amd64
+          --target check
+          --output type=cacheonly)
+        if [ -n "${HIVE_CACHE_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        if [ -n "${HIVE_CACHE_TO:-}" ]; then
+          command+=(--cache-to "$HIVE_CACHE_TO")
+        fi
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
+        command+=(
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --file hive/Dockerfile
+          .)
+        "${command[@]}"
+        BASH
+
+  build:
+    desc: Build the Hive worker in its pinned builder image.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - >-
+        docker buildx build
+        --platform linux/amd64
+        --target builder
+        --output type=cacheonly
+        --build-context nook-app={{.NOOK_APP_CONTEXT}}
+        --file hive/Dockerfile
+        .
+
+  test:
+    desc: Run Hive behavior tests in its pinned builder image.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        command=(docker buildx build
+          --platform linux/amd64
+          --target test-runner
+          --load
+          --tag "{{.HIVE_TEST_IMAGE}}")
+        if [ -n "${HIVE_CACHE_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        if [ -n "${HIVE_CACHE_TO:-}" ]; then
+          command+=(--cache-to "$HIVE_CACHE_TO")
+        fi
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
+        command+=(
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --file hive/Dockerfile
+          .)
+        "${command[@]}"
+        BASH
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        command=(docker run --rm
+          --network host
+          -e HIVE_NEO4J_TEST_URI
+          -e HIVE_NEO4J_TEST_USERNAME
+          -e HIVE_NEO4J_TEST_PASSWORD)
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          command+=(--mount "type=bind,src=$SCCACHE_REDIS_PASSWORD_FILE,dst=/run/secrets/sccache_redis_password,readonly")
+        fi
+        command+=("{{.HIVE_TEST_IMAGE}}")
+        "${command[@]}"
+        BASH
+
+  cache:publish:
+    desc: Publish the already-verified Hive BuildKit graph.
+    dir: '{{.HIVE_DIR}}'
+    preconditions:
+      - sh: test -n "${HIVE_CACHE_TO:-}"
+        msg: HIVE_CACHE_TO is required for cache publication.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        command=(docker buildx build
+          --platform linux/amd64
+          --target test-runner
+          --output type=cacheonly
+          --cache-to "$HIVE_CACHE_TO")
+        if [ -n "${HIVE_CACHE_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
+          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        fi
+        command+=(
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --file hive/Dockerfile
+          .)
+        "${command[@]}"
+        BASH
+
+  image:
+    desc: Build the linux/amd64 Hive worker image.
+    dir: '{{.HIVE_DIR}}'
+    cmds:
+      - >-
+        docker build
+        --platform linux/amd64
+        --tag {{.HIVE_IMAGE}}
+        --build-context nook-app={{.NOOK_APP_CONTEXT}}
+        --file hive/Dockerfile
+        .

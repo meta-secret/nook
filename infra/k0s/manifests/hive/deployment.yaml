@@ -1,0 +1,341 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive
+  namespace: hive-system
+  labels:
+    app.kubernetes.io/name: hive
+spec:
+  replicas: 4
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  template:
+    metadata:
+      annotations:
+        hive.nook.sh/codex-auth-sha256: HIVE_AUTH_CHECKSUM
+        hive.nook.sh/github-publication-sha256: HIVE_GITHUB_CHECKSUM
+        hive.nook.sh/neo4j-ca-sha256: HIVE_NEO4J_CA_CHECKSUM
+      labels:
+        app.kubernetes.io/name: hive
+    spec:
+      serviceAccountName: hive-auth-persistence
+      runtimeClassName: kata-dragonball
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: neo4j-trust
+          image: HIVE_IMAGE
+          command:
+            - /bin/bash
+            - -ceu
+            - |
+              cat /etc/ssl/certs/ca-certificates.crt /run/neo4j/ca.crt \
+                > /trust/ca-certificates.crt
+              chmod 0444 /trust/ca-certificates.crt
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: neo4j-ca
+              mountPath: /run/neo4j
+              readOnly: true
+            - name: trust-bundle
+              mountPath: /trust
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: hive
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["worker"]
+          env:
+            - name: HIVE_AGENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: HIVE_REPOSITORY_URL
+              value: https://github.com/meta-secret/nook.git
+            - name: HIVE_WORKSPACE
+              value: /workspace
+            - name: HIVE_LEASE_SECONDS
+              value: "300"
+            - name: HIVE_HEARTBEAT_SECONDS
+              value: "60"
+            - name: HIVE_TASK_TIMEOUT_SECONDS
+              value: "21600"
+            - name: HIVE_POLL_MIN_SECONDS
+              value: "5"
+            - name: HIVE_POLL_MAX_SECONDS
+              value: "15"
+            - name: HIVE_CODEX_REASONING_EFFORT
+              value: medium
+            - name: HIVE_AUTH_SOCKET
+              value: /run/hive-auth/broker.sock
+            - name: HIVE_COORDINATOR_SOCKET
+              value: /run/hive-coordinator/coordinator.sock
+            - name: HIVE_PUBLICATION_SOCKET
+              value: /run/hive-publication/broker.sock
+            - name: CODEX_HOME
+              value: /home/hive/.codex
+            - name: HOME
+              value: /home/hive
+            - name: HIVE_SEALED_GUEST
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/workspace/.hive-worker-ready"]
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 3
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: codex-home
+              mountPath: /home/hive/.codex
+            - name: home
+              mountPath: /home/hive
+            - name: temporary
+              mountPath: /tmp
+            - name: auth-channel
+              mountPath: /run/hive-auth
+            - name: coordinator-channel
+              mountPath: /run/hive-coordinator
+            - name: publication-channel
+              mountPath: /run/hive-publication
+          resources:
+            requests:
+              cpu: "2"
+              memory: 6Gi
+              ephemeral-storage: 20Gi
+            limits:
+              cpu: "4"
+              memory: 12Gi
+              ephemeral-storage: 100Gi
+        - name: coordinator
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["coordinator"]
+          env:
+            - name: HIVE_COORDINATOR_SOCKET
+              value: /run/hive-coordinator/coordinator.sock
+            - name: NEO4J_URI
+              value: neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+            - name: SSL_CERT_FILE
+              value: /trust/ca-certificates.crt
+            - name: NEO4J_USERNAME
+              value: neo4j
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hive-neo4j-client
+                  key: NEO4J_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: coordinator-channel
+              mountPath: /run/hive-coordinator
+            - name: trust-bundle
+              mountPath: /trust
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        - name: publication-broker
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["publication-broker"]
+          env:
+            - name: HIVE_PUBLICATION_SOCKET
+              value: /run/hive-publication/broker.sock
+            - name: HIVE_GITHUB_TOKEN_FILE
+              value: /run/secrets/github/token
+            - name: HIVE_WORKSPACE
+              value: /workspace
+            - name: HIVE_PUBLICATION_HOME
+              value: /var/lib/hive-publication
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+              readOnly: true
+            - name: publication-channel
+              mountPath: /run/hive-publication
+            - name: publication-home
+              mountPath: /var/lib/hive-publication
+            - name: github-publication
+              mountPath: /run/secrets/github
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        - name: auth-broker
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["auth-broker"]
+          env:
+            - name: HIVE_AUTH_SOCKET
+              value: /run/hive-auth/broker.sock
+            - name: HIVE_AUTH_HOME
+              value: /var/lib/hive-auth
+            - name: HIVE_AUTH_SOURCE
+              value: /run/secrets/codex/auth.json
+            - name: HIVE_AUTH_PERSIST_URL
+              value: https://kubernetes.default.svc/api/v1/namespaces/hive-system/secrets/hive-codex-auth
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: codex-auth-source
+              mountPath: /run/secrets/codex
+              readOnly: true
+            - name: auth-channel
+              mountPath: /run/hive-auth
+            - name: broker-auth-home
+              mountPath: /var/lib/hive-auth
+            - name: broker-auth-api
+              mountPath: /run/secrets/hive-auth-api
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        - name: pod-reaper
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          command:
+            - /bin/bash
+            - -ceu
+            - |
+              while ! test -f /workspace/.hive-task-finished; do
+                sleep 1
+              done
+              curl --fail --silent --show-error \
+                --request POST \
+                --header "Authorization: Bearer $(cat /run/reaper-auth/token)" \
+                "http://hive-reaper.hive-system.svc.cluster.local:8080/reap/$POD_NAME" \
+                >/dev/null
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+              readOnly: true
+            - name: reaper-auth
+              mountPath: /run/reaper-auth
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+      volumes:
+        - name: workspace
+          emptyDir:
+            sizeLimit: 100Gi
+        - name: codex-home
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: home
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: temporary
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: trust-bundle
+          emptyDir:
+            sizeLimit: 2Mi
+        - name: auth-channel
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: coordinator-channel
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: publication-channel
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: publication-home
+          emptyDir:
+            sizeLimit: 100Gi
+        - name: broker-auth-home
+          emptyDir:
+            sizeLimit: 2Mi
+        - name: neo4j-ca
+          secret:
+            secretName: hive-neo4j-ca
+            defaultMode: 0400
+        - name: codex-auth-source
+          secret:
+            secretName: hive-codex-auth
+            defaultMode: 0400
+        - name: github-publication
+          secret:
+            secretName: hive-github-publication
+            defaultMode: 0400
+        - name: reaper-auth
+          secret:
+            secretName: hive-reaper-auth
+            defaultMode: 0400
+        - name: broker-auth-api
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt

@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-reaper-controller
+  namespace: hive-system
+  labels:
+    app.kubernetes.io/name: hive-reaper-controller
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive-reaper-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hive-reaper-controller
+    spec:
+      serviceAccountName: hive-reaper-controller
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          command:
+            - /bin/bash
+            - -ceu
+            - |
+              exec python3 - <<'PY'
+              import hmac
+              import http.server
+              import json
+              import re
+              import ssl
+              import urllib.error
+              import urllib.request
+
+              namespace = "hive-system"
+              api = "https://kubernetes.default.svc"
+              context = ssl.create_default_context(cafile="/run/kubernetes/ca.crt")
+
+              def token(path):
+                  with open(path, encoding="utf-8") as handle:
+                      return handle.read().strip()
+
+              def api_request(method, path):
+                  request = urllib.request.Request(
+                      f"{api}{path}",
+                      method=method,
+                      headers={
+                          "Authorization": (
+                              f"Bearer {token('/run/kubernetes/token')}"
+                          )
+                      },
+                  )
+                  with urllib.request.urlopen(request, context=context, timeout=10) as response:
+                      return response.read()
+
+              class Handler(http.server.BaseHTTPRequestHandler):
+                  def do_POST(self):
+                      supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
+                      match = re.fullmatch(r"/reap/(hive-[a-z0-9-]+)", self.path)
+                      expected = token("/run/reaper-auth/token")
+                      if not hmac.compare_digest(supplied, expected) or match is None:
+                          self.send_error(403)
+                          return
+                      pod_name = match.group(1)
+                      pod_path = f"/api/v1/namespaces/{namespace}/pods/{pod_name}"
+                      try:
+                          pod = json.loads(api_request("GET", pod_path))
+                          labels = pod.get("metadata", {}).get("labels", {})
+                          if labels.get("app.kubernetes.io/name") != "hive":
+                              self.send_error(403)
+                              return
+                          api_request("DELETE", pod_path)
+                      except urllib.error.HTTPError as error:
+                          if error.code != 404:
+                              self.send_error(502)
+                              return
+                      self.send_response(204)
+                      self.end_headers()
+
+                  def log_message(self, _format, *_args):
+                      return
+
+              http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+              PY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: reaper-auth
+              mountPath: /run/reaper-auth
+              readOnly: true
+            - name: kubernetes-api
+              mountPath: /run/kubernetes
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 24Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        - name: reaper-auth
+          secret:
+            secretName: hive-reaper-auth
+            defaultMode: 0400
+        - name: kubernetes-api
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-reaper
+  namespace: hive-system
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hive-reaper-controller
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

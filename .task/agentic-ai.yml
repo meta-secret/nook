@@ -17,6 +17,48 @@ vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
+  hive:format:
+    desc: Format the Hive Rust workspace.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml format
+
+  hive:guest:format:
+    desc: Format the repository natively inside a sealed Hive Kata guest.
+    preconditions:
+      - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
+        msg: hive:guest:format is available only inside a sealed Hive guest
+    cmds:
+      - cd nook-app && cargo fmt --all
+      - cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
+      - cd nook-app/nook-web/nook-web-app && bun run format
+      - cd nook-app/nook-web/nook-web-extension && bun run format
+      - cd agentic-ai/minds && cargo fmt --all
+
+  hive:check:
+    desc: Format-check and lint the Hive worker.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml check
+
+  hive:build:
+    desc: Build the Hive worker.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml build
+
+  hive:test:
+    desc: Run Hive behavior tests.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml test
+
+  hive:cache:publish:
+    desc: Publish the already-verified Hive BuildKit graph.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml cache:publish
+
+  hive:image:
+    desc: Build the linux/amd64 Hive worker image.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml image
+
   ci-agent:install:
     internal: true
     dir: '{{.CI_AGENT_DIR}}'
