@@ -69,7 +69,7 @@ fi
 if [[ "$need" -eq 1 ]]; then
   # The full Playwright project needs a rebuilt unified harness plus the independent public,
   # Simple, and Sentinel artifacts. `vite build --mode unified` empties dist, so preserve the
-  # already-built public site before rebuilding instead of compiling or losing it. Main/nightly
+  # already-built public site before rebuilding instead of compiling or losing it. Main/manual
   # CI keeps the sealed production tree in dist-prod; direct local runs can reuse dist/site.
   site_source="$WEB_ROOT/dist-prod/site"
   site_snapshot=""

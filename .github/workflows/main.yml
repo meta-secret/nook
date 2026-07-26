@@ -9,8 +9,8 @@
 # agentic-AI-only changes do not need the product pipeline. A trusted
 # workflow_run collector records each attempt in meta-secret/nook-workbench.
 #
-# E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
-# tests run nightly — see e2e-nightly.yml.
+# E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync
+# provider tests remain available through the manually dispatched e2e-pr.yml.
 #
 # Playwright browsers are pre-installed in the web e2e base image.
 # Hosted delivery stays secret-free (no Redis sccache); GHA BuildKit scopes are the remote cache.

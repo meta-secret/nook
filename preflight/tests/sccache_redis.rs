@@ -158,10 +158,7 @@ fn assert_workflows_scope_cache_credentials() {
         }
     }
 
-    for path in [
-        ".github/workflows/main.yml",
-        ".github/workflows/e2e-nightly.yml",
-    ] {
+    for path in [".github/workflows/main.yml"] {
         let workflow = read(path);
         assert!(
             !workflow.contains("NOOK_CACHE_REDIS_PASSWORD"),
@@ -169,12 +166,6 @@ fn assert_workflows_scope_cache_credentials() {
         );
         assert!(!workflow.contains("NOOK_CLOUDFLARE_ACCESS"));
     }
-
-    let nightly = read(".github/workflows/e2e-nightly.yml");
-    assert!(
-        nightly.contains("\n  ci-fix:\n"),
-        "nightly workflow must define its AI fix job"
-    );
 }
 
 fn assert_rust_build_cache_boundary() {

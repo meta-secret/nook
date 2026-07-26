@@ -17,7 +17,6 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust → WASM → browser-free web verify run read-only, then each serially exports its already-solved local BuildKit graph after lane validation; local-provider web e2e, extension e2e, and headless UI demos consume the verified WASM handoff on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then commit one `stats/main-build/**` record directly to Nook Workbench | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
-| [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml)                 | Scheduled ready-Workbench scan or manual dispatch | Atomically claim one `status: ready`, `automation: agent` Markdown issue → Cursor SDK implement → PR opened → Workbench progress/worklog published → workflow exits | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)                                   | Manual                                      | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                                                                                                                                                                                        | Only for `sync-live`                      |
@@ -41,8 +40,7 @@ flowchart LR
   release_yml --> simple_cf[Cloudflare Simple Vault]
   release_yml --> sentinel_cf[Cloudflare Sentinel Vault]
 
-  cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
-  nightly --> e2e_live[sync-live e2e]
+  manual_e2e[Manual PR e2e] --> e2e_live[sync-live e2e]
 
   cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
   cleanup --> docker_prune["docker system prune --volumes"]
@@ -63,7 +61,6 @@ cancelled required check whenever another contributor pushes.
 | Main build stats   | Main run ID + attempt                 | No                 | Every completed attempt is immutable evidence; separate runs never supersede it   |
 | Manual PR e2e      | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                |
 | Web research       | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                        |
-| Nightly live sync  | Provider job                         | Yes                | Replace a superseded live-sync build without interrupting an active `ci-fix` job |
 | CI agent smoke     | Global smoke group                   | Yes                | Only the newest smoke result matters                                             |
 | Agent implement    | Issue number; manual runs are unique | No                 | It may already have pushed a branch or opened a PR                               |
 | Production release | Global production release group      | No                 | Serialize stateful publication without interrupting a deploy                     |
@@ -111,7 +108,7 @@ Registry and factories live in `nook-app/nook-web/nook-web-app/e2e/sync-provider
 
 - **`createSyncTarget()`** — isolated e2e remote (reads provider from env)
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
-- **`live/sync.smoke.spec.ts`** — one nightly smoke per matrix row
+- **`live/sync.smoke.spec.ts`** — explicit real-provider smoke
 - **`live/google-drive-shared-grant.smoke.spec.ts`** — opt-in real Drive
   shared-folder create + `permissions.create` (+ optional joiner verify);
   skips unless `NOOK_GOOGLE_E2E_ACCESS_TOKEN` and `NOOK_GOOGLE_E2E_JOINER_EMAIL`
@@ -124,15 +121,9 @@ event files in a real temp directory while Playwright serves the oauth-file HTTP
 calls, so default sync tests exercise local file-backed replication without
 external API quota.
 
-**Nightly (`sync-live`):** matrix in `e2e-nightly.yml`:
-
-```yaml
-strategy:
-  matrix:
-    provider: [github] # add google-drive when secret exists
-env:
-  NOOK_E2E_SYNC_PROVIDER: ${{ matrix.provider }}
-```
+**Manual (`sync-live`):** dispatch `e2e-pr.yml` with the `sync-live` suite.
+The workflow defaults `NOOK_E2E_SYNC_PROVIDER` to `github`; local runs may
+select another configured provider explicitly.
 
 Live credentials per provider:
 
@@ -167,7 +158,7 @@ dependency export instead of competing with the larger native dependency
 lineage. Main's preparation selects both dependency targets and the native
 source target as explicit cache-only outputs; consuming them as named build
 contexts is not sufficient to run their dedicated exporters. Only a `push`
-event on `refs/heads/main` may write the shared scopes. Release, nightly, agent,
+event on `refs/heads/main` may write the shared scopes. Release, agent,
 manual, and PR workflows are read-only. Keeping Main as the sole hosted-cache
 writer also prevents short-lived lineages from exhausting the repository cache
 quota. The self-hosted `nook` label is reserved for runner cleanup while that
@@ -205,7 +196,7 @@ Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
 PR web solves normally use browser-free `web-base`. UI-changing PRs, main,
-nightly, and explicitly requested browser e2e also build `web-e2e-base` with Debian's
+and explicitly requested browser e2e also build `web-e2e-base` with Debian's
 `chromium` and `ffmpeg` packages. Playwright is pointed at `/usr/bin/chromium`,
 and its revisioned recording path links to `/usr/bin/ffmpeg`; do not install
 its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
@@ -236,8 +227,8 @@ so the persistent-context smoke cannot compete with other headed Chromium tests.
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
 | `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with main-seeded GHA BuildKit caches |
-| `agent-implement.yml`, `ci-agent-smoke.yml`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Long-running background AI work scales independently           |
-| `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml`         | `ubuntu-latest` | Scheduled, manual, and research work scales independently      |
+| `agent-implement.yml`, `ci-agent-smoke.yml`                            | `ubuntu-latest` | Long-running background AI work scales independently           |
+| `e2e-pr.yml`, `web-research.yml`                                       | `ubuntu-latest` | Manual and research work scales independently                  |
 | `runner-cleanup.yml`                                                    | `nook`          | Maintain the registered self-hosted Docker host and disk       |
 
 The runner-cleanup workflow runs its age-filtered system prune separately from
@@ -251,7 +242,7 @@ Real provider API calls are slow and brittle at CI scale. Nook therefore:
 1. **`e2e` project** — IndexedDB flows plus sync-provider specs through isolated e2e remotes. One Playwright process, fully parallel, one preview server.
 2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. It starts at 6 workers.
 3. **`unstable` project** — local provider/sync specs. It runs separately at 4 workers so their shared preview-server and WASM pressure stays bounded.
-4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; nightly + manual only.
+4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; explicit manual runs only.
 
 When adding Google Drive or other sync providers, add local e2e remote specs to
 the `e2e` list and thin live smoke specs to `e2e/live/`.
@@ -284,7 +275,7 @@ WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
 `ci:pr:e2e` includes repository preflight, Rust coverage/unit tests, WASM checks,
 web checks/unit tests/builds, the complete local-provider Playwright suite, and
 extension e2e. Credentialed real-provider `sync-live` e2e remains a separate
-nightly validation because it creates disposable external-provider state and
+manual validation because it creates disposable external-provider state and
 requires provider secrets. The agent opens a PR after local validation. No
 workflow merges it blindly from a check event; a task-owning agent must run the
 standard readiness audit and squash-merge when it succeeds.
@@ -355,7 +346,7 @@ Defined in `nook-app/nook-web/playwright.config.ts`:
 | ----------- | ----------------------------------------- | ---------------------------- |
 | `stable`    | IndexedDB-only specs (6 workers)          | main, e2e-pr (manual/debug)  |
 | `unstable`  | Local-provider and sync specs (4 workers) | main, e2e-pr (manual)        |
-| `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-nightly, e2e-pr (manual) |
+| `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-pr (manual)              |
 | `ui-demo`   | `e2e/demos/**/*.demo.spec.ts`             | UI-changing PRs (1 worker)   |
 
 The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
@@ -387,9 +378,8 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 # Main CI equivalent
 task ci:main:e2e                    # one container, full e2e project
 
-# Nightly / live GitHub (needs NOOK_GITHUB_PAT in env or .env.test.local)
+# Manual live GitHub (needs NOOK_GITHUB_PAT in env or .env.test.local)
 task web:test:e2e:sync-live
-task ci:nightly:e2e                 # prepare + build + sync-live
 
 # Legacy aliases
 task web:test:e2e:github            # → sync-live
@@ -490,7 +480,7 @@ branch-local cache generations unnecessary. Native coverage and WASM
 source-sensitive layers have separate v2
 GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
 non-Rust pushes do not repeat unchanged Cargo compilation.
-Hosted Main, nightly, and PR Docker builds all omit the direct TLS Redis
+Hosted Main, manual e2e, and PR Docker builds all omit the direct TLS Redis
 credential (`hosted_secret_free_by_design`). This makes Main's exported
 compiler vertices reusable by the secret-free PR solve; a secret-backed Main
 vertex would force every PR to recompile the dependency graph. The hosted remote
@@ -502,7 +492,7 @@ image between build and deploy.
 `task setup` verifies the direct TLS Redis endpoint when a credential file is
 available. Without one, the wrapper bypasses sccache. It does not replace
 cargo-chef or change the build result when unavailable to a secret-free job.
-Scheduled/manual e2e, research, and every AI-agent job also use isolated
+Manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
@@ -609,11 +599,11 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 | Secret / env                                        | Used by                                                                                                                                                                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NOOK_GITHUB_PAT`                                   | sync-live e2e, nightly ci-fix PR/push, and agent-implement PR/push (repo scope; PR creation must act as a user so normal workflows fire)                                                                                                                                                                                                              |
+| `NOOK_GITHUB_PAT`                                   | sync-live e2e and agent-implement PR/push (repo scope; PR creation must act as a user so normal workflows fire)                                                                                                                                                                                                                                      |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                                                                                                                                                                                                              |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy and main development deploy/domain verification. The token requires account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`; main purges stale development routes before live verification. PR CI records its preview as a successful `github-pages` deployment for ruleset enforcement. |
 | `GITHUB_TOKEN`                                      | PR comments, deployment records, nook-core + nook-auth2 coverage comment                                                                                                                                                                                                                                                                              |
-| `CURSOR_API_KEY`                                    | nightly ci-fix agent (`e2e-nightly.yml`) and `agent-implement.yml`                                                                                                                                                                                                                                                                                    |
+| `CURSOR_API_KEY`                                    | `agent-implement.yml`                                                                                                                                                                                                                                                                                                                                 |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
@@ -631,17 +621,34 @@ client configuration to contain exact origins; do not commit client secrets, and
 do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 [auth-providers.md §7](../design-docs/auth-providers.md#7-oauth-origins-and-pr-previews).
 
-## CI agent (`ci-fix` / `ci-agent:implement`)
+## CI agent (dependency updates / implementation)
 
-[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. Main-branch failures remain visible for manual handling. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for Workbench issues or manual prompts (see below).
+[`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the
+CI-agent harness via **`task ci-agent:implement`** for ready Workbench issues or
+manual prompts (see below). Main and manually requested E2E failures remain
+visible for explicit handling. The weekly Rust dependency workflow uses the
+same harness through **`task ci-agent:fix`** for its bounded update job.
 
-**Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner and `pr.yml` runs. Merge still requires the standard exact-head readiness audit.
+**Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire
+`pull_request` workflows for PRs opened with the default Actions token
+(`github-actions[bot]`). The implementation job checks out and pushes with
+`NOOK_GITHUB_PAT` so the PR is attributed to the PAT owner and `pr.yml` runs.
+Merge still requires the standard exact-head readiness audit.
 
-Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT with `repo` scope, or fine-grained with contents + pull requests write on this repo).
+Required secrets: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT with `repo`
+scope, or fine-grained with contents + pull requests write on this repo).
 
-The `ci-fix` / `ci-agent:implement` jobs run **`task setup`** (bake sealed `nook-web:local`) then **`task ci-agent:fix`** / **`task ci-agent:implement`**, which build and run the **`nook-ci-agent:local`** image. That container includes both the Docker CLI and the Buildx CLI plugin because repository Task targets use `docker buildx bake`. It uses **`docker run --init`**, bind-mounts the checkout, and mounts **`/var/run/docker.sock`** so the agent can spawn sibling containers on the host Docker daemon (not Docker-in-Docker).
+The `ci-agent:implement` job runs **`task setup`** (bake sealed
+`nook-web:local`) then **`task ci-agent:implement`**, which builds and runs the
+**`nook-ci-agent:local`** image. That container includes both the Docker CLI and
+the Buildx CLI plugin because repository Task targets use `docker buildx bake`.
+It uses **`docker run --init`**, bind-mounts the checkout, and mounts
+**`/var/run/docker.sock`** so the agent can spawn sibling containers on the
+host Docker daemon (not Docker-in-Docker).
 
-**Runner placement:** nightly `ci-fix` and `agent-implement.yml` run on GitHub-hosted **`ubuntu-latest`**, like delivery CI, so concurrent work scales across hosted capacity. Host Node is not required for these jobs.
+**Runner placement:** `agent-implement.yml` runs on GitHub-hosted
+**`ubuntu-latest`**, like delivery CI, so concurrent work scales across hosted
+capacity. Host Node is not required for this job.
 
 After the agent finishes, ci-agent **awaits** `agent[Symbol.asyncDispose]()` (not fire-and-forget `close()`), then calls `process.exit` (and best-effort SIGKILL of direct child PIDs) so orphaned SDK children cannot keep the container alive.
 
@@ -695,7 +702,7 @@ Loop: claim Workbench record → `task setup` → **`task ci-agent:implement`**
 (nook-ci-agent container + docker.sock) → push branch → open a Nook PR →
 publish Workbench progress/worklog → exit. The PR then follows the standard
 agent-owned failure/comment/conflict loop, exact-head readiness audit, squash
-merge, and final Workbench completion update. Same secrets as ci-fix:
+merge, and final Workbench completion update. Agent secrets:
 `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
 [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 
@@ -705,7 +712,7 @@ merge, and final Workbench completion update. Same secrets as ci-fix:
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** push after `task format` and let GitHub Actions own product validation; optional local `task ci:pr` / e2e is debug-only, never a merge gate.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e** and leaves failures for manual handling. Nightly runs **sync-live** and invokes `ci-fix` on failure.
+5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e** and leaves failures for manual handling. Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).

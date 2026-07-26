@@ -324,9 +324,8 @@ requested deployment/live verification or assigned a Main failure.
 
 After merge, `main.yml` independently runs full local-provider and extension
 **e2e**. Main failures remain visible for manual handling and never start an AI
-agent automatically. Nightly covers sync-live and retains its `ci-fix` worker,
-which opens a repair PR; any task-owning agent that continues that PR follows
-the same readiness-and-squash-merge contract.
+agent automatically. Credentialed sync-live checks are available only through
+explicit manual validation.
 
 ### 9. Post-merge Workbench context and statistics
 

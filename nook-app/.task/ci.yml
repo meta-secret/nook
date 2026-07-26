@@ -303,15 +303,6 @@ tasks:
     cmds:
       - task: ci:main:e2e
 
-  ci:nightly:e2e:
-    desc: Nightly live sync provider e2e (real APIs; requires provider credentials).
-    cmds:
-      - task: preflight
-      - task: setup
-        vars: { SETUP_TARGET: nook-web-e2e }
-      - task: docker:e2e:run
-        vars: { TASK: _ci:nightly:e2e }
-
   ci:main:build:
     desc: Format, wasm, verify, and web build in one container (no e2e).
     cmds:
@@ -407,14 +398,6 @@ tasks:
     cmds:
       - task: _web:test:e2e:parallel
       - task: _web:test:e2e:isolation
-
-  _ci:nightly:e2e:
-    desc: Nightly live sync e2e after full main build in one container.
-    cmds:
-      - task: _ci:main:build
-      - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
-      - task: _web:test:e2e:sync-live:parallel
-      - task: _web:e2e:restore-prod-dist
 
   _ci:pr:prepare:
     desc: Format check only (split-container debug — prefer _ci:pr).

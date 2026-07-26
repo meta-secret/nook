@@ -515,6 +515,22 @@ fn main_failures_do_not_trigger_an_ai_repair_agent() {
 }
 
 #[test]
+fn scheduled_nightly_live_sync_is_retired() {
+    let root = repository_root();
+    assert!(
+        !root.join(".github/workflows/e2e-nightly.yml").exists(),
+        "live-provider sync checks must not have a scheduled workflow"
+    );
+
+    let manual_e2e = read(&root, ".github/workflows/e2e-pr.yml");
+    assert!(
+        manual_e2e.contains("- sync-live")
+            && manual_e2e.contains("task web:test:e2e:sync-live:parallel"),
+        "manual PR e2e must retain explicit live-provider validation"
+    );
+}
+
+#[test]
 fn delivery_avoids_a_shared_buildkit_container() {
     let root = repository_root();
     let pr = read(&root, ".github/workflows/pr.yml");
@@ -1486,7 +1502,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
     let e2e_only = section(
         &ci_tasks,
         "  _ci:main:web:e2e-only:\n",
-        "  _ci:nightly:e2e:\n",
+        "  _ci:pr:prepare:\n",
     );
     assert!(
         e2e_only.contains("_web:test:e2e:parallel")

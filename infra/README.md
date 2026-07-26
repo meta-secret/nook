@@ -34,10 +34,10 @@ directory is mode `0700`; the password file is mode `0600`.
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the Redis cache.
 
-Only trusted default-branch and normal nightly jobs receive the Redis password.
-Pull-request heads, arbitrary release refs, dependency-update agents, and
-AI-authored jobs compile without sccache; otherwise code under review could
-read, poison, or exfiltrate the shared cache.
+Hosted jobs do not receive the Redis password. Pull-request heads, arbitrary
+release refs, dependency-update agents, and AI-authored jobs compile without
+sccache; otherwise code under review could read, poison, or exfiltrate the
+shared cache.
 
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 
