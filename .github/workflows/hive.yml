@@ -1,4 +1,8 @@
 name: Hive
+run-name: >-
+  Hive verification · ${{ github.event_name == 'pull_request'
+  && format('PR #{0}', github.event.pull_request.number)
+  || format('Main {0}', github.sha) }}
 
 on:
   pull_request:
