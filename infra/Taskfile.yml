@@ -23,6 +23,8 @@ tasks:
       - ruby .github/scripts/hive-manifest-contract.rb
       - python3 .github/scripts/hive-reaper-controller-test.py
       - python3 .github/scripts/k0s-firewall-rollback-test.py
+      - python3 .github/scripts/k0s-cni-migration-test.py
+      - python3 .github/scripts/services-network-repair-test.py
 
   mesh:node:add:
     desc: Idempotently add a Linux server as a distinct Cloudflare Mesh node.
@@ -624,6 +626,31 @@ tasks:
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
           /etc/k0s/containerd.d/certs.d/127.0.0.1:5000/hosts.toml
 
+        api_address_unit="$(mktemp)"
+        cat > "$api_address_unit" <<'EOF'
+        [Unit]
+        Description=Nook k0s stable API loopback address
+        Before=k0scontroller.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/sbin/ip address replace 10.201.0.1/32 dev lo
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+        sudo -n install -m 0644 \
+          "$api_address_unit" \
+          /etc/systemd/system/nook-k0s-api-address.service
+        rm -f "$api_address_unit"
+        sudo -n systemctl daemon-reload
+        sudo -n systemctl enable --now nook-k0s-api-address.service
+        sudo -n systemctl is-enabled --quiet nook-k0s-api-address.service
+        sudo -n systemctl is-active --quiet nook-k0s-api-address.service
+        sudo -n ip -4 address show dev lo |
+          grep -F '10.201.0.1/32' >/dev/null
+
         if ! sudo -n test -f /etc/systemd/system/k0scontroller.service; then
           sudo -n k0s install controller \
             --enable-worker \
@@ -1024,6 +1051,12 @@ tasks:
         fi
         sudo -n k0s stop
         sudo -n k0s reset
+        sudo -n systemctl disable --now nook-k0s-api-address.service \
+          >/dev/null 2>&1 || true
+        sudo -n rm -f /etc/systemd/system/nook-k0s-api-address.service
+        sudo -n systemctl daemon-reload
+        sudo -n ip address del "{{.K0S_API_ADDRESS}}/32" dev lo \
+          2>/dev/null || true
         sudo -n nft --handle list chain inet bynull_filter input |
           awk '/comment "nook k0s pod control plane( v[0-9]+( next)?| install)?"/ { print $NF }' |
           while read -r handle; do
@@ -1747,14 +1780,28 @@ tasks:
         kubectl rollout status deployment/hive-reaper-controller \
           --namespace hive-system \
           --timeout=15m
-        expected_neo4j_cidrs="$(
-          printf '%s\n' \
-            "$neo4j_service_ip/32" \
-            "$neo4j_endpoint_ip/32" |
-            sort |
-            paste -sd, -
-        )"
         for attempt in $(seq 1 60); do
+          current_neo4j_endpoint_ip="$(
+            kubectl get endpoints hive-neo4j \
+              --namespace hive-data \
+              -o jsonpath='{.subsets[0].addresses[0].ip}'
+          )"
+          case "$current_neo4j_endpoint_ip" in
+            *[!0-9.]*)
+              echo "Refusing invalid live Neo4j endpoint: $current_neo4j_endpoint_ip" >&2
+              exit 1
+              ;;
+          esac
+          expected_neo4j_cidrs="$(
+            {
+              printf '%s\n' "$neo4j_service_ip/32"
+              if test -n "$current_neo4j_endpoint_ip"; then
+                printf '%s\n' "$current_neo4j_endpoint_ip/32"
+              fi
+            } |
+              sort |
+              paste -sd, -
+          )"
           live_neo4j_cidrs="$(
             kubectl get networkpolicy hive-worker-egress \
               --namespace hive-system \

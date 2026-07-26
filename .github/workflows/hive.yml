@@ -11,6 +11,8 @@ on:
       - .github/scripts/hive-manifest-contract.rb
       - .github/scripts/hive-reaper-controller-test.py
       - .github/scripts/k0s-firewall-rollback-test.py
+      - .github/scripts/k0s-cni-migration-test.py
+      - .github/scripts/services-network-repair-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
@@ -22,6 +24,8 @@ on:
       - .github/scripts/hive-manifest-contract.rb
       - .github/scripts/hive-reaper-controller-test.py
       - .github/scripts/k0s-firewall-rollback-test.py
+      - .github/scripts/k0s-cni-migration-test.py
+      - .github/scripts/services-network-repair-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**

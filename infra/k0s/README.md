@@ -23,7 +23,10 @@ egress through the forward chain. Kube-router masquerades Pod traffic destined
 outside the cluster so replies return through the node. The API server binds the
 stable host loopback address `10.201.0.1`; worker policy allows only its `/32`
 post-DNAT endpoint on `6443`, so endpoint refresh cannot deadlock behind its own
-stale policy. No public control-plane port is opened. The installer applies its
+stale policy. A Taskfile-owned systemd oneshot unit assigns that address before
+k0s and validates that the unit is enabled, active, and present on `lo`, so the
+binding survives host reboots and fresh installations. No public control-plane
+port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
 dynamic networking rules, and atomically restores every previous input and
 forward rule in its original order plus the persisted firewall state if

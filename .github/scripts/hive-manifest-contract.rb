@@ -279,7 +279,20 @@ unless k0s_config.dig("spec", "network", "kuberouter", "ipMasq") == true
 end
 unless k0s_config.dig("spec", "api", "address") == "10.201.0.1" &&
        k0s_config.dig("spec", "api", "sans").include?("10.201.0.1") &&
-       infra_taskfile.include?("K0S_API_ADDRESS: 10.201.0.1")
+       infra_taskfile.include?("K0S_API_ADDRESS: 10.201.0.1") &&
+       infra_taskfile.include?("nook-k0s-api-address.service") &&
+       infra_taskfile.include?(
+         "ExecStart=/usr/sbin/ip address replace 10.201.0.1/32 dev lo"
+       ) &&
+       infra_taskfile.include?(
+         "systemctl enable --now nook-k0s-api-address.service"
+       ) &&
+       infra_taskfile.include?(
+         "systemctl is-enabled --quiet nook-k0s-api-address.service"
+       ) &&
+       infra_taskfile.include?(
+         "systemctl is-active --quiet nook-k0s-api-address.service"
+       )
   raise "k0s must expose its API on the stable Hive loopback address"
 end
 unless infra_taskfile.include?("rollout restart deployment/coredns") &&
@@ -336,6 +349,7 @@ unless neo4j_rule
 end
 unless infra_taskfile.scan("kubectl get service hive-neo4j").length >= 2 &&
        infra_taskfile.scan("kubectl get endpoints hive-neo4j").length >= 2 &&
+       infra_taskfile.include?("current_neo4j_endpoint_ip") &&
        infra_taskfile.scan('k0s_api_ip="{{.K0S_API_ADDRESS}}"').length >= 2 &&
        infra_taskfile.scan(
          's|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g'

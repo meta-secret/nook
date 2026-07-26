@@ -511,7 +511,10 @@ records the existing CNI state before restarting k0s, so a controller rewrite
 cannot hide an `ipMasq` migration; migrations automatically replace existing
 Hive, dispatcher, and lifecycle-controller Pod sandboxes. The API server's
 stable loopback address is `10.201.0.1`, and the worker egress template uses its
-exact `/32` rather than a deployment-time endpoint lookup.
+exact `/32` rather than a deployment-time endpoint lookup. The
+`nook-k0s-api-address.service` systemd unit assigns the `/32` before k0s starts
+and is enabled across reboots; installation verifies both unit state and the
+live `lo` address.
 
 Credential synchronization requires explicit local file inputs:
 
