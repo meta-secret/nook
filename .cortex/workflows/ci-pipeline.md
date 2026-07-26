@@ -504,13 +504,13 @@ cargo-chef or change the build result when unavailable to a secret-free job.
 Manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
 The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.
-Its manifest-only Docker stage compiles locked debug/test and release
-dependencies before authored sources are copied. Pull requests restore Main's
-scope read-only; only Main exports it, in a final step after check and behavior
-tests both pass. Hive check and test tasks use the same job-scoped Buildx
-builder, so the behavior image reuses the dependency and Clippy graph produced
-earlier in the run without allowing parallel PRs or failed validation to
-replace the trusted cache.
+Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy,
+then warm real-lock debug/test and release profiles before authored sources are
+copied. Pull requests restore Main's scope read-only; only Main exports it, in a
+final step after check and behavior tests both pass. Hive check and test tasks
+use the same job-scoped Buildx builder, so the behavior image reuses the
+dependency and Clippy graph produced earlier in the run without allowing
+parallel PRs or failed validation to replace the trusted cache.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
 prepared image and without a second setup. The combined `dist` tree is reserved

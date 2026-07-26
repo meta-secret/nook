@@ -1,7 +1,10 @@
+# syntax=docker/dockerfile:1.4
+
 FROM docker:28.5.1-cli@sha256:9190b0613792e658a7783cf14b2d5ace5941bb68ede7276922ea36ee457d76ad AS docker-cli
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun
 FROM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS node
-FROM rust:1.96.0-bookworm@sha256:5e2214abe154fe26e39f64488952e5c991eeed1d6d6da7cc8381ae83927f0cfc AS toolchain
+FROM lukemathwalker/cargo-chef:latest-rust-1.96-trixie@sha256:3a1dd6010466c1cf591607a75c6e144ba9f099e7f3790d595c6a611a9c78f387 AS cargo-chef
+FROM rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376 AS toolchain
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -31,18 +34,33 @@ COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins /usr/local/libexec/docker/cli-plugins
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 
 WORKDIR /build
 
-FROM toolchain AS dependencies
+FROM toolchain AS chef-planner
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p lace/src hive/src \
-    && printf '%s\n' 'pub fn dependency_cache_seed() {}' > lace/src/lib.rs \
-    && printf '%s\n' 'fn main() {}' > hive/src/main.rs \
-    && cargo build --locked -p hive --all-targets \
-    && cargo build --locked --release -p hive
+    && touch lace/src/lib.rs hive/src/main.rs
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM toolchain AS dependencies
+COPY --from=chef-planner /build/recipe.json recipe.json
+COPY Cargo.toml Cargo.lock ./
+COPY lace/Cargo.toml lace/Cargo.toml
+COPY hive/Cargo.toml hive/Cargo.toml
+# Keep downloads, chef cooking, and the real-lock compiler profiles in separate
+# manifest-keyed layers. cargo-chef rewrites workspace versions, so the explicit
+# real-lock warm-ups are required for Clippy/tests and the release binary to
+# reuse compiled dependencies (the same boundary used by nook-app).
+RUN cargo chef cook --recipe-path recipe.json
+RUN cargo fetch --locked
+RUN mkdir -p lace/src hive/src \
+    && touch lace/src/lib.rs hive/src/main.rs
+RUN cargo build --locked -p hive --all-targets
+RUN cargo build --locked --release -p hive
 
 FROM dependencies AS source
 COPY lace/src lace/src

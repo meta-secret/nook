@@ -107,9 +107,10 @@ task hive:image
 The repository-owned `Hive` GitHub Actions workflow runs these pinned Docker
 checks only when Hive or its infrastructure changes. Pull requests restore the
 trusted Main GHA BuildKit scope read-only, and only Main publishes that scope.
-The Dockerfile compiles locked dependencies from manifests before copying
-authored sources, while `hive:check` and `hive:test` share one Buildx builder.
-Dependency changes still rebuild the layer; ordinary source changes reuse it.
+The Dockerfile uses the same pinned cargo-chef planner/recipe/cook boundary as
+`nook-app`, then warms real-lock debug/test and release profiles before copying
+authored sources. `hive:check` and `hive:test` share one Buildx builder.
+Dependency changes rebuild those layers; ordinary source changes reuse them.
 Main exports the graph only after both check and behavior tests pass.
 
 Runtime operations use the binary directly:
