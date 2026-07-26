@@ -115,7 +115,7 @@ COPY hive/src hive/src
 RUN cargo fmt --all
 
 FROM check AS test-runner
-CMD ["bash", "-lc", "cargo test --locked -p hive && nook-sccache-report hive-test"]
+CMD ["bash", "-c", "cargo test --locked -p hive && nook-sccache-report hive-test"]
 
 FROM source AS builder
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
