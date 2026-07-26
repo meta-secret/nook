@@ -4,6 +4,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use codex::{Arg0DispatchPaths, arg0_dispatch_or_else};
 use hive::auth::run_auth_broker;
+use hive::codex::{DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT};
 use hive::coordinator::run_coordinator;
 use hive::dispatcher::run_workbench_dispatcher;
 use hive::model::{AgentId, EnqueueTask, TaskId};
@@ -55,9 +56,17 @@ enum Command {
         poll_min_seconds: u64,
         #[arg(long, env = "HIVE_POLL_MAX_SECONDS", default_value_t = 15)]
         poll_max_seconds: u64,
-        #[arg(long, env = "HIVE_CODEX_MODEL")]
+        #[arg(
+            long,
+            env = "HIVE_CODEX_MODEL",
+            default_value = DEFAULT_CODEX_MODEL
+        )]
         model: Option<String>,
-        #[arg(long, env = "HIVE_CODEX_REASONING_EFFORT", default_value = "medium")]
+        #[arg(
+            long,
+            env = "HIVE_CODEX_REASONING_EFFORT",
+            default_value = DEFAULT_CODEX_REASONING_EFFORT
+        )]
         reasoning_effort: String,
         #[arg(
             long,

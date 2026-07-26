@@ -24,7 +24,9 @@ Hive separates four responsibilities:
 2. **Neo4j coordinates durable work.** It is the only task queue, DAG, lease
    store, attempt history, and artifact store.
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
-   core API; it does not spawn a Codex CLI process or parse CLI JSONL.
+   core API; it does not spawn a Codex CLI process or parse CLI JSONL. Every
+   worker turn explicitly selects `gpt-5.6` with `low` reasoning effort, the
+   non-UI representation of Codex Light.
 4. **Narrow brokers own credentials and authority.** The repository-facing
    worker has no Neo4j password, Codex credential file, GitHub token, or
    Kubernetes administrative credential.
@@ -452,9 +454,16 @@ Redis `sccache` and GHA BuildKit are separate layers:
 
 ## 10. Taskfile operations
 
-All local, CI, SSH, Kubernetes, and deployment operations go through the root
-Taskfile command surface. Do not run ad hoc `ssh`, `kubectl`, Helm, or deployment
-shell scripts for Hive.
+All automated lifecycle, mutation, CI, SSH, Kubernetes, and deployment
+operations go through the root Taskfile command surface. After
+`task infra:kubernetes:console:install`, an authenticated operator may use the
+installed `kubectl`, Helm, and k9s clients directly over SSH for interactive
+inspection. Persistent platform changes still belong in Taskfile operations,
+not ad hoc shell scripts.
+
+The SSH-user kubeconfig stores no reusable credential. Its exec provider crosses
+the operator's existing passwordless sudo boundary to a root-owned helper,
+which mints a 15-minute token for the dedicated cluster operator identity.
 
 Repository verification:
 
@@ -471,6 +480,8 @@ Remote platform lifecycle:
 
 ```text
 task infra:kvm:verify
+task infra:kubernetes:console:install
+task infra:kubernetes:tools:status
 task infra:k0s:install
 task infra:k0s:status
 task infra:k0s:diagnose

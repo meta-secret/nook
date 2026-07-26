@@ -373,6 +373,8 @@ task pr:ready PR=410       # read-only exact-head readiness assertion; never mer
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
 task infra:deploy           # deploy Redis/registry plus k0s, Kata, Neo4j, and Hive
+task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
+task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
 task infra:k0s:diagnose     # bounded k0s, CNI, firewall, and control-plane evidence
 task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migration

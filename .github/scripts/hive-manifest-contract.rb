@@ -87,6 +87,10 @@ end
 unless worker_environment["HIVE_TASK_TIMEOUT_SECONDS"] == "21600"
   raise "Hive worker must allow the complete six-hour repair lifecycle"
 end
+unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6" &&
+       worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "low"
+  raise "Hive workers must pin Codex GPT-5.6 with Light reasoning"
+end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
@@ -180,6 +184,32 @@ unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
 end
 
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
+kubernetes_tools_task = infra_taskfile.match(
+  /^  kubernetes:tools:install:\n(?<body>.*?)(?=^  kubernetes:tools:status:)/m
+)&.[](:body)
+raise "Kubernetes operator tools install task is missing" unless kubernetes_tools_task
+unless kubernetes_tools_task.include?("https://dl.k8s.io/release/$kubectl_version/bin/linux/amd64/kubectl") &&
+       kubernetes_tools_task.include?("https://get.helm.sh/$helm_asset") &&
+       kubernetes_tools_task.include?("https://github.com/derailed/k9s/releases/download/$k9s_version/$k9s_asset") &&
+       kubernetes_tools_task.scan("sha256sum --check").length >= 3 &&
+       kubernetes_tools_task.include?("/usr/local/bin/kubectl") &&
+       kubernetes_tools_task.include?("/usr/local/bin/helm") &&
+       kubernetes_tools_task.include?("/usr/local/bin/k9s")
+  raise "Kubernetes operator tools must use pinned verified standalone binaries"
+end
+unless infra_taskfile.include?("create token nook-operator") &&
+       infra_taskfile.include?("--duration=15m") &&
+       infra_taskfile.include?("client.authentication.k8s.io/v1") &&
+       infra_taskfile.include?("--exec-interactive-mode=Never") &&
+       infra_taskfile.include?("! grep -Eq 'client-(certificate|key)-data:'") &&
+       infra_taskfile.include?('chmod 0600 "$kubeconfig"') &&
+       infra_taskfile.include?('[ "$existing_clusters" = local ]') &&
+       infra_taskfile.include?('[ "$existing_contexts" = Default ]') &&
+       infra_taskfile.include?('[ "$existing_users" = user ]') &&
+       infra_taskfile.include?('Refusing to replace existing $default_kubeconfig') &&
+       infra_taskfile.include?("kubectl get --raw=/readyz")
+  raise "Kubernetes console must use short-lived direct SSH credentials"
+end
 k0s_install_task = infra_taskfile.match(
   /^  k0s:install:\n(?<body>.*?)(?=^  k0s:status:)/m
 )&.[](:body)

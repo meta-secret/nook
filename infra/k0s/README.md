@@ -9,10 +9,30 @@ Pinned platform:
 
 - Debian 13 host
 - k0s `v1.36.2+k0s.0`
+- kubectl `v1.36.2`
 - Helm `v3.21.3`
+- k9s `v0.51.0`
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
 - Kata runtime-rs class `kata-dragonball`
+
+Install the pinned operator console and its credential-free kubeconfig through
+the root Taskfile, then use it directly after SSH login:
+
+```text
+task infra:kubernetes:console:install
+ssh debian@ssh-ovh-borg-1.bynull.link
+kubectl get pods --all-namespaces
+k9s
+```
+
+The user kubeconfig contains the cluster CA and a root-owned exec helper, not a
+client certificate, private key, or bearer token. Each invocation obtains a
+15-minute token for the dedicated `nook-operator` service account through the
+SSH user's existing passwordless sudo boundary. The managed configuration lives
+at `~/.kube/nook-k0s.yaml`; installation links `~/.kube/config` only when it is
+absent or is the legacy Nook-generated admin configuration, and refuses to
+replace an unrelated operator config.
 
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
 firewall must retain default-drop input and forward policies. The installer adds
