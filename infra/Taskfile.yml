@@ -229,8 +229,8 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_MESH_SSH_TARGET}}"
         'sudo -n warp-cli status && ip -brief address | grep CloudflareWARP'
 
-  services:deploy:
-    desc: Deploy the public TLS Redis cache and loopback-only Hive registry.
+  deploy:
+    desc: Deploy Nook services and the complete k0s/Kata/Neo4j/Hive platform.
     silent: true
     cmds:
       - |
@@ -284,6 +284,11 @@ tasks:
            curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null; \
            docker compose -f '$remote_compose' ps"
         BASH
+      - task: k0s:install
+      - task: kata:install
+      - task: kata:verify
+      - task: neo4j:deploy
+      - task: hive:deploy
 
   k0s:sync:
     internal: true
@@ -707,16 +712,6 @@ tasks:
           -l app.kubernetes.io/name=hive \
           -o wide
         REMOTE
-
-  deploy:
-    desc: Deploy Nook services and the complete k0s/Kata/Neo4j/Hive platform.
-    cmds:
-      - task: services:deploy
-      - task: k0s:install
-      - task: kata:install
-      - task: kata:verify
-      - task: neo4j:deploy
-      - task: hive:deploy
 
   status:
     desc: Show the remote infrastructure service state.
