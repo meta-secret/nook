@@ -153,8 +153,10 @@ reaper_command = reaper_deployment
 unless reaper_command.include?("token('/run/kubernetes/token')") &&
        reaper_command.include?('expected = token("/run/reaper-auth/token")') &&
        reaper_command.include?("def reconcile_neo4j_policy():") &&
+       reaper_command.include?('"resourceVersion": policy["metadata"][') &&
+       reaper_command.include?("if error.code != 409:") &&
        reaper_command.include?("time.sleep(10)")
-  raise "Hive reaper controller must reload rotating credentials for every request"
+  raise "Hive reaper controller must reload credentials and reject stale policy writes"
 end
 
 kata = load_yaml.call("infra/k0s/manifests/kata/values.yaml")
@@ -225,6 +227,8 @@ unless infra_taskfile.include?("nook-k0s.nft") &&
        infra_taskfile.include?("nft delete rule") &&
        k0s_install_task.include?("set -Eeuo pipefail") &&
        k0s_install_task.include?("trap rollback_k0s_firewall ERR") &&
+       k0s_install_task.include?('> "$firewall_previous_live"') &&
+       k0s_install_task.include?('nft --file "$firewall_previous_live"') &&
        infra_taskfile.include?("rm -f /etc/nftables.d/nook-k0s.nft") &&
        infra_taskfile.include?("nft --check --file") &&
        !infra_taskfile.include?("systemctl reload nftables")
@@ -238,6 +242,10 @@ unless firewall_rollback && k0s_download && k0s_final_status && firewall_commit 
        firewall_rollback < k0s_download &&
        k0s_final_status < firewall_commit
   raise "k0s firewall rollback must remain armed through final install verification"
+end
+unless k0s_install_task.index('> "$firewall_previous_live"') <
+       k0s_install_task.index("trap rollback_k0s_firewall ERR")
+  raise "k0s firewall rollback must snapshot live owned rules before mutation"
 end
 unless infra_taskfile.scan('nft list chain inet bynull_filter forward |').length >= 3 &&
        infra_taskfile.scan('grep -E "policy drop" >/dev/null').length >= 4
@@ -335,6 +343,11 @@ unless root_agentic_taskfile.include?("hive:guest:format:") &&
        root_agentic_taskfile.include?("cargo fmt --all") &&
        root_agentic_taskfile.include?("bun run format")
   raise "Hive native sealed-guest formatting task is incomplete"
+end
+
+hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
+unless hive_workflow.scan(".github/scripts/hive-reaper-controller-test.py").length == 2
+  raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end
 
 puts "Hive Kubernetes manifest contract: ok"

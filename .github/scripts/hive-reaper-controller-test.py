@@ -5,6 +5,7 @@ import copy
 import pathlib
 import ssl
 import textwrap
+import urllib.error
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -32,6 +33,7 @@ def main():
     new_endpoint = "10.244.0.9/32"
     service_cidr = "10.96.87.23/32"
     policy = {
+        "metadata": {"resourceVersion": "10"},
         "spec": {
             "egress": [
                 {
@@ -49,8 +51,10 @@ def main():
         }
     }
     patches = []
+    policy_reads = 0
 
     def json_request(_method, path, _payload=None):
+        nonlocal policy_reads
         if path.endswith("/services/hive-neo4j"):
             return {"spec": {"clusterIP": service_cidr.removesuffix("/32")}}
         if path.endswith("/endpoints/hive-neo4j"):
@@ -64,21 +68,38 @@ def main():
                 ]
             }
         if path.endswith("/networkpolicies/hive-worker-egress"):
+            policy_reads += 1
+            if policy_reads == 2:
+                policy["metadata"]["resourceVersion"] = "11"
+                policy["spec"]["egress"][0]["to"] = [
+                    {
+                        "namespaceSelector": {
+                            "matchLabels": {"role": "updated-data"}
+                        }
+                    }
+                ]
             return copy.deepcopy(policy)
         raise AssertionError(f"unexpected API path: {path}")
 
     def api_request(method, path, payload=None):
         patches.append((method, path, payload))
+        if len(patches) == 1:
+            raise urllib.error.HTTPError(path, 409, "Conflict", {}, None)
         return b"{}"
 
     namespace["json_request"] = json_request
     namespace["api_request"] = api_request
     namespace["reconcile_neo4j_policy"]()
 
-    assert len(patches) == 1, patches
-    method, path, payload = patches[0]
+    assert len(patches) == 2, patches
+    method, path, payload = patches[-1]
     assert method == "PATCH"
     assert path.endswith("/networkpolicies/hive-worker-egress")
+    assert patches[0][2]["metadata"]["resourceVersion"] == "10"
+    assert payload["metadata"]["resourceVersion"] == "11"
+    assert payload["spec"]["egress"][0]["to"] == [
+        {"namespaceSelector": {"matchLabels": {"role": "updated-data"}}}
+    ]
     cidrs = [
         destination["ipBlock"]["cidr"]
         for rule in payload["spec"]["egress"]

@@ -453,28 +453,42 @@ tasks:
         firewall_config="$(mktemp)"
         firewall_previous_config="$(mktemp)"
         firewall_previous_fragment="$(mktemp)"
+        firewall_previous_live="$(mktemp)"
         firewall_fragment_existed=false
-        trap 'rm -f "$firewall_fragment" "$firewall_config" "$firewall_previous_config" "$firewall_previous_fragment"' EXIT
+        trap 'rm -f "$firewall_fragment" "$firewall_config" "$firewall_previous_config" "$firewall_previous_fragment" "$firewall_previous_live"' EXIT
         sudo -n cat /etc/nftables.conf > "$firewall_previous_config"
         if sudo -n test -f /etc/nftables.d/nook-k0s.nft; then
           sudo -n cat /etc/nftables.d/nook-k0s.nft \
             > "$firewall_previous_fragment"
           firewall_fragment_existed=true
         fi
+        for chain in input forward; do
+          sudo -n nft --handle list chain inet bynull_filter "$chain" |
+            awk -v chain="$chain" '
+              /comment "nook k0s pod (control plane|egress)/ {
+                sub(/^[[:space:]]*/, "")
+                sub(/[[:space:]]+# handle [0-9]+$/, "")
+                print "add rule inet bynull_filter " chain " " $0
+              }
+            ' >> "$firewall_previous_live"
+        done
         rollback_k0s_firewall() {
           status=$?
           trap - ERR
           set +e
           sudo -n nft --handle list chain inet bynull_filter input |
-            awk '/comment "nook k0s pod control plane install"/ { print $NF }' |
+            awk '/comment "nook k0s pod control plane/ { print $NF }' |
             while read -r handle; do
               sudo -n nft delete rule inet bynull_filter input handle "$handle"
             done
           sudo -n nft --handle list chain inet bynull_filter forward |
-            awk '/comment "nook k0s pod egress install"/ { print $NF }' |
+            awk '/comment "nook k0s pod egress/ { print $NF }' |
             while read -r handle; do
               sudo -n nft delete rule inet bynull_filter forward handle "$handle"
             done
+          if test -s "$firewall_previous_live"; then
+            sudo -n nft --file "$firewall_previous_live"
+          fi
           sudo -n install -m 0644 \
             "$firewall_previous_config" \
             /etc/nftables.conf
@@ -489,7 +503,8 @@ tasks:
             "$firewall_fragment" \
             "$firewall_config" \
             "$firewall_previous_config" \
-            "$firewall_previous_fragment"
+            "$firewall_previous_fragment" \
+            "$firewall_previous_live"
           return "$status"
         }
         trap rollback_k0s_firewall ERR
@@ -773,7 +788,8 @@ tasks:
           "$firewall_fragment" \
           "$firewall_config" \
           "$firewall_previous_config" \
-          "$firewall_previous_fragment"
+          "$firewall_previous_fragment" \
+          "$firewall_previous_live"
         REMOTE
 
   k0s:status:

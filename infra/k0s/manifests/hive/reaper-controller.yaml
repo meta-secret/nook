@@ -88,7 +88,6 @@ spec:
                       "/apis/networking.k8s.io/v1/namespaces/hive-system/"
                       "networkpolicies/hive-worker-egress"
                   )
-                  policy = json_request("GET", policy_path)
                   service_ip = str(
                       ipaddress.ip_address(service["spec"]["clusterIP"])
                   )
@@ -103,20 +102,43 @@ spec:
                       {"ipBlock": {"cidr": f"{service_ip}/32"}},
                       {"ipBlock": {"cidr": f"{endpoint_ips[0]}/32"}},
                   ]
-                  egress = policy["spec"]["egress"]
-                  matched = False
-                  for rule in egress:
-                      if any(
-                          port.get("protocol") == "TCP" and port.get("port") == 7687
-                          for port in rule.get("ports", [])
-                      ) and any("ipBlock" in target for target in rule.get("to", [])):
-                          matched = True
-                          if rule["to"] != destinations:
+                  for _ in range(3):
+                      policy = json_request("GET", policy_path)
+                      egress = policy["spec"]["egress"]
+                      matched = False
+                      for rule in egress:
+                          if any(
+                              port.get("protocol") == "TCP"
+                              and port.get("port") == 7687
+                              for port in rule.get("ports", [])
+                          ) and any(
+                              "ipBlock" in target for target in rule.get("to", [])
+                          ):
+                              matched = True
+                              if rule["to"] == destinations:
+                                  return
                               rule["to"] = destinations
-                              api_request("PATCH", policy_path, {"spec": {"egress": egress}})
-                          break
-                  if not matched:
-                      raise RuntimeError("Neo4j endpoint egress rule is missing")
+                              try:
+                                  api_request(
+                                      "PATCH",
+                                      policy_path,
+                                      {
+                                          "metadata": {
+                                              "resourceVersion": policy["metadata"][
+                                                  "resourceVersion"
+                                              ]
+                                          },
+                                          "spec": {"egress": egress},
+                                      },
+                                  )
+                                  return
+                              except urllib.error.HTTPError as error:
+                                  if error.code != 409:
+                                      raise
+                                  break
+                      if not matched:
+                          raise RuntimeError("Neo4j endpoint egress rule is missing")
+                  raise RuntimeError("Neo4j NetworkPolicy changed during reconciliation")
 
               def reconcile_loop():
                   while True:
