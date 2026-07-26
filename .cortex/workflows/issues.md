@@ -96,14 +96,25 @@ to avoid naming the feature; `backlog` is primarily the historical import area.
 ## Publishing changes
 
 Workbench records are content, not Nook product changes. Publish a single
-record directly with the checked-in helper:
+record directly with the checked-in helper. For an existing issue, first read
+the file and retain the blob SHA that the local edit is based on, then pass that
+exact SHA as `NOOK_WORKBENCH_EXPECTED_SHA`:
 
 ```bash
+export NOOK_WORKBENCH_EXPECTED_SHA="$(
+  gh api repos/meta-secret/nook-workbench/contents/issues/<feature>/<issue>.md \
+    --jq .sha
+)"
 node .github/scripts/workbench-publish.cjs \
   /absolute/path/to/local-record.md \
   issues/<feature>/<issue>.md \
   "issues: update <feature>/<issue>"
 ```
+
+The helper rejects an existing mutable record when the expected SHA is absent
+or no longer current. Refetch and merge concurrent progress instead of
+overwriting it. New worklogs and statistics use unique paths and do not need an
+expected SHA; existing statistics are immutable and cannot be replaced.
 
 For coordinated multi-file restructuring, use a focused Workbench branch and
 PR. Never mix Workbench files into a Nook implementation PR.

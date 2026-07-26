@@ -37,6 +37,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
         "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
         "Publish Workbench result",
+        "steps.workbench.outputs.found == 'true'",
         "validateSummary",
         "contains a workflow credential",
         "publishing trusted fallback metadata",
@@ -86,7 +87,9 @@ fn statistics_leave_the_product_repository() {
     );
     assert!(
         publisher.contains("sha && remotePath.startsWith('stats/')")
-            && publisher.contains("Refusing to overwrite immutable Workbench statistics"),
+            && publisher.contains("Refusing to overwrite immutable Workbench statistics")
+            && publisher.contains("NOOK_WORKBENCH_EXPECTED_SHA")
+            && publisher.contains("Refusing stale Workbench update"),
         "the Workbench publisher must refuse to replace immutable statistics"
     );
 

@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process')
 const { readFileSync } = require('node:fs')
 
 const repository = process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
+const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
 const [localPath, remotePath, ...messageParts] = process.argv.slice(2)
 const message = messageParts.join(' ').trim()
 
@@ -33,6 +34,18 @@ try {
 if (sha && remotePath.startsWith('stats/')) {
   console.error(`Refusing to overwrite immutable Workbench statistics: ${remotePath}`)
   process.exit(3)
+}
+if (sha && !expectedSha) {
+  console.error(
+    `Refusing to overwrite mutable Workbench record without NOOK_WORKBENCH_EXPECTED_SHA: ${remotePath}`,
+  )
+  process.exit(4)
+}
+if (sha && sha !== expectedSha) {
+  console.error(
+    `Refusing stale Workbench update for ${remotePath}: expected ${expectedSha}, current ${sha}`,
+  )
+  process.exit(5)
 }
 
 const args = [
