@@ -9,6 +9,8 @@ vars:
   K0S_VERSION: v1.36.2+k0s.0
   K0S_API_ADDRESS: 10.201.0.1
   K0S_AMD64_SHA256: 8b5d985f803df27acb44f900b2574a5b48e600bd2f87a3335d2a853b888e9298
+  KUBECTL_VERSION: v1.36.2
+  KUBECTL_AMD64_SHA256: 1e9045ec32bea85da43de85f0065358529ea7c7a152eca78154fba5b58c27d82
   HELM_VERSION: v3.21.3
   HELM_AMD64_SHA256: 15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
   KATA_VERSION: 4.0.0
@@ -407,6 +409,98 @@ tasks:
             "tar -xf - -C '$remote_dir'"
         BASH
 
+  kubernetes:tools:install:
+    desc: Idempotently install pinned standalone kubectl and Helm clients.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl_version="{{.KUBECTL_VERSION}}"
+        kubectl_sha="{{.KUBECTL_AMD64_SHA256}}"
+        helm_version="{{.HELM_VERSION}}"
+        helm_sha="{{.HELM_AMD64_SHA256}}"
+        download_dir="$remote_dir/downloads"
+        extract_dir="$(mktemp -d)"
+        trap 'rm -rf "$extract_dir"' EXIT
+
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "infra Kubernetes tools: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+        test "$(uname -m)" = x86_64
+        install -d -m 0750 "$download_dir"
+
+        kubectl_asset="kubectl-${kubectl_version}-linux-amd64"
+        if ! printf '%s  %s\n' "$kubectl_sha" "$download_dir/$kubectl_asset" |
+          sha256sum --check --status 2>/dev/null; then
+          curl -fsSL --retry 3 \
+            -o "$download_dir/$kubectl_asset.next" \
+            "https://dl.k8s.io/release/$kubectl_version/bin/linux/amd64/kubectl"
+          printf '%s  %s\n' \
+            "$kubectl_sha" \
+            "$download_dir/$kubectl_asset.next" |
+            sha256sum --check
+          mv "$download_dir/$kubectl_asset.next" "$download_dir/$kubectl_asset"
+        fi
+        sudo -n install -m 0755 \
+          "$download_dir/$kubectl_asset" \
+          /usr/local/bin/kubectl
+
+        helm_asset="helm-${helm_version}-linux-amd64.tar.gz"
+        if ! printf '%s  %s\n' "$helm_sha" "$download_dir/$helm_asset" |
+          sha256sum --check --status 2>/dev/null; then
+          curl -fsSL --retry 3 \
+            -o "$download_dir/$helm_asset.next" \
+            "https://get.helm.sh/$helm_asset"
+          printf '%s  %s\n' \
+            "$helm_sha" \
+            "$download_dir/$helm_asset.next" |
+            sha256sum --check
+          mv "$download_dir/$helm_asset.next" "$download_dir/$helm_asset"
+        fi
+        tar -xzf "$download_dir/$helm_asset" -C "$extract_dir"
+        sudo -n install -m 0755 \
+          "$extract_dir/linux-amd64/helm" \
+          /usr/local/bin/helm
+
+        test "$(
+          kubectl version --client=true --output=yaml |
+            awk '/gitVersion:/ { print $2; exit }'
+        )" = "$kubectl_version"
+        test "$(
+          helm version --short |
+            cut -d+ -f1
+        )" = "$helm_version"
+        kubectl version --client=true
+        helm version --short
+        REMOTE
+
+  kubernetes:tools:status:
+    desc: Verify standalone kubectl and Helm clients on the Hive host.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        test "$(command -v kubectl)" = /usr/local/bin/kubectl
+        test "$(command -v helm)" = /usr/local/bin/helm
+        test "$(
+          kubectl version --client=true --output=yaml |
+            awk '/gitVersion:/ { print $2; exit }'
+        )" = "{{.KUBECTL_VERSION}}"
+        test "$(
+          helm version --short |
+            cut -d+ -f1
+        )" = "{{.HELM_VERSION}}"
+        kubectl version --client=true
+        helm version --short
+        REMOTE
+
   kvm:verify:
     desc: Verify the Hive host, nested virtualization, KVM modules, and firewall.
     silent: true
@@ -436,8 +530,8 @@ tasks:
         REMOTE
 
   k0s:install:
-    desc: Idempotently install the pinned single-node k0s cluster and Helm.
-    deps: [kvm:verify, k0s:sync]
+    desc: Idempotently install the pinned single-node k0s cluster.
+    deps: [kvm:verify, k0s:sync, kubernetes:tools:install]
     silent: true
     cmds:
       - |
@@ -446,8 +540,6 @@ tasks:
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         k0s_version="{{.K0S_VERSION}}"
         k0s_sha="{{.K0S_AMD64_SHA256}}"
-        helm_version="{{.HELM_VERSION}}"
-        helm_sha="{{.HELM_AMD64_SHA256}}"
         download_dir="$remote_dir/downloads"
         install -d -m 0750 "$download_dir"
         sudo -n apt-get update -qq
@@ -635,14 +727,6 @@ tasks:
         chmod 0755 "$download_dir/$k0s_asset.next"
         sudo -n install -m 0755 "$download_dir/$k0s_asset.next" /usr/local/bin/k0s
         mv "$download_dir/$k0s_asset.next" "$download_dir/$k0s_asset"
-
-        helm_asset="helm-${helm_version}-linux-amd64.tar.gz"
-        curl -fsSL --retry 3 -o "$download_dir/$helm_asset.next" \
-          "https://get.helm.sh/$helm_asset"
-        printf '%s  %s\n' "$helm_sha" "$download_dir/$helm_asset.next" | sha256sum -c -
-        tar -xzf "$download_dir/$helm_asset.next" -C "$download_dir"
-        sudo -n install -m 0755 "$download_dir/linux-amd64/helm" /usr/local/bin/helm
-        mv "$download_dir/$helm_asset.next" "$download_dir/$helm_asset"
 
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
         sudo -n install -d -m 0700 /var/lib/hive/k0s-recovery

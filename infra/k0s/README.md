@@ -9,6 +9,7 @@ Pinned platform:
 
 - Debian 13 host
 - k0s `v1.36.2+k0s.0`
+- kubectl `v1.36.2`
 - Helm `v3.21.3`
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`

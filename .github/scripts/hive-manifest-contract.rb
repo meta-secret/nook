@@ -180,6 +180,17 @@ unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
 end
 
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
+kubernetes_tools_task = infra_taskfile.match(
+  /^  kubernetes:tools:install:\n(?<body>.*?)(?=^  kubernetes:tools:status:)/m
+)&.[](:body)
+raise "Kubernetes operator tools install task is missing" unless kubernetes_tools_task
+unless kubernetes_tools_task.include?("https://dl.k8s.io/release/$kubectl_version/bin/linux/amd64/kubectl") &&
+       kubernetes_tools_task.include?("https://get.helm.sh/$helm_asset") &&
+       kubernetes_tools_task.scan("sha256sum --check").length >= 2 &&
+       kubernetes_tools_task.include?("/usr/local/bin/kubectl") &&
+       kubernetes_tools_task.include?("/usr/local/bin/helm")
+  raise "Kubernetes operator tools must use pinned verified standalone binaries"
+end
 k0s_install_task = infra_taskfile.match(
   /^  k0s:install:\n(?<body>.*?)(?=^  k0s:status:)/m
 )&.[](:body)
