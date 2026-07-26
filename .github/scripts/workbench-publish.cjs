@@ -10,11 +10,14 @@ const message = messageParts.join(' ').trim()
 
 if (!localPath || !remotePath || !message) {
   console.error(
-    'Usage: workbench-publish.cjs <local-file> <issues|worklogs|stats/...> <commit-message>',
+    'Usage: workbench-publish.cjs <local-file> <issues|plans|worklogs|stats/...> <commit-message>',
   )
   process.exit(2)
 }
-if (!/^(issues|worklogs|stats)\/[a-zA-Z0-9._/-]+$/.test(remotePath) || remotePath.includes('..')) {
+if (
+  !/^(issues|plans|worklogs|stats)\/[a-zA-Z0-9._/-]+$/.test(remotePath) ||
+  remotePath.includes('..')
+) {
   console.error(`Refusing invalid Workbench path: ${remotePath}`)
   process.exit(2)
 }
@@ -31,8 +34,11 @@ try {
   sha = undefined
 }
 
-if (sha && remotePath.startsWith('stats/')) {
-  console.error(`Refusing to overwrite immutable Workbench statistics: ${remotePath}`)
+if (
+  sha &&
+  (remotePath.startsWith('plans/') || remotePath.startsWith('stats/'))
+) {
+  console.error(`Refusing to overwrite immutable Workbench record: ${remotePath}`)
   process.exit(3)
 }
 if (sha && !expectedSha) {

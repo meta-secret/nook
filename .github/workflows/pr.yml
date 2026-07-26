@@ -277,6 +277,9 @@ jobs:
       - name: Test Main build statistics collector
         run: node --test .github/scripts/main-build-stats.test.cjs
 
+      - name: Test Workbench agent records
+        run: node --test .github/scripts/workbench-records.test.cjs
+
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs
 

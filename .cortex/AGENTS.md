@@ -178,10 +178,14 @@ the PR documents why. Full policy:
 Nook issues, agent work summaries, and delivery statistics live in
 [`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench),
 not in GitHub Issues or `.stats` inside this repository. Feature directories
-contain Markdown issue files; every task-owning agent publishes a worklog with
-progress, problems, decisions, validation, and remaining work. Only a Workbench
-issue explicitly marked `status: ready` and `automation: agent` may trigger the
-scheduled implementation worker. Full policy:
+contain Markdown issue files. Before implementation, every task-owning agent
+publishes a concise task plan containing its own public-safe interpretation of
+the user's requirements, constraints, intended steps, and completion evidence;
+raw prompts and chat transcripts are forbidden. At completion or blockage, the
+agent publishes a worklog linked to that plan with progress, problems,
+decisions, validation, and remaining work. Only a Workbench issue explicitly
+marked `status: ready` and `automation: agent` may trigger the scheduled
+implementation worker. Full policy:
 [workflows/issues.md](workflows/issues.md).
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
@@ -235,7 +239,7 @@ build-performance PR. Full policy:
 * [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; every product gate runs on GitHub Actions**.
 * [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
-* [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, and required agent worklogs.
+* [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; local-provider vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
