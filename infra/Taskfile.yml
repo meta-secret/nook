@@ -583,13 +583,41 @@ tasks:
         chmod 0600 "$kubeconfig"
 
         if [ -f "$default_kubeconfig" ] && [ ! -L "$default_kubeconfig" ]; then
+          existing_context="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config current-context 2>/dev/null ||
+              true
+          )"
           existing_server="$(
             kubectl --kubeconfig="$default_kubeconfig" \
               config view --minify \
               --output=jsonpath='{.clusters[0].cluster.server}' 2>/dev/null ||
               true
           )"
-          if [ "$existing_server" = "$api_server" ] &&
+          existing_clusters="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view \
+              --output=jsonpath='{range .clusters[*]}{.name}{"\n"}{end}' 2>/dev/null ||
+              true
+          )"
+          existing_contexts="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view \
+              --output=jsonpath='{range .contexts[*]}{.name}{"\n"}{end}' 2>/dev/null ||
+              true
+          )"
+          existing_users="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view \
+              --output=jsonpath='{range .users[*]}{.name}{"\n"}{end}' 2>/dev/null ||
+              true
+          )"
+          if [ "$existing_context" = Default ] &&
+             [ "$existing_server" = "$api_server" ] &&
+             [ "$existing_clusters" = local ] &&
+             [ "$existing_contexts" = Default ] &&
+             [ "$existing_users" = user ] &&
+             grep -q 'client-certificate-data:' "$default_kubeconfig" &&
              grep -q 'client-key-data:' "$default_kubeconfig"; then
             rm -f "$default_kubeconfig"
           else

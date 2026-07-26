@@ -203,6 +203,9 @@ unless infra_taskfile.include?("create token nook-operator") &&
        infra_taskfile.include?("--exec-interactive-mode=Never") &&
        infra_taskfile.include?("! grep -Eq 'client-(certificate|key)-data:'") &&
        infra_taskfile.include?('chmod 0600 "$kubeconfig"') &&
+       infra_taskfile.include?('[ "$existing_clusters" = local ]') &&
+       infra_taskfile.include?('[ "$existing_contexts" = Default ]') &&
+       infra_taskfile.include?('[ "$existing_users" = user ]') &&
        infra_taskfile.include?('Refusing to replace existing $default_kubeconfig') &&
        infra_taskfile.include?("kubectl get --raw=/readyz")
   raise "Kubernetes console must use short-lived direct SSH credentials"
