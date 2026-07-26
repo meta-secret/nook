@@ -97,6 +97,7 @@ jobs:
         run: task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000 WASM_BUILD_MODE=prod
         env:
           CI: true
+          NOOK_E2E_SYNC_PROVIDER: github
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-pr-${{ inputs.pr_number }}-${{ github.run_id }}
           NOOK_GITHUB_POLL_MS: "3000"

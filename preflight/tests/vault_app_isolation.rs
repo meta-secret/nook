@@ -525,8 +525,9 @@ fn scheduled_nightly_live_sync_is_retired() {
     let manual_e2e = read(&root, ".github/workflows/e2e-pr.yml");
     assert!(
         manual_e2e.contains("- sync-live")
+            && manual_e2e.contains("NOOK_E2E_SYNC_PROVIDER: github")
             && manual_e2e.contains("task web:test:e2e:sync-live:parallel"),
-        "manual PR e2e must retain explicit live-provider validation"
+        "manual PR e2e must retain explicit GitHub live-provider validation"
     );
 }
 
