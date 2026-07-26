@@ -38,6 +38,10 @@ pub enum GitHubRequest {
         thread_id: String,
         body: String,
     },
+    ReplyFeedback {
+        feedback_id: String,
+        body: String,
+    },
     ResolveThread {
         thread_id: String,
     },
@@ -62,12 +66,14 @@ struct PublicationBroker {
     task: Arc<Mutex<Option<BoundTask>>>,
     merged_commit: Arc<Mutex<Option<String>>>,
     verified_main: Arc<Mutex<bool>>,
+    verified_run: Arc<Mutex<Option<Value>>>,
+    workbench_completed: Arc<Mutex<bool>>,
     workspace: PathBuf,
     token_path: PathBuf,
     private_home: PathBuf,
 }
 
-pub async fn bind_publication_task(socket: &Path, task: &ClaimedTask) -> anyhow::Result<()> {
+pub async fn bind_publication_task(socket: &Path, task: &ClaimedTask) -> anyhow::Result<String> {
     let response = request(
         socket,
         &GitHubRequest::Bind {
@@ -76,10 +82,11 @@ pub async fn bind_publication_task(socket: &Path, task: &ClaimedTask) -> anyhow:
         },
     )
     .await?;
-    if !response.get("branch").is_some_and(Value::is_string) {
-        anyhow::bail!("publication broker returned an invalid bind response");
-    }
-    Ok(())
+    response
+        .get("branch")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .context("publication broker returned an invalid bind response")
 }
 
 pub async fn publication_delivery_verified(socket: &Path) -> anyhow::Result<bool> {
@@ -163,6 +170,8 @@ pub async fn run_publication_broker(
         task: Arc::new(Mutex::new(None)),
         merged_commit: Arc::new(Mutex::new(None)),
         verified_main: Arc::new(Mutex::new(false)),
+        verified_run: Arc::new(Mutex::new(None)),
+        workbench_completed: Arc::new(Mutex::new(false)),
         workspace,
         token_path,
         private_home,
@@ -209,12 +218,13 @@ impl PublicationBroker {
             GitHubRequest::ReplyThread { thread_id, body } => {
                 self.reply_thread(&thread_id, &body).await
             }
+            GitHubRequest::ReplyFeedback { feedback_id, body } => {
+                self.reply_feedback(&feedback_id, &body).await
+            }
             GitHubRequest::ResolveThread { thread_id } => self.resolve_thread(&thread_id).await,
             GitHubRequest::Merge { expected_head } => self.merge(&expected_head).await,
             GitHubRequest::VerifyMain { merge_commit } => self.verify_main(&merge_commit).await,
-            GitHubRequest::CompletionStatus => {
-                Ok(json!({ "verified": *self.verified_main.lock().await }))
-            }
+            GitHubRequest::CompletionStatus => self.completion_status().await,
         }
     }
 
@@ -223,8 +233,17 @@ impl PublicationBroker {
         {
             anyhow::bail!("publication source commit is invalid");
         }
+        let base_branch = publication_branch_name(&task_id);
+        let task_pulls = self.task_pulls(&base_branch).await?;
+        let branch = task_pulls
+            .iter()
+            .max_by_key(|pull| pull.get("number").and_then(Value::as_u64).unwrap_or(0))
+            .and_then(|pull| pull.pointer("/head/ref"))
+            .and_then(Value::as_str)
+            .unwrap_or(&base_branch)
+            .to_owned();
         let candidate = BoundTask {
-            branch: publication_branch_name(&task_id),
+            branch,
             id: task_id,
             source_commit: source_commit.to_ascii_lowercase(),
         };
@@ -239,17 +258,18 @@ impl PublicationBroker {
                 *task = Some(candidate.clone());
             }
         }
-        let recovered_merge_commit = self
-            .pulls_for_branch(&candidate.branch, "all")
-            .await?
-            .as_array()
-            .and_then(|pulls| pulls.first())
+        let recovered_merge_commit = task_pulls
+            .iter()
             .filter(|pull| pull.get("merged_at").is_some_and(|value| !value.is_null()))
+            .max_by_key(|pull| pull.get("number").and_then(Value::as_u64).unwrap_or(0))
             .and_then(|pull| pull.get("merge_commit_sha"))
             .and_then(Value::as_str)
             .map(str::to_owned);
         if let Some(merge_commit) = recovered_merge_commit.as_ref() {
             *self.merged_commit.lock().await = Some(merge_commit.clone());
+        }
+        if candidate.id.starts_with("main-failure-") {
+            self.ensure_workbench_plan(&candidate).await?;
         }
         Ok(json!({
             "branch": candidate.branch,
@@ -266,10 +286,32 @@ impl PublicationBroker {
     }
 
     async fn publish(&self, title: &str, body: &str) -> anyhow::Result<Value> {
-        let task = self.bound_task().await?;
+        let mut task = self.bound_task().await?;
         if title.trim().is_empty() || body.trim().is_empty() {
             anyhow::bail!("pull request title and body are required");
         }
+        let base_branch = publication_branch_name(&task.id);
+        let task_pulls = self.task_pulls(&base_branch).await?;
+        if let Some(open_branch) = task_pulls
+            .iter()
+            .find(|pull| pull.get("state").and_then(Value::as_str) == Some("open"))
+            .and_then(|pull| pull.pointer("/head/ref"))
+            .and_then(Value::as_str)
+        {
+            task.branch = open_branch.to_owned();
+        } else if !task_pulls.is_empty() {
+            let generation = task_pulls
+                .iter()
+                .filter_map(|pull| pull.pointer("/head/ref").and_then(Value::as_str))
+                .filter_map(|branch| publication_branch_generation(&base_branch, branch))
+                .max()
+                .unwrap_or(1)
+                + 1;
+            task.branch = format!("{base_branch}-g{generation}");
+        } else {
+            task.branch.clone_from(&base_branch);
+        }
+        *self.task.lock().await = Some(task.clone());
         self.git(&["checkout", "-B", &task.branch]).await?;
         self.git(&["add", "--all", "--", "."]).await?;
         if !self.git_success(&["diff", "--cached", "--quiet"]).await? {
@@ -295,7 +337,7 @@ impl PublicationBroker {
         ])
         .await?;
 
-        let existing = self.pulls_for_branch(&task.branch, "all").await?;
+        let existing = self.pulls_for_branch(&task.branch, "open").await?;
         let pull = if let Some(pull) = existing.as_array().and_then(|pulls| pulls.first()) {
             pull.clone()
         } else {
@@ -311,6 +353,18 @@ impl PublicationBroker {
             )
             .await?
         };
+        if task.id.starts_with("main-failure-") {
+            let number = pull
+                .get("number")
+                .and_then(Value::as_u64)
+                .context("published Main repair has no pull-request number")?;
+            self.api(
+                "POST",
+                &format!("/repos/{REPOSITORY}/issues/{number}/labels"),
+                Some(json!({ "labels": ["ci:full-e2e"] })),
+            )
+            .await?;
+        }
         Ok(json!({
             "branch": task.branch,
             "head_sha": head,
@@ -344,7 +398,15 @@ impl PublicationBroker {
                 None,
             )
             .await?;
+        let comments = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/issues/{number}/comments?per_page=100"),
+                None,
+            )
+            .await?;
         let review_threads = self.review_threads(number).await?;
+        let feedback = review_feedback(&pull, &reviews, &comments);
         Ok(json!({
             "pull_request": number,
             "url": pull.get("html_url"),
@@ -355,6 +417,8 @@ impl PublicationBroker {
             "head_sha": head,
             "checks": checks.get("check_runs"),
             "reviews": reviews,
+            "comments": comments,
+            "feedback": feedback,
             "review_threads": review_threads,
         }))
     }
@@ -399,9 +463,21 @@ impl PublicationBroker {
                 None,
             )
             .await?;
-        if pull.pointer("/base/sha").and_then(Value::as_str)
-            != main.pointer("/object/sha").and_then(Value::as_str)
-        {
+        let main_sha = main
+            .pointer("/object/sha")
+            .and_then(Value::as_str)
+            .context("Main ref has no object SHA")?;
+        let comparison = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/compare/{main_sha}...{head}"),
+                None,
+            )
+            .await?;
+        if !matches!(
+            comparison.get("status").and_then(Value::as_str),
+            Some("ahead" | "identical")
+        ) {
             anyhow::bail!("Main moved; update the repair branch and rerun exact-head checks");
         }
         let checks = self
@@ -437,6 +513,29 @@ impl PublicationBroker {
             });
         if unresolved {
             anyhow::bail!("pull request still has unresolved review threads");
+        }
+        let reviews = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100"),
+                None,
+            )
+            .await?;
+        let comments = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/issues/{number}/comments?per_page=100"),
+                None,
+            )
+            .await?;
+        if review_feedback(&pull, &reviews, &comments)
+            .iter()
+            .any(|feedback| {
+                feedback.get("actionable").and_then(Value::as_bool) == Some(true)
+                    && feedback.get("addressed").and_then(Value::as_bool) != Some(true)
+            })
+        {
+            anyhow::bail!("pull request still has unaddressed top-level review feedback");
         }
         let merged = self
             .api(
@@ -578,6 +677,49 @@ impl PublicationBroker {
         .await
     }
 
+    async fn reply_feedback(&self, feedback_id: &str, body: &str) -> anyhow::Result<Value> {
+        if !valid_feedback_id(feedback_id) || body.trim().is_empty() {
+            anyhow::bail!("a feedback id and non-empty reply are required");
+        }
+        let task = self.bound_task().await?;
+        let pull = self.pull_for_branch(&task.branch).await?;
+        let number = pull
+            .get("number")
+            .and_then(Value::as_u64)
+            .context("pull request has no number")?;
+        let reviews = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100"),
+                None,
+            )
+            .await?;
+        let comments = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/issues/{number}/comments?per_page=100"),
+                None,
+            )
+            .await?;
+        if !review_feedback(&pull, &reviews, &comments)
+            .iter()
+            .any(|feedback| {
+                feedback.get("id").and_then(Value::as_str) == Some(feedback_id)
+                    && feedback.get("actionable").and_then(Value::as_bool) == Some(true)
+            })
+        {
+            anyhow::bail!("feedback id does not identify actionable feedback on this pull request");
+        }
+        self.api(
+            "POST",
+            &format!("/repos/{REPOSITORY}/issues/{number}/comments"),
+            Some(json!({
+                "body": format!("<!-- hive-feedback:{feedback_id} -->\n{}", body.trim()),
+            })),
+        )
+        .await
+    }
+
     async fn resolve_thread(&self, thread_id: &str) -> anyhow::Result<Value> {
         if !thread_id.starts_with("PRRT_") {
             anyhow::bail!("a valid review thread id is required");
@@ -606,28 +748,290 @@ impl PublicationBroker {
                 None,
             )
             .await?;
-        let Some(run) = runs
+        let workflow_runs = runs
             .get("workflow_runs")
             .and_then(Value::as_array)
-            .and_then(|runs| {
-                runs.iter()
-                    .find(|run| run.get("head_sha").and_then(Value::as_str) == Some(merge_commit))
-            })
-        else {
-            return Ok(json!({ "status": "pending", "reason": "Main run has not started" }));
-        };
-        let result = json!({
-            "status": run.get("status"),
-            "conclusion": run.get("conclusion"),
-            "url": run.get("html_url"),
-            "run_id": run.get("id"),
-        });
-        if run.get("status").and_then(Value::as_str) == Some("completed")
-            && run.get("conclusion").and_then(Value::as_str) == Some("success")
-        {
-            *self.verified_main.lock().await = true;
+            .context("GitHub Main workflow listing is invalid")?;
+        let exact = workflow_runs
+            .iter()
+            .find(|run| run.get("head_sha").and_then(Value::as_str) == Some(merge_commit));
+        if let Some(run) = exact {
+            let status = run.get("status").and_then(Value::as_str);
+            let conclusion = run.get("conclusion").and_then(Value::as_str);
+            if status != Some("completed") || conclusion == Some("success") {
+                if conclusion == Some("success") {
+                    *self.verified_main.lock().await = true;
+                    *self.verified_run.lock().await = Some(run.clone());
+                }
+                return Ok(main_run_result(run, merge_commit, false));
+            }
+            if !matches!(conclusion, Some("cancelled" | "skipped" | "neutral")) {
+                return Ok(main_run_result(run, merge_commit, false));
+            }
         }
-        Ok(result)
+        for run in workflow_runs.iter().filter(|run| {
+            run.get("status").and_then(Value::as_str) == Some("completed")
+                && run.get("conclusion").and_then(Value::as_str) == Some("success")
+        }) {
+            let Some(head_sha) = run.get("head_sha").and_then(Value::as_str) else {
+                continue;
+            };
+            let comparison = self
+                .api(
+                    "GET",
+                    &format!("/repos/{REPOSITORY}/compare/{merge_commit}...{head_sha}"),
+                    None,
+                )
+                .await?;
+            if matches!(
+                comparison.get("status").and_then(Value::as_str),
+                Some("ahead" | "identical")
+            ) {
+                *self.verified_main.lock().await = true;
+                *self.verified_run.lock().await = Some(run.clone());
+                return Ok(main_run_result(run, merge_commit, true));
+            }
+        }
+        Ok(json!({
+            "status": "pending",
+            "reason": if exact.is_some() {
+                "the exact Main run was coalesced; waiting for a successful descendant"
+            } else {
+                "Main run has not started"
+            },
+        }))
+    }
+
+    async fn completion_status(&self) -> anyhow::Result<Value> {
+        if !*self.verified_main.lock().await {
+            return Ok(json!({ "verified": false }));
+        }
+        let task = self.bound_task().await?;
+        if task.id.starts_with("main-failure-") && !*self.workbench_completed.lock().await {
+            self.complete_workbench(&task).await?;
+            *self.workbench_completed.lock().await = true;
+        }
+        Ok(json!({
+            "verified": true,
+            "workbench_completed": *self.workbench_completed.lock().await,
+        }))
+    }
+
+    async fn ensure_workbench_plan(&self, task: &BoundTask) -> anyhow::Result<()> {
+        let issue_path = workbench_issue_path(task);
+        let issue = self.workbench_contents(&issue_path).await?;
+        let issue_body = decode_base64(
+            issue
+                .get("content")
+                .and_then(Value::as_str)
+                .context("Workbench issue has no content")?,
+        )
+        .await?;
+        let plan_path = workbench_plan_path(task, &issue_body);
+        match self.workbench_contents(&plan_path).await {
+            Ok(_) => return Ok(()),
+            Err(error) if format!("{error:#}").contains("status exit status: 22") => {}
+            Err(error) => return Err(error),
+        }
+        let created_at = frontmatter_value(&issue_body, "created_at")
+            .context("Workbench incident has no created_at timestamp")?;
+        let content = format!(
+            "---\n\
+             title: Repair failed Main verification for {short}\n\
+             feature: hive-isolated-agent-platform\n\
+             issue: {issue_path}\n\
+             started_at: {created_at}\n\
+             agent: nook-hive\n\
+             ---\n\n\
+             # Repair failed Main verification for {short}\n\n\
+             ## Interpreted request\n\n\
+             Diagnose the recorded Main failure, deliver its root-cause repair through a \
+             reviewed pull request, squash-merge it, and verify the resulting Main lineage.\n\n\
+             ## Requirements\n\n\
+             - Preserve the incident SHA and its durable Workbench evidence.\n\
+             - Use repository Taskfile commands for formatting and validation.\n\
+             - Address every actionable review surface before merge.\n\
+             - Do not push directly to Main or expose worker credentials.\n\n\
+             ## Constraints and exclusions\n\n\
+             - Keep credentials behind the existing auth and publication brokers.\n\
+             - Do not include raw workflow logs or private environment details in Workbench.\n\n\
+             ## Initial plan\n\n\
+             1. Inspect the failed workflow and reproduce the bounded failure.\n\
+             2. Implement the smallest repair with behavior-focused regression coverage.\n\
+             3. Publish and review an exact-head PR, then squash-merge it.\n\
+             4. Verify successful Main delivery and close the Workbench lifecycle.\n\n\
+             ## Completion evidence\n\n\
+             A merged repair PR, successful Main run containing the merge, completed incident, \
+             and linked worklog.\n\n\
+             ## Safety review\n\n\
+             This plan contains no credentials, raw logs, private data, local paths, or prompt \
+             transcript.\n",
+            short = &task.source_commit[..12],
+        );
+        self.put_workbench_file(
+            &plan_path,
+            &content,
+            &format!("plan: start Main repair {}", &task.source_commit[..12]),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn complete_workbench(&self, task: &BoundTask) -> anyhow::Result<()> {
+        let issue_path = workbench_issue_path(task);
+        let issue = self.workbench_contents(&issue_path).await?;
+        let issue_sha = issue
+            .get("sha")
+            .and_then(Value::as_str)
+            .context("Workbench issue has no blob SHA")?;
+        let mut issue_body = decode_base64(
+            issue
+                .get("content")
+                .and_then(Value::as_str)
+                .context("Workbench issue has no content")?,
+        )
+        .await?;
+        let pulls = self.task_pulls(&publication_branch_name(&task.id)).await?;
+        let pull = pulls
+            .iter()
+            .filter(|pull| pull.get("merged_at").is_some_and(|value| !value.is_null()))
+            .max_by_key(|pull| pull.get("number").and_then(Value::as_u64).unwrap_or(0))
+            .context("completed Main repair has no merged pull request")?;
+        let pull_number = pull
+            .get("number")
+            .and_then(Value::as_u64)
+            .context("merged repair has no pull-request number")?;
+        let pull_url = pull
+            .get("html_url")
+            .and_then(Value::as_str)
+            .context("merged repair has no URL")?;
+        let merge_commit = self
+            .merged_commit
+            .lock()
+            .await
+            .clone()
+            .context("completed Main repair has no merge commit")?;
+        let verified_run = self
+            .verified_run
+            .lock()
+            .await
+            .clone()
+            .context("completed Main repair has no verified Main run")?;
+        let main_url = verified_run
+            .get("html_url")
+            .and_then(Value::as_str)
+            .context("verified Main run has no URL")?;
+        let finished_at = utc_timestamp().await?;
+        let plan_path = workbench_plan_path(task, &issue_body);
+        let worklog_path = format!(
+            "worklogs/hive-isolated-agent-platform/main-failure-{}.md",
+            task.source_commit
+        );
+        let worklog = format!(
+            "---\n\
+             title: Restore Main after {short}\n\
+             feature: hive-isolated-agent-platform\n\
+             issue: {issue_path}\n\
+             plan: {plan_path}\n\
+             nook_pr: {pull_number}\n\
+             status: completed\n\
+             started_at: {started_at}\n\
+             finished_at: {finished_at}\n\
+             agent: nook-hive\n\
+             ---\n\n\
+             # Restore Main after {short}\n\n\
+             ## Outcome\n\n\
+             Delivered the Main repair through [Nook PR #{pull_number}]({pull_url}) and verified \
+             a successful Main run containing merge `{merge_commit}`.\n\n\
+             ## Progress\n\n\
+             - Diagnosed the recorded Main failure and implemented its bounded repair.\n\
+             - Addressed review feedback and squash-merged the exact verified head.\n\
+             - Verified successful Main delivery: {main_url}\n\n\
+             ## Implementation problems\n\n\
+             - See the incident progress and repair PR for preserved diagnostic details.\n\n\
+             ## Decisions\n\n\
+             - Kept the repair on the normal reviewed PR path; no direct Main push was used.\n\n\
+             ## Validation\n\n\
+             - Exact-head repository-owned checks on PR #{pull_number}.\n\
+             - Successful Main workflow containing `{merge_commit}`.\n\n\
+             ## Remaining work\n\n\
+             None.\n",
+            short = &task.source_commit[..12],
+            started_at =
+                frontmatter_value(&issue_body, "created_at").unwrap_or(finished_at.as_str()),
+        );
+        match self.workbench_contents(&worklog_path).await {
+            Ok(_) => {}
+            Err(error) if format!("{error:#}").contains("status exit status: 22") => {
+                self.put_workbench_file(
+                    &worklog_path,
+                    &worklog,
+                    &format!(
+                        "worklog: complete Main repair {}",
+                        &task.source_commit[..12]
+                    ),
+                    None,
+                )
+                .await?;
+            }
+            Err(error) => return Err(error),
+        }
+        issue_body = replace_frontmatter(&issue_body, "status", "done")?;
+        issue_body = replace_frontmatter(&issue_body, "owner", "nook-hive")?;
+        issue_body = replace_frontmatter(&issue_body, "updated_at", &finished_at)?;
+        issue_body = append_related_pr(&issue_body, pull_number)?;
+        issue_body = issue_body.replace("- [ ]", "- [x]");
+        if !issue_body.contains("<!-- hive-delivery-complete -->") {
+            issue_body.push_str(&format!(
+                "\n\n## Completion\n\n\
+                 <!-- hive-delivery-complete -->\n\
+                 - Repair PR: [#{pull_number}]({pull_url})\n\
+                 - Merge commit: `{merge_commit}`\n\
+                 - Verified Main run: {main_url}\n\
+                 - Worklog: [{worklog_path}](../../{worklog_path})\n"
+            ));
+        }
+        self.put_workbench_file(
+            &issue_path,
+            &issue_body,
+            &format!("issue: complete Main repair {}", &task.source_commit[..12]),
+            Some(issue_sha),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn workbench_contents(&self, path: &str) -> anyhow::Result<Value> {
+        self.api(
+            "GET",
+            &format!("/repos/meta-secret/nook-workbench/contents/{path}?ref=main"),
+            None,
+        )
+        .await
+    }
+
+    async fn put_workbench_file(
+        &self,
+        path: &str,
+        content: &str,
+        message: &str,
+        sha: Option<&str>,
+    ) -> anyhow::Result<Value> {
+        let mut body = json!({
+            "message": message,
+            "content": encode_base64(content).await?,
+            "branch": "main",
+        });
+        if let Some(sha) = sha {
+            body["sha"] = Value::String(sha.to_owned());
+        }
+        self.api(
+            "PUT",
+            &format!("/repos/meta-secret/nook-workbench/contents/{path}"),
+            Some(body),
+        )
+        .await
     }
 
     async fn pull_for_branch(&self, branch: &str) -> anyhow::Result<Value> {
@@ -646,6 +1050,29 @@ impl PublicationBroker {
             None,
         )
         .await
+    }
+
+    async fn task_pulls(&self, base_branch: &str) -> anyhow::Result<Vec<Value>> {
+        let pulls = self
+            .api(
+                "GET",
+                &format!("/repos/{REPOSITORY}/pulls?state=all&per_page=100"),
+                None,
+            )
+            .await?;
+        Ok(pulls
+            .as_array()
+            .context("GitHub pull-request listing is invalid")?
+            .iter()
+            .filter(|pull| {
+                pull.pointer("/head/ref")
+                    .and_then(Value::as_str)
+                    .is_some_and(|branch| {
+                        publication_branch_generation(base_branch, branch).is_some()
+                    })
+            })
+            .cloned()
+            .collect())
     }
 
     async fn review_threads(&self, number: u64) -> anyhow::Result<Value> {
@@ -783,9 +1210,205 @@ pub fn publication_branch_name(task_id: &str) -> String {
     format!("codex/hive-{}", slug.trim_matches('-'))
 }
 
+fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value> {
+    let comment_values = comments.as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let addressed = comment_values
+        .iter()
+        .filter_map(|comment| comment.get("body").and_then(Value::as_str))
+        .filter_map(|body| body.split("<!-- hive-feedback:").nth(1))
+        .filter_map(|suffix| suffix.split(" -->").next())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let pull_author = pull.pointer("/user/login").and_then(Value::as_str);
+    let mut feedback = Vec::new();
+    for review in reviews.as_array().map(Vec::as_slice).unwrap_or(&[]) {
+        let Some(id) = review.get("id").and_then(Value::as_u64) else {
+            continue;
+        };
+        let feedback_id = format!("review-{id}");
+        let body = review.get("body").and_then(Value::as_str).unwrap_or("");
+        let state = review.get("state").and_then(Value::as_str).unwrap_or("");
+        let standard_codex_summary = body.contains("### 💡 Codex Review")
+            && body.contains("Here are some automated review suggestions");
+        let actionable = state == "CHANGES_REQUESTED"
+            || (state == "COMMENTED" && !body.trim().is_empty() && !standard_codex_summary);
+        feedback.push(json!({
+            "id": feedback_id,
+            "kind": "review",
+            "body": body,
+            "url": review.get("html_url"),
+            "author": review.pointer("/user/login"),
+            "state": state,
+            "actionable": actionable,
+            "addressed": !actionable || addressed.iter().any(|value| value == &feedback_id),
+        }));
+    }
+    for comment in comment_values {
+        let Some(id) = comment.get("id").and_then(Value::as_u64) else {
+            continue;
+        };
+        let feedback_id = format!("comment-{id}");
+        let body = comment.get("body").and_then(Value::as_str).unwrap_or("");
+        let author = comment.pointer("/user/login").and_then(Value::as_str);
+        let automated = author.is_some_and(|login| {
+            login == "github-actions" || login.ends_with("[bot]") || Some(login) == pull_author
+        });
+        let actionable =
+            !automated && !body.trim().is_empty() && !body.contains("<!-- hive-feedback:");
+        feedback.push(json!({
+            "id": feedback_id,
+            "kind": "comment",
+            "body": body,
+            "url": comment.get("html_url"),
+            "author": author,
+            "actionable": actionable,
+            "addressed": !actionable || addressed.iter().any(|value| value == &feedback_id),
+        }));
+    }
+    feedback
+}
+
+fn workbench_issue_path(task: &BoundTask) -> String {
+    format!("issues/hive-isolated-agent-platform/{}.md", task.id)
+}
+
+fn workbench_plan_path(task: &BoundTask, issue_body: &str) -> String {
+    let timestamp = frontmatter_value(issue_body, "created_at")
+        .unwrap_or("unknown-time")
+        .replace(':', "-");
+    format!(
+        "plans/hive-isolated-agent-platform/{timestamp}-main-repair-{}.md",
+        &task.source_commit[..12]
+    )
+}
+
+fn frontmatter_value<'a>(body: &'a str, field: &str) -> Option<&'a str> {
+    body.lines()
+        .find_map(|line| line.strip_prefix(&format!("{field}: ")))
+        .map(str::trim)
+}
+
+fn replace_frontmatter(body: &str, field: &str, value: &str) -> anyhow::Result<String> {
+    let prefix = format!("{field}: ");
+    let mut replaced = false;
+    let updated = body
+        .lines()
+        .map(|line| {
+            if line.starts_with(&prefix) {
+                replaced = true;
+                format!("{prefix}{value}")
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if !replaced {
+        anyhow::bail!("Workbench incident is missing {field}");
+    }
+    Ok(updated)
+}
+
+fn append_related_pr(body: &str, pull_number: u64) -> anyhow::Result<String> {
+    let current = frontmatter_value(body, "related_prs")
+        .context("Workbench incident is missing related_prs")?;
+    if current
+        .trim_matches(['[', ']'])
+        .split(',')
+        .any(|value| value.trim() == pull_number.to_string())
+    {
+        return Ok(body.to_owned());
+    }
+    let mut values = current
+        .trim_matches(['[', ']'])
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    values.push(pull_number.to_string());
+    replace_frontmatter(body, "related_prs", &format!("[{}]", values.join(", ")))
+}
+
+async fn encode_base64(value: &str) -> anyhow::Result<String> {
+    base64_command(&["-w", "0"], value).await
+}
+
+async fn decode_base64(value: &str) -> anyhow::Result<String> {
+    base64_command(&["--decode"], value).await
+}
+
+async fn base64_command(arguments: &[&str], value: &str) -> anyhow::Result<String> {
+    let mut child = Command::new("base64")
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("start base64 codec")?;
+    child
+        .stdin
+        .take()
+        .context("base64 stdin was unavailable")?
+        .write_all(value.as_bytes())
+        .await?;
+    let output = child.wait_with_output().await?;
+    if !output.status.success() {
+        anyhow::bail!("base64 codec failed with status {}", output.status);
+    }
+    String::from_utf8(output.stdout).context("base64 output is not UTF-8")
+}
+
+async fn utc_timestamp() -> anyhow::Result<String> {
+    let output = Command::new("date")
+        .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!("UTC timestamp command failed with status {}", output.status);
+    }
+    String::from_utf8(output.stdout)
+        .context("UTC timestamp is not UTF-8")
+        .map(|value| value.trim().to_owned())
+}
+
+fn valid_feedback_id(value: &str) -> bool {
+    ["review-", "comment-"].iter().any(|prefix| {
+        value
+            .strip_prefix(prefix)
+            .is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
+    })
+}
+
+fn main_run_result(run: &Value, merge_commit: &str, descendant: bool) -> Value {
+    json!({
+        "status": run.get("status"),
+        "conclusion": run.get("conclusion"),
+        "url": run.get("html_url"),
+        "run_id": run.get("id"),
+        "verified_merge_commit": merge_commit,
+        "verified_by_descendant": descendant,
+        "verified_head_sha": run.get("head_sha"),
+    })
+}
+
+fn publication_branch_generation(base_branch: &str, branch: &str) -> Option<u64> {
+    if branch == base_branch {
+        return Some(1);
+    }
+    branch
+        .strip_prefix(&format!("{base_branch}-g"))
+        .and_then(|generation| generation.parse().ok())
+        .filter(|generation| *generation >= 2)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::publication_branch_name;
+    use serde_json::{Value, json};
+
+    use super::{
+        publication_branch_generation, publication_branch_name, review_feedback, valid_feedback_id,
+    };
 
     #[test]
     fn task_branch_is_deterministic_and_namespaced() {
@@ -793,5 +1416,67 @@ mod tests {
             publication_branch_name("main-failure-ABC_123"),
             "codex/hive-main-failure-abc-123"
         );
+    }
+
+    #[test]
+    fn task_branch_generations_are_recoverable() {
+        let base = "codex/hive-main-failure-abc-123";
+        assert_eq!(publication_branch_generation(base, base), Some(1));
+        assert_eq!(
+            publication_branch_generation(base, "codex/hive-main-failure-abc-123-g2"),
+            Some(2)
+        );
+        assert_eq!(
+            publication_branch_generation(base, "codex/hive-main-failure-abc-123-other"),
+            None
+        );
+    }
+
+    #[test]
+    fn actionable_top_level_feedback_requires_a_targeted_reply() {
+        let pull = json!({"user": {"login": "nook-hive"}});
+        let reviews = json!([{
+            "id": 42,
+            "state": "CHANGES_REQUESTED",
+            "body": "Please cover the recovery path.",
+            "user": {"login": "reviewer"}
+        }]);
+        let comments = json!([{
+            "id": 7,
+            "body": "Also keep the cache read-only.",
+            "user": {"login": "reviewer"}
+        }]);
+        let feedback = review_feedback(&pull, &reviews, &comments);
+        assert!(
+            feedback
+                .iter()
+                .filter(|item| item.get("actionable").and_then(Value::as_bool) == Some(true))
+                .all(|item| item.get("addressed").and_then(Value::as_bool) == Some(false))
+        );
+
+        let comments = json!([
+            {
+                "id": 7,
+                "body": "Also keep the cache read-only.",
+                "user": {"login": "reviewer"}
+            },
+            {
+                "id": 8,
+                "body": "<!-- hive-feedback:review-42 -->\nFixed with a recovery test.",
+                "user": {"login": "nook-hive"}
+            },
+            {
+                "id": 9,
+                "body": "<!-- hive-feedback:comment-7 -->\nConfirmed read-only.",
+                "user": {"login": "nook-hive"}
+            }
+        ]);
+        assert!(
+            review_feedback(&pull, &reviews, &comments)
+                .iter()
+                .all(|item| item.get("addressed").and_then(Value::as_bool) == Some(true))
+        );
+        assert!(valid_feedback_id("review-42"));
+        assert!(!valid_feedback_id("review-not-a-number"));
     }
 }

@@ -12,7 +12,7 @@ deployment = load_yaml.call("infra/k0s/manifests/hive/deployment.yaml")
 dispatcher_deployment = load_yaml.call("infra/k0s/manifests/hive/dispatcher.yaml")
 pod = deployment.fetch("spec").fetch("template").fetch("spec")
 raise "Hive must keep four warm workers" unless deployment.dig("spec", "replicas") == 4
-raise "Hive must use Kata" unless pod["runtimeClassName"] == "kata-qemu-runtime-rs"
+raise "Hive must use Kata Dragonball" unless pod["runtimeClassName"] == "kata-dragonball"
 raise "Hive must disable automatic service-account tokens" unless pod["automountServiceAccountToken"] == false
 raise "Hive must not use hostPath" if pod.fetch("volumes").any? { |volume| volume.key?("hostPath") }
 
@@ -63,20 +63,27 @@ unless publisher_mounts.include?("github-publication") &&
        worker_mounts.include?("publication-channel")
   raise "Hive publication broker boundary is incomplete"
 end
+worker_environment = worker.fetch("env").to_h { |entry| [entry.fetch("name"), entry["value"]] }
+unless worker_environment["HIVE_SEALED_GUEST"] == "1"
+  raise "Hive worker must select native sealed-guest Taskfile formatting"
+end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
 end
 unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
        dispatcher_deployment.dig("spec", "template", "spec", "runtimeClassName") ==
-       "kata-qemu-runtime-rs" &&
+       "kata-dragonball" &&
        dispatcher_deployment.dig("spec", "template", "spec", "automountServiceAccountToken") ==
        false
   raise "Hive Workbench dispatcher must remain one token-free Kata replica"
 end
 
 manifest_text = File.read(File.join(root, "infra/k0s/manifests/hive/deployment.yaml"))
-raise "Hive must not receive a Docker socket" if manifest_text.include?("docker.sock")
+raise "Hive must not mount the host Docker socket" if manifest_text.include?("hostPath")
+if manifest_text.match?(/DOCKER_HOST|docker-channel|docker-data|sealed-builder|privileged:\s*true/)
+  raise "Hive must not run a nested or privileged Docker daemon"
+end
 unless manifest_text.include?("neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687")
   raise "Hive must verify encrypted Bolt traffic"
 end
@@ -129,6 +136,13 @@ end
 hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
 unless hive_taskfile.include?("for crate in hive lace")
   raise "Hive formatting does not apply the entire checked workspace"
+end
+
+root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
+unless root_agentic_taskfile.include?("hive:guest:format:") &&
+       root_agentic_taskfile.include?("cargo fmt --all") &&
+       root_agentic_taskfile.include?("bun run format")
+  raise "Hive native sealed-guest formatting task is incomplete"
 end
 
 puts "Hive Kubernetes manifest contract: ok"

@@ -639,7 +639,10 @@ impl TaskStore for Neo4jTaskStore {
                      WITH task, attempt, blocker
                      WHERE blocker.source_commit = $source_commit
                      MERGE (task)-[:DEPENDS_ON]->(blocker)
-                     SET task.status = 'BLOCKED',
+                     SET task.status = CASE
+                             WHEN blocker.status = 'COMPLETED' THEN 'READY'
+                             ELSE 'BLOCKED'
+                         END,
                          task.attempt_count = task.attempt_count - 1,
                          task.blocked_reason = $reason,
                          task.updated_at = timestamp(),
@@ -1060,6 +1063,41 @@ mod tests {
             .expect("original resumed");
         assert_eq!(resumed_original.id, original.id);
         assert_eq!(resumed_original.attempt_number, 1);
+        assert!(
+            store
+                .complete(&resumed_original, &agent_a, "original complete", None)
+                .await
+                .expect("complete resumed original")
+        );
+
+        let reused = task(format!("reused-blocker-original-{suffix}"), Vec::new());
+        store
+            .enqueue(&reused)
+            .await
+            .expect("enqueue reused original");
+        let reused_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim reused original")
+            .expect("reused original available");
+        assert!(
+            store
+                .block(
+                    &reused_claim,
+                    &agent_a,
+                    &blocker,
+                    "requires the already-completed prerequisite repair",
+                )
+                .await
+                .expect("persist completed blocker dependency")
+        );
+        let resumed_reused = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("resume task with completed blocker")
+            .expect("task with completed blocker is ready");
+        assert_eq!(resumed_reused.id, reused.id);
+        assert_eq!(resumed_reused.attempt_number, 1);
 
         store
             .graph

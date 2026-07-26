@@ -12,7 +12,7 @@ Pinned platform:
 - Helm `v3.21.3`
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
-- Kata runtime class `kata-qemu-runtime-rs`
+- Kata runtime-rs class `kata-dragonball`
 
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
 firewall must retain a default-drop input policy. Neo4j data uses the retained

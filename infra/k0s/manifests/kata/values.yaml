@@ -10,11 +10,11 @@ monitor:
 
 shims:
   disableAll: true
-  qemu-runtime-rs:
+  dragonball:
     enabled: true
 
 defaultShim:
-  amd64: qemu-runtime-rs
+  amd64: dragonball
 
 runtimeClasses:
   enabled: true

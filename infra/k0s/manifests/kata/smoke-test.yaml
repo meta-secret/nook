@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: hive-kata-smoke
 spec:
-  runtimeClassName: kata-qemu-runtime-rs
+  runtimeClassName: kata-dragonball
   automountServiceAccountToken: false
   restartPolicy: Never
   securityContext:

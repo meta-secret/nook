@@ -21,7 +21,7 @@ spec:
         app.kubernetes.io/name: hive
     spec:
       serviceAccountName: hive-reaper
-      runtimeClassName: kata-qemu-runtime-rs
+      runtimeClassName: kata-dragonball
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 30
@@ -96,6 +96,8 @@ spec:
               value: /home/hive/.codex
             - name: HOME
               value: /home/hive
+            - name: HIVE_SEALED_GUEST
+              value: "1"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

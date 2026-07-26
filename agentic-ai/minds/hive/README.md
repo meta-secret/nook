@@ -44,6 +44,9 @@ after the worker writes its terminal marker or if the worker container
 restarts, so a second task cannot run in the same microVM. A create-once
 workspace sentinel also prevents a restarted worker process from claiming
 during the reaper's polling window. Workers receive no Docker socket.
+The worker image includes Rust, Bun, Node, and Task; the normal `task format`
+entrypoint selects native sealed-guest formatting, so no nested Docker daemon
+or privileged builder is required.
 On `SIGTERM`, a claimed worker transactionally releases its lease and marks the
 attempt interrupted without consuming the task's retry budget before rollout.
 

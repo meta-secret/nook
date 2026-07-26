@@ -640,7 +640,7 @@ tasks:
           --namespace kube-system \
           --timeout=10m
         kubectl get runtimeclasses
-        kubectl get runtimeclass kata-qemu-runtime-rs
+        kubectl get runtimeclass kata-dragonball
         REMOTE
 
   kata:verify:
@@ -654,7 +654,7 @@ tasks:
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
-        kubectl get runtimeclass kata-qemu-runtime-rs
+        kubectl get runtimeclass kata-dragonball
         kubectl delete pod hive-kata-smoke \
           --namespace hive-system \
           --ignore-not-found \
@@ -667,7 +667,7 @@ tasks:
         runtime_class="$(kubectl get pod hive-kata-smoke \
           --namespace hive-system \
           -o jsonpath='{.spec.runtimeClassName}')"
-        test "$runtime_class" = kata-qemu-runtime-rs
+        test "$runtime_class" = kata-dragonball
         host_kernel="$(uname -r)"
         guest_kernel="$(kubectl logs hive-kata-smoke --namespace hive-system)"
         test -n "$guest_kernel"
@@ -1111,14 +1111,17 @@ tasks:
           -o jsonpath='{.status.readyReplicas}')" = 4
         test "$(kubectl get deployment hive \
           --namespace hive-system \
-          -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-qemu-runtime-rs
+          -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-dragonball
         test "$(kubectl get deployment hive \
           --namespace hive-system \
           -o jsonpath='{.spec.template.spec.automountServiceAccountToken}')" = false
         deployment_json="$(kubectl get deployment hive --namespace hive-system -o json)"
         if printf '%s' "$deployment_json" | jq -e \
-          '[.spec.template.spec.containers[], .spec.template.spec.initContainers[]]
-           | any(.securityContext.privileged == true)' >/dev/null; then
+          '[
+             .spec.template.spec.containers[],
+             .spec.template.spec.initContainers[]
+             | select(.securityContext.privileged == true)
+           ] | length > 0' >/dev/null; then
           echo "Hive deployment contains a privileged container" >&2
           exit 1
         fi

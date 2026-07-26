@@ -18,7 +18,7 @@ spec:
       labels:
         app.kubernetes.io/name: hive-workbench-dispatcher
     spec:
-      runtimeClassName: kata-qemu-runtime-rs
+      runtimeClassName: kata-dragonball
       automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:

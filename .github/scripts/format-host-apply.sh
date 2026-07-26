@@ -8,6 +8,12 @@ repo_root="$(cd "$scripts_dir/../.." && pwd)"
 extract_awk="$scripts_dir/format-host-apply-extract.awk"
 cd "$repo_root"
 
+if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
+  task hive:guest:format
+  git status --short --untracked-files=no
+  exit 0
+fi
+
 tmp="$(mktemp)"
 patch="$(mktemp)"
 trap 'rm -f "$tmp" "$patch"' EXIT

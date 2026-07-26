@@ -15,9 +15,7 @@ use tokio::sync::watch;
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, TerminalResult, TerminalStatus};
-use crate::publication::{
-    bind_publication_task, publication_branch_name, publication_delivery_verified,
-};
+use crate::publication::{bind_publication_task, publication_delivery_verified};
 use crate::store::TaskStore;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -80,9 +78,34 @@ impl<S: TaskStore> Worker<S> {
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
-        bind_publication_task(&self.config.publication_socket, &task).await?;
+        let publication_branch =
+            match bind_publication_task(&self.config.publication_socket, &task).await {
+                Ok(branch) => branch,
+                Err(error) => {
+                    let released = self
+                        .store
+                        .release(&task, &self.config.agent_id)
+                        .await
+                        .context("release task after publication broker binding failed")?;
+                    tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                        .await
+                        .context("mark publication-binding failure for Pod replacement")?;
+                    if !released {
+                        return Err(anyhow!(
+                            "publication broker binding failed after the task lease expired: \
+                             {error:#}"
+                        ));
+                    }
+                    return Err(anyhow!(
+                        "publication broker binding failed; the task claim was released without \
+                         consuming an attempt: {error:#}"
+                    ));
+                }
+            };
 
-        let result = self.execute(&task, external_auth).await;
+        let result = self
+            .execute(&task, external_auth, &publication_branch)
+            .await;
         if let Err(error) = result {
             if error.downcast_ref::<WorkerBlocked>().is_some() {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
@@ -118,6 +141,7 @@ impl<S: TaskStore> Worker<S> {
         &self,
         task: &ClaimedTask,
         external_auth: std::sync::Arc<BrokerExternalAuth>,
+        publication_branch: &str,
     ) -> anyhow::Result<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
@@ -132,8 +156,7 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
-                let resume_branch =
-                    (task.kind == "main-repair").then(|| publication_branch_name(task.id.as_str()));
+                let resume_branch = (task.kind == "main-repair").then_some(publication_branch);
                 let preparation = prepare_workspace(
                     &self.config.workspace,
                     &self.config.repository_url,
@@ -430,18 +453,15 @@ async fn prepare_workspace(
             did_resume = true;
         }
     }
-    if did_resume {
-        return Ok(WorkspacePreparation {
-            baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
-            conflicted: false,
-        });
+    if !did_resume {
+        run_git_status(
+            &repository,
+            &["checkout", "--quiet", "--detach", source_commit],
+            "check out the pinned task revision",
+        )
+        .await?;
     }
-    run_git_status(
-        &repository,
-        &["checkout", "--quiet", "--detach", source_commit],
-        "check out the pinned task revision",
-    )
-    .await?;
+    let mut applied_dependency = false;
     for (index, artifact) in dependency_artifacts.iter().enumerate() {
         if artifact.kind != "git-patch" {
             return Err(anyhow!(
@@ -466,6 +486,9 @@ async fn prepare_workspace(
                 "dependency artifact {} failed digest verification",
                 artifact.id
             ));
+        }
+        if did_resume && patch_is_already_applied(&repository, artifact).await? {
+            continue;
         }
         let mut child = Command::new("git")
             .args(["apply", "--3way", "--index", "--binary", "-"])
@@ -512,8 +535,9 @@ async fn prepare_workspace(
                 conflicted: true,
             });
         }
+        applied_dependency = true;
     }
-    if !dependency_artifacts.is_empty() {
+    if applied_dependency {
         let baseline = commit_dependency_baseline(&repository).await?;
         return Ok(WorkspacePreparation {
             baseline,
@@ -524,6 +548,29 @@ async fn prepare_workspace(
         baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
         conflicted: false,
     })
+}
+
+async fn patch_is_already_applied(repository: &Path, artifact: &Artifact) -> anyhow::Result<bool> {
+    let mut child = Command::new("git")
+        .args(["apply", "--reverse", "--check", "--binary", "-"])
+        .current_dir(repository)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("failed to inspect a resumed dependency artifact")?;
+    child
+        .stdin
+        .take()
+        .context("dependency reverse-check stdin was unavailable")?
+        .write_all(artifact.content.as_bytes())
+        .await
+        .context("failed to stream a dependency reverse check")?;
+    Ok(child
+        .wait()
+        .await
+        .context("dependency reverse-check process failed")?
+        .success())
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -684,8 +731,9 @@ fn task_prompt(task: &ClaimedTask) -> String {
          Use only repository Taskfile commands for formatting and validation. Use \
          `hive github publish --title <title> --body <body>` to push the deterministic \
          task branch and create or update its PR, `hive github inspect` to wait for and \
-         address exact-head checks and reviews, `hive github reply-thread` and \
-         `hive github resolve-thread` after each targeted fix, `hive github merge \
+         address exact-head checks and every review surface, `hive github reply-thread`, \
+         `hive github resolve-thread`, and `hive github reply-feedback` after each targeted \
+         fix, `hive github merge \
          --expected-head <sha>` \
          only after every check succeeds, and `hive github verify-main --merge-commit <sha>` \
          until the resulting Main run succeeds. Do not report completed before the squash \
@@ -897,13 +945,27 @@ mod tests {
             digest: format!("sha256:{digest}"),
             content: patch,
         };
+        let resume_branch = "codex/hive-resume-test";
+        run_git(&["checkout", "--quiet", "-b", resume_branch, &source_commit]);
+        std::fs::write(source.path().join("resumed.txt"), "durable branch\n").unwrap();
+        run_git(&["add", "resumed.txt"]);
+        run_git(&[
+            "-c",
+            "user.name=Hive Test",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "durable branch",
+        ]);
         let workspace = tempfile::tempdir().unwrap();
         let preparation = prepare_workspace(
             workspace.path(),
             source.path().to_str().unwrap(),
             &source_commit,
             None,
-            &[dependency],
+            std::slice::from_ref(&dependency),
         )
         .await
         .unwrap();
@@ -913,6 +975,26 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(repository.join("dependency.txt")).unwrap(),
             "from dependency\n"
+        );
+        let resumed_workspace = tempfile::tempdir().unwrap();
+        let resumed_preparation = prepare_workspace(
+            resumed_workspace.path(),
+            source.path().to_str().unwrap(),
+            &source_commit,
+            Some(resume_branch),
+            std::slice::from_ref(&dependency),
+        )
+        .await
+        .unwrap();
+        assert!(!resumed_preparation.conflicted);
+        let resumed_repository = resumed_workspace.path().join("repository");
+        assert_eq!(
+            std::fs::read_to_string(resumed_repository.join("dependency.txt")).unwrap(),
+            "from dependency\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(resumed_repository.join("resumed.txt")).unwrap(),
+            "durable branch\n"
         );
         std::fs::write(repository.join("task.txt"), "task result\n").unwrap();
         let task = ClaimedTask {

@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.4
 
-FROM docker:28.5.1-cli@sha256:9190b0613792e658a7783cf14b2d5ace5941bb68ede7276922ea36ee457d76ad AS docker-cli
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun
 FROM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS node
 FROM lukemathwalker/cargo-chef:latest-rust-1.96-trixie@sha256:3a1dd6010466c1cf591607a75c6e144ba9f099e7f3790d595c6a611a9c78f387 AS cargo-chef
@@ -59,8 +58,6 @@ RUN curl -fsSL \
     && tar -xzf /tmp/task.tar.gz -C /usr/local/bin task \
     && rm -f /tmp/task.tar.gz
 
-COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins /usr/local/libexec/docker/cli-plugins
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef

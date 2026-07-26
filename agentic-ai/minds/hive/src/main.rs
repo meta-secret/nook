@@ -175,6 +175,12 @@ enum GitHubAction {
         #[arg(long)]
         body: String,
     },
+    ReplyFeedback {
+        #[arg(long)]
+        feedback_id: String,
+        #[arg(long)]
+        body: String,
+    },
     ResolveThread {
         #[arg(long)]
         thread_id: String,
@@ -214,6 +220,9 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 GitHubAction::Inspect => GitHubRequest::Inspect,
                 GitHubAction::ReplyThread { thread_id, body } => {
                     GitHubRequest::ReplyThread { thread_id, body }
+                }
+                GitHubAction::ReplyFeedback { feedback_id, body } => {
+                    GitHubRequest::ReplyFeedback { feedback_id, body }
                 }
                 GitHubAction::ResolveThread { thread_id } => {
                     GitHubRequest::ResolveThread { thread_id }

@@ -1,0 +1,453 @@
+# Hive Isolated Agent Platform
+
+Status: Implemented in the repository; deployment and live-state verification
+are performed through the infrastructure Taskfile.
+
+Hive is Nook's self-hosted, stateful AI-agent platform. It runs on the dedicated
+Linux machine addressed by the default infrastructure target
+`debian@ssh-ovh-borg-1.bynull.link`. k0s manages the Kubernetes cluster,
+containerd starts Kata Containers microVMs, and Neo4j persists the task graph,
+leases, attempts, results, and dependency artifacts.
+
+The platform is stateful; workers are deliberately not. Each worker Pod handles
+at most one task, exits, and is replaced by a clean Kata-backed Pod. A logical
+Main-repair task nevertheless survives Pod replacement and owns delivery until
+its reviewed pull request is squash-merged, the resulting Main revision is
+green, and the Workbench incident is completed.
+
+## 1. Architectural boundaries
+
+Hive separates four responsibilities:
+
+1. **Kubernetes schedules isolated execution.** k0s maintains the worker pool
+   and Kata supplies the guest-kernel boundary.
+2. **Neo4j coordinates durable work.** It is the only task queue, DAG, lease
+   store, attempt history, and artifact store.
+3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
+   core API; it does not spawn a Codex CLI process or parse CLI JSONL.
+4. **Narrow brokers own credentials and authority.** The repository-facing
+   worker has no Neo4j password, Codex credential file, GitHub token, or
+   Kubernetes administrative credential.
+
+Hive does not add NATS, Redis, PostgreSQL, RabbitMQ, KubeVirt, or a
+Kata-specific application orchestrator. Redis used by Hive CI is only an
+optional remote `sccache` compiler-output cache; it is not runtime coordination
+or durable Hive state.
+
+## 2. Deployment topology
+
+```mermaid
+flowchart TB
+  subgraph host["Dedicated Debian host"]
+    k0s["k0s + containerd"]
+    registry["Loopback OCI registry"]
+
+    subgraph data["hive-data namespace (runc)"]
+      neo4j["Neo4j + retained local PVC"]
+    end
+
+    subgraph system["hive-system namespace"]
+      dispatcher["Workbench dispatcher (Kata)"]
+
+      subgraph pod["Hive worker Pod (one Kata microVM)"]
+        worker["Hive worker + embedded Codex"]
+        coordinator["Coordinator"]
+        auth["Auth broker"]
+        publication["Publication broker"]
+        builder["Sealed Docker builder"]
+        reaper["Pod reaper"]
+      end
+    end
+  end
+
+  workbench["Nook Workbench"] --> dispatcher
+  dispatcher --> neo4j
+  worker <--> coordinator
+  coordinator <--> neo4j
+  worker <--> auth
+  worker <--> publication
+  publication <--> github["GitHub"]
+  auth --> codex_api["Codex service"]
+  reaper --> k0s
+  k0s --> pod
+  registry --> k0s
+```
+
+The initial cluster is deliberately single-node. Neo4j runs with the normal
+container runtime because it is a persistent infrastructure service. The
+dispatcher and every task worker use `kata-dragonball`. Dragonball is the
+Rust-based VMM built into Kata runtime-rs; it provides the full CRI and
+virtio-fs behavior required by Hive with lower startup and memory overhead than
+QEMU. The authoritative
+version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
+[`infra/Taskfile.yml`](../../infra/Taskfile.yml) and the manifests under
+[`infra/k0s/`](../../infra/k0s/).
+
+## 3. Components and ownership
+
+| Component | Runs where | Owns | Must not own |
+| --- | --- | --- | --- |
+| Main failure handoff | GitHub Actions | Converts an unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA | Agent execution, raw failure logs, deployment |
+| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents and idempotently enqueues them | GitHub publication token, Codex auth |
+| Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
+| Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
+| Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, terminal result, dependency patch integration | Neo4j/GitHub/Codex credential files |
+| Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
+| Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations | Arbitrary GitHub API access by Codex |
+| Pod reaper | Worker Kata Pod | Deletes the whole Pod after terminal completion or worker restart | Task execution or broad Kubernetes authority |
+| Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
+
+The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
+independent long-lived worker processes sharing one filesystem.
+
+## 4. Task and graph model
+
+The graph contains:
+
+```text
+(:Task)-[:DEPENDS_ON]->(:Task)
+(:Agent)-[:EXECUTED]->(:Attempt)-[:FOR_TASK]->(:Task)
+(:Attempt)-[:PRODUCED]->(:Artifact)
+```
+
+Task definitions include a full 40-character `source_commit`. Every task in one
+dependency DAG must target the same source revision. Hive graph schema
+migrations are explicit and versioned; a binary refuses a graph newer than it
+supports.
+
+### Stored readiness invariant
+
+- `BLOCKED` means at least one direct dependency is not `COMPLETED`.
+- `READY` means every direct dependency is `COMPLETED`.
+- Completion promotes newly unblocked tasks in the same write transaction.
+- Claiming always revalidates dependency state, so stale stored readiness cannot
+  authorize execution.
+
+```mermaid
+stateDiagram-v2
+  [*] --> BLOCKED: dependencies incomplete
+  [*] --> READY: dependencies complete
+  BLOCKED --> READY: all dependencies complete
+  READY --> RUNNING: transactional claim
+  RUNNING --> COMPLETED: lease-token completion
+  RUNNING --> READY: retryable failure or clean release
+  RUNNING --> RUNNING: expired lease reclaimed
+  RUNNING --> BLOCKED: discovered blocker
+  RUNNING --> FAILED: attempts exhausted
+```
+
+Claiming is a Neo4j write transaction. It obtains a write conflict through
+`claim_lock`, revalidates task status, dependencies, attempt limits, and lease
+expiry, then creates a unique attempt and lease token. Heartbeat and completion
+must present the current token. A late worker cannot overwrite a replacement
+attempt.
+
+The normal defaults are a five-minute lease, a one-minute heartbeat, a
+one-hour task timeout, and bounded idle polling with jitter. Rollout
+interruption releases the task and decrements the consumed attempt before the
+Pod exits.
+
+### Blocking dependencies
+
+Codex may return a typed blocker instead of pretending the parent task is
+complete. Hive then:
+
+1. idempotently creates or reuses the higher-priority blocker;
+2. adds a `DEPENDS_ON` edge;
+3. records the blocked attempt;
+4. releases the parent's retry consumption; and
+5. makes the parent `READY` immediately if the reused blocker was already
+   complete, otherwise `BLOCKED`.
+
+When the blocker completes, its Git patch becomes a dependency artifact. A
+replacement worker verifies the artifact digest, applies it to the same pinned
+revision, commits a dependency baseline, and gives the parent task both the
+dependency summary and resulting source. Resumed publication branches still
+receive dependency artifacts added after the branch was first created.
+
+### Durable results
+
+Terminal summaries are bounded to 64 KiB. Authored changes are stored as a
+bounded binary Git patch of at most 1 MiB, with a SHA-256 digest, in the same
+transaction as attempt completion. These graph artifacts are suitable for
+dependency handoff; large logs and build artifacts remain outside the current
+prototype.
+
+## 5. Worker execution lifecycle
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant K as Kubernetes
+  participant W as Worker
+  participant C as Coordinator
+  participant N as Neo4j
+  participant A as Auth broker
+  participant X as Embedded Codex
+  participant P as Publication broker
+
+  K->>W: Start clean Kata-backed Pod
+  W->>C: Claim one task
+  C->>N: Transactional claim + attempt + lease
+  N-->>W: Pinned task and dependency context
+  W->>P: Bind deterministic publication identity
+  W->>W: Fetch pinned Git object and apply dependency artifacts
+  W->>A: Establish short-lived Codex auth channel
+  W->>X: Start one in-process thread
+  loop While the task runs
+    W->>C: Heartbeat current lease token
+    X-->>W: Progress and structured result
+  end
+  W->>C: Complete, block, fail, or release
+  C->>N: Commit terminal state
+  W->>W: Write terminal lifecycle marker
+  K->>K: Reaper deletes Pod; Deployment replaces it
+```
+
+The worker creates a sentinel with create-once semantics before claiming. If
+the worker container restarts in the same Pod, it refuses to claim again and
+the reaper deletes the Pod. This preserves the one-task-per-microVM invariant.
+
+Repository checkout starts from the task's full pinned Git object ID, not a
+moving branch. A Main repair may resume a durable Hive publication branch only
+after proving that the pinned revision is its ancestor.
+
+## 6. Main failure to completed repair
+
+Main uses a single concurrency group with `cancel-in-progress: false`. The
+active run finishes, including cache publication, while GitHub coalesces a
+burst of later pushes to the newest pending revision.
+
+An unsuccessful completed Main run follows this path:
+
+```mermaid
+flowchart LR
+  failed["Failed Main run"] --> handoff["Trusted failure handoff"]
+  handoff --> incident["Workbench incident keyed by failed SHA"]
+  incident --> dispatcher["Token-free dispatcher"]
+  dispatcher --> task["Neo4j main-repair task"]
+  task --> diagnose["Diagnose and implement"]
+  diagnose --> pr["Normal PR + ci:full-e2e"]
+  pr --> review["Exact-head checks and all review surfaces"]
+  review --> merge["Serialized squash merge"]
+  merge --> main["Resulting Main verification"]
+  main --> worklog["Workbench issue + worklog completion"]
+  worklog --> complete["Neo4j task COMPLETED"]
+```
+
+One logical Hive task owns the entire repair. Opening a PR is intermediate
+state, not completion. The task must:
+
+1. diagnose from retained workflow evidence;
+2. implement and run repository operations through Taskfiles;
+3. publish a deterministic repair branch and PR;
+4. apply the `ci:full-e2e` label;
+5. inspect exact-head repository checks, inline threads, review bodies, and
+   top-level PR comments;
+6. reply to each actionable item and resolve its thread after the reply exists;
+7. prove the PR head contains current `main`;
+8. acquire the short-lived `hive-merge-lock` Git ref and squash-merge the exact
+   verified head;
+9. verify the resulting Main run; and
+10. complete the Workbench incident, linked plan, and worklog.
+
+The broker allows a successful descendant Main run to verify the merge when the
+exact merge-commit run was coalesced or cancelled, but only after GitHub proves
+the successful head contains the merge commit.
+
+### Publication recovery
+
+The base branch is deterministic: `codex/hive-<task-id>`. If a prior repair PR
+is closed or merged but the durable task still requires work, the broker creates
+`-g2`, `-g3`, and later generations instead of trying to reuse a closed PR.
+Replacement Pods discover the latest generation and merged commit from GitHub.
+
+The GitHub token is used only by the publication broker. Its typed socket API
+permits task binding, publish/update, inspection, targeted replies, thread
+resolution, exact-head squash merge, Main verification, and bounded Workbench
+file updates. Codex cannot read the token or issue arbitrary authenticated
+requests.
+
+## 7. Isolation and credential design
+
+### Kata boundary
+
+Every dispatcher and worker Pod selects `kata-dragonball`. There is no
+fallback to `runc`. The host, KVM support, runtime class, and guest-kernel
+identity are verified by infrastructure tasks before Hive deploys.
+
+Worker Pods have no hostPath volume and never mount the host repository, host
+`CODEX_HOME`, or host Docker socket. They contain no privileged containers and
+run no Docker daemon. The worker image carries the pinned Rust, Bun, Node, and
+Task tools required by the repository. When `task format` detects the sealed
+guest marker it selects the native `hive:guest:format` Taskfile path, operating
+only on that task's disposable checkout.
+
+### Credential ownership
+
+| Credential | Mounted into | Exposed to worker/Codex |
+| --- | --- | --- |
+| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
+| Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
+| GitHub publication token | Publication broker only | Typed bounded publication operations |
+| Kubernetes reaper token | Pod reaper only | No |
+| Kubernetes auth-refresh token | Auth broker only | No |
+
+The Pod disables automatic service-account token mounting. The reaper and auth
+broker receive separate projected, one-hour tokens. RBAC restricts the reaper
+to `get`/`delete` Pods in `hive-system`, and the auth broker to updating only
+the Codex-auth Secret.
+
+Secrets are encrypted at rest by the k0s API server with a host-generated
+AES-GCM encryption provider. Neo4j recovery material is authenticated and
+encrypted under that host-held key. Secret checksums are placed in the Pod
+template so credential rotation replaces the warm pool.
+
+### Network boundary
+
+Both Hive namespaces default-deny ingress and egress. Workers and the dispatcher
+may use:
+
+- cluster DNS;
+- TLS Bolt to Neo4j on port 7687;
+- the Kubernetes API service only for the two narrow sidecars;
+- external TCP 443 for Codex, GitHub, and HTTPS repository access; and
+- external TCP 22 for task-authorized Git/SSH operations.
+
+Private, loopback, link-local, multicast, and cluster address ranges are
+excluded from general external egress. Neo4j Bolt and HTTP are never exposed on
+the machine's public address.
+
+## 8. Persistence and recovery
+
+The stateful boundary is:
+
+- Neo4j data on the retained `hive-local-retain` persistent volume;
+- graph schema migrations and all task/attempt state;
+- bounded dependency patches stored in Neo4j;
+- deterministic GitHub branches and pull requests for Main delivery;
+- Workbench incidents, plans, and worklogs; and
+- encrypted Kubernetes Secrets plus the authenticated recovery bundle.
+
+The disposable boundary is:
+
+- repository checkout;
+- Codex home and process state;
+- temporary files and Unix sockets; and
+- the Kata guest itself.
+
+Failure recovery is therefore explicit:
+
+- **Worker crash:** the lease expires and another Pod claims a new attempt.
+- **Stale worker:** heartbeat and completion fail because its lease token no
+  longer matches.
+- **Rollout/SIGTERM:** the worker releases the task without consuming retry
+  budget.
+- **Publication bind failure:** the claim is released without consuming an
+  attempt.
+- **Pod restart:** the create-once sentinel prevents reuse; the reaper deletes
+  the Pod.
+- **Closed prior PR:** the next publication branch generation is created.
+- **Merged repair followed by red Main:** the task recovers the merge state and
+  opens a new generation for the follow-up repair.
+- **Neo4j restart:** the PVC, transactions, and leases preserve graph state.
+
+## 9. Build verification and cache model
+
+The repository-owned `Hive` workflow is a valuable deployment-independent
+verification gate. It runs when Hive, its infrastructure, or its contract tests
+change. It does not deploy the cluster.
+
+The Dockerfile follows Nook's cargo-chef boundary:
+
+1. plan the dependency recipe;
+2. cook stable debug/test and release dependencies;
+3. copy authored source;
+4. run format/Clippy and behavior tests; and
+5. publish the already-verified BuildKit graph only from `main`.
+
+Pull requests restore the `nook-hive-linux-amd64-v1` GitHub Actions BuildKit
+scope read-only. Only Main publishes it after both Hive checks and Neo4j-backed
+behavior tests pass.
+
+Trusted same-repository Hive runs also use the remote TLS Redis compiler cache:
+
+```text
+rediss://redis-ovh-borg-1.bynull.link:6380
+key prefix: nook-hive
+credential: NOOK_CACHE_REDIS_PASSWORD
+```
+
+Redis `sccache` and GHA BuildKit are separate layers:
+
+- Redis stores Rust compiler outputs.
+- GHA stores BuildKit layers and dependency/source graph snapshots.
+- Neither is a correctness dependency.
+- Forks and local runs without `SCCACHE_REDIS_PASSWORD_FILE` compile normally.
+- The Redis credential is mounted as a BuildKit secret or read-only runtime
+  secret and is never copied into an image or cache layer.
+
+## 10. Taskfile operations
+
+All local, CI, SSH, Kubernetes, and deployment operations go through the root
+Taskfile command surface. Do not run ad hoc `ssh`, `kubectl`, Helm, or deployment
+shell scripts for Hive.
+
+Repository verification:
+
+```text
+task hive:format
+task hive:check
+task hive:test
+task hive:build
+task hive:image
+task infra:k0s:manifests:check
+```
+
+Remote platform lifecycle:
+
+```text
+task infra:kvm:verify
+task infra:k0s:install
+task infra:k0s:status
+task infra:kata:install
+task infra:kata:verify
+task infra:neo4j:deploy
+task infra:hive:deploy
+task infra:deploy
+```
+
+`task infra:deploy` is the complete entrypoint: it deploys the private
+infrastructure services, syncs the repository-owned k0s configuration, installs
+and verifies k0s/Kata, deploys persistent Neo4j, builds and publishes the exact
+Hive image to the loopback registry, synchronizes credentials, deploys the warm
+pool, and verifies Pod replacement.
+
+Credential synchronization requires explicit local file inputs:
+
+```text
+HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json
+HIVE_GITHUB_TOKEN_FILE=/absolute/path/to/token
+```
+
+Copying these credentials into encrypted Kubernetes Secrets is a
+security-sensitive deployment action and requires immediate user confirmation
+before `task infra:deploy` or `task infra:hive:deploy` is invoked.
+
+Destructive k0s uninstall requires `K0S_UNINSTALL_FORCE=1` and preserves
+encrypted Neo4j recovery material by default.
+
+## 11. Source map
+
+| Concern | Source of truth |
+| --- | --- |
+| Rust platform implementation | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/) |
+| Worker image and cache stages | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile) |
+| Hive developer commands | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml) |
+| Infrastructure operations and pins | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |
+| k0s, Kata, Neo4j, and Hive manifests | [`infra/k0s/`](../../infra/k0s/) |
+| Main failure handoff | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml) |
+| Hive verification workflow | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml) |
+| Main coalescing and delivery | [`.github/workflows/main.yml`](../../.github/workflows/main.yml) |
+| Workbench issue contract | [`workflows/issues.md`](../workflows/issues.md) |
+| Pull-request ownership contract | [`workflows/pull-requests.md`](../workflows/pull-requests.md) |
