@@ -25,12 +25,14 @@ fn is_transient_claim_error(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         cause
             .downcast_ref::<Neo4jDriverError>()
-            .is_some_and(|driver_error| {
-                matches!(
-                    driver_error,
-                    Neo4jDriverError::Neo4j(neo4j_error)
-                        if neo4j_error.kind() == Neo4jErrorKind::Transient
-                )
+            .is_some_and(|driver_error| match driver_error {
+                Neo4jDriverError::Neo4j(neo4j_error) => {
+                    neo4j_error.kind() == Neo4jErrorKind::Transient
+                }
+                Neo4jDriverError::UnexpectedMessage(message) => {
+                    message.contains("Neo.TransientError.")
+                }
+                _ => false,
             })
     })
 }
@@ -489,10 +491,10 @@ impl TaskStore for Neo4jTaskStore {
 mod tests {
     use std::env;
 
-    use neo4rs::query;
+    use neo4rs::{Error as Neo4jDriverError, query};
     use uuid::Uuid;
 
-    use super::Neo4jTaskStore;
+    use super::{Neo4jTaskStore, is_transient_claim_error};
     use crate::model::{AgentId, EnqueueTask, TaskId};
     use crate::store::TaskStore;
 
@@ -505,6 +507,20 @@ mod tests {
             max_attempts: 3,
             dependencies,
         }
+    }
+
+    #[test]
+    fn retries_transient_pull_failures_from_the_neo4j_driver() {
+        let transient = anyhow::Error::new(Neo4jDriverError::UnexpectedMessage(
+            "unexpected response for PULL: Neo.TransientError.Transaction.DeadlockDetected"
+                .to_owned(),
+        ));
+        let permanent = anyhow::Error::new(Neo4jDriverError::UnexpectedMessage(
+            "unexpected response for PULL: Neo.ClientError.Statement.SyntaxError".to_owned(),
+        ));
+
+        assert!(is_transient_claim_error(&transient));
+        assert!(!is_transient_claim_error(&permanent));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
