@@ -18,6 +18,7 @@ agentic-ai/ci-agent/dist-test/
 .playwright-mcp/
 ui-demo-results/
 /.nook-workbench-worklog.md
+/.nook-workbench-plan.md
 
 # Local env files with secrets (never commit)
 .env

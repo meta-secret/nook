@@ -1,6 +1,7 @@
-# Main branch: split like PR — native Rust and WASM producers in parallel, then overlap
-# browser-free web verify, local-provider web e2e, extension e2e, and headless UI demos on
-# separate hosted runners. Deploy the fast, unoptimized development channel to Cloudflare
+# Main branch: serialize the native, WASM, and web cache-writing lanes so each verifies read-only
+# and then exports its already-solved local graph without competing uploads. After the verified
+# WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on separate
+# read-only hosted runners. Deploy the fast, unoptimized development channel to Cloudflare
 # Pages only after web verify and web e2e succeed; extension e2e and UI demos remain required
 # for the workflow but do not gate the development deploy. Immutable releases remain
 # responsible for production wasm optimization.
@@ -68,8 +69,7 @@ jobs:
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
-          # Producers restore GHA scopes only. Hosted export is deferred to publish-cache so a
-          # cancelled Mid-build Main run cannot poison dependency indexes.
+          # Verify the complete native graph before refreshing any shared Main cache scope.
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
@@ -99,12 +99,22 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      - name: Publish verified native BuildKit cache
+        run: task ci:main:publish-native-cache
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          WASM_BUILD_MODE: dev
+
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
   wasm:
     name: WASM verification and artifact
+    # Serialize hosted cache uploads after native verification while retaining the producer's
+    # job-scoped builder for a no-rebuild export.
+    needs: [rust]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -120,6 +130,7 @@ jobs:
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
           CI: true
+          # Node verification below must succeed before this builder may publish shared scopes.
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
@@ -150,6 +161,13 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+          WASM_BUILD_MODE: dev
+
+      - name: Publish verified WASM BuildKit cache
+        run: task ci:main:publish-wasm-cache
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
       - name: Preserve cache telemetry
@@ -188,14 +206,20 @@ jobs:
           WASM_BUILD_MODE=dev
         env:
           CI: true
-          # Warm the job-scoped builder only. Publishing mid-prepare lets cancelled Main runs
-          # overwrite GHA indexes without the cargo-chef cook blobs PRs need.
+          # Keep verification read-only; publish the already-solved dependency graph afterward.
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+
+      - name: Publish verified web BuildKit cache
+        run: task ci:main:publish-web-cache
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          WASM_BUILD_MODE: dev
 
       - name: Preserve cache telemetry
         if: always()
@@ -240,42 +264,6 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  publish-cache:
-    name: Publish GHA BuildKit cache
-    # Dedicated deps-only warm+export job keeps deferred publish on one builder without blocking
-    # deploy and without re-running producer verification graphs. Needs producers only so a failed
-    # native/WASM graph does not refresh hosted indexes.
-    needs: [rust, wasm]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-
-      - name: Warm dependency graph without publishing
-        run: task ci:main:warm-gha-cache WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          # Warm the job-scoped builder only. Publishing mid-warm lets cancelled Main runs
-          # overwrite GHA indexes without the cargo-chef cook blobs PRs need.
-          GHA_CACHE_WRITE_ENABLED: ""
-
-      - name: Publish hosted BuildKit cache
-        if: success()
-        run: task ci:main:publish-gha-cache WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Preserve cache telemetry
         if: always()

@@ -8,6 +8,14 @@ Nook development issues live as versioned Markdown in
 [`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench),
 not in GitHub Issues. GitHub Issues are historical input only.
 
+Every task-owning agent publishes two linked lifecycle records:
+
+1. a structured task plan before implementation begins; and
+2. a completion or blocked worklog when the task ends.
+
+The task plan is an LLM-authored interpretation of the important request, not a
+copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
+
 ## Repository boundary
 
 The Nook product repository owns source code, architecture, tests, CI, and the
@@ -16,6 +24,7 @@ rules under `.cortex`. Nook Workbench owns:
 ```text
 issues/<feature>/README.md
 issues/<feature>/<focused-deliverable>.md
+plans/<feature>/<timestamp>-<task>.md
 worklogs/<feature>/<timestamp>-<issue-or-pr>.md
 stats/ai-agent/<nook-pr>.yaml
 stats/main-build/<run-id>-attempt-<attempt>.yaml
@@ -43,13 +52,14 @@ discover missing functionality that the current PR will not finish.
 ## Search first
 
 Clone or update the Workbench outside the Nook working tree, then search feature
-summaries, issues, and worklogs with both product language and code terms:
+summaries, issues, plans, and worklogs with both product language and code
+terms:
 
 ```bash
 workbench_dir="$(mktemp -d)"
 gh repo clone meta-secret/nook-workbench "$workbench_dir"
 rg -n -i "<user words>|<code terms>" \
-  "$workbench_dir/issues" "$workbench_dir/worklogs"
+  "$workbench_dir/issues" "$workbench_dir/plans" "$workbench_dir/worklogs"
 ```
 
 Do not infer current state from a historical Nook GitHub issue alone. Imported
@@ -113,8 +123,8 @@ node .github/scripts/workbench-publish.cjs \
 
 The helper rejects an existing mutable record when the expected SHA is absent
 or no longer current. Refetch and merge concurrent progress instead of
-overwriting it. New worklogs and statistics use unique paths and do not need an
-expected SHA; existing statistics are immutable and cannot be replaced.
+overwriting it. New plans, worklogs, and statistics use unique paths and do not
+need an expected SHA; existing statistics are immutable and cannot be replaced.
 
 For coordinated multi-file restructuring, use a focused Workbench branch and
 PR. Never mix Workbench files into a Nook implementation PR.
@@ -130,17 +140,51 @@ Agents must not:
 - mark acceptance criteria done without validation evidence;
 - delete prior findings, failed approaches, blockers, or decisions;
 - switch `automation: agent` or `status: ready` merely to organize a draft;
-- copy prompts, chats, credentials, secrets, vault data, private user
-  information, environment values, or raw logs into the Workbench.
+- copy or lightly reformat prompts or chats into the Workbench;
+- store credentials, secrets, vault data, private user information, environment
+  values, or raw logs in any record.
 
 When overlap is uncertain, append the finding to the likely issue and leave it
 `proposed` rather than creating a competing execution record.
+
+## Task-start plan requirement
+
+Before implementation edits, every task-owning agent must publish one plan from
+`plans/_templates/plan.md`, including for a direct user request with no issue.
+Use `plans/<feature>/<timestamp>-<task>.md`; use the closest feature or
+`unplanned` when no feature record exists.
+
+The plan must contain:
+
+- the agent's own complete interpretation of the desired outcome;
+- material functional, workflow, security, and delivery requirements;
+- explicit constraints, assumptions, and exclusions;
+- a small ordered execution plan;
+- expected completion evidence;
+- a safety review confirming that no raw prompt, transcript, secret, private
+  data, raw log, local path, or unnecessary infrastructure detail is present.
+
+Plans are immutable start snapshots. If the request changes materially, publish
+a superseding plan rather than rewriting what the agent originally intended.
+Use the checked-in publisher for interactive work:
+
+```bash
+node .github/scripts/workbench-publish.cjs \
+  /absolute/path/to/local-plan.md \
+  plans/<feature>/<timestamp>-<task>.md \
+  "plan: start <task>"
+```
+
+The scheduled implementation worker uses a dedicated planning LLM turn,
+validates and publishes the plan, and only then begins its implementation turn.
+A missing or rejected plan blocks implementation.
 
 ## Worklog requirement
 
 Every task-owning agent must publish one worklog before reporting completion or
 a blocker, even when the task began from a direct user prompt and had no issue.
-Use `worklogs/_templates/worklog.md`. Include:
+Use `worklogs/_templates/worklog.md`, set its `plan` field to the corresponding
+task plan, and include:
 
 - outcome and material progress;
 - implementation problems and root causes;
@@ -157,6 +201,7 @@ external blocker moves it to `blocked`.
 The final response or PR comment must link:
 
 - the Workbench feature and focused issue file;
+- the task-start plan;
 - the new worklog;
 - the Nook implementation PR;
 - what was completed versus what remains.

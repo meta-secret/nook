@@ -162,17 +162,23 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:prepare-images:host }
 
-  ci:main:warm-gha-cache:
-    desc: Warm Main dependency/native-source Bake targets for deferred GHA export (no preflight or web image).
+  ci:main:publish-native-cache:
+    desc: Publish verified native cache scopes from the current job-scoped builder.
     cmds:
       - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:warm-gha-cache:host }
+        vars: { BUILD_TASK: _ci:main:publish-native-cache:host }
 
-  ci:main:publish-gha-cache:
-    desc: Export the warm Main dependency graph into hosted GHA cache scopes (same Buildx builder).
+  ci:main:publish-wasm-cache:
+    desc: Publish verified WASM cache scopes from the current job-scoped builder.
     cmds:
       - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:publish-gha-cache:host }
+        vars: { BUILD_TASK: _ci:main:publish-wasm-cache:host }
+
+  ci:main:publish-web-cache:
+    desc: Publish verified web cache scopes from the current job-scoped builder.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:publish-web-cache:host }
 
   ci:main:web-e2e:
     desc: Main web gate without extension e2e — prepare images then run web e2e alone (manual/debug).
@@ -245,18 +251,17 @@ tasks:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
 
-  _ci:main:warm-gha-cache:host:
-    # Flattened app includes can run with cwd under nook-app/. Always resolve from REPO_ROOT.
-    dir: '{{.REPO_ROOT}}'
+  _ci:main:publish-native-cache:host:
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/warm-buildkit-gha-cache.sh"
+      - task: docker:ci:cache:publish:native
 
-  _ci:main:publish-gha-cache:host:
-    # Flattened app includes can run with cwd under nook-app/. Always resolve from REPO_ROOT so
-    # Main's deferred cache publish cannot miss the script (exit 127) after a warm bake.
-    dir: '{{.REPO_ROOT}}'
+  _ci:main:publish-wasm-cache:host:
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/publish-buildkit-gha-cache.sh"
+      - task: docker:ci:cache:publish:wasm
+
+  _ci:main:publish-web-cache:host:
+    cmds:
+      - task: docker:ci:cache:publish:web
 
   _ci:main:web-e2e:host:
     cmds:

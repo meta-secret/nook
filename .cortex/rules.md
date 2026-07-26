@@ -248,8 +248,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, monitor applicable repository-owned checks (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews. Do not require a local product gate.
 - **Publish Workbench context after merge.** Follow
   [workflows/issues.md](workflows/issues.md) and
-  [workflows/agent-statistics.md](workflows/agent-statistics.md): update the
-  associated Markdown issue, add the agent worklog, and publish the completed
+  [workflows/agent-statistics.md](workflows/agent-statistics.md): the task plan
+  must already have been published before implementation; update the associated
+  Markdown issue, add the linked completion worklog, and publish the completed
   `stats/ai-agent/<source-pr>.yaml` to `meta-secret/nook-workbench`, including
   repository test counts by type and absolute total. Compare recent comparable
   PRs and own a normal performance-fix PR for actionable regression or waste.
