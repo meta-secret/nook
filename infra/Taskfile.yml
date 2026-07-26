@@ -514,15 +514,93 @@ tasks:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
+        api_server="https://{{.K0S_API_ADDRESS}}:6443"
         kubeconfig_dir="$HOME/.kube"
-        kubeconfig_next="$kubeconfig_dir/config.next"
+        kubeconfig="$kubeconfig_dir/nook-k0s.yaml"
+        kubeconfig_next="$kubeconfig.next"
+        default_kubeconfig="$kubeconfig_dir/config"
+        credential_helper="/usr/local/libexec/nook-kubectl-credential"
         install -d -m 0700 "$kubeconfig_dir"
         trap 'rm -f "$kubeconfig_next"' EXIT
-        umask 077
-        sudo -n k0s kubeconfig admin > "$kubeconfig_next"
+
+        sudo -n k0s kubectl apply -f - <<'RBAC'
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: nook-operator
+          namespace: kube-system
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: nook-operator
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: cluster-admin
+        subjects:
+          - kind: ServiceAccount
+            name: nook-operator
+            namespace: kube-system
+        RBAC
+
+        sudo -n install -d -m 0755 /usr/local/libexec
+        sudo -n tee "$credential_helper" >/dev/null <<'HELPER'
+        #!/bin/sh
+        set -eu
+        token="$(
+          /usr/local/bin/kubectl \
+            --kubeconfig /var/lib/k0s/pki/admin.conf \
+            --namespace kube-system \
+            create token nook-operator \
+            --duration=15m
+        )"
+        expiration="$(date -u -d '+14 minutes' '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '%s\n' \
+          "{\"apiVersion\":\"client.authentication.k8s.io/v1\",\"kind\":\"ExecCredential\",\"status\":{\"expirationTimestamp\":\"$expiration\",\"token\":\"$token\"}}"
+        HELPER
+        sudo -n chown root:root "$credential_helper"
+        sudo -n chmod 0755 "$credential_helper"
+
+        rm -f "$kubeconfig_next"
+        KUBECONFIG="$kubeconfig_next" kubectl config set-cluster nook-k0s \
+          --server="$api_server" \
+          --certificate-authority=/var/lib/k0s/pki/ca.crt \
+          --embed-certs=true >/dev/null
+        KUBECONFIG="$kubeconfig_next" kubectl config set-credentials nook-operator \
+          --exec-command=sudo \
+          --exec-api-version=client.authentication.k8s.io/v1 \
+          --exec-interactive-mode=Never \
+          --exec-arg=-n \
+          --exec-arg="$credential_helper" >/dev/null
+        KUBECONFIG="$kubeconfig_next" kubectl config set-context nook-k0s \
+          --cluster=nook-k0s \
+          --user=nook-operator >/dev/null
+        KUBECONFIG="$kubeconfig_next" kubectl config use-context nook-k0s >/dev/null
         test -s "$kubeconfig_next"
-        mv "$kubeconfig_next" "$kubeconfig_dir/config"
-        chmod 0600 "$kubeconfig_dir/config"
+        ! grep -Eq 'client-(certificate|key)-data:' "$kubeconfig_next"
+        mv "$kubeconfig_next" "$kubeconfig"
+        chmod 0600 "$kubeconfig"
+
+        if [ -f "$default_kubeconfig" ] && [ ! -L "$default_kubeconfig" ]; then
+          existing_server="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view --minify \
+              --output=jsonpath='{.clusters[0].cluster.server}' 2>/dev/null ||
+              true
+          )"
+          if [ "$existing_server" = "$api_server" ] &&
+             grep -q 'client-key-data:' "$default_kubeconfig"; then
+            rm -f "$default_kubeconfig"
+          else
+            echo "Refusing to replace existing $default_kubeconfig" >&2
+            exit 1
+          fi
+        fi
+        if [ ! -e "$default_kubeconfig" ]; then
+          ln -s "$(basename "$kubeconfig")" "$default_kubeconfig"
+        fi
+        test "$(readlink "$default_kubeconfig")" = "$(basename "$kubeconfig")"
         kubectl get --raw=/readyz
         REMOTE
 
@@ -544,8 +622,13 @@ tasks:
         test "$(command -v kubectl)" = /usr/local/bin/kubectl
         test "$(command -v helm)" = /usr/local/bin/helm
         test "$(command -v k9s)" = /usr/local/bin/k9s
-        test -s "$HOME/.kube/config"
-        test "$(stat -c '%a' "$HOME/.kube/config")" = 600
+        test -s "$HOME/.kube/nook-k0s.yaml"
+        test "$(stat -c '%a' "$HOME/.kube/nook-k0s.yaml")" = 600
+        test "$(readlink "$HOME/.kube/config")" = nook-k0s.yaml
+        ! grep -Eq 'client-(certificate|key)-data:' "$HOME/.kube/nook-k0s.yaml"
+        grep -q 'command: sudo' "$HOME/.kube/nook-k0s.yaml"
+        grep -q '/usr/local/libexec/nook-kubectl-credential' "$HOME/.kube/nook-k0s.yaml"
+        sudo -n test "$(stat -c '%U:%G:%a' /usr/local/libexec/nook-kubectl-credential)" = root:root:755
         test "$(
           kubectl version --client=true --output=yaml |
             awk '/gitVersion:/ { print $2; exit }'

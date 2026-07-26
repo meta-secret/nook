@@ -454,9 +454,16 @@ Redis `sccache` and GHA BuildKit are separate layers:
 
 ## 10. Taskfile operations
 
-All local, CI, SSH, Kubernetes, and deployment operations go through the root
-Taskfile command surface. Do not run ad hoc `ssh`, `kubectl`, Helm, or deployment
-shell scripts for Hive.
+All automated lifecycle, mutation, CI, SSH, Kubernetes, and deployment
+operations go through the root Taskfile command surface. After
+`task infra:kubernetes:console:install`, an authenticated operator may use the
+installed `kubectl`, Helm, and k9s clients directly over SSH for interactive
+inspection. Persistent platform changes still belong in Taskfile operations,
+not ad hoc shell scripts.
+
+The SSH-user kubeconfig stores no reusable credential. Its exec provider crosses
+the operator's existing passwordless sudo boundary to a root-owned helper,
+which mints a 15-minute token for the dedicated cluster operator identity.
 
 Repository verification:
 

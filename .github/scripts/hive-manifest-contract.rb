@@ -197,10 +197,15 @@ unless kubernetes_tools_task.include?("https://dl.k8s.io/release/$kubectl_versio
        kubernetes_tools_task.include?("/usr/local/bin/k9s")
   raise "Kubernetes operator tools must use pinned verified standalone binaries"
 end
-unless infra_taskfile.include?("sudo -n k0s kubeconfig admin") &&
-       infra_taskfile.include?('chmod 0600 "$kubeconfig_dir/config"') &&
+unless infra_taskfile.include?("create token nook-operator") &&
+       infra_taskfile.include?("--duration=15m") &&
+       infra_taskfile.include?("client.authentication.k8s.io/v1") &&
+       infra_taskfile.include?("--exec-interactive-mode=Never") &&
+       infra_taskfile.include?("! grep -Eq 'client-(certificate|key)-data:'") &&
+       infra_taskfile.include?('chmod 0600 "$kubeconfig"') &&
+       infra_taskfile.include?('Refusing to replace existing $default_kubeconfig') &&
        infra_taskfile.include?("kubectl get --raw=/readyz")
-  raise "Kubernetes operator console must configure private direct SSH access"
+  raise "Kubernetes console must use short-lived direct SSH credentials"
 end
 k0s_install_task = infra_taskfile.match(
   /^  k0s:install:\n(?<body>.*?)(?=^  k0s:status:)/m
