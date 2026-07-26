@@ -28,17 +28,24 @@ jobs:
   verify:
     name: Hive Rust and infrastructure verification
     runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        env:
+          NEO4J_AUTH: neo4j/hive-integration-password
+        ports:
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p hive-integration-password 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Install Task
         uses: go-task/setup-task@v2
-
-      - name: Install pinned Rust
-        uses: dtolnay/rust-toolchain@1.96.0
-        with:
-          components: clippy,rustfmt
 
       - name: Validate Taskfile command surface
         run: |
@@ -51,4 +58,8 @@ jobs:
         run: task hive:check
 
       - name: Hive behavior tests
+        env:
+          HIVE_NEO4J_TEST_URI: 127.0.0.1:7687
+          HIVE_NEO4J_TEST_USERNAME: neo4j
+          HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
         run: task hive:test

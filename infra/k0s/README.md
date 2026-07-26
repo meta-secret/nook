@@ -17,6 +17,10 @@ Pinned platform:
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
 firewall must retain a default-drop input policy. Neo4j data uses the retained
 local PV at `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
+Kubernetes Secrets are encrypted in etcd with the generated
+`/var/lib/k0s/pki/hive-encryption-provider.yaml`; that root-only file must be
+included in encrypted host backups or disaster recovery cannot decrypt the
+cluster's Secrets.
 
 The first Hive deployment requires an explicit auth file:
 

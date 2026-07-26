@@ -373,6 +373,30 @@ tasks:
         mv "$download_dir/$helm_asset.next" "$download_dir/$helm_asset"
 
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
+        if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml; then
+          encryption_key="$(openssl rand -base64 32)"
+          encryption_config="$(mktemp)"
+          trap 'rm -f "$encryption_config"' EXIT
+          umask 077
+          cat > "$encryption_config" <<EOF
+        apiVersion: apiserver.config.k8s.io/v1
+        kind: EncryptionConfiguration
+        resources:
+          - resources:
+              - secrets
+            providers:
+              - aesgcm:
+                  keys:
+                    - name: hive-key-1
+                      secret: $encryption_key
+              - identity: {}
+        EOF
+          sudo -n install -D -m 0600 \
+            "$encryption_config" \
+            /var/lib/k0s/pki/hive-encryption-provider.yaml
+          rm -f "$encryption_config"
+          trap - EXIT
+        fi
         sudo -n install -m 0644 "$remote_dir/infra/k0s/config/k0s.yaml" /etc/k0s/k0s.yaml
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/cri-registry.toml" \
@@ -458,6 +482,7 @@ tasks:
         sudo -n k0s kubeconfig admin > "$kubeconfig"
         chmod 0600 "$kubeconfig"
         export KUBECONFIG="$kubeconfig"
+        kubectl() { sudo -n k0s kubectl "$@"; }
         helm upgrade --install kata-deploy "$chart" \
           --namespace kube-system \
           --values "$remote_dir/infra/k0s/manifests/kata/values.yaml" \
@@ -619,7 +644,7 @@ tasks:
           "$remote_dir/agentic-ai/minds"
         push_output="$(docker push "$image")"
         digest="$(printf '%s\n' "$push_output" |
-          awk '/digest:/ {print $2}' |
+          awk '{for (field = 1; field <= NF; field++) if ($field == "digest:") print $(field + 1)}' |
           tail -1)"
         case "$digest" in
           sha256:????????????????????????????????????????????????????????????????) ;;
@@ -682,6 +707,20 @@ tasks:
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
         image="$(cat "$remote_dir/hive-image")"
+        auth_checksum="$(
+          kubectl get secret hive-codex-auth \
+            --namespace hive-system \
+            -o jsonpath='{.data.auth\\.json}' |
+            sha256sum |
+            cut -d' ' -f1
+        )"
+        case "$auth_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Codex authentication checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
         case "$image" in
           127.0.0.1:5000/nook-hive@sha256:*) ;;
           *)
@@ -691,10 +730,13 @@ tasks:
         esac
         rendered="$(mktemp)"
         trap 'rm -f "$rendered"' EXIT
-        sed "s|HIVE_IMAGE|$image|g" \
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          -e "s|HIVE_AUTH_CHECKSUM|$auth_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/deployment.yaml" > "$rendered"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
         kubectl rollout status deployment/hive \
           --namespace hive-system \

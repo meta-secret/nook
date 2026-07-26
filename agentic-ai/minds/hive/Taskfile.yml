@@ -1,8 +1,9 @@
 version: '3'
 
 vars:
-  HIVE_DIR: agentic-ai/minds
+  HIVE_DIR: ..
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
+  HIVE_TEST_IMAGE: '{{default "nook-hive-test:local" .HIVE_TEST_IMAGE}}'
 
 tasks:
   format:
@@ -12,30 +13,55 @@ tasks:
       - cargo fmt --all
 
   check:
-    desc: Format-check and lint the Hive worker.
+    desc: Format-check and lint the Hive worker in its pinned builder image.
     dir: '{{.HIVE_DIR}}'
     cmds:
-      - cargo fmt --all -- --check
-      - cargo clippy --locked -p hive --all-targets -- -D warnings
+      - >-
+        docker buildx build
+        --platform linux/amd64
+        --target check
+        --output type=cacheonly
+        --file hive/Dockerfile
+        .
 
   build:
-    desc: Build the Hive worker.
+    desc: Build the Hive worker in its pinned builder image.
     dir: '{{.HIVE_DIR}}'
     cmds:
-      - cargo build --locked -p hive
+      - >-
+        docker buildx build
+        --platform linux/amd64
+        --target builder
+        --output type=cacheonly
+        --file hive/Dockerfile
+        .
 
   test:
-    desc: Run Hive behavior tests.
+    desc: Run Hive behavior tests in its pinned builder image.
     dir: '{{.HIVE_DIR}}'
     cmds:
-      - cargo test --locked -p hive
+      - >-
+        docker build
+        --platform linux/amd64
+        --target test-runner
+        --tag {{.HIVE_TEST_IMAGE}}
+        --file hive/Dockerfile
+        .
+      - >-
+        docker run --rm
+        --network host
+        -e HIVE_NEO4J_TEST_URI
+        -e HIVE_NEO4J_TEST_USERNAME
+        -e HIVE_NEO4J_TEST_PASSWORD
+        {{.HIVE_TEST_IMAGE}}
 
   image:
     desc: Build the linux/amd64 Hive worker image.
+    dir: '{{.HIVE_DIR}}'
     cmds:
       - >-
         docker build
         --platform linux/amd64
         --tag {{.HIVE_IMAGE}}
-        --file agentic-ai/minds/hive/Dockerfile
-        agentic-ai/minds
+        --file hive/Dockerfile
+        .

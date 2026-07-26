@@ -39,6 +39,12 @@ impl<S: TaskStore> Worker<S> {
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
+        let lifecycle_marker = self.config.workspace.join(".hive-task-finished");
+        if lifecycle_marker.exists() {
+            return Err(anyhow!(
+                "refusing to reuse a Pod that already finished a Hive task"
+            ));
+        }
         self.store.migrate().await?;
         self.store
             .register_agent(&self.config.agent_id, &self.config.pod_name)
@@ -57,28 +63,25 @@ impl<S: TaskStore> Worker<S> {
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
 
-        if let Err(error) = self.execute(&task).await {
+        let result = self.execute(&task).await;
+        if let Err(error) = result {
             let message = bounded(&format!("{error:#}"));
             let _ = self
                 .store
                 .fail(&task, &self.config.agent_id, &message)
                 .await;
+            tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                .await
+                .context("failed to mark the Pod for replacement")?;
             return Err(error);
         }
+        tokio::fs::write(&lifecycle_marker, task.id.as_str())
+            .await
+            .context("failed to mark the Pod for replacement")?;
         Ok(())
     }
 
     async fn execute(&self, task: &ClaimedTask) -> anyhow::Result<()> {
-        prepare_workspace(&self.config.workspace, &self.config.repository_url).await?;
-        let repository = self.config.workspace.join("repository");
-        let prompt = task_prompt(task);
-        let mut codex_options = CodexOptions::new(repository).with_workspace_write();
-        codex_options.model.clone_from(&self.config.model);
-        codex_options
-            .reasoning_effort
-            .clone_from(&self.config.reasoning_effort);
-        let runner = InProcessCodexRunner::new(codex_options);
-
         let (stop_tx, stop_rx) = watch::channel(false);
         let heartbeat = tokio::spawn(heartbeat_loop(
             self.store.clone(),
@@ -91,7 +94,22 @@ impl<S: TaskStore> Worker<S> {
 
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
-            runner.execute_task(task.id.as_str(), &prompt),
+            async {
+                prepare_workspace(&self.config.workspace, &self.config.repository_url).await?;
+                let repository = self.config.workspace.join("repository");
+                let prompt = task_prompt(task);
+                let mut codex_options = CodexOptions::new(repository).with_workspace_write();
+                if let Some(model) = &self.config.model {
+                    codex_options.model = Some(model.clone());
+                }
+                codex_options
+                    .reasoning_effort
+                    .clone_from(&self.config.reasoning_effort);
+                InProcessCodexRunner::new(codex_options)
+                    .execute_task(task.id.as_str(), &prompt)
+                    .await
+                    .context("embedded Codex execution failed")
+            },
         )
         .await;
         let _ = stop_tx.send(true);
@@ -100,9 +118,7 @@ impl<S: TaskStore> Worker<S> {
             .context("heartbeat task panicked")?
             .context("lease heartbeat failed")?;
 
-        let raw_result = execution
-            .map_err(|_| anyhow!("task timed out"))?
-            .context("embedded Codex execution failed")?;
+        let raw_result = execution.map_err(|_| anyhow!("task timed out"))??;
         let result: TerminalResult = serde_json::from_str(&raw_result)
             .context("Codex returned an invalid terminal result")?;
         if result.status == TerminalStatus::Blocked {

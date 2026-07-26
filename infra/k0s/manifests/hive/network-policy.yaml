@@ -39,6 +39,12 @@ spec:
           port: 7687
     - to:
         - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
             cidr: 0.0.0.0/0
       ports:
         - protocol: TCP

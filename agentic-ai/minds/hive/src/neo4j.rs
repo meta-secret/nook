@@ -15,6 +15,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
+const LATEST_SCHEMA_VERSION: i64 = 1;
 
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
@@ -69,12 +70,40 @@ impl Neo4jTaskStore {
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
     async fn migrate(&self) -> anyhow::Result<()> {
+        let mut transaction = self.graph.start_txn().await?;
+        let mut rows = transaction
+            .execute(query(
+                "MATCH (migration:HiveSchemaMigration)
+                 RETURN max(migration.version) AS version",
+            ))
+            .await?;
+        let installed_version = rows
+            .next(transaction.handle())
+            .await?
+            .and_then(|row| row.get::<i64>("version").ok())
+            .unwrap_or(0);
+        if installed_version > LATEST_SCHEMA_VERSION {
+            transaction.rollback().await?;
+            anyhow::bail!(
+                "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
+            );
+        }
         for statement in CONSTRAINTS {
-            self.graph
+            transaction
                 .run(query(statement))
                 .await
                 .with_context(|| format!("failed to apply graph migration: {statement}"))?;
         }
+        transaction
+            .run(
+                query(
+                    "MERGE (migration:HiveSchemaMigration {version: $version})
+                     ON CREATE SET migration.applied_at = timestamp()",
+                )
+                .param("version", LATEST_SCHEMA_VERSION),
+            )
+            .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -98,29 +127,38 @@ impl TaskStore for Neo4jTaskStore {
     async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
         task.validate().map_err(anyhow::Error::msg)?;
         let mut transaction = self.graph.start_txn().await?;
-        transaction
-            .run(
+        let enqueue_token = Uuid::new_v4().to_string();
+        let mut rows = transaction
+            .execute(
                 query(
                     "MERGE (task:Task {id: $id})
                      ON CREATE SET task.created_at = timestamp(),
                                    task.attempt_count = 0,
-                                   task.version = 0
-                     SET task.kind = $kind,
-                         task.prompt = $prompt,
-                         task.priority = $priority,
-                         task.max_attempts = $max_attempts,
-                         task.updated_at = timestamp()
-                     WITH task
-                     OPTIONAL MATCH (task)-[old:DEPENDS_ON]->()
-                     DELETE old",
+                                   task.version = 0,
+                                   task.enqueue_token = $enqueue_token,
+                                   task.kind = $kind,
+                                   task.prompt = $prompt,
+                                   task.priority = $priority,
+                                   task.max_attempts = $max_attempts,
+                                   task.updated_at = timestamp()
+                     RETURN task.enqueue_token = $enqueue_token AS created",
                 )
                 .param("id", task.id.as_str())
+                .param("enqueue_token", enqueue_token.as_str())
                 .param("kind", task.kind.as_str())
                 .param("prompt", task.prompt.as_str())
                 .param("priority", task.priority)
                 .param("max_attempts", task.max_attempts),
             )
             .await?;
+        let created = rows
+            .next(transaction.handle())
+            .await?
+            .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
+        if !created {
+            transaction.rollback().await?;
+            anyhow::bail!("task {} already exists", task.id);
+        }
 
         for dependency in &task.dependencies {
             let mut rows = transaction
@@ -172,15 +210,21 @@ impl TaskStore for Neo4jTaskStore {
 
         transaction
             .run(query(
-                "MATCH (task:Task)
+                "MATCH (task:Task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
                  WHERE task.status = 'RUNNING'
                    AND task.lease_until <= timestamp()
                    AND task.attempt_count >= task.max_attempts
+                 OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                  SET task.status = 'FAILED',
                      task.updated_at = timestamp(),
                      task.lease_owner = null,
                      task.lease_token = null,
-                     task.lease_until = null",
+                     task.lease_until = null,
+                     attempt.status = 'EXPIRED',
+                     attempt.error = 'lease expired after final attempt',
+                     attempt.completed_at = timestamp(),
+                     agent.status = 'IDLE',
+                     agent.last_seen_at = timestamp()",
             ))
             .await?;
 
@@ -226,13 +270,21 @@ impl TaskStore for Neo4jTaskStore {
                      WITH task,
                           [value IN collect(dependency.id) WHERE value IS NOT NULL] AS dependency_ids,
                           [value IN collect(coalesce(dependency.result_summary, '')) WHERE value IS NOT NULL] AS dependency_summaries
+                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
+                     WHERE expired_attempt.lease_token = task.lease_token
+                     OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
                      SET task.status = 'RUNNING',
                          task.lease_owner = $agent_id,
                          task.lease_token = $lease_token,
                          task.lease_until = timestamp() + ($lease_seconds * 1000),
                          task.attempt_count = task.attempt_count + 1,
                          task.version = task.version + 1,
-                         task.updated_at = timestamp()
+                         task.updated_at = timestamp(),
+                         expired_attempt.status = 'EXPIRED',
+                         expired_attempt.error = 'lease expired and task was reclaimed',
+                         expired_attempt.completed_at = timestamp(),
+                         expired_agent.status = 'IDLE',
+                         expired_agent.last_seen_at = timestamp()
                      CREATE (attempt:Attempt {
                        id: $attempt_id,
                        number: task.attempt_count,
@@ -398,5 +450,161 @@ impl TaskStore for Neo4jTaskStore {
             )
             .await?;
         Ok(rows.next().await?.is_some())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use neo4rs::query;
+    use uuid::Uuid;
+
+    use super::Neo4jTaskStore;
+    use crate::model::{AgentId, EnqueueTask, TaskId};
+    use crate::store::TaskStore;
+
+    fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
+        EnqueueTask {
+            id: TaskId::new(id).expect("valid task id"),
+            kind: "integration".to_owned(),
+            prompt: "Exercise the production task store".to_owned(),
+            priority: 0,
+            max_attempts: 3,
+            dependencies,
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn production_store_enforces_claims_dependencies_and_stale_leases() {
+        let Ok(uri) = env::var("HIVE_NEO4J_TEST_URI") else {
+            return;
+        };
+        let username = env::var("HIVE_NEO4J_TEST_USERNAME").unwrap_or_else(|_| "neo4j".to_owned());
+        let password = env::var("HIVE_NEO4J_TEST_PASSWORD")
+            .expect("HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI");
+        let store = Neo4jTaskStore::connect(&uri, &username, &password)
+            .await
+            .expect("connect to integration Neo4j");
+        store.migrate().await.expect("migrate production store");
+        store
+            .graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .expect("clear isolated integration database");
+
+        let suffix = Uuid::new_v4().simple().to_string();
+        let dependency = task(format!("dependency-{suffix}"), Vec::new());
+        let dependent = task(format!("dependent-{suffix}"), vec![dependency.id.clone()]);
+        store
+            .enqueue(&dependency)
+            .await
+            .expect("enqueue dependency");
+        store.enqueue(&dependent).await.expect("enqueue dependent");
+        assert!(
+            store.enqueue(&dependency).await.is_err(),
+            "duplicate enqueue must not reset task state"
+        );
+
+        let agent_a = AgentId::new(format!("agent-a-{suffix}")).expect("valid agent");
+        let agent_b = AgentId::new(format!("agent-b-{suffix}")).expect("valid agent");
+        let agent_c = AgentId::new(format!("agent-c-{suffix}")).expect("valid agent");
+        for agent in [&agent_a, &agent_b, &agent_c] {
+            store
+                .register_agent(agent, agent.as_str())
+                .await
+                .expect("register agent");
+        }
+
+        let dependency_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim dependency")
+            .expect("dependency available");
+        assert_eq!(dependency_claim.id, dependency.id);
+        assert!(
+            store
+                .claim(&agent_b, 300)
+                .await
+                .expect("blocked claim")
+                .is_none(),
+            "dependent task must remain blocked"
+        );
+        assert!(
+            store
+                .complete(&dependency_claim, &agent_a, "dependency complete")
+                .await
+                .expect("complete dependency")
+        );
+
+        let (claim_b_result, claim_c_result) =
+            tokio::join!(store.claim(&agent_b, 300), store.claim(&agent_c, 300));
+        let claim_b = claim_b_result.expect("agent b claim");
+        let claim_c = claim_c_result.expect("agent c claim");
+        let (stale_claim, stale_agent, retry_agent) = match (claim_b, claim_c) {
+            (Some(claim), None) => (claim, &agent_b, &agent_c),
+            (None, Some(claim)) => (claim, &agent_c, &agent_b),
+            _ => panic!("only one worker may win a claim"),
+        };
+
+        store
+            .graph
+            .run(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     SET task.lease_until = timestamp() - 1",
+                )
+                .param("id", dependent.id.as_str()),
+            )
+            .await
+            .expect("expire lease");
+        let retry_claim = store
+            .claim(retry_agent, 300)
+            .await
+            .expect("retry claim")
+            .expect("expired task is claimable");
+        assert_eq!(retry_claim.attempt_number, 2);
+        assert!(
+            !store
+                .heartbeat(&stale_claim.id, stale_agent, &stale_claim.lease_token, 300,)
+                .await
+                .expect("stale heartbeat")
+        );
+        assert!(
+            !store
+                .complete(&stale_claim, stale_agent, "stale completion")
+                .await
+                .expect("stale completion")
+        );
+        assert!(
+            store
+                .complete(&retry_claim, retry_agent, "retry complete")
+                .await
+                .expect("current completion")
+        );
+
+        let mut rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (attempt:Attempt)-[:FOR_TASK]->(task:Task {id: $id})
+                     RETURN attempt.status AS status
+                     ORDER BY attempt.number",
+                )
+                .param("id", dependent.id.as_str()),
+            )
+            .await
+            .expect("read attempts");
+        let mut statuses = Vec::new();
+        while let Some(row) = rows.next().await.expect("attempt row") {
+            statuses.push(row.get::<String>("status").expect("attempt status"));
+        }
+        assert_eq!(statuses, ["EXPIRED", "COMPLETED"]);
+
+        store
+            .graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .expect("clean isolated integration database");
     }
 }

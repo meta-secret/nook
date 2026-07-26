@@ -11,7 +11,7 @@ struct Cli {
     #[arg(
         long,
         env = "NEO4J_URI",
-        default_value = "neo4j://hive-neo4j.hive-system.svc.cluster.local:7687"
+        default_value = "neo4j://hive-neo4j.hive-data.svc.cluster.local:7687"
     )]
     neo4j_uri: String,
     #[arg(long, env = "NEO4J_USERNAME", default_value = "neo4j")]
