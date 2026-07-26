@@ -96,7 +96,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
 | Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations from a broker-owned checkout | Arbitrary GitHub API access by Codex or task-controlled Git metadata |
 | Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
-| Reaper controller | Dedicated runc Pod | Validates Hive Pod identity and deletes only labeled Hive Pods | Codex auth or task execution |
+| Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker egress policy | Codex auth or task execution |
 | Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
@@ -331,10 +331,13 @@ The Pod disables automatic service-account token mounting. Its service account
 can patch only the Codex-auth Secret, and that projected token is mounted only
 by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
 controller with an opaque credential. The controller has a distinct workload
-identity restricted to `get`/`delete` labeled Hive Pods. The controller reloads
-both its projected Kubernetes token and the opaque reaper credential for every
-request, so normal token projection and Secret rotation do not require a
-controller restart.
+identity restricted to `get`/`delete` labeled Hive Pods, reading only the
+Neo4j Service and Endpoints, and patching only the worker egress NetworkPolicy.
+It continuously reconciles the post-DNAT Neo4j Pod address, so an automatic
+StatefulSet or kubelet replacement cannot leave workers pinned to a stale
+endpoint. The controller reloads both its projected Kubernetes token and the
+opaque reaper credential for every request, so normal token projection and
+Secret rotation do not require a controller restart.
 
 Embedded Codex validation commands produce typed, secret-sanitized JSONL events
 outside the repository checkout. The publication broker reads those events
@@ -364,8 +367,9 @@ may use:
 
 Only Hive worker Pods may reach the Kubernetes API service and its post-DNAT
 endpoint, for the auth-persistence sidecar. The token-free Workbench dispatcher
-has no API-server route. The dedicated reaper controller has a separate
-API-server policy for its narrow Pod-deletion identity.
+has no API-server route. The dedicated lifecycle controller has a separate
+API-server policy for its narrow Pod-deletion and Neo4j-endpoint reconciliation
+identity.
 
 Private, loopback, link-local, multicast, and cluster address ranges are
 excluded from general external egress. Neo4j Bolt and HTTP are never exposed on

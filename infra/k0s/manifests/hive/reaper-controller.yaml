@@ -38,9 +38,13 @@ spec:
               exec python3 - <<'PY'
               import hmac
               import http.server
+              import ipaddress
               import json
               import re
               import ssl
+              import sys
+              import threading
+              import time
               import urllib.error
               import urllib.request
 
@@ -52,18 +56,79 @@ spec:
                   with open(path, encoding="utf-8") as handle:
                       return handle.read().strip()
 
-              def api_request(method, path):
+              def api_request(method, path, payload=None):
+                  body = None if payload is None else json.dumps(payload).encode()
                   request = urllib.request.Request(
                       f"{api}{path}",
                       method=method,
+                      data=body,
                       headers={
                           "Authorization": (
                               f"Bearer {token('/run/kubernetes/token')}"
-                          )
+                          ),
+                          "Content-Type": "application/merge-patch+json",
                       },
                   )
                   with urllib.request.urlopen(request, context=context, timeout=10) as response:
                       return response.read()
+
+              def json_request(method, path, payload=None):
+                  return json.loads(api_request(method, path, payload))
+
+              def reconcile_neo4j_policy():
+                  service = json_request(
+                      "GET",
+                      "/api/v1/namespaces/hive-data/services/hive-neo4j",
+                  )
+                  endpoints = json_request(
+                      "GET",
+                      "/api/v1/namespaces/hive-data/endpoints/hive-neo4j",
+                  )
+                  policy_path = (
+                      "/apis/networking.k8s.io/v1/namespaces/hive-system/"
+                      "networkpolicies/hive-worker-egress"
+                  )
+                  policy = json_request("GET", policy_path)
+                  service_ip = str(
+                      ipaddress.ip_address(service["spec"]["clusterIP"])
+                  )
+                  endpoint_ips = sorted(
+                      str(ipaddress.ip_address(address["ip"]))
+                      for subset in endpoints.get("subsets", [])
+                      for address in subset.get("addresses", [])
+                  )
+                  if not endpoint_ips:
+                      raise RuntimeError("Neo4j has no ready endpoint")
+                  destinations = [
+                      {"ipBlock": {"cidr": f"{service_ip}/32"}},
+                      {"ipBlock": {"cidr": f"{endpoint_ips[0]}/32"}},
+                  ]
+                  egress = policy["spec"]["egress"]
+                  matched = False
+                  for rule in egress:
+                      if any(
+                          port.get("protocol") == "TCP" and port.get("port") == 7687
+                          for port in rule.get("ports", [])
+                      ) and any("ipBlock" in target for target in rule.get("to", [])):
+                          matched = True
+                          if rule["to"] != destinations:
+                              rule["to"] = destinations
+                              api_request("PATCH", policy_path, {"spec": {"egress": egress}})
+                          break
+                  if not matched:
+                      raise RuntimeError("Neo4j endpoint egress rule is missing")
+
+              def reconcile_loop():
+                  while True:
+                      try:
+                          reconcile_neo4j_policy()
+                      except Exception as error:
+                          print(
+                              f"Neo4j NetworkPolicy reconciliation failed: {error}",
+                              file=sys.stderr,
+                              flush=True,
+                          )
+                      time.sleep(10)
 
               class Handler(http.server.BaseHTTPRequestHandler):
                   def do_POST(self):
@@ -92,6 +157,7 @@ spec:
                   def log_message(self, _format, *_args):
                       return
 
+              threading.Thread(target=reconcile_loop, daemon=True).start()
               http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
               PY
           securityContext:

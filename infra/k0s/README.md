@@ -24,6 +24,9 @@ port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
 dynamic networking rules. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
+The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
+Pod endpoint into the workers' narrow Bolt egress policy, including after
+automatic StatefulSet or kubelet replacement.
 Kubernetes Secrets are encrypted in etcd with the generated
 `/var/lib/k0s/pki/hive-encryption-provider.yaml`; that file is readable only by
 the dedicated `kube-apiserver` OS user through a read-only ACL and by root; only

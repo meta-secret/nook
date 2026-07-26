@@ -252,7 +252,6 @@ tasks:
             exit 1
             ;;
         esac
-        docker compose --file "$compose_file" down --remove-orphans
         if ! sudo -n iptables --table nat --list DOCKER >/dev/null 2>&1; then
           sudo -n iptables --table nat --new-chain DOCKER
         fi
@@ -280,6 +279,7 @@ tasks:
           --list DOCKER-ISOLATION-STAGE-1 >/dev/null
         sudo -n iptables --table filter \
           --list DOCKER-ISOLATION-STAGE-2 >/dev/null
+        docker compose --file "$compose_file" down --remove-orphans
         docker compose --file "$compose_file" up --detach --wait
         docker compose --file "$compose_file" ps
         curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
@@ -471,22 +471,24 @@ tasks:
         fi
         sudo -n nft --check --file "$firewall_config"
         sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
-        if ! sudo -n nft list chain inet bynull_filter input |
-          grep -F "nook k0s pod control plane v2" >/dev/null; then
-          printf '%s\n' \
-            'add rule inet bynull_filter input ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' |
-            sudo -n nft --file -
-        fi
-        if ! sudo -n nft list chain inet bynull_filter forward |
-          grep -F "nook k0s pod egress v2" >/dev/null; then
-          printf '%s\n' \
-            'add rule inet bynull_filter forward ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' |
-            sudo -n nft --file -
-        fi
+        sudo -n nft --handle list chain inet bynull_filter input |
+          awk '/comment "nook k0s pod control plane v2"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter input handle "$handle"
+          done
+        sudo -n nft --handle list chain inet bynull_filter forward |
+          awk '/comment "nook k0s pod egress v2"/ { print $NF }' |
+          while read -r handle; do
+            sudo -n nft delete rule inet bynull_filter forward handle "$handle"
+          done
+        printf '%s\n' \
+          'add rule inet bynull_filter input ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' \
+          'add rule inet bynull_filter forward ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' |
+          sudo -n nft --file -
         sudo -n nft list chain inet bynull_filter input |
-          grep -F 'nook k0s pod control plane v2' >/dev/null
+          grep -F 'ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
-          grep -F 'nook k0s pod egress v2' >/dev/null
+          grep -F 'ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' >/dev/null
         rm -f "$firewall_fragment" "$firewall_config"
         trap - EXIT
 
@@ -689,9 +691,9 @@ tasks:
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter input |
-          grep -F "nook k0s pod control plane v2" >/dev/null
+          grep -F 'ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v2"' >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
-          grep -F "nook k0s pod egress v2" >/dev/null
+          grep -F 'ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v2"' >/dev/null
         REMOTE
 
   k0s:network:refresh:
@@ -1290,11 +1292,16 @@ tasks:
           cut -c1-16)"
         image="127.0.0.1:5000/nook-hive:$source_id-$manifest_id"
         redis_password="$remote_dir/secrets/redis-password"
-        test -s "$redis_password"
+        secret_args=()
+        if test -s "$redis_password"; then
+          secret_args+=(--secret "id=sccache_redis_password,src=$redis_password")
+        else
+          echo "Redis sccache credential is unavailable; compiling without remote cache"
+        fi
         docker build \
           --platform linux/amd64 \
           --network host \
-          --secret "id=sccache_redis_password,src=$redis_password" \
+          "${secret_args[@]}" \
           --tag "$image" \
           --build-context "nook-app=$remote_dir/nook-app" \
           --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
@@ -1557,6 +1564,36 @@ tasks:
         kubectl rollout status deployment/hive-reaper-controller \
           --namespace hive-system \
           --timeout=15m
+        expected_neo4j_cidrs="$(
+          printf '%s\n' \
+            "$neo4j_service_ip/32" \
+            "$neo4j_endpoint_ip/32" |
+            sort |
+            paste -sd, -
+        )"
+        for attempt in $(seq 1 60); do
+          live_neo4j_cidrs="$(
+            kubectl get networkpolicy hive-worker-egress \
+              --namespace hive-system \
+              -o json |
+              jq -r '
+                .spec.egress[]
+                | select(any(.ports[]?; .protocol == "TCP" and .port == 7687))
+                | select(any(.to[]?; has("ipBlock")))
+                | [.to[] | .ipBlock.cidr]
+                | sort
+                | join(",")
+              '
+          )"
+          if test "$live_neo4j_cidrs" = "$expected_neo4j_cidrs"; then
+            break
+          fi
+          if test "$attempt" -eq 60; then
+            echo "Hive NetworkPolicy controller did not reconcile Neo4j endpoints" >&2
+            exit 1
+          fi
+          sleep 2
+        done
         test "$(kubectl get deployment hive \
           --namespace hive-system \
           -o jsonpath='{.status.readyReplicas}')" = 4

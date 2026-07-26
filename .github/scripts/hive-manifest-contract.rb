@@ -151,7 +151,9 @@ reaper_command = reaper_deployment
   .fetch("command")
   .last
 unless reaper_command.include?("token('/run/kubernetes/token')") &&
-       reaper_command.include?('expected = token("/run/reaper-auth/token")')
+       reaper_command.include?('expected = token("/run/reaper-auth/token")') &&
+       reaper_command.include?("def reconcile_neo4j_policy():") &&
+       reaper_command.include?("time.sleep(10)")
   raise "Hive reaper controller must reload rotating credentials for every request"
 end
 
@@ -211,6 +213,8 @@ end
 unless infra_taskfile.include?("nook-k0s.nft") &&
        infra_taskfile.include?("ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 }") &&
        infra_taskfile.include?("forward ip saddr 10.244.0.0/16 accept") &&
+       infra_taskfile.include?("nft --handle list chain") &&
+       infra_taskfile.include?("nft delete rule") &&
        infra_taskfile.include?("nft --check --file") &&
        !infra_taskfile.include?("systemctl reload nftables")
   raise "k0s install must persist narrow Pod control-plane and egress firewall rules"
@@ -225,8 +229,13 @@ docker_version_check = infra_taskfile.index(
 compose_shutdown = infra_taskfile.index(
   'docker compose --file "$compose_file" down --remove-orphans'
 )
-unless docker_version_check && compose_shutdown && docker_version_check < compose_shutdown
-  raise "Docker recovery must verify compatibility before stopping services"
+docker_chain_repair = infra_taskfile.index(
+  "sudo -n iptables --table nat --new-chain DOCKER"
+)
+unless docker_version_check && docker_chain_repair && compose_shutdown &&
+       docker_version_check < docker_chain_repair &&
+       docker_chain_repair < compose_shutdown
+  raise "Docker recovery must verify compatibility and restore chains before stopping services"
 end
 k0s_config = load_yaml.call("infra/k0s/config/k0s.yaml")
 unless k0s_config.dig("spec", "network", "kuberouter", "ipMasq") == true
@@ -244,10 +253,12 @@ unless infra_taskfile.include?("k0s:network:refresh:") &&
 end
 unless infra_taskfile.include?("docker build") &&
        infra_taskfile.include?("--network host") &&
+       infra_taskfile.include?("secret_args=()") &&
+       infra_taskfile.include?("if test -s \"$redis_password\"") &&
        infra_taskfile.include?(
          "--secret \"id=sccache_redis_password,src=$redis_password\""
        )
-  raise "Hive image builds must use host networking and authenticated Redis sccache"
+  raise "Hive image builds must optionally use authenticated Redis sccache"
 end
 unless infra_taskfile.include?("hive:diagnose:") &&
        infra_taskfile.include?("kubectl get endpoints kubernetes") &&
