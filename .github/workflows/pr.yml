@@ -942,16 +942,12 @@ jobs:
           if [ ! -f "../nook-base-coverage/nook-app/nook-replication/Cargo.toml" ]; then
             cp nook-app/Cargo.toml "../nook-base-coverage/nook-app/Cargo.toml"
             cp nook-app/Cargo.lock "../nook-base-coverage/nook-app/Cargo.lock"
-            cp nook-app/nook-core/Cargo.toml \
-              "../nook-base-coverage/nook-app/nook-core/Cargo.toml"
             cp -R nook-app/nook-replication \
               "../nook-base-coverage/nook-app/nook-replication"
           fi
           if [ ! -f "../nook-base-coverage/nook-app/nook-event-log/Cargo.toml" ]; then
             cp nook-app/Cargo.toml "../nook-base-coverage/nook-app/Cargo.toml"
             cp nook-app/Cargo.lock "../nook-base-coverage/nook-app/Cargo.lock"
-            cp nook-app/nook-core/Cargo.toml \
-              "../nook-base-coverage/nook-app/nook-core/Cargo.toml"
             cp -R nook-app/nook-event-log \
               "../nook-base-coverage/nook-app/nook-event-log"
           fi

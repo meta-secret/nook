@@ -12,7 +12,7 @@ pub use nook_auth2::{
     PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
     ValidationResult, VaultCryptoError,
 };
-pub use nook_event_log::EventError;
+pub use nook_event_log::{EventError, EventResult};
 pub use session::{SessionError, SessionResult};
 pub use vault_epoch::{VaultEpochError, VaultEpochResult};
 pub use vault_format::{VaultFormatError, VaultFormatResult};

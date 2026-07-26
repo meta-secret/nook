@@ -91,7 +91,7 @@ pub use enrollment::{
     peek_enrollment_issued_at,
 };
 pub use errors::{
-    DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError,
+    DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
     ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, SecretPayloadError,
     SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
     VaultRecoveryErrorKind, VaultResult, VaultSyncError, classify_vault_recovery_error,

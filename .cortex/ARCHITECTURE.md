@@ -174,9 +174,12 @@ this crate.
   in-memory service inputs. Browser event storage, projection cache, clocks,
   secure randomness ceremonies, and provider transports remain adapters in
   `nook-wasm`; portable functions receive their resulting typed data explicitly.
-- **Root exports:** `nook-app/nook-core/src/lib.rs` keeps the public
-  `nook_core::...` API stable by re-exporting the event-log domain alongside
-  core-owned application services.
+- **Root exports:** `nook-app/nook-core/src/lib.rs` keeps the established
+  `nook_core::...` type and function paths available by re-exporting the
+  event-log domain alongside core-owned application services. Fallible
+  event-log APIs return `EventResult` / `EventError` at both crate roots;
+  core-owned application services convert those errors into
+  `VaultResult` / `VaultError`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
 ### E. `nook-wasm` (The Bridge Layer)

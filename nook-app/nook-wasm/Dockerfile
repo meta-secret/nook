@@ -56,8 +56,13 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     && wasm-pack build nook-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
          --out-name nook_wasm $wasm_opt_flag \
-    && ( current="$(find nook-wasm/src nook-core/src nook-core/locales nook-auth2/src nook-replication/src nook-event-log/src \
-           \( -name '*.rs' -o -name '*.json' \) -print0 \
+    && ( current="$(find Cargo.toml Cargo.lock \
+           nook-wasm/Cargo.toml nook-wasm/src \
+           nook-core/Cargo.toml nook-core/src nook-core/locales \
+           nook-auth2/Cargo.toml nook-auth2/src \
+           nook-replication/Cargo.toml nook-replication/src \
+           nook-event-log/Cargo.toml nook-event-log/src \
+           \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
          | sha256sum \
