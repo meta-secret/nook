@@ -206,14 +206,16 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
    nook-wasm          browser I/O + session bridge
         ↓
    nook-core          vault events, sync, secrets, projection
-        ↓
-   nook-auth2         device identity, envelopes, vault key access
+      ↙       ↘
+nook-auth2   nook-replication
+key access   causal DAG, replica/outbox mechanics
 ```
 
 | Package | Role |
 | ------- | ---- |
 | `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
-| `nook-core` | Domain: event log, causal merge, projection, typed secrets, sync policy |
+| `nook-replication` | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning |
+| `nook-core` | Vault domain: signed operations, authorization, projection, typed secrets, sync policy |
 | `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
 | `nook-vault-simple` | Independent Svelte 5 Simple Vault application |
 | `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application |
@@ -383,9 +385,10 @@ Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 `.env.test.example` next to that file.
 
 Architecture changes belong in the lowest appropriate layer: key access in
-`nook-auth2`, domain logic in `nook-core`, browser I/O in `nook-wasm`, UI in
-`nook-web-*`. When package boundaries, sync model, or public Task commands
-change, update this README in the same change (see
+`nook-auth2`, provider-neutral causal replication mechanics in
+`nook-replication`, vault domain logic in `nook-core`, browser I/O in
+`nook-wasm`, and UI in `nook-web-*`. When package boundaries, sync model, or
+public Task commands change, update this README in the same change (see
 [`.cortex/AGENTS.md`](.cortex/AGENTS.md)).
 
 ### Docker dependency caches

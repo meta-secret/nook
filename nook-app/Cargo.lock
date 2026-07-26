@@ -1520,6 +1520,7 @@ dependencies = [
  "hkdf",
  "hmac 0.12.1",
  "nook-auth2",
+ "nook-replication",
  "p256",
  "pbkdf2 0.13.0",
  "percent-encoding",
@@ -1539,6 +1540,10 @@ dependencies = [
  "zeroize",
  "zip",
 ]
+
+[[package]]
+name = "nook-replication"
+version = "1.0.0"
 
 [[package]]
 name = "nook-wasm"

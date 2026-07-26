@@ -296,7 +296,7 @@ Optional scoped debug commands (never merge gates):
 
 ```bash
 task web:check && task web:test    # web-only debug
-task rust:test                     # nook-core + nook-auth2 only
+task rust:test                     # portable Rust crates only
 task extension:check:fast          # host-cached extension security/build checks
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```

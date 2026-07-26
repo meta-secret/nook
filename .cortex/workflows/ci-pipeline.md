@@ -385,17 +385,19 @@ task web:test:e2e:sync-live
 task web:test:e2e:github            # → sync-live
 ```
 
-## nook-core + nook-auth2 coverage export
+## Portable Rust crate coverage export
 
-The `nook-core + nook-auth2` coverage gate runs during the Docker image build in
-`nook-app/nook-core/Dockerfile` (`builder-debug`). The source-sensitive layers are
-ordered by Rust dependency edge: `nook-auth2` is copied, linted, and coverage-tested
-before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
-`cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
-and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
+The `nook-core + nook-auth2 + nook-replication` coverage gate runs during the
+Docker image build in `nook-app/nook-core/Dockerfile` (`builder-debug`). The
+source-sensitive layers are ordered by Rust dependency edge: the sibling
+foundations `nook-auth2` and `nook-replication` are copied, linted, and
+coverage-tested before `nook-core`; the `nook-core` coverage run uses
+`--no-clean` and the final report across all three crates enforces the committed
+floor and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the
+image.
 
 PR CI uses independent native Rust and WASM producers. Native Rust runs the
-`nook-core + nook-auth2` nextest/coverage branch and uploads its small coverage
+portable Rust nextest/coverage branch and uploads its small coverage
 handoff. The WASM producer runs clippy/build once, uploads the generated package
 under a run-stable artifact name, and then continues with required Node tests.
 `Verify and preview` can begin browser-free web validation from that built handoff
@@ -455,7 +457,7 @@ the web build for reporting. The preview job runs without browser e2e, deploys t
 records a successful `github-pages` deployment status for the PR head SHA. A
 `ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs. The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
-`nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
+portable Rust artifact against the floor; changed Rust/Cargo/source
 inputs reuse the exact base commit's main artifact (with a coverage-only build
 fallback), while unchanged source reuses the current artifact as the base
 comparison. Use remote CI as the **sole PR product validation gate**.
@@ -602,7 +604,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | `NOOK_GITHUB_PAT`                                   | sync-live e2e and agent-implement PR/push (repo scope; PR creation must act as a user so normal workflows fire)                                                                                                                                                                                                                                      |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                                                                                                                                                                                                              |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy and main development deploy/domain verification. The token requires account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`; main purges stale development routes before live verification. PR CI records its preview as a successful `github-pages` deployment for ruleset enforcement. |
-| `GITHUB_TOKEN`                                      | PR comments, deployment records, nook-core + nook-auth2 coverage comment                                                                                                                                                                                                                                                                              |
+| `GITHUB_TOKEN`                                      | PR comments, deployment records, portable Rust coverage comment                                                                                                                                                                                                                                                                                       |
 | `CURSOR_API_KEY`                                    | `agent-implement.yml`                                                                                                                                                                                                                                                                                                                                 |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.

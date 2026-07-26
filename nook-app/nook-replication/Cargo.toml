@@ -1,0 +1,12 @@
+[package]
+name = "nook-replication"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

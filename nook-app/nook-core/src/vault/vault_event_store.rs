@@ -8,30 +8,14 @@ use crate::vault_event::{
 };
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
 use crate::vault_ids::StoreId;
-use std::collections::{BTreeMap, BTreeSet};
-
-/// Provider event-log classification before a connect/sync path mutates remote
-/// state.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RemoteEventLogClassification {
-    Empty,
-    SameStore {
-        store_id: String,
-    },
-    DifferentStore {
-        local_store_id: String,
-        remote_store_id: String,
-    },
-    MultipleStores {
-        store_ids: Vec<String>,
-    },
-}
+pub use nook_replication::RemoteEventLogClassification;
+use nook_replication::ReplicaStore;
+use std::collections::BTreeSet;
 
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
 #[derive(Debug, Clone, Default)]
 pub struct LocalEventStore {
-    events: BTreeMap<EventId, Vec<u8>>,
-    outbox: BTreeMap<String, BTreeMap<EventId, Vec<u8>>>,
+    replica: ReplicaStore<EventId>,
 }
 
 impl LocalEventStore {
@@ -41,53 +25,49 @@ impl LocalEventStore {
     }
 
     pub fn put_event(&mut self, event_id: EventId, storage_bytes: Vec<u8>) {
-        self.events.insert(event_id, storage_bytes);
+        self.replica.put_event(event_id, storage_bytes);
     }
 
     pub fn remove_event(&mut self, event_id: &EventId) {
-        self.events.remove(event_id);
+        self.replica.remove_event(event_id);
     }
 
     #[must_use]
     pub fn get_bytes(&self, event_id: &EventId) -> Option<&[u8]> {
-        self.events.get(event_id).map(Vec::as_slice)
+        self.replica.get_bytes(event_id)
     }
 
     #[must_use]
     pub fn event_ids(&self) -> Vec<EventId> {
-        self.events.keys().cloned().collect()
+        self.replica.event_ids()
     }
 
     pub fn queue_outbox(&mut self, provider_id: &str, event_id: EventId, bytes: Vec<u8>) {
-        self.outbox
-            .entry(provider_id.to_owned())
-            .or_default()
-            .insert(event_id, bytes);
+        self.replica.queue_outbox(provider_id, event_id, bytes);
     }
 
     pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &EventId) -> Option<Vec<u8>> {
-        self.outbox
-            .get_mut(provider_id)
-            .and_then(|entries| entries.remove(event_id))
+        self.replica.dequeue_outbox(provider_id, event_id)
     }
 
     #[must_use]
     pub fn pending_outbox(&self, provider_id: &str) -> Vec<(EventId, Vec<u8>)> {
-        self.outbox
-            .get(provider_id)
-            .map(|entries| {
-                entries
-                    .iter()
-                    .map(|(id, bytes)| (id.clone(), bytes.clone()))
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.replica.pending_outbox(provider_id)
+    }
+
+    #[must_use]
+    pub fn repair_entries(&self, remote_ids: &BTreeSet<EventId>) -> Vec<(EventId, Vec<u8>)> {
+        self.replica.repair_entries(remote_ids)
     }
 
     /// Build a causal graph from stored YAML bytes.
     pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
-        for bytes in self.events.values() {
+        for event_id in self.replica.event_ids() {
+            let bytes = self
+                .replica
+                .get_bytes(&event_id)
+                .expect("event id came from replica store");
             let event = parse_event_storage_bytes(bytes)?;
             let _ = graph.insert(event, store_id)?;
         }
@@ -102,7 +82,7 @@ impl LocalEventStore {
     ) -> VaultResult<(EventId, EventInsertStatus)> {
         let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
         let bytes = serialize_event_storage_yaml(event)?;
-        if self.events.contains_key(&event_id) {
+        if self.replica.contains_event(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
         let mut graph = self.load_graph(store_id)?;

@@ -457,15 +457,10 @@ impl NookVaultManager {
 
         if !self.vault.store_id.is_empty() {
             let local = load_local_event_store(&self.vault.store_id).await?;
-            for event_id in local.event_ids() {
-                if remote_ids.contains(&event_id) {
-                    continue;
-                }
-                if let Some(bytes) = local.get_bytes(&event_id) {
-                    self.put_current_provider_event_if_absent(&event_id, bytes)
-                        .await?;
-                    remote_ids.insert(event_id);
-                }
+            for (event_id, bytes) in local.repair_entries(&remote_ids) {
+                self.put_current_provider_event_if_absent(&event_id, &bytes)
+                    .await?;
+                remote_ids.insert(event_id);
             }
         }
         Ok(())

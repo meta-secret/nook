@@ -249,7 +249,7 @@ function mockOctokit(options: MockOptions = {}): Octokit {
         {
           body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
         },
-        { body: "<!-- nook-core-coverage -->\n### nook-core + nook-auth2 coverage\n\nPASS" },
+        { body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS" },
       ],
     }),
   };

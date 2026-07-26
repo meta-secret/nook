@@ -79,7 +79,7 @@ tasks:
         vars: { TASK: _rust:test }
 
   rust:coverage:
-    desc: Report nook-core + nook-auth2 line coverage (cargo llvm-cov + nextest).
+    desc: Report portable Rust crate line coverage (cargo llvm-cov + nextest).
     deps:
       - setup:rust
     cmds:
@@ -87,7 +87,7 @@ tasks:
         vars: { TASK: _rust:coverage }
 
   rust:coverage:check:
-    desc: Enforce nook-core + nook-auth2 90% line coverage threshold.
+    desc: Enforce portable Rust crate 90% line coverage threshold.
     deps:
       - setup:rust
     cmds:
@@ -103,7 +103,7 @@ tasks:
         vars: { TASK: _rust:coverage:update }
 
   rust:coverage:export:
-    desc: Export nook-core + nook-auth2 coverage summary, JSON, and LCOV artifacts from Docker.
+    desc: Export portable Rust crate coverage summary, JSON, and LCOV artifacts from Docker.
     deps:
       - setup
     cmds:
@@ -173,23 +173,23 @@ tasks:
       - _extension:check
 
   _rust:test:parallel:
-    desc: Run nook-core + nook-auth2 tests when deps are already built (ci:pr parallel track).
+    desc: Run portable Rust crate tests when deps are already built (ci:pr parallel track).
     cmds:
       - task: _rust:test:run
 
   _rust:test:run:
     internal: true
-    desc: Run nook-core + nook-auth2 tests via cargo-nextest (ci profile, no coverage gate).
+    desc: Run nook-core + nook-auth2 + nook-replication tests via cargo-nextest (ci profile, no coverage gate).
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo nextest run -p nook-core -p nook-auth2 --profile ci
+      - cd "{{.APP_ROOT}}" && cargo nextest run -p nook-core -p nook-auth2 -p nook-replication --profile ci
 
   _rust:coverage:
-    desc: Print nook-core + nook-auth2 line coverage summary (no floor enforcement).
+    desc: Print portable Rust crate line coverage summary (no floor enforcement).
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 --summary-only
+      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 -p nook-replication --summary-only
 
   _rust:coverage:check:
-    desc: Run nook-core + nook-auth2 coverage in Docker and let cargo-llvm-cov enforce the line floor.
+    desc: Run portable Rust crate coverage in Docker and let cargo-llvm-cov enforce the line floor.
     vars:
       FLOOR:
         sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-core/coverage-floor.json
@@ -197,14 +197,14 @@ tasks:
       # Same cargo-llvm-cov subcommand warmed in nook-app/nook-core/Dockerfile (builder-debug), so the coverage
       # build is a cache hit — no dep recompile at runtime. cargo-llvm-cov enforces the threshold
       # itself via --fail-under-lines (non-zero exit if below); no output parsing.
-      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 --summary-only --fail-under-lines {{.FLOOR}}
+      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 -p nook-replication --summary-only --fail-under-lines {{.FLOOR}}
 
   _rust:coverage:update:
-    desc: Print measured nook-core + nook-auth2 line coverage as JSON so the floor can be bumped (apply on host).
+    desc: Print measured portable Rust crate line coverage as JSON so the floor can be bumped (apply on host).
     cmds:
       # Emit machine-readable coverage; --fail-under-lines with the current floor still gates, while
       # the JSON summary gives the exact measured line% to copy into {{.APP_ROOT}}/nook-core/coverage-floor.json.
-      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 --json --summary-only
+      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 -p nook-replication --json --summary-only
 
   _format:
     desc: Format web projects, then print a host-applicable git diff (sealed image).
@@ -240,15 +240,15 @@ tasks:
   _rust:build:
     desc: Build the native Rust crates (wasm is built via _wasm:build).
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo build -p nook-core -p nook-auth2
+      - cd "{{.APP_ROOT}}" && cargo build -p nook-core -p nook-auth2 -p nook-replication
 
   _rust:test:
-    desc: Test nook-core + nook-auth2 (wasm is covered by web e2e).
+    desc: Test nook-core + nook-auth2 + nook-replication (wasm is covered by web e2e).
     cmds:
       - task: _rust:test:run
 
   _rust:lint:
-    desc: Lint nook-core + nook-auth2 on host and nook-wasm for wasm32.
+    desc: Lint portable Rust crates on host and nook-wasm for wasm32.
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo clippy -p nook-core -p nook-auth2 --all-targets -- -D warnings
+      - cd "{{.APP_ROOT}}" && cargo clippy -p nook-core -p nook-auth2 -p nook-replication --all-targets -- -D warnings
       - cd "{{.APP_ROOT}}" && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings

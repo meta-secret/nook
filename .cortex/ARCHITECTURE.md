@@ -33,6 +33,7 @@ root/
     ├── .config/
     ├── docker/              (shared app/toolchain image definitions)
     ├── nook-auth2/
+    ├── nook-replication/
     ├── nook-core/
     ├── nook-wasm/
     ├── nook-web/
@@ -65,20 +66,24 @@ root/
                                v (core domain dependencies)
 +-------------------------------------------------------------+
 |                         nook-core                           |
-|   (Rust domain: vault formats, events, sync, secrets)        |
+|   (Rust domain: vault operations, projection, secrets)       |
 +-------------------------------------------------------------+
-                               |
-                               v (portable security/key access)
+                      /                   \
+                     v                     v
 +-------------------------------------------------------------+
 |                         nook-auth2                           |
 |     (Rust auth: device identity, envelopes, vault keys)      |
 +-------------------------------------------------------------+
+ +-------------------------------------------------------------+
+ |                    nook-replication                         |
+ |   (Rust replication: causal DAG, replica sets, outboxes)    |
+ +-------------------------------------------------------------+
 ```
 
 ### Dependency Enforcements
 
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
-2. **Platform Portability:** `nook-auth2` and `nook-core` compile on native and `wasm32-unknown-unknown`. No browser APIs in either crate; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
+2. **Platform Portability:** `nook-auth2`, `nook-replication`, and `nook-core` compile on native and `wasm32-unknown-unknown`. No browser APIs in these crates; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
 ---
 
@@ -94,13 +99,32 @@ root/
 - **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser APIs, or sync reconciliation. Sync provider credentials authorize replica access only; they are not vault unlock credentials.
 - **Portability:** Compiles on native and `wasm32-unknown-unknown` so browser, extension, CLI, server, mobile, HSM, YubiKey, and future quorum-recovery adapters can share the same key-access semantics.
 
-### B. `nook-core` (The Domain Core)
+### B. `nook-replication` (Portable Replication Mechanics)
+
+- **Causal index:** Generic parent relationships, heads, ancestry,
+  concurrency, pending-parent handling, deterministic topological ordering,
+  quarantine indexing/exclusion, and set union.
+- **Replica bookkeeping:** Provider-neutral immutable event bytes, per-provider
+  outboxes, and missing-event repair planning.
+- **No vault policy:** No `VaultOperation`, secret payload, actor authorization,
+  key epoch, projection, provider credential, or session behavior.
+- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, browser API,
+  or network transport. Hosts remain responsible for loading and persisting
+  bytes.
+- **Portability:** Compiles on native and `wasm32-unknown-unknown`; it has no
+  dependency on `nook-core`, `nook-wasm`, or `nook-web`.
+
+### C. `nook-core` (The Domain Core)
 
 - **`src/auth/`:** Compatibility re-exports for `nook-auth2` plus the core-only adapter that replays vault event operations into auth metadata state.
 - **`src/crypto/`:** Canonical event signing/hashing, vault encryption, key-epoch re-encryption, and signing identity helpers.
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
 - **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
-- **`src/vault/`:** In-memory database, vault formats, ids/newtypes, event log, projection, import, connect, session-cache workflows, typed access states, and portable idle/sync runtime policy.
+- **`src/vault/`:** In-memory database, vault formats, ids/newtypes, signed vault
+  event operations, actor authorization, projection, import, connect,
+  session-cache workflows, typed access states, and portable idle/sync runtime
+  policy. Generic causal and replica bookkeeping delegates to
+  `nook-replication`.
 - **Application services:** Provider-agnostic connect decisions live in
   `vault_connect`; unlock/session hydration in `vault_session` and
   `vault_session_cache`; enrollment in `auth/enrollment`; mutation/event
@@ -115,7 +139,7 @@ root/
 - **Root exports:** `nook-app/nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
-### C. `nook-wasm` (The Bridge Layer)
+### D. `nook-wasm` (The Bridge Layer)
 
 - **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
@@ -321,7 +345,7 @@ members:  members_key-encrypted catalog entries
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preflight` | `task preflight` — standalone Rust tests for whole-repository invariants, including Rust/WASM-to-TypeScript boundary mirrors, no-op forwarding wrappers, unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures; runs before app setup in PR/main CI                                                                                            |
-| `nook-core` / `nook-auth2` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
+| `nook-core` / `nook-auth2` / `nook-replication` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web/nook-web-app`  | Playwright e2e: `task web:test:e2e` (main stub gate and explicit PR validation), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (manual real-provider validation); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |
 | `nook-web/nook-web-extension` | `task extension:check` for type/build validation; `task extension:test:e2e` for the Chromium extension smoke loaded from the packaged `dist` bundle |

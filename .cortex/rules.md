@@ -7,7 +7,14 @@ This document defines the strict development standards, architectural boundaries
 ## 1. Monorepo Architecture & Package Boundaries
 
 - **README stays in sync:** When this section's boundaries, package layout, sync model, or public Task surface change, update the root [`README.md`](../README.md) in the same PR. See [AGENTS.md — Keep the root README current](AGENTS.md#keep-the-root-readme-current).
-- **Strict Uni-directional Flow:** The dependency path is strictly `nook-auth2` ➔ `nook-core` ➔ `nook-wasm` ➔ `nook-web`. Circular dependencies or reverse imports (e.g. importing a WASM type inside `nook-core`) are strictly forbidden.
+- **Strict Uni-directional Flow:** `nook-auth2` and `nook-replication` are
+  portable foundations consumed by `nook-core`, followed by `nook-wasm` and
+  `nook-web`. Circular dependencies or reverse imports (e.g. importing a WASM
+  type inside `nook-core`) are strictly forbidden.
+- **`nook-replication` Isolation:** Own only provider-neutral causal DAG,
+  immutable replica-set, outbox, and repair mechanics. Vault operations,
+  authorization, projection, key epochs, provider credentials, and provider
+  transports stay outside this crate.
 - **`nook-core` Isolation:**
   - Must remain Rust domain code with no browser, Svelte, Bun, IndexedDB, HTTP, or session-state behavior.
   - May use `wasm-bindgen` annotations on simple domain DTOs/enums when that exposes the real core type through WASM and avoids a TypeScript/string mirror.
@@ -69,7 +76,7 @@ This document defines the strict development standards, architectural boundaries
 
 | Layer                         | Target                                                                            | Where                                                        |
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-app/nook-core/src/**` `#[cfg(test)]`, `nook-app/nook-core/tests/*.rs`    |
+| **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-app/nook-replication/src/**`, `nook-app/nook-core/src/**`, `nook-app/nook-core/tests/*.rs` |
 | **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-app/nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
 | **E2e (Playwright)**          | Critical UI smoke only — unlock, save, local-provider sync, conflict UX           | `nook-app/nook-web/nook-web-app/e2e/`                                  |
 
@@ -81,7 +88,7 @@ Finding a root cause is not completion. Every AI-authored bug fix must add
 behavior-focused regression coverage that would fail on the broken behavior and
 pass with the fix:
 
-- **`nook-core` / `nook-auth2`:** add one or more Rust unit, property, or
+- **`nook-core` / `nook-auth2` / `nook-replication`:** add one or more Rust unit, property, or
   integration tests at the owning domain boundary.
 - **Typed Rust/WASM boundary:** when the failure is reproducible without a
   browser, add the narrow Rust/WASM test first. This supplements the owning
@@ -100,11 +107,13 @@ test. Cost or inconvenience is not an exception.
 
 ### Line coverage threshold (90%)
 
-`nook-core + nook-auth2` line coverage is measured with **`cargo llvm-cov nextest`** and checked against a committed **90%** floor:
+The portable Rust crates (`nook-core`, `nook-auth2`, and `nook-replication`)
+are measured together with **`cargo llvm-cov nextest`** and checked against a
+committed **90%** line floor:
 
 | Artifact                        | Purpose                                                                                                                               |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-app/nook-core/coverage-floor.json` | Minimum **line** coverage % for `nook-core + nook-auth2` (currently **90**)                                                            |
+| `nook-app/nook-core/coverage-floor.json` | Minimum combined **line** coverage % for the portable Rust crates (currently **90**)                                                    |
 | `task rust:coverage:check`      | CI gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check` / `task ci:pr` / PR CI) |
 | `task rust:coverage`            | Report only (no threshold check)                                                                                                      |
 | `task rust:coverage:update`     | Optional — rewrite floor file to measured % (user approval only)                                                                      |
@@ -118,7 +127,11 @@ test. Cost or inconvenience is not an exception.
 
 Fast iteration without coverage instrumentation: `task rust:test` (nextest only).
 
-- **Vault domain logic:** Add or update tests in `nook-core` or `nook-auth2`, depending on the owning boundary (`task rust:test` / `cd nook-app && cargo nextest run -p nook-core -p nook-auth2 --profile ci`). Prefer colocated module unit tests for pure functions; use `tests/event_log_workflow.rs` and siblings for multi-device / provider scenarios.
+- **Portable replication and vault domain logic:** Add or update tests in
+  `nook-replication`, `nook-core`, or `nook-auth2`, depending on the owning
+  boundary (`task rust:test`). Prefer colocated module unit tests for pure
+  mechanics; use `tests/event_log_workflow.rs` and siblings for multi-device /
+  provider scenarios.
 - **Complex sync cases:** Event-sourcing merge (causal DAG, not scalar vector clocks), concurrent append, out-of-order delivery, join heads, replacement/security conflicts — must have dedicated Rust tests. See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
 - **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `StoreId`, `DevicePublicKey`, …) over raw `String` / `u32` in `nook-core` domain APIs. A bare `String` does not carry meaning; the compiler cannot catch swapped arguments. Use serde-transparent wrappers so wire JSON stays unchanged. Version fields (`VaultEventSchemaVersion`, …) must be newtypes — the app keeps multiple schema versions and each struct must declare which version it speaks. Full inventory: [design-docs/typed-newtypes.md](design-docs/typed-newtypes.md). WASM getters may still return `String`; parse before calling core. No type-state for its own sake.
 - **UI / integration:** Playwright e2e in `nook-app/nook-web/nook-web-app/e2e/` — `task web:test:e2e` on main CI and explicitly for PR validation (no PAT); credentialed live sync via the manual `e2e-pr.yml` workflow or `task web:test:e2e:sync-live`. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).

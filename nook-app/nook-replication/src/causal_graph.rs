@@ -1,0 +1,322 @@
+//! Generic causal DAG indexing for immutable replicated events.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::error::Error;
+use std::fmt;
+
+/// Result of indexing an immutable event and its parent set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CausalInsertStatus<Id> {
+    Applied,
+    Pending { missing_parents: Vec<Id> },
+    Duplicate,
+}
+
+/// Structural causal-graph failures independent of an application's event
+/// schema or authorization policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CausalGraphError {
+    Cycle,
+    TopologicalSortStalled,
+}
+
+impl fmt::Display for CausalGraphError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cycle => formatter.write_str("causal graph contains a cycle"),
+            Self::TopologicalSortStalled => {
+                formatter.write_str("failed to advance causal topological sort")
+            }
+        }
+    }
+}
+
+impl Error for CausalGraphError {}
+
+/// Provider-neutral causal metadata for an immutable event set.
+///
+/// The application owns event bytes, signatures, authorization, and domain
+/// projection. This index owns only parent relationships and rejection
+/// propagation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CausalGraph<Id> {
+    parents: BTreeMap<Id, Vec<Id>>,
+    quarantined: BTreeMap<Id, String>,
+}
+
+impl<Id> Default for CausalGraph<Id> {
+    fn default() -> Self {
+        Self {
+            parents: BTreeMap::new(),
+            quarantined: BTreeMap::new(),
+        }
+    }
+}
+
+impl<Id> CausalGraph<Id>
+where
+    Id: Clone + Ord,
+{
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.parents.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.parents.is_empty()
+    }
+
+    #[must_use]
+    pub fn contains(&self, id: &Id) -> bool {
+        self.parents.contains_key(id)
+    }
+
+    #[must_use]
+    pub fn parents(&self, id: &Id) -> Option<&[Id]> {
+        self.parents.get(id).map(Vec::as_slice)
+    }
+
+    #[must_use]
+    pub fn quarantined(&self) -> &BTreeMap<Id, String> {
+        &self.quarantined
+    }
+
+    pub fn insert(&mut self, id: Id, parents: Vec<Id>) -> CausalInsertStatus<Id> {
+        if self.parents.contains_key(&id) {
+            return CausalInsertStatus::Duplicate;
+        }
+        let missing_parents = parents
+            .iter()
+            .filter(|parent| !self.parents.contains_key(*parent))
+            .cloned()
+            .collect::<Vec<_>>();
+        self.parents.insert(id, parents);
+        if missing_parents.is_empty() {
+            CausalInsertStatus::Applied
+        } else {
+            CausalInsertStatus::Pending { missing_parents }
+        }
+    }
+
+    pub fn quarantine(&mut self, id: Id, reason: String) {
+        self.quarantined.insert(id, reason);
+    }
+
+    #[must_use]
+    pub fn ancestors_present(&self, id: &Id) -> bool {
+        let Some(parents) = self.parents.get(id) else {
+            return false;
+        };
+        self.ancestor_ids_present(parents)
+    }
+
+    #[must_use]
+    pub fn ancestor_ids_present(&self, parents: &[Id]) -> bool {
+        let mut visited = BTreeSet::new();
+        let mut stack = parents.to_vec();
+        while let Some(id) = stack.pop() {
+            if !visited.insert(id.clone()) {
+                continue;
+            }
+            let Some(parent_ids) = self.parents.get(&id) else {
+                return false;
+            };
+            stack.extend(parent_ids.iter().cloned());
+        }
+        true
+    }
+
+    #[must_use]
+    pub fn applicable_ids(&self) -> Vec<&Id> {
+        self.parents
+            .keys()
+            .filter(|id| !self.quarantined.contains_key(*id) && self.ancestors_present(*id))
+            .collect()
+    }
+
+    #[must_use]
+    pub fn pending_ids(&self) -> Vec<&Id> {
+        self.parents
+            .iter()
+            .filter(|(id, parents)| {
+                !parents.is_empty()
+                    && !self.ancestor_ids_present(parents)
+                    && !self.quarantined.contains_key(*id)
+            })
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    #[must_use]
+    pub fn heads(&self) -> Vec<Id> {
+        let mut referenced = BTreeSet::new();
+        for (id, parents) in &self.parents {
+            if self.quarantined.contains_key(id) {
+                continue;
+            }
+            referenced.extend(parents.iter().cloned());
+        }
+        self.parents
+            .keys()
+            .filter(|id| !self.quarantined.contains_key(*id) && !referenced.contains(*id))
+            .cloned()
+            .collect()
+    }
+
+    #[must_use]
+    pub fn is_ancestor(&self, ancestor: &Id, descendant: &Id) -> bool {
+        if ancestor == descendant {
+            return true;
+        }
+        let Some(parents) = self.parents.get(descendant) else {
+            return false;
+        };
+        parents
+            .iter()
+            .any(|parent| self.is_ancestor(ancestor, parent))
+    }
+
+    #[must_use]
+    pub fn are_concurrent(&self, left: &Id, right: &Id) -> bool {
+        left != right
+            && !self.is_ancestor(left, right)
+            && !self.is_ancestor(right, left)
+            && self.parents.contains_key(left)
+            && self.parents.contains_key(right)
+    }
+
+    /// Deterministic topological order with identifiers as the tie-break.
+    pub fn topological_order(&self) -> Result<Vec<Id>, CausalGraphError> {
+        let mut ordered = Vec::with_capacity(self.parents.len());
+        let mut remaining: BTreeSet<Id> = self.applicable_ids().into_iter().cloned().collect();
+
+        while !remaining.is_empty() {
+            let ready = remaining
+                .iter()
+                .filter(|id| {
+                    self.parents
+                        .get(*id)
+                        .expect("remaining identifiers are indexed")
+                        .iter()
+                        .all(|parent| ordered.contains(parent) || !remaining.contains(parent))
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if ready.is_empty() {
+                return Err(CausalGraphError::Cycle);
+            }
+            let previous_len = remaining.len();
+            for id in ready {
+                remaining.remove(&id);
+                ordered.push(id);
+            }
+            if remaining.len() == previous_len {
+                return Err(CausalGraphError::TopologicalSortStalled);
+            }
+        }
+        Ok(ordered)
+    }
+
+    #[must_use]
+    pub fn union(&self, other: &Self) -> Self {
+        let mut merged = self.clone();
+        for (id, parents) in &other.parents {
+            merged
+                .parents
+                .entry(id.clone())
+                .or_insert_with(|| parents.clone());
+        }
+        for (id, reason) in &other.quarantined {
+            merged
+                .quarantined
+                .entry(id.clone())
+                .or_insert_with(|| reason.clone());
+        }
+        merged
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn id(value: &str) -> String {
+        value.to_owned()
+    }
+
+    #[test]
+    fn pending_child_becomes_applicable_when_parent_arrives() {
+        let mut graph = CausalGraph::new();
+        assert_eq!(
+            graph.insert(id("child"), vec![id("root")]),
+            CausalInsertStatus::Pending {
+                missing_parents: vec![id("root")]
+            }
+        );
+        assert_eq!(graph.pending_ids(), vec![&id("child")]);
+
+        assert_eq!(
+            graph.insert(id("root"), Vec::new()),
+            CausalInsertStatus::Applied
+        );
+        assert!(graph.pending_ids().is_empty());
+        assert_eq!(
+            graph.topological_order().unwrap(),
+            vec![id("root"), id("child")]
+        );
+    }
+
+    #[test]
+    fn concurrent_branches_and_join_have_deterministic_heads() {
+        let mut graph = CausalGraph::new();
+        graph.insert(id("root"), Vec::new());
+        graph.insert(id("left"), vec![id("root")]);
+        graph.insert(id("right"), vec![id("root")]);
+
+        assert!(graph.are_concurrent(&id("left"), &id("right")));
+        assert_eq!(graph.heads(), vec![id("left"), id("right")]);
+
+        graph.insert(id("join"), vec![id("left"), id("right")]);
+        assert_eq!(graph.heads(), vec![id("join")]);
+    }
+
+    #[test]
+    fn quarantined_events_are_excluded_from_projection_order() {
+        let mut graph = CausalGraph::new();
+        graph.insert(id("root"), Vec::new());
+        graph.insert(id("rejected"), vec![id("root")]);
+        graph.insert(id("descendant"), vec![id("rejected")]);
+        graph.quarantine(id("rejected"), "policy rejected".to_owned());
+        graph.quarantine(id("descendant"), "ancestor rejected".to_owned());
+
+        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+        assert_eq!(graph.heads(), vec![id("root")]);
+    }
+
+    #[test]
+    fn union_is_commutative_associative_and_idempotent() {
+        let mut left = CausalGraph::new();
+        left.insert(id("root"), Vec::new());
+        left.insert(id("left"), vec![id("root")]);
+
+        let mut right = CausalGraph::new();
+        right.insert(id("root"), Vec::new());
+        right.insert(id("right"), vec![id("root")]);
+
+        let mut third = CausalGraph::new();
+        third.insert(id("join"), vec![id("left"), id("right")]);
+
+        assert_eq!(left.union(&right), right.union(&left));
+        assert_eq!(
+            left.union(&right).union(&third),
+            left.union(&right.union(&third))
+        );
+        assert_eq!(left.union(&left), left);
+    }
+}

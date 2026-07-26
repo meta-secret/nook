@@ -14,6 +14,7 @@ fn classifies_source_and_build_only_coverage_inputs() {
     let source = classify_coverage_inputs([
         "README.md",
         "nook-app/nook-core/src/lib.rs",
+        "nook-app/nook-replication/src/lib.rs",
         "nook-app/nook-core/Dockerfile",
     ]);
     assert!(source.coverage_inputs_changed);
@@ -77,7 +78,7 @@ fn reports_coverage_from_structured_json() {
     assert!(report.passed);
     assert_eq!(
         report.markdown(),
-        "### nook-core + nook-auth2 coverage\n\
+        "### portable Rust crate coverage\n\
 \n\
 | Metric | Lines |\n\
 | --- | ---: |\n\
