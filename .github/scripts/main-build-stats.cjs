@@ -45,11 +45,19 @@ function timestampMilliseconds(value, label) {
   return timestamp
 }
 
-function durationSeconds(startedAt, completedAt, label) {
+function durationSeconds(
+  startedAt,
+  completedAt,
+  label,
+  { negativeSkewToleranceMilliseconds = 0 } = {},
+) {
   if (!startedAt || !completedAt) return null
   const started = timestampMilliseconds(startedAt, `${label}.started_at`)
   const completed = timestampMilliseconds(completedAt, `${label}.completed_at`)
-  if (completed < started) throw new Error(`${label} completion precedes its start`)
+  if (completed < started) {
+    if (started - completed <= negativeSkewToleranceMilliseconds) return 0
+    throw new Error(`${label} completion precedes its start`)
+  }
   return Math.round((completed - started) / 1000)
 }
 
@@ -99,7 +107,11 @@ function normalizeJob(job) {
     labels: Array.isArray(job.labels) ? job.labels.map(String) : [],
     started_at: job.started_at ?? null,
     completed_at: job.completed_at ?? null,
-    duration_seconds: durationSeconds(job.started_at, job.completed_at, `job ${job.name}`),
+    duration_seconds: durationSeconds(job.started_at, job.completed_at, `job ${job.name}`, {
+      // GitHub can report a never-started skipped job as completing one second
+      // before its nominal start when both timestamps are rounded to seconds.
+      negativeSkewToleranceMilliseconds: job.conclusion === 'skipped' ? 1000 : 0,
+    }),
     steps,
   }
 }

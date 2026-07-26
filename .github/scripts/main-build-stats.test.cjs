@@ -245,6 +245,33 @@ test('retains incomplete failed steps with null timing instead of inventing dura
   assert.equal(record.comparison.baseline_quality, 'not_applicable')
 })
 
+test('normalizes one-second GitHub timestamp skew for skipped jobs', () => {
+  const input = fixture()
+  input.jobs = [
+    {
+      ...input.jobs[0],
+      id: 9002,
+      name: 'Publish GHA BuildKit cache',
+      conclusion: 'skipped',
+      started_at: '2026-07-26T00:23:10Z',
+      completed_at: '2026-07-26T00:23:09Z',
+      steps: [],
+    },
+  ]
+
+  const record = buildMainBuildStats(input)
+
+  assert.equal(record.jobs[0].duration_seconds, 0)
+})
+
+test('rejects impossible timestamps for executed jobs', () => {
+  const input = fixture()
+  input.jobs[0].started_at = '2026-07-26T00:23:10Z'
+  input.jobs[0].completed_at = '2026-07-26T00:23:09Z'
+
+  assert.throws(() => buildMainBuildStats(input), /completion precedes its start/)
+})
+
 test('uses attempt-specific start and job timestamps for rerun wall time', () => {
   const input = fixture()
   input.run.run_attempt = 2
