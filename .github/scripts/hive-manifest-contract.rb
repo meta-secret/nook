@@ -277,22 +277,18 @@ end
 unless neo4j_rule
   raise "Hive workers must reach Neo4j before and after Service DNAT"
 end
-network_policy_script = File.read(
-  File.join(root, "infra/k0s/scripts/apply-hive-network-policy.sh")
-)
-unless network_policy_script.include?("kubectl get service hive-neo4j") &&
-       network_policy_script.include?("kubectl get endpoints hive-neo4j") &&
-       network_policy_script.include?("kubectl get endpoints kubernetes") &&
-       network_policy_script.include?(
+unless infra_taskfile.scan("kubectl get service hive-neo4j").length >= 2 &&
+       infra_taskfile.scan("kubectl get endpoints hive-neo4j").length >= 2 &&
+       infra_taskfile.scan("kubectl get endpoints kubernetes").length >= 2 &&
+       infra_taskfile.scan(
          's|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g'
-       ) &&
-       network_policy_script.include?(
+       ).length >= 2 &&
+       infra_taskfile.scan(
          's|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g'
-       ) &&
-       network_policy_script.include?(
+       ).length >= 2 &&
+       infra_taskfile.scan(
          's|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g'
-       ) &&
-       infra_taskfile.scan("apply-hive-network-policy.sh").length >= 2
+       ).length >= 2
   raise "Hive NetworkPolicy endpoints must be discovered from the live cluster"
 end
 hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))

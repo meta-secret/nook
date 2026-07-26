@@ -1013,6 +1013,7 @@ tasks:
 
         secret_dir="$(mktemp -d)"
         kubeconfig=""
+        network_policy=""
         hive_replicas=""
         dispatcher_replicas=""
         restore_hive() {
@@ -1039,6 +1040,9 @@ tasks:
           rm -rf "$secret_dir"
           if test -n "$kubeconfig"; then
             rm -f "$kubeconfig"
+          fi
+          if test -n "$network_policy"; then
+            rm -f "$network_policy"
           fi
           restore_hive
         }
@@ -1218,8 +1222,42 @@ tasks:
         kubectl rollout status statefulset/hive-neo4j \
           --namespace hive-data \
           --timeout=10m
-        bash "$remote_dir/infra/k0s/scripts/apply-hive-network-policy.sh" \
-          "$remote_dir"
+        neo4j_service_ip="$(
+          kubectl get service hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.spec.clusterIP}'
+        )"
+        neo4j_endpoint_ip="$(
+          kubectl get endpoints hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        k0s_api_ip="$(
+          kubectl get endpoints kubernetes \
+            --namespace default \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        for discovered_ip in \
+          "$neo4j_service_ip" \
+          "$neo4j_endpoint_ip" \
+          "$k0s_api_ip"; do
+          case "$discovered_ip" in
+            *[!0-9.]*|'')
+              echo "Refusing invalid discovered cluster endpoint: $discovered_ip" >&2
+              exit 1
+              ;;
+          esac
+        done
+        network_policy="$(mktemp)"
+        sed \
+          -e "s|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g" \
+          -e "s|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g" \
+          -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
+          "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" \
+          > "$network_policy"
+        kubectl apply -f "$network_policy"
+        rm -f "$network_policy"
+        network_policy=""
         restore_hive
         test "$(kubectl get service hive-neo4j \
           --namespace hive-data \
@@ -1459,6 +1497,32 @@ tasks:
             exit 1
             ;;
         esac
+        neo4j_service_ip="$(
+          kubectl get service hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.spec.clusterIP}'
+        )"
+        neo4j_endpoint_ip="$(
+          kubectl get endpoints hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        k0s_api_ip="$(
+          kubectl get endpoints kubernetes \
+            --namespace default \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        for discovered_ip in \
+          "$neo4j_service_ip" \
+          "$neo4j_endpoint_ip" \
+          "$k0s_api_ip"; do
+          case "$discovered_ip" in
+            *[!0-9.]*|'')
+              echo "Refusing invalid discovered cluster endpoint: $discovered_ip" >&2
+              exit 1
+              ;;
+          esac
+        done
         rendered="$(mktemp)"
         trap 'rm -f "$rendered"' EXIT
         sed \
@@ -1476,8 +1540,12 @@ tasks:
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" >> "$rendered"
-        bash "$remote_dir/infra/k0s/scripts/apply-hive-network-policy.sh" \
-          "$remote_dir"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g" \
+          -e "s|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g" \
+          -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
+          "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" >> "$rendered"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
         kubectl rollout status deployment/hive \
