@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod codex;
 pub mod model;
 pub mod neo4j;

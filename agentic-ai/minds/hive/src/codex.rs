@@ -8,15 +8,15 @@ use codex::{
     AbsolutePathBuf, AltScreenMode, ApprovalsReviewer, Arg0DispatchPaths, AskForApproval,
     AuthCredentialsStoreMode, AuthManager, AutoCompactTokenLimitScope,
     CodexHomeUserInstructionsProvider, CodexThread, Config, ConfigLayerStack, Constrained,
-    EnvironmentManager, EventMsg, ExecServerRuntimePaths, Features, GhostSnapshotConfig, History,
-    MemoriesConfig, ModelAvailabilityNuxConfig, MultiAgentV2Config, NewThread, Notice,
-    OAuthCredentialsStoreMode, OPENAI_PROVIDER_ID, Op, OtelConfig, PermissionProfile, Permissions,
-    ProjectConfig, RealtimeAudioConfig, RealtimeConfig, SessionPickerViewMode, SessionSource,
-    TerminalResizeReflowConfig, ThreadManager, ThreadStoreConfig, ToolSuggestConfig, TuiKeymap,
-    TuiNotificationSettings, TuiPetAnchor, UriBasedFileOpener, UserInput, WebSearchMode,
-    build_models_manager, built_in_model_providers, empty_extension_registry, find_codex_home,
-    init_state_db, local_agent_graph_store_from_state_db, resolve_installation_id,
-    thread_store_from_config,
+    EnvironmentManager, EventMsg, ExecServerRuntimePaths, ExternalAuth, Features,
+    GhostSnapshotConfig, History, MemoriesConfig, ModelAvailabilityNuxConfig, MultiAgentV2Config,
+    NewThread, Notice, OAuthCredentialsStoreMode, OPENAI_PROVIDER_ID, Op, OtelConfig,
+    PermissionProfile, Permissions, ProjectConfig, RealtimeAudioConfig, RealtimeConfig,
+    SessionPickerViewMode, SessionSource, TerminalResizeReflowConfig, ThreadManager,
+    ThreadStoreConfig, ToolSuggestConfig, TuiKeymap, TuiNotificationSettings, TuiPetAnchor,
+    UriBasedFileOpener, UserInput, WebSearchMode, build_models_manager, built_in_model_providers,
+    empty_extension_registry, find_codex_home, init_state_db,
+    local_agent_graph_store_from_state_db, resolve_installation_id, thread_store_from_config,
 };
 use thiserror::Error;
 
@@ -64,14 +64,25 @@ pub trait CodexRunner {
     ) -> impl Future<Output = Result<String, CodexError>> + Send + 'a;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct InProcessCodexRunner {
     options: CodexOptions,
+    external_auth: Option<Arc<dyn ExternalAuth>>,
 }
 
 impl InProcessCodexRunner {
     pub fn new(options: CodexOptions) -> Self {
-        Self { options }
+        Self {
+            options,
+            external_auth: None,
+        }
+    }
+
+    pub fn with_external_auth(options: CodexOptions, external_auth: Arc<dyn ExternalAuth>) -> Self {
+        Self {
+            options,
+            external_auth: Some(external_auth),
+        }
     }
 
     async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<String, CodexError> {
@@ -79,6 +90,12 @@ impl InProcessCodexRunner {
         let state_db = init_state_db(&config).await;
         let auth_manager =
             AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false).await;
+        if let Some(external_auth) = &self.external_auth {
+            auth_manager
+                .set_external_auth(Arc::clone(external_auth))
+                .await
+                .map_err(|error| CodexError::Run(error.to_string()))?;
+        }
         let runtime_paths = ExecServerRuntimePaths::from_optional_paths(
             config.codex_self_exe.clone(),
             config.codex_linux_sandbox_exe.clone(),

@@ -394,6 +394,39 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 
+    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
+                     WHERE task.status = 'RUNNING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND attempt.lease_token = $lease_token
+                     SET task.status = 'READY',
+                         task.attempt_count = task.attempt_count - 1,
+                         task.updated_at = timestamp(),
+                         task.lease_owner = null,
+                         task.lease_token = null,
+                         task.lease_until = null,
+                         attempt.status = 'INTERRUPTED',
+                         attempt.error = 'worker terminated for rollout',
+                         attempt.completed_at = timestamp()
+                     WITH task
+                     MATCH (agent:Agent {id: $agent_id})
+                     SET agent.status = 'IDLE', agent.last_seen_at = timestamp()
+                     RETURN task.id AS id",
+                )
+                .param("task_id", task.id.as_str())
+                .param("attempt_id", task.attempt_id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str()),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
+
     async fn complete(
         &self,
         task: &ClaimedTask,
@@ -728,6 +761,49 @@ mod tests {
             statuses.push(row.get::<String>("status").expect("attempt status"));
         }
         assert_eq!(statuses, ["EXPIRED", "COMPLETED"]);
+
+        let rollout = task(format!("rollout-{suffix}"), Vec::new());
+        store.enqueue(&rollout).await.expect("enqueue rollout task");
+        let interrupted = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim rollout task")
+            .expect("rollout task available");
+        assert!(
+            store
+                .release(&interrupted, &agent_a)
+                .await
+                .expect("release rollout task")
+        );
+        let resumed = store
+            .claim(&agent_b, 300)
+            .await
+            .expect("reclaim rollout task")
+            .expect("released task available");
+        assert_eq!(resumed.attempt_number, 1);
+        assert!(
+            store
+                .complete(&resumed, &agent_b, "rollout recovery complete", None)
+                .await
+                .expect("complete released task")
+        );
+        let mut rollout_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (attempt:Attempt)-[:FOR_TASK]->(task:Task {id: $id})
+                     RETURN attempt.status AS status
+                     ORDER BY attempt.status",
+                )
+                .param("id", rollout.id.as_str()),
+            )
+            .await
+            .expect("read rollout attempts");
+        let mut rollout_statuses = Vec::new();
+        while let Some(row) = rollout_rows.next().await.expect("rollout attempt row") {
+            rollout_statuses.push(row.get::<String>("status").expect("rollout status"));
+        }
+        assert_eq!(rollout_statuses, ["COMPLETED", "INTERRUPTED"]);
 
         store
             .graph

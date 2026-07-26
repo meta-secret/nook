@@ -313,8 +313,15 @@ tasks:
             ;;
         esac
         ssh -n -o BatchMode=yes "$ssh_target" \
-          "install -d -m 0750 '$remote_dir'"
-        tar -C "$repo_root" -cf - infra/k0s agentic-ai/minds |
+          "install -d -m 0750 '$remote_dir'; \
+           if test -d '$remote_dir/agentic-ai/minds'; then \
+             find '$remote_dir/agentic-ai/minds' \
+               -type d -name target -prune -exec rm -rf -- {} +; \
+           fi"
+        tar -C "$repo_root" \
+          --exclude='agentic-ai/minds/target' \
+          --exclude='agentic-ai/minds/*/target' \
+          -cf - infra/k0s agentic-ai/minds |
           ssh -o BatchMode=yes "$ssh_target" \
             "tar -xf - -C '$remote_dir'"
         BASH
@@ -811,7 +818,13 @@ tasks:
         auth_file="${HIVE_CODEX_AUTH_FILE:-}"
         if test -n "$auth_file"; then
           test -f "$auth_file"
-          jq -e 'type == "object"' "$auth_file" >/dev/null
+          jq -e '
+            type == "object" and
+            .auth_mode == "chatgpt" and
+            (.tokens.access_token | type == "string" and length > 0) and
+            (.tokens.refresh_token | type == "string" and length > 0) and
+            (.tokens.account_id | type == "string" and length > 0)
+          ' "$auth_file" >/dev/null
           ssh -n -o BatchMode=yes "$ssh_target" \
             "install -d -m 0700 '$remote_dir/secrets'"
           remote_auth_file="$remote_dir/secrets/codex-auth.json.next"

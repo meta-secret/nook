@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use tokio::process::Command;
 use tokio::sync::watch;
 
+use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{AgentId, Artifact, ClaimedTask, TerminalResult, TerminalStatus};
 use crate::store::TaskStore;
@@ -32,6 +33,7 @@ pub struct WorkerConfig {
     pub model: Option<String>,
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
+    pub auth_socket: PathBuf,
 }
 
 pub struct Worker<S> {
@@ -46,6 +48,7 @@ impl<S: TaskStore> Worker<S> {
 
     pub async fn run(self) -> anyhow::Result<()> {
         establish_worker_lifecycle(&self.config.workspace, &self.config.pod_name)?;
+        let external_auth = BrokerExternalAuth::connect(&self.config.auth_socket).await?;
         let lifecycle_marker = self.config.workspace.join(".hive-task-finished");
         if lifecycle_marker.exists() {
             return Err(anyhow!(
@@ -70,8 +73,14 @@ impl<S: TaskStore> Worker<S> {
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
 
-        let result = self.execute(&task).await;
+        let result = self.execute(&task, external_auth).await;
         if let Err(error) = result {
+            if error.downcast_ref::<WorkerInterrupted>().is_some() {
+                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                    .await
+                    .context("failed to mark the interrupted Pod for replacement")?;
+                return Ok(());
+            }
             let message = bounded(&format!("{error:#}"));
             let _ = self
                 .store
@@ -90,7 +99,11 @@ impl<S: TaskStore> Worker<S> {
         Ok(())
     }
 
-    async fn execute(&self, task: &ClaimedTask) -> anyhow::Result<()> {
+    async fn execute(
+        &self,
+        task: &ClaimedTask,
+        external_auth: std::sync::Arc<BrokerExternalAuth>,
+    ) -> anyhow::Result<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
             self.store.clone(),
@@ -115,12 +128,15 @@ impl<S: TaskStore> Worker<S> {
                 codex_options
                     .reasoning_effort
                     .clone_from(&self.config.reasoning_effort);
-                InProcessCodexRunner::new(codex_options)
+                InProcessCodexRunner::with_external_auth(codex_options, external_auth)
                     .execute_task(task.id.as_str(), &prompt)
                     .await
                     .context("embedded Codex execution failed")
             },
         );
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .context("failed to install the worker termination handler")?;
         tokio::pin!(execution);
         let raw_result = tokio::select! {
             execution = &mut execution => {
@@ -136,6 +152,25 @@ impl<S: TaskStore> Worker<S> {
                     .context("heartbeat task panicked")?
                     .context("lease heartbeat failed")?;
                 return Err(anyhow!("lease heartbeat stopped before task execution"));
+            }
+            signal = terminate.recv() => {
+                if signal.is_none() {
+                    return Err(anyhow!("worker termination signal stream closed"));
+                }
+                let _ = stop_tx.send(true);
+                heartbeat
+                    .await
+                    .context("heartbeat task panicked")?
+                    .context("lease heartbeat failed during termination")?;
+                let released = self
+                    .store
+                    .release(task, &self.config.agent_id)
+                    .await
+                    .context("failed to release the task during termination")?;
+                if !released {
+                    return Err(anyhow!("task release was rejected because the lease is stale"));
+                }
+                return Err(WorkerInterrupted.into());
             }
         };
         let result: TerminalResult = serde_json::from_str(&raw_result)
@@ -163,6 +198,10 @@ impl<S: TaskStore> Worker<S> {
         Ok(())
     }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("worker interrupted for rollout")]
+struct WorkerInterrupted;
 
 fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(workspace)?;

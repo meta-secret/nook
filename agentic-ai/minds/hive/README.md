@@ -25,11 +25,14 @@ unexpired lease token.
 
 ## Authentication and repository boundary
 
-Codex authentication is mounted from the `hive-codex-auth` Kubernetes Secret
-into `/run/secrets`, then copied by an init container into a per-Pod `emptyDir`
-used as `CODEX_HOME`. The k0s API server encrypts Kubernetes Secrets in etcd
-with a host-generated AES-GCM key. Rotating the auth file changes a Pod-template
-checksum and replaces the warm pool.
+Only the auth-broker container mounts the `hive-codex-auth` Kubernetes Secret.
+It loads and refreshes the credentials in a broker-only `emptyDir`, accepts
+exactly one Unix connection from Hive, unlinks the socket before repository
+commands can run, and returns short-lived access tokens over that established
+channel. The worker's `CODEX_HOME` contains no credentials and tool subprocesses
+cannot reconnect to the broker. The k0s API server encrypts Kubernetes Secrets
+in etcd with a host-generated AES-GCM key. Rotating the auth file changes a
+Pod-template checksum and replaces the warm pool.
 
 No host `CODEX_HOME`, host path, or host Docker socket is mounted. A dedicated
 reaper sidecar alone receives a projected, short-lived service-account token
@@ -38,6 +41,8 @@ after the worker writes its terminal marker or if the worker container
 restarts, so a second task cannot run in the same microVM. A create-once
 workspace sentinel also prevents a restarted worker process from claiming
 during the reaper's polling window. Workers receive no Docker socket.
+On `SIGTERM`, a claimed worker transactionally releases its lease and marks the
+attempt interrupted without consuming the task's retry budget before rollout.
 
 The prototype clones the configured repository over HTTPS into a disposable
 `emptyDir`. Before marking an implementation task complete, Hive collects a

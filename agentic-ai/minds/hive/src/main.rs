@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use codex::{Arg0DispatchPaths, arg0_dispatch_or_else};
+use hive::auth::run_auth_broker;
 use hive::model::{AgentId, EnqueueTask, TaskId};
 use hive::{Neo4jTaskStore, TaskStore, Worker, WorkerConfig};
 
@@ -18,7 +19,7 @@ struct Cli {
     #[arg(long, env = "NEO4J_USERNAME", default_value = "neo4j")]
     neo4j_username: String,
     #[arg(long, env = "NEO4J_PASSWORD", hide_env_values = true)]
-    neo4j_password: String,
+    neo4j_password: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -52,6 +53,28 @@ enum Command {
         model: Option<String>,
         #[arg(long, env = "HIVE_CODEX_REASONING_EFFORT", default_value = "medium")]
         reasoning_effort: String,
+        #[arg(
+            long,
+            env = "HIVE_AUTH_SOCKET",
+            default_value = "/run/hive-auth/broker.sock"
+        )]
+        auth_socket: PathBuf,
+    },
+    AuthBroker {
+        #[arg(
+            long,
+            env = "HIVE_AUTH_SOCKET",
+            default_value = "/run/hive-auth/broker.sock"
+        )]
+        socket: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_AUTH_SOURCE",
+            default_value = "/run/secrets/codex/auth.json"
+        )]
+        auth_source: PathBuf,
+        #[arg(long, env = "HIVE_AUTH_HOME", default_value = "/var/lib/hive-auth")]
+        auth_home: PathBuf,
     },
     Migrate,
     Enqueue {
@@ -76,10 +99,13 @@ fn main() -> anyhow::Result<()> {
 
 async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let store =
-        Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, &cli.neo4j_password).await?;
 
     match cli.command {
+        Command::AuthBroker {
+            socket,
+            auth_source,
+            auth_home,
+        } => run_auth_broker(socket, auth_source, auth_home).await,
         Command::Worker {
             agent_id,
             pod_name,
@@ -92,7 +118,15 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             poll_max_seconds,
             model,
             reasoning_effort,
+            auth_socket,
         } => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for the worker")?;
+            let store =
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                    .await?;
             if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
                 anyhow::bail!("heartbeat interval must be positive and shorter than the lease");
             }
@@ -114,12 +148,22 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     model,
                     reasoning_effort,
                     arg0_paths,
+                    auth_socket,
                 },
             )
             .run()
             .await
         }
-        Command::Migrate => store.migrate().await,
+        Command::Migrate => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for migration")?;
+            Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                .await?
+                .migrate()
+                .await
+        }
         Command::Enqueue {
             id,
             kind,
@@ -128,6 +172,13 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             max_attempts,
             depends_on,
         } => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for enqueue")?;
+            let store =
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                    .await?;
             store.migrate().await?;
             let dependencies = depends_on
                 .into_iter()

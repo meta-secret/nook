@@ -24,6 +24,8 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         lease_seconds: i64,
     ) -> anyhow::Result<bool>;
 
+    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool>;
+
     async fn complete(
         &self,
         task: &ClaimedTask,
@@ -192,6 +194,23 @@ mod tests {
             Ok(accepted)
         }
 
+        async fn release(
+            &self,
+            claimed: &ClaimedTask,
+            _agent_id: &AgentId,
+        ) -> anyhow::Result<bool> {
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let task = tasks.get_mut(claimed.id.as_str()).expect("task");
+            if task.lease_token.as_ref() != Some(&claimed.lease_token) {
+                return Ok(false);
+            }
+            task.status = "READY";
+            task.attempt_count -= 1;
+            task.lease_token = None;
+            task.lease_until = None;
+            Ok(true)
+        }
+
         async fn fail(
             &self,
             claimed: &ClaimedTask,
@@ -256,6 +275,19 @@ mod tests {
         let first = store.claim(&agent, 300).await.unwrap().unwrap();
         assert_eq!(first.id, dependency.id);
         assert!(store.claim(&agent, 300).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn rollout_release_does_not_consume_an_attempt() {
+        let store = MemoryStore::default();
+        store.enqueue(&task("task-1", Vec::new())).await.unwrap();
+        let agent = AgentId::new("agent").unwrap();
+
+        let first = store.claim(&agent, 300).await.unwrap().unwrap();
+        assert!(store.release(&first, &agent).await.unwrap());
+        let replacement = store.claim(&agent, 300).await.unwrap().unwrap();
+
+        assert_eq!(replacement.attempt_number, 1);
     }
 
     #[tokio::test]

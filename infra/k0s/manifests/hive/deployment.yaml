@@ -59,32 +59,6 @@ spec:
             limits:
               cpu: 100m
               memory: 64Mi
-        - name: codex-auth
-          image: HIVE_IMAGE
-          command:
-            - /usr/bin/install
-            - -m
-            - "0600"
-            - /run/secrets/codex/auth.json
-            - /codex-home/auth.json
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: codex-auth-source
-              mountPath: /run/secrets/codex
-              readOnly: true
-            - name: codex-home
-              mountPath: /codex-home
-          resources:
-            requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 100m
-              memory: 64Mi
       containers:
         - name: hive
           image: HIVE_IMAGE
@@ -111,6 +85,8 @@ spec:
               value: "15"
             - name: HIVE_CODEX_REASONING_EFFORT
               value: medium
+            - name: HIVE_AUTH_SOCKET
+              value: /run/hive-auth/broker.sock
             - name: CODEX_HOME
               value: /home/hive/.codex
             - name: HOME
@@ -143,6 +119,8 @@ spec:
             - name: trust-bundle
               mountPath: /trust
               readOnly: true
+            - name: auth-channel
+              mountPath: /run/hive-auth
           resources:
             requests:
               cpu: "2"
@@ -152,6 +130,37 @@ spec:
               cpu: "4"
               memory: 12Gi
               ephemeral-storage: 100Gi
+        - name: auth-broker
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["auth-broker"]
+          env:
+            - name: HIVE_AUTH_SOCKET
+              value: /run/hive-auth/broker.sock
+            - name: HIVE_AUTH_HOME
+              value: /var/lib/hive-auth
+            - name: HIVE_AUTH_SOURCE
+              value: /run/secrets/codex/auth.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: codex-auth-source
+              mountPath: /run/secrets/codex
+              readOnly: true
+            - name: auth-channel
+              mountPath: /run/hive-auth
+            - name: broker-auth-home
+              mountPath: /var/lib/hive-auth
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
         - name: pod-reaper
           image: HIVE_IMAGE
           imagePullPolicy: Always
@@ -224,6 +233,12 @@ spec:
           emptyDir:
             sizeLimit: 2Gi
         - name: trust-bundle
+          emptyDir:
+            sizeLimit: 2Mi
+        - name: auth-channel
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: broker-auth-home
           emptyDir:
             sizeLimit: 2Mi
         - name: neo4j-ca
