@@ -190,6 +190,7 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+              readOnly: true
             - name: publication-channel
               mountPath: /run/hive-publication
             - name: publication-home
@@ -327,7 +328,7 @@ spec:
             sizeLimit: 1Mi
         - name: publication-home
           emptyDir:
-            sizeLimit: 2Mi
+            sizeLimit: 100Gi
         - name: broker-auth-home
           emptyDir:
             sizeLimit: 2Mi

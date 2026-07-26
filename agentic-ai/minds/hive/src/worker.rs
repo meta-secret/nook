@@ -78,30 +78,35 @@ impl<S: TaskStore> Worker<S> {
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
-        let publication_branch =
-            match bind_publication_task(&self.config.publication_socket, &task).await {
-                Ok(branch) => branch,
-                Err(error) => {
-                    let released = self
-                        .store
-                        .release(&task, &self.config.agent_id)
-                        .await
-                        .context("release task after publication broker binding failed")?;
-                    tokio::fs::write(&lifecycle_marker, task.id.as_str())
-                        .await
-                        .context("mark publication-binding failure for Pod replacement")?;
-                    if !released {
-                        return Err(anyhow!(
-                            "publication broker binding failed after the task lease expired: \
-                             {error:#}"
-                        ));
-                    }
+        let publication_branch = match bind_publication_task(
+            &self.config.publication_socket,
+            &task,
+            task.kind == "main-repair",
+        )
+        .await
+        {
+            Ok(branch) => branch,
+            Err(error) => {
+                let released = self
+                    .store
+                    .release(&task, &self.config.agent_id)
+                    .await
+                    .context("release task after publication broker binding failed")?;
+                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                    .await
+                    .context("mark publication-binding failure for Pod replacement")?;
+                if !released {
                     return Err(anyhow!(
-                        "publication broker binding failed; the task claim was released without \
-                         consuming an attempt: {error:#}"
+                        "publication broker binding failed after the task lease expired: \
+                             {error:#}"
                     ));
                 }
-            };
+                return Err(anyhow!(
+                    "publication broker binding failed; the task claim was released without \
+                        consuming an attempt: {error:#}"
+                ));
+            }
+        };
 
         let result = self
             .execute(&task, external_auth, &publication_branch)

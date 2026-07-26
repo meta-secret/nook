@@ -567,8 +567,8 @@ impl TaskStore for Neo4jTaskStore {
         agent_id: &AgentId,
         error: &str,
     ) -> anyhow::Result<bool> {
-        let mut rows = self
-            .graph
+        let mut transaction = self.graph.start_txn().await?;
+        let mut rows = transaction
             .execute(
                 query(
                     "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
@@ -599,7 +599,31 @@ impl TaskStore for Neo4jTaskStore {
                 .param("error", error),
             )
             .await?;
-        Ok(rows.next().await?.is_some())
+        let accepted = rows.next(transaction.handle()).await?.is_some();
+        if !accepted {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+        transaction
+            .run(
+                query(
+                    "MATCH (failed:Task {id: $task_id, status: 'FAILED'})
+                     MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(failed)
+                     WHERE dependent.status IN ['READY', 'BLOCKED']
+                     SET dependent.status = 'FAILED',
+                         dependent.blocked_reason = $dependency_error,
+                         dependent.updated_at = timestamp(),
+                         dependent.version = dependent.version + 1",
+                )
+                .param("task_id", task.id.as_str())
+                .param(
+                    "dependency_error",
+                    format!("dependency {} exhausted its retry budget", task.id),
+                ),
+            )
+            .await?;
+        transaction.commit().await?;
+        Ok(true)
     }
 
     async fn block(
@@ -638,6 +662,10 @@ impl TaskStore for Neo4jTaskStore {
                                    blocker.updated_at = timestamp()
                      WITH task, attempt, blocker
                      WHERE blocker.source_commit = $source_commit
+                       AND blocker.id <> task.id
+                       AND NOT EXISTS {
+                         MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
+                       }
                      MERGE (task)-[:DEPENDS_ON]->(blocker)
                      SET task.status = CASE
                              WHEN blocker.status = 'COMPLETED' THEN 'READY'
@@ -1098,6 +1126,122 @@ mod tests {
             .expect("task with completed blocker is ready");
         assert_eq!(resumed_reused.id, reused.id);
         assert_eq!(resumed_reused.attempt_number, 1);
+        assert!(
+            store
+                .complete(
+                    &resumed_reused,
+                    &agent_a,
+                    "completed reused-blocker task",
+                    None,
+                )
+                .await
+                .expect("complete reused-blocker task")
+        );
+
+        let cycle_root = task(format!("cycle-root-{suffix}"), Vec::new());
+        let cycle_dependent = task(
+            format!("cycle-dependent-{suffix}"),
+            vec![cycle_root.id.clone()],
+        );
+        store
+            .enqueue(&cycle_root)
+            .await
+            .expect("enqueue cycle root");
+        store
+            .enqueue(&cycle_dependent)
+            .await
+            .expect("enqueue cycle dependent");
+        let cycle_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim cycle root")
+            .expect("cycle root available");
+        let mut existing_dependent = cycle_dependent.clone();
+        existing_dependent.dependencies.clear();
+        assert!(
+            !store
+                .block(
+                    &cycle_claim,
+                    &agent_a,
+                    &existing_dependent,
+                    "must reject a dependency cycle",
+                )
+                .await
+                .expect("reject dependency cycle")
+        );
+        assert!(
+            store
+                .complete(&cycle_claim, &agent_a, "cycle root complete", None)
+                .await
+                .expect("complete cycle root")
+        );
+        let cycle_dependent_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim cycle dependent")
+            .expect("cycle dependent available");
+        assert!(
+            store
+                .complete(
+                    &cycle_dependent_claim,
+                    &agent_a,
+                    "cycle dependent complete",
+                    None,
+                )
+                .await
+                .expect("complete cycle dependent")
+        );
+
+        let mut exhausted = task(format!("exhausted-{suffix}"), Vec::new());
+        exhausted.max_attempts = 1;
+        let stranded = task(
+            format!("exhausted-dependent-{suffix}"),
+            vec![exhausted.id.clone()],
+        );
+        store
+            .enqueue(&exhausted)
+            .await
+            .expect("enqueue exhausted task");
+        store
+            .enqueue(&stranded)
+            .await
+            .expect("enqueue exhausted dependent");
+        let exhausted_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim exhausted task")
+            .expect("exhausted task available");
+        assert!(
+            store
+                .fail(&exhausted_claim, &agent_a, "terminal failure")
+                .await
+                .expect("fail exhausted task")
+        );
+        let mut failed_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task)
+                     WHERE task.id IN [$failed_id, $dependent_id]
+                     RETURN task.id AS id, task.status AS status",
+                )
+                .param("failed_id", exhausted.id.as_str())
+                .param("dependent_id", stranded.id.as_str()),
+            )
+            .await
+            .expect("read propagated failures");
+        let mut failed_statuses = Vec::new();
+        while let Some(row) = failed_rows.next().await.expect("failed task row") {
+            failed_statuses.push((
+                row.get::<String>("id").expect("failed task id"),
+                row.get::<String>("status").expect("failed task status"),
+            ));
+        }
+        assert_eq!(failed_statuses.len(), 2);
+        assert!(
+            failed_statuses.iter().all(|(_, status)| status == "FAILED"),
+            "terminal dependency failure must propagate to every blocked descendant"
+        );
 
         store
             .graph

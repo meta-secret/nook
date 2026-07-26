@@ -20,6 +20,7 @@ struct BoundTask {
     id: String,
     source_commit: String,
     branch: String,
+    enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,6 +29,7 @@ pub enum GitHubRequest {
     Bind {
         task_id: String,
         source_commit: String,
+        enabled: bool,
     },
     Publish {
         title: String,
@@ -68,17 +70,23 @@ struct PublicationBroker {
     verified_main: Arc<Mutex<bool>>,
     verified_run: Arc<Mutex<Option<Value>>>,
     workbench_completed: Arc<Mutex<bool>>,
+    source_workspace: PathBuf,
     workspace: PathBuf,
     token_path: PathBuf,
     private_home: PathBuf,
 }
 
-pub async fn bind_publication_task(socket: &Path, task: &ClaimedTask) -> anyhow::Result<String> {
+pub async fn bind_publication_task(
+    socket: &Path,
+    task: &ClaimedTask,
+    enabled: bool,
+) -> anyhow::Result<String> {
     let response = request(
         socket,
         &GitHubRequest::Bind {
             task_id: task.id.to_string(),
             source_commit: task.source_commit.clone(),
+            enabled,
         },
     )
     .await?;
@@ -172,7 +180,8 @@ pub async fn run_publication_broker(
         verified_main: Arc::new(Mutex::new(false)),
         verified_run: Arc::new(Mutex::new(None)),
         workbench_completed: Arc::new(Mutex::new(false)),
-        workspace,
+        source_workspace: workspace,
+        workspace: private_home.join("repository"),
         token_path,
         private_home,
     };
@@ -212,7 +221,8 @@ impl PublicationBroker {
             GitHubRequest::Bind {
                 task_id,
                 source_commit,
-            } => self.bind(task_id, source_commit).await,
+                enabled,
+            } => self.bind(task_id, source_commit, enabled).await,
             GitHubRequest::Publish { title, body } => self.publish(&title, &body).await,
             GitHubRequest::Inspect => self.inspect().await,
             GitHubRequest::ReplyThread { thread_id, body } => {
@@ -228,12 +238,31 @@ impl PublicationBroker {
         }
     }
 
-    async fn bind(&self, task_id: String, source_commit: String) -> anyhow::Result<Value> {
+    async fn bind(
+        &self,
+        task_id: String,
+        source_commit: String,
+        enabled: bool,
+    ) -> anyhow::Result<Value> {
         if source_commit.len() != 40 || !source_commit.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
             anyhow::bail!("publication source commit is invalid");
         }
         let base_branch = publication_branch_name(&task_id);
+        if !enabled {
+            let candidate = BoundTask {
+                branch: String::new(),
+                id: task_id,
+                source_commit: source_commit.to_ascii_lowercase(),
+                enabled,
+            };
+            let mut task = self.task.lock().await;
+            if task.is_some() {
+                anyhow::bail!("publication broker is already bound");
+            }
+            *task = Some(candidate);
+            return Ok(json!({ "branch": "" }));
+        }
         let task_pulls = self.task_pulls(&base_branch).await?;
         let branch = task_pulls
             .iter()
@@ -246,11 +275,14 @@ impl PublicationBroker {
             branch,
             id: task_id,
             source_commit: source_commit.to_ascii_lowercase(),
+            enabled,
         };
         {
             let mut task = self.task.lock().await;
             if let Some(existing) = task.as_ref() {
-                if existing.id != candidate.id || existing.source_commit != candidate.source_commit
+                if existing.id != candidate.id
+                    || existing.source_commit != candidate.source_commit
+                    || existing.enabled != candidate.enabled
                 {
                     anyhow::bail!("publication broker is already bound to another task");
                 }
@@ -278,11 +310,16 @@ impl PublicationBroker {
     }
 
     async fn bound_task(&self) -> anyhow::Result<BoundTask> {
-        self.task
+        let task = self
+            .task
             .lock()
             .await
             .clone()
-            .context("publication broker is not bound to a claimed task")
+            .context("publication broker is not bound to a claimed task")?;
+        if !task.enabled {
+            anyhow::bail!("publication is disabled for this task");
+        }
+        Ok(task)
     }
 
     async fn publish(&self, title: &str, body: &str) -> anyhow::Result<Value> {
@@ -312,7 +349,7 @@ impl PublicationBroker {
             task.branch.clone_from(&base_branch);
         }
         *self.task.lock().await = Some(task.clone());
-        self.git(&["checkout", "-B", &task.branch]).await?;
+        self.prepare_publication_workspace(&task).await?;
         self.git(&["add", "--all", "--", "."]).await?;
         if !self.git_success(&["diff", "--cached", "--quiet"]).await? {
             self.git(&[
@@ -1141,6 +1178,69 @@ impl PublicationBroker {
         }
     }
 
+    async fn prepare_publication_workspace(&self, task: &BoundTask) -> anyhow::Result<()> {
+        tokio::fs::create_dir_all(&self.workspace).await?;
+        if !self.workspace.join(".git").is_dir() {
+            self.git(&["init", "--initial-branch=main", "."]).await?;
+            self.git(&[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/meta-secret/nook.git",
+            ])
+            .await?;
+        }
+        self.git(&[
+            "fetch",
+            "--force",
+            "--no-tags",
+            "origin",
+            &task.source_commit,
+        ])
+        .await?;
+        let remote_branch = format!("refs/heads/{}", task.branch);
+        let private_remote = "refs/remotes/origin/hive-publication";
+        let fetch_branch = format!("+{remote_branch}:{private_remote}");
+        if self
+            .git_success(&["fetch", "--force", "--no-tags", "origin", &fetch_branch])
+            .await?
+        {
+            self.git(&["checkout", "-B", &task.branch, private_remote])
+                .await?;
+        } else {
+            self.git(&["checkout", "-B", &task.branch, &task.source_commit])
+                .await?;
+        }
+        self.git(&["reset", "--hard", "HEAD"]).await?;
+        self.git(&["clean", "-fdx"]).await?;
+
+        let source = format!("{}/", self.source_workspace.join("repository").display());
+        let destination = format!("{}/", self.workspace.display());
+        let status = Command::new("rsync")
+            .args([
+                "--archive",
+                "--delete",
+                "--exclude=.git/",
+                "--exclude=node_modules/",
+                "--exclude=target/",
+                "--exclude=dist/",
+                "--exclude=.svelte-kit/",
+                "--exclude=.wrangler/",
+                &source,
+                &destination,
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await
+            .context("copy worker tree into broker-owned publication checkout")?;
+        if !status.success() {
+            anyhow::bail!("copy worker tree into broker-owned publication checkout failed");
+        }
+        Ok(())
+    }
+
     async fn git(&self, arguments: &[&str]) -> anyhow::Result<()> {
         if !self.git_success(arguments).await? {
             anyhow::bail!("git {:?} failed", arguments);
@@ -1168,8 +1268,18 @@ impl PublicationBroker {
             tokio::fs::set_permissions(&askpass, permissions).await?;
         }
         let status = Command::new("git")
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "credential.helper=",
+                "-c",
+                "protocol.ext.allow=never",
+            ])
             .args(arguments)
-            .current_dir(self.workspace.join("repository"))
+            .current_dir(&self.workspace)
             .env("GIT_ASKPASS", &askpass)
             .env("GIT_TERMINAL_PROMPT", "0")
             .stdin(Stdio::null())
@@ -1182,8 +1292,18 @@ impl PublicationBroker {
 
     async fn git_output(&self, arguments: &[&str]) -> anyhow::Result<String> {
         let output = Command::new("git")
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "credential.helper=",
+                "-c",
+                "protocol.ext.allow=never",
+            ])
             .args(arguments)
-            .current_dir(self.workspace.join("repository"))
+            .current_dir(&self.workspace)
             .stdin(Stdio::null())
             .output()
             .await?;

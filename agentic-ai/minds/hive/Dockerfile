@@ -28,6 +28,7 @@ RUN apt-get update \
         patch \
         python3 \
         ripgrep \
+        rsync \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add clippy rustfmt

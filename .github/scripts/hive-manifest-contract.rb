@@ -63,6 +63,12 @@ unless publisher_mounts.include?("github-publication") &&
        worker_mounts.include?("publication-channel")
   raise "Hive publication broker boundary is incomplete"
 end
+publisher_workspace = publisher
+  .fetch("volumeMounts")
+  .find { |mount| mount.fetch("name") == "workspace" }
+unless publisher_workspace&.fetch("readOnly", false) == true
+  raise "Hive publication broker must see the worker workspace read-only"
+end
 worker_environment = worker.fetch("env").to_h { |entry| [entry.fetch("name"), entry["value"]] }
 unless worker_environment["HIVE_SEALED_GUEST"] == "1"
   raise "Hive worker must select native sealed-guest Taskfile formatting"
@@ -120,6 +126,9 @@ end
 unless neo4j.dig("ssl", "bolt", "privateKey", "secretName") == "hive-neo4j-tls" &&
        neo4j.dig("ssl", "bolt", "publicCertificate", "secretName") == "hive-neo4j-tls"
   raise "Neo4j Bolt TLS certificate configuration is incomplete"
+end
+unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
+  raise "Neo4j Bolt listener must require TLS"
 end
 
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))

@@ -93,7 +93,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
 | Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, terminal result, dependency patch integration | Neo4j/GitHub/Codex credential files |
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
-| Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations | Arbitrary GitHub API access by Codex |
+| Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations from a broker-owned checkout | Arbitrary GitHub API access by Codex or task-controlled Git metadata |
 | Pod reaper | Worker Kata Pod | Deletes the whole Pod after terminal completion or worker restart | Task execution or broad Kubernetes authority |
 | Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
 
@@ -267,6 +267,13 @@ permits task binding, publish/update, inspection, targeted replies, thread
 resolution, exact-head squash merge, Main verification, and bounded Workbench
 file updates. Codex cannot read the token or issue arbitrary authenticated
 requests.
+
+The worker binds this API before repository execution. Main-repair tasks enable
+the bounded publication capability; all other task kinds permanently disable
+it for that Pod. The broker reads the worker tree through a read-only mount,
+copies authored files into its own private checkout, and runs Git only there
+with hooks and executable protocol extensions disabled. Task-controlled
+`.git` configuration is never used by a token-bearing process.
 
 ## 7. Isolation and credential design
 

@@ -58,6 +58,11 @@ publication, PR inspection, targeted review replies and resolution, exact-head
 squash merge, and resulting Main verification, but cannot read the credential
 or invoke arbitrary GitHub APIs. A short Git-ref lock serializes the base
 recheck and merge; stale locks self-expire.
+Before Codex starts, the worker enables that capability only for Main-repair
+tasks and permanently disables it for every other task kind. Publication uses
+a broker-owned private Git checkout populated from the worker's read-only tree;
+task-controlled hooks and repository Git configuration therefore never execute
+in the token-bearing broker.
 
 If Codex discovers blocking work, its structured result names the blocker.
 Hive atomically creates a higher-priority task, adds a `DEPENDS_ON` edge, and
