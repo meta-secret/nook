@@ -41,7 +41,8 @@ No host `CODEX_HOME`, host path, or host Docker socket is mounted. The reaper
 sidecar receives only an opaque credential for a dedicated controller service;
 it has no Kubernetes API token. That controller runs under a separate workload
 identity restricted to `get`/`delete` labeled Hive Pods. It deletes the entire
-Pod after the worker writes its terminal marker. A create-once workspace
+Pod after the worker writes its terminal marker and reloads both its projected
+Kubernetes token and opaque credential for every request. A create-once workspace
 sentinel makes a restarted worker write that marker before exiting, so a second
 task cannot run in the same microVM. The worker Pod identity can patch only the
 Codex-auth Secret, and its projected token is mounted only into the auth broker.
@@ -54,12 +55,15 @@ attempt interrupted without consuming the task's retry budget before rollout.
 
 A one-replica Kata dispatcher reconciles trusted `ready/agent` Workbench Main
 incidents into Neo4j. The failed Main SHA is the idempotency key, so retries do
-not duplicate work. A repository-scoped GitHub credential lives only in a
+not duplicate work. It revalidates the referenced Actions run before enqueueing,
+so a successful rerun makes a stale incident a no-op. A repository-scoped
+GitHub credential lives only in a
 separate publication broker. Codex can request deterministic branch
 publication, PR inspection, targeted review replies and resolution, exact-head
 squash merge, and resulting Main verification, but cannot read the credential
-or invoke arbitrary GitHub APIs. A short Git-ref lock serializes the base
-recheck and merge; stale locks self-expire.
+or invoke arbitrary GitHub APIs. Review, comment, and repair-PR history is
+paginated. A short Git-ref lock serializes the base recheck and merge; stale
+locks self-expire.
 Before Codex starts, the worker enables that capability only for Main-repair
 tasks and permanently disables it for every other task kind. Publication uses
 a broker-owned private Git checkout populated from the worker's read-only tree;
@@ -80,6 +84,12 @@ as the terminal result. Main-repair tasks are not terminal until the broker has
 squash-merged their PR and the resulting Main workflow is green. Deterministic
 branches let replacement Pods resume an existing delivery instead of creating
 duplicates.
+
+The complete Main-repair lifecycle has a six-hour execution bound. Embedded
+Codex validation commands append typed, secret-sanitized local execution events
+outside the repository checkout; the publication broker includes their command
+identity, category, timestamps, duration, outcome, and reason in the immutable
+Workbench statistics record.
 
 Neo4j requires Bolt TLS. The deployment creates a private CA and
 service certificate, configures the chart with `server.bolt.tls_level=REQUIRED`,

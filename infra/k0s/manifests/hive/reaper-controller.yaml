@@ -44,17 +44,21 @@ spec:
 
               namespace = "hive-system"
               api = "https://kubernetes.default.svc"
-              with open("/run/reaper-auth/token", encoding="utf-8") as handle:
-                  client_token = handle.read().strip()
-              with open("/run/kubernetes/token", encoding="utf-8") as handle:
-                  api_token = handle.read().strip()
               context = ssl.create_default_context(cafile="/run/kubernetes/ca.crt")
+
+              def token(path):
+                  with open(path, encoding="utf-8") as handle:
+                      return handle.read().strip()
 
               def api_request(method, path):
                   request = urllib.request.Request(
                       f"{api}{path}",
                       method=method,
-                      headers={"Authorization": f"Bearer {api_token}"},
+                      headers={
+                          "Authorization": (
+                              f"Bearer {token('/run/kubernetes/token')}"
+                          )
+                      },
                   )
                   with urllib.request.urlopen(request, context=context, timeout=10) as response:
                       return response.read()
@@ -63,7 +67,8 @@ spec:
                   def do_POST(self):
                       supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
                       match = re.fullmatch(r"/reap/(hive-[a-z0-9-]+)", self.path)
-                      if not hmac.compare_digest(supplied, client_token) or match is None:
+                      expected = token("/run/reaper-auth/token")
+                      if not hmac.compare_digest(supplied, expected) or match is None:
                           self.send_error(403)
                           return
                       pod_name = match.group(1)

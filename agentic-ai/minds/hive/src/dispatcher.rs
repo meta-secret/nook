@@ -54,6 +54,18 @@ async fn dispatch_once<S: TaskStore>(store: &S, contents_url: &str) -> anyhow::R
         if !is_ready_agent_issue(&body) {
             continue;
         }
+        let run_id = main_failure_run_id(&body)
+            .context("ready Main failure issue has no workflow-run marker")?;
+        let run: serde_json::Value = serde_json::from_slice(
+            &fetch(&format!(
+                "https://api.github.com/repos/meta-secret/nook/actions/runs/{run_id}"
+            ))
+            .await?,
+        )
+        .context("decode current Main workflow-run state")?;
+        if !main_run_requires_repair(&run) {
+            continue;
+        }
         let task = EnqueueTask {
             id: TaskId::new(entry.name.trim_end_matches(MAIN_FAILURE_SUFFIX))
                 .map_err(anyhow::Error::msg)?,
@@ -86,6 +98,23 @@ fn is_ready_agent_issue(body: &str) -> bool {
         && body.lines().any(|line| line.trim() == "automation: hive")
 }
 
+fn main_failure_run_id(body: &str) -> Option<u64> {
+    body.split("<!-- main-run:")
+        .nth(1)?
+        .split(":attempt:")
+        .next()?
+        .parse()
+        .ok()
+}
+
+fn main_run_requires_repair(run: &serde_json::Value) -> bool {
+    run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
+        && !matches!(
+            run.get("conclusion").and_then(serde_json::Value::as_str),
+            Some("success" | "neutral" | "skipped")
+        )
+}
+
 async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
     let output = Command::new("curl")
         .args([
@@ -114,7 +143,11 @@ async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_ready_agent_issue, main_failure_commit};
+    use serde_json::json;
+
+    use super::{
+        is_ready_agent_issue, main_failure_commit, main_failure_run_id, main_run_requires_repair,
+    };
 
     #[test]
     fn recognizes_only_ready_automated_main_incidents() {
@@ -130,5 +163,18 @@ mod tests {
             "---\nstatus: in_progress\nautomation: hive\n---\n"
         ));
         assert!(main_failure_commit("unrelated.md").is_none());
+        assert_eq!(
+            main_failure_run_id("<!-- main-run:123456:attempt:2 -->\n- failed workflow evidence"),
+            Some(123456)
+        );
+        assert!(main_run_requires_repair(
+            &json!({"status": "completed", "conclusion": "failure"})
+        ));
+        assert!(!main_run_requires_repair(
+            &json!({"status": "completed", "conclusion": "success"})
+        ));
+        assert!(!main_run_requires_repair(
+            &json!({"status": "in_progress", "conclusion": null})
+        ));
     }
 }

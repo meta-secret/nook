@@ -23,6 +23,25 @@ struct BoundTask {
     enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum LocalExecutionCategory {
+    Check,
+    Test,
+    Combined,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LocalExecutionEvent {
+    command: String,
+    category: LocalExecutionCategory,
+    started_at: String,
+    finished_at: String,
+    duration_seconds: u64,
+    outcome: String,
+    reason: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum GitHubRequest {
@@ -429,18 +448,10 @@ impl PublicationBroker {
             )
             .await?;
         let reviews = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/pulls/{number}/reviews"))
             .await?;
         let comments = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/issues/{number}/comments?per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/issues/{number}/comments"))
             .await?;
         let review_threads = self.review_threads(number).await?;
         let feedback = review_feedback(&pull, &reviews, &comments);
@@ -473,9 +484,13 @@ impl PublicationBroker {
         match (result, release) {
             (Ok(merged), Ok(_)) => Ok(merged),
             (Err(error), _) => Err(error),
-            (Ok(_), Err(error)) => Err(error).context(format!(
-                "merged successfully but failed to release merge lock {lock}"
-            )),
+            (Ok(merged), Err(error)) => {
+                eprintln!(
+                    "Hive merge {lock} succeeded but lock cleanup will be retried by its \
+                     expiration path: {error:#}"
+                );
+                Ok(merged)
+            }
         }
     }
 
@@ -558,18 +573,10 @@ impl PublicationBroker {
             anyhow::bail!("pull request still has unresolved review threads");
         }
         let reviews = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/pulls/{number}/reviews"))
             .await?;
         let comments = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/issues/{number}/comments?per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/issues/{number}/comments"))
             .await?;
         if review_feedback(&pull, &reviews, &comments)
             .iter()
@@ -1165,6 +1172,23 @@ impl PublicationBroker {
                 })
             })
             .collect::<Vec<_>>();
+        let local_executions = self.local_executions().await?;
+        let local_execution_seconds = local_executions
+            .iter()
+            .map(|execution| execution.duration_seconds)
+            .sum::<u64>();
+        let local_check_count = local_executions
+            .iter()
+            .filter(|execution| execution.category == LocalExecutionCategory::Check)
+            .count();
+        let local_test_count = local_executions
+            .iter()
+            .filter(|execution| execution.category == LocalExecutionCategory::Test)
+            .count();
+        let local_combined_count = local_executions
+            .iter()
+            .filter(|execution| execution.category == LocalExecutionCategory::Combined)
+            .count();
         let inventory = self.test_inventory().await?;
         let baseline_prs = self.statistics_baselines(number).await?;
         let record = json!({
@@ -1182,11 +1206,11 @@ impl PublicationBroker {
                 "open_to_merge_seconds": open_to_merge_seconds,
             },
             "summary": {
-                "local_execution_count": 0,
-                "local_check_count": 0,
-                "local_test_count": 0,
-                "local_combined_count": 0,
-                "local_execution_seconds": 0,
+                "local_execution_count": local_executions.len(),
+                "local_check_count": local_check_count,
+                "local_test_count": local_test_count,
+                "local_combined_count": local_combined_count,
+                "local_execution_seconds": local_execution_seconds,
                 "github_actions_run_count": action_records.len(),
                 "github_actions_seconds": github_actions_seconds,
                 "pr_retrigger_count": retriggers.len(),
@@ -1199,7 +1223,7 @@ impl PublicationBroker {
                 "by_type": inventory,
                 "total": inventory.values().sum::<u64>(),
             },
-            "local_executions": [],
+            "local_executions": local_executions,
             "github_actions_runs": action_records,
             "cache_telemetry": {
                 "totals": {
@@ -1241,11 +1265,10 @@ impl PublicationBroker {
             "waste_assessment": {
                 "wasteful": true,
                 "findings": [
-                    "The broker cannot observe sealed-guest local command timings.",
                     "Cache artifacts are retained by Actions but are not yet decoded by the broker.",
                 ],
                 "required_actions": [
-                    "Add typed local-execution events and cache-artifact decoding to Hive statistics collection.",
+                    "Add cache-artifact decoding to Hive statistics collection.",
                 ],
             },
         });
@@ -1257,6 +1280,32 @@ impl PublicationBroker {
         )
         .await?;
         Ok(())
+    }
+
+    async fn local_executions(&self) -> anyhow::Result<Vec<LocalExecutionEvent>> {
+        let path = self.source_workspace.join(".hive-local-executions.jsonl");
+        let contents = match tokio::fs::read_to_string(&path).await {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("read local execution events {}", path.display()));
+            }
+        };
+        contents
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .enumerate()
+            .map(|(index, line)| {
+                serde_json::from_str::<LocalExecutionEvent>(line).with_context(|| {
+                    format!(
+                        "decode local execution event {} from {}",
+                        index + 1,
+                        path.display()
+                    )
+                })
+            })
+            .collect()
     }
 
     async fn test_inventory(&self) -> anyhow::Result<std::collections::BTreeMap<String, u64>> {
@@ -1393,11 +1442,7 @@ impl PublicationBroker {
 
     async fn task_pulls(&self, base_branch: &str) -> anyhow::Result<Vec<Value>> {
         let pulls = self
-            .api(
-                "GET",
-                &format!("/repos/{REPOSITORY}/pulls?state=all&per_page=100"),
-                None,
-            )
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/pulls?state=all"))
             .await?;
         Ok(pulls
             .as_array()
@@ -1415,27 +1460,74 @@ impl PublicationBroker {
     }
 
     async fn review_threads(&self, number: u64) -> anyhow::Result<Value> {
-        let response = self
-            .api(
-                "POST",
-                "/graphql",
-                Some(json!({
-                    "query": "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(last:1){nodes{body url author{login}}}}}}}}",
-                    "variables": {
-                        "owner": "meta-secret",
-                        "name": "nook",
-                        "number": number,
-                    }
-                })),
-            )
-            .await?;
-        if response.get("errors").is_some() {
-            anyhow::bail!("GitHub rejected the review-thread query");
+        let mut cursor: Option<String> = None;
+        let mut threads = Vec::new();
+        loop {
+            let response = self
+                .api(
+                    "POST",
+                    "/graphql",
+                    Some(json!({
+                        "query": "query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){nodes{id isResolved comments(last:1){nodes{body url author{login}}}} pageInfo{hasNextPage endCursor}}}}}",
+                        "variables": {
+                            "owner": "meta-secret",
+                            "name": "nook",
+                            "number": number,
+                            "after": cursor.as_deref(),
+                        }
+                    })),
+                )
+                .await?;
+            if response.get("errors").is_some() {
+                anyhow::bail!("GitHub rejected the review-thread query");
+            }
+            let page = response
+                .pointer("/data/repository/pullRequest/reviewThreads")
+                .context("GitHub review-thread response is invalid")?;
+            threads.extend(
+                page.get("nodes")
+                    .and_then(Value::as_array)
+                    .context("GitHub review-thread nodes are invalid")?
+                    .iter()
+                    .cloned(),
+            );
+            if page
+                .pointer("/pageInfo/hasNextPage")
+                .and_then(Value::as_bool)
+                != Some(true)
+            {
+                break;
+            }
+            cursor = Some(
+                page.pointer("/pageInfo/endCursor")
+                    .and_then(Value::as_str)
+                    .context("GitHub review-thread page has no end cursor")?
+                    .to_owned(),
+            );
         }
-        response
-            .pointer("/data/repository/pullRequest/reviewThreads/nodes")
-            .cloned()
-            .context("GitHub review-thread response is invalid")
+        Ok(Value::Array(threads))
+    }
+
+    async fn paginated_api_array(&self, path: &str) -> anyhow::Result<Value> {
+        let mut values = Vec::new();
+        for page in 1.. {
+            let separator = if path.contains('?') { '&' } else { '?' };
+            let response = self
+                .api(
+                    "GET",
+                    &format!("{path}{separator}per_page=100&page={page}"),
+                    None,
+                )
+                .await?;
+            let page_values = response
+                .as_array()
+                .context("GitHub paginated response is not an array")?;
+            values.extend(page_values.iter().cloned());
+            if page_values.len() < 100 {
+                break;
+            }
+        }
+        Ok(Value::Array(values))
     }
 
     async fn require_bound_review_thread(&self, thread_id: &str) -> anyhow::Result<()> {
@@ -1656,14 +1748,15 @@ pub fn publication_branch_name(task_id: &str) -> String {
 
 fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value> {
     let comment_values = comments.as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let pull_author = pull.pointer("/user/login").and_then(Value::as_str);
     let addressed = comment_values
         .iter()
+        .filter(|comment| comment.pointer("/user/login").and_then(Value::as_str) == pull_author)
         .filter_map(|comment| comment.get("body").and_then(Value::as_str))
         .filter_map(|body| body.split("<!-- hive-feedback:").nth(1))
         .filter_map(|suffix| suffix.split(" -->").next())
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    let pull_author = pull.pointer("/user/login").and_then(Value::as_str);
     let current_head = pull.pointer("/head/sha").and_then(Value::as_str);
     let mut feedback = Vec::new();
     for review in reviews.as_array().map(Vec::as_slice).unwrap_or(&[]) {
@@ -1932,11 +2025,30 @@ mod tests {
             },
             {
                 "id": 8,
+                "body": "<!-- hive-feedback:review-42 -->\nSpoofed marker.",
+                "user": {"login": "untrusted-commenter"}
+            }
+        ]);
+        assert!(
+            review_feedback(&pull, &reviews, &comments)
+                .iter()
+                .filter(|item| item.get("id").and_then(Value::as_str) == Some("review-42"))
+                .all(|item| item.get("addressed").and_then(Value::as_bool) == Some(false))
+        );
+
+        let comments = json!([
+            {
+                "id": 7,
+                "body": "Also keep the cache read-only.",
+                "user": {"login": "reviewer"}
+            },
+            {
+                "id": 9,
                 "body": "<!-- hive-feedback:review-42 -->\nFixed with a recovery test.",
                 "user": {"login": "nook-hive"}
             },
             {
-                "id": 9,
+                "id": 10,
                 "body": "<!-- hive-feedback:comment-7 -->\nConfirmed read-only.",
                 "user": {"login": "nook-hive"}
             }

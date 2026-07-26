@@ -84,6 +84,9 @@ worker_environment = worker.fetch("env").to_h { |entry| [entry.fetch("name"), en
 unless worker_environment["HIVE_SEALED_GUEST"] == "1"
   raise "Hive worker must select native sealed-guest Taskfile formatting"
 end
+unless worker_environment["HIVE_TASK_TIMEOUT_SECONDS"] == "21600"
+  raise "Hive worker must allow the complete six-hour repair lifecycle"
+end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
@@ -124,6 +127,15 @@ raise "Hive Internet egress includes private ranges: #{missing_ranges.join(", ")
 unless reaper_deployment.dig("spec", "template", "spec", "serviceAccountName") ==
        "hive-reaper-controller"
   raise "Hive reaper controller must use a distinct Pod-deletion identity"
+end
+reaper_command = reaper_deployment
+  .dig("spec", "template", "spec", "containers")
+  .find { |container| container["name"] == "controller" }
+  .fetch("command")
+  .last
+unless reaper_command.include?("token('/run/kubernetes/token')") &&
+       reaper_command.include?('expected = token("/run/reaper-auth/token")')
+  raise "Hive reaper controller must reload rotating credentials for every request"
 end
 
 kata = load_yaml.call("infra/k0s/manifests/kata/values.yaml")

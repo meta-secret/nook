@@ -46,7 +46,7 @@ enum Command {
         lease_seconds: i64,
         #[arg(long, env = "HIVE_HEARTBEAT_SECONDS", default_value_t = 60)]
         heartbeat_seconds: u64,
-        #[arg(long, env = "HIVE_TASK_TIMEOUT_SECONDS", default_value_t = 3600)]
+        #[arg(long, env = "HIVE_TASK_TIMEOUT_SECONDS", default_value_t = 21600)]
         task_timeout_seconds: u64,
         #[arg(long, env = "HIVE_POLL_MIN_SECONDS", default_value_t = 5)]
         poll_min_seconds: u64,

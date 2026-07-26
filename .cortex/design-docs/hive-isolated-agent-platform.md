@@ -89,7 +89,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Component | Runs where | Owns | Must not own |
 | --- | --- | --- | --- |
 | Main failure handoff | GitHub Actions | Converts an unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA | Agent execution, raw failure logs, deployment |
-| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents and idempotently enqueues them | GitHub publication token, Codex auth |
+| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, revalidates the referenced Main run, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
 | Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, terminal result, dependency patch integration | Neo4j/GitHub/Codex credential files |
@@ -199,6 +199,7 @@ sequenceDiagram
   loop While the task runs
     W->>C: Heartbeat current lease token
     X-->>W: Progress and structured result
+    W->>W: Append typed validation execution event
   end
   W->>C: Complete, block, fail, or release
   C->>N: Commit terminal state
@@ -209,6 +210,8 @@ sequenceDiagram
 The worker creates a sentinel with create-once semantics before claiming. If
 the worker container restarts in the same Pod, it refuses to claim again and
 the reaper deletes the Pod. This preserves the one-task-per-microVM invariant.
+The task lifecycle has a six-hour bound so diagnosis, implementation, review,
+merge, and resulting Main verification remain one durable unit of work.
 
 Repository checkout starts from the task's full pinned Git object ID, not a
 moving branch. A Main repair may resume a durable Hive publication branch only
@@ -236,6 +239,10 @@ flowchart LR
   main --> worklog["Workbench issue + worklog completion"]
   worklog --> complete["Neo4j task COMPLETED"]
 ```
+
+Before enqueueing, the dispatcher fetches the referenced workflow run again.
+A later successful rerun therefore turns a stale Workbench incident into a
+no-op instead of spending an isolated worker on an already-recovered revision.
 
 One logical Hive task owns the entire repair. Opening a PR is intermediate
 state, not completion. The task must:
@@ -267,8 +274,9 @@ Replacement Pods discover the latest generation and merged commit from GitHub.
 The GitHub token is used only by the publication broker. Its typed socket API
 permits task binding, publish/update, inspection, targeted replies, thread
 resolution, exact-head squash merge, Main verification, and bounded Workbench
-file updates. Codex cannot read the token or issue arbitrary authenticated
-requests.
+file updates. Review threads, submitted reviews, comments, and prior repair PR
+history are cursor/page traversed rather than truncated at the first API page.
+Codex cannot read the token or issue arbitrary authenticated requests.
 
 The worker binds this API before repository execution. Main-repair tasks enable
 the bounded publication capability; all other task kinds permanently disable
@@ -306,7 +314,16 @@ The Pod disables automatic service-account token mounting. Its service account
 can patch only the Codex-auth Secret, and that projected token is mounted only
 by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
 controller with an opaque credential. The controller has a distinct workload
-identity restricted to `get`/`delete` labeled Hive Pods.
+identity restricted to `get`/`delete` labeled Hive Pods. The controller reloads
+both its projected Kubernetes token and the opaque reaper credential for every
+request, so normal token projection and Secret rotation do not require a
+controller restart.
+
+Embedded Codex validation commands produce typed, secret-sanitized JSONL events
+outside the repository checkout. The publication broker reads those events
+through its read-only workspace mount and records their category, timestamps,
+duration, outcome, and bounded command identity in the immutable Workbench
+statistics record.
 
 Secrets are encrypted at rest by the k0s API server with a host-generated
 AES-GCM encryption provider. Neo4j recovery material is authenticated and

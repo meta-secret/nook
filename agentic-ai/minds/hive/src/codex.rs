@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::io::{self, IsTerminal, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use codex::{
@@ -18,7 +18,10 @@ use codex::{
     empty_extension_registry, find_codex_home, init_state_db,
     local_agent_graph_store_from_state_db, resolve_installation_id, thread_store_from_config,
 };
+use serde::Serialize;
 use thiserror::Error;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+use tokio::io::AsyncWriteExt;
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
 const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
@@ -135,7 +138,14 @@ impl InProcessCodexRunner {
             .await
             .map_err(|error| CodexError::Run(error.to_string()))?;
 
-        let turn_result = submit_and_wait(&thread, prompt, kind).await;
+        let execution_log = matches!(&kind, TurnKind::Task(_)).then(|| {
+            self.options
+                .repo_root
+                .parent()
+                .unwrap_or(&self.options.repo_root)
+                .join(".hive-local-executions.jsonl")
+        });
+        let turn_result = submit_and_wait(&thread, prompt, kind, execution_log.as_deref()).await;
         let shutdown_result = thread.shutdown_and_wait().await;
         let _ = thread_manager.remove_thread(&thread_id).await;
 
@@ -340,6 +350,7 @@ async fn submit_and_wait(
     thread: &CodexThread,
     prompt: &str,
     kind: TurnKind,
+    execution_log: Option<&Path>,
 ) -> Result<String, CodexError> {
     let schema = match &kind {
         TurnKind::Planning => OUTPUT_SCHEMA,
@@ -376,6 +387,16 @@ async fn submit_and_wait(
         progress
             .observe(&event.msg)
             .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
+        if let (Some(path), EventMsg::ExecCommandEnd(execution)) = (execution_log, &event.msg) {
+            record_local_execution(
+                path,
+                &execution.command,
+                execution.exit_code,
+                execution.duration,
+            )
+            .await
+            .map_err(|error| CodexError::Run(format!("record local execution: {error:#}")))?;
+        }
         match event.msg {
             EventMsg::TurnComplete(event) => {
                 return event
@@ -410,6 +431,115 @@ async fn submit_and_wait(
             _ => {}
         }
     }
+}
+
+#[derive(Serialize)]
+struct LocalExecutionRecord {
+    command: String,
+    category: &'static str,
+    started_at: String,
+    finished_at: String,
+    duration_seconds: u64,
+    outcome: &'static str,
+    reason: &'static str,
+}
+
+async fn record_local_execution(
+    path: &Path,
+    command: &[String],
+    exit_code: i32,
+    duration: std::time::Duration,
+) -> anyhow::Result<()> {
+    let Some(category) = local_execution_category(command) else {
+        return Ok(());
+    };
+    let finished = OffsetDateTime::now_utc();
+    let duration_seconds = duration.as_secs();
+    let started = finished - time::Duration::seconds(i64::try_from(duration_seconds)?);
+    let record = LocalExecutionRecord {
+        command: sanitized_execution_command(command, category),
+        category,
+        started_at: started.format(&Rfc3339)?,
+        finished_at: finished.format(&Rfc3339)?,
+        duration_seconds,
+        outcome: if exit_code == 0 { "passed" } else { "failed" },
+        reason: "embedded_codex_validation",
+    };
+    let mut line = serde_json::to_vec(&record)?;
+    line.push(b'\n');
+    let mut output = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .await?;
+    output.write_all(&line).await?;
+    output.flush().await?;
+    Ok(())
+}
+
+fn local_execution_category(command: &[String]) -> Option<&'static str> {
+    let command = command.join(" ").to_ascii_lowercase();
+    let tests = [
+        " test",
+        "test ",
+        "nextest",
+        "pytest",
+        "e2e",
+        "playwright",
+        "vitest",
+    ]
+    .iter()
+    .any(|marker| command.contains(marker));
+    let checks = [
+        "task ",
+        "cargo check",
+        "cargo clippy",
+        "cargo fmt",
+        "format",
+        " lint",
+        "build",
+        "deploy",
+        "validate",
+        "verify",
+    ]
+    .iter()
+    .any(|marker| command.contains(marker));
+    match (checks, tests) {
+        (true, true) => Some("combined"),
+        (true, false) => Some("check"),
+        (false, true) => Some("test"),
+        (false, false) => None,
+    }
+}
+
+fn sanitized_execution_command(command: &[String], category: &str) -> String {
+    let joined = command.join(" ");
+    let lower = joined.to_ascii_lowercase();
+    if ["token", "secret", "password", "credential", "authorization"]
+        .iter()
+        .any(|marker| lower.contains(marker))
+    {
+        return format!("[redacted {category} command]");
+    }
+    for tool in ["task", "cargo", "bun", "npm", "pytest", "go"] {
+        let Some(index) = lower.find(&format!("{tool} ")) else {
+            continue;
+        };
+        let public = joined[index..]
+            .split_whitespace()
+            .take(2)
+            .map(|part| {
+                part.trim_matches(|character: char| {
+                    !character.is_ascii_alphanumeric()
+                        && !matches!(character, '-' | '_' | ':' | '/' | '.')
+                })
+            })
+            .collect::<Vec<_>>();
+        if public.len() == 2 && public.iter().all(|part| !part.is_empty()) {
+            return public.join(" ");
+        }
+    }
+    format!("[{category} repository command]")
 }
 
 enum TurnProgress<W> {
@@ -962,5 +1092,38 @@ mod tests {
         assert!(output.contains("failed  · Repository command exited with status 1"));
         assert!(!output.contains("secret-command"));
         assert!(!output.contains("credential-value"));
+    }
+
+    #[test]
+    fn classifies_and_sanitizes_local_validation_executions() {
+        let check = vec![
+            "/bin/zsh".into(),
+            "-lc".into(),
+            "task infra:k0s:manifests:check".into(),
+        ];
+        let combined = vec!["/bin/zsh".into(), "-lc".into(), "task test:hive".into()];
+        let unrelated = vec!["git".into(), "status".into()];
+
+        assert_eq!(local_execution_category(&check), Some("check"));
+        assert_eq!(local_execution_category(&combined), Some("combined"));
+        assert_eq!(local_execution_category(&unrelated), None);
+        assert_eq!(
+            sanitized_execution_command(&check, "check"),
+            "task infra:k0s:manifests:check"
+        );
+    }
+
+    #[test]
+    fn redacts_secret_bearing_local_validation_commands() {
+        let command = vec![
+            "/bin/zsh".into(),
+            "-lc".into(),
+            "task deploy TOKEN=do-not-publish".into(),
+        ];
+
+        assert_eq!(
+            sanitized_execution_command(&command, "check"),
+            "[redacted check command]"
+        );
     }
 }
