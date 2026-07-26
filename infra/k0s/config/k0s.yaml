@@ -4,9 +4,11 @@ metadata:
   name: nook-hive
 spec:
   api:
+    address: 10.201.0.1
     sans:
       - 127.0.0.1
       - localhost
+      - 10.201.0.1
     extraArgs:
       encryption-provider-config: /var/lib/k0s/pki/hive-encryption-provider.yaml
   network:

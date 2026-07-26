@@ -7,6 +7,7 @@ vars:
   INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'
   INFRA_CLOUDFLARE_ACCOUNT_ID: '{{default "8a84df74d5bcf7b212980e6f51979731" .INFRA_CLOUDFLARE_ACCOUNT_ID}}'
   K0S_VERSION: v1.36.2+k0s.0
+  K0S_API_ADDRESS: 10.201.0.1
   K0S_AMD64_SHA256: 8b5d985f803df27acb44f900b2574a5b48e600bd2f87a3335d2a853b888e9298
   HELM_VERSION: v3.21.3
   HELM_AMD64_SHA256: 15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
@@ -468,13 +469,25 @@ tasks:
             > "$firewall_previous_fragment"
           firewall_fragment_existed=true
         fi
+        : > "$firewall_previous_live"
         for chain in input forward; do
+          printf 'flush chain inet bynull_filter %s\n' "$chain" \
+            >> "$firewall_previous_live"
           sudo -n nft --handle list chain inet bynull_filter "$chain" |
             awk -v chain="$chain" '
-              /comment "nook k0s pod (control plane|egress)/ {
+              /^[[:space:]]*table / ||
+              /^[[:space:]]*chain / ||
+              /^[[:space:]]*type / ||
+              /^[[:space:]]*policy / ||
+              /^[[:space:]]*[{}][[:space:]]*$/ {
+                next
+              }
+              {
                 sub(/^[[:space:]]*/, "")
                 sub(/[[:space:]]+# handle [0-9]+$/, "")
-                print "add rule inet bynull_filter " chain " " $0
+                if (length($0) > 0) {
+                  print "add rule inet bynull_filter " chain " " $0
+                }
               }
             ' >> "$firewall_previous_live"
         done
@@ -484,16 +497,6 @@ tasks:
           set +e
           if test "$firewall_rollback_armed" = true; then
             firewall_rollback_armed=false
-            sudo -n nft --handle list chain inet bynull_filter input |
-              awk '/comment "nook k0s pod control plane/ { print $NF }' |
-              while read -r handle; do
-                sudo -n nft delete rule inet bynull_filter input handle "$handle"
-              done
-            sudo -n nft --handle list chain inet bynull_filter forward |
-              awk '/comment "nook k0s pod egress/ { print $NF }' |
-              while read -r handle; do
-                sudo -n nft delete rule inet bynull_filter forward handle "$handle"
-              done
             if test -s "$firewall_previous_live"; then
               sudo -n nft --file "$firewall_previous_live"
             fi
@@ -1040,11 +1043,12 @@ tasks:
         firewall_config="$(mktemp)"
         trap 'rm -f "$firewall_config"' EXIT
         sudo -n awk \
-          '$0 != "include \"/etc/nftables.d/nook-k0s.nft\""' \
+          '$0 !~ /^[[:space:]]*include[[:space:]]+"\/etc\/nftables.d\/nook-k0s\.nft"([[:space:]]*(#.*)?)?$/' \
           /etc/nftables.conf > "$firewall_config"
         sudo -n nft --check --file "$firewall_config"
         sudo -n install -m 0644 "$firewall_config" /etc/nftables.conf
         sudo -n rm -f /etc/nftables.d/nook-k0s.nft
+        sudo -n nft --check --file /etc/nftables.conf
         if sudo -n nft list chain inet bynull_filter input |
           grep -F 'nook k0s pod control plane' >/dev/null; then
           echo "k0s input firewall exception survived uninstall" >&2
@@ -1055,7 +1059,8 @@ tasks:
           echo "k0s forward firewall exception survived uninstall" >&2
           exit 1
         fi
-        if sudo -n grep -F 'include "/etc/nftables.d/nook-k0s.nft"' \
+        if sudo -n grep -E \
+          '^[[:space:]]*include[[:space:]]+"/etc/nftables.d/nook-k0s\.nft"([[:space:]]*(#.*)?)?$' \
           /etc/nftables.conf >/dev/null; then
           echo "k0s firewall include survived uninstall" >&2
           exit 1
@@ -1420,11 +1425,7 @@ tasks:
             --namespace hive-data \
             -o jsonpath='{.subsets[0].addresses[0].ip}'
         )"
-        k0s_api_ip="$(
-          kubectl get endpoints kubernetes \
-            --namespace default \
-            -o jsonpath='{.subsets[0].addresses[0].ip}'
-        )"
+        k0s_api_ip="{{.K0S_API_ADDRESS}}"
         for discovered_ip in \
           "$neo4j_service_ip" \
           "$neo4j_endpoint_ip" \
@@ -1700,11 +1701,7 @@ tasks:
             --namespace hive-data \
             -o jsonpath='{.subsets[0].addresses[0].ip}'
         )"
-        k0s_api_ip="$(
-          kubectl get endpoints kubernetes \
-            --namespace default \
-            -o jsonpath='{.subsets[0].addresses[0].ip}'
-        )"
+        k0s_api_ip="{{.K0S_API_ADDRESS}}"
         for discovered_ip in \
           "$neo4j_service_ip" \
           "$neo4j_endpoint_ip" \

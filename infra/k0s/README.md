@@ -20,12 +20,15 @@ only two persisted `10.244.0.0/16` source exceptions arriving on kube-router's
 `kube-bridge`: Pod traffic to local
 control-plane ports `6443` and `8132` and the kubelet API on `10250`, plus Pod
 egress through the forward chain. Kube-router masquerades Pod traffic destined
-outside the cluster so replies return through the node. No public control-plane
-port is opened. The installer applies its
+outside the cluster so replies return through the node. The API server binds the
+stable host loopback address `10.201.0.1`; worker policy allows only its `/32`
+post-DNAT endpoint on `6443`, so endpoint refresh cannot deadlock behind its own
+stale policy. No public control-plane port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
-dynamic networking rules, and restores the previous live and persisted
-firewall state if installation errors, exits, or receives a termination
-signal. The installer records an existing CNI's masquerade state before
+dynamic networking rules, and atomically restores every previous input and
+forward rule in its original order plus the persisted firewall state if
+installation errors, exits, or receives a termination signal. The installer
+records an existing CNI's masquerade state before
 restarting k0s; a migration replaces existing Hive workload Pod sandboxes
 automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.

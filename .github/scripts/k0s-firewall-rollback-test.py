@@ -39,10 +39,14 @@ def run_case(exit_mode):
         original_input = (
             'add rule inet bynull_filter input tcp dport 6443 accept '
             'comment "nook k0s pod control plane v2"\n'
+            'add rule inet bynull_filter input counter drop '
+            'comment "later input rule"\n'
         )
         original_forward = (
             'add rule inet bynull_filter forward ip saddr 10.244.0.0/16 '
             'accept comment "nook k0s pod egress v2"\n'
+            'add rule inet bynull_filter forward counter drop '
+            'comment "later forward rule"\n'
         )
         original_config = "table inet bynull_filter { # original }\n"
         original_fragment = original_input + original_forward
@@ -52,7 +56,13 @@ def run_case(exit_mode):
         write(fragment, "mutated fragment\n")
         write(previous_config, original_config)
         write(previous_fragment, original_fragment)
-        write(previous_live, original_fragment)
+        write(
+            previous_live,
+            "flush chain inet bynull_filter input\n"
+            + original_input
+            + "flush chain inet bynull_filter forward\n"
+            + original_forward,
+        )
 
         sudo = mock_bin / "sudo"
         write(
@@ -82,6 +92,8 @@ def run_case(exit_mode):
                     input_rules = []
                     forward_rules = []
                     for line in pathlib.Path(args[2]).read_text().splitlines():
+                        if line.startswith("flush chain "):
+                            continue
                         (input_rules if " input " in line else forward_rules).append(line)
                     input_state.write_text("\\n".join(input_rules) + ("\\n" if input_rules else ""))
                     forward_state.write_text("\\n".join(forward_rules) + ("\\n" if forward_rules else ""))

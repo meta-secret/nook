@@ -372,7 +372,10 @@ Only Hive worker Pods may reach the Kubernetes API service and its post-DNAT
 endpoint, for the auth-persistence sidecar. The token-free Workbench dispatcher
 has no API-server route. The dedicated lifecycle controller has a separate
 API-server policy for its narrow Pod-deletion and Neo4j-endpoint reconciliation
-identity.
+identity. k0s binds that post-DNAT endpoint to the stable host loopback address
+`10.201.0.1`; policy permits only `10.201.0.1/32` on port `6443`, avoiding a
+bootstrap dependency on discovering an endpoint through an already-stale
+allowlist.
 
 Private, loopback, link-local, multicast, and cluster address ranges are
 excluded from general external egress. Neo4j Bolt and HTTP are never exposed on
@@ -502,9 +505,13 @@ worker egress receive replies through the node. These rules do not expose any
 control-plane port on the public interface. The installer uses a temporary
 owned rule while k0s starts and restores the previous live and persisted
 firewall state if installation errors, exits, or receives a termination
-signal. It records the existing CNI state before restarting k0s, so a controller
-rewrite cannot hide an `ipMasq` migration; migrations automatically replace
-existing Hive, dispatcher, and lifecycle-controller Pod sandboxes.
+signal. The rollback transaction flushes and recreates both managed host chains
+from a complete ordered snapshot, preserving unrelated rule positions. It
+records the existing CNI state before restarting k0s, so a controller rewrite
+cannot hide an `ipMasq` migration; migrations automatically replace existing
+Hive, dispatcher, and lifecycle-controller Pod sandboxes. The API server's
+stable loopback address is `10.201.0.1`, and the worker egress template uses its
+exact `/32` rather than a deployment-time endpoint lookup.
 
 Credential synchronization requires explicit local file inputs:
 
