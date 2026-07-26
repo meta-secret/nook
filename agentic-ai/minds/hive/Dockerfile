@@ -73,23 +73,23 @@ RUN mkdir -p lace/src hive/src \
     && touch lace/src/lib.rs hive/src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM toolchain AS dependencies
-COPY --from=chef-planner /build/recipe.json recipe.json
+FROM toolchain AS fetched-dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-# Keep the manifest-only cargo-chef graph as the single dependency boundary.
-# Redis sccache supplies compiler objects when this BuildKit layer is cold;
-# Main's GHA cache publishes the complete cooked layer for later PRs. Do not
-# pre-build debug and release graphs here: Clippy and tests need different Cargo
-# unit graphs, and serially warming all three profiles more than doubles the
-# cold-path runtime even when every sccache lookup hits.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo chef cook --recipe-path recipe.json \
-    && nook-sccache-report hive-chef
 RUN cargo fetch --locked
 
-FROM dependencies AS source
+# Production image builds use a release-profile cargo-chef layer. Verification
+# deliberately branches before this cook: Redis already supplies compiler
+# objects, while waiting for a dummy cook and then compiling the real Clippy/test
+# graphs serializes redundant Cargo work on every cold PR runner.
+FROM fetched-dependencies AS dependencies
+COPY --from=chef-planner /build/recipe.json recipe.json
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo chef cook --release --recipe-path recipe.json \
+    && nook-sccache-report hive-chef-release
+
+FROM fetched-dependencies AS source
 COPY lace/src lace/src
 COPY hive/src hive/src
 RUN find lace/src hive/src -type f -exec touch {} +
@@ -132,7 +132,12 @@ FROM scratch AS verify
 COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
 COPY --from=test /opt/nook/hive-test-passed /hive-test-passed
 
-FROM source AS builder
+FROM dependencies AS release-source
+COPY lace/src lace/src
+COPY hive/src hive/src
+RUN find lace/src hive/src -type f -exec touch {} +
+
+FROM release-source AS builder
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo build --locked --release -p hive \
     && nook-sccache-report hive-release
