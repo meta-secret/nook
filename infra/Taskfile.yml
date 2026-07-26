@@ -437,7 +437,7 @@ tasks:
             --config /etc/k0s/k0s.yaml
         fi
         sudo -n test "$(id -u kube-apiserver)" -ge 1
-        sudo -n chown kube-apiserver:root \
+        sudo -n chown root:kube-apiserver \
           /var/lib/k0s/pki/hive-encryption-provider.yaml
         sudo -n chmod 0640 \
           /var/lib/k0s/pki/hive-encryption-provider.yaml
@@ -546,6 +546,7 @@ tasks:
           '( sport = :6443 )' || true
         sudo -n namei -l \
           /var/lib/k0s/pki/hive-encryption-provider.yaml || true
+        id kube-apiserver || true
         sudo -n find /var/lib/k0s/pki \
           -maxdepth 1 \
           -type f \
