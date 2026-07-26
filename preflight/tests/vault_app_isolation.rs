@@ -845,12 +845,19 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     );
 
     let wasm_task = read(&root, "nook-app/nook-web/.task/wasm.yml");
-    assert!(
-        wasm_task.contains(
-            "find \"nook-wasm/src\" \"nook-core/src\" \"nook-core/locales\" \"nook-auth2/src\" \"nook-replication/src\" \"nook-event-log/src\"",
-        ),
-        "mounted WASM builds must invalidate when portable replication source changes"
-    );
+    for required in [
+        "\"Cargo.toml\" \"Cargo.lock\"",
+        "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",
+        "\"nook-core/Cargo.toml\" \"nook-core/src\" \"nook-core/locales\"",
+        "\"nook-auth2/Cargo.toml\" \"nook-auth2/src\"",
+        "\"nook-replication/Cargo.toml\" \"nook-replication/src\"",
+        "\"nook-event-log/Cargo.toml\" \"nook-event-log/src\"",
+    ] {
+        assert!(
+            wasm_task.contains(required),
+            "mounted WASM builds must hash portable source and manifests: {required}"
+        );
+    }
 }
 
 #[test]
