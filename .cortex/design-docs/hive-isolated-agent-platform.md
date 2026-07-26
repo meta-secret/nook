@@ -460,6 +460,7 @@ Remote platform lifecycle:
 task infra:kvm:verify
 task infra:k0s:install
 task infra:k0s:status
+task infra:k0s:diagnose
 task infra:kata:install
 task infra:kata:verify
 task infra:neo4j:deploy
@@ -472,6 +473,11 @@ infrastructure services, syncs the repository-owned k0s configuration, installs
 and verifies k0s/Kata, deploys persistent Neo4j, builds and publishes the exact
 Hive image to the loopback registry, synchronizes credentials, deploys the warm
 pool, and verifies Pod replacement.
+
+The encryption-provider file remains `root`-owned with group-readable access
+limited to the dedicated `kube-apiserver` OS user. If the API server cannot
+start, `task infra:k0s:diagnose` emits bounded service, listener, permission,
+and journal evidence without reading secret contents.
 
 Credential synchronization requires explicit local file inputs:
 
