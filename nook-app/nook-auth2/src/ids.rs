@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn compact_token_and_device_id_validate_expected_shapes() {
-        let token = CompactToken::parse(TOKEN).unwrap();
+        let token = CompactToken::parse(TOKEN).expect("ids test setup should succeed");
         assert_eq!(token.as_str(), TOKEN);
         assert_eq!(token.as_ref(), TOKEN);
         assert_eq!(token.to_string(), TOKEN);
@@ -348,7 +348,7 @@ mod tests {
         assert!(CompactToken::parse("too-short").is_err());
         assert!(CompactToken::parse("has/slash11").is_err());
 
-        let device_id = DeviceId::parse(DEVICE_ID).unwrap();
+        let device_id = DeviceId::parse(DEVICE_ID).expect("ids test setup should succeed");
         assert_eq!(device_id.as_str(), DEVICE_ID);
         assert_eq!(device_id.as_ref(), DEVICE_ID);
         assert_eq!(device_id.to_string(), DEVICE_ID);
@@ -359,22 +359,34 @@ mod tests {
 
     #[test]
     fn store_ids_normalize_tokens_and_reject_reserved_device_ids() {
-        let token = CompactToken::parse(TOKEN).unwrap();
+        let token = CompactToken::parse(TOKEN).expect("ids test setup should succeed");
         let store = StoreId::from_token(&token);
         assert_eq!(store.as_str(), "store_Abcdef_1234");
         assert_eq!(store.as_ref(), store.as_str());
         assert_eq!(store.to_string(), store.as_str());
         assert_eq!(store.clone().into_inner(), store.as_str());
 
-        assert_eq!(format_store_id(TOKEN).unwrap(), store);
-        assert_eq!(normalize_store_id(TOKEN).unwrap(), store);
-        assert_eq!(normalize_store_id(" store_Abcdef_1234 ").unwrap(), store);
-        assert_eq!(validate_store_id(store.as_str()).unwrap(), store);
+        assert_eq!(
+            format_store_id(TOKEN).expect("ids test setup should succeed"),
+            store
+        );
+        assert_eq!(
+            normalize_store_id(TOKEN).expect("ids test setup should succeed"),
+            store
+        );
+        assert_eq!(
+            normalize_store_id(" store_Abcdef_1234 ").expect("ids test setup should succeed"),
+            store
+        );
+        assert_eq!(
+            validate_store_id(store.as_str()).expect("ids test setup should succeed"),
+            store
+        );
         assert!(format_store_id(DEVICE_ID).is_err());
         assert!(normalize_store_id("store_not-valid!").is_err());
         assert!(
             generate_store_id()
-                .unwrap()
+                .expect("ids test setup should succeed")
                 .as_str()
                 .starts_with(STORE_ID_PREFIX)
         );
@@ -382,17 +394,24 @@ mod tests {
 
     #[test]
     fn auth_key_ids_normalize_prefixed_and_legacy_digests() {
-        let auth = AuthKeyId::from_digest_hex(DIGEST).unwrap();
+        let auth = AuthKeyId::from_digest_hex(DIGEST).expect("ids test setup should succeed");
         assert_eq!(auth.as_str(), format!("key_{DIGEST}"));
         assert_eq!(auth.digest(), DIGEST);
         assert_eq!(auth.as_ref(), auth.as_str());
         assert_eq!(auth.to_string(), auth.as_str());
         assert_eq!(auth.clone().into_inner(), auth.as_str());
 
-        assert_eq!(format_auth_key_id(DIGEST).unwrap(), auth);
-        assert_eq!(normalize_auth_key_id(DIGEST).unwrap(), auth);
         assert_eq!(
-            normalize_auth_key_id(&format!(" key_{DIGEST} ")).unwrap(),
+            format_auth_key_id(DIGEST).expect("ids test setup should succeed"),
+            auth
+        );
+        assert_eq!(
+            normalize_auth_key_id(DIGEST).expect("ids test setup should succeed"),
+            auth
+        );
+        assert_eq!(
+            normalize_auth_key_id(&format!(" key_{DIGEST} "))
+                .expect("ids test setup should succeed"),
             auth
         );
         assert_eq!(auth_key_digest(auth.as_str()), Some(DIGEST));
@@ -403,20 +422,32 @@ mod tests {
 
     #[test]
     fn secret_ids_accept_legacy_labels_and_reject_reserved_rows() {
-        let token = CompactToken::parse(TOKEN).unwrap();
-        let secret = SecretId::from_token(&token).unwrap();
+        let token = CompactToken::parse(TOKEN).expect("ids test setup should succeed");
+        let secret = SecretId::from_token(&token).expect("ids test setup should succeed");
         assert_eq!(secret.as_str(), "secret_Abcdef_1234");
         assert_eq!(secret.as_ref(), secret.as_str());
         assert_eq!(secret.to_string(), secret.as_str());
         assert_eq!(secret.clone().into_inner(), secret.as_str());
 
-        assert_eq!(format_secret_id(TOKEN).unwrap(), secret);
-        assert_eq!(validate_secret_id(secret.as_str()).unwrap(), secret);
-        assert_eq!(validate_secret_id("pass_Abcdef_1234").unwrap(), secret);
-        assert_eq!(normalize_secret_id_for_write(TOKEN).unwrap(), secret);
+        assert_eq!(
+            format_secret_id(TOKEN).expect("ids test setup should succeed"),
+            secret
+        );
+        assert_eq!(
+            validate_secret_id(secret.as_str()).expect("ids test setup should succeed"),
+            secret
+        );
+        assert_eq!(
+            validate_secret_id("pass_Abcdef_1234").expect("ids test setup should succeed"),
+            secret
+        );
+        assert_eq!(
+            normalize_secret_id_for_write(TOKEN).expect("ids test setup should succeed"),
+            secret
+        );
         assert_eq!(
             normalize_secret_id_for_write("github.com")
-                .unwrap()
+                .expect("ids test setup should succeed")
                 .as_str(),
             "github.com"
         );
@@ -427,7 +458,7 @@ mod tests {
         assert!(validate_secret_id("store_Abcdef_1234").is_err());
         assert!(
             generate_secret_id()
-                .unwrap()
+                .expect("ids test setup should succeed")
                 .as_str()
                 .starts_with(SECRET_ID_PREFIX)
         );

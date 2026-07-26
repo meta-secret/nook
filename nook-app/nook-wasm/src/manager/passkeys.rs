@@ -158,8 +158,8 @@ impl NookVaultManager {
             id,
             nook_core::SecretType::Passkey,
             ciphertext.as_str(),
-            Some(identity_fingerprint),
-            Some(fingerprint),
+            identity_fingerprint,
+            fingerprint,
         ))
     }
 }

@@ -10,12 +10,17 @@ use harness::{
 };
 use nook_core::{
     AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
-    SecretId, SecretType, SecretValue, SecureNoteSecret, StoreId, VaultOperation, VaultResult,
-    build_signed_event, encrypted_secret_from_armored,
+    SecretFingerprint, SecretId, SecretType, SecretValue, SecureNoteSecret, StoreId, SymmetricKey,
+    VaultOperation, VaultResult, build_signed_event, encrypted_secret_from_armored,
+    secret_fingerprint, secret_identity_fingerprint,
 };
 use std::collections::{BTreeSet, HashMap};
 
 const TS: &str = "2026-06-28T00:00:00Z";
+
+fn test_fingerprint(label: &str) -> SecretFingerprint {
+    SecretFingerprint::from_trusted(format!("test:{label}"))
+}
 
 fn event_id_set(device: &EventLogDevice) -> BTreeSet<String> {
     device
@@ -69,6 +74,9 @@ fn append_secure_note(
         title: title.to_owned(),
         note: note.to_owned(),
     });
+    let secrets_key = SymmetricKey::parse(&device.secrets_key)?;
+    let identity_fingerprint = secret_identity_fingerprint(&value, &secrets_key);
+    let fingerprint = secret_fingerprint(&value, &secrets_key);
     let yaml = value.to_yaml()?;
     let ciphertext = device.crypto.encrypt_value(yaml.as_str())?;
     device.append_signed(vec![VaultOperation::SecretCreated {
@@ -76,8 +84,8 @@ fn append_secure_note(
             &SecretId::from_vault_record(secret_id),
             SecretType::SecureNote,
             ciphertext.as_str(),
-            None,
-            None,
+            identity_fingerprint,
+            fingerprint,
         ),
     }])
 }
@@ -110,8 +118,8 @@ fn child_event_with_genesis(
                 id: SecretId::from_vault_record(secret_id),
                 secret_type: SecretType::ApiKey,
                 ciphertext: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
-                identity_fingerprint: None,
-                fingerprint: None,
+                identity_fingerprint: test_fingerprint("child-identity"),
+                fingerprint: test_fingerprint("child-version"),
             },
         }],
     })?;
@@ -326,8 +334,8 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_newaaaaaaa"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newaaaaaaa".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
+            identity_fingerprint: test_fingerprint("replace-a-identity"),
+            fingerprint: test_fingerprint("replace-a-version"),
         },
     }])?;
     device.session.heads = vec![head];
@@ -337,8 +345,8 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_newbbbbbbb"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newbbbbbbb".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
+            identity_fingerprint: test_fingerprint("replace-b-identity"),
+            fingerprint: test_fingerprint("replace-b-version"),
         },
     }])?;
 
@@ -453,8 +461,8 @@ fn join_merge_single_head() -> VaultResult<()> {
             id: SecretId::from_vault_record("secret_joinmerge1"),
             secret_type: SecretType::ApiKey,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-join".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
+            identity_fingerprint: test_fingerprint("join-identity"),
+            fingerprint: test_fingerprint("join-version"),
         },
     }])?;
 

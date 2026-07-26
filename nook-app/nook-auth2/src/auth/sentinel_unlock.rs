@@ -374,14 +374,14 @@ mod tests {
 
     fn fixture() -> Fixture {
         let participants = (0..3)
-            .map(|_| DeviceIdentity::generate().unwrap())
+            .map(|_| DeviceIdentity::generate().expect("sentinel unlock test setup should succeed"))
             .collect::<Vec<_>>();
         let recipients = participants
             .iter()
             .map(|identity| (identity.device_id().clone(), identity.public_key()))
             .collect::<Vec<_>>();
-        let (keys, records) =
-            create_sentinel_root_share_records_for_recipients(&recipients, 2).unwrap();
+        let (keys, records) = create_sentinel_root_share_records_for_recipients(&recipients, 2)
+            .expect("sentinel unlock test setup should succeed");
         let requester = participants[2].clone();
         Fixture {
             keys,
@@ -389,7 +389,8 @@ mod tests {
             participants,
             requester,
             requester_signing: signing_key(90),
-            store_id: StoreId::parse("store_AAAAAAAAAAA").unwrap(),
+            store_id: StoreId::parse("store_AAAAAAAAAAA")
+                .expect("sentinel unlock test setup should succeed"),
             policy: SentinelUnlockPolicy {
                 threshold: 2,
                 required_participants: 3,
@@ -405,7 +406,7 @@ mod tests {
             &fixture.requester,
             &fixture.requester_signing,
         )
-        .unwrap()
+        .expect("sentinel unlock test setup should succeed")
     }
 
     fn response(
@@ -417,10 +418,12 @@ mod tests {
             request,
             &fixture.records,
             &fixture.participants[index],
-            &signing_key(u8::try_from(index + 1).unwrap()),
+            &signing_key(
+                u8::try_from(index + 1).expect("sentinel unlock test setup should succeed"),
+            ),
             &signing_public_key(&fixture.requester_signing),
         )
-        .unwrap()
+        .expect("sentinel unlock test setup should succeed")
     }
 
     #[test]
@@ -431,13 +434,15 @@ mod tests {
         let first = response(&fixture, &request, 0);
         let second = response(&fixture, &request, 1);
         let local_plaintext =
-            open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0]).unwrap();
+            open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0])
+                .expect("sentinel unlock test setup should succeed");
         assert!(
             !serde_json::to_string(&first)
-                .unwrap()
+                .expect("sentinel unlock test setup should succeed")
                 .contains(&local_plaintext.share)
         );
-        add_sentinel_unlock_response(&mut session, first).unwrap();
+        add_sentinel_unlock_response(&mut session, first)
+            .expect("sentinel unlock test setup should succeed");
         assert_eq!(
             sentinel_unlock_status(&session),
             SentinelUnlockStatus {
@@ -446,10 +451,12 @@ mod tests {
                 ready: false,
             }
         );
-        add_sentinel_unlock_response(&mut session, second).unwrap();
+        add_sentinel_unlock_response(&mut session, second)
+            .expect("sentinel unlock test setup should succeed");
         assert!(sentinel_unlock_status(&session).ready);
         assert_eq!(
-            finalize_sentinel_unlock(session, &fixture.requester).unwrap(),
+            finalize_sentinel_unlock(session, &fixture.requester)
+                .expect("sentinel unlock test setup should succeed"),
             fixture.keys
         );
     }
@@ -459,12 +466,13 @@ mod tests {
         let fixture = fixture();
         let mut session = session(&fixture);
         let request = sentinel_unlock_request(&session);
-        add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0)).unwrap();
+        add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0))
+            .expect("sentinel unlock test setup should succeed");
         assert!(matches!(
             finalize_sentinel_unlock(session.clone(), &fixture.requester),
             Err(MultiDeviceError::NotEnoughSentinelShares { .. })
         ));
-        let wrong = DeviceIdentity::generate().unwrap();
+        let wrong = DeviceIdentity::generate().expect("sentinel unlock test setup should succeed");
         assert!(matches!(
             finalize_sentinel_unlock(session, &wrong),
             Err(MultiDeviceError::SentinelUnlockRecipientMismatch)
@@ -478,7 +486,8 @@ mod tests {
         let request = sentinel_unlock_request(&session);
         let first = response(&fixture, &request, 0);
         let duplicate_index = first.share_index;
-        add_sentinel_unlock_response(&mut session, first.clone()).unwrap();
+        add_sentinel_unlock_response(&mut session, first.clone())
+            .expect("sentinel unlock test setup should succeed");
         assert!(matches!(
             add_sentinel_unlock_response(&mut session, first),
             Err(MultiDeviceError::DuplicateSentinelUnlockParticipant { .. })
@@ -488,7 +497,10 @@ mod tests {
         second.share_index = duplicate_index;
         second.signature = hex::encode(
             signing_key(2)
-                .sign(&response_signing_bytes(&second).unwrap())
+                .sign(
+                    &response_signing_bytes(&second)
+                        .expect("sentinel unlock test setup should succeed"),
+                )
                 .to_bytes(),
         );
         assert!(matches!(
@@ -534,7 +546,8 @@ mod tests {
     #[test]
     fn unenrolled_requester_receives_no_unlock_response() {
         let fixture = fixture();
-        let unknown_identity = DeviceIdentity::generate().unwrap();
+        let unknown_identity =
+            DeviceIdentity::generate().expect("sentinel unlock test setup should succeed");
         let unknown_signing = signing_key(91);
         let session = start_sentinel_unlock(
             fixture.store_id.clone(),
@@ -543,7 +556,7 @@ mod tests {
             &unknown_identity,
             &unknown_signing,
         )
-        .unwrap();
+        .expect("sentinel unlock test setup should succeed");
         let request = sentinel_unlock_request(&session);
 
         assert!(matches!(

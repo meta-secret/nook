@@ -550,11 +550,22 @@ mod tests {
     fn build_1pux(attributes: &str, data: &str) -> Vec<u8> {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        writer.start_file("export.attributes", options).unwrap();
-        writer.write_all(attributes.as_bytes()).unwrap();
-        writer.start_file("export.data", options).unwrap();
-        writer.write_all(data.as_bytes()).unwrap();
-        writer.finish().unwrap().into_inner()
+        writer
+            .start_file("export.attributes", options)
+            .expect("onepassword import test setup should succeed");
+        writer
+            .write_all(attributes.as_bytes())
+            .expect("onepassword import test setup should succeed");
+        writer
+            .start_file("export.data", options)
+            .expect("onepassword import test setup should succeed");
+        writer
+            .write_all(data.as_bytes())
+            .expect("onepassword import test setup should succeed");
+        writer
+            .finish()
+            .expect("onepassword import test setup should succeed")
+            .into_inner()
     }
 
     fn current_attributes() -> &'static str {
@@ -611,7 +622,8 @@ mod tests {
             }]
           }]
         }"#;
-        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)).unwrap();
+        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data))
+            .expect("onepassword import test setup should succeed");
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(plan.items.len(), 3);
@@ -662,7 +674,8 @@ mod tests {
             }]
           }]
         }"#;
-        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)).unwrap();
+        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data))
+            .expect("onepassword import test setup should succeed");
         assert_eq!(plan.source_count, 4);
         assert_eq!(plan.skipped_unsupported, 2);
         assert_eq!(plan.items.len(), 2);
@@ -684,9 +697,14 @@ mod tests {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         writer
             .start_file("export.attributes", SimpleFileOptions::default())
-            .unwrap();
-        writer.write_all(current_attributes().as_bytes()).unwrap();
-        let missing_data = writer.finish().unwrap().into_inner();
+            .expect("onepassword import test setup should succeed");
+        writer
+            .write_all(current_attributes().as_bytes())
+            .expect("onepassword import test setup should succeed");
+        let missing_data = writer
+            .finish()
+            .expect("onepassword import test setup should succeed")
+            .into_inner();
         assert!(matches!(
             plan_onepassword_import(&missing_data),
             Err(OnePasswordImportError::MissingEntry("export.data"))

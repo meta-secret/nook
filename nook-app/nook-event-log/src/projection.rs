@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedSecret {
     pub record: StoredSecretRecord,
-    pub identity_fingerprint: Option<SecretFingerprint>,
-    pub fingerprint: Option<SecretFingerprint>,
+    pub identity_fingerprint: SecretFingerprint,
+    pub fingerprint: SecretFingerprint,
     pub created_by: EventId,
     pub deleted_by: Option<EventId>,
     pub replaced_from: Option<SecretId>,
@@ -262,8 +262,10 @@ fn apply_fingerprint_backfill(
 ) {
     for assignment in fingerprints {
         if let Some(secret) = projection.secrets.get_mut(&assignment.secret_id) {
-            secret.identity_fingerprint = Some(assignment.identity_fingerprint.clone());
-            secret.fingerprint = Some(assignment.fingerprint.clone());
+            secret
+                .identity_fingerprint
+                .clone_from(&assignment.identity_fingerprint);
+            secret.fingerprint.clone_from(&assignment.fingerprint);
         }
     }
 }
@@ -417,7 +419,7 @@ mod tests {
                 schema_version: VaultEventSchemaVersion::CURRENT,
                 store_id: store(),
                 actor_id: actor(signing_key),
-                actor_signing_public_key: Some(public_key(signing_key)),
+                actor_signing_public_key: public_key(signing_key),
                 parents,
                 created_at: ts("2026-06-28T00:00:00Z"),
                 key_epoch: epoch(),
@@ -441,8 +443,10 @@ mod tests {
                     id: sid(new_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: SecretFingerprint::from_trusted(format!(
+                        "test-identity:{new_id}"
+                    )),
+                    fingerprint: SecretFingerprint::from_trusted(format!("test-version:{new_id}")),
                 },
             },
         )
@@ -463,9 +467,11 @@ mod tests {
             &ts("2026-06-28T00:00:00Z"),
             signing_key,
         )
-        .unwrap();
-        let id = event.id().unwrap();
-        graph.insert(event, STORE).unwrap();
+        .expect("projection test setup should succeed");
+        let id = event.id().expect("projection test setup should succeed");
+        graph
+            .insert(event, STORE)
+            .expect("projection test setup should succeed");
         id
     }
 
@@ -478,7 +484,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(signing_key),
-            actor_signing_public_key: Some(public_key(signing_key)),
+            actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: ts("2026-06-28T00:00:00Z"),
             key_epoch: epoch(),
@@ -487,12 +493,16 @@ mod tests {
                     id: sid(secret_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: SecretFingerprint::from_trusted(format!(
+                        "test-identity:{secret_id}"
+                    )),
+                    fingerprint: SecretFingerprint::from_trusted(format!(
+                        "test-version:{secret_id}"
+                    )),
                 },
             }],
         };
-        VaultEvent::sign(body, signing_key).unwrap()
+        VaultEvent::sign(body, signing_key).expect("projection test setup should succeed")
     }
 
     #[test]
@@ -503,10 +513,15 @@ mod tests {
 
         let a = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
         let b = secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key);
-        graph.insert(a, STORE).unwrap();
-        graph.insert(b, STORE).unwrap();
+        graph
+            .insert(a, STORE)
+            .expect("projection test setup should succeed");
+        graph
+            .insert(b, STORE)
+            .expect("projection test setup should succeed");
 
-        let projection = project_vault(&graph, STORE).unwrap();
+        let projection =
+            project_vault(&graph, STORE).expect("projection test setup should succeed");
         assert_eq!(projection.live_secrets(&graph).len(), 2);
         assert!(!projection.has_blocking_conflicts());
     }
@@ -526,7 +541,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            actor_signing_public_key: public_key(&signing_key),
             parents: vec![created_id],
             created_at: ts("2026-06-28T00:00:01Z"),
             key_epoch: epoch(),
@@ -541,8 +556,11 @@ mod tests {
         graph.insert(VaultEvent::sign(body, &signing_key)?, STORE)?;
 
         let projection = project_vault(&graph, STORE)?;
-        let projected = projection.secrets.get(&sid("secret_fingerprint1")).unwrap();
-        assert_eq!(projected.fingerprint.as_ref(), Some(&fingerprint));
+        let projected = projection
+            .secrets
+            .get(&sid("secret_fingerprint1"))
+            .expect("projection test setup should succeed");
+        assert_eq!(projected.fingerprint, fingerprint);
         assert_eq!(
             projected.record.value.as_str(),
             "cipher-secret_fingerprint1"
@@ -556,14 +574,16 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
         let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
-        let created_id = created.id().unwrap();
-        graph.insert(created, STORE).unwrap();
+        let created_id = created.id().expect("projection test setup should succeed");
+        graph
+            .insert(created, STORE)
+            .expect("projection test setup should succeed");
 
         let delete_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            actor_signing_public_key: public_key(&signing_key),
             parents: vec![created_id],
             created_at: ts("2026-06-28T00:00:00Z"),
             key_epoch: epoch(),
@@ -571,10 +591,14 @@ mod tests {
                 secret_id: sid("secret_aaaaaaaaaaa"),
             }],
         };
-        let deleted = VaultEvent::sign(delete_body, &signing_key).unwrap();
-        graph.insert(deleted, STORE).unwrap();
+        let deleted = VaultEvent::sign(delete_body, &signing_key)
+            .expect("projection test setup should succeed");
+        graph
+            .insert(deleted, STORE)
+            .expect("projection test setup should succeed");
 
-        let projection = project_vault(&graph, STORE).unwrap();
+        let projection =
+            project_vault(&graph, STORE).expect("projection test setup should succeed");
         assert!(projection.live_secrets(&graph).is_empty());
     }
 
@@ -584,15 +608,24 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
         let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key);
-        let base_id = base.id().unwrap();
-        graph.insert(base, STORE).unwrap();
+        let base_id = base.id().expect("projection test setup should succeed");
+        graph
+            .insert(base, STORE)
+            .expect("projection test setup should succeed");
 
-        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa").unwrap();
-        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb").unwrap();
-        graph.insert(r1, STORE).unwrap();
-        graph.insert(r2, STORE).unwrap();
+        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")
+            .expect("projection test setup should succeed");
+        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")
+            .expect("projection test setup should succeed");
+        graph
+            .insert(r1, STORE)
+            .expect("projection test setup should succeed");
+        graph
+            .insert(r2, STORE)
+            .expect("projection test setup should succeed");
 
-        let projection = project_vault(&graph, STORE).unwrap();
+        let projection =
+            project_vault(&graph, STORE).expect("projection test setup should succeed");
         assert_eq!(projection.live_secrets(&graph).len(), 2);
         assert!(
             projection
@@ -611,14 +644,15 @@ mod tests {
                 secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key),
                 STORE,
             )
-            .unwrap();
+            .expect("projection test setup should succeed");
         graph
             .insert(
                 secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key),
                 STORE,
             )
-            .unwrap();
-        assert_projection_permutation_invariant(&graph, STORE).unwrap();
+            .expect("projection test setup should succeed");
+        assert_projection_permutation_invariant(&graph, STORE)
+            .expect("projection test setup should succeed");
     }
 
     #[test]
@@ -725,7 +759,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            actor_signing_public_key: public_key(&signing_key),
             parents: graph.heads(),
             created_at: ts("2026-06-28T00:00:01Z"),
             key_epoch: epoch(),
@@ -761,7 +795,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            actor_signing_public_key: public_key(&signing_key),
             parents: graph.heads(),
             created_at: ts("2026-06-28T00:00:01Z"),
             key_epoch: epoch(),
@@ -791,7 +825,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            actor_signing_public_key: public_key(&signing_key),
             parents,
             created_at: ts("2026-06-28T00:00:00Z"),
             key_epoch: epoch(),
@@ -820,14 +854,16 @@ mod tests {
             &signing_key,
             vec![genesis_id.clone()],
             VaultOperation::DeviceRevoked {
-                device_id: DeviceId::parse("abcd1234ef567890").unwrap(),
+                device_id: DeviceId::parse("abcd1234ef567890")
+                    .expect("projection test setup should succeed"),
             },
         )?;
         let rotate = signed_operation(
             &signing_key,
             vec![genesis_id],
             VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001").unwrap(),
+                entry_id: PasswordEntryId::parse("pwdentry001")
+                    .expect("projection test setup should succeed"),
                 envelope: password_envelope_fixture("x"),
             },
         )?;

@@ -50,6 +50,25 @@ tests first when the fault is reproducible at the typed boundary, then keep the
 Playwright test for the user-visible flow. Full policy:
 [rules.md §4](rules.md#4-testing-requirements).
 
+## ⛔ Non-negotiable: Rust domain absence must be explicit
+
+Before adding or preserving `Option<T>` in authored Rust, determine what
+`None` means. Required persisted values stay required validated values. Named
+product, lifecycle, authorization, or workflow states use enums with
+variant-owned data instead of `Option<T>` field bags. `Option<T>` remains
+appropriate only when absence is the truthful structural contract, including
+iterator/lookup results, optional external inputs, caches, and compatibility
+wire shapes that are converted into typed domain states at the boundary.
+
+Do not create one-variant wrapper enums merely to avoid the spelling
+`Option<T>`. The objective is to make illegal domain states unrepresentable,
+not to reject idiomatic Rust. Full contract and examples:
+[dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
+
+Authored Rust must not call `.unwrap()`. Production paths propagate or classify
+failure; tests use `Result`/`?` or an invariant-specific `expect`. Workspace
+Clippy configuration enforces this rule across all targets.
+
 ## ⛔ Non-negotiable: squash merge every PR
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).

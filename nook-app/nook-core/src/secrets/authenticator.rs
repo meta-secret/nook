@@ -576,7 +576,7 @@ mod tests {
             }
             _ => panic!("unsupported fixture"),
         };
-        TotpSecret::parse(encoded).unwrap()
+        TotpSecret::parse(encoded).expect("authenticator test setup should succeed")
     }
 
     fn fixture(algorithm: TotpAlgorithm, secret: &[u8]) -> AuthenticatorSecret {
@@ -586,7 +586,7 @@ mod tests {
             website_url: String::new(),
             secret: rfc_secret(secret),
             algorithm,
-            digits: TotpDigits::parse(8).unwrap(),
+            digits: TotpDigits::parse(8).expect("authenticator test setup should succeed"),
             period: TotpPeriod::default(),
             backup_codes: Vec::new(),
         }
@@ -609,21 +609,21 @@ mod tests {
             assert_eq!(
                 fixture(TotpAlgorithm::Sha1, sha1)
                     .current_code(timestamp)
-                    .unwrap()
+                    .expect("authenticator test setup should succeed")
                     .code,
                 expected_sha1
             );
             assert_eq!(
                 fixture(TotpAlgorithm::Sha256, sha256)
                     .current_code(timestamp)
-                    .unwrap()
+                    .expect("authenticator test setup should succeed")
                     .code,
                 expected_sha256
             );
             assert_eq!(
                 fixture(TotpAlgorithm::Sha512, sha512)
                     .current_code(timestamp)
-                    .unwrap()
+                    .expect("authenticator test setup should succeed")
                     .code,
                 expected_sha512
             );
@@ -642,7 +642,7 @@ mod tests {
             " first-code \nsecond-code\nfirst-code\n",
             "",
         )
-        .unwrap();
+        .expect("authenticator test setup should succeed");
         assert_eq!(item.issuer, "Example Co");
         assert_eq!(item.account, "alice@example.com");
         assert_eq!(item.algorithm, TotpAlgorithm::Sha256);
@@ -655,8 +655,10 @@ mod tests {
 
     #[test]
     fn canonicalizes_base32_padding() {
-        let padded = TotpSecret::parse("JBSWY3DPEHPK3PXP====").unwrap();
-        let unpadded = TotpSecret::parse("JBSWY3DPEHPK3PXP").unwrap();
+        let padded = TotpSecret::parse("JBSWY3DPEHPK3PXP====")
+            .expect("authenticator test setup should succeed");
+        let unpadded =
+            TotpSecret::parse("JBSWY3DPEHPK3PXP").expect("authenticator test setup should succeed");
 
         assert_eq!(padded, unpadded);
         assert_eq!(padded.as_str(), "JBSWY3DPEHPK3PXP");
@@ -666,14 +668,17 @@ mod tests {
     fn setup_key_change_detection_uses_canonical_base32() {
         assert!(
             !authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "jbsw-y3dp ehpk-3pxp====",)
-                .unwrap()
+                .expect("authenticator test setup should succeed")
         );
-        assert!(authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "KRUGS4ZANFZSAYJA",).unwrap());
+        assert!(
+            authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "KRUGS4ZANFZSAYJA",)
+                .expect("authenticator test setup should succeed")
+        );
         assert!(authenticator_setup_key_changed(
             "JBSWY3DPEHPK3PXP",
             "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA256",
         )
-        .unwrap());
+        .expect("authenticator test setup should succeed"));
     }
 
     #[test]
@@ -681,7 +686,7 @@ mod tests {
         let item = AuthenticatorSecret::from_otpauth_uri(
             "otpauth://totp/Example%3Aalice%2Balerts%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
         )
-        .unwrap();
+        .expect("authenticator test setup should succeed");
 
         assert_eq!(item.account, "alice+alerts@example.com");
     }
@@ -689,11 +694,12 @@ mod tests {
     #[test]
     fn current_code_from_otpauth_matches_persisted_secret() {
         let uri = "otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth";
-        let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59).unwrap();
+        let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)
+            .expect("authenticator test setup should succeed");
         let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)
-            .unwrap()
+            .expect("authenticator test setup should succeed")
             .current_code(59)
-            .unwrap();
+            .expect("authenticator test setup should succeed");
         assert_eq!(from_uri.code, from_secret.code);
     }
 
@@ -710,7 +716,7 @@ mod tests {
         let preview = AuthenticatorSecret::preview_otpauth_uri(
             "otpauth://totp/Example%20Co:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example%20Co&algorithm=SHA256&digits=8&period=45",
         )
-        .unwrap();
+        .expect("authenticator test setup should succeed");
         assert_eq!(preview.issuer, "Example Co");
         assert_eq!(preview.account, "alice@example.com");
         assert_eq!(preview.algorithm, TotpAlgorithm::Sha256);
@@ -732,11 +738,13 @@ mod tests {
             String::new(),
         ];
         assert_eq!(
-            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Replace).unwrap(),
+            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Replace)
+                .expect("authenticator test setup should succeed"),
             ["new-code", "keep-me"]
         );
         assert_eq!(
-            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Merge).unwrap(),
+            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Merge)
+                .expect("authenticator test setup should succeed"),
             ["keep-me", "old-code", "new-code"]
         );
 

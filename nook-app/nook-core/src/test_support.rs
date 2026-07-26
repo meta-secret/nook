@@ -18,7 +18,7 @@ pub(crate) fn sample_vault_yaml(version: u64, store_id: &str, armor_line: &str) 
         Some(store_id),
         Some(version),
     )
-    .unwrap()
+    .expect("test support test setup should succeed")
     .into_inner()
 }
 

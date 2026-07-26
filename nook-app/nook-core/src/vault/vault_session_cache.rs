@@ -83,7 +83,8 @@ mod tests {
             &architecture,
         )?;
 
-        let err = hydrate_keys_from_projection_yaml(yaml.as_str(), &first).unwrap_err();
+        let err = hydrate_keys_from_projection_yaml(yaml.as_str(), &first)
+            .expect_err("vault session cache test should reject invalid input");
         assert!(
             matches!(
                 err,

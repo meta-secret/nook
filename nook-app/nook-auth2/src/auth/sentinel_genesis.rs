@@ -741,7 +741,7 @@ mod tests {
 
     fn signing_key() -> SigningKey {
         let mut seed = [0_u8; 32];
-        getrandom::getrandom(&mut seed).unwrap();
+        getrandom::getrandom(&mut seed).expect("sentinel genesis test setup should succeed");
         SigningKey::from_bytes(&seed)
     }
 
@@ -753,11 +753,12 @@ mod tests {
         SigningKey,
         SentinelGenesisParticipantResponse,
     ) {
-        let identity = DeviceIdentity::generate().unwrap();
+        let identity =
+            DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let signing = signing_key();
         let response =
             respond_to_sentinel_genesis_request(request, &identity, &signing, label.to_owned())
-                .unwrap();
+                .expect("sentinel genesis test setup should succeed");
         (identity, signing, response)
     }
 
@@ -799,16 +800,17 @@ mod tests {
 
     #[test]
     fn standalone_public_key_announcement_is_rejected_for_enrollment() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
-        let peer = DeviceIdentity::generate().unwrap();
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
+        let peer = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let peer_signing = signing_key();
         let announcement =
             create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
-                .unwrap();
-        let payload = serde_json::to_string(&announcement).unwrap();
+                .expect("sentinel genesis test setup should succeed");
+        let payload = serde_json::to_string(&announcement)
+            .expect("sentinel genesis test setup should succeed");
         assert!(matches!(
             add_sentinel_genesis_participant_payload(&mut session, &payload),
             Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
@@ -828,19 +830,20 @@ mod tests {
 
     #[test]
     fn owner_can_name_a_verified_session_bound_participant() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
         let (peer, _, response) = participant(&session.request, "Peer");
-        let payload = serde_json::to_string(&response).unwrap();
+        let payload =
+            serde_json::to_string(&response).expect("sentinel genesis test setup should succeed");
 
         add_sentinel_genesis_participant_payload_with_label(
             &mut session,
             &payload,
             "  Ada's iPhone  ",
         )
-        .unwrap();
+        .expect("sentinel genesis test setup should succeed");
 
         assert_eq!(session.participants()[1].label, "Ada's iPhone");
         assert_eq!(
@@ -851,79 +854,95 @@ mod tests {
 
     #[test]
     fn request_link_round_trips_as_canonical_validated_json() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into()).unwrap();
-        let request_json = serde_json::to_string(&session.request).unwrap();
+        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
+        let request_json = serde_json::to_string(&session.request)
+            .expect("sentinel genesis test setup should succeed");
 
         let link = build_sentinel_genesis_request_link(&request_json, "https://nook.example/app/")
-            .unwrap();
+            .expect("sentinel genesis test setup should succeed");
         assert!(link.starts_with("https://nook.example/app/#sentinel-request="));
         assert!(!link.contains(&session.request.session_id.to_string()));
         assert_eq!(
-            normalize_sentinel_genesis_request(&link).unwrap(),
+            normalize_sentinel_genesis_request(&link)
+                .expect("sentinel genesis test setup should succeed"),
             request_json
         );
         let mut tampered = session.request.clone();
         tampered.policy.threshold = 3;
         assert!(
-            normalize_sentinel_genesis_request(&serde_json::to_string(&tampered).unwrap()).is_err()
+            normalize_sentinel_genesis_request(
+                &serde_json::to_string(&tampered)
+                    .expect("sentinel genesis test setup should succeed")
+            )
+            .is_err()
         );
         assert!(normalize_sentinel_genesis_request("not-a-request").is_err());
     }
 
     #[test]
     fn participant_response_link_round_trips_and_remains_session_verified() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
         let (_, _, response) = participant(&session.request, "Peer");
-        let response_json = serde_json::to_string(&response).unwrap();
+        let response_json =
+            serde_json::to_string(&response).expect("sentinel genesis test setup should succeed");
 
         let link = build_sentinel_genesis_participant_response_link(
             &response_json,
             "https://nook.example/app/",
         )
-        .unwrap();
+        .expect("sentinel genesis test setup should succeed");
         assert!(link.starts_with("https://nook.example/app/#sentinel-response="));
         assert!(!link.contains(&response.signature));
-        let normalized = normalize_sentinel_genesis_participant_payload(&link).unwrap();
+        let normalized = normalize_sentinel_genesis_participant_payload(&link)
+            .expect("sentinel genesis test setup should succeed");
         assert_eq!(normalized, response_json);
-        add_sentinel_genesis_participant_payload(&mut session, &normalized).unwrap();
+        add_sentinel_genesis_participant_payload(&mut session, &normalized)
+            .expect("sentinel genesis test setup should succeed");
         assert!(session.is_complete());
         assert!(normalize_sentinel_genesis_participant_payload("not-a-response").is_err());
     }
 
     #[test]
     fn local_announcement_fingerprint_remains_readable_but_not_enrollable() {
-        let peer = DeviceIdentity::generate().unwrap();
+        let peer = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let peer_signing = signing_key();
         let announcement =
             create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
-                .unwrap();
-        let payload = serde_json::to_string(&announcement).unwrap();
+                .expect("sentinel genesis test setup should succeed");
+        let payload = serde_json::to_string(&announcement)
+            .expect("sentinel genesis test setup should succeed");
         assert_eq!(
-            sentinel_genesis_participant_fingerprint(&payload).unwrap(),
+            sentinel_genesis_participant_fingerprint(&payload)
+                .expect("sentinel genesis test setup should succeed"),
             announcement.fingerprint
         );
         let mut tampered = announcement.clone();
         tampered.label = "Mallory".into();
         assert!(matches!(
-            sentinel_genesis_participant_fingerprint(&serde_json::to_string(&tampered).unwrap()),
+            sentinel_genesis_participant_fingerprint(
+                &serde_json::to_string(&tampered)
+                    .expect("sentinel genesis test setup should succeed")
+            ),
             Err(MultiDeviceError::InvalidSentinelGenesisSignature)
         ));
     }
 
     #[test]
     fn response_is_session_bound_signed_and_unique() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
         let (_, _, response) = participant(&session.request, "Peer");
         let duplicate = response.clone();
-        add_sentinel_genesis_response(&mut session, response).unwrap();
+        add_sentinel_genesis_response(&mut session, response)
+            .expect("sentinel genesis test setup should succeed");
         assert!(session.is_complete());
         assert!(matches!(
             add_sentinel_genesis_response(&mut session, duplicate),
@@ -933,14 +952,15 @@ mod tests {
 
     #[test]
     fn tampered_response_and_cross_session_response_fail() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let mut first =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
-        let second_owner = DeviceIdentity::generate().unwrap();
+        let mut first = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
+        let second_owner =
+            DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let second_signing = signing_key();
-        let second =
-            start_sentinel_genesis(&second_owner, &second_signing, 2, 2, "Other".into()).unwrap();
+        let second = start_sentinel_genesis(&second_owner, &second_signing, 2, 2, "Other".into())
+            .expect("sentinel genesis test setup should succeed");
         let (_, _, mut response) = participant(&first.request, "Peer");
         let cross = response.clone();
         response.participant.label = "Mallory".into();
@@ -962,32 +982,35 @@ mod tests {
 
     #[test]
     fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let incomplete =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
-        let store_id = StoreId::parse("store_AAAAAAAAAAA").unwrap();
+        let incomplete = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
+        let store_id = StoreId::parse("store_AAAAAAAAAAA")
+            .expect("sentinel genesis test setup should succeed");
         assert!(matches!(
             finalize_sentinel_genesis_shares(incomplete, &store_id, &owner_signing),
             Err(MultiDeviceError::SentinelGenesisIncomplete { .. })
         ));
 
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
         let (peer, _, response) = participant(&session.request, "Peer");
-        add_sentinel_genesis_response(&mut session, response).unwrap();
+        add_sentinel_genesis_response(&mut session, response)
+            .expect("sentinel genesis test setup should succeed");
         let expected_request = session.request.clone();
-        let issued = finalize_sentinel_genesis_shares(session, &store_id, &owner_signing).unwrap();
+        let issued = finalize_sentinel_genesis_shares(session, &store_id, &owner_signing)
+            .expect("sentinel genesis test setup should succeed");
         assert_eq!(issued.records.len(), 4);
         assert_eq!(issued.deliveries.len(), 2);
         let peer_delivery = issued
             .deliveries
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
-            .unwrap();
+            .expect("sentinel genesis test setup should succeed");
         let accepted =
             accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &peer)
-                .unwrap();
+                .expect("sentinel genesis test setup should succeed");
         assert!(issued.records.contains(&accepted));
         assert!(matches!(
             accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &owner),
@@ -997,20 +1020,23 @@ mod tests {
 
     #[test]
     fn no_full_key_envelope_and_quorum_is_required() {
-        let owner = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate().expect("sentinel genesis test setup should succeed");
         let owner_signing = signing_key();
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into()).unwrap();
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())
+            .expect("sentinel genesis test setup should succeed");
         let (peer_a, _, a) = participant(&session.request, "A");
         let (peer_b, _, b) = participant(&session.request, "B");
-        add_sentinel_genesis_response(&mut session, a).unwrap();
-        add_sentinel_genesis_response(&mut session, b).unwrap();
+        add_sentinel_genesis_response(&mut session, a)
+            .expect("sentinel genesis test setup should succeed");
+        add_sentinel_genesis_response(&mut session, b)
+            .expect("sentinel genesis test setup should succeed");
         let issued = finalize_sentinel_genesis_shares(
             session,
-            &StoreId::parse("store_AAAAAAAAAAA").unwrap(),
+            &StoreId::parse("store_AAAAAAAAAAA")
+                .expect("sentinel genesis test setup should succeed"),
             &owner_signing,
         )
-        .unwrap();
+        .expect("sentinel genesis test setup should succeed");
         assert!(
             issued.records.iter().all(|record| !matches!(
                 VaultMetaRecord::classify(record),
@@ -1032,7 +1058,7 @@ mod tests {
             &issued.records,
             &[owner, peer_a],
         )
-        .unwrap();
+        .expect("sentinel genesis test setup should succeed");
         assert_eq!(first_quorum.secrets_key.as_str().len(), 64);
         assert!(
             super::super::multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[peer_b])

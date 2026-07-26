@@ -221,7 +221,7 @@ mod tests {
             "123",
             "work card",
         )
-        .unwrap();
+        .expect("credit card test setup should succeed");
 
         assert_eq!(card.number, "4111111111111111");
         assert_eq!(card.expiration_month, "12");
@@ -253,8 +253,8 @@ mod tests {
 
     #[test]
     fn allows_empty_optional_fields() {
-        let card =
-            CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "").unwrap();
+        let card = CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "")
+            .expect("credit card test setup should succeed");
         assert!(card.cardholder_name.is_empty());
         assert!(card.cvv.is_empty());
         assert!(card.expiration_display().is_empty());

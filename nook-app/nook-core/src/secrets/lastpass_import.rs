@@ -190,7 +190,7 @@ mod tests {
             "https://github.com/login,alice,secret,\"Recovery codes,\nelsewhere\",GitHub,Work,1\n",
             "http://sn,,,\"# Private note\n\nKeep offline\",Recovery,Personal,0\n",
         );
-        let plan = plan_lastpass_import(export).unwrap();
+        let plan = plan_lastpass_import(export).expect("lastpass import test setup should succeed");
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(
@@ -219,7 +219,7 @@ mod tests {
             "Router,router-secret,,note,admin,false,Home,otpauth://totp/router?secret=ABC,value\n",
             ",,,,,,,,\n",
         );
-        let plan = plan_lastpass_import(export).unwrap();
+        let plan = plan_lastpass_import(export).expect("lastpass import test setup should succeed");
         assert_eq!(plan.source_count, 1);
         assert_eq!(
             plan.items,

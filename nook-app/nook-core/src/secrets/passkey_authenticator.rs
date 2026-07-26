@@ -532,10 +532,17 @@ mod tests {
 
     #[test]
     fn registration_builds_valid_es256_none_attestation() {
-        let result = create_website_passkey(&registration_request(), &[]).unwrap();
-        result.credential.validate().unwrap();
-        let attestation = URL_SAFE_NO_PAD.decode(&result.attestation_object).unwrap();
-        let value: Value = ciborium::de::from_reader(attestation.as_slice()).unwrap();
+        let result = create_website_passkey(&registration_request(), &[])
+            .expect("passkey authenticator test setup should succeed");
+        result
+            .credential
+            .validate()
+            .expect("passkey authenticator test setup should succeed");
+        let attestation = URL_SAFE_NO_PAD
+            .decode(&result.attestation_object)
+            .expect("passkey authenticator test setup should succeed");
+        let value: Value = ciborium::de::from_reader(attestation.as_slice())
+            .expect("passkey authenticator test setup should succeed");
         let Value::Map(entries) = value else {
             panic!("attestation must be a map")
         };
@@ -549,7 +556,8 @@ mod tests {
 
     #[test]
     fn assertion_signature_verifies_and_counter_advances() {
-        let registration = create_website_passkey(&registration_request(), &[]).unwrap();
+        let registration = create_website_passkey(&registration_request(), &[])
+            .expect("passkey authenticator test setup should succeed");
         let request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
             challenge: challenge(9),
@@ -561,26 +569,39 @@ mod tests {
         };
         let assertion =
             assert_website_passkey(&request, std::slice::from_ref(&registration.credential))
-                .unwrap();
+                .expect("passkey authenticator test setup should succeed");
         assert_eq!(assertion.updated_credential.signature_count, 1);
         let auth_data = URL_SAFE_NO_PAD
             .decode(&assertion.authenticator_data)
-            .unwrap();
-        let client_data = URL_SAFE_NO_PAD.decode(&assertion.client_data_json).unwrap();
+            .expect("passkey authenticator test setup should succeed");
+        let client_data = URL_SAFE_NO_PAD
+            .decode(&assertion.client_data_json)
+            .expect("passkey authenticator test setup should succeed");
         let mut signed = auth_data;
         signed.extend_from_slice(&Sha256::digest(client_data));
-        let signature =
-            Signature::from_der(&URL_SAFE_NO_PAD.decode(assertion.signature).unwrap()).unwrap();
+        let signature = Signature::from_der(
+            &URL_SAFE_NO_PAD
+                .decode(assertion.signature)
+                .expect("passkey authenticator test setup should succeed"),
+        )
+        .expect("passkey authenticator test setup should succeed");
         let PasskeyCredentialKey::Es256 {
             public_key_cose, ..
         } = &registration.credential.key;
-        let (x, y) =
-            cose_coordinates(&URL_SAFE_NO_PAD.decode(public_key_cose.encoded()).unwrap()).unwrap();
+        let (x, y) = cose_coordinates(
+            &URL_SAFE_NO_PAD
+                .decode(public_key_cose.encoded())
+                .expect("passkey authenticator test setup should succeed"),
+        )
+        .expect("passkey authenticator test setup should succeed");
         let mut point = vec![4];
         point.extend_from_slice(&x);
         point.extend_from_slice(&y);
-        let verifying = VerifyingKey::from_sec1_bytes(&point).unwrap();
-        verifying.verify(&signed, &signature).unwrap();
+        let verifying = VerifyingKey::from_sec1_bytes(&point)
+            .expect("passkey authenticator test setup should succeed");
+        verifying
+            .verify(&signed, &signature)
+            .expect("passkey authenticator test setup should succeed");
     }
 
     #[test]
@@ -599,10 +620,10 @@ mod tests {
         );
 
         let first = create_website_passkey(&registration_request(), &[])
-            .unwrap()
+            .expect("passkey authenticator test setup should succeed")
             .credential;
         let second = create_website_passkey(&registration_request(), &[])
-            .unwrap()
+            .expect("passkey authenticator test setup should succeed")
             .credential;
         let assertion = PasskeyAssertionRequest {
             origin: "https://example.com".to_owned(),
@@ -626,7 +647,8 @@ mod tests {
 
     #[test]
     fn concurrent_counter_variants_resume_from_the_highest_counter() {
-        let registration = create_website_passkey(&registration_request(), &[]).unwrap();
+        let registration = create_website_passkey(&registration_request(), &[])
+            .expect("passkey authenticator test setup should succeed");
         let mut older = registration.credential.clone();
         older.signature_count = 2;
         let mut newer = registration.credential;
@@ -641,7 +663,8 @@ mod tests {
             user_verification_required: true,
         };
 
-        let assertion = assert_website_passkey(&request, &[older, newer]).unwrap();
+        let assertion = assert_website_passkey(&request, &[older, newer])
+            .expect("passkey authenticator test setup should succeed");
 
         assert_eq!(assertion.updated_credential.signature_count, 8);
     }
@@ -649,10 +672,10 @@ mod tests {
     #[test]
     fn credential_key_validation_rejects_mismatched_public_key() {
         let first = create_website_passkey(&registration_request(), &[])
-            .unwrap()
+            .expect("passkey authenticator test setup should succeed")
             .credential;
         let second = create_website_passkey(&registration_request(), &[])
-            .unwrap()
+            .expect("passkey authenticator test setup should succeed")
             .credential;
         let PasskeyCredentialKey::Es256 {
             private_key_pkcs8, ..
@@ -669,7 +692,7 @@ mod tests {
     #[test]
     fn exclusions_malformed_descriptors_and_exhausted_counters_fail_closed() {
         let credential = create_website_passkey(&registration_request(), &[])
-            .unwrap()
+            .expect("passkey authenticator test setup should succeed")
             .credential;
         let mut excluded_request = registration_request();
         excluded_request.exclude_credentials = vec![PasskeyCredentialDescriptor {

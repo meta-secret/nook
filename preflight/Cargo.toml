@@ -13,5 +13,6 @@ tree-sitter-svelte-next = "0.1.1"
 tree-sitter-typescript = "0.23.2"
 
 [lints.clippy]
-all = "warn"
-pedantic = "warn"
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"

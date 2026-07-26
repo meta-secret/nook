@@ -445,7 +445,7 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap()
+            .expect("mock passkey test setup should succeed")
     }
 
     #[test]
@@ -461,7 +461,7 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap();
+            .expect("mock passkey test setup should succeed");
 
         assert_eq!(registration.credential_id(), assertion.credential_id());
         assert_eq!(registration.user_handle(), assertion.user_handle());
@@ -484,7 +484,7 @@ mod tests {
             registration.user_handle(),
             registration.prf_output(),
         )
-        .unwrap();
+        .expect("mock passkey test setup should succeed");
 
         let assertion = authenticator
             .authenticate(
@@ -494,22 +494,24 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap();
+            .expect("mock passkey test setup should succeed");
         let recovered_identity = derive_device_identity_from_passkey_prf(
             assertion.user_handle(),
             assertion.prf_output(),
         )
-        .unwrap();
+        .expect("mock passkey test setup should succeed");
         let recovered_record = passkey_derived_device_identity_record(
             assertion.credential_id(),
             assertion.user_handle(),
             &deterministic_passkey_prf_input(),
         )
-        .unwrap();
+        .expect("mock passkey test setup should succeed");
 
         assert_eq!(recovered_identity, original_identity);
         assert_eq!(
-            recovered_record.credential_id_bytes().unwrap(),
+            recovered_record
+                .credential_id_bytes()
+                .expect("mock passkey test setup should succeed"),
             registration.credential_id()
         );
     }
@@ -549,7 +551,7 @@ mod tests {
         assert_eq!(
             authenticator
                 .credential(registration.credential_id())
-                .unwrap()
+                .expect("mock passkey test setup should succeed")
                 .sign_count(),
             0
         );
@@ -611,20 +613,20 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap();
+            .expect("mock passkey test setup should succeed");
 
         assert_eq!(assertion.credential_id(), second.credential_id());
         assert_eq!(
             authenticator
                 .credential(first.credential_id())
-                .unwrap()
+                .expect("mock passkey test setup should succeed")
                 .sign_count(),
             0
         );
         assert_eq!(
             authenticator
                 .credential(second.credential_id())
-                .unwrap()
+                .expect("mock passkey test setup should succeed")
                 .sign_count(),
             1
         );
@@ -648,14 +650,14 @@ mod tests {
         assert_eq!(
             authenticator
                 .credential(first.credential_id())
-                .unwrap()
+                .expect("mock passkey test setup should succeed")
                 .sign_count(),
             0
         );
         assert_eq!(
             authenticator
                 .credential(second.credential_id())
-                .unwrap()
+                .expect("mock passkey test setup should succeed")
                 .sign_count(),
             0
         );
@@ -669,10 +671,10 @@ mod tests {
 
         let first_identity =
             derive_device_identity_from_passkey_prf(first.user_handle(), first.prf_output())
-                .unwrap();
+                .expect("mock passkey test setup should succeed");
         let second_identity =
             derive_device_identity_from_passkey_prf(second.user_handle(), second.prf_output())
-                .unwrap();
+                .expect("mock passkey test setup should succeed");
 
         assert_ne!(first.credential_id(), second.credential_id());
         assert_ne!(first_identity, second_identity);

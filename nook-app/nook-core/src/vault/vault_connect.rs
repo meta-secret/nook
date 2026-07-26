@@ -279,7 +279,8 @@ mod tests {
             ),
         };
 
-        let error = validate_user_secret_types(&[record]).unwrap_err();
+        let error = validate_user_secret_types(&[record])
+            .expect_err("vault connect test should reject invalid input");
 
         assert!(matches!(
             error,
@@ -338,7 +339,7 @@ mod tests {
             None,
             &architecture,
         )
-        .unwrap_err();
+        .expect_err("vault connect test should reject invalid input");
 
         assert!(matches!(
             error,

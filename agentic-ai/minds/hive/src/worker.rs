@@ -870,9 +870,10 @@ mod tests {
 
     #[test]
     fn a_restarted_process_cannot_reuse_the_same_pod_workspace() {
-        let workspace = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().expect("worker test setup should succeed");
 
-        establish_worker_lifecycle(workspace.path(), "pod-a").unwrap();
+        establish_worker_lifecycle(workspace.path(), "pod-a")
+            .expect("worker test setup should succeed");
         let error = establish_worker_lifecycle(workspace.path(), "pod-a")
             .expect_err("the second worker process must be rejected");
 
@@ -887,13 +888,15 @@ mod tests {
     #[test]
     fn recovered_merge_commit_is_part_of_replacement_worker_context() {
         let task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery").unwrap(),
+            id: TaskId::new("main-failure-recovery").expect("worker test setup should succeed"),
             kind: "main-repair".to_owned(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-recovery").unwrap(),
+            attempt_id: AttemptId::new("attempt-recovery")
+                .expect("worker test setup should succeed"),
             attempt_number: 2,
-            lease_token: LeaseToken::new("lease-recovery").unwrap(),
+            lease_token: LeaseToken::new("lease-recovery")
+                .expect("worker test setup should succeed"),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -940,17 +943,18 @@ mod tests {
 
     #[tokio::test]
     async fn implementation_patch_is_durable_before_completion() {
-        let repository = tempfile::tempdir().unwrap();
+        let repository = tempfile::tempdir().expect("worker test setup should succeed");
         let run_git = |arguments: &[&str]| {
             let status = std::process::Command::new("git")
                 .args(arguments)
                 .current_dir(repository.path())
                 .status()
-                .unwrap();
+                .expect("worker test setup should succeed");
             assert!(status.success());
         };
         run_git(&["init", "--quiet"]);
-        std::fs::write(repository.path().join("tracked.txt"), "before\n").unwrap();
+        std::fs::write(repository.path().join("tracked.txt"), "before\n")
+            .expect("worker test setup should succeed");
         run_git(&["add", "tracked.txt"]);
         run_git(&[
             "-c",
@@ -962,17 +966,21 @@ mod tests {
             "-m",
             "fixture",
         ]);
-        std::fs::write(repository.path().join("tracked.txt"), "after\n").unwrap();
-        std::fs::write(repository.path().join("new.txt"), "new\n").unwrap();
+        std::fs::write(repository.path().join("tracked.txt"), "after\n")
+            .expect("worker test setup should succeed");
+        std::fs::write(repository.path().join("new.txt"), "new\n")
+            .expect("worker test setup should succeed");
 
         let baseline = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(repository.path())
             .output()
-            .unwrap();
-        let baseline = String::from_utf8(baseline.stdout).unwrap();
+            .expect("worker test setup should succeed");
+        let baseline =
+            String::from_utf8(baseline.stdout).expect("worker test setup should succeed");
         let baseline = baseline.trim();
-        std::fs::write(repository.path().join("committed.txt"), "committed\n").unwrap();
+        std::fs::write(repository.path().join("committed.txt"), "committed\n")
+            .expect("worker test setup should succeed");
         run_git(&["add", "committed.txt"]);
         run_git(&[
             "-c",
@@ -984,18 +992,20 @@ mod tests {
             "-m",
             "task commit",
         ]);
-        std::fs::write(repository.path().join("tracked.txt"), "after\n").unwrap();
+        std::fs::write(repository.path().join("tracked.txt"), "after\n")
+            .expect("worker test setup should succeed");
         run_git(&["add", "tracked.txt"]);
-        std::fs::write(repository.path().join("new.txt"), "new\n").unwrap();
+        std::fs::write(repository.path().join("new.txt"), "new\n")
+            .expect("worker test setup should succeed");
 
         let task = ClaimedTask {
-            id: TaskId::new("task-1").unwrap(),
+            id: TaskId::new("task-1").expect("worker test setup should succeed"),
             kind: "code".to_owned(),
             prompt: "change files".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1").unwrap(),
+            attempt_id: AttemptId::new("attempt-1").expect("worker test setup should succeed"),
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1").unwrap(),
+            lease_token: LeaseToken::new("lease-1").expect("worker test setup should succeed"),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1009,7 +1019,7 @@ mod tests {
 
         let artifact = persistable_patch(repository.path(), baseline, &task, &result, false)
             .await
-            .unwrap()
+            .expect("worker test setup should succeed")
             .expect("patch artifact");
 
         assert_eq!(artifact.kind, "git-patch");
@@ -1021,17 +1031,18 @@ mod tests {
 
     #[tokio::test]
     async fn resumed_repair_accepts_changes_already_published_on_its_branch() {
-        let repository = tempfile::tempdir().unwrap();
+        let repository = tempfile::tempdir().expect("worker test setup should succeed");
         let run_git = |arguments: &[&str]| {
             let status = std::process::Command::new("git")
                 .args(arguments)
                 .current_dir(repository.path())
                 .status()
-                .unwrap();
+                .expect("worker test setup should succeed");
             assert!(status.success());
         };
         run_git(&["init", "--quiet"]);
-        std::fs::write(repository.path().join("repair.txt"), "published\n").unwrap();
+        std::fs::write(repository.path().join("repair.txt"), "published\n")
+            .expect("worker test setup should succeed");
         run_git(&["add", "repair.txt"]);
         run_git(&[
             "-c",
@@ -1047,16 +1058,19 @@ mod tests {
             .args(["rev-parse", "HEAD"])
             .current_dir(repository.path())
             .output()
-            .unwrap();
-        let baseline = String::from_utf8(baseline.stdout).unwrap();
+            .expect("worker test setup should succeed");
+        let baseline =
+            String::from_utf8(baseline.stdout).expect("worker test setup should succeed");
         let task = ClaimedTask {
-            id: TaskId::new("resumed-task").unwrap(),
+            id: TaskId::new("resumed-task").expect("worker test setup should succeed"),
             kind: "main-repair".to_owned(),
             prompt: "finish delivery".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("resumed-attempt").unwrap(),
+            attempt_id: AttemptId::new("resumed-attempt")
+                .expect("worker test setup should succeed"),
             attempt_number: 1,
-            lease_token: LeaseToken::new("resumed-lease").unwrap(),
+            lease_token: LeaseToken::new("resumed-lease")
+                .expect("worker test setup should succeed"),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1071,20 +1085,20 @@ mod tests {
         assert!(
             persistable_patch(repository.path(), baseline.trim(), &task, &result, true)
                 .await
-                .unwrap()
+                .expect("worker test setup should succeed")
                 .is_none()
         );
     }
 
     #[tokio::test]
     async fn completed_dependency_patch_becomes_the_task_baseline() {
-        let source = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().expect("worker test setup should succeed");
         let run_git = |arguments: &[&str]| {
             let output = std::process::Command::new("git")
                 .args(arguments)
                 .current_dir(source.path())
                 .output()
-                .unwrap();
+                .expect("worker test setup should succeed");
             assert!(
                 output.status.success(),
                 "{}",
@@ -1093,7 +1107,8 @@ mod tests {
             output.stdout
         };
         run_git(&["init", "--quiet"]);
-        std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
+        std::fs::write(source.path().join("dependency.txt"), "before\n")
+            .expect("worker test setup should succeed");
         run_git(&["add", "dependency.txt"]);
         run_git(&[
             "-c",
@@ -1106,12 +1121,15 @@ mod tests {
             "fixture",
         ]);
         let source_commit = String::from_utf8(run_git(&["rev-parse", "HEAD"]))
-            .unwrap()
+            .expect("worker test setup should succeed")
             .trim()
             .to_owned();
-        std::fs::write(source.path().join("dependency.txt"), "from dependency\n").unwrap();
-        let patch = String::from_utf8(run_git(&["diff", "--binary"])).unwrap();
-        std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
+        std::fs::write(source.path().join("dependency.txt"), "from dependency\n")
+            .expect("worker test setup should succeed");
+        let patch = String::from_utf8(run_git(&["diff", "--binary"]))
+            .expect("worker test setup should succeed");
+        std::fs::write(source.path().join("dependency.txt"), "before\n")
+            .expect("worker test setup should succeed");
         let digest = Sha256::digest(patch.as_bytes());
         let digest = digest.iter().fold(
             String::with_capacity(digest.len() * 2),
@@ -1129,7 +1147,8 @@ mod tests {
         };
         let resume_branch = "codex/hive-resume-test";
         run_git(&["checkout", "--quiet", "-b", resume_branch, &source_commit]);
-        std::fs::write(source.path().join("resumed.txt"), "durable branch\n").unwrap();
+        std::fs::write(source.path().join("resumed.txt"), "durable branch\n")
+            .expect("worker test setup should succeed");
         run_git(&["add", "resumed.txt"]);
         run_git(&[
             "-c",
@@ -1141,52 +1160,62 @@ mod tests {
             "-m",
             "durable branch",
         ]);
-        let workspace = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().expect("worker test setup should succeed");
         let preparation = prepare_workspace(
             workspace.path(),
-            source.path().to_str().unwrap(),
+            source
+                .path()
+                .to_str()
+                .expect("worker test setup should succeed"),
             &source_commit,
             None,
             std::slice::from_ref(&dependency),
         )
         .await
-        .unwrap();
+        .expect("worker test setup should succeed");
         assert!(!preparation.conflicted);
         let baseline = preparation.baseline;
         let repository = workspace.path().join("repository");
         assert_eq!(
-            std::fs::read_to_string(repository.join("dependency.txt")).unwrap(),
+            std::fs::read_to_string(repository.join("dependency.txt"))
+                .expect("worker test setup should succeed"),
             "from dependency\n"
         );
-        let resumed_workspace = tempfile::tempdir().unwrap();
+        let resumed_workspace = tempfile::tempdir().expect("worker test setup should succeed");
         let resumed_preparation = prepare_workspace(
             resumed_workspace.path(),
-            source.path().to_str().unwrap(),
+            source
+                .path()
+                .to_str()
+                .expect("worker test setup should succeed"),
             &source_commit,
             Some(resume_branch),
             std::slice::from_ref(&dependency),
         )
         .await
-        .unwrap();
+        .expect("worker test setup should succeed");
         assert!(!resumed_preparation.conflicted);
         let resumed_repository = resumed_workspace.path().join("repository");
         assert_eq!(
-            std::fs::read_to_string(resumed_repository.join("dependency.txt")).unwrap(),
+            std::fs::read_to_string(resumed_repository.join("dependency.txt"))
+                .expect("worker test setup should succeed"),
             "from dependency\n"
         );
         assert_eq!(
-            std::fs::read_to_string(resumed_repository.join("resumed.txt")).unwrap(),
+            std::fs::read_to_string(resumed_repository.join("resumed.txt"))
+                .expect("worker test setup should succeed"),
             "durable branch\n"
         );
-        std::fs::write(repository.join("task.txt"), "task result\n").unwrap();
+        std::fs::write(repository.join("task.txt"), "task result\n")
+            .expect("worker test setup should succeed");
         let task = ClaimedTask {
-            id: TaskId::new("task-2").unwrap(),
+            id: TaskId::new("task-2").expect("worker test setup should succeed"),
             kind: "code".to_owned(),
             prompt: "build on dependency".to_owned(),
             source_commit,
-            attempt_id: AttemptId::new("attempt-2").unwrap(),
+            attempt_id: AttemptId::new("attempt-2").expect("worker test setup should succeed"),
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-2").unwrap(),
+            lease_token: LeaseToken::new("lease-2").expect("worker test setup should succeed"),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1199,7 +1228,7 @@ mod tests {
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false)
             .await
-            .unwrap()
+            .expect("worker test setup should succeed")
             .expect("task patch");
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));

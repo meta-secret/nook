@@ -74,8 +74,8 @@ impl NookVaultManager {
     ) -> Result<
         Vec<(
             nook_core::StoredSecretRecord,
-            Option<nook_core::SecretFingerprint>,
-            Option<nook_core::SecretFingerprint>,
+            nook_core::SecretFingerprint,
+            nook_core::SecretFingerprint,
         )>,
         NookError,
     > {
@@ -911,7 +911,7 @@ impl NookVaultManager {
             schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
             store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
             actor_id,
-            actor_signing_public_key: Some(signing_public_key),
+            actor_signing_public_key: signing_public_key,
             parents: Vec::new(),
             created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
             key_epoch: EventId::parse(&key_epoch)?,
@@ -971,7 +971,7 @@ impl NookVaultManager {
             schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
             store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
             actor_id,
-            actor_signing_public_key: Some(signing.public_key()),
+            actor_signing_public_key: signing.public_key(),
             parents: Vec::new(),
             created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
             key_epoch: EventId::parse(&key_epoch)?,

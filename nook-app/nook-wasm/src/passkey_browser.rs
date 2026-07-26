@@ -610,7 +610,7 @@ mod tests {
     fn creation_options_use_passkey_prf_types() {
         let value =
             creation_options_struct("localhost", "Nook", "Kitchen laptop", &[8; 32], &[9; 32])
-                .unwrap();
+                .expect("passkey browser test setup should succeed");
         let json = to_json(&value);
 
         assert_eq!(json["publicKey"]["rp"]["id"], "localhost");
@@ -649,16 +649,18 @@ mod tests {
 
     #[test]
     fn blank_rp_id_uses_browser_origin_default() {
-        let creation =
-            creation_options_struct("", "Nook", "Browser extension", &[8; 32], &[9; 32]).unwrap();
+        let creation = creation_options_struct("", "Nook", "Browser extension", &[8; 32], &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let creation_json = to_json(&creation);
         assert!(creation_json["publicKey"]["rp"].get("id").is_none());
 
-        let request = request_options_struct("", &[7; 32], &[9; 32]).unwrap();
+        let request = request_options_struct("", &[7; 32], &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let request_json = to_json(&request);
         assert!(request_json["publicKey"].get("rpId").is_none());
 
-        let recovery = recovery_options_struct("", &[9; 32]).unwrap();
+        let recovery = recovery_options_struct("", &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let recovery_json = to_json(&recovery);
         assert!(recovery_json["publicKey"].get("rpId").is_none());
     }
@@ -666,7 +668,8 @@ mod tests {
     #[test]
     fn request_options_key_prf_input_by_credential_id() {
         let credential_id = [7u8; 32];
-        let value = request_options_struct("localhost", &credential_id, &[9; 32]).unwrap();
+        let value = request_options_struct("localhost", &credential_id, &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let json = to_json(&value);
         let key = base64_url(&credential_id);
 
@@ -689,7 +692,8 @@ mod tests {
 
     #[test]
     fn recovery_options_use_discoverable_credentials_and_global_prf_input() {
-        let value = recovery_options_struct("localhost", &[9; 32]).unwrap();
+        let value = recovery_options_struct("localhost", &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let json = to_json(&value);
 
         assert_eq!(json["publicKey"]["rpId"], "localhost");
@@ -755,8 +759,8 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn creation_options_serialize_webauthn_bytes_as_uint8_arrays() {
-        let options =
-            creation_options("localhost", "Nook", "Nook device", &[8; 32], &[9; 32]).unwrap();
+        let options = creation_options("localhost", "Nook", "Nook device", &[8; 32], &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let public_key = get(&options, "publicKey");
         let user = get(&public_key, "user");
         let extensions = get(&public_key, "extensions");
@@ -775,7 +779,8 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn request_options_serialize_webauthn_bytes_as_uint8_arrays() {
         let credential_id = [7u8; 32];
-        let options = request_options("localhost", &credential_id, &[9; 32]).unwrap();
+        let options = request_options("localhost", &credential_id, &[9; 32])
+            .expect("passkey browser test setup should succeed");
         let public_key = get(&options, "publicKey");
         let credentials: js_sys::Array = get(&public_key, "allowCredentials").unchecked_into();
         let first_credential: js_sys::Object = credentials.get(0).unchecked_into();
@@ -791,7 +796,8 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn recovery_options_serialize_webauthn_bytes_as_uint8_arrays() {
-        let options = recovery_options("localhost").unwrap();
+        let options =
+            recovery_options("localhost").expect("passkey browser test setup should succeed");
         let public_key = get(&options, "publicKey");
         let extensions = get(&public_key, "extensions");
         let prf = get(&extensions, "prf");

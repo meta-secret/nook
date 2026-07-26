@@ -952,12 +952,12 @@ mod tests {
     fn sample_records() -> Vec<SecretRecord> {
         vec![
             SecretRecord {
-                id: validate_secret_id("github.com").unwrap(),
+                id: validate_secret_id("github.com").expect("validation test setup should succeed"),
                 secret_type: SecretType::ApiKey,
                 data: value("a"),
             },
             SecretRecord {
-                id: validate_secret_id("work-vpn").unwrap(),
+                id: validate_secret_id("work-vpn").expect("validation test setup should succeed"),
                 secret_type: SecretType::ApiKey,
                 data: value("b"),
             },
@@ -967,11 +967,15 @@ mod tests {
     #[test]
     fn validate_github_repo_name_defaults_and_rejects_invalid() {
         assert_eq!(
-            validate_github_repo_name("  ").unwrap().as_str(),
+            validate_github_repo_name("  ")
+                .expect("validation test setup should succeed")
+                .as_str(),
             DEFAULT_GITHUB_REPO_NAME
         );
         assert_eq!(
-            validate_github_repo_name("work-vault").unwrap().as_str(),
+            validate_github_repo_name("work-vault")
+                .expect("validation test setup should succeed")
+                .as_str(),
             "work-vault"
         );
         assert!(validate_github_repo_name(".").is_err());
@@ -983,8 +987,8 @@ mod tests {
         assert!(validate_connect(STORAGE_MODE_GITHUB, "  ").is_err());
         assert_eq!(
             validate_connect(STORAGE_MODE_GITHUB, " ghp_test ")
-                .unwrap()
-                .unwrap()
+                .expect("validation test setup should succeed")
+                .expect("validation test setup should succeed")
                 .as_str(),
             "ghp_test"
         );
@@ -992,7 +996,10 @@ mod tests {
 
     #[test]
     fn validate_connect_local_ok() {
-        assert_eq!(validate_connect(STORAGE_MODE_LOCAL, "").unwrap(), None);
+        assert_eq!(
+            validate_connect(STORAGE_MODE_LOCAL, "").expect("validation test setup should succeed"),
+            None
+        );
     }
 
     #[test]
@@ -1223,22 +1230,33 @@ mod tests {
     #[test]
     fn validate_secret_fields() {
         assert!(validate_secret_id("  ").is_err());
-        assert_eq!(validate_secret_id(" github ").unwrap().as_str(), "github");
+        assert_eq!(
+            validate_secret_id(" github ")
+                .expect("validation test setup should succeed")
+                .as_str(),
+            "github"
+        );
         assert!(validate_secret_data("").is_err());
         assert!(validate_secret_data("x").is_ok());
         assert!(validate_secret_id("abc123def4567890").is_err());
         assert!(validate_secret_id(&"a".repeat(64)).is_err());
         assert_eq!(
-            validate_store_id("store_SMypl8K0w9Y").unwrap().as_str(),
+            validate_store_id("store_SMypl8K0w9Y")
+                .expect("validation test setup should succeed")
+                .as_str(),
             "store_SMypl8K0w9Y"
         );
         assert_eq!(
-            validate_store_id("SMypl8K0w9Y").unwrap().as_str(),
+            validate_store_id("SMypl8K0w9Y")
+                .expect("validation test setup should succeed")
+                .as_str(),
             "store_SMypl8K0w9Y"
         );
         assert!(validate_store_id("short").is_err());
         assert_eq!(
-            validate_secret_id("secret_SMypl8K0w9Y").unwrap().as_str(),
+            validate_secret_id("secret_SMypl8K0w9Y")
+                .expect("validation test setup should succeed")
+                .as_str(),
             "secret_SMypl8K0w9Y"
         );
     }
@@ -1266,13 +1284,22 @@ mod tests {
         assert_eq!(StorageMode::Github.as_str(), "github");
         assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
         assert_eq!(StorageMode::ICloud.as_str(), "icloud");
-        assert_eq!(StorageMode::parse("local").unwrap(), StorageMode::Local);
-        assert_eq!(StorageMode::parse("github").unwrap(), StorageMode::Github);
         assert_eq!(
-            StorageMode::parse("google-drive").unwrap(),
+            StorageMode::parse("local").expect("validation test setup should succeed"),
+            StorageMode::Local
+        );
+        assert_eq!(
+            StorageMode::parse("github").expect("validation test setup should succeed"),
+            StorageMode::Github
+        );
+        assert_eq!(
+            StorageMode::parse("google-drive").expect("validation test setup should succeed"),
             StorageMode::GoogleDrive
         );
-        assert_eq!(StorageMode::parse("icloud").unwrap(), StorageMode::ICloud);
+        assert_eq!(
+            StorageMode::parse("icloud").expect("validation test setup should succeed"),
+            StorageMode::ICloud
+        );
         assert!(StorageMode::parse("s3").is_err());
         assert_eq!(format!("{}", StorageMode::Local), "local");
     }
@@ -1286,14 +1313,19 @@ mod tests {
     #[test]
     fn validate_connect_icloud_requires_access_token() {
         assert!(validate_connect("icloud", "  ").is_err());
-        assert_eq!(validate_connect("icloud", " ck-web-token ").unwrap(), None);
+        assert_eq!(
+            validate_connect("icloud", " ck-web-token ")
+                .expect("validation test setup should succeed"),
+            None
+        );
     }
 
     #[test]
     fn validate_connect_google_drive_requires_access_token() {
         assert!(validate_connect("google-drive", "  ").is_err());
         assert_eq!(
-            validate_connect("google-drive", " ya29.test ").unwrap(),
+            validate_connect("google-drive", " ya29.test ")
+                .expect("validation test setup should succeed"),
             None
         );
     }
@@ -1301,12 +1333,14 @@ mod tests {
     #[test]
     fn validate_drive_backup_name_defaults_and_rejects_invalid() {
         assert_eq!(
-            validate_drive_backup_name("  ").unwrap().as_str(),
+            validate_drive_backup_name("  ")
+                .expect("validation test setup should succeed")
+                .as_str(),
             DEFAULT_DRIVE_BACKUP_NAME
         );
         assert_eq!(
             validate_drive_backup_name("work-vault.yaml")
-                .unwrap()
+                .expect("validation test setup should succeed")
                 .as_str(),
             "work-vault.yaml"
         );
@@ -1317,17 +1351,20 @@ mod tests {
     #[test]
     fn parse_drive_storage_ref_splits_file_id_and_name() {
         assert_eq!(
-            parse_drive_storage_ref("abc123\twork-vault.yaml").unwrap(),
+            parse_drive_storage_ref("abc123\twork-vault.yaml")
+                .expect("validation test setup should succeed"),
             (
                 "abc123".to_owned(),
-                validate_drive_backup_name("work-vault.yaml").unwrap()
+                validate_drive_backup_name("work-vault.yaml")
+                    .expect("validation test setup should succeed")
             )
         );
         assert_eq!(
-            parse_drive_storage_ref("nook-events").unwrap(),
+            parse_drive_storage_ref("nook-events").expect("validation test setup should succeed"),
             (
                 String::new(),
-                validate_drive_backup_name("nook-events").unwrap()
+                validate_drive_backup_name("nook-events")
+                    .expect("validation test setup should succeed")
             )
         );
     }
@@ -1335,11 +1372,19 @@ mod tests {
     #[test]
     fn format_drive_storage_ref_omits_empty_file_id() {
         assert_eq!(
-            format_drive_storage_ref("", &validate_drive_backup_name("nook-events").unwrap()),
+            format_drive_storage_ref(
+                "",
+                &validate_drive_backup_name("nook-events")
+                    .expect("validation test setup should succeed")
+            ),
             "nook-events"
         );
         assert_eq!(
-            format_drive_storage_ref("abc", &validate_drive_backup_name("work.yaml").unwrap()),
+            format_drive_storage_ref(
+                "abc",
+                &validate_drive_backup_name("work.yaml")
+                    .expect("validation test setup should succeed")
+            ),
             "abc\twork.yaml"
         );
     }
@@ -1356,7 +1401,9 @@ mod tests {
     fn validate_oauth_access_token_rejects_empty() {
         assert!(validate_oauth_access_token(" ").is_err());
         assert_eq!(
-            validate_oauth_access_token(" token ").unwrap().as_str(),
+            validate_oauth_access_token(" token ")
+                .expect("validation test setup should succeed")
+                .as_str(),
             "token"
         );
     }
@@ -1381,7 +1428,7 @@ mod tests {
     #[test]
     fn filter_secrets_does_not_search_values() {
         let records = vec![SecretRecord {
-            id: validate_secret_id("label").unwrap(),
+            id: validate_secret_id("label").expect("validation test setup should succeed"),
             secret_type: SecretType::ApiKey,
             data: value("find-me"),
         }];
@@ -1432,11 +1479,11 @@ mod tests {
     #[test]
     fn google_drive_mode_is_explicit_and_backward_compatible() {
         assert_eq!(
-            GoogleDriveMode::parse("").unwrap(),
+            GoogleDriveMode::parse("").expect("validation test setup should succeed"),
             GoogleDriveMode::Private
         );
         assert_eq!(
-            GoogleDriveMode::parse("shared").unwrap(),
+            GoogleDriveMode::parse("shared").expect("validation test setup should succeed"),
             GoogleDriveMode::Shared
         );
         assert!(GoogleDriveMode::parse("public").is_err());
@@ -1451,27 +1498,33 @@ mod tests {
             "root-record",
             "short-guid",
         )
-        .unwrap();
-        let storage_id = owner.to_storage_id().unwrap();
+        .expect("validation test setup should succeed");
+        let storage_id = owner
+            .to_storage_id()
+            .expect("validation test setup should succeed");
         assert!(storage_id.starts_with("icloud-share-v1:"));
         assert_eq!(
-            ICloudSharedTarget::from_storage_id(&storage_id).unwrap(),
+            ICloudSharedTarget::from_storage_id(&storage_id)
+                .expect("validation test setup should succeed"),
             owner
         );
         assert_eq!(
-            ICloudEventTarget::from_storage_id("").unwrap(),
+            ICloudEventTarget::from_storage_id("").expect("validation test setup should succeed"),
             ICloudEventTarget::Private
         );
         assert_eq!(
-            ICloudEventTarget::from_storage_id("nook-events").unwrap(),
+            ICloudEventTarget::from_storage_id("nook-events")
+                .expect("validation test setup should succeed"),
             ICloudEventTarget::Private
         );
         assert_eq!(
-            ICloudEventTarget::from_storage_id("legacy-private-record-ref").unwrap(),
+            ICloudEventTarget::from_storage_id("legacy-private-record-ref")
+                .expect("validation test setup should succeed"),
             ICloudEventTarget::Private
         );
         assert_eq!(
-            ICloudEventTarget::from_storage_id(&storage_id).unwrap(),
+            ICloudEventTarget::from_storage_id(&storage_id)
+                .expect("validation test setup should succeed"),
             ICloudEventTarget::Shared(owner)
         );
         assert!(ICloudEventTarget::from_storage_id("icloud-share-v1:{}").is_err());
@@ -1480,8 +1533,14 @@ mod tests {
 
     #[test]
     fn icloud_mode_is_explicit_and_backward_compatible() {
-        assert_eq!(ICloudMode::parse("").unwrap(), ICloudMode::Private);
-        assert_eq!(ICloudMode::parse("shared").unwrap(), ICloudMode::Shared);
+        assert_eq!(
+            ICloudMode::parse("").expect("validation test setup should succeed"),
+            ICloudMode::Private
+        );
+        assert_eq!(
+            ICloudMode::parse("shared").expect("validation test setup should succeed"),
+            ICloudMode::Shared
+        );
         assert!(ICloudMode::parse("public").is_err());
     }
 
@@ -1489,7 +1548,7 @@ mod tests {
     fn normalize_google_drive_folder_ref_accepts_id_and_folder_url() {
         assert_eq!(
             normalize_google_drive_folder_ref(" folder_ABC-123 ")
-                .unwrap()
+                .expect("validation test setup should succeed")
                 .as_str(),
             "folder_ABC-123"
         );
@@ -1497,7 +1556,7 @@ mod tests {
             normalize_google_drive_folder_ref(
                 "https://drive.google.com/drive/u/1/folders/folder_ABC-123?resourcekey=key"
             )
-            .unwrap()
+            .expect("validation test setup should succeed")
             .as_str(),
             "folder_ABC-123"
         );

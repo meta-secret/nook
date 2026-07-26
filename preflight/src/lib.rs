@@ -818,30 +818,30 @@ mod tests {
     #[test]
     fn reports_only_cache_mounts_in_dockerfiles() {
         let root = temporary_directory();
-        fs::create_dir_all(root.join("nested")).unwrap();
-        fs::create_dir_all(root.join("nook-app/nook-wasm")).unwrap();
+        fs::create_dir_all(root.join("nested")).expect("lib test setup should succeed");
+        fs::create_dir_all(root.join("nook-app/nook-wasm")).expect("lib test setup should succeed");
         fs::create_dir_all(
             root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm"),
         )
-        .unwrap();
+        .expect("lib test setup should succeed");
         fs::write(
             root.join("nested/build.Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
         )
-        .unwrap();
+        .expect("lib test setup should succeed");
         fs::write(
             root.join("nook-app/nook-wasm/Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/wasm-cache true\n",
         )
-        .unwrap();
+        .expect("lib test setup should succeed");
         fs::write(
             root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/generated-cache true\n",
         )
-        .unwrap();
-        fs::write(root.join("notes.txt"), "--mount=type=cache").unwrap();
+        .expect("lib test setup should succeed");
+        fs::write(root.join("notes.txt"), "--mount=type=cache").expect("lib test setup should succeed");
 
-        let violations = dockerfile_cache_mounts(&root).unwrap();
+        let violations = dockerfile_cache_mounts(&root).expect("lib test setup should succeed");
 
         assert_eq!(
             violations,
@@ -860,15 +860,15 @@ mod tests {
                 },
             ]
         );
-        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root).expect("lib test setup should succeed");
     }
 
     #[test]
     fn fails_when_repository_root_contains_no_dockerfiles() {
         let root = temporary_directory();
-        let error = dockerfile_cache_mounts(&root).unwrap_err();
+        let error = dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
-        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root).expect("lib test setup should succeed");
     }
 
     #[test]
@@ -1093,13 +1093,13 @@ export function configuredCapability(): NookProviderReplicationCapability {
     fn temporary_directory() -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("lib test setup should succeed")
             .as_nanos();
         let process_id = std::process::id();
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let path =
             std::env::temp_dir().join(format!("nook-preflight-{process_id}-{unique}-{sequence}"));
-        fs::create_dir(&path).unwrap();
+        fs::create_dir(&path).expect("lib test setup should succeed");
         path
     }
 }

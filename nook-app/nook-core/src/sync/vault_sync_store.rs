@@ -198,7 +198,8 @@ mod tests {
         let mut local = MemoryVaultStore::with_blob(local_blob);
         let mut remote = MemoryVaultStore::with_blob_and_revision("", "rev-0");
 
-        let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        let action = reconcile_vault_stores(&mut local, &mut remote)
+            .expect("vault sync store test setup should succeed");
         assert_eq!(action, VaultSyncAction::PushLocal);
         assert_eq!(remote.blob(), local.blob());
         assert_eq!(remote.revision(), Some("rev-1"));
@@ -211,7 +212,8 @@ mod tests {
         let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local"));
         let mut remote = MemoryVaultStore::with_blob_and_revision(remote_blob.clone(), "rev-9");
 
-        let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        let action = reconcile_vault_stores(&mut local, &mut remote)
+            .expect("vault sync store test setup should succeed");
         assert_eq!(action, VaultSyncAction::AdoptRemote);
         assert_eq!(local.blob(), remote_blob);
         assert_eq!(local.revision(), Some("rev-9"));
@@ -225,7 +227,8 @@ mod tests {
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        let action = reconcile_vault_stores(&mut local, &mut remote)
+            .expect("vault sync store test setup should succeed");
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
@@ -241,8 +244,8 @@ mod tests {
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action =
-            reconcile_vault_stores_with_common(&mut local, &mut remote, Some(&base_hash)).unwrap();
+        let action = reconcile_vault_stores_with_common(&mut local, &mut remote, Some(&base_hash))
+            .expect("vault sync store test setup should succeed");
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
@@ -264,7 +267,8 @@ mod tests {
             ),
         ]);
 
-        let results = fan_out_sync(&mut local, &mut remotes).unwrap();
+        let results = fan_out_sync(&mut local, &mut remotes)
+            .expect("vault sync store test setup should succeed");
         assert_eq!(results.len(), 2);
         assert!(
             results

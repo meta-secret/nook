@@ -1553,10 +1553,15 @@ mod tests {
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
 
     fn genesis_vault(keys: &VaultKeys) -> (DeviceIdentity, Vec<StoredSecretRecord>) {
-        let genesis = DeviceIdentity::generate().unwrap();
-        let mut records =
-            vec![genesis_auth_record(&genesis, &keys.secrets_key, &keys.members_key).unwrap()];
-        records.extend(genesis_members_records(&genesis, &keys.members_key, ENROLLED_AT).unwrap());
+        let genesis = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let mut records = vec![
+            genesis_auth_record(&genesis, &keys.secrets_key, &keys.members_key)
+                .expect("multi device test setup should succeed"),
+        ];
+        records.extend(
+            genesis_members_records(&genesis, &keys.members_key, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        );
         (genesis, records)
     }
 
@@ -1574,7 +1579,8 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) {
-        let join = pending_join_for_device(records, joiner.device_id()).unwrap();
+        let join = pending_join_for_device(records, joiner.device_id())
+            .expect("multi device test setup should succeed");
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
             &keys.members_key,
@@ -1582,58 +1588,64 @@ mod tests {
             approver,
             records,
         )
-        .unwrap();
+        .expect("multi device test setup should succeed");
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
         replace_member_records(records, member_records);
     }
 
     fn sentinel_share_fixture() -> (VaultKeys, [DeviceIdentity; 3], Vec<StoredSecretRecord>) {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let identities = [
-            DeviceIdentity::generate().unwrap(),
-            DeviceIdentity::generate().unwrap(),
-            DeviceIdentity::generate().unwrap(),
+            DeviceIdentity::generate().expect("multi device test setup should succeed"),
+            DeviceIdentity::generate().expect("multi device test setup should succeed"),
+            DeviceIdentity::generate().expect("multi device test setup should succeed"),
         ];
-        let records = create_sentinel_share_records(&keys, &identities, 2).unwrap();
+        let records = create_sentinel_share_records(&keys, &identities, 2)
+            .expect("multi device test setup should succeed");
         (keys, identities, records)
     }
 
     #[test]
     fn genesis_device_can_decrypt_vault_keys() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, records) = genesis_vault(&keys);
         assert_eq!(
-            resolve_secrets_key(&records, &genesis).unwrap(),
+            resolve_secrets_key(&records, &genesis)
+                .expect("multi device test setup should succeed"),
             keys.secrets_key
         );
         assert_eq!(
-            resolve_members_key(&records, &genesis).unwrap(),
+            resolve_members_key(&records, &genesis)
+                .expect("multi device test setup should succeed"),
             keys.members_key
         );
     }
 
     #[test]
     fn second_device_join_request_and_approval_roundtrips_key_access() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
 
-        let joiner = DeviceIdentity::generate().unwrap();
-        records.push(create_join_request_record(&joiner, ENROLLED_AT).unwrap());
+        let joiner = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        records.push(
+            create_join_request_record(&joiner, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        );
 
         approve_pending_join(&keys, &genesis, &mut records, &joiner);
 
         assert_eq!(
-            resolve_secrets_key(&records, &joiner).unwrap(),
+            resolve_secrets_key(&records, &joiner).expect("multi device test setup should succeed"),
             keys.secrets_key
         );
         assert_eq!(
-            resolve_members_key(&records, &joiner).unwrap(),
+            resolve_members_key(&records, &joiner).expect("multi device test setup should succeed"),
             keys.members_key
         );
         assert_eq!(
             resolve_member_roster(&records, &keys.members_key)
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .len(),
             2
         );
@@ -1641,24 +1653,25 @@ mod tests {
 
     #[test]
     fn vault_meta_state_classifies_roundtrips_and_removes_every_record_kind() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
-        let joiner = DeviceIdentity::generate().unwrap();
-        let sentinel_participant = DeviceIdentity::generate().unwrap();
+        let joiner = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let sentinel_participant =
+            DeviceIdentity::generate().expect("multi device test setup should succeed");
         let sentinel_record = create_sentinel_share_records(
             &keys,
             &[genesis.clone(), sentinel_participant.clone()],
             2,
         )
-        .unwrap()
+        .expect("multi device test setup should succeed")
         .pop()
-        .unwrap();
+        .expect("multi device test setup should succeed");
         let join_record = create_join_request_record_with_signing_key(
             &joiner,
             ENROLLED_AT,
             &DeviceSigningPublicKey::from_trusted("a".repeat(64)),
         )
-        .unwrap();
+        .expect("multi device test setup should succeed");
         let user_secret = user_secret_record("secret_login001", "encrypted-user-secret");
         records.push(join_record.clone());
         records.push(sentinel_record.clone());
@@ -1674,7 +1687,7 @@ mod tests {
             state
                 .joins
                 .get(joiner.device_id())
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .signing_public_key
                 .as_str(),
             "a".repeat(64)
@@ -1716,10 +1729,12 @@ mod tests {
         assert!(reconstruct_sentinel_vault_keys(&records, std::slice::from_ref(&first)).is_err());
 
         let reconstructed =
-            reconstruct_sentinel_vault_keys(&records, &[first.clone(), second.clone()]).unwrap();
+            reconstruct_sentinel_vault_keys(&records, &[first.clone(), second.clone()])
+                .expect("multi device test setup should succeed");
         assert_eq!(reconstructed, keys);
 
-        let alternate = reconstruct_sentinel_vault_keys(&records, &[second, third]).unwrap();
+        let alternate = reconstruct_sentinel_vault_keys(&records, &[second, third])
+            .expect("multi device test setup should succeed");
         assert_eq!(alternate, keys);
     }
 
@@ -1727,8 +1742,10 @@ mod tests {
     fn opened_sentinel_shares_reconstruct_without_peer_identities() {
         let (keys, [first, second, third], records) = sentinel_share_fixture();
 
-        let opened_first = open_sentinel_share_for_identity(&records, &first).unwrap();
-        let opened_second = open_sentinel_share_for_identity(&records, &second).unwrap();
+        let opened_first = open_sentinel_share_for_identity(&records, &first)
+            .expect("multi device test setup should succeed");
+        let opened_second = open_sentinel_share_for_identity(&records, &second)
+            .expect("multi device test setup should succeed");
         assert_eq!(opened_first.device_id, first.device_id().as_str());
         assert_eq!(opened_second.threshold, 2);
 
@@ -1742,7 +1759,7 @@ mod tests {
 
         let reconstructed =
             reconstruct_sentinel_vault_keys_from_opened(&records, &[opened_first, opened_second])
-                .unwrap();
+                .expect("multi device test setup should succeed");
         assert_eq!(reconstructed, keys);
 
         // Share-row enrollment counts as Ready without an auth envelope.
@@ -1756,10 +1773,11 @@ mod tests {
 
     #[test]
     fn sentinel_member_row_without_auth_counts_as_enrolled() {
-        let keys = generate_vault_keys().unwrap();
-        let participant = DeviceIdentity::generate().unwrap();
-        let members =
-            genesis_members_records(&participant, &keys.members_key, ENROLLED_AT).unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
+        let participant =
+            DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let members = genesis_members_records(&participant, &keys.members_key, ENROLLED_AT)
+            .expect("multi device test setup should succeed");
         assert!(device_is_enrolled(&members, &participant));
         assert_eq!(
             assess_connect_access(&members, &participant),
@@ -1770,16 +1788,24 @@ mod tests {
 
     #[test]
     fn merge_remote_join_records_replaces_only_pending_join_bucket() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
         records.push(user_secret_record("secret_api001", "encrypted-user-secret"));
 
-        let stale_joiner = DeviceIdentity::generate().unwrap();
-        records.push(create_join_request_record(&stale_joiner, "2026-06-20T00:00:00Z").unwrap());
+        let stale_joiner =
+            DeviceIdentity::generate().expect("multi device test setup should succeed");
+        records.push(
+            create_join_request_record(&stale_joiner, "2026-06-20T00:00:00Z")
+                .expect("multi device test setup should succeed"),
+        );
         let mut state = VaultMetaState::from_stored_records(&records);
 
-        let fresh_joiner = DeviceIdentity::generate().unwrap();
-        let fresh_records = vec![create_join_request_record(&fresh_joiner, ENROLLED_AT).unwrap()];
+        let fresh_joiner =
+            DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let fresh_records = vec![
+            create_join_request_record(&fresh_joiner, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        ];
         merge_remote_join_records(&mut state, &fresh_records);
 
         assert_eq!(state.secrets.len(), 1);
@@ -1791,19 +1817,23 @@ mod tests {
             vec![fresh_joiner.device_id()]
         );
         assert_eq!(
-            resolve_secrets_key(&state.to_stored_records(), &genesis).unwrap(),
+            resolve_secrets_key(&state.to_stored_records(), &genesis)
+                .expect("multi device test setup should succeed"),
             keys.secrets_key
         );
     }
 
     #[test]
     fn connect_access_status_distinguishes_ready_pending_and_unenrolled_devices() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
-        let pending = DeviceIdentity::generate().unwrap();
-        let stranger = DeviceIdentity::generate().unwrap();
+        let pending = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let stranger = DeviceIdentity::generate().expect("multi device test setup should succeed");
 
-        records.push(create_join_request_record(&pending, ENROLLED_AT).unwrap());
+        records.push(
+            create_join_request_record(&pending, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        );
 
         assert_eq!(
             assess_connect_access(&records, &genesis),
@@ -1820,35 +1850,38 @@ mod tests {
         assert!(explain_connect_blocked(&records, &genesis).is_none());
         assert!(
             explain_connect_blocked(&records, &pending)
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .contains("Join request pending")
         );
         assert!(
             explain_connect_blocked(&records, &stranger)
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .contains("not enrolled")
         );
     }
 
     #[test]
     fn approve_join_falls_back_to_approver_when_roster_is_missing() {
-        let keys = generate_vault_keys().unwrap();
-        let genesis = DeviceIdentity::generate().unwrap();
-        let joiner = DeviceIdentity::generate().unwrap();
-        let wrong_members_key = generate_symmetric_key().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
+        let genesis = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let joiner = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        let wrong_members_key =
+            generate_symmetric_key().expect("multi device test setup should succeed");
         let corrupt_member_record = build_members_records(
             &[member_from_identity(&genesis, ENROLLED_AT)],
             &wrong_members_key,
         )
-        .unwrap()
+        .expect("multi device test setup should succeed")
         .into_iter()
         .next()
-        .unwrap();
+        .expect("multi device test setup should succeed");
         let records = vec![
-            create_join_request_record(&joiner, ENROLLED_AT).unwrap(),
+            create_join_request_record(&joiner, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
             corrupt_member_record,
         ];
-        let join = pending_join_for_device(&records, joiner.device_id()).unwrap();
+        let join = pending_join_for_device(&records, joiner.device_id())
+            .expect("multi device test setup should succeed");
 
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
@@ -1857,16 +1890,18 @@ mod tests {
             &genesis,
             &records,
         )
-        .unwrap();
+        .expect("multi device test setup should succeed");
         let mut approved_records = vec![auth_record];
         approved_records.extend(member_records);
 
         assert_eq!(join_key, join_record_key(joiner.device_id()));
         assert_eq!(
-            resolve_secrets_key(&approved_records, &joiner).unwrap(),
+            resolve_secrets_key(&approved_records, &joiner)
+                .expect("multi device test setup should succeed"),
             keys.secrets_key
         );
-        let roster = resolve_member_roster(&approved_records, &keys.members_key).unwrap();
+        let roster = resolve_member_roster(&approved_records, &keys.members_key)
+            .expect("multi device test setup should succeed");
         assert_eq!(roster.len(), 2);
         assert!(
             roster
@@ -1882,10 +1917,13 @@ mod tests {
 
     #[test]
     fn ensure_self_in_roster_adds_missing_current_identity_once() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
-        let joiner = DeviceIdentity::generate().unwrap();
-        records.push(create_join_request_record(&joiner, ENROLLED_AT).unwrap());
+        let joiner = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        records.push(
+            create_join_request_record(&joiner, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        );
         approve_pending_join(&keys, &genesis, &mut records, &joiner);
 
         let mut missing_joiner_roster = records
@@ -1893,12 +1931,16 @@ mod tests {
             .filter(|record| record.key.as_str() != member_stored_key(&joiner.auth_id()))
             .cloned()
             .collect::<Vec<_>>();
-        let repaired =
-            ensure_self_in_roster(&missing_joiner_roster, &joiner, &keys.members_key).unwrap();
+        let repaired = ensure_self_in_roster(&missing_joiner_roster, &joiner, &keys.members_key)
+            .expect("multi device test setup should succeed");
         assert!(repaired.is_some());
-        replace_member_records(&mut missing_joiner_roster, repaired.unwrap());
+        replace_member_records(
+            &mut missing_joiner_roster,
+            repaired.expect("multi device test setup should succeed"),
+        );
 
-        let roster = resolve_member_roster(&missing_joiner_roster, &keys.members_key).unwrap();
+        let roster = resolve_member_roster(&missing_joiner_roster, &keys.members_key)
+            .expect("multi device test setup should succeed");
         assert_eq!(roster.len(), 2);
         assert!(
             roster
@@ -1907,17 +1949,20 @@ mod tests {
         );
         assert!(
             ensure_self_in_roster(&missing_joiner_roster, &joiner, &keys.members_key)
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .is_none()
         );
     }
 
     #[test]
     fn rename_vault_member_trims_clears_and_preserves_key_access() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
-        let joiner = DeviceIdentity::generate().unwrap();
-        records.push(create_join_request_record(&joiner, ENROLLED_AT).unwrap());
+        let joiner = DeviceIdentity::generate().expect("multi device test setup should succeed");
+        records.push(
+            create_join_request_record(&joiner, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        );
         approve_pending_join(&keys, &genesis, &mut records, &joiner);
 
         let renamed = rename_vault_member(
@@ -1926,30 +1971,32 @@ mod tests {
             &joiner.auth_id(),
             "  Travel iPad  ",
         )
-        .unwrap();
-        let roster = resolve_member_roster(&renamed, &keys.members_key).unwrap();
+        .expect("multi device test setup should succeed");
+        let roster = resolve_member_roster(&renamed, &keys.members_key)
+            .expect("multi device test setup should succeed");
         assert_eq!(
             roster
                 .iter()
                 .find(|member| member.auth_id == joiner.auth_id())
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .label
                 .as_deref(),
             Some("Travel iPad")
         );
         assert_eq!(
-            resolve_members_key(&records, &joiner).unwrap(),
+            resolve_members_key(&records, &joiner).expect("multi device test setup should succeed"),
             keys.members_key
         );
 
-        let cleared =
-            rename_vault_member(&renamed, &keys.members_key, &joiner.auth_id(), "   ").unwrap();
-        let roster = resolve_member_roster(&cleared, &keys.members_key).unwrap();
+        let cleared = rename_vault_member(&renamed, &keys.members_key, &joiner.auth_id(), "   ")
+            .expect("multi device test setup should succeed");
+        let roster = resolve_member_roster(&cleared, &keys.members_key)
+            .expect("multi device test setup should succeed");
         assert_eq!(
             roster
                 .iter()
                 .find(|member| member.auth_id == joiner.auth_id())
-                .unwrap()
+                .expect("multi device test setup should succeed")
                 .label,
             None
         );
@@ -1957,22 +2004,28 @@ mod tests {
 
     #[test]
     fn revoke_vault_member_removes_auth_and_member_rows_but_not_user_secrets() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, mut records) = genesis_vault(&keys);
-        let joiner = DeviceIdentity::generate().unwrap();
+        let joiner = DeviceIdentity::generate().expect("multi device test setup should succeed");
         let user_secret = user_secret_record("secret_note001", "encrypted-user-secret");
-        records.push(create_join_request_record(&joiner, ENROLLED_AT).unwrap());
+        records.push(
+            create_join_request_record(&joiner, ENROLLED_AT)
+                .expect("multi device test setup should succeed"),
+        );
         records.push(user_secret.clone());
         approve_pending_join(&keys, &genesis, &mut records, &joiner);
         records.extend(
-            create_sentinel_share_records(&keys, &[genesis.clone(), joiner.clone()], 2).unwrap(),
+            create_sentinel_share_records(&keys, &[genesis.clone(), joiner.clone()], 2)
+                .expect("multi device test setup should succeed"),
         );
 
-        let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id()).unwrap();
+        let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id())
+            .expect("multi device test setup should succeed");
 
         assert!(resolve_secrets_key(&revoked, &joiner).is_err());
         assert_eq!(
-            resolve_secrets_key(&revoked, &genesis).unwrap(),
+            resolve_secrets_key(&revoked, &genesis)
+                .expect("multi device test setup should succeed"),
             keys.secrets_key
         );
         assert!(revoked.iter().any(|record| record == &user_secret));
@@ -1982,16 +2035,17 @@ mod tests {
         assert!(revoked.iter().any(|record| {
             record.key.as_str() == sentinel_share_record_key(genesis.device_id())
         }));
-        let roster = resolve_member_roster(&revoked, &keys.members_key).unwrap();
+        let roster = resolve_member_roster(&revoked, &keys.members_key)
+            .expect("multi device test setup should succeed");
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].auth_id, genesis.auth_id());
     }
 
     #[test]
     fn revoke_last_access_and_missing_member_are_errors() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, records) = genesis_vault(&keys);
-        let stranger = DeviceIdentity::generate().unwrap();
+        let stranger = DeviceIdentity::generate().expect("multi device test setup should succeed");
 
         assert!(matches!(
             revoke_vault_member(&records, &keys.members_key, &genesis.auth_id()),
@@ -2014,14 +2068,15 @@ mod tests {
 
     #[test]
     fn member_roster_rejects_mismatched_record_key() {
-        let keys = generate_vault_keys().unwrap();
+        let keys = generate_vault_keys().expect("multi device test setup should succeed");
         let (genesis, records) = genesis_vault(&keys);
         let mut member_record = records
             .iter()
             .find(|record| is_members_stored_record(record))
-            .unwrap()
+            .expect("multi device test setup should succeed")
             .clone();
-        let other_identity = DeviceIdentity::generate().unwrap();
+        let other_identity =
+            DeviceIdentity::generate().expect("multi device test setup should succeed");
         member_record.key =
             SecretId::from_vault_record(&member_stored_key(&other_identity.auth_id()));
 
@@ -2030,7 +2085,9 @@ mod tests {
             Err(MultiDeviceError::MemberRecordKeyMismatch { .. })
         ));
         assert_eq!(
-            resolve_member_roster(&records, &keys.members_key).unwrap()[0].auth_id,
+            resolve_member_roster(&records, &keys.members_key)
+                .expect("multi device test setup should succeed")[0]
+                .auth_id,
             genesis.auth_id()
         );
     }

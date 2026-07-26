@@ -152,15 +152,18 @@ mod tests {
                     id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: crate::SecretFingerprint::from_trusted(
+                        "test-identity".to_owned(),
+                    ),
+                    fingerprint: crate::SecretFingerprint::from_trusted("test-version".to_owned(),),
                 },
             }),
             None
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SentinelParticipantEnrolled {
-                device_id: crate::DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: crate::DeviceId::parse("0123456789abcdef")
+                    .expect("epoch test setup should succeed"),
                 encryption_public_key: crate::DevicePublicKey::from_trusted(
                     "age-public-key".to_owned(),
                 ),

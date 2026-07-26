@@ -38,8 +38,8 @@ pub fn reencrypt_user_secrets_for_epoch(
             id: record.key.clone(),
             secret_type,
             ciphertext: OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
-            identity_fingerprint: Some(identity_fingerprint),
-            fingerprint: Some(fingerprint),
+            identity_fingerprint,
+            fingerprint,
         });
     }
     Ok(out)
@@ -100,13 +100,13 @@ mod tests {
     fn reencrypt_produces_decryptable_new_epoch_secrets() {
         let old_key =
             SymmetricKey::parse("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-                .unwrap();
+                .expect("vault epoch crypto test setup should succeed");
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_testtoken1"),
             secret_type: Some(crate::SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(
                 VaultCrypto::new(&old_key)
-                    .unwrap()
+                    .expect("vault epoch crypto test setup should succeed")
                     .encrypt_value(
                         SecretValue::ApiKey(ApiKeySecret {
                             website_url: "https://example.com".to_owned(),
@@ -114,21 +114,23 @@ mod tests {
                             expires_at: String::new(),
                         })
                         .to_yaml()
-                        .unwrap(),
+                        .expect("vault epoch crypto test setup should succeed"),
                     )
-                    .unwrap(),
+                    .expect("vault epoch crypto test setup should succeed"),
             ),
         };
         let new_key =
             SymmetricKey::parse("cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe")
-                .unwrap();
-        let payloads = reencrypt_user_secrets_for_epoch(&[record], &old_key, &new_key).unwrap();
-        let new_crypto = VaultCrypto::new(&new_key).unwrap();
+                .expect("vault epoch crypto test setup should succeed");
+        let payloads = reencrypt_user_secrets_for_epoch(&[record], &old_key, &new_key)
+            .expect("vault epoch crypto test setup should succeed");
+        let new_crypto =
+            VaultCrypto::new(&new_key).expect("vault epoch crypto test setup should succeed");
         let plaintext = new_crypto
             .decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
                 payloads[0].ciphertext.as_str().to_owned(),
             ))
-            .unwrap();
+            .expect("vault epoch crypto test setup should succeed");
         assert!(plaintext.as_str().contains("hunter2"));
     }
 

@@ -86,7 +86,7 @@ mod tests {
             numbers: true,
             symbols: false,
         })
-        .unwrap();
+        .expect("password test setup should succeed");
         assert_eq!(password.len(), 24);
     }
 
@@ -99,7 +99,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap_err();
+        .expect_err("password test should reject invalid input");
         assert!(err.to_string().contains("at least one character set"));
     }
 
@@ -112,7 +112,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap_err();
+        .expect_err("password test should reject invalid input");
         assert!(err.to_string().contains("between 8 and 128"));
     }
 
@@ -125,7 +125,7 @@ mod tests {
             numbers: true,
             symbols: false,
         })
-        .unwrap();
+        .expect("password test setup should succeed");
         assert!(
             password
                 .chars()
@@ -142,7 +142,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap();
+        .expect("password test setup should succeed");
         assert_eq!(min.len(), MIN_PASSWORD_LENGTH);
 
         let max = generate_password(&PasswordOptions {
@@ -152,7 +152,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap();
+        .expect("password test setup should succeed");
         assert_eq!(max.len(), MAX_PASSWORD_LENGTH);
     }
 
@@ -165,7 +165,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap_err();
+        .expect_err("password test should reject invalid input");
         assert!(err.to_string().contains("between 8 and 128"));
     }
 
@@ -178,7 +178,7 @@ mod tests {
             numbers: false,
             symbols: true,
         })
-        .unwrap();
+        .expect("password test setup should succeed");
         assert!(password.chars().all(|c| SYMBOLS.contains(c)));
     }
 }

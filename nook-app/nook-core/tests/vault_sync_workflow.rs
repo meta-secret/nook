@@ -27,7 +27,7 @@ fn sample_yaml(version: u64, armor_line: &str) -> String {
         Some(STORE_ID),
         Some(version),
     )
-    .unwrap()
+    .expect("vault sync workflow test setup should succeed")
     .into_inner()
 }
 
@@ -46,14 +46,16 @@ fn local_save_then_fan_out_replicates_to_all_providers() {
         ),
     ]);
 
-    let results = fan_out_sync(&mut local, &mut remotes).unwrap();
+    let results = fan_out_sync(&mut local, &mut remotes)
+        .expect("vault sync workflow test setup should succeed");
     let actions: HashMap<_, _> = results.into_iter().collect();
     assert_eq!(actions["provider-alpha"], VaultSyncAction::PushLocal);
     assert_eq!(actions["provider-beta"], VaultSyncAction::PushLocal);
     assert_eq!(remotes["provider-alpha"].blob(), v3);
     assert_eq!(remotes["provider-beta"].blob(), v3);
     assert_eq!(
-        read_vault_version(remotes["provider-alpha"].blob()).unwrap(),
+        read_vault_version(remotes["provider-alpha"].blob())
+            .expect("vault sync workflow test setup should succeed"),
         3
     );
 }
@@ -64,12 +66,17 @@ fn remote_ahead_adopts_into_local_on_reconcile() {
     let remote_blob = sample_yaml(4, "remote-newer");
     let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-    let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+    let action = reconcile_vault_stores(&mut local, &mut remote)
+        .expect("vault sync workflow test setup should succeed");
     assert_eq!(action, VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remote_blob);
-    assert_eq!(read_vault_version(local.blob()).unwrap(), 4);
     assert_eq!(
-        compare_vault_sync(local.blob(), remote.blob()).unwrap(),
+        read_vault_version(local.blob()).expect("vault sync workflow test setup should succeed"),
+        4
+    );
+    assert_eq!(
+        compare_vault_sync(local.blob(), remote.blob())
+            .expect("vault sync workflow test setup should succeed"),
         VaultSyncAction::Unchanged
     );
 }
@@ -81,7 +88,8 @@ fn same_version_divergence_surfaces_conflict_without_mutating_stores() {
     let mut local = MemoryVaultStore::with_blob(local_blob.clone());
     let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-    let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+    let action = reconcile_vault_stores(&mut local, &mut remote)
+        .expect("vault sync workflow test setup should succeed");
     assert_eq!(action, VaultSyncAction::Conflict);
     assert_eq!(local.blob(), local_blob);
     assert_eq!(remote.blob(), remote_blob);
@@ -111,7 +119,7 @@ fn stale_revision_write_is_idempotent_when_remote_already_has_same_blob() {
 
     let result = remote
         .write_if_revision_matches_or_same_content(&local_save_blob, Some("rev-1"))
-        .unwrap();
+        .expect("vault sync workflow test setup should succeed");
 
     assert_eq!(
         result,
@@ -131,7 +139,8 @@ fn resolve_conflict_keep_local_then_fan_out_unifies_providers() {
     let mut stale_remote = MemoryVaultStore::with_blob(remote_blob);
 
     assert_eq!(
-        reconcile_vault_stores(&mut local, &mut stale_remote).unwrap(),
+        reconcile_vault_stores(&mut local, &mut stale_remote)
+            .expect("vault sync workflow test setup should succeed"),
         VaultSyncAction::Conflict
     );
 
@@ -142,7 +151,8 @@ fn resolve_conflict_keep_local_then_fan_out_unifies_providers() {
         "other".to_owned(),
         MemoryVaultStore::with_blob(sample_yaml(1, "stale")),
     )]);
-    let results = fan_out_sync(&mut local, &mut remotes).unwrap();
+    let results = fan_out_sync(&mut local, &mut remotes)
+        .expect("vault sync workflow test setup should succeed");
     assert_eq!(results[0].1, VaultSyncAction::PushLocal);
     assert_eq!(remotes["other"].blob(), local_blob);
 }
@@ -165,7 +175,8 @@ fn empty_remote_receives_push_on_first_sync() {
     let mut remote = MemoryVaultStore::new();
 
     assert_eq!(
-        reconcile_vault_stores(&mut local, &mut remote).unwrap(),
+        reconcile_vault_stores(&mut local, &mut remote)
+            .expect("vault sync workflow test setup should succeed"),
         VaultSyncAction::PushLocal
     );
     assert_eq!(remote.blob(), local_blob);
@@ -186,15 +197,23 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() {
         ),
     ]);
 
-    let results = fan_out_sync(&mut local, &mut remotes).unwrap();
+    let results = fan_out_sync(&mut local, &mut remotes)
+        .expect("vault sync workflow test setup should succeed");
     let actions: HashMap<_, _> = results.into_iter().collect();
     assert_eq!(actions["stale"], VaultSyncAction::PushLocal);
     assert_eq!(actions["ahead"], VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remotes["ahead"].blob());
-    assert_eq!(read_vault_version(local.blob()).unwrap(), 5);
-    assert_eq!(read_vault_version(remotes["stale"].blob()).unwrap(), 5);
     assert_eq!(
-        read_vault_store_id(local.blob()).unwrap(),
+        read_vault_version(local.blob()).expect("vault sync workflow test setup should succeed"),
+        5
+    );
+    assert_eq!(
+        read_vault_version(remotes["stale"].blob())
+            .expect("vault sync workflow test setup should succeed"),
+        5
+    );
+    assert_eq!(
+        read_vault_store_id(local.blob()).expect("vault sync workflow test setup should succeed"),
         Some(store_id.to_owned())
     );
 }

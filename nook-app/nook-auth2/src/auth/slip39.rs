@@ -613,7 +613,8 @@ mod tests {
     #[test]
     fn official_extendable_256_bit_one_of_one_vector_recovers() {
         let mnemonics = vec![OFFICIAL_EXTENDABLE_1_OF_1.to_owned()];
-        let recovered = recover_with_passphrase(&mnemonics, b"TREZOR").unwrap();
+        let recovered = recover_with_passphrase(&mnemonics, b"TREZOR")
+            .expect("slip39 test setup should succeed");
         assert_eq!(
             hex::encode(recovered),
             "8340611602fe91af634a5f4608377b5235fa2d757c51d720c0c7656249a3035f"
@@ -630,7 +631,8 @@ mod tests {
             OFFICIAL_EXTENDABLE_2_OF_3_A.to_owned(),
             OFFICIAL_EXTENDABLE_2_OF_3_B.to_owned(),
         ];
-        let recovered = recover_with_passphrase(&mnemonics, b"TREZOR").unwrap();
+        let recovered = recover_with_passphrase(&mnemonics, b"TREZOR")
+            .expect("slip39 test setup should succeed");
         assert_eq!(
             hex::encode(recovered),
             "8dc652d6d6cd370d8c963141f6d79ba440300f25c467302c1d966bff8f62300d"
@@ -639,8 +641,10 @@ mod tests {
 
     #[test]
     fn sentinel_round_trip_is_current_ext_one_and_any_quorum_recovers() {
-        let root = core::array::from_fn(|index| u8::try_from(index).unwrap());
-        let shares = split_sentinel_secret(&root, 3, 5).unwrap();
+        let root = core::array::from_fn(|index| {
+            u8::try_from(index).expect("slip39 test setup should succeed")
+        });
+        let shares = split_sentinel_secret(&root, 3, 5).expect("slip39 test setup should succeed");
         assert_eq!(shares.len(), 5);
         assert!(
             shares
@@ -648,19 +652,26 @@ mod tests {
                 .all(|share| share.split_whitespace().count() == 33)
         );
         for share in &shares {
-            let decoded = decode_share(share).unwrap();
+            let decoded = decode_share(share).expect("slip39 test setup should succeed");
             assert_eq!(decoded.iteration_exponent, 0);
             assert_eq!(decoded.member_threshold, 3);
         }
-        assert_eq!(recover_sentinel_secret(&shares[1..4]).unwrap(), root);
+        assert_eq!(
+            recover_sentinel_secret(&shares[1..4]).expect("slip39 test setup should succeed"),
+            root
+        );
         assert!(recover_sentinel_secret(&shares[..2]).is_err());
     }
 
     #[test]
     fn checksum_and_padding_corruption_are_rejected() {
         let root = [42_u8; SECRET_BYTES];
-        let mut shares = split_sentinel_secret(&root, 2, 3).unwrap();
-        let last = shares[0].rfind(' ').unwrap() + 1;
+        let mut shares =
+            split_sentinel_secret(&root, 2, 3).expect("slip39 test setup should succeed");
+        let last = shares[0]
+            .rfind(' ')
+            .expect("slip39 test setup should succeed")
+            + 1;
         let replacement = if &shares[0][last..] == "academic" {
             "acid"
         } else {
@@ -669,10 +680,18 @@ mod tests {
         shares[0].replace_range(last.., replacement);
         assert!(recover_sentinel_secret(&shares[..2]).is_err());
 
-        let mut valid = split_sentinel_secret(&root, 2, 3).unwrap();
+        let mut valid =
+            split_sentinel_secret(&root, 2, 3).expect("slip39 test setup should succeed");
         let mut indices = valid[0]
             .split_whitespace()
-            .map(|word| u16::try_from(wordlist().binary_search(&word).unwrap()).unwrap())
+            .map(|word| {
+                u16::try_from(
+                    wordlist()
+                        .binary_search(&word)
+                        .expect("slip39 test setup should succeed"),
+                )
+                .expect("slip39 test setup should succeed")
+            })
             .collect::<Vec<_>>();
         indices[METADATA_WORDS] |= 1 << 9;
         let data_len = indices.len() - CHECKSUM_WORDS;
@@ -688,8 +707,10 @@ mod tests {
 
     #[test]
     fn rejects_mixed_sets_duplicates_and_invalid_policy() {
-        let left = split_sentinel_secret(&[1_u8; SECRET_BYTES], 2, 3).unwrap();
-        let right = split_sentinel_secret(&[2_u8; SECRET_BYTES], 2, 3).unwrap();
+        let left = split_sentinel_secret(&[1_u8; SECRET_BYTES], 2, 3)
+            .expect("slip39 test setup should succeed");
+        let right = split_sentinel_secret(&[2_u8; SECRET_BYTES], 2, 3)
+            .expect("slip39 test setup should succeed");
         assert!(recover_sentinel_secret(&[left[0].clone(), right[1].clone()]).is_err());
         assert!(recover_sentinel_secret(&[left[0].clone(), left[0].clone()]).is_err());
         assert!(split_sentinel_secret(&[0_u8; SECRET_BYTES], 1, 3).is_err());

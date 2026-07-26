@@ -941,7 +941,7 @@ mod tests {
 
     #[test]
     fn configures_an_ephemeral_read_only_core_thread() {
-        let repository = tempfile::tempdir().unwrap();
+        let repository = tempfile::tempdir().expect("codex test setup should succeed");
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
             model: Some("test-model".into()),
@@ -954,7 +954,7 @@ mod tests {
             access: CodexAccess::ReadOnly,
             publication_fd: None,
         };
-        let config = new_config(&options).unwrap();
+        let config = new_config(&options).expect("codex test setup should succeed");
 
         assert_eq!(config.model.as_deref(), Some("test-model"));
         assert_eq!(
@@ -982,7 +982,7 @@ mod tests {
 
     #[test]
     fn defaults_to_gpt_5_6_terra_with_light_reasoning() {
-        let repository = tempfile::tempdir().unwrap();
+        let repository = tempfile::tempdir().expect("codex test setup should succeed");
         let options = CodexOptions::new(repository.path().to_owned());
 
         assert_eq!(options.model.as_deref(), Some(DEFAULT_CODEX_MODEL));
@@ -1050,9 +1050,9 @@ mod tests {
 
     #[test]
     fn execution_options_enable_workspace_write() {
-        let repository = tempfile::tempdir().unwrap();
+        let repository = tempfile::tempdir().expect("codex test setup should succeed");
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
-        let config = new_config(&options).unwrap();
+        let config = new_config(&options).expect("codex test setup should succeed");
 
         assert_eq!(options.access, CodexAccess::WorkspaceWrite);
         assert_eq!(
@@ -1065,14 +1065,24 @@ mod tests {
     fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() {
         let mut progress = ProgressReporter::new(Vec::new(), false);
 
-        progress.reasoning_delta("Inspecting ").unwrap();
-        progress.reasoning_delta("the repository.\n").unwrap();
-        progress.announce_plan_output().unwrap();
-        progress.announce_plan_output().unwrap();
-        progress.finish_reasoning().unwrap();
+        progress
+            .reasoning_delta("Inspecting ")
+            .expect("codex test setup should succeed");
+        progress
+            .reasoning_delta("the repository.\n")
+            .expect("codex test setup should succeed");
+        progress
+            .announce_plan_output()
+            .expect("codex test setup should succeed");
+        progress
+            .announce_plan_output()
+            .expect("codex test setup should succeed");
+        progress
+            .finish_reasoning()
+            .expect("codex test setup should succeed");
 
         assert_eq!(
-            String::from_utf8(progress.writer).unwrap(),
+            String::from_utf8(progress.writer).expect("codex test setup should succeed"),
             "  ↳ Inspecting the repository.\n  ◆  Building feature plan\n     Writing structured tasks and dependencies\n"
         );
         assert!(progress.plan_output_announced);
@@ -1100,9 +1110,11 @@ mod tests {
         ];
 
         for command in commands {
-            progress.inspection(&command).unwrap();
+            progress
+                .inspection(&command)
+                .expect("codex test setup should succeed");
         }
-        let output = String::from_utf8(progress.writer).unwrap();
+        let output = String::from_utf8(progress.writer).expect("codex test setup should succeed");
 
         assert!(output.contains("01  Discovering project instructions"));
         assert!(output.contains("02  Searching implementation"));
@@ -1117,8 +1129,10 @@ mod tests {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
 
-        progress.failed_inspection(2, &command).unwrap();
-        let output = String::from_utf8(progress.writer).unwrap();
+        progress
+            .failed_inspection(2, &command)
+            .expect("codex test setup should succeed");
+        let output = String::from_utf8(progress.writer).expect("codex test setup should succeed");
 
         assert!(output.contains("Repository inspection failed (exit 2)"));
         assert!(output.contains("/bin/zsh -lc rg missing-file"));
@@ -1128,21 +1142,27 @@ mod tests {
     fn task_progress_logs_only_fixed_secret_safe_metadata() {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
 
-        progress.line("36", "●", "start", "Agent started").unwrap();
+        progress
+            .line("36", "●", "start", "Agent started")
+            .expect("codex test setup should succeed");
         progress
             .command_finished(
                 &["cargo".into(), "test".into(), "-p".into(), "core".into()],
                 0,
                 1.24,
             )
-            .unwrap();
+            .expect("codex test setup should succeed");
         progress
             .line("33", "!", "warning", "Embedded turn reported a warning")
-            .unwrap();
-        progress.announce_finalizing().unwrap();
-        progress.announce_finalizing().unwrap();
+            .expect("codex test setup should succeed");
+        progress
+            .announce_finalizing()
+            .expect("codex test setup should succeed");
+        progress
+            .announce_finalizing()
+            .expect("codex test setup should succeed");
 
-        let output = String::from_utf8(progress.writer).unwrap();
+        let output = String::from_utf8(progress.writer).expect("codex test setup should succeed");
         assert!(output.contains("core-agent"));
         assert!(output.contains("result  · 1.2s · verification completed"));
         assert!(output.contains("Embedded turn reported a warning"));
@@ -1159,9 +1179,9 @@ mod tests {
                 1,
                 0.5,
             )
-            .unwrap();
+            .expect("codex test setup should succeed");
 
-        let output = String::from_utf8(progress.writer).unwrap();
+        let output = String::from_utf8(progress.writer).expect("codex test setup should succeed");
         assert!(output.contains("failed  · Repository command exited with status 1"));
         assert!(!output.contains("secret-command"));
         assert!(!output.contains("credential-value"));

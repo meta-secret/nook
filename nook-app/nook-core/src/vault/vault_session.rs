@@ -397,7 +397,8 @@ mod tests {
         let secrets = HashMap::new();
         let id = SecretId::from_vault_record("secret_missing");
 
-        let error = decrypt_encrypted_secret(&secrets, &crypto, &id).unwrap_err();
+        let error = decrypt_encrypted_secret(&secrets, &crypto, &id)
+            .expect_err("vault session test should reject invalid input");
 
         assert!(matches!(
             error,

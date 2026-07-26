@@ -1519,9 +1519,16 @@ mod tests {
     #[test]
     fn oauth_target_identity_keeps_private_and_shared_drive_rows_distinct() {
         let mut private = oauth_provider("drive-private", "google-drive", None, "events");
-        private.oauth_file.as_mut().unwrap().drive_mode = Some(GoogleDriveMode::Private);
+        private
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed")
+            .drive_mode = Some(GoogleDriveMode::Private);
         let mut shared = oauth_provider("drive-shared", "google-drive", None, "events");
-        let shared_oauth = shared.oauth_file.as_mut().unwrap();
+        let shared_oauth = shared
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed");
         shared_oauth.drive_mode = Some(GoogleDriveMode::Shared);
         shared_oauth.folder_id = Some("folder-team".to_owned());
 
@@ -1543,7 +1550,8 @@ mod tests {
     #[test]
     fn storage_args_for_configured_provider_rows_match_wasm_connect_contract() {
         assert_eq!(
-            storage_args_for_provider(&github_provider("gh", " team-vault ", " pat ")).unwrap(),
+            storage_args_for_provider(&github_provider("gh", " team-vault ", " pat "))
+                .expect("sync provider store test setup should succeed"),
             StorageConnectArgs {
                 mode: "github".to_owned(),
                 pat: "pat".to_owned(),
@@ -1557,7 +1565,7 @@ mod tests {
                 Some(" file-1 "),
                 " events "
             ))
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             StorageConnectArgs {
                 mode: "google-drive".to_owned(),
                 pat: "token".to_owned(),
@@ -1565,7 +1573,8 @@ mod tests {
             }
         );
         assert_eq!(
-            storage_args_for_provider(&local_folder_provider("folder", "handle-1")).unwrap(),
+            storage_args_for_provider(&local_folder_provider("folder", "handle-1"))
+                .expect("sync provider store test setup should succeed"),
             StorageConnectArgs::local()
         );
     }
@@ -1667,7 +1676,7 @@ mod tests {
             &config,
             "https://drive.google.com/drive/folders/folder-team",
         )
-        .unwrap();
+        .expect("sync provider store test setup should succeed");
 
         assert_eq!(bound.drive_mode, Some(GoogleDriveMode::Shared));
         assert_eq!(bound.folder_id.as_deref(), Some("folder-team"));
@@ -1679,7 +1688,9 @@ mod tests {
         let mut provider = oauth_provider("drive", "google-drive", None, "nook-events");
         provider.oauth_file = Some(bound);
         assert_eq!(
-            storage_args_for_provider(&provider).unwrap().repo,
+            storage_args_for_provider(&provider)
+                .expect("sync provider store test setup should succeed")
+                .repo,
             "shared:folder-team\tnook-events"
         );
     }
@@ -1687,14 +1698,24 @@ mod tests {
     #[test]
     fn storage_args_require_folder_for_explicit_shared_drive_mode() {
         let mut provider = oauth_provider("drive", "google-drive", None, "events");
-        provider.oauth_file.as_mut().unwrap().drive_mode = Some(GoogleDriveMode::Shared);
+        provider
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed")
+            .drive_mode = Some(GoogleDriveMode::Shared);
         assert_eq!(
             storage_args_for_provider(&provider),
             Err(ValidationError::SharedStorageTargetRequired)
         );
-        provider.oauth_file.as_mut().unwrap().folder_id = Some("folder-1".to_owned());
+        provider
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed")
+            .folder_id = Some("folder-1".to_owned());
         assert_eq!(
-            storage_args_for_provider(&provider).unwrap().repo,
+            storage_args_for_provider(&provider)
+                .expect("sync provider store test setup should succeed")
+                .repo,
             "shared:folder-1\tevents"
         );
     }
@@ -1702,12 +1723,16 @@ mod tests {
     #[test]
     fn storage_args_preserve_shared_folder_for_empty_legacy_google_preset() {
         let mut provider = oauth_provider("drive", "", None, "events");
-        let oauth = provider.oauth_file.as_mut().unwrap();
+        let oauth = provider
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed");
         oauth.drive_mode = Some(GoogleDriveMode::Shared);
         oauth.folder_id = Some("folder-legacy".to_owned());
 
         assert_eq!(
-            storage_args_for_provider(&provider).unwrap(),
+            storage_args_for_provider(&provider)
+                .expect("sync provider store test setup should succeed"),
             StorageConnectArgs {
                 mode: "google-drive".to_owned(),
                 pat: "token".to_owned(),
@@ -1738,7 +1763,7 @@ mod tests {
                 },
                 &labels,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             "This device desc"
         );
         assert_eq!(
@@ -1746,7 +1771,7 @@ mod tests {
                 &github_provider("gh", " team-vault ", " github_pat_11AAAAbbbbCCCC "),
                 &labels,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             "team-vault · github_pat_11A…"
         );
         assert_eq!(
@@ -1758,11 +1783,12 @@ mod tests {
                 },
                 &labels,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             "nook · No token saved"
         );
         assert_eq!(
-            provider_storage_detail(&local_folder_provider("folder", "handle-1"), &labels).unwrap(),
+            provider_storage_detail(&local_folder_provider("folder", "handle-1"), &labels)
+                .expect("sync provider store test setup should succeed"),
             "Nook Backup"
         );
         assert_eq!(
@@ -1773,7 +1799,7 @@ mod tests {
                 },
                 &labels,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             "Choose folder"
         );
         assert_eq!(
@@ -1783,18 +1809,18 @@ mod tests {
                         account_email: Some("person@example.com".to_owned()),
                         ..oauth_provider("drive", "google-drive", None, " events ")
                             .oauth_file
-                            .unwrap()
+                            .expect("sync provider store test setup should succeed")
                     }),
                     ..oauth_provider("drive", "google-drive", None, " events ")
                 },
                 &labels,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             "events · person@example.com"
         );
         assert_eq!(
             provider_storage_detail(&oauth_provider("icloud", "icloud", None, " "), &labels)
-                .unwrap(),
+                .expect("sync provider store test setup should succeed"),
             format!("{DEFAULT_DRIVE_BACKUP_NAME} · Signed in with iCloud")
         );
     }
@@ -1884,7 +1910,7 @@ mod tests {
                 None,
                 None,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             StorageConnectArgs::local()
         );
         assert_eq!(
@@ -1900,7 +1926,7 @@ mod tests {
                 None,
                 None,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             StorageConnectArgs {
                 mode: "github".to_owned(),
                 pat: "pat".to_owned(),
@@ -1920,7 +1946,7 @@ mod tests {
                 None,
                 None,
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             StorageConnectArgs {
                 mode: "github".to_owned(),
                 pat: "draft-pat".to_owned(),
@@ -1990,7 +2016,10 @@ mod tests {
         };
         let (migrated, changed) = migrate_provider_fields(&snapshot);
         assert!(changed);
-        let oauth = migrated.providers[0].oauth_file.as_ref().unwrap();
+        let oauth = migrated.providers[0]
+            .oauth_file
+            .as_ref()
+            .expect("sync provider store test setup should succeed");
         assert_eq!(oauth.file_name.as_deref(), Some(DEFAULT_DRIVE_BACKUP_NAME));
         assert_eq!(oauth.preset, "icloud");
         assert_eq!(oauth.access_token, "tok");
@@ -2000,14 +2029,21 @@ mod tests {
     #[test]
     fn migrate_infers_shared_mode_for_legacy_google_folder_rows() {
         let mut provider = oauth_provider("gd", "", None, "events");
-        provider.oauth_file.as_mut().unwrap().folder_id = Some("folder-1".to_owned());
+        provider
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed")
+            .folder_id = Some("folder-1".to_owned());
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![provider],
             active_vault_store_id: None,
         };
         let (migrated, changed) = migrate_provider_fields(&snapshot);
         assert!(changed);
-        let oauth = migrated.providers[0].oauth_file.as_ref().unwrap();
+        let oauth = migrated.providers[0]
+            .oauth_file
+            .as_ref()
+            .expect("sync provider store test setup should succeed");
         assert_eq!(oauth.preset, "google-drive");
         assert_eq!(oauth.drive_mode, Some(GoogleDriveMode::Shared));
         assert_eq!(oauth.folder_id.as_deref(), Some("folder-1"));
@@ -2146,8 +2182,8 @@ mod tests {
             last_common_content_hash: None,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         };
-        let capability =
-            validate_provider_row_replication(&gdrive, ReplicationType::Shared).unwrap();
+        let capability = validate_provider_row_replication(&gdrive, ReplicationType::Shared)
+            .expect("sync provider store test setup should succeed");
         assert!(capability.supports_shared);
         assert_eq!(
             capability.shared_joiner_identity,
@@ -2207,7 +2243,7 @@ mod tests {
             Some("joiner@example.com"),
             Some("shared-folder-xyz"),
         )
-        .unwrap();
+        .expect("sync provider store test setup should succeed");
         assert_eq!(
             granted,
             EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
@@ -2217,7 +2253,8 @@ mod tests {
         );
 
         let personal = VaultArchitecture::default();
-        let provider = enrollment_provider_for_architecture(&gdrive, &personal, None).unwrap();
+        let provider = enrollment_provider_for_architecture(&gdrive, &personal, None)
+            .expect("sync provider store test setup should succeed");
         assert_eq!(
             provider,
             EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
@@ -2232,7 +2269,10 @@ mod tests {
         );
 
         let mut shared_gdrive = gdrive.clone();
-        let shared_oauth = shared_gdrive.oauth_file.as_mut().unwrap();
+        let shared_oauth = shared_gdrive
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed");
         shared_oauth.drive_mode = Some(GoogleDriveMode::Shared);
         shared_oauth.folder_id = Some("persisted-shared-folder".to_owned());
         assert_eq!(
@@ -2245,14 +2285,18 @@ mod tests {
                 &personal,
                 Some("joiner@example.com")
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
                 "joiner@example.com".to_owned(),
                 "persisted-shared-folder".to_owned(),
             ))
         );
 
-        shared_gdrive.oauth_file.as_mut().unwrap().folder_id = None;
+        shared_gdrive
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed")
+            .folder_id = None;
         assert_eq!(
             enrollment_provider_for_architecture(
                 &shared_gdrive,
@@ -2288,7 +2332,8 @@ mod tests {
             OnboardingType::SharedProviderGrant
         );
 
-        let serialized = serde_json::to_value(shared).unwrap();
+        let serialized =
+            serde_json::to_value(shared).expect("sync provider store test setup should succeed");
         assert_eq!(serialized["onboardingType"], "shared-provider-grant");
         assert_eq!(serialized["provider"]["storage_target_id"], "shared-folder");
         let serialized = serialized.to_string();
@@ -2300,7 +2345,10 @@ mod tests {
     #[test]
     fn private_icloud_row_is_not_ready_for_shared_replication() {
         let mut icloud = oauth_provider("icloud", "icloud", None, "nook-events");
-        let oauth = icloud.oauth_file.as_mut().unwrap();
+        let oauth = icloud
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed");
         oauth.icloud_mode = Some(ICloudMode::Private);
 
         assert!(validate_provider_row_replication(&icloud, ReplicationType::Personal).is_ok());
@@ -2309,7 +2357,10 @@ mod tests {
             Err(ValidationError::SharedStorageTargetRequired)
         );
 
-        let oauth = icloud.oauth_file.as_mut().unwrap();
+        let oauth = icloud
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed");
         oauth.icloud_mode = Some(ICloudMode::Shared);
         oauth.icloud_share_target = Some("not-a-cloudkit-share-target".to_owned());
         assert_eq!(
@@ -2327,18 +2378,23 @@ mod tests {
             "root",
             "guid",
         )
-        .unwrap()
+        .expect("sync provider store test setup should succeed")
         .to_storage_id()
-        .unwrap();
+        .expect("sync provider store test setup should succeed");
         let mut icloud = oauth_provider("icloud", "icloud", None, "nook-events");
-        let oauth = icloud.oauth_file.as_mut().unwrap();
+        let oauth = icloud
+            .oauth_file
+            .as_mut()
+            .expect("sync provider store test setup should succeed");
         oauth.icloud_mode = Some(ICloudMode::Shared);
         oauth.icloud_share_target = Some(target.clone());
 
-        let wire = serde_json::to_value(&icloud).unwrap();
+        let wire =
+            serde_json::to_value(&icloud).expect("sync provider store test setup should succeed");
         assert_eq!(wire["oauthFile"]["iCloudMode"], "shared");
         assert_eq!(wire["oauthFile"]["iCloudShareTarget"], target);
-        let icloud: StorageProviderData = serde_json::from_value(wire).unwrap();
+        let icloud: StorageProviderData =
+            serde_json::from_value(wire).expect("sync provider store test setup should succeed");
 
         assert_eq!(
             provider_onboarding_type(&icloud, &VaultArchitecture::default()),
@@ -2346,10 +2402,11 @@ mod tests {
         );
         assert_eq!(
             enrollment_provider_for_architecture(&icloud, &VaultArchitecture::default(), None)
-                .unwrap(),
+                .expect("sync provider store test setup should succeed"),
             EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(target.clone()))
         );
-        let args = storage_args_for_provider(&icloud).unwrap();
+        let args = storage_args_for_provider(&icloud)
+            .expect("sync provider store test setup should succeed");
         assert_eq!(args.mode, "icloud");
         assert_eq!(args.pat, "token");
         assert_eq!(args.repo, format!("{target}\tnook-events"));
@@ -2372,11 +2429,13 @@ mod tests {
             vec![local_a.clone(), github_a.clone(), legacy.clone()]
         );
         assert_eq!(
-            sync_providers_for_active_vault(&providers, Some("store-a")).unwrap(),
+            sync_providers_for_active_vault(&providers, Some("store-a"))
+                .expect("sync provider store test setup should succeed"),
             vec![github_a, legacy]
         );
         assert_eq!(
-            local_provider_for_active_vault(&providers, Some("store-a")).unwrap(),
+            local_provider_for_active_vault(&providers, Some("store-a"))
+                .expect("sync provider store test setup should succeed"),
             Some(local_a.clone())
         );
         assert_eq!(
@@ -2484,7 +2543,8 @@ mod tests {
             Some("shared:shared-folder")
         );
 
-        let updated = update_oauth_remote_ref(&google, " manager-ref ").unwrap();
+        let updated = update_oauth_remote_ref(&google, " manager-ref ")
+            .expect("sync provider store test setup should succeed");
         assert_eq!(updated.file_id.as_deref(), Some("manager-ref"));
         assert!(update_oauth_remote_ref(&updated, "manager-ref").is_none());
         assert!(update_oauth_remote_ref(&updated, " ").is_none());
@@ -2504,12 +2564,13 @@ mod tests {
     #[test]
     fn staged_remote_args_reject_incomplete_drafts_and_normalize_targets() {
         assert_eq!(
-            staged_remote_storage_args(StorageProviderType::Local, None, None, None).unwrap(),
+            staged_remote_storage_args(StorageProviderType::Local, None, None, None)
+                .expect("sync provider store test setup should succeed"),
             None
         );
         assert_eq!(
             staged_remote_storage_args(StorageProviderType::Github, Some("  "), None, None)
-                .unwrap(),
+                .expect("sync provider store test setup should succeed"),
             None
         );
         assert_eq!(
@@ -2519,7 +2580,7 @@ mod tests {
                 Some(" owner/repo "),
                 None
             )
-            .unwrap(),
+            .expect("sync provider store test setup should succeed"),
             Some(StorageConnectArgs {
                 mode: "github".to_owned(),
                 pat: "pat".to_owned(),
@@ -2540,8 +2601,8 @@ mod tests {
             Some("draft-name"),
             Some(&oauth),
         )
-        .unwrap()
-        .unwrap();
+        .expect("sync provider store test setup should succeed")
+        .expect("sync provider store test setup should succeed");
         assert_eq!(args.mode, "google-drive");
         assert_eq!(args.pat, "token");
         assert_eq!(args.repo, "file-id\tdraft-name");
@@ -2553,8 +2614,8 @@ mod tests {
             Some("draft-name"),
             Some(&oauth),
         )
-        .unwrap()
-        .unwrap();
+        .expect("sync provider store test setup should succeed")
+        .expect("sync provider store test setup should succeed");
         assert_eq!(legacy.mode, "google-drive");
         assert_eq!(legacy.repo, "file-id\tdraft-name");
 
@@ -2567,8 +2628,8 @@ mod tests {
             Some("ignored-draft-name"),
             Some(&oauth),
         )
-        .unwrap()
-        .unwrap();
+        .expect("sync provider store test setup should succeed")
+        .expect("sync provider store test setup should succeed");
         assert_eq!(args.repo, "shared:shared-folder\tstored-name");
     }
 

@@ -821,8 +821,10 @@ mod tests {
 
     #[test]
     fn setup_uses_random_user_handle_and_deterministic_prf_input() {
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
-        let other = DeviceKeyProtectionSetup::generate().unwrap();
+        let setup = DeviceKeyProtectionSetup::generate()
+            .expect("device key protection test setup should succeed");
+        let other = DeviceKeyProtectionSetup::generate()
+            .expect("device key protection test setup should succeed");
         assert_eq!(setup.user_handle().len(), 32);
         assert_eq!(setup.prf_input().len(), 32);
         assert_ne!(setup.user_handle(), other.user_handle());
@@ -834,12 +836,14 @@ mod tests {
     fn passkey_prf_derives_stable_age_identity() {
         let user_handle = [8u8; 32];
         let prf_output = [10u8; 32];
-        let identity = derive_device_identity_from_passkey_prf(&user_handle, &prf_output).unwrap();
-        let same = derive_device_identity_from_passkey_prf(&user_handle, &prf_output).unwrap();
-        let different_user =
-            derive_device_identity_from_passkey_prf(&[9u8; 32], &prf_output).unwrap();
-        let different_prf =
-            derive_device_identity_from_passkey_prf(&user_handle, &[11u8; 32]).unwrap();
+        let identity = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)
+            .expect("device key protection test setup should succeed");
+        let same = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)
+            .expect("device key protection test setup should succeed");
+        let different_user = derive_device_identity_from_passkey_prf(&[9u8; 32], &prf_output)
+            .expect("device key protection test setup should succeed");
+        let different_prf = derive_device_identity_from_passkey_prf(&user_handle, &[11u8; 32])
+            .expect("device key protection test setup should succeed");
 
         assert_eq!(identity, same);
         assert_ne!(identity, different_user);
@@ -854,14 +858,31 @@ mod tests {
         let prf_input = deterministic_passkey_prf_input();
         let record =
             passkey_derived_device_identity_record(&credential_id, &user_handle, &prf_input)
-                .unwrap();
-        let json = serialize_wrapped_device_identity(&record).unwrap();
-        let parsed = parse_wrapped_device_identity(&json).unwrap();
+                .expect("device key protection test setup should succeed");
+        let json = serialize_wrapped_device_identity(&record)
+            .expect("device key protection test setup should succeed");
+        let parsed = parse_wrapped_device_identity(&json)
+            .expect("device key protection test setup should succeed");
 
         assert_eq!(parsed.protection_mode(), "passkey");
-        assert_eq!(parsed.credential_id_bytes().unwrap(), credential_id);
-        assert_eq!(parsed.user_handle_bytes().unwrap(), user_handle);
-        assert_eq!(parsed.prf_input_bytes().unwrap(), prf_input);
+        assert_eq!(
+            parsed
+                .credential_id_bytes()
+                .expect("device key protection test setup should succeed"),
+            credential_id
+        );
+        assert_eq!(
+            parsed
+                .user_handle_bytes()
+                .expect("device key protection test setup should succeed"),
+            user_handle
+        );
+        assert_eq!(
+            parsed
+                .prf_input_bytes()
+                .expect("device key protection test setup should succeed"),
+            prf_input
+        );
         assert_eq!(
             passkey_derived_record(&parsed).version,
             PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION
@@ -882,9 +903,11 @@ mod tests {
             &prf_input,
             &prf_output,
         )
-        .unwrap();
-        let json = serialize_wrapped_device_identity(material.record()).unwrap();
-        let parsed = parse_wrapped_device_identity(&json).unwrap();
+        .expect("device key protection test setup should succeed");
+        let json = serialize_wrapped_device_identity(material.record())
+            .expect("device key protection test setup should succeed");
+        let parsed = parse_wrapped_device_identity(&json)
+            .expect("device key protection test setup should succeed");
         let record = passkey_wrapped_record(&parsed);
 
         assert_eq!(parsed.protection_mode(), "passkey");
@@ -893,15 +916,31 @@ mod tests {
             record.version,
             PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION
         );
-        assert_eq!(parsed.credential_id_bytes().unwrap(), credential_id);
-        assert_eq!(parsed.user_handle_bytes().unwrap(), user_handle);
-        assert_eq!(parsed.prf_input_bytes().unwrap(), prf_input);
+        assert_eq!(
+            parsed
+                .credential_id_bytes()
+                .expect("device key protection test setup should succeed"),
+            credential_id
+        );
+        assert_eq!(
+            parsed
+                .user_handle_bytes()
+                .expect("device key protection test setup should succeed"),
+            user_handle
+        );
+        assert_eq!(
+            parsed
+                .prf_input_bytes()
+                .expect("device key protection test setup should succeed"),
+            prf_input
+        );
         assert!(json.contains("ciphertext"));
         assert!(json.contains("nonce"));
         assert!(!json.contains("AGE-SECRET-KEY-"));
         assert_ne!(
             material.identity_secret(),
-            &derive_device_identity_from_passkey_prf(&user_handle, &prf_output).unwrap()
+            &derive_device_identity_from_passkey_prf(&user_handle, &prf_output)
+                .expect("device key protection test setup should succeed")
         );
     }
 
@@ -917,19 +956,19 @@ mod tests {
             &prf_input,
             &prf_output,
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
 
         let unlocked =
             unlock_passkey_device_identity(material.device_id(), material.record(), &prf_output)
-                .unwrap();
+                .expect("device key protection test setup should succeed");
         assert_eq!(&unlocked, material.identity_secret());
         assert!(
             unlock_passkey_device_identity(material.device_id(), material.record(), &[11u8; 32])
                 .is_err()
         );
 
-        let recovered =
-            recover_passkey_device_identity(&credential_id, &user_handle, &prf_output).unwrap();
+        let recovered = recover_passkey_device_identity(&credential_id, &user_handle, &prf_output)
+            .expect("device key protection test setup should succeed");
         assert_ne!(recovered.device_id(), material.device_id());
     }
 
@@ -947,7 +986,7 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap()
+            .expect("device key protection test setup should succeed")
     }
 
     fn complete_mock_registration(
@@ -957,7 +996,8 @@ mod tests {
         MockPasskeyRegistration,
         PasskeyDeviceIdentityMaterial,
     ) {
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
+        let setup = DeviceKeyProtectionSetup::generate()
+            .expect("device key protection test setup should succeed");
         let registration = approved_mock_registration(authenticator, &setup);
         let resolution = resolve_passkey_registration(
             registration.credential_id(),
@@ -965,7 +1005,7 @@ mod tests {
             setup.prf_input(),
             Some(registration.prf_output()),
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
             panic!("registration should complete from create() PRF output");
         };
@@ -978,15 +1018,24 @@ mod tests {
         let (setup, registration, material) = complete_mock_registration(&mut authenticator);
 
         assert_eq!(
-            material.record().credential_id_bytes().unwrap(),
+            material
+                .record()
+                .credential_id_bytes()
+                .expect("device key protection test setup should succeed"),
             registration.credential_id()
         );
         assert_eq!(
-            material.record().user_handle_bytes().unwrap(),
+            material
+                .record()
+                .user_handle_bytes()
+                .expect("device key protection test setup should succeed"),
             setup.user_handle()
         );
         assert_eq!(
-            material.record().prf_input_bytes().unwrap(),
+            material
+                .record()
+                .prf_input_bytes()
+                .expect("device key protection test setup should succeed"),
             setup.prf_input()
         );
         assert_eq!(
@@ -995,14 +1044,15 @@ mod tests {
                 setup.user_handle(),
                 registration.prf_output()
             )
-            .unwrap()
+            .expect("device key protection test setup should succeed")
         );
     }
 
     #[test]
     fn mode_aware_registration_creates_wrapped_local_identity() {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
+        let setup = DeviceKeyProtectionSetup::generate()
+            .expect("device key protection test setup should succeed");
         let registration = approved_mock_registration(&mut authenticator, &setup);
         let resolution = resolve_passkey_registration_for_mode(
             registration.credential_id(),
@@ -1011,7 +1061,7 @@ mod tests {
             Some(registration.prf_output()),
             PasskeyDeviceProtectionMode::AntiHacker,
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
             panic!("registration should complete from create() PRF output");
         };
@@ -1024,7 +1074,8 @@ mod tests {
     #[test]
     fn passkey_workflow_prf_missing_registration_falls_back_to_assertion() {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
+        let setup = DeviceKeyProtectionSetup::generate()
+            .expect("device key protection test setup should succeed");
         let registration = approved_mock_registration(&mut authenticator, &setup);
         let resolution = resolve_passkey_registration(
             registration.credential_id(),
@@ -1032,7 +1083,7 @@ mod tests {
             setup.prf_input(),
             None,
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
 
         let PasskeyRegistrationResolution::NeedsAssertion(request) = resolution else {
             panic!("registration without PRF output should request assertion fallback");
@@ -1049,23 +1100,26 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap();
+            .expect("device key protection test setup should succeed");
         let material = finish_passkey_device_identity(
             assertion.credential_id(),
             setup.user_handle(),
             request.prf_input(),
             assertion.prf_output(),
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
 
         assert_eq!(
-            material.record().credential_id_bytes().unwrap(),
+            material
+                .record()
+                .credential_id_bytes()
+                .expect("device key protection test setup should succeed"),
             registration.credential_id()
         );
         assert_eq!(
             material.identity_secret(),
             &derive_device_identity_from_passkey_prf(setup.user_handle(), assertion.prf_output())
-                .unwrap()
+                .expect("device key protection test setup should succeed")
         );
     }
 
@@ -1073,7 +1127,8 @@ mod tests {
     fn passkey_workflow_unlock_succeeds_from_stored_metadata() {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, material) = complete_mock_registration(&mut authenticator);
-        let request = passkey_assertion_request(material.record()).unwrap();
+        let request = passkey_assertion_request(material.record())
+            .expect("device key protection test setup should succeed");
         let assertion = authenticator
             .authenticate(
                 &MockPasskeyAssertionRequest::with_allowed_credential(
@@ -1083,14 +1138,14 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap();
+            .expect("device key protection test setup should succeed");
 
         let unlocked = unlock_passkey_device_identity(
             material.device_id(),
             material.record(),
             assertion.prf_output(),
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
 
         assert_eq!(assertion.credential_id(), registration.credential_id());
         assert_eq!(&unlocked, material.identity_secret());
@@ -1109,23 +1164,29 @@ mod tests {
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )
-            .unwrap();
+            .expect("device key protection test setup should succeed");
 
         let recovered = recover_passkey_device_identity(
             assertion.credential_id(),
             assertion.user_handle(),
             assertion.prf_output(),
         )
-        .unwrap();
+        .expect("device key protection test setup should succeed");
 
         assert_eq!(recovered.device_id(), original.device_id());
         assert_eq!(recovered.identity_secret(), original.identity_secret());
         assert_eq!(
-            recovered.record().credential_id_bytes().unwrap(),
+            recovered
+                .record()
+                .credential_id_bytes()
+                .expect("device key protection test setup should succeed"),
             registration.credential_id()
         );
         assert_eq!(
-            recovered.record().prf_input_bytes().unwrap(),
+            recovered
+                .record()
+                .prf_input_bytes()
+                .expect("device key protection test setup should succeed"),
             deterministic_passkey_prf_input()
         );
     }
@@ -1133,7 +1194,8 @@ mod tests {
     #[test]
     fn passkey_workflow_denial_blocks_registration_and_assertion() {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
+        let setup = DeviceKeyProtectionSetup::generate()
+            .expect("device key protection test setup should succeed");
         let denied_registration = authenticator.register(
             MockPasskeyRegistrationRequest::new(
                 TEST_RP_ID,
@@ -1155,7 +1217,7 @@ mod tests {
             setup.prf_input(),
             None,
         )
-        .unwrap() else {
+        .expect("device key protection test setup should succeed") else {
             panic!("registration without PRF output should request assertion fallback");
         };
         let denied_assertion = authenticator.authenticate(
@@ -1177,7 +1239,8 @@ mod tests {
     fn passkey_workflow_wrong_rp_or_unknown_credential_is_rejected() {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, material) = complete_mock_registration(&mut authenticator);
-        let request = passkey_assertion_request(material.record()).unwrap();
+        let request = passkey_assertion_request(material.record())
+            .expect("device key protection test setup should succeed");
 
         let wrong_rp = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
@@ -1207,7 +1270,8 @@ mod tests {
     fn passkey_workflow_reconstructs_request_metadata_and_rejects_mismatched_identity() {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, material) = complete_mock_registration(&mut authenticator);
-        let request = passkey_assertion_request(material.record()).unwrap();
+        let request = passkey_assertion_request(material.record())
+            .expect("device key protection test setup should succeed");
 
         assert_eq!(request.credential_id(), registration.credential_id());
         assert_eq!(request.prf_input(), deterministic_passkey_prf_input());
@@ -1249,22 +1313,31 @@ mod tests {
 
     #[test]
     fn pin_wrap_round_trips_and_serializes_without_plaintext() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
-        let json = serialize_wrapped_device_identity(&record).unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("device key protection test setup should succeed")
+            .secret_string();
+        let record = wrap_device_identity_with_pin(&identity, "123456")
+            .expect("device key protection test setup should succeed");
+        let json = serialize_wrapped_device_identity(&record)
+            .expect("device key protection test setup should succeed");
         assert!(!json.contains(identity.as_str()));
         assert!(json.contains(r#""protection":"pin""#));
 
-        let parsed = parse_wrapped_device_identity(&json).unwrap();
+        let parsed = parse_wrapped_device_identity(&json)
+            .expect("device key protection test setup should succeed");
         assert_eq!(parsed.protection_mode(), "pin");
-        let decrypted = unwrap_device_identity_with_pin(&parsed, "123456").unwrap();
+        let decrypted = unwrap_device_identity_with_pin(&parsed, "123456")
+            .expect("device key protection test setup should succeed");
         assert_eq!(decrypted, identity);
     }
 
     #[test]
     fn wrong_pin_does_not_decrypt() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("device key protection test setup should succeed")
+            .secret_string();
+        let record = wrap_device_identity_with_pin(&identity, "123456")
+            .expect("device key protection test setup should succeed");
         assert!(matches!(
             unwrap_device_identity_with_pin(&record, "654321"),
             Err(DeviceKeyProtectionError::Decrypt)
@@ -1273,8 +1346,11 @@ mod tests {
 
     #[test]
     fn pin_metadata_and_ciphertext_reject_tampering() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("device key protection test setup should succeed")
+            .secret_string();
+        let record = wrap_device_identity_with_pin(&identity, "123456")
+            .expect("device key protection test setup should succeed");
 
         let mut metadata_tampered = record.clone();
         let WrappedDeviceIdentity::Pin(pin) = &mut metadata_tampered else {
@@ -1290,7 +1366,8 @@ mod tests {
         let WrappedDeviceIdentity::Pin(pin) = &mut ciphertext_tampered else {
             panic!("expected pin record");
         };
-        let mut ciphertext = decode_field("ciphertext", &pin.ciphertext).unwrap();
+        let mut ciphertext = decode_field("ciphertext", &pin.ciphertext)
+            .expect("device key protection test setup should succeed");
         ciphertext[0] ^= 0x80;
         pin.ciphertext = encode(&ciphertext);
         assert!(matches!(
@@ -1301,12 +1378,15 @@ mod tests {
 
     #[test]
     fn pin_requires_minimum_length() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
+        let identity = DeviceIdentity::generate()
+            .expect("device key protection test setup should succeed")
+            .secret_string();
         assert!(matches!(
             wrap_device_identity_with_pin(&identity, "12345"),
             Err(DeviceKeyProtectionError::PinTooShort)
         ));
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
+        let record = wrap_device_identity_with_pin(&identity, "123456")
+            .expect("device key protection test setup should succeed");
         assert!(matches!(
             unwrap_device_identity_with_pin(&record, "12345"),
             Err(DeviceKeyProtectionError::PinTooShort)

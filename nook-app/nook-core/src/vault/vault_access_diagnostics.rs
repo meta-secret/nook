@@ -672,8 +672,12 @@ mod tests {
                     id: SecretId::from_vault_record("secret_eventdiag"),
                     secret_type: SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("cipher".to_owned()),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: crate::SecretFingerprint::from_trusted(
+                        "test:diagnostic-identity".to_owned(),
+                    ),
+                    fingerprint: crate::SecretFingerprint::from_trusted(
+                        "test:diagnostic-version".to_owned(),
+                    ),
                 }],
                 password_entries: Vec::new(),
             },
@@ -703,8 +707,10 @@ mod tests {
             id: SecretId::from_vault_record("secret_payload01"),
             secret_type: SecretType::ApiKey,
             ciphertext: crate::OpaqueCiphertext::from_trusted("cipher".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
+            identity_fingerprint: crate::SecretFingerprint::from_trusted(
+                "test:payload-identity".to_owned(),
+            ),
+            fingerprint: crate::SecretFingerprint::from_trusted("test:payload-version".to_owned()),
         };
 
         assert_eq!(

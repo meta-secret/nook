@@ -633,7 +633,7 @@ mod tests {
             user_verification_required: true,
         };
         let mut passkey = crate::create_website_passkey(&request, &[])
-            .unwrap()
+            .expect("secret types test setup should succeed")
             .credential;
         passkey.signature_count = 4;
         passkey
@@ -642,8 +642,11 @@ mod tests {
     #[test]
     fn passkey_payload_round_trips_as_versioned_yaml() {
         let value = SecretValue::Passkey(passkey());
-        let yaml = value.to_yaml().unwrap();
-        let decoded = SecretValue::from_yaml(SecretType::Passkey, &yaml).unwrap();
+        let yaml = value
+            .to_yaml()
+            .expect("secret types test setup should succeed");
+        let decoded = SecretValue::from_yaml(SecretType::Passkey, &yaml)
+            .expect("secret types test setup should succeed");
 
         assert_eq!(decoded, value);
         assert!(yaml.as_str().contains("version: 1"));
@@ -715,8 +718,11 @@ mod tests {
     #[test]
     fn file_attachment_payload_round_trips_as_yaml() {
         let value = SecretValue::FileAttachment(file_attachment());
-        let yaml = value.to_yaml().unwrap();
-        let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml).unwrap();
+        let yaml = value
+            .to_yaml()
+            .expect("secret types test setup should succeed");
+        let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)
+            .expect("secret types test setup should succeed");
         assert_eq!(decoded, value);
         assert!(yaml.as_str().contains("fileName: recovery.pdf"));
         assert!(yaml.as_str().contains("mimeType: application/pdf"));

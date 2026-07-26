@@ -333,7 +333,8 @@ mod tests {
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
     fn key(byte: char) -> SymmetricKey {
-        SymmetricKey::parse(&byte.to_string().repeat(64)).unwrap()
+        SymmetricKey::parse(&byte.to_string().repeat(64))
+            .expect("secret fingerprint test setup should succeed")
     }
 
     fn authenticator(secret: &str, backup_codes: &[&str]) -> SecretValue {
@@ -341,10 +342,11 @@ mod tests {
             issuer: "Example".to_owned(),
             account: "alice@example.com".to_owned(),
             website_url: String::new(),
-            secret: TotpSecret::parse(secret).unwrap(),
+            secret: TotpSecret::parse(secret)
+                .expect("secret fingerprint test setup should succeed"),
             algorithm: TotpAlgorithm::Sha1,
-            digits: TotpDigits::parse(6).unwrap(),
-            period: TotpPeriod::parse(30).unwrap(),
+            digits: TotpDigits::parse(6).expect("secret fingerprint test setup should succeed"),
+            period: TotpPeriod::parse(30).expect("secret fingerprint test setup should succeed"),
             backup_codes: backup_codes.iter().map(ToString::to_string).collect(),
         })
     }
@@ -588,7 +590,7 @@ mod tests {
             },
             &[],
         )
-        .unwrap();
+        .expect("secret fingerprint test setup should succeed");
         let first = SecretValue::Passkey(registration.credential);
         let mut updated = first.clone();
         let SecretValue::Passkey(updated_passkey) = &mut updated else {

@@ -415,7 +415,9 @@ mod tests {
         );
         assert!(graph.pending_ids().is_empty());
         assert_eq!(
-            graph.topological_order().unwrap(),
+            graph
+                .topological_order()
+                .expect("causal graph test setup should succeed"),
             vec![id("root"), id("child")]
         );
     }
@@ -535,7 +537,12 @@ mod tests {
         graph.quarantine(id("rejected"), "policy rejected".to_owned());
         graph.quarantine(id("descendant"), "ancestor rejected".to_owned());
 
-        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+        assert_eq!(
+            graph
+                .topological_order()
+                .expect("causal graph test setup should succeed"),
+            vec![id("root")]
+        );
         assert_eq!(graph.heads(), vec![id("root")]);
     }
 
@@ -548,7 +555,12 @@ mod tests {
 
         graph.quarantine(id("rejected"), id("invalid signature"));
         assert!(graph.quarantined().contains_key("descendant"));
-        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+        assert_eq!(
+            graph
+                .topological_order()
+                .expect("causal graph test setup should succeed"),
+            vec![id("root")]
+        );
 
         assert_eq!(
             graph.insert(id("future"), vec![id("descendant")]),
@@ -557,7 +569,12 @@ mod tests {
             }
         );
         assert!(graph.quarantined().contains_key("future"));
-        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+        assert_eq!(
+            graph
+                .topological_order()
+                .expect("causal graph test setup should succeed"),
+            vec![id("root")]
+        );
     }
 
     #[test]
@@ -576,7 +593,12 @@ mod tests {
         assert!(graph.is_ancestor(&id("right"), &id("left")));
         assert!(!graph.are_concurrent(&id("left"), &id("right")));
         assert_eq!(graph.applicable_ids(), vec![&id("unrelated")]);
-        assert_eq!(graph.topological_order().unwrap(), vec![id("unrelated")]);
+        assert_eq!(
+            graph
+                .topological_order()
+                .expect("causal graph test setup should succeed"),
+            vec![id("unrelated")]
+        );
         assert_eq!(
             graph.quarantined().keys().cloned().collect::<Vec<_>>(),
             vec![id("left"), id("right")]

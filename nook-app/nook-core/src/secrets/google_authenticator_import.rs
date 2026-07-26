@@ -377,7 +377,7 @@ mod tests {
             0,
             17,
         ))])
-        .unwrap();
+        .expect("google authenticator import test setup should succeed");
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 0);
@@ -400,7 +400,8 @@ mod tests {
             "NjE5NGJjMTczNzcyNzc5ODc5MxACGAEgAA%3D%3D"
         );
 
-        let plan = plan_google_authenticator_import(&[migration_uri.to_owned()]).unwrap();
+        let plan = plan_google_authenticator_import(&[migration_uri.to_owned()])
+            .expect("google authenticator import test setup should succeed");
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 1);
@@ -436,7 +437,8 @@ mod tests {
             91,
         ));
 
-        let plan = plan_google_authenticator_import(&[second, first]).unwrap();
+        let plan = plan_google_authenticator_import(&[second, first])
+            .expect("google authenticator import test setup should succeed");
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.items.len(), 2);
@@ -512,7 +514,8 @@ mod tests {
             ),
             short_secret,
         ];
-        let plan = plan_google_authenticator_import(&[uri(&payload(entries, 1, 0, 12))]).unwrap();
+        let plan = plan_google_authenticator_import(&[uri(&payload(entries, 1, 0, 12))])
+            .expect("google authenticator import test setup should succeed");
         assert!(plan.items.is_empty());
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 3);

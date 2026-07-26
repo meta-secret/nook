@@ -307,16 +307,22 @@ mod tests {
     #[tokio::test]
     async fn concurrent_workers_cannot_claim_the_same_attempt() {
         let store = MemoryStore::default();
-        store.enqueue(&task("task-1", Vec::new())).await.unwrap();
-        let agent_a = AgentId::new("agent-a").unwrap();
-        let agent_b = AgentId::new("agent-b").unwrap();
+        store
+            .enqueue(&task("task-1", Vec::new()))
+            .await
+            .expect("store test setup should succeed");
+        let agent_a = AgentId::new("agent-a").expect("store test setup should succeed");
+        let agent_b = AgentId::new("agent-b").expect("store test setup should succeed");
         let (claim_a, claim_b) =
             tokio::join!(store.claim(&agent_a, 300), store.claim(&agent_b, 300));
 
-        let claims = [claim_a.unwrap(), claim_b.unwrap()]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        let claims = [
+            claim_a.expect("store test setup should succeed"),
+            claim_b.expect("store test setup should succeed"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0].attempt_number, 1);
     }
@@ -325,27 +331,56 @@ mod tests {
     async fn incomplete_dependencies_block_claiming() {
         let store = MemoryStore::default();
         let dependency = task("dependency", Vec::new());
-        store.enqueue(&dependency).await.unwrap();
+        store
+            .enqueue(&dependency)
+            .await
+            .expect("store test setup should succeed");
         store
             .enqueue(&task("dependent", vec![dependency.id.clone()]))
             .await
-            .unwrap();
-        let agent = AgentId::new("agent").unwrap();
+            .expect("store test setup should succeed");
+        let agent = AgentId::new("agent").expect("store test setup should succeed");
 
-        let first = store.claim(&agent, 300).await.unwrap().unwrap();
+        let first = store
+            .claim(&agent, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
         assert_eq!(first.id, dependency.id);
-        assert!(store.claim(&agent, 300).await.unwrap().is_none());
+        assert!(
+            store
+                .claim(&agent, 300)
+                .await
+                .expect("store test setup should succeed")
+                .is_none()
+        );
     }
 
     #[tokio::test]
     async fn rollout_release_does_not_consume_an_attempt() {
         let store = MemoryStore::default();
-        store.enqueue(&task("task-1", Vec::new())).await.unwrap();
-        let agent = AgentId::new("agent").unwrap();
+        store
+            .enqueue(&task("task-1", Vec::new()))
+            .await
+            .expect("store test setup should succeed");
+        let agent = AgentId::new("agent").expect("store test setup should succeed");
 
-        let first = store.claim(&agent, 300).await.unwrap().unwrap();
-        assert!(store.release(&first, &agent).await.unwrap());
-        let replacement = store.claim(&agent, 300).await.unwrap().unwrap();
+        let first = store
+            .claim(&agent, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
+        assert!(
+            store
+                .release(&first, &agent)
+                .await
+                .expect("store test setup should succeed")
+        );
+        let replacement = store
+            .claim(&agent, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
 
         assert_eq!(replacement.attempt_number, 1);
     }
@@ -353,9 +388,16 @@ mod tests {
     #[tokio::test]
     async fn discovered_blocker_is_prioritized_and_resumes_original_task() {
         let store = MemoryStore::default();
-        store.enqueue(&task("original", Vec::new())).await.unwrap();
-        let agent = AgentId::new("agent").unwrap();
-        let original = store.claim(&agent, 300).await.unwrap().unwrap();
+        store
+            .enqueue(&task("original", Vec::new()))
+            .await
+            .expect("store test setup should succeed");
+        let agent = AgentId::new("agent").expect("store test setup should succeed");
+        let original = store
+            .claim(&agent, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
         let mut blocker = task("blocker", Vec::new());
         blocker.priority = 100;
 
@@ -363,17 +405,25 @@ mod tests {
             store
                 .block(&original, &agent, &blocker, "blocked by prerequisite")
                 .await
-                .unwrap()
+                .expect("store test setup should succeed")
         );
-        let blocker_claim = store.claim(&agent, 300).await.unwrap().unwrap();
+        let blocker_claim = store
+            .claim(&agent, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
                 .complete(&blocker_claim, &agent, "blocker fixed", None)
                 .await
-                .unwrap()
+                .expect("store test setup should succeed")
         );
-        let resumed = store.claim(&agent, 300).await.unwrap().unwrap();
+        let resumed = store
+            .claim(&agent, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
         assert_eq!(resumed.id, original.id);
         assert_eq!(resumed.attempt_number, 1);
     }
@@ -382,12 +432,23 @@ mod tests {
     async fn expired_lease_rejects_stale_worker_and_allows_retry() {
         let store = MemoryStore::default();
         let definition = task("task-1", Vec::new());
-        store.enqueue(&definition).await.unwrap();
-        let agent_a = AgentId::new("agent-a").unwrap();
-        let agent_b = AgentId::new("agent-b").unwrap();
-        let stale = store.claim(&agent_a, 300).await.unwrap().unwrap();
+        store
+            .enqueue(&definition)
+            .await
+            .expect("store test setup should succeed");
+        let agent_a = AgentId::new("agent-a").expect("store test setup should succeed");
+        let agent_b = AgentId::new("agent-b").expect("store test setup should succeed");
+        let stale = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
         store.expire(&definition.id);
-        let current = store.claim(&agent_b, 300).await.unwrap().unwrap();
+        let current = store
+            .claim(&agent_b, 300)
+            .await
+            .expect("store test setup should succeed")
+            .expect("store test setup should succeed");
 
         assert_ne!(stale.lease_token, current.lease_token);
         assert_eq!(current.attempt_number, 2);
@@ -395,19 +456,19 @@ mod tests {
             !store
                 .heartbeat(&stale.id, &agent_a, &stale.lease_token, 300)
                 .await
-                .unwrap()
+                .expect("store test setup should succeed")
         );
         assert!(
             !store
                 .complete(&stale, &agent_a, "late", None)
                 .await
-                .unwrap()
+                .expect("store test setup should succeed")
         );
         assert!(
             store
                 .complete(&current, &agent_b, "done", None)
                 .await
-                .unwrap()
+                .expect("store test setup should succeed")
         );
     }
 }

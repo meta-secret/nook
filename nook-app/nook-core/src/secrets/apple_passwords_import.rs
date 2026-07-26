@@ -166,7 +166,8 @@ mod tests {
             "secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA256&digits=8&period=45\"\n"
         );
 
-        let plan = plan_apple_passwords_import(csv).unwrap();
+        let plan = plan_apple_passwords_import(csv)
+            .expect("apple passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 0);
@@ -195,7 +196,8 @@ mod tests {
     fn supports_bom_reordered_headers_and_optional_columns() {
         let csv = "\u{feff}Password,Username,URL,Title\nsecret,alice,,Example\n";
 
-        let plan = plan_apple_passwords_import(csv).unwrap();
+        let plan = plan_apple_passwords_import(csv)
+            .expect("apple passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(
@@ -217,7 +219,8 @@ mod tests {
             ",,,,,\n"
         );
 
-        let plan = plan_apple_passwords_import(csv).unwrap();
+        let plan = plan_apple_passwords_import(csv)
+            .expect("apple passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.items.len(), 1);
@@ -233,7 +236,8 @@ mod tests {
             "secret=JBSWY3DPEHPK3PXP&issuer=Example\"\n"
         );
 
-        let plan = plan_apple_passwords_import(csv).unwrap();
+        let plan = plan_apple_passwords_import(csv)
+            .expect("apple passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.items.len(), 1);
@@ -245,7 +249,8 @@ mod tests {
     fn preserves_leading_and_trailing_password_whitespace() {
         let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,\" secret \"\n";
 
-        let plan = plan_apple_passwords_import(csv).unwrap();
+        let plan = plan_apple_passwords_import(csv)
+            .expect("apple passwords import test setup should succeed");
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login");
         };
@@ -255,8 +260,8 @@ mod tests {
 
     #[test]
     fn rejects_non_apple_csv_headers() {
-        let error =
-            plan_apple_passwords_import("name,login,secret\nExample,alice,password\n").unwrap_err();
+        let error = plan_apple_passwords_import("name,login,secret\nExample,alice,password\n")
+            .expect_err("apple passwords import test should reject invalid input");
 
         assert!(matches!(
             error,

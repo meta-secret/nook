@@ -185,7 +185,7 @@ mod tests {
     fn identical_content_is_unchanged() {
         let yaml = sample_yaml(1, "store_AAAAAAAAAAA", "test");
         assert_eq!(
-            compare_vault_sync(&yaml, &yaml).unwrap(),
+            compare_vault_sync(&yaml, &yaml).expect("vault sync test setup should succeed"),
             VaultSyncAction::Unchanged
         );
     }
@@ -194,7 +194,7 @@ mod tests {
     fn empty_local_adopts_remote() {
         let remote = sample_yaml(1, "store_AAAAAAAAAAA", "test");
         assert_eq!(
-            compare_vault_sync("", &remote).unwrap(),
+            compare_vault_sync("", &remote).expect("vault sync test setup should succeed"),
             VaultSyncAction::AdoptRemote
         );
     }
@@ -203,7 +203,7 @@ mod tests {
     fn empty_remote_pushes_local() {
         let local = sample_yaml(1, "store_AAAAAAAAAAA", "test");
         assert_eq!(
-            compare_vault_sync(&local, "").unwrap(),
+            compare_vault_sync(&local, "").expect("vault sync test setup should succeed"),
             VaultSyncAction::PushLocal
         );
     }
@@ -213,7 +213,7 @@ mod tests {
         let local = sample_yaml(1, "store_AAAAAAAAAAA", "a");
         let remote = sample_yaml(3, "store_AAAAAAAAAAA", "b");
         assert_eq!(
-            compare_vault_sync(&local, &remote).unwrap(),
+            compare_vault_sync(&local, &remote).expect("vault sync test setup should succeed"),
             VaultSyncAction::AdoptRemote
         );
     }
@@ -223,7 +223,7 @@ mod tests {
         let local = sample_yaml(5, "store_AAAAAAAAAAA", "a");
         let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
         assert_eq!(
-            compare_vault_sync(&local, &remote).unwrap(),
+            compare_vault_sync(&local, &remote).expect("vault sync test setup should succeed"),
             VaultSyncAction::PushLocal
         );
     }
@@ -233,7 +233,7 @@ mod tests {
         let local = sample_yaml(2, "store_AAAAAAAAAAA", "a");
         let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
         assert_eq!(
-            compare_vault_sync(&local, &remote).unwrap(),
+            compare_vault_sync(&local, &remote).expect("vault sync test setup should succeed"),
             VaultSyncAction::Conflict
         );
     }
@@ -246,11 +246,13 @@ mod tests {
         let base_hash = vault_content_hash(&base);
 
         assert_eq!(
-            compare_vault_sync_with_common(&local, &remote, Some(&base_hash)).unwrap(),
+            compare_vault_sync_with_common(&local, &remote, Some(&base_hash))
+                .expect("vault sync test setup should succeed"),
             VaultSyncAction::PushLocal
         );
         assert_eq!(
-            compare_vault_sync_with_common(&remote, &local, Some(&base_hash)).unwrap(),
+            compare_vault_sync_with_common(&remote, &local, Some(&base_hash))
+                .expect("vault sync test setup should succeed"),
             VaultSyncAction::AdoptRemote
         );
     }
@@ -263,7 +265,8 @@ mod tests {
         let base_hash = vault_content_hash(&base);
 
         assert_eq!(
-            compare_vault_sync_with_common(&local, &remote, Some(&base_hash)).unwrap(),
+            compare_vault_sync_with_common(&local, &remote, Some(&base_hash))
+                .expect("vault sync test setup should succeed"),
             VaultSyncAction::Conflict
         );
     }

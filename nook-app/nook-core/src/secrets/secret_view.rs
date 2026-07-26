@@ -1034,7 +1034,7 @@ mod tests {
                     "123",
                     "work",
                 )
-                .unwrap(),
+                .expect("secret view test setup should succeed"),
             ),
         };
 
@@ -1072,8 +1072,9 @@ mod tests {
                 cvv: String::new(),
                 notes: String::new(),
             }))
-            .unwrap();
-        let value = SecretValue::from_yaml(SecretType::CreditCard, &yaml).unwrap();
+            .expect("secret view test setup should succeed");
+        let value = SecretValue::from_yaml(SecretType::CreditCard, &yaml)
+            .expect("secret view test setup should succeed");
         let SecretValue::CreditCard(card) = value else {
             panic!("expected credit card");
         };
@@ -1108,11 +1109,12 @@ mod tests {
                 user_name: "alice@example.com".to_owned(),
                 user_display_name: "Alice".to_owned(),
                 key: PasskeyCredentialKey::Es256 {
-                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone()).unwrap(),
+                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone())
+                        .expect("secret view test setup should succeed"),
                     public_key_cose: PasskeyPublicKeyCose::parse(
                         URL_SAFE_NO_PAD.encode([10_u8; 77]),
                     )
-                    .unwrap(),
+                    .expect("secret view test setup should succeed"),
                 },
                 signature_count: 0,
                 discoverable: true,
@@ -1139,8 +1141,10 @@ mod tests {
             "password": "pw",
             "notes": "note"
         });
-        let yaml = build_secret_yaml(SecretType::Login, &fields).unwrap();
-        let parsed = SecretValue::from_yaml(SecretType::Login, &yaml).unwrap();
+        let yaml = build_secret_yaml(SecretType::Login, &fields)
+            .expect("secret view test setup should succeed");
+        let parsed = SecretValue::from_yaml(SecretType::Login, &yaml)
+            .expect("secret view test setup should succeed");
         match parsed {
             SecretValue::Login(value) => {
                 assert_eq!(value.username, "bob");
@@ -1164,8 +1168,10 @@ mod tests {
             "title": "",
             "note": ""
         });
-        let yaml = build_secret_yaml(SecretType::ApiKey, &fields).unwrap();
-        let parsed = SecretValue::from_yaml(SecretType::ApiKey, &yaml).unwrap();
+        let yaml = build_secret_yaml(SecretType::ApiKey, &fields)
+            .expect("secret view test setup should succeed");
+        let parsed = SecretValue::from_yaml(SecretType::ApiKey, &yaml)
+            .expect("secret view test setup should succeed");
         match parsed {
             SecretValue::ApiKey(value) => {
                 assert_eq!(value.website_url, "https://api.example.com");
@@ -1187,7 +1193,8 @@ mod tests {
 
     #[test]
     fn build_secret_yaml_rejects_manual_passkey_creation() {
-        let error = build_secret_yaml(SecretType::Passkey, &serde_json::json!({})).unwrap_err();
+        let error = build_secret_yaml(SecretType::Passkey, &serde_json::json!({}))
+            .expect_err("secret view test should reject invalid input");
         assert!(matches!(
             error,
             SecretPayloadError::PasskeyCreationRequiresAuthenticator
@@ -1206,7 +1213,7 @@ mod tests {
             "backup-one\nbackup-two",
             "",
         )
-        .unwrap();
+        .expect("secret view test setup should succeed");
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_authenticator"),
             secret_type: SecretType::Authenticator,
@@ -1353,8 +1360,10 @@ mod tests {
             "period": "",
             "backupCodes": "one\ntwo"
         });
-        let yaml = build_secret_yaml(SecretType::Authenticator, &fields).unwrap();
-        let parsed = SecretValue::from_yaml(SecretType::Authenticator, &yaml).unwrap();
+        let yaml = build_secret_yaml(SecretType::Authenticator, &fields)
+            .expect("secret view test setup should succeed");
+        let parsed = SecretValue::from_yaml(SecretType::Authenticator, &yaml)
+            .expect("secret view test setup should succeed");
         match parsed {
             SecretValue::Authenticator(value) => {
                 assert_eq!(value.issuer, "Example");
@@ -1375,8 +1384,10 @@ mod tests {
             "sizeBytes": 12,
             "contentBase64": content,
         });
-        let yaml = build_secret_yaml(SecretType::FileAttachment, &fields).unwrap();
-        let parsed = SecretValue::from_yaml(SecretType::FileAttachment, &yaml).unwrap();
+        let yaml = build_secret_yaml(SecretType::FileAttachment, &fields)
+            .expect("secret view test setup should succeed");
+        let parsed = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)
+            .expect("secret view test setup should succeed");
         let SecretValue::FileAttachment(value) = parsed else {
             panic!("expected file attachment");
         };

@@ -153,7 +153,10 @@ impl Database {
         keys.sort();
         let mut stored_records = Vec::with_capacity(keys.len());
         for key in keys {
-            let record = self.records.get(key).unwrap();
+            let record = self
+                .records
+                .get(key)
+                .expect("database test setup should succeed");
             let yaml = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
                 key: key.clone(),
@@ -199,7 +202,7 @@ mod tests {
         "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
     fn test_key() -> crate::SymmetricKey {
-        crate::SymmetricKey::parse(TEST_PASSPHRASE).unwrap()
+        crate::SymmetricKey::parse(TEST_PASSPHRASE).expect("database test setup should succeed")
     }
 
     fn api_key(value: &str) -> SecretValue {
@@ -232,7 +235,9 @@ mod tests {
         let passphrase = TEST_PASSPHRASE;
 
         let db = sample_db();
-        let stored = db.to_stored_yaml(passphrase).unwrap();
+        let stored = db
+            .to_stored_yaml(passphrase)
+            .expect("database test setup should succeed");
 
         assert!(stored.as_str().contains("github.com"));
         assert!(stored.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
@@ -241,7 +246,8 @@ mod tests {
         assert!(!stored.as_str().contains("token-abc"));
         assert!(!stored.as_str().contains("\\n"));
 
-        let restored = Database::from_stored_yaml(&stored, passphrase).unwrap();
+        let restored = Database::from_stored_yaml(&stored, passphrase)
+            .expect("database test setup should succeed");
         assert_eq!(restored.list(), db.list());
     }
 
@@ -250,11 +256,13 @@ mod tests {
         let passphrase = TEST_PASSPHRASE;
         let mut db = Database::new();
         db.insert(sid("x"), api_key("y"));
-        let yaml = db.to_stored_yaml(passphrase).unwrap();
+        let yaml = db
+            .to_stored_yaml(passphrase)
+            .expect("database test setup should succeed");
 
         assert_eq!(
             Database::from_stored_auto(yaml.as_str(), passphrase)
-                .unwrap()
+                .expect("database test setup should succeed")
                 .list(),
             db.list()
         );
@@ -266,7 +274,9 @@ mod tests {
         db.insert(sid("a"), api_key("1"));
         let passphrase = TEST_PASSPHRASE;
 
-        let yaml = db.to_stored(passphrase).unwrap();
+        let yaml = db
+            .to_stored(passphrase)
+            .expect("database test setup should succeed");
         assert!(yaml.as_str().contains("secrets:"));
     }
 
@@ -283,7 +293,7 @@ mod tests {
 
         let from_yaml =
             Database::from_stored_yaml(&StoredVaultYaml::from_trusted(yaml.clone()), passphrase)
-                .unwrap();
+                .expect("database test setup should succeed");
         let ids: Vec<_> = from_yaml
             .list()
             .into_iter()
@@ -297,7 +307,9 @@ mod tests {
         const WRONG_PASSPHRASE: &str =
             "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
         let db = sample_db();
-        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored_yaml = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         assert!(Database::from_stored_yaml(&stored_yaml, WRONG_PASSPHRASE).is_err());
         assert!(Database::from_stored_auto(stored_yaml.as_str(), WRONG_PASSPHRASE).is_err());
     }
@@ -307,17 +319,19 @@ mod tests {
         let db = Database::new();
         assert!(db.list().is_empty());
 
-        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored_yaml = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
 
         assert!(
             Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)
-                .unwrap()
+                .expect("database test setup should succeed")
                 .list()
                 .is_empty()
         );
         assert!(
             Database::from_stored_auto(stored_yaml.as_str(), TEST_PASSPHRASE)
-                .unwrap()
+                .expect("database test setup should succeed")
                 .list()
                 .is_empty()
         );
@@ -337,7 +351,9 @@ mod tests {
     fn remove_returns_previous_value() {
         let mut db = sample_db();
         assert_eq!(
-            db.remove(&sid("github.com")).unwrap().data,
+            db.remove(&sid("github.com"))
+                .expect("database test setup should succeed")
+                .data,
             api_key("hunter2")
         );
         assert_eq!(db.remove(&sid("github.com")), None);
@@ -358,8 +374,11 @@ mod tests {
         let mut db = Database::new();
         db.insert(sid(key), api_key(value));
 
-        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE).unwrap();
+        let stored_yaml = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
+        let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         assert_eq!(from_yaml.list()[0].id.as_str(), key);
         assert_eq!(from_yaml.list()[0].data, api_key(value));
     }
@@ -369,8 +388,11 @@ mod tests {
         let mut db = Database::new();
         db.insert(sid("empty-value"), api_key(""));
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
+        let stored = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
+        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         assert_eq!(restored.list()[0].data, api_key(""));
     }
 
@@ -380,8 +402,11 @@ mod tests {
         db.insert(sid("new-entry"), api_key("added-later"));
         db.remove(&sid("work-vpn"));
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        let mut restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
+        let stored = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
+        let mut restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         restored.insert(sid("another"), api_key("value"));
 
         let keys: Vec<String> = restored
@@ -400,11 +425,14 @@ mod tests {
         let mut db = Database::new();
         db.insert(sid("notes"), api_key("line-one\nline-two\nline-three"));
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         assert!(stored.as_str().contains('|'));
         assert!(!stored.as_str().contains("\\n"));
 
-        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
+        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         assert_eq!(
             restored.list()[0].data,
             api_key("line-one\nline-two\nline-three")
@@ -416,15 +444,23 @@ mod tests {
         use crate::VaultCrypto;
         use std::collections::HashMap;
 
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let crypto = VaultCrypto::new(&test_key()).expect("database test setup should succeed");
         let mut armored = HashMap::new();
         armored.insert(
             sid("z-last"),
-            crypto.encrypt_value("z").unwrap().as_str().to_owned(),
+            crypto
+                .encrypt_value("z")
+                .expect("database test setup should succeed")
+                .as_str()
+                .to_owned(),
         );
         armored.insert(
             sid("a-first"),
-            crypto.encrypt_value("a").unwrap().as_str().to_owned(),
+            crypto
+                .encrypt_value("a")
+                .expect("database test setup should succeed")
+                .as_str()
+                .to_owned(),
         );
 
         let secret_types = HashMap::from([
@@ -449,10 +485,13 @@ mod tests {
     fn stored_records_with_crypto_roundtrip() {
         use crate::VaultCrypto;
 
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let crypto = VaultCrypto::new(&test_key()).expect("database test setup should succeed");
         let db = sample_db();
-        let stored = db.to_stored_records_with_crypto(&crypto).unwrap();
-        let restored = Database::from_stored_records_with_crypto(&stored, &crypto).unwrap();
+        let stored = db
+            .to_stored_records_with_crypto(&crypto)
+            .expect("database test setup should succeed");
+        let restored = Database::from_stored_records_with_crypto(&stored, &crypto)
+            .expect("database test setup should succeed");
         assert_eq!(restored.list(), db.list());
     }
 
@@ -469,12 +508,14 @@ mod tests {
             }),
         );
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored = db
+            .to_stored_yaml(TEST_PASSPHRASE)
+            .expect("database test setup should succeed");
         assert!(stored.as_str().contains("type: login"));
         assert!(!stored.as_str().contains("private-password"));
         assert_eq!(
             Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
-                .unwrap()
+                .expect("database test setup should succeed")
                 .list(),
             db.list()
         );
@@ -489,18 +530,20 @@ mod tests {
             notes: "first line\nsecond line\nthird line".to_owned(),
         });
 
-        let yaml = value.to_yaml().unwrap();
+        let yaml = value.to_yaml().expect("database test setup should succeed");
         assert!(yaml.as_str().contains("notes: |-"));
         assert!(yaml.as_str().contains("  second line"));
         assert_eq!(
-            SecretValue::from_yaml(SecretType::Login, &yaml).unwrap(),
+            SecretValue::from_yaml(SecretType::Login, &yaml)
+                .expect("database test setup should succeed"),
             value
         );
     }
 
     #[test]
     fn missing_or_mismatched_type_metadata_is_rejected() {
-        let crypto = crate::VaultCrypto::new(&test_key()).unwrap();
+        let crypto =
+            crate::VaultCrypto::new(&test_key()).expect("database test setup should succeed");
         let login_yaml = crate::SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -508,8 +551,10 @@ mod tests {
             notes: String::new(),
         })
         .to_yaml()
-        .unwrap();
-        let ciphertext = crypto.encrypt_value(login_yaml.as_str()).unwrap();
+        .expect("database test setup should succeed");
+        let ciphertext = crypto
+            .encrypt_value(login_yaml.as_str())
+            .expect("database test setup should succeed");
 
         let missing = StoredSecretRecord {
             key: sid("missing"),

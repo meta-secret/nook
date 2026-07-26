@@ -307,12 +307,12 @@ mod tests {
             access_token: "access".to_owned(),
             account_id: "account".to_owned(),
         };
-        let encoded = serde_json::to_string(&response).unwrap();
+        let encoded = serde_json::to_string(&response).expect("auth test setup should succeed");
 
         assert!(!encoded.contains("refresh_token"));
         assert!(
             serde_json::from_str::<BrokerRequest>(r#"{"refresh":true}"#)
-                .unwrap()
+                .expect("auth test setup should succeed")
                 .refresh
         );
     }

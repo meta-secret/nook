@@ -216,27 +216,40 @@ mod tests {
 
     #[test]
     fn seal_and_open_github_pat_round_trips() {
-        let identity = DeviceIdentity::generate().unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let pat = "github_pat_11AAAAbbbbCCCC";
         let mut snapshot = github_snapshot(pat);
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
-        let stored = snapshot.providers[0].github_pat.as_ref().unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
+        let stored = snapshot.providers[0]
+            .github_pat
+            .as_ref()
+            .expect("sync provider credentials test setup should succeed");
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        assert!(!open_provider_credentials(&identity, &mut opened).unwrap());
+        assert!(
+            !open_provider_credentials(&identity, &mut opened)
+                .expect("sync provider credentials test setup should succeed")
+        );
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
     }
 
     #[test]
     fn seal_and_open_oauth_tokens_round_trips() {
-        let identity = DeviceIdentity::generate().unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let access = "ya29.oauth-access-token";
         let refresh = "1//refresh-token-secret";
         let mut snapshot = oauth_snapshot(access, Some(refresh));
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
-        let oauth = snapshot.providers[0].oauth_file.as_ref().unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
+        let oauth = snapshot.providers[0]
+            .oauth_file
+            .as_ref()
+            .expect("sync provider credentials test setup should succeed");
         assert!(is_sealed_credential(&oauth.access_token));
         assert!(
             oauth
@@ -245,64 +258,96 @@ mod tests {
                 .is_some_and(|value| is_sealed_credential(value))
         );
         assert!(!oauth.access_token.contains(access));
-        assert!(!oauth.refresh_token.as_ref().unwrap().contains(refresh));
+        assert!(
+            !oauth
+                .refresh_token
+                .as_ref()
+                .expect("sync provider credentials test setup should succeed")
+                .contains(refresh)
+        );
 
         let mut opened = snapshot;
-        assert!(!open_provider_credentials(&identity, &mut opened).unwrap());
-        let opened_oauth = opened.providers[0].oauth_file.as_ref().unwrap();
+        assert!(
+            !open_provider_credentials(&identity, &mut opened)
+                .expect("sync provider credentials test setup should succeed")
+        );
+        let opened_oauth = opened.providers[0]
+            .oauth_file
+            .as_ref()
+            .expect("sync provider credentials test setup should succeed");
         assert_eq!(opened_oauth.access_token, access);
         assert_eq!(opened_oauth.refresh_token.as_deref(), Some(refresh));
     }
 
     #[test]
     fn open_reports_legacy_plaintext_without_decrypting() {
-        let identity = DeviceIdentity::generate().unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let pat = "github_pat_11LEGACY";
         let mut snapshot = github_snapshot(pat);
-        assert!(open_provider_credentials(&identity, &mut snapshot).unwrap());
+        assert!(
+            open_provider_credentials(&identity, &mut snapshot)
+                .expect("sync provider credentials test setup should succeed")
+        );
         assert_eq!(snapshot.providers[0].github_pat.as_deref(), Some(pat));
     }
 
     #[test]
     fn seal_is_idempotent_for_already_sealed_fields() {
-        let identity = DeviceIdentity::generate().unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let mut snapshot = github_snapshot("github_pat_11AAAA");
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
         let sealed_once = snapshot.providers[0].github_pat.clone();
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
         assert_eq!(snapshot.providers[0].github_pat, sealed_once);
     }
 
     #[test]
     fn sealed_credentials_fail_on_wrong_device() {
-        let owner = DeviceIdentity::generate().unwrap();
-        let other = DeviceIdentity::generate().unwrap();
+        let owner = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
+        let other = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let mut snapshot = github_snapshot("github_pat_11SECRET");
-        seal_provider_credentials(&owner, &mut snapshot).unwrap();
+        seal_provider_credentials(&owner, &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
         assert!(open_provider_credentials(&other, &mut snapshot).is_err());
     }
 
     #[test]
     fn seal_for_public_key_opens_on_recipient_device() {
-        let extension = DeviceIdentity::generate().unwrap();
+        let extension = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let pat = "github_pat_11EXTENSIONgrant";
         let mut snapshot = github_snapshot(pat);
-        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot).unwrap();
-        let stored = snapshot.providers[0].github_pat.as_ref().unwrap();
+        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
+        let stored = snapshot.providers[0]
+            .github_pat
+            .as_ref()
+            .expect("sync provider credentials test setup should succeed");
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        assert!(!open_provider_credentials(&extension, &mut opened).unwrap());
+        assert!(
+            !open_provider_credentials(&extension, &mut opened)
+                .expect("sync provider credentials test setup should succeed")
+        );
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
     }
 
     #[test]
     fn presealed_check_accepts_sealed_or_empty_credentials() {
-        let identity = DeviceIdentity::generate().unwrap();
+        let identity = DeviceIdentity::generate()
+            .expect("sync provider credentials test setup should succeed");
         let mut snapshot = github_snapshot("github_pat_11PRESEAL");
         assert!(!provider_credentials_are_presealed(&snapshot));
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)
+            .expect("sync provider credentials test setup should succeed");
         assert!(provider_credentials_are_presealed(&snapshot));
         assert!(provider_credentials_are_presealed(
             &AuthProvidersSnapshotData {

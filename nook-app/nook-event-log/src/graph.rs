@@ -297,9 +297,7 @@ impl EventGraph {
         if signing_public_key.is_empty() {
             return Ok(false);
         }
-        if let Some(body_public_key) = &event.body.actor_signing_public_key
-            && body_public_key != signing_public_key
-        {
+        if &event.body.actor_signing_public_key != signing_public_key {
             return Ok(false);
         }
         let request_actor =
@@ -422,7 +420,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(signing_key),
-            actor_signing_public_key: Some(public_key(signing_key)),
+            actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch(),
@@ -431,12 +429,16 @@ mod tests {
                     id: SecretId::from_vault_record(secret_id),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: crate::SecretFingerprint::from_trusted(format!(
+                        "test-identity:{secret_id}"
+                    )),
+                    fingerprint: crate::SecretFingerprint::from_trusted(format!(
+                        "test-version:{secret_id}"
+                    )),
                 },
             }],
         };
-        VaultEvent::sign(body, signing_key).unwrap()
+        VaultEvent::sign(body, signing_key).expect("graph test setup should succeed")
     }
 
     fn genesis_event(signing_key: &SigningKey) -> VaultEvent {
@@ -452,7 +454,7 @@ mod tests {
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )
-        .unwrap()
+        .expect("graph test setup should succeed")
     }
 
     fn signed_operation(
@@ -464,13 +466,13 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
             actor_id: actor(signing_key),
-            actor_signing_public_key: Some(public_key(signing_key)),
+            actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch(),
             operations: vec![operation],
         };
-        VaultEvent::sign(body, signing_key).unwrap()
+        VaultEvent::sign(body, signing_key).expect("graph test setup should succeed")
     }
 
     fn graph_with_genesis(signing_key: &SigningKey) -> EventResult<(EventGraph, EventId)> {
@@ -488,7 +490,7 @@ mod tests {
         label: &str,
     ) -> VaultOperation {
         VaultOperation::JoinApproved {
-            device_id: DeviceId::parse(device_id).unwrap(),
+            device_id: DeviceId::parse(device_id).expect("graph test setup should succeed"),
             encryption_public_key: DevicePublicKey::from_trusted(encryption_public_key.to_owned()),
             signing_public_key: public_key(signing_key),
             label: MemberLabel::from_trusted(label.to_owned()),
@@ -526,17 +528,30 @@ mod tests {
     fn union_is_commutative_on_ids() {
         let key = signing_key();
         let genesis = genesis_event(&key);
-        let child = signed_child(vec![genesis.id().unwrap()], "secret_child00001", &key);
+        let child = signed_child(
+            vec![genesis.id().expect("graph test setup should succeed")],
+            "secret_child00001",
+            &key,
+        );
 
         let mut left = EventGraph::new();
-        left.insert(genesis.clone(), STORE_STR).unwrap();
+        left.insert(genesis.clone(), STORE_STR)
+            .expect("graph test setup should succeed");
         let mut right = EventGraph::new();
-        right.insert(child.clone(), STORE_STR).unwrap();
-        right.insert(genesis.clone(), STORE_STR).unwrap();
+        right
+            .insert(child.clone(), STORE_STR)
+            .expect("graph test setup should succeed");
+        right
+            .insert(genesis.clone(), STORE_STR)
+            .expect("graph test setup should succeed");
 
         let mut only_left = EventGraph::new();
-        only_left.insert(genesis, STORE_STR).unwrap();
-        only_left.insert(child, STORE_STR).unwrap();
+        only_left
+            .insert(genesis, STORE_STR)
+            .expect("graph test setup should succeed");
+        only_left
+            .insert(child, STORE_STR)
+            .expect("graph test setup should succeed");
 
         assert_eq!(left.union(&right).len(), only_left.len());
         assert_eq!(right.union(&only_left).len(), only_left.len());
@@ -548,14 +563,20 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key), store_str).unwrap();
+        graph
+            .insert(genesis_event(&key), store_str)
+            .expect("graph test setup should succeed");
         let head = graph.heads()[0].clone();
         let a = signed_child(vec![head.clone()], "secret_concurrenta", &key);
         let b = signed_child(vec![head], "secret_concurrentb", &key);
-        let a_id = a.id().unwrap();
-        let b_id = b.id().unwrap();
-        graph.insert(a, store_str).unwrap();
-        graph.insert(b, store_str).unwrap();
+        let a_id = a.id().expect("graph test setup should succeed");
+        let b_id = b.id().expect("graph test setup should succeed");
+        graph
+            .insert(a, store_str)
+            .expect("graph test setup should succeed");
+        graph
+            .insert(b, store_str)
+            .expect("graph test setup should succeed");
         assert!(graph.are_concurrent(&a_id, &b_id));
         assert_eq!(graph.heads().len(), 2);
     }
@@ -728,7 +749,8 @@ mod tests {
         let join = signed_operation(
             vec![genesis_id],
             VaultOperation::JoinRequested {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: DeviceId::parse("0123456789abcdef")
+                    .expect("graph test setup should succeed"),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
@@ -781,7 +803,8 @@ mod tests {
     fn revoked_actor_cannot_append_after_observing_revocation() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
-        let device_id = DeviceId::parse("0123456789abcdef").unwrap();
+        let device_id =
+            DeviceId::parse("0123456789abcdef").expect("graph test setup should succeed");
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key);
         let genesis_id = genesis.id()?;
@@ -847,7 +870,8 @@ mod tests {
         let enrol = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: DeviceId::parse("0123456789abcdef")
+                    .expect("graph test setup should succeed"),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&stranger_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
@@ -875,7 +899,8 @@ mod tests {
         let enrol = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: DeviceId::parse("0123456789abcdef")
+                    .expect("graph test setup should succeed"),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
@@ -903,7 +928,8 @@ mod tests {
         let sentinel_enrol = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: DeviceId::parse("0123456789abcdef")
+                    .expect("graph test setup should succeed"),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
@@ -935,7 +961,8 @@ mod tests {
             vec![genesis_id],
             VaultOperation::SentinelSharesIssued {
                 shares: vec![crate::event::SentinelShareIssuedPayload {
-                    device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                    device_id: DeviceId::parse("0123456789abcdef")
+                        .expect("graph test setup should succeed"),
                     version: 1,
                     threshold: 2,
                     required_participants: 2,
@@ -966,12 +993,14 @@ mod tests {
             .body
             .operations
             .push(VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: DeviceId::parse("0123456789abcdef")
+                    .expect("graph test setup should succeed"),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&root_key),
                 label: MemberLabel::from_trusted("owner".to_owned()),
             });
-        sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key).unwrap();
+        sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key)
+            .expect("graph test setup should succeed");
         let sentinel_genesis_id = sentinel_genesis.id()?;
         assert_eq!(
             graph.insert(sentinel_genesis, STORE_STR)?,

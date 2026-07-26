@@ -41,7 +41,7 @@ fn validates_commit_keyed_coverage_artifacts() {
         root.join("manifest.json"),
         r#"{"schema_version":1,"commit_sha":"abc123"}"#,
     )
-    .unwrap();
+    .expect("coverage reporting test setup should succeed");
 
     assert_eq!(
         validate_coverage_artifact(&root, "abc123"),
@@ -59,7 +59,7 @@ fn validates_commit_keyed_coverage_artifacts() {
             .as_deref()
             .is_some_and(|reason| reason.contains("does not match def456"))
     );
-    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(root).expect("coverage reporting test setup should succeed");
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn reports_coverage_from_structured_json() {
     write_coverage_directory(&current, 92.625, 90.0);
     write_coverage_directory(&base, 91.125, 90.0);
 
-    let report = coverage_report(&current, &base).unwrap();
+    let report = coverage_report(&current, &base).expect("coverage reporting test setup should succeed");
 
     assert_close(report.current, 92.625);
     assert_close(report.base, 91.125);
@@ -90,7 +90,7 @@ fn reports_coverage_from_structured_json() {
 \n\
 Artifact: `nook-core-coverage`\n"
     );
-    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(root).expect("coverage reporting test setup should succeed");
 }
 
 #[test]
@@ -100,13 +100,13 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() {
     let base = root.join("base");
     write_coverage_directory(&current, 92.0, 90.0);
     write_coverage_directory(&base, 91.0, 90.0);
-    fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n").unwrap();
+    fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n").expect("coverage reporting test setup should succeed");
 
-    let error = coverage_report(&current, &base).unwrap_err();
+    let error = coverage_report(&current, &base).expect_err("coverage reporting test should reject invalid input");
 
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("summary.json"));
-    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(root).expect("coverage reporting test setup should succeed");
 }
 
 #[test]
@@ -132,22 +132,22 @@ fn coverage_report_command_writes_github_outputs_and_markdown() {
         .arg("--markdown")
         .arg(&markdown)
         .status()
-        .unwrap();
+        .expect("coverage reporting test setup should succeed");
 
     assert!(status.success());
     assert_eq!(
-        fs::read_to_string(&github_output).unwrap(),
+        fs::read_to_string(&github_output).expect("coverage reporting test setup should succeed"),
         "current=93.25\nbase=92.00\ndelta=+1.25\nfloor=90.00\nstatus=passed\n"
     );
     assert_eq!(
-        fs::read_to_string(&markdown).unwrap(),
-        fs::read_to_string(&github_summary).unwrap()
+        fs::read_to_string(&markdown).expect("coverage reporting test setup should succeed"),
+        fs::read_to_string(&github_summary).expect("coverage reporting test setup should succeed")
     );
-    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(root).expect("coverage reporting test setup should succeed");
 }
 
 fn write_coverage_directory(directory: &Path, percent: f64, floor: f64) {
-    fs::create_dir_all(directory).unwrap();
+    fs::create_dir_all(directory).expect("coverage reporting test setup should succeed");
     fs::write(
         directory.join("summary.json"),
         serde_json::json!({
@@ -165,27 +165,27 @@ fn write_coverage_directory(directory: &Path, percent: f64, floor: f64) {
         })
         .to_string(),
     )
-    .unwrap();
-    fs::write(directory.join("summary.txt"), "summary").unwrap();
-    fs::write(directory.join("lcov.info"), "lcov").unwrap();
+    .expect("coverage reporting test setup should succeed");
+    fs::write(directory.join("summary.txt"), "summary").expect("coverage reporting test setup should succeed");
+    fs::write(directory.join("lcov.info"), "lcov").expect("coverage reporting test setup should succeed");
     fs::write(
         directory.join("coverage-floor.json"),
         format!(r#"{{"lines_percent":{floor}}}"#),
     )
-    .unwrap();
+    .expect("coverage reporting test setup should succeed");
 }
 
 fn temporary_directory() -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("coverage reporting test setup should succeed")
         .as_nanos();
     let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let process_id = std::process::id();
     let path = std::env::temp_dir().join(format!(
         "nook-preflight-coverage-{process_id}-{unique}-{sequence}"
     ));
-    fs::create_dir(&path).unwrap();
+    fs::create_dir(&path).expect("coverage reporting test setup should succeed");
     path
 }
 

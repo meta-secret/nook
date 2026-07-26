@@ -17,7 +17,7 @@ use sim::{JoinApproval, SimWorld, Timeline};
 /// pushed to the shared bucket and pulled by the peer.
 #[test]
 fn join_approval_converges_across_all_delivery_orders() {
-    let joiner = DeviceIdentity::generate().unwrap();
+    let joiner = DeviceIdentity::generate().expect("sim join approve test setup should succeed");
     let joiner_id = joiner.device_id().as_str().to_owned();
 
     // Two order-independent transport steps: genesis pushes its outbox, and the
@@ -51,7 +51,7 @@ fn join_approval_converges_across_all_delivery_orders() {
                 Ok(())
             },
         )
-        .unwrap();
+        .expect("sim join approve test setup should succeed");
 }
 
 /// The canonical race: peer pulls before the approval is pushed, then pulls again
@@ -59,29 +59,42 @@ fn join_approval_converges_across_all_delivery_orders() {
 /// never a dangling duplicate — once it has pulled after the push.
 #[test]
 fn peer_converges_after_pull_push_pull() {
-    let joiner = DeviceIdentity::generate().unwrap();
+    let joiner = DeviceIdentity::generate().expect("sim join approve test setup should succeed");
     let joiner_id = joiner.device_id().as_str().to_owned();
 
-    let mut world = SimWorld::new(1).unwrap();
+    let mut world = SimWorld::new(1).expect("sim join approve test setup should succeed");
 
     // Genesis records and approves the join.
-    let pending = JoinApproval::request(&mut world, 0, &joiner).unwrap();
-    let approved = pending.approve(&mut world, 0).unwrap();
+    let pending = JoinApproval::request(&mut world, 0, &joiner)
+        .expect("sim join approve test setup should succeed");
+    let approved = pending
+        .approve(&mut world, 0)
+        .expect("sim join approve test setup should succeed");
     assert_eq!(approved.device_id(), joiner_id);
 
     // Peer pulls first — nothing has been pushed yet, so it must see no join at all
     // (the request event lives only in genesis' local log).
-    world.pull(1).unwrap();
-    let before = world.roster_view(1).unwrap();
+    world
+        .pull(1)
+        .expect("sim join approve test setup should succeed");
+    let before = world
+        .roster_view(1)
+        .expect("sim join approve test setup should succeed");
     assert!(
         !before.has_pending_join(&joiner_id),
         "peer saw a join before genesis pushed anything"
     );
 
     // Genesis pushes, peer pulls again, and now converges to resolved.
-    world.push(0).unwrap();
-    world.pull(1).unwrap();
-    let after = world.roster_view(1).unwrap();
+    world
+        .push(0)
+        .expect("sim join approve test setup should succeed");
+    world
+        .pull(1)
+        .expect("sim join approve test setup should succeed");
+    let after = world
+        .roster_view(1)
+        .expect("sim join approve test setup should succeed");
     assert!(
         !after.has_pending_join(&joiner_id),
         "peer still shows the join pending after pulling the approval"
@@ -92,7 +105,7 @@ fn peer_converges_after_pull_push_pull() {
 /// regardless of delivery order.
 #[test]
 fn join_denial_converges_across_all_delivery_orders() {
-    let joiner = DeviceIdentity::generate().unwrap();
+    let joiner = DeviceIdentity::generate().expect("sim join approve test setup should succeed");
     let joiner_id = joiner.device_id().as_str().to_owned();
 
     let joiner_for_step = joiner.clone();
@@ -119,5 +132,5 @@ fn join_denial_converges_across_all_delivery_orders() {
                 Ok(())
             },
         )
-        .unwrap();
+        .expect("sim join approve test setup should succeed");
 }

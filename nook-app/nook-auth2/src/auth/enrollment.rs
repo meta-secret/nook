@@ -712,8 +712,10 @@ mod tests {
             Some("2026-06-23T12:00:00Z")
         );
 
-        let envelope = parse_enrollment_envelope(&code).unwrap();
-        let serialized = serde_json::to_string(&envelope).unwrap();
+        let envelope =
+            parse_enrollment_envelope(&code).expect("enrollment test setup should succeed");
+        let serialized =
+            serde_json::to_string(&envelope).expect("enrollment test setup should succeed");
         assert!(!serialized.contains("vault-pass-99"));
         assert!(!serialized.contains("github_pat_11AAAAbbbbCCCC"));
         assert!(!serialized.contains("Team vault"));
@@ -737,8 +739,10 @@ mod tests {
     #[test]
     fn decrypts_roundtrip_payload() {
         let input = github_payload();
-        let code = encrypt_enrollment_payload(&input, "vault-pass-99", "").unwrap();
-        let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99").unwrap();
+        let code = encrypt_enrollment_payload(&input, "vault-pass-99", "")
+            .expect("enrollment test setup should succeed");
+        let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99")
+            .expect("enrollment test setup should succeed");
         assert_eq!(decrypted.provider, input.provider);
         assert_eq!(decrypted.vault_name.as_deref(), Some("Team vault"));
         assert_eq!(decrypted.entry_id, input.entry_id);
@@ -747,8 +751,10 @@ mod tests {
 
     #[test]
     fn rejects_wrong_password() {
-        let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "").unwrap();
-        let err = decrypt_enrollment_payload(&code, "wrong-pass").unwrap_err();
+        let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")
+            .expect("enrollment test setup should succeed");
+        let err = decrypt_enrollment_payload(&code, "wrong-pass")
+            .expect_err("enrollment test should reject invalid input");
         assert_eq!(
             err.to_string(),
             "Vault password does not decrypt this enrollment code."
@@ -759,10 +765,11 @@ mod tests {
     fn rejects_malformed_codes() {
         let malformed = base64_url_encode(
             serde_json::to_vec(&json!({"provider": {"type": "local"}}))
-                .unwrap()
+                .expect("enrollment test setup should succeed")
                 .as_slice(),
         );
-        let err = decrypt_enrollment_payload(&malformed, "pw").unwrap_err();
+        let err = decrypt_enrollment_payload(&malformed, "pw")
+            .expect_err("enrollment test should reject invalid input");
         assert_eq!(err.to_string(), "Invalid enrollment code.");
         assert_eq!(peek_enrollment_entry_id(&malformed), None);
     }
@@ -775,8 +782,10 @@ mod tests {
             entry_id: "entry-local".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "").unwrap();
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
+        let code = encrypt_enrollment_payload(&input, "hunter2", "")
+            .expect("enrollment test setup should succeed");
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2")
+            .expect("enrollment test setup should succeed");
         assert_eq!(
             decrypted.provider,
             EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
@@ -794,8 +803,10 @@ mod tests {
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant").unwrap();
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant")
+            .expect("enrollment test setup should succeed");
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2")
+            .expect("enrollment test setup should succeed");
         assert_eq!(decrypted.provider, input.provider);
         match decrypted.provider.shared_data() {
             Some(SharedEnrollmentProviderData::GoogleDrive {
@@ -806,8 +817,10 @@ mod tests {
             other => panic!("expected shared grant, got {other:?}"),
         }
 
-        let envelope = parse_enrollment_envelope(&code).unwrap();
-        let serialized = serde_json::to_string(&envelope).unwrap();
+        let envelope =
+            parse_enrollment_envelope(&code).expect("enrollment test setup should succeed");
+        let serialized =
+            serde_json::to_string(&envelope).expect("enrollment test setup should succeed");
         assert!(!serialized.contains("ya29."));
         assert!(!serialized.contains("github_pat_"));
         assert!(!serialized.contains("hunter2"));
@@ -823,7 +836,7 @@ mod tests {
             provider,
             vault_name: Some("Shared vault".to_owned()),
         })
-        .unwrap();
+        .expect("enrollment test setup should succeed");
         assert_eq!(value["provider"]["onboardingType"], "shared-provider-grant");
         assert_eq!(
             value["provider"]["provider"]["type"],
@@ -855,7 +868,8 @@ mod tests {
                 "access_token": "legacy-owner-token"
             }
         });
-        let decoded: DecodableEnrollmentProviderPayload = serde_json::from_value(legacy).unwrap();
+        let decoded: DecodableEnrollmentProviderPayload =
+            serde_json::from_value(legacy).expect("enrollment test setup should succeed");
         let provider = decoded.into_provider();
         assert!(provider.shared_data().is_none());
         assert!(matches!(
@@ -880,8 +894,10 @@ mod tests {
             entry_id: "entry-icloud-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared iCloud").unwrap();
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared iCloud")
+            .expect("enrollment test setup should succeed");
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2")
+            .expect("enrollment test setup should succeed");
         assert_eq!(decrypted.provider, input.provider);
         assert!(!code.contains("web-auth-token"));
         assert!(storage_target_id.contains("shortGuid"));
@@ -923,11 +939,13 @@ mod tests {
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "correct horse", "OAuth entry").unwrap();
+        let code = encrypt_enrollment_payload(&input, "correct horse", "OAuth entry")
+            .expect("enrollment test setup should succeed");
         assert!(!code.contains("ya29.secret"));
         assert!(!code.contains("refresh.secret"));
 
-        let decrypted = decrypt_enrollment_payload(&code, "correct horse").unwrap();
+        let decrypted = decrypt_enrollment_payload(&code, "correct horse")
+            .expect("enrollment test setup should succeed");
         assert_eq!(decrypted.provider, input.provider);
     }
 

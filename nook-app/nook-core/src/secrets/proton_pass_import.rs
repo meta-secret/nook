@@ -381,9 +381,16 @@ mod tests {
     fn build_zip(name: &str, data: &[u8]) -> Vec<u8> {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        writer.start_file(name, options).unwrap();
-        writer.write_all(data).unwrap();
-        writer.finish().unwrap().into_inner()
+        writer
+            .start_file(name, options)
+            .expect("proton pass import test setup should succeed");
+        writer
+            .write_all(data)
+            .expect("proton pass import test setup should succeed");
+        writer
+            .finish()
+            .expect("proton pass import test setup should succeed")
+            .into_inner()
     }
 
     fn export_json() -> &'static str {
@@ -446,8 +453,8 @@ mod tests {
 
     #[test]
     fn converts_zip_logins_and_notes_and_counts_unsupported_items() {
-        let plan =
-            plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes())).unwrap();
+        let plan = plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes()))
+            .expect("proton pass import test setup should succeed");
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(plan.items.len(), 3);
@@ -485,7 +492,8 @@ mod tests {
     #[test]
     fn accepts_decrypted_json_and_uses_email_as_username_fallback() {
         let json = export_json().replace(r#""itemUsername":"alice""#, r#""itemUsername":"""#);
-        let plan = plan_proton_pass_import(json.as_bytes()).unwrap();
+        let plan = plan_proton_pass_import(json.as_bytes())
+            .expect("proton pass import test setup should succeed");
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
@@ -499,7 +507,8 @@ mod tests {
             r#""itemUsername":"alice""#,
             r#""itemUsername":"","username":"legacy-alice""#,
         );
-        let plan = plan_proton_pass_import(json.as_bytes()).unwrap();
+        let plan = plan_proton_pass_import(json.as_bytes())
+            .expect("proton pass import test setup should succeed");
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };

@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
 
@@ -7,11 +7,18 @@ const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
 /// The HMAC computation remains in `nook-core`, where plaintext secret domain
 /// values live. The event log owns the serialized opaque value because it is
 /// part of the immutable event schema.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct SecretFingerprint(String);
 
 impl SecretFingerprint {
+    pub fn parse(value: &str) -> Result<Self, &'static str> {
+        if value.trim().is_empty() {
+            return Err("secret fingerprint must not be empty");
+        }
+        Ok(Self(value.to_owned()))
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -19,6 +26,10 @@ impl SecretFingerprint {
 
     #[must_use]
     pub fn from_trusted(value: String) -> Self {
+        assert!(
+            !value.trim().is_empty(),
+            "trusted secret fingerprint must not be empty"
+        );
         Self(value)
     }
 
@@ -26,5 +37,24 @@ impl SecretFingerprint {
     #[must_use]
     pub fn is_current_secret_version(&self) -> bool {
         self.0.starts_with(SECRET_VERSION_FINGERPRINT_SCHEME)
+    }
+}
+
+impl<'de> Deserialize<'de> for SecretFingerprint {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SecretFingerprint;
+
+    #[test]
+    fn empty_fingerprints_are_rejected_at_the_wire_boundary() {
+        assert!(SecretFingerprint::parse("").is_err());
+        assert!(SecretFingerprint::parse("  ").is_err());
+        assert!(serde_json::from_str::<SecretFingerprint>("\"\"").is_err());
     }
 }

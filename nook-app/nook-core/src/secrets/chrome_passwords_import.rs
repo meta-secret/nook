@@ -147,7 +147,8 @@ mod tests {
             "\"Recovery, information\"\n"
         );
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)
+            .expect("chrome passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 0);
@@ -168,7 +169,8 @@ mod tests {
         let csv =
             "\u{feff}Password,User_Name,Website URL,Title,Notes\nsecret,alice,,Example,Personal\n";
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)
+            .expect("chrome passwords import test setup should succeed");
 
         assert_eq!(
             plan.items,
@@ -189,7 +191,8 @@ mod tests {
             ",,\n"
         );
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)
+            .expect("chrome passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.items.len(), 1);
@@ -200,7 +203,8 @@ mod tests {
     fn preserves_leading_and_trailing_password_whitespace() {
         let csv = "url,username,password\nhttps://example.com,alice,\" secret \"\n";
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)
+            .expect("chrome passwords import test setup should succeed");
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login");
         };
@@ -216,7 +220,8 @@ mod tests {
             "https://spaces.example,alice,\"   \"\n"
         );
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)
+            .expect("chrome passwords import test setup should succeed");
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 1);
@@ -229,7 +234,7 @@ mod tests {
     #[test]
     fn rejects_unrelated_csv_headers() {
         let error = plan_chrome_passwords_import("service,login,secret\nExample,alice,password\n")
-            .unwrap_err();
+            .expect_err("chrome passwords import test should reject invalid input");
 
         assert!(matches!(
             error,
