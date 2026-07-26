@@ -166,7 +166,7 @@ impl<S: TaskStore> Worker<S> {
                     &self.config.workspace,
                     &self.config.repository_url,
                     &task.source_commit,
-                    resume_branch.as_deref(),
+                    resume_branch,
                     &task.dependency_artifacts,
                 )
                 .await?;
