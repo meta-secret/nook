@@ -4,7 +4,7 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_core::{
-    AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EventError, EventId, JoinRequest,
+    AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EventId, JoinRequest,
     LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue, SigningIdentity,
     VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
     VaultUnlock, encrypted_secret_from_armored, generate_store_id, generate_vault_keys,
@@ -246,6 +246,12 @@ fn genesis_yaml(
 /// Remote provider bucket keyed by provider id.
 pub type ProviderBuckets = HashMap<String, LocalEventStore>;
 
+pub fn missing_provider_bucket(provider_id: &str) -> nook_core::VaultSyncError {
+    nook_core::VaultSyncError::ProviderDisappeared {
+        provider_id: provider_id.to_owned(),
+    }
+}
+
 pub fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>> {
     let graph = device.session.store.load_graph(device.store_id())?;
     Ok(device
@@ -263,7 +269,7 @@ pub fn write_all_device_events_to_provider(
 ) -> VaultResult<()> {
     let bucket = providers
         .get_mut(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
+        .ok_or_else(|| missing_provider_bucket(provider))?;
     for (id, bytes) in device.remote_events() {
         if bucket.get_bytes(&id).is_none() {
             bucket.put_event(id, bytes);
@@ -279,7 +285,7 @@ pub fn pull_provider_into_device(
 ) -> VaultResult<()> {
     let bucket = providers
         .get(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
+        .ok_or_else(|| missing_provider_bucket(provider))?;
     let events = bucket
         .event_ids()
         .into_iter()

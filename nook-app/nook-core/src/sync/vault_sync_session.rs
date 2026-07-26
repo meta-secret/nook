@@ -201,7 +201,7 @@ mod tests {
                 assert_eq!(reloaded.version, 42);
             }
             other => {
-                return Err(crate::errors::EventError::UnexpectedYamlSyncOutcome {
+                return Err(crate::errors::VaultSyncError::UnexpectedYamlSyncOutcome {
                     outcome: format!("{other:?}"),
                 }
                 .into());

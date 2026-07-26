@@ -2,6 +2,7 @@
 members = [
     "nook-auth2",
     "nook-replication",
+    "nook-event-log",
     "nook-core",
     "nook-wasm",
 ]

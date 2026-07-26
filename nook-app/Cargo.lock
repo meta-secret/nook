@@ -1520,7 +1520,7 @@ dependencies = [
  "hkdf",
  "hmac 0.12.1",
  "nook-auth2",
- "nook-replication",
+ "nook-event-log",
  "p256",
  "pbkdf2 0.13.0",
  "percent-encoding",
@@ -1539,6 +1539,24 @@ dependencies = [
  "wasm-bindgen",
  "zeroize",
  "zip",
+]
+
+[[package]]
+name = "nook-event-log"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "getrandom",
+ "hex",
+ "nook-auth2",
+ "nook-replication",
+ "rand_core",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

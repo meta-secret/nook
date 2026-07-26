@@ -1,11 +1,10 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
-use crate::errors::{EventError, VaultError, VaultResult};
-use crate::event_canonical::EventId;
-use crate::vault_event::{VaultEvent, VaultOperation};
-use crate::vault_ids::AuthKeyId;
-use crate::vault_signing::SigningIdentity;
-use crate::vault_wire::DeviceSigningPublicKey;
+use crate::canonical::EventId;
+use crate::event::{VaultEvent, VaultOperation};
+use crate::signing::SigningIdentity;
+use crate::{EventError, EventResult};
+use nook_auth2::{AuthKeyId, DeviceSigningPublicKey};
 use nook_replication::{CausalGraph, CausalGraphError, CausalInsertStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -71,7 +70,7 @@ impl EventGraph {
         &mut self,
         event: VaultEvent,
         expected_store_id: &str,
-    ) -> VaultResult<EventInsertStatus> {
+    ) -> EventResult<EventInsertStatus> {
         let event_id = event.validate_envelope(&crate::StoreId::parse(expected_store_id)?)?;
         if self.events.contains_key(&event_id) {
             let existing = self.events.get(&event_id).expect("present");
@@ -145,20 +144,19 @@ impl EventGraph {
     }
 
     /// Deterministic topological order — ties broken by event id lexicographic order.
-    pub fn topological_order(&self) -> VaultResult<Vec<EventId>> {
+    pub fn topological_order(&self) -> EventResult<Vec<EventId>> {
         self.validate_authorizations()?;
-        self.causal.topological_order().map_err(|error| {
-            match error {
+        self.causal
+            .topological_order()
+            .map_err(|error| match error {
                 CausalGraphError::Cycle => EventError::GraphCycle,
                 CausalGraphError::TopologicalSortStalled => EventError::TopologicalSortStalled,
-            }
-            .into()
-        })
+            })
     }
 
     /// Validate all applicable events against actors authorized in their causal
     /// past. Pending events wait until all parents are present.
-    pub fn validate_authorizations(&self) -> VaultResult<()> {
+    pub fn validate_authorizations(&self) -> EventResult<()> {
         let applicable = self.applicable_events();
         if applicable
             .iter()
@@ -166,7 +164,7 @@ impl EventGraph {
             .count()
             > 1
         {
-            return Err(EventError::MultipleGenesisRoots.into());
+            return Err(EventError::MultipleGenesisRoots);
         }
         for event in applicable {
             self.validate_event_actor_authorized(event)?;
@@ -188,7 +186,7 @@ impl EventGraph {
         merged
     }
 
-    fn validate_event_actor_authorized(&self, event: &VaultEvent) -> VaultResult<()> {
+    fn validate_event_actor_authorized(&self, event: &VaultEvent) -> EventResult<()> {
         if event.body.parents.is_empty() {
             return Ok(());
         }
@@ -201,11 +199,10 @@ impl EventGraph {
         }
         Err(EventError::UnauthorizedActor {
             actor_id: event.body.actor_id.as_str().to_owned(),
-        }
-        .into())
+        })
     }
 
-    fn quarantine_rejected_applicable_events(&mut self) -> VaultResult<()> {
+    fn quarantine_rejected_applicable_events(&mut self) -> EventResult<()> {
         loop {
             let mut changed = false;
             let ids = self.events.keys().cloned().collect::<Vec<_>>();
@@ -227,9 +224,9 @@ impl EventGraph {
                 } else {
                     match self.validate_event_actor_authorized(event) {
                         Ok(()) => None,
-                        Err(VaultError::Event(EventError::UnauthorizedActor { actor_id })) => Some(
-                            format!("Event actor {actor_id} was not authorized in causal history"),
-                        ),
+                        Err(EventError::UnauthorizedActor { actor_id }) => Some(format!(
+                            "Event actor {actor_id} was not authorized in causal history"
+                        )),
                         Err(err) => return Err(err),
                     }
                 };
@@ -256,7 +253,7 @@ impl EventGraph {
     /// - `JoinApproved` — allowed only for simple password self-enrol, i.e. when
     ///   causal ancestry has no sentinel membership/share ops.
     /// - `SentinelParticipantEnrolled` — never self-signed; must be authorized.
-    fn is_self_signed_membership_event(&self, event: &VaultEvent) -> VaultResult<bool> {
+    fn is_self_signed_membership_event(&self, event: &VaultEvent) -> EventResult<bool> {
         if event.body.operations.is_empty() {
             return Ok(false);
         }
@@ -296,7 +293,7 @@ impl EventGraph {
     fn operation_is_self_signed(
         event: &VaultEvent,
         signing_public_key: &DeviceSigningPublicKey,
-    ) -> VaultResult<bool> {
+    ) -> EventResult<bool> {
         if signing_public_key.is_empty() {
             return Ok(false);
         }
@@ -336,7 +333,7 @@ impl EventGraph {
         false
     }
 
-    fn authorized_actors_before(&self, event: &VaultEvent) -> VaultResult<BTreeSet<AuthKeyId>> {
+    fn authorized_actors_before(&self, event: &VaultEvent) -> EventResult<BTreeSet<AuthKeyId>> {
         let mut authorized = BTreeSet::new();
         let mut actor_by_device = BTreeMap::new();
         let mut revoked_devices = BTreeSet::new();
@@ -398,18 +395,17 @@ impl EventGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::VaultResult;
-    use crate::test_support::{actor, epoch, public_key, signing_key, store};
-    use crate::vault_event::{
+    use crate::EventResult;
+    use crate::event::{
         GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
-    use crate::vault_ids::{DeviceId, SecretId};
-    use crate::vault_wire::{
-        AgeArmoredCiphertext, DevicePublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext,
-        Sha256Hex,
-    };
+    use crate::test_support::{actor, epoch, public_key, signing_key, store};
     use ed25519_dalek::SigningKey;
+    use nook_auth2::{
+        AgeArmoredCiphertext, DeviceId, DevicePublicKey, IsoTimestamp, MemberLabel,
+        OpaqueCiphertext, SecretId, Sha256Hex,
+    };
 
     const STORE_STR: &str = "store_testtoken11";
 
@@ -431,7 +427,7 @@ mod tests {
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch(),
             operations: vec![VaultOperation::SecretCreated {
-                secret: crate::vault_event::EncryptedSecretPayload {
+                secret: crate::event::EncryptedSecretPayload {
                     id: SecretId::from_vault_record(secret_id),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
@@ -477,7 +473,7 @@ mod tests {
         VaultEvent::sign(body, signing_key).unwrap()
     }
 
-    fn graph_with_genesis(signing_key: &SigningKey) -> VaultResult<(EventGraph, EventId)> {
+    fn graph_with_genesis(signing_key: &SigningKey) -> EventResult<(EventGraph, EventId)> {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(signing_key);
         let genesis_id = genesis.id()?;
@@ -506,7 +502,7 @@ mod tests {
         parent: EventId,
         stranger_key: &SigningKey,
         encryption_public_key: &str,
-    ) -> VaultResult<()> {
+    ) -> EventResult<()> {
         let event = signed_operation(
             vec![parent],
             join_approval(
@@ -565,7 +561,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_events_until_parent_arrives() -> VaultResult<()> {
+    fn pending_events_until_parent_arrives() -> EventResult<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -585,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn unauthorized_pending_event_is_quarantined_when_parent_arrives() -> VaultResult<()> {
+    fn unauthorized_pending_event_is_quarantined_when_parent_arrives() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let genesis = genesis_event(&root_key);
@@ -616,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_insert_returns_duplicate_status() -> VaultResult<()> {
+    fn duplicate_insert_returns_duplicate_status() -> EventResult<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -636,7 +632,7 @@ mod tests {
     }
 
     #[test]
-    fn is_ancestor_is_transitive() -> VaultResult<()> {
+    fn is_ancestor_is_transitive() -> EventResult<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -657,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn join_event_collapses_multiple_heads() -> VaultResult<()> {
+    fn join_event_collapses_multiple_heads() -> EventResult<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -679,7 +675,7 @@ mod tests {
     }
 
     #[test]
-    fn topological_order_is_deterministic_under_concurrency() -> VaultResult<()> {
+    fn topological_order_is_deterministic_under_concurrency() -> EventResult<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -702,7 +698,7 @@ mod tests {
     }
 
     #[test]
-    fn unapproved_actor_child_is_rejected() -> VaultResult<()> {
+    fn unapproved_actor_child_is_rejected() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
@@ -721,7 +717,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_request_is_allowed_before_approval() -> VaultResult<()> {
+    fn self_signed_join_request_is_allowed_before_approval() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
@@ -744,7 +740,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_password_join_approval_is_allowed() -> VaultResult<()> {
+    fn self_signed_password_join_approval_is_allowed() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let (mut graph, genesis_id) = graph_with_genesis(&root_key)?;
@@ -763,7 +759,7 @@ mod tests {
     }
 
     #[test]
-    fn join_approval_authorizes_future_joiner_events() -> VaultResult<()> {
+    fn join_approval_authorizes_future_joiner_events() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let (mut graph, genesis_id) = graph_with_genesis(&root_key)?;
@@ -782,7 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn revoked_actor_cannot_append_after_observing_revocation() -> VaultResult<()> {
+    fn revoked_actor_cannot_append_after_observing_revocation() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let device_id = DeviceId::parse("0123456789abcdef").unwrap();
@@ -825,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn multiple_independent_genesis_roots_fail_closed() -> VaultResult<()> {
+    fn multiple_independent_genesis_roots_fail_closed() -> EventResult<()> {
         let first_key = signing_key();
         let second_key = signing_key();
         let mut graph = EventGraph::new();
@@ -834,13 +830,13 @@ mod tests {
 
         assert!(matches!(
             graph.topological_order(),
-            Err(VaultError::Event(EventError::MultipleGenesisRoots))
+            Err(EventError::MultipleGenesisRoots)
         ));
         Ok(())
     }
 
     #[test]
-    fn self_signed_sentinel_participant_enrolled_is_quarantined() -> VaultResult<()> {
+    fn self_signed_sentinel_participant_enrolled_is_quarantined() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
@@ -868,7 +864,7 @@ mod tests {
     }
 
     #[test]
-    fn owner_signed_sentinel_participant_enrolled_is_allowed() -> VaultResult<()> {
+    fn owner_signed_sentinel_participant_enrolled_is_allowed() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
@@ -895,7 +891,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_approved_after_sentinel_enrol_is_quarantined() -> VaultResult<()> {
+    fn self_signed_join_approved_after_sentinel_enrol_is_quarantined() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let stranger_key = signing_key();
@@ -927,7 +923,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_approved_after_sentinel_shares_is_quarantined() -> VaultResult<()> {
+    fn self_signed_join_approved_after_sentinel_shares_is_quarantined() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
@@ -938,7 +934,7 @@ mod tests {
         let shares = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelSharesIssued {
-                shares: vec![crate::vault_event::SentinelShareIssuedPayload {
+                shares: vec![crate::event::SentinelShareIssuedPayload {
                     device_id: DeviceId::parse("0123456789abcdef").unwrap(),
                     version: 1,
                     threshold: 2,
@@ -957,7 +953,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_approved_after_sentinel_genesis_root_is_quarantined() -> VaultResult<()> {
+    fn self_signed_join_approved_after_sentinel_genesis_root_is_quarantined() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();

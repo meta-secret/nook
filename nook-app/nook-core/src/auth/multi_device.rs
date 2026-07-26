@@ -6,7 +6,7 @@
 
 pub use nook_auth2::multi_device_api::*;
 
-use crate::vault_event::VaultOperation;
+use crate::VaultOperation;
 
 /// Apply a single core event-log meta operation to the typed auth metadata cache.
 ///
@@ -112,7 +112,7 @@ pub fn apply_vault_meta_operation(
 
 /// Replay core event-log meta operations from the event graph in topological order.
 pub fn materialize_vault_meta_from_graph(
-    graph: &crate::vault_event_graph::EventGraph,
+    graph: &crate::EventGraph,
     state: &mut VaultMetaState,
 ) -> nook_auth2::MultiDeviceResult<()> {
     let order = graph
@@ -135,7 +135,7 @@ pub fn materialize_vault_meta_from_graph(
 /// vault. The event log is the authorization source of truth: an old encrypted
 /// auth envelope must not keep an extension active after `DeviceRevoked`.
 pub fn event_graph_has_active_device_access(
-    graph: &crate::vault_event_graph::EventGraph,
+    graph: &crate::EventGraph,
     expected_device_id: &crate::DeviceId,
     expected_public_key: &crate::DevicePublicKey,
     expected_signing_public_key: &crate::DeviceSigningPublicKey,

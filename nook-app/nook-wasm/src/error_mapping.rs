@@ -12,6 +12,9 @@ impl From<nook_core::VaultError> for NookError {
             VaultError::Password(e) => NookError::Encryption(e.to_string()),
             VaultError::Age(e) => NookError::Encryption(e.to_string()),
             VaultError::Database(e) => NookError::Database(e.to_string()),
+            VaultError::Session(nook_core::SessionError::EmptyProjectionCache) => {
+                NookError::Decryption(nook_core::SessionError::EmptyProjectionCache.to_string())
+            }
             VaultError::Session(e) => NookError::Database(e.to_string()),
             VaultError::VaultSync(e) => NookError::Database(e.to_string()),
             VaultError::VaultEpoch(e) => NookError::Database(e.to_string()),
@@ -33,7 +36,6 @@ impl From<nook_core::EventError> for NookError {
             | EventError::SignatureMissingPrefix { .. }
             | EventError::SignatureWrongLength
             | EventError::AuthKeyId(_) => NookError::Encryption(event.to_string()),
-            EventError::EmptyProjectionCache => NookError::Decryption(event.to_string()),
             _ => NookError::Database(event.to_string()),
         }
     }

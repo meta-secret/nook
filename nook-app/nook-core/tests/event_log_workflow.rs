@@ -4,8 +4,8 @@
 mod harness;
 
 use harness::{
-    EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, pull_provider_into_device,
-    push_device_outbox, request_join, union_device_from_providers,
+    EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, missing_provider_bucket,
+    pull_provider_into_device, push_device_outbox, request_join, union_device_from_providers,
     write_all_device_events_to_provider,
 };
 use nook_core::{
@@ -40,17 +40,19 @@ fn expect_provider_event_sets_equal(
     names: &[&str],
 ) -> VaultResult<()> {
     let mut iter = names.iter();
-    let first_name = iter.next().ok_or(EventError::MissingProviderBucket)?;
+    let first_name = iter
+        .next()
+        .ok_or_else(|| missing_provider_bucket("provider-set"))?;
     let first = provider_event_id_set(
         providers
             .get(*first_name)
-            .ok_or(EventError::MissingProviderBucket)?,
+            .ok_or_else(|| missing_provider_bucket(first_name))?,
     );
     for name in iter {
         let current = provider_event_id_set(
             providers
                 .get(*name)
-                .ok_or(EventError::MissingProviderBucket)?,
+                .ok_or_else(|| missing_provider_bucket(name))?,
         );
         assert_eq!(current, first, "{name} did not contain the same event set");
     }
@@ -183,7 +185,7 @@ fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()>
     )?;
     let common_vault_events = providers
         .get("common-vault")
-        .ok_or(EventError::MissingProviderBucket)?
+        .ok_or_else(|| missing_provider_bucket("common-vault"))?
         .event_ids();
     assert_eq!(
         common_vault_events.len(),
@@ -503,7 +505,7 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     for (id, bytes) in a.remote_events() {
         providers
             .get_mut("github")
-            .ok_or(EventError::MissingProviderBucket)?
+            .ok_or_else(|| missing_provider_bucket("github"))?
             .put_event(id, bytes);
     }
 
@@ -530,7 +532,7 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
     for (id, bytes) in root.remote_events() {
         providers
             .get_mut("github")
-            .ok_or(EventError::MissingProviderBucket)?
+            .ok_or_else(|| missing_provider_bucket("github"))?
             .put_event(id, bytes);
     }
     union_device_from_providers(&mut local, &providers)?;

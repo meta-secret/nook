@@ -15,6 +15,7 @@ fn classifies_source_and_build_only_coverage_inputs() {
         "README.md",
         "nook-app/nook-core/src/lib.rs",
         "nook-app/nook-replication/src/lib.rs",
+        "nook-app/nook-event-log/src/lib.rs",
         "nook-app/nook-core/Dockerfile",
     ]);
     assert!(source.coverage_inputs_changed);

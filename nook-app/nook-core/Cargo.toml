@@ -11,7 +11,7 @@ mock-passkey = ["nook-auth2/mock-passkey"]
 
 [dependencies]
 nook-auth2 = { path = "../nook-auth2" }
-nook-replication = { path = "../nook-replication" }
+nook-event-log = { path = "../nook-event-log" }
 serde = { version = "1.0.228", features = ["derive"] }
 age = { version = "0.11.3", features = ["armor"] }
 serde_json = "1.0.150"
@@ -24,7 +24,6 @@ bip39 = "2.2.2"
 getrandom = "0.2.17"
 base64 = "0.22"
 prost = "0.14.4"
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 thiserror = "2.0.18"
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
 aes = "0.9.1"
@@ -46,6 +45,7 @@ url = "2.5.8"
 psl = "2.1.189"
 
 [dev-dependencies]
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 rand_core = "0.6"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

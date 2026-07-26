@@ -1,6 +1,6 @@
 //! Restore vault encryption keys from the projection-cache YAML.
 
-use crate::errors::{EventError, MultiDeviceError, VaultResult};
+use crate::errors::{MultiDeviceError, VaultResult};
 use crate::{
     DeviceIdentity, VaultType, deserialize_stored, detect_stored_format, resolve_members_key,
     resolve_secrets_key,
@@ -15,7 +15,7 @@ pub fn hydrate_keys_from_projection_yaml(
     identity: &DeviceIdentity,
 ) -> VaultResult<(String, String)> {
     if yaml.trim().is_empty() {
-        return Err(EventError::EmptyProjectionCache.into());
+        return Err(crate::SessionError::EmptyProjectionCache.into());
     }
     let architecture = crate::read_vault_architecture(yaml)?;
     if architecture.vault_type == VaultType::Sentinel {

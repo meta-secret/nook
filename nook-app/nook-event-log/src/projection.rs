@@ -1,17 +1,16 @@
 //! Deterministic encrypted vault projection from the causal event log.
 
-use crate::PasswordUnlockEntry;
-use crate::SecretFingerprint;
-use crate::errors::{EventError, VaultResult};
-use crate::event_canonical::EventId;
-use crate::secret_types::StoredSecretRecord;
-use crate::vault_epoch::{
+use crate::canonical::EventId;
+use crate::epoch::{
     EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
     operation_starts_epoch,
 };
-use crate::vault_event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
-use crate::vault_event_graph::EventGraph;
-use crate::vault_ids::{SecretId, StoreId};
+use crate::event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
+use crate::graph::EventGraph;
+use crate::{EventError, EventResult};
+use crate::{PasswordUnlockEntry, SecretFingerprint};
+use nook_auth2::StoredSecretRecord;
+use nook_auth2::{SecretId, StoreId};
 use std::collections::BTreeMap;
 
 /// One live or tombstoned secret in the encrypted projection.
@@ -98,7 +97,7 @@ impl VaultProjection {
 
 /// Rebuild projection from the event graph. Result is independent of provider order
 /// and of the topological tie-break used internally.
-pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultProjection> {
+pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultProjection> {
     let expected_store = StoreId::parse(store_id)?;
     let order = graph.topological_order()?;
     let mut projection = VaultProjection {
@@ -114,7 +113,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultPro
             event_id: event_id.as_str().to_owned(),
         })?;
         if event.body.store_id != expected_store {
-            return Err(EventError::ProjectionStoreMismatch.into());
+            return Err(EventError::ProjectionStoreMismatch);
         }
         if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
             projection.unresolved_schema = true;
@@ -356,12 +355,12 @@ fn detect_security_conflicts(
 pub fn assert_projection_permutation_invariant(
     graph: &EventGraph,
     store_id: &str,
-) -> VaultResult<()> {
+) -> EventResult<()> {
     let baseline = project_vault(graph, store_id)?;
     for _ in 0..3 {
         let again = project_vault(graph, store_id)?;
         if again != baseline {
-            return Err(EventError::ProjectionReplayMismatch.into());
+            return Err(EventError::ProjectionReplayMismatch);
         }
     }
     Ok(())
@@ -370,18 +369,18 @@ pub fn assert_projection_permutation_invariant(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PasswordEnvelope;
-    use crate::PasswordUnlockEntry;
-    use crate::secret_types::SecretType;
-    use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::vault_event::{
+    use crate::event::{
         GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
-    use crate::vault_ids::{DeviceId, SecretId};
-    use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex};
-    use crate::{SecretFingerprint, SecretFingerprintAssignment, VaultResult};
+    use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
+    use crate::{EventResult, SecretFingerprint, SecretFingerprintAssignment};
+    use crate::{PasswordEnvelope, PasswordUnlockEntry};
     use ed25519_dalek::SigningKey;
+    use nook_auth2::SecretType;
+    use nook_auth2::{
+        DeviceId, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex,
+    };
 
     fn ts(value: &str) -> IsoTimestamp {
         IsoTimestamp::from_trusted(value.to_owned())
@@ -412,7 +411,7 @@ mod tests {
         signing_key: &SigningKey,
         parents: Vec<EventId>,
         operation: VaultOperation,
-    ) -> VaultResult<VaultEvent> {
+    ) -> EventResult<VaultEvent> {
         VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
@@ -432,7 +431,7 @@ mod tests {
         signing_key: &SigningKey,
         parent: &EventId,
         new_id: &str,
-    ) -> VaultResult<VaultEvent> {
+    ) -> EventResult<VaultEvent> {
         signed_operation(
             signing_key,
             vec![parent.clone()],
@@ -513,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn fingerprint_backfill_updates_projection_without_changing_ciphertext() -> VaultResult<()> {
+    fn fingerprint_backfill_updates_projection_without_changing_ciphertext() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -623,7 +622,7 @@ mod tests {
     }
 
     #[test]
-    fn genesis_import_materializes_password_entries() -> VaultResult<()> {
+    fn genesis_import_materializes_password_entries() -> EventResult<()> {
         let signing_key = key();
         let imported_entry = PasswordUnlockEntry {
             id: "pwdentry001".to_owned(),
@@ -652,7 +651,7 @@ mod tests {
     }
 
     #[test]
-    fn password_entry_events_add_rotate_and_remove() -> VaultResult<()> {
+    fn password_entry_events_add_rotate_and_remove() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -709,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn secret_conflict_resolved_picks_winner() -> VaultResult<()> {
+    fn secret_conflict_resolved_picks_winner() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -748,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn vault_cleared_empties_projection() -> VaultResult<()> {
+    fn vault_cleared_empties_projection() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -780,7 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_deletes_tombstone_secret() -> VaultResult<()> {
+    fn concurrent_deletes_tombstone_secret() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -812,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_security_rotations_surface_conflict() -> VaultResult<()> {
+    fn concurrent_security_rotations_surface_conflict() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -842,7 +841,7 @@ mod tests {
     }
 
     #[test]
-    fn three_way_fork_projection_is_replay_invariant() -> VaultResult<()> {
+    fn three_way_fork_projection_is_replay_invariant() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);

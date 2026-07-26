@@ -1,19 +1,18 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
-use crate::errors::{EventError, VaultResult};
-use crate::event_canonical::{
+use crate::canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
     sign_body, verify_body_signature,
 };
-use crate::secret_types::{SecretType, StoredRecordPayload, StoredSecretRecord};
-use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
-use crate::vault_signing::SigningIdentity;
-use crate::vault_wire::{
-    AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
-    OpaqueCiphertext, PasswordEntryId, Sha256Hex,
-};
+use crate::signing::SigningIdentity;
+use crate::{EventError, EventResult};
 use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint};
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use nook_auth2::{
+    AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretId, SecretType, Sha256Hex,
+    StoreId, StoredRecordPayload, StoredSecretRecord,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -189,7 +188,7 @@ pub struct VaultEventBody {
 }
 
 impl VaultEventBody {
-    pub fn to_canonical_value(&self) -> VaultResult<Value> {
+    pub fn to_canonical_value(&self) -> EventResult<Value> {
         let mut value = serde_json::to_value(self).map_err(EventError::EventBodySerialize)?;
         if let Value::Object(ref mut map) = value {
             let mut sorted_parents: Vec<String> = self
@@ -203,11 +202,11 @@ impl VaultEventBody {
         Ok(canonicalize_json(&value))
     }
 
-    pub fn to_canonical_bytes(&self) -> VaultResult<Vec<u8>> {
+    pub fn to_canonical_bytes(&self) -> EventResult<Vec<u8>> {
         canonical_json_bytes(&self.to_canonical_value()?)
     }
 
-    pub fn event_id(&self) -> VaultResult<EventId> {
+    pub fn event_id(&self) -> EventResult<EventId> {
         Ok(event_id_from_body_bytes(&self.to_canonical_bytes()?))
     }
 }
@@ -222,22 +221,22 @@ pub struct VaultEvent {
 }
 
 impl VaultEvent {
-    pub fn id(&self) -> VaultResult<EventId> {
+    pub fn id(&self) -> EventResult<EventId> {
         self.body.event_id()
     }
 
-    pub fn sign(body: VaultEventBody, signing_key: &SigningKey) -> VaultResult<Self> {
+    pub fn sign(body: VaultEventBody, signing_key: &SigningKey) -> EventResult<Self> {
         let body_bytes = body.to_canonical_bytes()?;
         let signature = sign_body(&body_bytes, signing_key);
         Ok(Self { body, signature })
     }
 
-    pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> VaultResult<()> {
+    pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> EventResult<()> {
         let body_bytes = self.body.to_canonical_bytes()?;
         verify_body_signature(&body_bytes, self.signature.as_str(), verifying_key)
     }
 
-    pub fn validate_actor_signature(&self) -> VaultResult<()> {
+    pub fn validate_actor_signature(&self) -> EventResult<()> {
         let public_key = self
             .body
             .actor_signing_public_key
@@ -251,25 +250,22 @@ impl VaultEvent {
             return Err(EventError::ActorSigningKeyMismatch {
                 actor_id: self.body.actor_id.as_str().to_owned(),
                 signing_key_actor_id: signing_key_actor_id.as_str().to_owned(),
-            }
-            .into());
+            });
         }
         self.verify_signature(&verifying_key)
     }
 
-    pub fn validate_envelope(&self, expected_store_id: &StoreId) -> VaultResult<EventId> {
+    pub fn validate_envelope(&self, expected_store_id: &StoreId) -> EventResult<EventId> {
         if self.body.schema_version != VaultEventSchemaVersion::CURRENT {
             return Err(EventError::UnsupportedSchemaVersion {
                 version: self.body.schema_version.get(),
-            }
-            .into());
+            });
         }
         if &self.body.store_id != expected_store_id {
             return Err(EventError::EventStoreIdMismatch {
                 expected: expected_store_id.as_str().to_owned(),
                 actual: self.body.store_id.as_str().to_owned(),
-            }
-            .into());
+            });
         }
         if self.body.parents.is_empty()
             && !self
@@ -278,7 +274,7 @@ impl VaultEvent {
                 .iter()
                 .any(|operation| matches!(operation, VaultOperation::VaultImported { .. }))
         {
-            return Err(EventError::MissingEventParents.into());
+            return Err(EventError::MissingEventParents);
         }
         for parent in &self.body.parents {
             EventId::parse(parent.as_str())?;
@@ -293,7 +289,7 @@ impl VaultEvent {
 ///
 /// Event ids and signatures still use canonical compact JSON body bytes. The
 /// persisted event envelope is pretty YAML so humans can inspect provider files.
-pub fn serialize_event_storage_yaml(event: &VaultEvent) -> VaultResult<Vec<u8>> {
+pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<Vec<u8>> {
     let mut yaml =
         serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
     if !yaml.ends_with('\n') {
@@ -303,20 +299,18 @@ pub fn serialize_event_storage_yaml(event: &VaultEvent) -> VaultResult<Vec<u8>> 
 }
 
 /// Parse a stored event from YAML bytes.
-pub fn parse_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
+pub fn parse_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
     let text = std::str::from_utf8(bytes).map_err(|e| {
         EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
     })?;
     serde_yaml::from_str(text)
-        .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")).into())
+        .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")))
 }
 
 /// Parse a remote event and classify errors for provider sync.
-pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
+pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
     parse_event_storage_bytes(bytes).map_err(|error| match error {
-        crate::errors::VaultError::Event(EventError::ParseStoredEvent(message)) => {
-            EventError::ParseRemoteEvent(message).into()
-        }
+        EventError::ParseStoredEvent(message) => EventError::ParseRemoteEvent(message),
         other => other,
     })
 }
@@ -335,15 +329,14 @@ pub fn build_genesis_import_event(
     payload: GenesisImportPayload,
     created_at: &IsoTimestamp,
     signing_key: &SigningKey,
-) -> VaultResult<VaultEvent> {
+) -> EventResult<VaultEvent> {
     let signing_actor_id =
         SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
     if signing_actor_id != *actor_id {
         return Err(EventError::ActorSigningKeyMismatch {
             actor_id: actor_id.as_str().to_owned(),
             signing_key_actor_id: signing_actor_id.as_str().to_owned(),
-        }
-        .into());
+        });
     }
     let body = VaultEventBody {
         schema_version: VaultEventSchemaVersion::CURRENT,
@@ -407,7 +400,7 @@ mod tests {
             .unwrap_err();
         assert!(matches!(
             err,
-            crate::VaultError::Event(EventError::UnsupportedSchemaVersion { version: 1 })
+            EventError::UnsupportedSchemaVersion { version: 1 }
         ));
     }
 

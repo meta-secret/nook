@@ -7,6 +7,9 @@ pub type SessionResult<T> = Result<T, SessionError>;
 
 #[derive(Debug, Error)]
 pub enum SessionError {
+    #[error("projection cache is empty")]
+    EmptyProjectionCache,
+
     #[error("Replacement id must differ from the item being replaced.")]
     ReplacementIdUnchanged,
 

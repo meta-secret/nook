@@ -62,12 +62,11 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
     "icloud_shared_storage_target",
 ];
 
-/// Finds browser-only Rust dependencies used by portable domain and
-/// replication crates.
+/// Finds browser-only Rust dependencies used by portable Rust crates.
 ///
 /// # Errors
 ///
-/// Returns an error when the core source tree cannot be read.
+/// Returns an error when a portable Rust source tree cannot be read.
 pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = violations_in_tree(
         root,
@@ -78,6 +77,12 @@ pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violati
     violations.extend(violations_in_tree(
         root,
         Path::new("nook-app/nook-replication/src"),
+        "rs",
+        BROWSER_RUST_MARKERS,
+    )?);
+    violations.extend(violations_in_tree(
+        root,
+        Path::new("nook-app/nook-event-log/src"),
         "rs",
         BROWSER_RUST_MARKERS,
     )?);

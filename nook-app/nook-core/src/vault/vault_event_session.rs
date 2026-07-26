@@ -1,6 +1,6 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
-use crate::errors::{EventError, VaultResult};
+use crate::errors::VaultResult;
 use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
@@ -38,7 +38,7 @@ impl VaultEventSession {
     }
 
     pub fn actor_id(&self) -> VaultResult<AuthKeyId> {
-        self.signing.actor_id()
+        Ok(self.signing.actor_id()?)
     }
 
     pub fn set_heads_from_graph(&mut self) -> VaultResult<()> {
@@ -87,7 +87,7 @@ impl VaultEventSession {
 
     pub fn project(&self) -> VaultResult<VaultProjection> {
         let graph = self.store.load_graph(&self.store_id)?;
-        project_vault(&graph, &self.store_id)
+        Ok(project_vault(&graph, &self.store_id)?)
     }
 
     pub fn apply_projection_to_armored(
@@ -108,8 +108,8 @@ impl VaultEventSession {
     ) -> VaultResult<Sha256Hex> {
         let roster = resolve_member_roster(records, members_key)?;
         let member_records = build_members_records(&roster, members_key)?;
-        let json =
-            serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
+        let json = serde_json::to_string(&member_records)
+            .map_err(crate::VaultEpochError::MemberRecordsSerialize)?;
         Ok(sha256_hex(json.as_bytes()))
     }
 

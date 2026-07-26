@@ -205,7 +205,9 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
         ↓
    nook-wasm          browser I/O + session bridge
         ↓
-   nook-core          vault events, sync, secrets, projection
+   nook-core          vault application services, secrets, sync policy
+      ↘          ↙
+   nook-event-log     signed operations, authorization, projection
       ↙       ↘
 nook-auth2   nook-replication
 key access   causal DAG, replica/outbox mechanics
@@ -215,7 +217,8 @@ key access   causal DAG, replica/outbox mechanics
 | ------- | ---- |
 | `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
 | `nook-replication` | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning |
-| `nook-core` | Vault domain: signed operations, authorization, projection, typed secrets, sync policy |
+| `nook-event-log` | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs |
+| `nook-core` | Vault application domain: typed plaintext secrets, encryption workflows, provider-neutral sync and session policy |
 | `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
 | `nook-vault-simple` | Independent Svelte 5 Simple Vault application |
 | `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application |
@@ -390,9 +393,10 @@ Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 
 Architecture changes belong in the lowest appropriate layer: key access in
 `nook-auth2`, provider-neutral causal replication mechanics in
-`nook-replication`, vault domain logic in `nook-core`, browser I/O in
-`nook-wasm`, and UI in `nook-web-*`. When package boundaries, sync model, or
-public Task commands change, update this README in the same change (see
+`nook-replication`, signed vault history and projection in `nook-event-log`,
+vault application services in `nook-core`, browser I/O in `nook-wasm`, and UI
+in `nook-web-*`. When package boundaries, sync model, or public Task commands
+change, update this README in the same change (see
 [`.cortex/AGENTS.md`](.cortex/AGENTS.md)).
 
 ### Docker dependency caches

@@ -823,18 +823,21 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     assert_eq!(
         warmup
             .matches(
-                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-core --no-tests=pass",
+                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass",
             )
             .count(),
         1,
         "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
-        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-core --no-tests=pass"
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass"
     ));
     assert!(dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2"));
     assert!(
         dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-replication")
+    );
+    assert!(
+        dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log")
     );
     assert!(
         dockerfile
@@ -842,12 +845,19 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     );
 
     let wasm_task = read(&root, "nook-app/nook-web/.task/wasm.yml");
-    assert!(
-        wasm_task.contains(
-            "find \"nook-wasm/src\" \"nook-core/src\" \"nook-core/locales\" \"nook-auth2/src\" \"nook-replication/src\"",
-        ),
-        "mounted WASM builds must invalidate when portable replication source changes"
-    );
+    for required in [
+        "\"Cargo.toml\" \"Cargo.lock\"",
+        "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",
+        "\"nook-core/Cargo.toml\" \"nook-core/src\" \"nook-core/locales\"",
+        "\"nook-auth2/Cargo.toml\" \"nook-auth2/src\"",
+        "\"nook-replication/Cargo.toml\" \"nook-replication/src\"",
+        "\"nook-event-log/Cargo.toml\" \"nook-event-log/src\"",
+    ] {
+        assert!(
+            wasm_task.contains(required),
+            "mounted WASM builds must hash portable source and manifests: {required}"
+        );
+    }
 }
 
 #[test]
@@ -1306,6 +1316,8 @@ fn assert_pr_workflow_contract(root: &Path) {
         "coverage/current/tools/nook-preflight coverage-report",
         "if [ ! -f \"../nook-base-coverage/nook-app/nook-replication/Cargo.toml\" ]; then",
         "cp -R nook-app/nook-replication",
+        "if [ ! -f \"../nook-base-coverage/nook-app/nook-event-log/Cargo.toml\" ]; then",
+        "cp -R nook-app/nook-event-log",
     ] {
         assert!(
             pr.contains(required),

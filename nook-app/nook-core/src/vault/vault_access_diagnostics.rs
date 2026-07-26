@@ -5,17 +5,17 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
+use crate::EventId;
+use crate::VaultProjection;
 use crate::errors::VaultResult;
-use crate::event_canonical::EventId;
 use crate::secret_types::{SecretType, StoredSecretRecord};
-use crate::vault_event::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
 use crate::vault_ids::{AuthKeyId, DeviceId, SecretId};
-use crate::vault_projection::VaultProjection;
 use crate::vault_wire::AgeArmoredCiphertext;
 use crate::{
     DeviceIdentity, VaultCrypto, VaultMetaRecord, is_auth_id, parse_auth_envelopes,
     pending_join_for_device, resolve_members_key, resolve_secrets_key,
 };
+use crate::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

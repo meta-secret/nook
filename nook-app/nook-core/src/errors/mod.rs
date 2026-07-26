@@ -1,19 +1,18 @@
 //! Typed errors for the vault stack.
 
 mod database;
-mod event;
 mod session;
 mod vault_epoch;
 mod vault_format;
 mod vault_sync;
 
 pub use database::{DatabaseError, DatabaseResult};
-pub use event::EventError;
 pub use nook_auth2::{
     AgeCryptoError, DeviceKeyProtectionError, EnrollmentError, MultiDeviceError, MultiDeviceResult,
     PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
     ValidationResult, VaultCryptoError,
 };
+pub use nook_event_log::{EventError, EventResult};
 pub use session::{SessionError, SessionResult};
 pub use vault_epoch::{VaultEpochError, VaultEpochResult};
 pub use vault_format::{VaultFormatError, VaultFormatResult};

@@ -10,7 +10,7 @@ Use this workflow for quality, CI, and deployment changes.
 6. Preserve these gates unless the task explicitly changes them:
    - `cd nook-app && cargo fmt --all -- --check`
    - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
-     manifest; `cd nook-app && cargo clippy -p nook-core -p nook-auth2 -p nook-replication --all-targets`,
+     manifest; `cd nook-app && cargo clippy -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets`,
      `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
      and the standalone `preflight` Clippy pass enforce them with `-D warnings`
    - `task rust:coverage:check` — combined `nook-core`, `nook-auth2`, and
@@ -62,7 +62,7 @@ Use this workflow for quality, CI, and deployment changes.
     Docker build remains the enforcement point for the 90% floor and the only
     place PR/base coverage tests run.
 20. **Coverage cache preservation:** Warm the `nook-auth2 +
-    nook-replication + nook-core` coverage dependency graph with one
+    nook-replication + nook-event-log + nook-core` coverage dependency graph with one
     `cargo llvm-cov nextest --no-report` Docker invocation. Subsequent
     source-level coverage commands must use `--no-clean` so they reuse and
     extend that instrumented target.

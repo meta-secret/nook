@@ -9,12 +9,11 @@
 mod harness;
 
 use harness::{
-    EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, pull_provider_into_device,
-    request_join, write_all_device_events_to_provider,
+    EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, missing_provider_bucket,
+    pull_provider_into_device, request_join, write_all_device_events_to_provider,
 };
 use nook_core::{
-    EncryptedSecretPayload, EventError, OpaqueCiphertext, SecretId, SecretType, VaultOperation,
-    VaultResult,
+    EncryptedSecretPayload, OpaqueCiphertext, SecretId, SecretType, VaultOperation, VaultResult,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -26,7 +25,7 @@ const LOGIN_USER: &str = "alice";
 fn clear_provider(providers: &mut ProviderBuckets, provider: &str) -> VaultResult<()> {
     let bucket = providers
         .get_mut(provider)
-        .ok_or(EventError::MissingProviderBucket)?;
+        .ok_or_else(|| missing_provider_bucket(provider))?;
     *bucket = nook_core::LocalEventStore::new();
     Ok(())
 }
@@ -34,7 +33,7 @@ fn clear_provider(providers: &mut ProviderBuckets, provider: &str) -> VaultResul
 fn provider_event_count(providers: &ProviderBuckets, provider: &str) -> VaultResult<usize> {
     Ok(providers
         .get(provider)
-        .ok_or(EventError::MissingProviderBucket)?
+        .ok_or_else(|| missing_provider_bucket(provider))?
         .event_ids()
         .len())
 }
