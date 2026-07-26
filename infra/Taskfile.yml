@@ -21,6 +21,7 @@ tasks:
     cmds:
       - ruby .github/scripts/hive-manifest-contract.rb
       - python3 .github/scripts/hive-reaper-controller-test.py
+      - python3 .github/scripts/k0s-firewall-rollback-test.py
 
   mesh:node:add:
     desc: Idempotently add a Linux server as a distinct Cloudflare Mesh node.

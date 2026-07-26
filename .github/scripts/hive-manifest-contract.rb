@@ -358,5 +358,8 @@ hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
 unless hive_workflow.scan(".github/scripts/hive-reaper-controller-test.py").length == 2
   raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end
+unless hive_workflow.scan(".github/scripts/k0s-firewall-rollback-test.py").length == 2
+  raise "k0s firewall rollback-test changes must trigger PR and Main verification"
+end
 
 puts "Hive Kubernetes manifest contract: ok"
