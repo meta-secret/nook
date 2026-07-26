@@ -1,7 +1,8 @@
 # Cursor SDK agent: claim an explicitly ready Markdown issue from
 # meta-secret/nook-workbench (or accept a manual prompt), implement it, and open
-# a Nook PR. The bounded worker records its worklog in the Workbench and exits;
-# a continuing task-owning agent owns validation and merge.
+# a Nook PR. The bounded worker publishes its interpreted task plan before
+# implementation, records its worklog afterward, and exits; a continuing
+# task-owning agent owns validation and merge.
 
 name: Agent implement
 
@@ -41,6 +42,7 @@ jobs:
       # a timed-out worker cannot strand an issue in progress.
       CI_AGENT_TIMEOUT_MS: "18000000"
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
+      WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
     steps:
       - name: Checkout
@@ -160,6 +162,11 @@ jobs:
             title="Implement ${ISSUE_TITLE}"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
           fi
+          feature="${ISSUE_PATH:-issues/unplanned/task.md}"
+          feature="$(printf '%s' "$feature" | cut -d/ -f2)"
+          plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
+          plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
           {
             echo "AGENT_BRANCH=$branch"
             echo "FIX_BRANCH=$branch"
@@ -172,6 +179,10 @@ jobs:
             echo "AGENT_COMMIT_MESSAGE<<${delim}"
             printf '%s\n' "$title"
             echo "${delim}"
+            echo "TASK_FEATURE=$feature"
+            echo "TASK_PLAN_PATH=$plan_path"
+            echo "TASK_PLAN_STARTED_AT=$plan_started_at"
+            echo "TASK_TITLE=$title"
             echo "AGENT_PR_BODY<<${delim}"
             printf '%s\n' "## Summary"
             if [ -n "$ISSUE_URL" ]; then
@@ -203,9 +214,82 @@ jobs:
           git -C "$GITHUB_WORKSPACE" rev-parse --git-dir
           git -C "$GITHUB_WORKSPACE" status -sb
 
+      - name: Run task-planning agent
+        id: planning
+        if: steps.task.outputs.ready == 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          REPO_ROOT: ${{ github.workspace }}
+          CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
+          CI_AGENT_TIMEOUT_MS: "600000"
+        run: |
+          set -euo pipefail
+          rm -f -- "$WORKBENCH_PLAN_FILE"
+          task ci-agent:run
+          test -s "$WORKBENCH_PLAN_FILE"
+          git diff --quiet
+          git diff --cached --quiet
+          untracked="$(git ls-files --others --exclude-standard)"
+          if [ -n "$untracked" ]; then
+            echo "::error::Planning agent created unexpected untracked files."
+            exit 1
+          fi
+
+      - name: Validate and publish Workbench task plan
+        id: plan
+        if: steps.planning.outcome == 'success'
+        uses: actions/github-script@v9
+        env:
+          ISSUE_PATH: ${{ steps.workbench.outputs.path }}
+          TASK_FEATURE: ${{ env.TASK_FEATURE }}
+          TASK_PLAN_PATH: ${{ env.TASK_PLAN_PATH }}
+          TASK_PLAN_STARTED_AT: ${{ env.TASK_PLAN_STARTED_AT }}
+          TASK_TITLE: ${{ env.TASK_TITLE }}
+          WORKBENCH_PLAN_FILE: ${{ env.WORKBENCH_PLAN_FILE }}
+          WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
+          CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const fs = require('node:fs')
+            const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
+            const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
+            const planPath = process.env.TASK_PLAN_PATH
+            const localPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_PLAN_FILE}`
+            const candidate = fs.readFileSync(localPath, 'utf8').trim()
+            const secrets = [process.env.CURSOR_SECRET]
+            const rejection = validateAgentRecord(candidate, 'plan', secrets)
+            if (rejection) {
+              core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
+              return
+            }
+            const plan = [
+              '---',
+              `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
+              `feature: ${process.env.TASK_FEATURE}`,
+              `issue: ${process.env.ISSUE_PATH || 'null'}`,
+              `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
+              'agent: cursor',
+              '---',
+              '',
+              candidate,
+              '',
+            ].join('\n')
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: planPath,
+              branch: 'main',
+              message: `plan: agent run ${context.runId}`,
+              content: Buffer.from(plan).toString('base64'),
+            })
+            core.setOutput('path', planPath)
+            core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${planPath}`)
+
       - name: Run ci-agent implement
         id: implement
-        if: steps.task.outputs.ready == 'true'
+        if: steps.plan.outcome == 'success'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
@@ -224,6 +308,7 @@ jobs:
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
           ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
+          PLAN_PATH: ${{ steps.plan.outputs.path }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
@@ -233,6 +318,7 @@ jobs:
           retries: 3
           script: |
             const fs = require('node:fs')
+            const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
             const issuePath = process.env.ISSUE_PATH.trim()
             const feature = issuePath ? issuePath.split('/')[1] : 'unplanned'
@@ -278,45 +364,11 @@ jobs:
                   '',
                   success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
-            const validateSummary = (candidate) => {
-              if (!candidate || Buffer.byteLength(candidate, 'utf8') > 12_000) {
-                return 'missing or larger than 12 KB'
-              }
-              const required = [
-                '## Outcome',
-                '## Progress',
-                '## Implementation problems',
-                '## Decisions',
-                '## Validation',
-                '## Remaining work',
-              ]
-              const headings = [...candidate.matchAll(/^## (.+)$/gm)].map((match) => `## ${match[1]}`)
-              if (JSON.stringify(headings) !== JSON.stringify(required)) {
-                return 'required sections are missing, duplicated, reordered, or extended'
-              }
-              const secrets = [process.env.CURSOR_SECRET, process.env.NOOK_SECRET]
-                .filter((secret) => secret && secret.length >= 8)
-              if (secrets.some((secret) => candidate.includes(secret))) {
-                return 'content contains a workflow credential'
-              }
-              const forbidden = [
-                /```/,
-                /^\s{4}\S/m,
-                /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,
-                /\b(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{12,}\b/,
-                /(?:^|\n)\s*[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|API_KEY)[A-Z0-9_]*\s*[:=]\s*\S+/m,
-                /\b(?:authorization|bearer|password|secret|token|api[_ -]?key|private[_ -]?key)\s*[:=]\s*\S+/i,
-                /\b(?:process\.env|environment dump|raw (?:stdout|stderr|log))\b/i,
-              ]
-              if (forbidden.some((pattern) => pattern.test(candidate))) {
-                return 'content resembles a credential, environment dump, or raw log'
-              }
-              return ''
-            }
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {
               const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
-              const rejection = validateSummary(candidate)
+              const secrets = [process.env.CURSOR_SECRET, process.env.NOOK_SECRET]
+              const rejection = validateAgentRecord(candidate, 'worklog', secrets)
               if (rejection) {
                 core.warning(`Rejected agent-authored Workbench summary: ${rejection}; publishing trusted fallback metadata.`)
               } else {
@@ -329,6 +381,7 @@ jobs:
               `title: ${JSON.stringify(process.env.ISSUE_TITLE || `Manual agent run ${context.runId}`)}`,
               `feature: ${feature}`,
               `issue: ${issuePath || 'null'}`,
+              `plan: ${process.env.PLAN_PATH || 'null'}`,
               `nook_pr: ${pull?.html_url || 'null'}`,
               `status: ${success ? 'in_progress' : 'blocked'}`,
               `started_at: ${workflowRun.created_at || now}`,

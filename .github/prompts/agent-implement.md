@@ -9,6 +9,8 @@ ${AGENT_TASK}
 - Repository: ${GITHUB_REPOSITORY}
 - Workflow run id: ${GITHUB_RUN_ID}
 - Implementation branch (harness commits here — do not git): `${AGENT_BRANCH}`
+- The planning phase has already published the task-start record and left its
+  validated body in `.nook-workbench-plan.md`.
 
 Read `.cortex/AGENTS.md` and `.cortex/workflows/coding-bro.md` before making changes.
 
@@ -27,8 +29,8 @@ with hand-written `docker run` commands.
 
 ## Steps
 
-1. Understand the task fully. Prefer the Workbench issue/prompt scope; do not
-   expand into unrelated refactors.
+1. Read `.nook-workbench-plan.md` first and implement that synthesized scope.
+   Prefer the Workbench issue scope; do not expand into unrelated refactors.
 2. Implement the change end-to-end in the working tree. Match existing conventions and package boundaries in `.cortex/ARCHITECTURE.md` / `.cortex/rules.md`.
 3. **Always run `task format`** (host-applied) before finishing so the harness
    commits a formatted tree. When UI-facing paths change, pass the UI demo
@@ -43,8 +45,9 @@ with hand-written `docker run` commands.
    `.nook-workbench-worklog.md`. Include `# Work summary` and the sections
    `## Outcome`, `## Progress`, `## Implementation problems`, `## Decisions`,
    `## Validation`, and `## Remaining work`. Do not add YAML frontmatter; the
-   workflow adds it when publishing. Never include prompts, chat transcripts,
-   secrets, credentials, vault data, private user information, or raw logs.
+   workflow adds it when publishing and links it to the task-start plan. Never
+   include prompts, chat transcripts, secrets, credentials, vault data, private
+   user information, or raw logs.
 
 ## Rules
 

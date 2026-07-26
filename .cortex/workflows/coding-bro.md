@@ -6,11 +6,11 @@ Use this pipeline for **every coding request** unless the user explicitly wants 
 
 ## PR-first mandate
 
-AI agents must treat every implementation task as PR-bound from the start. The
-first operational step is to establish the PR path: fetch `origin/main`, create
-a feature branch, and plan the PR title/body/scope before editing. Open or
-update the PR as soon as there is a coherent commit to show, then keep working
-on that same PR branch.
+AI agents must treat every implementation task as PR-bound from the start. Fetch
+`origin/main`, synthesize the important request into a public-safe Workbench
+task plan, and publish it before implementation edits. Then create a feature
+branch and plan the PR title/body/scope. Open or update the PR as soon as there
+is a coherent commit to show, then keep working on that same PR branch.
 
 Do not treat implementation as complete after local edits, a push, or a PR link.
 The agent owns the loop through Nook's applicable repository-owned PR test
@@ -20,26 +20,30 @@ PR must be merged without asking the user for separate authorization.
 
 Default PR-first loop:
 
-1. **Prepare the PR path** — fetch `origin/main`, create a feature branch, and
-   decide whether this will be a draft or normal PR.
-2. **Implement functionality** — make scoped changes on the feature branch.
-3. **Push and create/update the PR** — once the branch has a coherent formatted
+1. **Record the interpreted task** — fetch `origin/main`, write the important
+   requirements and initial plan in the agent's own words, and publish that
+   public-safe start snapshot to Nook Workbench. Never copy the raw prompt or
+   chat transcript.
+2. **Prepare the PR path** — create a feature branch and decide whether this
+   will be a draft or normal PR.
+3. **Implement functionality** — make scoped changes on the feature branch.
+4. **Push and create/update the PR** — once the branch has a coherent formatted
    commit, push it and open the PR; subsequent fixes update the same PR.
-4. **Preflight and validate on GitHub Actions** — run
+5. **Preflight and validate on GitHub Actions** — run
    `task pr:preflight PR=<number>`, then monitor the path-applicable
    `PR / Verify and preview` and `Web research / Build and deploy research
    catalog` workflows. PRs fixing a failure observed on `main` must have the
    `ci:full-e2e` label so the `PR` workflow also runs the Main-equivalent browser
    suite before merge. Do **not** run a required local `task check` / `task ci:pr`.
-5. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
+6. **Fix Nook's red PR test checks until green** — inspect failed logs, check app
    logs for web/e2e failures, fix, `task format`, and push the completed fix; the
    synchronize event re-evaluates the refreshed repository-owned check. This
    includes Knip unused findings, jscpd clone/duplicate findings, and every
    other mechanical gate — fix the code, do not silence the check.
-6. **Settle existing review feedback** — inspect the current comments and
+7. **Settle existing review feedback** — inspect the current comments and
    reviews, reply to every actionable human or automated finding, and resolve
    each thread. Do not request or wait for optional reviewers.
-7. **Merge automatically when ready** — require `task pr:ready PR=<number>`, then
+8. **Merge automatically when ready** — require `task pr:ready PR=<number>`, then
    squash-merge as soon as the branch is current, Nook's applicable
    repository-owned PR test checks are green and all actionable comments are
    resolved. Do not pause for a ready-PR handoff or separate merge
@@ -125,26 +129,30 @@ merge.
 
 Default agent flow:
 
-1. **Prepare the PR path first** — fetch `origin/main`, branch from it, and plan
-   the PR title/scope before editing.
-2. **Implement** — optional scoped debug commands only when useful.
-3. **Pre-push hygiene** — always `task format` (host-applied); when UI paths
+1. **Record the interpreted task first** — fetch `origin/main`, then publish
+   `plans/<feature>/<timestamp>-<task>.md` before implementation edits. Capture
+   synthesized requirements, constraints, initial steps, and completion
+   evidence; raw prompts and transcripts are forbidden.
+2. **Prepare the PR path** — branch from `origin/main` and plan the PR
+   title/scope.
+3. **Implement** — optional scoped debug commands only when useful.
+4. **Pre-push hygiene** — always `task format` (host-applied); when UI paths
    change, pass `.github/scripts/ui-demo-contract.sh` against `origin/main`.
-4. **Push and open/update the PR** — once the branch has a coherent formatted
+5. **Push and open/update the PR** — once the branch has a coherent formatted
    commit, commit, push, and create/update the PR.
-5. **Validate on GitHub Actions** — monitor `PR / Verify and preview`, plus
+6. **Validate on GitHub Actions** — monitor `PR / Verify and preview`, plus
    `Web research / Build and deploy research catalog` for web-research paths.
    Green status is necessary but the full readiness audit must also pass. See
    [code-review.md](code-review.md).
-6. **On any Nook PR-test failure** — read **app logs** (`nook-app-logs.json`
+7. **On any Nook PR-test failure** — read **app logs** (`nook-app-logs.json`
    attachment, `fetchAppLogs`, or `/app-logs`) → fix → `task format` → commit
    and push the completed fix → monitor the refreshed repository-owned PR test
    checks. Optional single-spec local repro is allowed; required local product
    gates are not.
-7. **Address actionable PR comments currently present** — reply with the fix,
+8. **Address actionable PR comments currently present** — reply with the fix,
    validation, or no-change rationale, and push any needed changes; GitHub
    events re-evaluate Nook's applicable PR test checks. Do not wait for another review cycle.
-8. **Resolve conflicts and merge** — before merging, verify the PR branch is not
+9. **Resolve conflicts and merge** — before merging, verify the PR branch is not
    stale against `origin/main`; update it and let the synchronize event
    re-evaluate Nook's applicable PR test checks if needed. After every push,
    re-run readiness, then squash-merge automatically when it passes.
@@ -173,8 +181,11 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 
 ## How it works
 
-0. **Prompt** — User gives a task description.
-1. **Fetch repository** — Sync with remote before branching.
+0. **Interpret the request** — Identify the important requirements without
+   copying the raw prompt or chat.
+1. **Fetch and publish the task plan** — Sync with remote, then publish the
+   public-safe structured interpretation and initial execution plan to
+   Workbench before implementation begins.
 2. **Branch from `origin/main` and prepare the PR** — Never commit on `main`.
    Create a feature branch for the work and keep the PR title/body/scope in
    mind from the first implementation step.
@@ -208,8 +219,9 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
     every actionable comment is resolved.
 10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
     readiness audit succeeds.
-11. **Publish Workbench context and statistics** — update the associated
-    Workbench issue, add the required worklog, write
+11. **Publish Workbench completion context and statistics** — update the
+    associated Workbench issue, add the required worklog linked to the task
+    plan, write
     `stats/ai-agent/<n>.yaml`, and compare it with one or two recent comparable
     records. Publish directly to Workbench `main`; do not create a Nook
     bookkeeping PR. Open a separate normal performance PR for actionable waste
@@ -220,7 +232,7 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 
 ```mermaid
 flowchart TD
-  P[0 Prompt] --> F[1 Fetch origin/main]
+  P[0 Interpret request] --> F[1 Fetch + publish Workbench task plan]
   F --> B[2 Branch + prepare PR]
   B --> I[3 Implement]
   I --> H[4 Always task format + demo contract]
@@ -232,7 +244,7 @@ flowchart TD
   G -->|no| FIX[7 Read app logs + fix + task format]
   FIX --> PUSH[Push completed fix]
   PUSH --> PR
-  M --> S[11 Publish Workbench issue + worklog + stats]
+  M --> S[11 Publish Workbench issue + linked worklog + stats]
   S --> W{Actionable regression or waste?}
   W -->|yes| BP[Open normal build-performance PR]
   W -->|no| D[12 Duration report]
@@ -370,9 +382,10 @@ a Main failure.
 ### 11 — Publish Workbench records
 
 After the implementation PR merges, follow [issues.md](issues.md) and
-[agent-statistics.md](agent-statistics.md). Update the associated issue and add
-a worklog summarizing progress, implementation problems, decisions, validation,
-and remaining work. Create the YAML from current Nook `main`, include the
+[agent-statistics.md](agent-statistics.md). The task-start plan must already be
+published. Update the associated issue and add a worklog linked to that plan,
+summarizing progress, implementation problems, decisions, validation, and
+remaining work. Create the YAML from current Nook `main`, include the
 repository test inventory for the merged head, compare it with comparable prior
 records, and publish it to `meta-secret/nook-workbench` as
 `stats/ai-agent/<pr>.yaml`. Do not wait for post-merge Main. Any performance fix
@@ -410,8 +423,9 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - **Never hide deferred scope** — if requested functionality is not fully
   implemented because it is large, risky, blocked, or out of scope, manage it in
   Workbench Markdown first. See [issues.md](issues.md).
-- **Workbench summary and per-PR statistics after merge** — publish the issue
-  update, agent worklog, and `stats/ai-agent/<pr-number>.yaml` directly to
+- **Workbench plan before implementation; summary and statistics after merge**
+  — publish the public-safe task plan before edits, then publish the issue
+  update, plan-linked worklog, and `stats/ai-agent/<pr-number>.yaml` directly to
   Workbench. See [issues.md](issues.md) and
   [agent-statistics.md](agent-statistics.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
@@ -421,7 +435,7 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
 - [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
-- [issues.md](issues.md) — Workbench feature and focused issue management, plus required worklogs
+- [issues.md](issues.md) — Workbench issues, required task-start plans, and completion worklogs
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
 - [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and Workbench publication
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)
