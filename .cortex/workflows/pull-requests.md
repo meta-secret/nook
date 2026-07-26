@@ -143,7 +143,7 @@ Optional scoped debug commands (never merge gates):
 
 ```bash
 task web:check && task web:test           # web-only debug
-task rust:test                            # nook-core + nook-auth2 nextest only
+task rust:test                            # portable Rust crate nextest only
 task rust:coverage:check                  # coverage floor (CI also enforces)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```

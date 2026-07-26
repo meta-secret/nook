@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "nook-auth2",
+    "nook-replication",
     "nook-core",
     "nook-wasm",
 ]

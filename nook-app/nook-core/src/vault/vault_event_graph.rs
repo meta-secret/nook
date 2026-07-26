@@ -6,6 +6,7 @@ use crate::vault_event::{VaultEvent, VaultOperation};
 use crate::vault_ids::AuthKeyId;
 use crate::vault_signing::SigningIdentity;
 use crate::vault_wire::DeviceSigningPublicKey;
+use nook_replication::{CausalGraph, CausalGraphError, CausalInsertStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Why an event is not yet applicable to projection.
@@ -27,7 +28,7 @@ pub enum EventInsertStatus {
 #[derive(Debug, Clone, Default)]
 pub struct EventGraph {
     events: BTreeMap<EventId, VaultEvent>,
-    quarantined: BTreeMap<EventId, String>,
+    causal: CausalGraph<EventId>,
 }
 
 impl EventGraph {
@@ -38,17 +39,17 @@ impl EventGraph {
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.events.len()
+        self.causal.len()
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
+        self.causal.is_empty()
     }
 
     #[must_use]
     pub fn contains(&self, id: &EventId) -> bool {
-        self.events.contains_key(id)
+        self.causal.contains(id)
     }
 
     #[must_use]
@@ -62,7 +63,7 @@ impl EventGraph {
 
     #[must_use]
     pub fn quarantined(&self) -> &BTreeMap<EventId, String> {
-        &self.quarantined
+        self.causal.quarantined()
     }
 
     /// Insert an event after envelope and current-schema signature validation.
@@ -77,7 +78,7 @@ impl EventGraph {
             if existing.body.to_canonical_bytes()? == event.body.to_canonical_bytes()? {
                 return Ok(EventInsertStatus::Duplicate);
             }
-            self.quarantined.insert(
+            self.causal.quarantine(
                 event_id.clone(),
                 "Same event id with different canonical bytes".to_owned(),
             );
@@ -86,136 +87,73 @@ impl EventGraph {
             ));
         }
 
-        let missing_parents = event
-            .body
-            .parents
-            .iter()
-            .filter(|parent| !self.events.contains_key(parent))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        if !missing_parents.is_empty() || !self.event_ancestors_present(&event) {
-            self.events.insert(event_id, event);
-            self.quarantine_rejected_applicable_events()?;
-            return Ok(EventInsertStatus::Pending(
-                EventPendingReason::MissingParents(missing_parents),
-            ));
-        }
-
+        let parents = event.body.parents.clone();
         self.events.insert(event_id.clone(), event);
+        let causal_status = self.causal.insert(event_id.clone(), parents);
         self.quarantine_rejected_applicable_events()?;
-        if let Some(reason) = self.quarantined.get(&event_id) {
+        if let Some(reason) = self.causal.quarantined().get(&event_id) {
             return Ok(EventInsertStatus::Quarantined(reason.clone()));
         }
-        Ok(EventInsertStatus::Applied)
+        match causal_status {
+            CausalInsertStatus::Applied => Ok(EventInsertStatus::Applied),
+            CausalInsertStatus::Pending { missing_parents } => Ok(EventInsertStatus::Pending(
+                EventPendingReason::MissingParents(missing_parents),
+            )),
+            CausalInsertStatus::Quarantined { reason } => {
+                Ok(EventInsertStatus::Quarantined(reason))
+            }
+            CausalInsertStatus::Duplicate => Ok(EventInsertStatus::Duplicate),
+            CausalInsertStatus::Conflict => Ok(EventInsertStatus::Quarantined(
+                "Conflicting causal parent sets for the same event id".to_owned(),
+            )),
+        }
     }
 
     /// Events whose parents are all present (ready for projection).
     #[must_use]
     pub fn applicable_events(&self) -> Vec<&VaultEvent> {
-        self.events
-            .iter()
-            .filter(|(id, event)| {
-                !self.quarantined.contains_key(*id) && self.event_ancestors_present(event)
-            })
-            .map(|(_, event)| event)
+        self.causal
+            .applicable_ids()
+            .into_iter()
+            .filter_map(|id| self.events.get(id))
             .collect()
     }
 
     #[must_use]
     pub fn pending_events(&self) -> Vec<(&EventId, &VaultEvent)> {
-        self.events
-            .iter()
-            .filter(|(id, event)| {
-                !event.body.parents.is_empty()
-                    && !self.event_ancestors_present(event)
-                    && !self.quarantined.contains_key(*id)
-            })
+        self.causal
+            .pending_ids()
+            .into_iter()
+            .filter_map(|id| self.events.get_key_value(id))
             .collect()
     }
 
     /// Maximal events — no other event lists them as a parent.
     #[must_use]
     pub fn heads(&self) -> Vec<EventId> {
-        let mut referenced = BTreeSet::new();
-        for (id, event) in &self.events {
-            if self.quarantined.contains_key(id) {
-                continue;
-            }
-            for parent in &event.body.parents {
-                referenced.insert(parent.clone());
-            }
-        }
-        self.events
-            .keys()
-            .filter(|id| !self.quarantined.contains_key(*id) && !referenced.contains(*id))
-            .cloned()
-            .collect()
+        self.causal.heads()
     }
 
     #[must_use]
     pub fn is_ancestor(&self, ancestor: &EventId, descendant: &EventId) -> bool {
-        if ancestor == descendant {
-            return true;
-        }
-        let Some(event) = self.events.get(descendant) else {
-            return false;
-        };
-        event
-            .body
-            .parents
-            .iter()
-            .any(|parent| self.is_ancestor(ancestor, parent))
+        self.causal.is_ancestor(ancestor, descendant)
     }
 
     #[must_use]
     pub fn are_concurrent(&self, left: &EventId, right: &EventId) -> bool {
-        left != right
-            && !self.is_ancestor(left, right)
-            && !self.is_ancestor(right, left)
-            && self.events.contains_key(left)
-            && self.events.contains_key(right)
+        self.causal.are_concurrent(left, right)
     }
 
     /// Deterministic topological order — ties broken by event id lexicographic order.
     pub fn topological_order(&self) -> VaultResult<Vec<EventId>> {
         self.validate_authorizations()?;
-        let applicable: Vec<EventId> = self
-            .applicable_events()
-            .into_iter()
-            .map(VaultEvent::id)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let mut ordered = Vec::with_capacity(applicable.len());
-        let mut remaining: BTreeSet<EventId> = applicable.into_iter().collect();
-
-        while !remaining.is_empty() {
-            let mut progress = false;
-            let ready: Vec<EventId> = remaining
-                .iter()
-                .filter(|id| {
-                    let event = self.events.get(*id).expect("in remaining");
-                    event
-                        .body
-                        .parents
-                        .iter()
-                        .all(|parent| ordered.contains(parent) || !remaining.contains(parent))
-                })
-                .cloned()
-                .collect();
-            if ready.is_empty() {
-                return Err(EventError::GraphCycle.into());
+        self.causal.topological_order().map_err(|error| {
+            match error {
+                CausalGraphError::Cycle => EventError::GraphCycle,
+                CausalGraphError::TopologicalSortStalled => EventError::TopologicalSortStalled,
             }
-            for id in ready {
-                remaining.remove(&id);
-                ordered.push(id);
-                progress = true;
-            }
-            if !progress {
-                return Err(EventError::TopologicalSortStalled.into());
-            }
-        }
-        Ok(ordered)
+            .into()
+        })
     }
 
     /// Validate all applicable events against actors authorized in their causal
@@ -246,12 +184,7 @@ impl EventGraph {
             }
             merged.events.insert(id.clone(), event.clone());
         }
-        for (id, reason) in &other.quarantined {
-            merged
-                .quarantined
-                .entry(id.clone())
-                .or_insert_with(|| reason.clone());
-        }
+        merged.causal = merged.causal.union(&other.causal);
         merged
     }
 
@@ -277,7 +210,7 @@ impl EventGraph {
             let mut changed = false;
             let ids = self.events.keys().cloned().collect::<Vec<_>>();
             for id in ids {
-                if self.quarantined.contains_key(&id) {
+                if self.causal.quarantined().contains_key(&id) {
                     continue;
                 }
                 let event = self.events.get(&id).expect("event id from map");
@@ -288,7 +221,7 @@ impl EventGraph {
                     .body
                     .parents
                     .iter()
-                    .any(|parent| self.quarantined.contains_key(parent))
+                    .any(|parent| self.causal.quarantined().contains_key(parent))
                 {
                     Some("Ancestor event was rejected".to_owned())
                 } else {
@@ -301,7 +234,7 @@ impl EventGraph {
                     }
                 };
                 if let Some(reason) = reason {
-                    self.quarantined.insert(id, reason);
+                    self.causal.quarantine(id, reason);
                     changed = true;
                 }
             }
@@ -312,18 +245,7 @@ impl EventGraph {
     }
 
     fn event_ancestors_present(&self, event: &VaultEvent) -> bool {
-        let mut visited = BTreeSet::new();
-        let mut stack = event.body.parents.clone();
-        while let Some(id) = stack.pop() {
-            if !visited.insert(id.clone()) {
-                continue;
-            }
-            let Some(parent) = self.events.get(&id) else {
-                return false;
-            };
-            stack.extend(parent.body.parents.iter().cloned());
-        }
-        true
+        self.causal.ancestor_ids_present(&event.body.parents)
     }
 
     /// Allow an unauthorized actor to publish its own membership event when the

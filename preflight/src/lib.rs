@@ -62,18 +62,26 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
     "icloud_shared_storage_target",
 ];
 
-/// Finds browser-only Rust dependencies used by the portable core crate.
+/// Finds browser-only Rust dependencies used by portable domain and
+/// replication crates.
 ///
 /// # Errors
 ///
 /// Returns an error when the core source tree cannot be read.
 pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
-    violations_in_tree(
+    let mut violations = violations_in_tree(
         root,
         Path::new("nook-app/nook-core/src"),
         "rs",
         BROWSER_RUST_MARKERS,
-    )
+    )?;
+    violations.extend(violations_in_tree(
+        root,
+        Path::new("nook-app/nook-replication/src"),
+        "rs",
+        BROWSER_RUST_MARKERS,
+    )?);
+    Ok(violations)
 }
 
 /// Finds TypeScript declarations that duplicate Rust-owned domain boundaries.

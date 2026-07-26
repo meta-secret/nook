@@ -18,7 +18,7 @@ fn portable_core_does_not_import_browser_runtime_crates() {
         .expect("scan portable core dependencies");
     assert!(
         violations.is_empty(),
-        "nook-core must stay browser-independent: {violations:#?}"
+        "portable core and replication crates must stay browser-independent: {violations:#?}"
     );
 }
 

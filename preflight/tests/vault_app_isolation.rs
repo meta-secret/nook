@@ -823,19 +823,30 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     assert_eq!(
         warmup
             .matches(
-                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass",
+                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-core --no-tests=pass",
             )
             .count(),
         1,
         "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
-        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass"
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-core --no-tests=pass"
     ));
     assert!(dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2"));
     assert!(
+        dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-replication")
+    );
+    assert!(
         dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
+    );
+
+    let wasm_task = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    assert!(
+        wasm_task.contains(
+            "find \"nook-wasm/src\" \"nook-core/src\" \"nook-core/locales\" \"nook-auth2/src\" \"nook-replication/src\"",
+        ),
+        "mounted WASM builds must invalidate when portable replication source changes"
     );
 }
 
@@ -1293,6 +1304,8 @@ fn assert_pr_workflow_contract(root: &Path) {
         "--github-output \"$GITHUB_OUTPUT\"",
         "coverage/current/tools/nook-preflight validate-coverage-artifact",
         "coverage/current/tools/nook-preflight coverage-report",
+        "if [ ! -f \"../nook-base-coverage/nook-app/nook-replication/Cargo.toml\" ]; then",
+        "cp -R nook-app/nook-replication",
     ] {
         assert!(
             pr.contains(required),

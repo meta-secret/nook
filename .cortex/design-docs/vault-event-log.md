@@ -95,7 +95,11 @@ Each event lists all locally observed heads in `parents`. Therefore:
 
 Unknown-parent events stay **pending** until dependencies arrive.
 
-Implementation: `nook-app/nook-core/src/vault_event_graph.rs`.
+Provider-neutral parent indexing, heads, ancestry, concurrency, pending events,
+topological order, and set union live in
+`nook-app/nook-replication/src/causal_graph.rs`. Vault event-envelope validation
+and actor authorization remain in
+`nook-app/nook-core/src/vault/vault_event_graph.rs`.
 
 ## Domain projection
 
@@ -183,7 +187,7 @@ event source.
 | Phase | Scope |
 |-------|--------|
 | 0 | This ADR |
-| 1 | `nook-core` event model, DAG, and projection |
+| 1 | `nook-replication` causal/replica mechanics plus `nook-core` event model, authorization, and projection |
 | 2 | Ed25519 device keys, epoch crypto, actor authorization |
 | 3 | IndexedDB event store, outbox, projection cache |
 | 4 | GitHub / Drive event adapters |
@@ -198,8 +202,10 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
 
 | Scenario | Test location |
 |----------|---------------|
+| Generic causal ordering, pending parents, union | `nook-replication/src/causal_graph.rs` |
+| Generic outbox idempotence and repair planning | `nook-replication/src/replica_store.rs` |
 | Concurrent append, both secrets live | `vault_event_graph.rs`, `vault_projection.rs`, `event_log_workflow.rs` |
-| Out-of-order delivery → pending → applied | `vault_event_graph.rs`, `vault_event_store.rs`, `event_log_workflow.rs` |
+| Out-of-order delivery → pending → applied | `causal_graph.rs`, `vault_event_graph.rs`, `vault_event_store.rs`, `event_log_workflow.rs` |
 | Join event collapses multiple heads | `vault_event_graph.rs`, `event_log_workflow.rs` |
 | Replacement / security conflicts | `vault_projection.rs`, `vault_epoch.rs` |
 | Multi-device decentralized union | `event_log_workflow.rs` (harness) |
@@ -208,7 +214,13 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 
-**Coverage:** `task rust:coverage:check` enforces a **90%** line floor (`nook-app/nook-core/coverage-floor.json`). Event-log modules (`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority for test additions when changing sync semantics or when coverage drops below 90%.
+**Coverage:** `task rust:coverage:check` enforces a combined **90%** line floor
+for `nook-replication`, `nook-core`, and `nook-auth2`
+(`nook-app/nook-core/coverage-floor.json`). Replication mechanics
+(`causal_graph`, `replica_store`) and vault policy modules
+(`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority
+for behavior-focused tests when sync semantics change or coverage drops below
+90%.
 
 ## Related
 

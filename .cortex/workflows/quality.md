@@ -10,10 +10,12 @@ Use this workflow for quality, CI, and deployment changes.
 6. Preserve these gates unless the task explicitly changes them:
    - `cd nook-app && cargo fmt --all -- --check`
    - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
-     manifest; `cd nook-app && cargo clippy -p nook-core -p nook-auth2 --all-targets`,
+     manifest; `cd nook-app && cargo clippy -p nook-core -p nook-auth2 -p nook-replication --all-targets`,
      `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
      and the standalone `preflight` Clippy pass enforce them with `-D warnings`
-   - `task rust:coverage:check` — `cd nook-app && cargo llvm-cov nextest -p nook-core -p nook-auth2 --profile ci` vs **90%** line floor (`nook-app/nook-core/coverage-floor.json`)
+   - `task rust:coverage:check` — combined `nook-core`, `nook-auth2`, and
+     `nook-replication` coverage vs the **90%** line floor
+     (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`
    - `knip` (`bun run unused`) — unused/unreachable files, exports, and
@@ -46,8 +48,24 @@ Use this workflow for quality, CI, and deployment changes.
 16. **Testing pyramid:** `task rust:coverage:check` is the primary correctness gate for vault logic (llvm-cov + nextest, **90%** line floor). Target **~99% functional coverage via Rust unit and integration tests** — not e2e. Playwright (`task web:test:e2e:pr`) is a thin UI smoke layer. New domain behavior requires new Rust tests in the same change. **Below 90% line coverage, agents add tests before finishing.** See [rules.md §4](../rules.md#4-testing-requirements).
 17. **Cortex + README hygiene:** After learning something durable from tests, CI, or PR review, update `.cortex` per [core-beliefs.md §10](../design-docs/core-beliefs.md#10-grow-cortex-dynamically). When the change is architectural or alters the public developer/product surface, also update the root [`README.md`](../../README.md) in the same PR ([AGENTS.md — Keep the root README current](../AGENTS.md#keep-the-root-readme-current)).
 18. **Troubleshooting web/e2e/CI failures:** After test output and static analysis, **always check persisted app logs** — they are the most important source of truth for vault, sync, and WASM behavior. See [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
-19. **Coverage reporting:** `task rust:coverage:export` exports baked `nook-core + nook-auth2` coverage artifacts locally (`summary.txt`, `summary.json`, `lcov.info`, and `coverage-floor.json`). PR CI uploads those files plus the stripped Linux `nook-preflight` reporter directly from the native Rust runner. `Verify and preview` downloads them after its artifact-backed web build, builds the base branch coverage target only when comparison fallback is required, and asks `nook-preflight` to classify changed coverage inputs, validate the commit-keyed base artifact, parse cargo-llvm-cov's structured JSON, write typed GitHub outputs, and render the Markdown summary. The workflow uploads both reports as `nook-core-coverage` and posts a sticky PR comment. Human-readable coverage tables must not be scraped with shell. The Docker build remains the enforcement point for the 90% floor and the only place PR/base coverage tests run.
-20. **Coverage cache preservation:** Warm the `nook-auth2 + nook-core` coverage dependency graph with one `cargo llvm-cov nextest --no-report` Docker invocation. Both subsequent source-level coverage commands must use `--no-clean` so they reuse and extend that instrumented target. Since llvm-cov forbids `--no-clean` with `--no-report`, the first source-level command emits an interim auth report before the combined core report and floor enforcement.
+19. **Coverage reporting:** `task rust:coverage:export` exports baked portable
+    Rust coverage artifacts locally (`summary.txt`, `summary.json`,
+    `lcov.info`, and `coverage-floor.json`). PR CI uploads those files plus the
+    stripped Linux `nook-preflight` reporter directly from the native Rust
+    runner. `Verify and preview` downloads them after its artifact-backed web
+    build, builds the base branch coverage target only when comparison fallback
+    is required, and asks `nook-preflight` to classify changed coverage inputs,
+    validate the commit-keyed base artifact, parse cargo-llvm-cov's structured
+    JSON, write typed GitHub outputs, and render the Markdown summary. The
+    workflow uploads both reports as `nook-core-coverage` and posts a sticky PR
+    comment. Human-readable coverage tables must not be scraped with shell. The
+    Docker build remains the enforcement point for the 90% floor and the only
+    place PR/base coverage tests run.
+20. **Coverage cache preservation:** Warm the `nook-auth2 +
+    nook-replication + nook-core` coverage dependency graph with one
+    `cargo llvm-cov nextest --no-report` Docker invocation. Subsequent
+    source-level coverage commands must use `--no-clean` so they reuse and
+    extend that instrumented target.
 
 ## Fix check findings — not silence them
 
