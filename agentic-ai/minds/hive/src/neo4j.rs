@@ -298,14 +298,23 @@ impl TaskStore for Neo4jTaskStore {
                      attempt.error = 'lease expired after final attempt',
                      attempt.completed_at = timestamp(),
                      agent.status = 'IDLE',
-                     agent.last_seen_at = timestamp()
-                 WITH task
-                 OPTIONAL MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(task)
-                 WHERE dependent.status IN ['READY', 'BLOCKED']
-                 SET dependent.status = 'FAILED',
-                     dependent.failure_reason =
-                       'upstream dependency failed after its final lease expired',
-                     dependent.updated_at = timestamp()",
+                     agent.last_seen_at = timestamp()",
+                    ))
+                    .await?;
+
+                transaction
+                    .run(query(
+                        "MATCH (failed:Task {
+                           status: 'FAILED',
+                           failure_reason: 'lease expired after final attempt'
+                         })
+                         MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(failed)
+                         WHERE dependent.status IN ['READY', 'BLOCKED']
+                         SET dependent.status = 'FAILED',
+                             dependent.blocked_reason =
+                               'upstream dependency failed after its final lease expired',
+                             dependent.updated_at = timestamp(),
+                             dependent.version = dependent.version + 1",
                     ))
                     .await?;
 
@@ -1347,11 +1356,12 @@ mod tests {
             .enqueue(&lease_stranded)
             .await
             .expect("enqueue final-lease dependent");
-        let _lease_claim = store
+        let lease_claim = store
             .claim(&agent_a, 300)
             .await
             .expect("claim final-lease task")
             .expect("final-lease task available");
+        assert_eq!(lease_claim.id, lease_exhausted.id);
         store
             .graph
             .run(
@@ -1398,7 +1408,8 @@ mod tests {
         assert!(
             lease_failed_statuses
                 .iter()
-                .all(|status| status == "FAILED")
+                .all(|status| status == "FAILED"),
+            "final lease failure must propagate to every descendant: {lease_failed_statuses:?}"
         );
 
         store
