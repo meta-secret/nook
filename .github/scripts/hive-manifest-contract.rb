@@ -432,6 +432,10 @@ unless hive_taskfile.include?("--target dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export the manifest-keyed dependency graph"
 end
+unless hive_taskfile.include?("Refusing oversized Hive test export") &&
+       hive_taskfile.include?("524288")
+  raise "Hive test artifact exports must have a hard size ceiling"
+end
 if hive_taskfile.include?("host.docker.internal")
   raise "Hive verification must not depend on Docker Desktop host aliases"
 end

@@ -97,6 +97,11 @@ tasks:
         "${command[@]}"
         test -f "$verified/hive-check-passed"
         test -n "$(find "$verified/hive-tests" -type f -print -quit)"
+        test_kib="$(du -sk "$verified/hive-tests" | awk '{print $1}')"
+        if [ "$test_kib" -gt 524288 ]; then
+          echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
+          exit 1
+        fi
         docker run --rm \
           --platform linux/amd64 \
           --network host \
@@ -153,6 +158,11 @@ tasks:
           .)
         "${command[@]}"
         test -n "$(find "$compiled/opt/nook/hive-tests" -type f -print -quit)"
+        test_kib="$(du -sk "$compiled/opt/nook/hive-tests" | awk '{print $1}')"
+        if [ "$test_kib" -gt 524288 ]; then
+          echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
+          exit 1
+        fi
         docker run --rm \
           --platform linux/amd64 \
           --network host \

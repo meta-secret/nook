@@ -125,7 +125,9 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
       /tmp/hive-test-artifacts.jsonl \
       | sort -u \
       | while IFS= read -r executable; do \
-          install -m 0755 "$executable" "/opt/nook/hive-tests/$(basename "$executable")"; \
+          destination="/opt/nook/hive-tests/$(basename "$executable")"; \
+          install -m 0755 "$executable" "$destination"; \
+          strip --strip-unneeded "$destination"; \
         done \
     && test -n "$(find /opt/nook/hive-tests -type f -perm /111 -print -quit)" \
     && nook-sccache-report hive-test-compile
