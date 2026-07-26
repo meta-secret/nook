@@ -78,22 +78,16 @@ COPY --from=chef-planner /build/recipe.json recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-# Keep downloads, chef cooking, and the real-lock compiler profiles in separate
-# manifest-keyed layers. cargo-chef rewrites workspace versions, so the explicit
-# real-lock warm-ups are required for Clippy/tests and the release binary to
-# reuse compiled dependencies (the same boundary used by nook-app).
+# Keep the manifest-only cargo-chef graph as the single dependency boundary.
+# Redis sccache supplies compiler objects when this BuildKit layer is cold;
+# Main's GHA cache publishes the complete cooked layer for later PRs. Do not
+# pre-build debug and release graphs here: Clippy and tests need different Cargo
+# unit graphs, and serially warming all three profiles more than doubles the
+# cold-path runtime even when every sccache lookup hits.
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo chef cook --recipe-path recipe.json \
     && nook-sccache-report hive-chef
 RUN cargo fetch --locked
-RUN mkdir -p lace/src hive/src \
-    && touch lace/src/lib.rs hive/src/main.rs
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo build --locked -p hive --all-targets \
-    && nook-sccache-report hive-debug-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo build --locked --release -p hive \
-    && nook-sccache-report hive-release-dependencies
 
 FROM dependencies AS source
 COPY lace/src lace/src
@@ -104,7 +98,8 @@ FROM source AS check
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo fmt --all -- --check \
     && cargo clippy --locked -p hive --all-targets -- -D warnings \
-    && nook-sccache-report hive-clippy
+    && nook-sccache-report hive-clippy \
+    && install -D /dev/null /opt/nook/hive-check-passed
 
 FROM toolchain AS formatter
 COPY Cargo.toml Cargo.lock ./
@@ -114,8 +109,28 @@ COPY lace/src lace/src
 COPY hive/src hive/src
 RUN cargo fmt --all
 
-FROM check AS test-runner
-CMD ["bash", "-c", "cargo test --locked -p hive && nook-sccache-report hive-test"]
+FROM source AS test
+
+ARG HIVE_NEO4J_TEST_URI=127.0.0.1:7687
+ARG HIVE_NEO4J_TEST_USERNAME=neo4j
+ARG HIVE_NEO4J_TEST_PASSWORD=hive-integration-password
+
+# Tests execute inside BuildKit instead of loading the multi-gigabyte Cargo
+# target directory into Docker's runtime image store. This stage and `check`
+# are siblings; the `verify` join below makes BuildKit run them concurrently.
+RUN --network=host \
+    --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    HIVE_NEO4J_TEST_URI="${HIVE_NEO4J_TEST_URI}" \
+    HIVE_NEO4J_TEST_USERNAME="${HIVE_NEO4J_TEST_USERNAME}" \
+    HIVE_NEO4J_TEST_PASSWORD="${HIVE_NEO4J_TEST_PASSWORD}" \
+    cargo test --locked -p hive \
+    && nook-sccache-report hive-test \
+    && install -D /dev/null /opt/nook/hive-test-passed
+
+FROM scratch AS verify
+
+COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
+COPY --from=test /opt/nook/hive-test-passed /hive-test-passed
 
 FROM source AS builder
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \

@@ -39,6 +39,11 @@ tasks:
     cmds:
       - task --taskfile agentic-ai/minds/hive/Taskfile.yml check
 
+  hive:verify:
+    desc: Run Hive Clippy and behavior tests concurrently.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml verify
+
   hive:build:
     desc: Build the Hive worker.
     cmds:

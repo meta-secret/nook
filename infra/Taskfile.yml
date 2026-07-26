@@ -709,6 +709,37 @@ tasks:
         sudo -n ip -4 address show dev lo |
           grep -F '10.201.0.1/32' >/dev/null
         if sudo -n systemctl is-active --quiet k0scontroller; then
+          if sudo -n k0s kubectl get deployment hive \
+            --namespace hive-system >/dev/null 2>&1 &&
+            ! sudo -n k0s kubectl get networkpolicy hive-worker-kubernetes-api \
+              --namespace hive-system >/dev/null 2>&1; then
+            cat <<'YAML' |
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata:
+          name: hive-worker-kubernetes-api
+          namespace: hive-system
+        spec:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hive
+          policyTypes: [Egress]
+          egress:
+            - to:
+                - ipBlock:
+                    cidr: 10.96.0.1/32
+              ports:
+                - protocol: TCP
+                  port: 443
+            - to:
+                - ipBlock:
+                    cidr: {{.K0S_API_ADDRESS}}/32
+              ports:
+                - protocol: TCP
+                  port: 6443
+        YAML
+              sudo -n k0s kubectl apply -f -
+          fi
           for policy in \
             hive-worker-kubernetes-api \
             hive-reaper-controller; do
@@ -949,6 +980,12 @@ tasks:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
+        persisted_firewall="$(mktemp)"
+        trap 'rm -f "$persisted_firewall"' EXIT
+        cat > "$persisted_firewall" <<'NFT'
+        add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"
+        add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"
+        NFT
         sudo -n k0s status
         sudo -n k0s kubectl get nodes -o wide
         sudo -n k0s kubectl get runtimeclasses
@@ -958,6 +995,12 @@ tasks:
         sudo -n systemctl is-active --quiet nook-k0s-api-address.service
         sudo -n ip -4 address show dev lo |
           grep -F '{{.K0S_API_ADDRESS}}/32' >/dev/null
+        sudo -n grep -Eq \
+          '^[[:space:]]*include[[:space:]]+"/etc/nftables.d/nook-k0s\.nft"([[:space:]]*(#.*)?)?$' \
+          /etc/nftables.conf
+        sudo -n cmp --silent \
+          "$persisted_firewall" \
+          /etc/nftables.d/nook-k0s.nft
         sudo -n nft list chain inet bynull_filter input |
           grep -E "policy drop" >/dev/null
         sudo -n nft list chain inet bynull_filter forward |
@@ -1337,6 +1380,7 @@ tasks:
         secret_dir="$(mktemp -d)"
         kubeconfig=""
         network_policy=""
+        reaper_controller=""
         hive_replicas=""
         dispatcher_replicas=""
         restore_hive() {
@@ -1366,6 +1410,9 @@ tasks:
           fi
           if test -n "$network_policy"; then
             rm -f "$network_policy"
+          fi
+          if test -n "$reaper_controller"; then
+            rm -f "$reaper_controller"
           fi
           restore_hive
         }
@@ -1574,6 +1621,34 @@ tasks:
           -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
           "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" \
           > "$network_policy"
+        if kubectl get deployment hive \
+          --namespace hive-system >/dev/null 2>&1; then
+          hive_image="$(
+            kubectl get deployment hive \
+              --namespace hive-system \
+              -o jsonpath='{.spec.template.spec.containers[?(@.name=="hive")].image}'
+          )"
+          case "$hive_image" in
+            127.0.0.1:5000/nook-hive@sha256:*) ;;
+            *)
+              echo "Refusing unpinned existing Hive image: $hive_image" >&2
+              exit 1
+              ;;
+          esac
+          reaper_controller="$(mktemp)"
+          sed \
+            -e "s|HIVE_IMAGE|$hive_image|g" \
+            "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" \
+            > "$reaper_controller"
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml" \
+            -f "$reaper_controller"
+          rm -f "$reaper_controller"
+          reaper_controller=""
+          kubectl rollout status deployment/hive-reaper-controller \
+            --namespace hive-system \
+            --timeout=10m
+        fi
         kubectl apply -f "$network_policy"
         rm -f "$network_policy"
         network_policy=""

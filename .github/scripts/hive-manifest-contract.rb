@@ -318,6 +318,14 @@ unless k0s_install_task.include?('path: "/spec/egress/-"') &&
        k0s_install_task.include?('ports: [{protocol: "TCP", port: 6443}]')
   raise "legacy Hive policies must gain a complete stable API egress rule"
 end
+unless k0s_install_task.include?(
+         "name: hive-worker-kubernetes-api"
+       ) &&
+       k0s_install_task.include?(
+         "kubectl apply -f -"
+       )
+  raise "legacy Hive workers must gain a transitional stable API policy"
+end
 unless k0s_status_task.include?(
          "systemctl is-enabled --quiet nook-k0s-api-address.service"
        ) &&
@@ -328,6 +336,19 @@ unless k0s_status_task.include?(
          "grep -F '{{.K0S_API_ADDRESS}}/32'"
        )
   raise "k0s status must verify persistent stable API address state"
+end
+unless k0s_status_task.include?("/etc/nftables.conf") &&
+       k0s_status_task.include?("/etc/nftables.d/nook-k0s.nft") &&
+       k0s_status_task.include?("cmp --silent")
+  raise "k0s status must verify exact persisted firewall state"
+end
+unless infra_taskfile.include?(
+         '-f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"'
+       ) &&
+       infra_taskfile.include?(
+         'kubectl rollout status deployment/hive-reaper-controller'
+       )
+  raise "standalone Neo4j upgrades must deploy the endpoint-policy reconciler"
 end
 unless infra_taskfile.include?("rollout restart deployment/coredns") &&
        infra_taskfile.include?("rollout status deployment/coredns") &&
@@ -400,6 +421,17 @@ hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
 unless hive_taskfile.include?("for crate in hive lace")
   raise "Hive formatting does not apply the entire checked workspace"
 end
+unless hive_taskfile.include?("--target verify") &&
+       hive_taskfile.include?("--target test") &&
+       hive_taskfile.include?("--output type=cacheonly") &&
+       !hive_taskfile.include?("--target test-runner") &&
+       !hive_taskfile.include?("--load")
+  raise "Hive verification must run inside BuildKit without loading Cargo target layers"
+end
+unless hive_taskfile.include?("--target dependencies") &&
+       hive_taskfile.include?('HIVE_CACHE_TO')
+  raise "Hive cache publication must export the manifest-keyed dependency graph"
+end
 
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
 unless root_agentic_taskfile.include?("hive:guest:format:") &&
@@ -414,6 +446,11 @@ unless hive_workflow.scan(".github/scripts/hive-reaper-controller-test.py").leng
 end
 unless hive_workflow.scan(".github/scripts/k0s-firewall-rollback-test.py").length == 2
   raise "k0s firewall rollback-test changes must trigger PR and Main verification"
+end
+unless hive_workflow.include?("run: task hive:verify") &&
+       !hive_workflow.include?("run: task hive:check") &&
+       !hive_workflow.include?("run: task hive:test")
+  raise "Hive workflow must use the parallel BuildKit verification join"
 end
 
 puts "Hive Kubernetes manifest contract: ok"
