@@ -256,8 +256,10 @@ spec:
                     "$api/api/v1/namespaces/$POD_NAMESPACE/pods/$POD_NAME"
                 )"
                 if printf '%s' "$pod" |
-                  tr -d '[:space:]' |
-                  grep -Eq '"restartCount":[1-9][0-9]*'; then
+                  jq -e '
+                    (.status.containerStatuses // [])
+                    | any(.name == "hive" and .restartCount > 0)
+                  ' >/dev/null; then
                   break
                 fi
                 sleep 1

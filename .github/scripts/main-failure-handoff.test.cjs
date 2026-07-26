@@ -37,7 +37,7 @@ test('creates one ready automated incident per failed Main revision', () => {
 
   assert.equal(issue.path, incidentPathForRun(source))
   assert.match(issue.body, /^status: ready$/m)
-  assert.match(issue.body, /^automation: agent$/m)
+  assert.match(issue.body, /^automation: hive$/m)
   assert.match(issue.body, /^related_prs: \[786\]$/m)
   assert.match(issue.body, /Failed jobs: WASM verification and artifact\./)
   assert.doesNotMatch(issue.body, /raw log contents/)
@@ -80,13 +80,17 @@ test('deduplicates attempts and preserves an active claim', () => {
 })
 
 test('rejects untrusted or non-failing workflow shapes', () => {
+  assert.equal(
+    requireMainFailure(run({ conclusion: 'timed_out' })),
+    'abcdef0123456789abcdef0123456789abcdef01',
+  )
   assert.throws(
     () => requireMainFailure(run({ event: 'pull_request' })),
     /expected push event/,
   )
   assert.throws(
     () => requireMainFailure(run({ conclusion: 'cancelled' })),
-    /expected failure conclusion/,
+    /expected unsuccessful conclusion/,
   )
   assert.throws(
     () => requireMainFailure(run({ head_branch: 'feature' })),
@@ -99,8 +103,9 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
   assert.match(
     main,
-    /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false[\s\S]*queue: single/,
+    /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
   )
+  assert.doesNotMatch(main, /^\s+queue:/m)
   assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust\]/)
   assert.match(
     main,
@@ -122,7 +127,8 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
     workflow,
     /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
   )
-  assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'failure'/)
+  assert.match(workflow, /"action_required","failure","startup_failure","timed_out"/)
+  assert.doesNotMatch(workflow, /^\s+queue:/m)
   assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/)
   assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
   assert.match(workflow, /github-token: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)

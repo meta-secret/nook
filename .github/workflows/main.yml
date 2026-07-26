@@ -37,7 +37,6 @@ concurrency:
   # Finish the active cache-writing run. GitHub keeps only the newest pending Main revision,
   # coalescing a burst of agent merges without interrupting verified cache publication.
   cancel-in-progress: false
-  queue: single
 
 env:
   DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}

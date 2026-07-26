@@ -34,8 +34,8 @@ function requireMainFailure(run) {
   if (run.head_branch !== 'main') {
     throw new Error(`expected main branch, got ${run.head_branch}`)
   }
-  if (run.conclusion !== 'failure') {
-    throw new Error(`expected failure conclusion, got ${run.conclusion}`)
+  if (!FAILURE_CONCLUSIONS.has(run.conclusion)) {
+    throw new Error(`expected unsuccessful conclusion, got ${run.conclusion}`)
   }
   requireInteger(run.id, 'run.id')
   requireInteger(run.run_attempt, 'run.run_attempt')
@@ -112,7 +112,7 @@ function newIssue({ run, recordedAt, failures, relatedPrs }) {
 title: Restore failed Main verification for ${shortSha}
 status: ready
 priority: p1
-automation: agent
+automation: hive
 owner: unassigned
 created_at: ${recordedAt}
 updated_at: ${recordedAt}
@@ -169,8 +169,8 @@ function updateExistingIssue({ body, run, recordedAt, failures, relatedPrs }) {
   if (typeof body !== 'string' || body.length === 0) {
     throw new Error('existing issue body must be non-empty')
   }
-  if (!/^automation:\s*agent$/m.test(body)) {
-    throw new Error('existing Main failure issue must remain agent-automated')
+  if (!/^automation:\s*hive$/m.test(body)) {
+    throw new Error('existing Main failure issue must remain Hive-automated')
   }
 
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`

@@ -17,13 +17,13 @@ permissions:
 concurrency:
   group: main-failure-handoff-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
-  queue: single
 
 jobs:
   record:
     name: Queue failed Main revision
     if: >-
-      github.event.workflow_run.conclusion == 'failure' &&
+      contains(fromJSON('["action_required","failure","startup_failure","timed_out"]'),
+        github.event.workflow_run.conclusion) &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.repository.full_name == github.repository

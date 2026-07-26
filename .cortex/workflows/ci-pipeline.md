@@ -35,8 +35,9 @@ flowchart LR
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
   main_stats --> workbench_stats[Commit metrics to Nook Workbench]
-  main_yml -->|failure| main_failure[Queue Workbench incident]
-  main_failure --> agent_worker[Scheduled agent worker]
+  main_yml -->|unsuccessful| main_failure[Queue Workbench incident]
+  main_failure --> hive_dispatcher[Isolated Hive dispatcher]
+  hive_dispatcher --> hive_worker[One end-to-end repair task]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -640,7 +641,7 @@ do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 ## CI agent (`ci-fix` / `ci-agent:implement`)
 
-[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. A failed Main run is handled separately by [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml): trusted default-branch code writes a deduplicated `status: ready`, `automation: agent` Workbench incident without copying raw logs, and the scheduled implementation worker claims it through the ordinary PR path. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for Workbench issues or manual prompts (see below).
+[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. An unsuccessful Main run is handled separately by [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml): trusted default-branch code writes a deduplicated `status: ready`, `automation: hive` Workbench incident without copying raw logs. The token-free k0s dispatcher reconciles it into Neo4j, and one isolated logical task owns diagnosis through exact-head checks, review resolution, squash merge, and replacement Main verification. The scheduled implementation worker does not claim Hive incidents. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for ordinary Workbench issues or manual prompts (see below).
 
 **Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner and `pr.yml` runs. Merge still requires the standard exact-head readiness audit.
 
@@ -712,7 +713,7 @@ merge, and final Workbench completion update. Same secrets as ci-fix:
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** push after `task format` and let GitHub Actions own product validation; optional local `task ci:pr` / e2e is debug-only, never a merge gate.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e** and leaves failures for manual handling. Nightly runs **sync-live** and invokes `ci-fix` on failure.
+5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e**. An unsuccessful Main run is reconciled through one `automation: hive` Workbench incident into an isolated task that owns the repair PR, review loop, squash merge, and replacement Main verification. Nightly runs **sync-live** and invokes its separate `ci-fix` worker on failure.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).

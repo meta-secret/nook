@@ -83,7 +83,7 @@ fn main_failure_commit(name: &str) -> Option<String> {
 
 fn is_ready_agent_issue(body: &str) -> bool {
     body.lines().any(|line| line.trim() == "status: ready")
-        && body.lines().any(|line| line.trim() == "automation: agent")
+        && body.lines().any(|line| line.trim() == "automation: hive")
 }
 
 async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
@@ -124,10 +124,10 @@ mod tests {
             Some(sha)
         );
         assert!(is_ready_agent_issue(
-            "---\nstatus: ready\nautomation: agent\n---\n"
+            "---\nstatus: ready\nautomation: hive\n---\n"
         ));
         assert!(!is_ready_agent_issue(
-            "---\nstatus: in_progress\nautomation: agent\n---\n"
+            "---\nstatus: in_progress\nautomation: hive\n---\n"
         ));
         assert!(main_failure_commit("unrelated.md").is_none());
     }
