@@ -529,7 +529,8 @@ fn scheduled_nightly_live_sync_is_retired() {
             && manual_e2e.contains("task web:test:e2e:sync-live:parallel")
             && manual_e2e.contains("- name: Clean up live-sync test repository")
             && manual_e2e.contains("if: >-\n          always() &&")
-            && manual_e2e.contains("github.rest.repos.delete"),
+            && manual_e2e.contains("github.rest.users.getAuthenticated()")
+            && manual_e2e.contains("github.rest.repos.delete({ owner: user.login, repo })"),
         "manual PR e2e must retain explicit GitHub live-provider validation with cancellation-safe cleanup"
     );
 }

@@ -118,10 +118,13 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           script: |
             const repo = process.env.NOOK_GITHUB_E2E_REPO
+            const { data: user } = await github.rest.users.getAuthenticated()
             try {
-              await github.rest.repos.delete({ owner: context.repo.owner, repo })
-              core.info(`Deleted live-sync test repository: ${repo}`)
+              await github.rest.repos.delete({ owner: user.login, repo })
+              core.info(`Deleted live-sync test repository: ${user.login}/${repo}`)
             } catch (error) {
               if (error.status !== 404) throw error
-              core.info(`Live-sync test repository already absent: ${repo}`)
+              core.info(
+                `Live-sync test repository already absent: ${user.login}/${repo}`,
+              )
             }
