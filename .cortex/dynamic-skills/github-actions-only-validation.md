@@ -49,8 +49,8 @@ Applies to:
 Does not apply to:
 
 - Humans who choose to run local mirrors for their own feedback.
-- Verified one-file stats-only PRs under `.stats/ai-agent/**` or
-  `.stats/main-build/**`.
+- Workbench issue, worklog, and statistics commits, which are not Nook product
+  changes or Nook PRs.
 - Read-only / question-only sessions with no commits.
 - Optional focused debug commands while investigating a specific red finding.
 

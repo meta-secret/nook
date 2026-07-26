@@ -5,8 +5,8 @@
 # for the workflow but do not gate the development deploy. Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
-# agentic-AI-only and statistics-only changes do not need the product pipeline. A trusted
-# workflow_run collector records this workflow only after each attempt completes.
+# agentic-AI-only changes do not need the product pipeline. A trusted
+# workflow_run collector records each attempt in meta-secret/nook-workbench.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
@@ -22,7 +22,6 @@ on:
     paths-ignore:
       - .cortex/**
       - .cursor/**
-      - .stats/**
       - .github/workflows/web-research.yml
       - agentic-ai/**
       - nook-app/nook-web/nook-web-research/**

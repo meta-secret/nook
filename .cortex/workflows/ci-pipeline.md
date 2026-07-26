@@ -2,12 +2,10 @@
 
 System of record for how Nook validates changes in GitHub Actions. Agents must understand this split before changing workflows or e2e.
 
-The PR and main product pipelines ignore `.stats/**`. Verified one-file
-`.stats/ai-agent/<source-pr-number>.yaml` and
-`.stats/main-build/<run-id>-attempt-<run-attempt>.yaml` PRs follow the immediate
-squash-merge exceptions in [agent-statistics.md](agent-statistics.md) and
-[main-build-statistics.md](main-build-statistics.md); they consume no product
-validation and cannot trigger Main after merge.
+Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
+not create Nook branches, PRs, product validation, or recursive Main builds.
+See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
+[main-build-statistics.md](main-build-statistics.md).
 
 ## Workflow map
 
@@ -17,11 +15,11 @@ validation and cannot trigger Main after merge.
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful same-repository PR workflow      | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust ‖ WASM producers (read-only GHA restore); then **overlap** browser-free web verify, local-provider web e2e, extension e2e, and all headless UI demos on separate runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); a dedicated `publish-cache` job warms dependency/native-source Bake targets without writing, then exports those GHA scopes only after success; deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
-| [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then immediately squash-merge one `.stats/main-build/**` record; the stats merge is ignored by Main, terminating the loop | Yes (`NOOK_GITHUB_PAT`)                   |
+| [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then commit one `stats/main-build/**` record directly to Nook Workbench | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml)                         | Cron 03:00 UTC + manual                     | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure                                                                                                                                                                        | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml)                 | Issue labeled `ai-agent`, or manual prompt  | Cursor SDK implement → PR opened and handed to the standard readiness-and-squash-merge lifecycle → workflow job exits                                                                                                                            | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml)                 | Scheduled ready-Workbench scan or manual dispatch | Atomically claim one `status: ready`, `automation: agent` Markdown issue → Cursor SDK implement → PR opened → Workbench progress/worklog published → workflow exits | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)                                   | Manual                                      | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                                                                                                                                                                                        | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml)                   | Cron 13:00 UTC + manual                     | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only)                                                                                                                                            | No                                        |
 
@@ -35,7 +33,7 @@ flowchart LR
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
-  main_stats --> stats_only[One-file stats-only PR]
+  main_stats --> workbench_stats[Commit metrics to Nook Workbench]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -628,7 +626,7 @@ do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 ## CI agent (`ci-fix` / `ci-agent:implement`)
 
-[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. Main-branch failures remain visible for manual handling. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for labeled issues / manual prompts (see below).
+[`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) runs a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR opened → workflow job exits. No workflow merges the PR blindly from a check event; any task-owning agent that continues it follows the standard readiness-and-squash-merge contract. Main-branch failures remain visible for manual handling. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for Workbench issues or manual prompts (see below).
 
 **Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner and `pr.yml` runs. Merge still requires the standard exact-head readiness audit.
 
@@ -669,20 +667,30 @@ Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step
 
 The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Without an explicit exit, the Cursor SDK local executor can leave child processes and open handles that keep the Node event loop alive after the agent opens its PR.
 
-Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) runs unit tests plus an `exitCiAgent` open-handle check on `ubuntu-latest` when an issue is labeled `ci-agent-smoke` (or via `workflow_dispatch`).
+Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) runs unit tests plus an `exitCiAgent` open-handle check on `ubuntu-latest` through `workflow_dispatch`.
 
-## Agent implement (`ai-agent` label / manual prompt)
+## Agent implement (Workbench issue / manual prompt)
 
 [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
 
-| Trigger             | When it runs                                                                                                      |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `issues: [labeled]` | Only when the label being assigned is exactly **`ai-agent`** (not on issue open, not when other labels are added) |
-| `workflow_dispatch` | Always, using the required `prompt` input                                                                         |
+| Trigger | When it runs |
+| --- | --- |
+| `schedule` | Twice hourly; claims the first Workbench file with `status: ready` and `automation: agent` |
+| `workflow_dispatch.issue_path` | Claims that exact eligible Workbench issue |
+| `workflow_dispatch.prompt` | Runs the explicit prompt without claiming an issue |
 
-Opt-in only: create milestones/epics/sub-issues first, then assign `ai-agent` to the focused issue you want executed. Opening an issue (even with labels pre-selected) does not start the job unless GitHub emits a `labeled` event for `ai-agent`. The workflow does **not** auto-create the label — maintainers create it once (`gh label create ai-agent` or the GitHub UI).
+The workflow serializes claims, commits `status: in_progress` before setup, and
+publishes a Workbench progress update and worklog whether implementation opens a
+PR or blocks. Drafts, manually owned issues, and historical imports cannot
+trigger it.
 
-Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + docker.sock) → push branch → open a PR → comment on the issue with the PR URL (issue runs) → exit the workflow job. The PR then follows the standard agent-owned failure/comment/conflict loop, exact-head readiness audit, and squash merge. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt: [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
+Loop: claim Workbench record → `task setup` → **`task ci-agent:implement`**
+(nook-ci-agent container + docker.sock) → push branch → open a Nook PR →
+publish Workbench progress/worklog → exit. The PR then follows the standard
+agent-owned failure/comment/conflict loop, exact-head readiness audit, squash
+merge, and final Workbench completion update. Same secrets as ci-fix:
+`CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
+[`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 
 ## Agent checklist when touching CI or e2e
 

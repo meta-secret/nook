@@ -1,24 +1,33 @@
-# GitHub Issue Management
+# Workbench Issue Management
 
 Use this workflow whenever a task reveals missing functionality that is too
 large, risky, blocked, or outside the current PR's safe scope. Agents must not
-hide unfinished work in chat history or PR summaries alone.
+hide unfinished work in chat history or PR summaries.
 
-GitHub issues are a shared, flat list used by many agents and humans. Manage
-them carefully: search first, preserve existing ownership, prefer comments over
-destructive edits, and keep related work discoverable through one aggregate
-issue plus focused sub-issues.
+Nook development issues live as versioned Markdown in
+[`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench),
+not in GitHub Issues. GitHub Issues are historical input only.
 
-When the user asks to create issues for a feature, also apply
-[`dynamic-skills/feature-issue-planning.md`](../dynamic-skills/feature-issue-planning.md):
-every feature issue pack must have a milestone. GitHub's public docs do not
-document a hard limit on the number of milestones, but a milestone with more
-than 500 open issues cannot be manually prioritized, so split oversized feature
-packs before they approach that size.
+## Repository boundary
+
+The Nook product repository owns source code, architecture, tests, CI, and the
+rules under `.cortex`. Nook Workbench owns:
+
+```text
+issues/<feature>/README.md
+issues/<feature>/<focused-deliverable>.md
+worklogs/<feature>/<timestamp>-<issue-or-pr>.md
+stats/ai-agent/<nook-pr>.yaml
+stats/main-build/<run-id>-attempt-<attempt>.yaml
+```
+
+A feature directory replaces a GitHub milestone and aggregate issue. Its
+`README.md` owns the overall goal, shared decisions, current status, and issue
+index. Focused Markdown files replace sub-issues.
 
 ## Trigger
 
-Before an agent says any of the following, it must run this workflow:
+Before an agent says any of the following, it must apply this workflow:
 
 - "too big for this PR"
 - "too risky to implement now"
@@ -31,142 +40,115 @@ Before an agent says any of the following, it must run this workflow:
 The workflow also applies when tests, review comments, or implementation work
 discover missing functionality that the current PR will not finish.
 
-## Required Issue Shape
+## Search first
 
-Every feature issue pack needs a milestone first. The milestone is the feature
-container and progress boundary; labels remain filters, not the source of
-ownership. Assign the aggregate issue and all sub-issues to that milestone.
-
-Every broad problem needs one aggregate issue. The aggregate issue owns the
-overall goal, current status, links to PRs, and the list of sub-issues.
-
-Every independently deliverable missing part needs a focused sub-issue. A
-sub-issue should have acceptance criteria small enough that another agent can
-implement and validate it without rereading the entire original conversation.
-
-Use GitHub's sub-issue relationship for parent/child tracking. If the local CLI
-does not expose sub-issue attachment, use the GitHub UI or API; do not skip the
-relationship. The issue body should still include explicit links so the
-relationship remains understandable from the flat issue list, search results,
-and CLI output.
-
-## Search First
-
-Before creating or editing issues, inspect existing work:
+Clone or update the Workbench outside the Nook working tree, then search feature
+summaries, issues, and worklogs with both product language and code terms:
 
 ```bash
-gh issue list --state all --search "<keywords> repo:meta-secret/nook" \
-  --json number,title,state,labels,assignees,milestone,updatedAt,url
-gh issue view <number> --json number,title,body,state,labels,assignees,milestone,comments,url
+workbench_dir="$(mktemp -d)"
+gh repo clone meta-secret/nook-workbench "$workbench_dir"
+rg -n -i "<user words>|<code terms>" \
+  "$workbench_dir/issues" "$workbench_dir/worklogs"
 ```
 
-Search with both user-facing words and code terms. For cross-cutting work, also
-search likely parent concepts such as `vault sync`, `event log`, `enrollment`,
-`password envelope`, `schema`, or the affected package names.
+Do not infer current state from a historical Nook GitHub issue alone. Imported
+records link their original issue bodies and comments, but the Workbench file is
+now the mutable execution record.
 
-## Choose Update vs Create
+## Required issue shape
 
-Update an existing issue when it already owns the broad problem or the exact
-missing deliverable. Prefer a comment when adding new findings, implementation
-notes, PR links, or validation gaps. Edit the issue body only when the issue
-itself needs a durable checklist, acceptance criteria update, or parent/sub-issue
-link.
+Every focused issue follows
+`issues/_templates/issue.md` and includes:
 
-Create a new issue when no existing issue covers the missing work. If no
-aggregate issue exists, create the aggregate first, then create or attach
-sub-issues underneath it. If an aggregate exists but the missing piece is
-independently deliverable, create a sub-issue and link it to the aggregate.
+- YAML frontmatter with title, lifecycle status, priority, automation mode,
+  owner, timestamps, source issues, related PRs, and dependencies;
+- context and an observable outcome;
+- explicit included and excluded scope;
+- testable acceptance criteria and required coverage;
+- append-only progress, findings, and durable decisions;
+- links to relevant Nook code, PRs, and historical discussions.
 
-Do not create duplicates. If overlap is uncertain, comment on the likely parent
-with the finding and ask/mark that a sub-issue may be needed rather than
-splitting ownership blindly.
+Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
+`cancelled`. `automation` is `manual` or `agent`.
 
-## Team Safety
+Only this exact combination authorizes the scheduled Nook implementation worker:
 
-Issues are shared by a team of agents and humans. Before changing an issue,
-check its assignees, labels, milestone, state, latest comments, and related PRs.
+```yaml
+status: ready
+automation: agent
+```
+
+Creating or editing any other record must not start implementation. The worker
+claims a ready record by committing `status: in_progress` before it runs.
+
+## Choose update versus create
+
+Update an existing file when it already owns the broad problem or focused
+deliverable. Preserve prior progress, findings, decisions, links, and acceptance
+criteria. Add a dated progress entry instead of erasing history.
+
+Create a new feature directory only when no existing feature owns the work.
+Create its `README.md` first, then add focused issue files and link them from the
+feature index. Do not put unrelated work into a flat `backlog` directory merely
+to avoid naming the feature; `backlog` is primarily the historical import area.
+
+## Publishing changes
+
+Workbench records are content, not Nook product changes. Publish a single
+record directly with the checked-in helper:
+
+```bash
+node .github/scripts/workbench-publish.cjs \
+  /absolute/path/to/local-record.md \
+  issues/<feature>/<issue>.md \
+  "issues: update <feature>/<issue>"
+```
+
+For coordinated multi-file restructuring, use a focused Workbench branch and
+PR. Never mix Workbench files into a Nook implementation PR.
+
+## Team safety
+
+Before editing a record, inspect its status, owner, updated timestamp,
+dependencies, related PRs, and recent worklogs.
 
 Agents must not:
 
-- Close, reopen, retitle, reassign, relabel, or move milestones on someone
-  else's active issue unless the user explicitly asked or the reason is obvious
-  and documented.
-- Remove existing body sections, checklists, links, or acceptance criteria while
-  adding new information.
-- Convert a focused issue into a broad aggregate if another aggregate already
-  exists.
-- Claim all sub-issues for themselves unless they are actively implementing
-  them in the current task.
+- claim or reassign another active owner's `in_progress` work;
+- mark acceptance criteria done without validation evidence;
+- delete prior findings, failed approaches, blockers, or decisions;
+- switch `automation: agent` or `status: ready` merely to organize a draft;
+- copy prompts, chats, credentials, secrets, vault data, private user
+  information, environment values, or raw logs into the Workbench.
 
-When in doubt, add a comment with the proposed relationship or missing scope
-instead of rewriting the issue.
+When overlap is uncertain, append the finding to the likely issue and leave it
+`proposed` rather than creating a competing execution record.
 
-## Aggregate Issue Template
+## Worklog requirement
 
-Use `--body-file` for markdown bodies with backticks or paths.
+Every task-owning agent must publish one worklog before reporting completion or
+a blocker, even when the task began from a direct user prompt and had no issue.
+Use `worklogs/_templates/worklog.md`. Include:
 
-```markdown
-## Summary
+- outcome and material progress;
+- implementation problems and root causes;
+- durable decisions and tradeoffs;
+- validation and linked Nook PR;
+- remaining work or `None`.
 
-<one paragraph describing the whole problem>
+Update the associated issue status and `related_prs` in the same completion
+boundary. A merged Nook PR normally moves the issue to `done`; a concrete
+external blocker moves it to `blocked`.
 
-## Current Status
+## Required handoff
 
-- <what is already implemented or covered by PRs>
-- <what remains missing>
+The final response or PR comment must link:
 
-## Sub-Issues
+- the Workbench feature and focused issue file;
+- the new worklog;
+- the Nook implementation PR;
+- what was completed versus what remains.
 
-- [ ] #<sub-issue>: <focused deliverable>
-- [ ] #<sub-issue>: <focused deliverable>
-
-## Acceptance Criteria
-
-- <end-to-end outcome for the aggregate problem>
-- <invariants that must hold across sub-issues>
-
-## References
-
-- PR: #<number>
-- Code: `<path>`
-- Discussion: <link if available>
-```
-
-## Sub-Issue Template
-
-```markdown
-## Parent
-
-Part of #<aggregate-issue>.
-
-## Problem
-
-<specific missing behavior or risk>
-
-## Scope
-
-- <what this issue must implement>
-- <what this issue must not include>
-
-## Acceptance Criteria
-
-- <testable outcome>
-- <required unit/e2e/docs coverage>
-
-## Notes
-
-- Found while working on PR #<number>.
-- Deferred because <size/risk/blocker/out-of-scope reason>.
-```
-
-## Required Handoff
-
-When deferring functionality, the final response or PR comment must include:
-
-- The aggregate issue number.
-- Each new or updated sub-issue number.
-- A concise reason why the work was deferred.
-- What was implemented in the current PR versus what remains.
-
-Before handoff, re-open the issue list or issue views and verify that links and
-relationships are visible.
+Re-open the published files before handoff and verify the links and state are
+visible on Workbench `main`.

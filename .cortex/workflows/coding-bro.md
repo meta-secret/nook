@@ -180,8 +180,8 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    mind from the first implementation step.
 3. **Implement** — Make the requested change. Follow [rules.md](../rules.md) and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md).
    If part of the requested functionality is too large, risky, blocked, or out
-   of scope, follow [issues.md](issues.md) before handoff: update or create the
-   aggregate GitHub issue and focused sub-issues for the missing work.
+    of scope, follow [issues.md](issues.md) before handoff: update or create the
+    Workbench feature and focused Markdown records for the missing work.
 4. **Pre-push hygiene** — Always run `task format` (host-applied). When UI-facing
    paths change, pass the UI demo contract against `origin/main`. Stage the
    applied format diff before committing. Do not run a required local product gate.
@@ -208,13 +208,15 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
     every actionable comment is resolved.
 10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the
     readiness audit succeeds.
-11. **Publish and analyze statistics** — write
-    `.stats/ai-agent/<n>.yaml`, compare it with one or two recent comparable PRs,
-    publish it in a separate check-free stats-only PR, and squash-merge that PR
-    immediately. Open a separate normal performance PR for actionable waste or
-    regression. See [agent-statistics.md](agent-statistics.md).
-12. **Finish** — report the task duration after the implementation and stats PRs
-    are merged and any required performance PR is also landed.
+11. **Publish Workbench context and statistics** — update the associated
+    Workbench issue, add the required worklog, write
+    `stats/ai-agent/<n>.yaml`, and compare it with one or two recent comparable
+    records. Publish directly to Workbench `main`; do not create a Nook
+    bookkeeping PR. Open a separate normal performance PR for actionable waste
+    or regression. See [issues.md](issues.md) and
+    [agent-statistics.md](agent-statistics.md).
+12. **Finish** — report the task duration after the implementation PR and
+    Workbench records are published and any required performance PR is landed.
 
 ```mermaid
 flowchart TD
@@ -230,7 +232,7 @@ flowchart TD
   G -->|no| FIX[7 Read app logs + fix + task format]
   FIX --> PUSH[Push completed fix]
   PUSH --> PR
-  M --> S[11 Publish + merge stats-only PR]
+  M --> S[11 Publish Workbench issue + worklog + stats]
   S --> W{Actionable regression or waste?}
   W -->|yes| BP[Open normal build-performance PR]
   W -->|no| D[12 Duration report]
@@ -365,16 +367,16 @@ or monitor the resulting Main workflow, development deployment, or live origins
 unless the user explicitly requested deployment/live verification or assigned
 a Main failure.
 
-### 11 — Publish statistics
+### 11 — Publish Workbench records
 
-After the implementation PR merges, follow
-[agent-statistics.md](agent-statistics.md). Create the YAML from current `main`,
-include the repository test inventory (counts by type and absolute total) for
-the merged head, compare it with one or two comparable prior records, publish
-it as the only file in a stats-only PR, and squash-merge it immediately without
-product checks, review, or `task pr:ready`. Stats-only PRs never generate
-another stats record. Do not wait for post-merge Main before publishing the
-record. Any performance fix belongs in a separate normal PR.
+After the implementation PR merges, follow [issues.md](issues.md) and
+[agent-statistics.md](agent-statistics.md). Update the associated issue and add
+a worklog summarizing progress, implementation problems, decisions, validation,
+and remaining work. Create the YAML from current Nook `main`, include the
+repository test inventory for the merged head, compare it with comparable prior
+records, and publish it to `meta-secret/nook-workbench` as
+`stats/ai-agent/<pr>.yaml`. Do not wait for post-merge Main. Any performance fix
+belongs in a separate normal Nook PR.
 
 ## CI fix PRs (nightly failures only)
 
@@ -407,10 +409,11 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Never hide deferred scope** — if requested functionality is not fully
   implemented because it is large, risky, blocked, or out of scope, manage it in
-  GitHub issues first. See [issues.md](issues.md).
-- **Per-PR statistics after merge** — measure throughout the normal PR, then
-  publish and analyze `.stats/ai-agent/<pr-number>.yaml` through a separate
-  check-free stats-only PR. See [agent-statistics.md](agent-statistics.md).
+  Workbench Markdown first. See [issues.md](issues.md).
+- **Workbench summary and per-PR statistics after merge** — publish the issue
+  update, agent worklog, and `stats/ai-agent/<pr-number>.yaml` directly to
+  Workbench. See [issues.md](issues.md) and
+  [agent-statistics.md](agent-statistics.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
 
 ## Related docs
@@ -418,7 +421,7 @@ When [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
 - [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
-- [issues.md](issues.md) — aggregate issue and sub-issue management for deferred scope
+- [issues.md](issues.md) — Workbench feature and focused issue management, plus required worklogs
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
-- [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and stats-only PR exception
+- [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and Workbench publication
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)
