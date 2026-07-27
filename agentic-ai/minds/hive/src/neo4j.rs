@@ -1561,11 +1561,35 @@ mod tests {
             assert_eq!(retried_claim.attempt_number, attempt_number);
             assert!(
                 store
-                    .fail(&retried_claim, &agent_a, "repair attempt failed")
+                    .fail(
+                        &retried_claim,
+                        &agent_a,
+                        &format!("repair attempt {attempt_number} failed"),
+                    )
                     .await
                     .expect("fail retried Main repair")
             );
         }
+        let status = store
+            .queue_status(200)
+            .await
+            .expect("inspect retried Main repair attempts");
+        let failed_repair = status
+            .iter()
+            .find(|task| task.id == repair.id.as_str())
+            .expect("retried Main repair status");
+        assert_eq!(failed_repair.latest_attempt_status, "FAILED");
+        assert_eq!(failed_repair.previous_attempt_status, "FAILED");
+        assert!(
+            failed_repair
+                .latest_error
+                .contains("repair attempt 4 failed")
+        );
+        assert!(
+            failed_repair
+                .previous_error
+                .contains("repair attempt 3 failed")
+        );
         assert!(
             !store
                 .retry_failed_main_task(
