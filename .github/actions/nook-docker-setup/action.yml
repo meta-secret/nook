@@ -84,7 +84,7 @@ runs:
         echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-        wasm_deps_fingerprint="${{ hashFiles('nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/.cargo/**', 'nook-app/.config/**', 'nook-app/docker-bake.hcl', 'nook-app/docker/base.Dockerfile', 'nook-app/docker/base.docker-bake.hcl', 'nook-app/docker/Taskfile.yml', 'nook-app/docker/sccache-wrapper.sh', 'nook-app/docker/sccache-report.sh', 'nook-app/nook-core/Dockerfile', 'nook-app/nook-core/docker-bake.hcl') }}"
+        wasm_deps_fingerprint="${{ hashFiles('nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/.cargo/**', 'nook-app/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/docker/base.Dockerfile', 'nook-app/docker/Taskfile.yml', 'nook-app/docker/sccache-wrapper.sh', 'nook-app/docker/sccache-report.sh', 'nook-app/nook-core/Dockerfile') }}"
         if [[ ! "$wasm_deps_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
           echo "Could not fingerprint the hosted WASM dependency graph" >&2
           exit 1

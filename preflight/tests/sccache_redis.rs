@@ -213,14 +213,14 @@ fn assert_delivery_cache_scope_contract() {
         "nook-app/**/Cargo.toml",
         "nook-app/.cargo/**",
         "nook-app/.config/**",
+        "nook-app/Taskfile.yml",
         "nook-app/docker-bake.hcl",
+        "nook-app/**/docker-bake.hcl",
         "nook-app/docker/base.Dockerfile",
-        "nook-app/docker/base.docker-bake.hcl",
         "nook-app/docker/Taskfile.yml",
         "nook-app/docker/sccache-wrapper.sh",
         "nook-app/docker/sccache-report.sh",
         "nook-app/nook-core/Dockerfile",
-        "nook-app/nook-core/docker-bake.hcl",
     ] {
         assert!(
             setup.contains(fingerprint_input),
@@ -236,6 +236,23 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("main-cache-only requires cache-write=false"));
     assert!(!setup.contains("cache_total_count()"));
     assert!(!setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
+
+    let release = read(".github/workflows/release.yml");
+    let release_source = release
+        .find("- name: Checkout release source")
+        .expect("release source checkout must exist");
+    let release_tooling = release
+        .find("- name: Checkout release workflow tooling")
+        .expect("release tooling checkout must exist");
+    let release_docker_setup = release
+        .find("- name: Docker setup")
+        .expect("release Docker setup must exist");
+    assert!(
+        release_source < release_tooling && release_tooling < release_docker_setup,
+        "release Docker setup must fingerprint the requested source after checkout"
+    );
+    assert!(release.contains("path: .nook/release-workflow"));
+    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
