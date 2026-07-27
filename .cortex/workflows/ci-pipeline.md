@@ -174,6 +174,15 @@ writer also prevents short-lived lineages from exhausting the repository cache
 quota. The self-hosted `nook` label is reserved for runner cleanup while that
 machine remains registered.
 
+BuildKit cache records imported by a named target are local to that target's
+solve; they do not propagate through a named build context into the outer
+source, export, or application solve. Every outer WASM solve must therefore
+list the fingerprinted WASM dependency scope directly in its `cache-from`
+inputs, even when it also consumes `builder-wasm-deps` as a named context.
+`nook-app/docker-bake.hcl` owns that direct import, and the repository invariant
+in `preflight/tests/sccache_redis.rs` prevents the source-cache fan-out from
+silently dropping it.
+
 The split native and WASM producers additionally restore small validated
 handoffs by exact input hash. Their keys cover Rust sources and manifests,
 toolchain and Docker definitions, Task entry points, Docker setup, and the PR
