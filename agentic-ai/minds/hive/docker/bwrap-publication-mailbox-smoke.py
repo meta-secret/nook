@@ -36,6 +36,32 @@ with tempfile.TemporaryDirectory(
     verifying_key = public_der[-32:].hex()
     broker_errors: list[Exception] = []
 
+    def sign_message(message: bytes) -> bytes:
+        with tempfile.NamedTemporaryFile(
+            prefix=".signing-input-", dir=directory, delete=False
+        ) as signing_input:
+            signing_input.write(message)
+            signing_input.flush()
+            os.fsync(signing_input.fileno())
+            signing_input_path = signing_input.name
+        try:
+            return subprocess.run(
+                [
+                    "openssl",
+                    "pkeyutl",
+                    "-sign",
+                    "-rawin",
+                    "-inkey",
+                    signing_key,
+                    "-in",
+                    signing_input_path,
+                ],
+                check=True,
+                capture_output=True,
+            ).stdout
+        finally:
+            os.unlink(signing_input_path)
+
     def serve_ping() -> None:
         try:
             deadline = time.monotonic() + 5
@@ -62,19 +88,7 @@ with tempfile.TemporaryDirectory(
             acknowledgement_message = (
                 b"ack" + b"\0" + request_id.encode() + b"\0" + request_digest
             )
-            acknowledgement_signature = subprocess.run(
-                [
-                    "openssl",
-                    "pkeyutl",
-                    "-sign",
-                    "-rawin",
-                    "-inkey",
-                    signing_key,
-                ],
-                input=acknowledgement_message,
-                check=True,
-                capture_output=True,
-            ).stdout
+            acknowledgement_signature = sign_message(acknowledgement_message)
             acknowledgement_path = os.path.join(
                 acknowledgements, f"{request_id}.json"
             )
@@ -121,19 +135,7 @@ with tempfile.TemporaryDirectory(
                 + b"\0"
                 + response_json.encode()
             )
-            signature = subprocess.run(
-                [
-                    "openssl",
-                    "pkeyutl",
-                    "-sign",
-                    "-rawin",
-                    "-inkey",
-                    signing_key,
-                ],
-                input=signed_message,
-                check=True,
-                capture_output=True,
-            ).stdout
+            signature = sign_message(signed_message)
             with open(temporary, "x", encoding="utf-8") as response_file:
                 os.chmod(temporary, 0o600)
                 json.dump(
