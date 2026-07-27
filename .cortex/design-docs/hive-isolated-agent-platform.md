@@ -333,16 +333,18 @@ an authenticated task reply marker to be visible before a thread can be
 resolved.
 Codex cannot read the token or issue arbitrary authenticated requests.
 
-The worker binds this API before repository execution and opens one inheritable
-publication listener capability. The worker relays one fresh broker connection
-through that listener per `hive github` invocation, so an interrupted client
-cannot leave a reply queued for the next command. The listener is explicitly
-inheritable, and deployment verification proves the descriptor survives the
-distribution Bubblewrap implementation without a version-specific wrapper.
-Codex's restricted network policy
-continues to deny every new connection while `hive github` can accept only the
-already-bound, typed broker channel. Main-repair tasks receive the bounded
-publication capability; all other task kinds receive no publication descriptor.
+The worker binds this API before repository execution and opens one ephemeral
+publication capability in a random private temporary directory. Its Unix socket
+is mode `0600`, and the worker preconnects one fresh broker stream before each
+`hive github` invocation, so an interrupted client cannot leave a reply queued
+for the next command. Passing the socket path through the task's filtered shell
+environment avoids relying on inherited descriptors that Codex closes at its
+shell exec boundary. Deployment verification executes the real
+`hive github ping` client through the distribution Bubblewrap implementation.
+Codex's restricted network policy continues to deny network access while the
+local socket reaches only the already-bound typed broker channel. Main-repair
+tasks receive the bounded publication capability path; all other task kinds
+receive no capability path and remain broker-disabled.
 The broker
 reads the worker tree through a read-only mount,
 copies authored files into its own private checkout, and runs Git only there
