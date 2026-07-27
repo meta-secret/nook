@@ -87,3 +87,21 @@ task infra:deploy
 The GitHub token needs Nook contents and pull-request write access plus Actions
 read access. Later deployments reuse the encrypted Secrets unless replacement
 files are explicitly supplied.
+Durable Hive queue state is inspected through the repository Taskfile:
+
+```bash
+task infra:hive:queue:status
+```
+
+An exhausted Main-repair task is never reset implicitly or given an unbounded
+retry budget. After deploying a platform repair, an operator may add exactly
+three attempts to one failed task while preserving its attempt history:
+
+```bash
+task infra:hive:queue:retry \
+  HIVE_TASK_ID=main-failure-<full-main-sha>
+```
+
+The retry refuses non-failed, non-Main-repair, already-requeued tasks, tasks
+whose one manual recovery budget was consumed, and tasks with incomplete
+dependencies.

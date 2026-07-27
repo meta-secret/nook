@@ -234,11 +234,19 @@ impl<S: TaskStore> Worker<S> {
                         .context("embedded Codex execution failed")?;
                 let result: TerminalResult = serde_json::from_str(&raw_result)
                     .context("Codex returned an invalid terminal result")?;
+                result
+                    .validate()
+                    .map_err(anyhow::Error::msg)
+                    .context("Codex returned empty terminal result content")?;
+                let blocker = result
+                    .blocker
+                    .clone()
+                    .into_request()
+                    .map_err(anyhow::Error::msg)
+                    .context("Codex returned an invalid blocker result")?;
                 if result.status == TerminalStatus::Blocked {
-                    let blocker = result
-                        .blocker
-                        .as_ref()
-                        .context("Codex blocked the task without a structured blocker")?;
+                    let blocker =
+                        blocker.context("Codex blocked the task without a structured blocker")?;
                     if blocker.id == task.id {
                         return Err(anyhow!("a blocked task cannot name itself as its blocker"));
                     }
@@ -267,7 +275,7 @@ impl<S: TaskStore> Worker<S> {
                     }
                     return Err(WorkerBlocked.into());
                 }
-                if result.blocker.is_some() {
+                if blocker.is_some() {
                     return Err(anyhow!("Codex returned a blocker for a completed task"));
                 }
                 if task.kind == "main-repair"
@@ -833,7 +841,8 @@ mod tests {
         prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
-        Artifact, AttemptId, ClaimedTask, LeaseToken, TaskId, TerminalResult, TerminalStatus,
+        Artifact, AttemptId, BlockerResult, ClaimedTask, LeaseToken, TaskId, TerminalResult,
+        TerminalStatus,
     };
     use sha2::{Digest, Sha256};
 
@@ -983,7 +992,7 @@ mod tests {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
-            blocker: None,
+            blocker: BlockerResult::none(),
         };
 
         let artifact = persistable_patch(repository.path(), baseline, &task, &result, false)
@@ -1044,7 +1053,7 @@ mod tests {
             summary: "published repair delivered".to_owned(),
             changed_files: vec!["repair.txt".to_owned()],
             tests: Vec::new(),
-            blocker: None,
+            blocker: BlockerResult::none(),
         };
 
         assert!(
@@ -1174,7 +1183,7 @@ mod tests {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
-            blocker: None,
+            blocker: BlockerResult::none(),
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false)
             .await

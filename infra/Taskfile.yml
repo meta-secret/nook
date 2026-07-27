@@ -2585,3 +2585,36 @@ tasks:
       - >-
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
         curl --fail --silent --show-error http://127.0.0.1:5000/v2/
+
+  hive:queue:status:
+    desc: Show bounded durable Hive task and latest-attempt state.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- /usr/local/bin/hive queue status
+        REMOTE
+
+  hive:queue:retry:
+    desc: Add three attempts to one exhausted Main-repair task (HIVE_TASK_ID required).
+    silent: true
+    cmds:
+      - |
+        task_id="{{.HIVE_TASK_ID}}"
+        if test -z "$task_id" || test "$task_id" = "<no value>"; then
+          echo "HIVE_TASK_ID is required" >&2
+          exit 1
+        fi
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' -- "$task_id" <<'REMOTE'
+        set -euo pipefail
+        task_id="$1"
+        sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- /usr/local/bin/hive queue retry-failed-main \
+            --task-id "$task_id"
+        REMOTE

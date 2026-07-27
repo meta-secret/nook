@@ -4,6 +4,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use neo4rs::{ConfigBuilder, Error as Neo4jDriverError, Graph, Neo4jErrorKind, Row, query};
 use rand::RngExt;
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::install_rustls_crypto_provider;
@@ -19,7 +20,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 2;
+const LATEST_SCHEMA_VERSION: i64 = 3;
 const CLAIM_RETRY_LIMIT: usize = 5;
 
 fn is_transient_claim_error(error: &anyhow::Error) -> bool {
@@ -48,6 +49,18 @@ pub struct Neo4jTaskStore {
     graph: Graph,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct QueueTaskStatus {
+    pub id: String,
+    pub status: String,
+    pub attempt_count: i64,
+    pub max_attempts: i64,
+    pub latest_attempt_status: String,
+    pub latest_error: String,
+    pub created_at: i64,
+    pub manual_retry_used: bool,
+}
+
 impl Neo4jTaskStore {
     pub async fn connect(uri: &str, username: &str, password: &str) -> anyhow::Result<Self> {
         install_rustls_crypto_provider()?;
@@ -62,6 +75,84 @@ impl Neo4jTaskStore {
             .await
             .context("failed to connect to Neo4j")?;
         Ok(Self { graph })
+    }
+
+    pub async fn queue_status(&self, limit: i64) -> anyhow::Result<Vec<QueueTaskStatus>> {
+        if !(1..=200).contains(&limit) {
+            anyhow::bail!("queue status limit must be between 1 and 200");
+        }
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task)
+                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
+                     WITH task, attempt
+                     ORDER BY attempt.completed_at DESC, attempt.started_at DESC
+                     WITH task, collect(attempt)[0] AS latest
+                     RETURN task.id AS id,
+                            task.status AS status,
+                            task.attempt_count AS attempt_count,
+                            task.max_attempts AS max_attempts,
+                            coalesce(latest.status, '') AS latest_attempt_status,
+                            substring(
+                              replace(coalesce(latest.error, ''), '\n', ' '),
+                              0,
+                              600
+                            ) AS latest_error,
+                            task.created_at AS created_at,
+                            coalesce(task.manual_retry_used, false) AS manual_retry_used
+                     ORDER BY created_at DESC
+                     LIMIT $limit",
+                )
+                .param("limit", limit),
+            )
+            .await?;
+        let mut tasks = Vec::new();
+        while let Some(row) = rows.next().await? {
+            tasks.push(QueueTaskStatus {
+                id: row.get("id")?,
+                status: row.get("status")?,
+                attempt_count: row.get("attempt_count")?,
+                max_attempts: row.get("max_attempts")?,
+                latest_attempt_status: row.get("latest_attempt_status")?,
+                latest_error: row.get("latest_error")?,
+                created_at: row.get("created_at")?,
+                manual_retry_used: row.get("manual_retry_used")?,
+            });
+        }
+        Ok(tasks)
+    }
+
+    pub async fn retry_failed_main_task(&self, task_id: &TaskId) -> anyhow::Result<bool> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     WHERE task.kind = 'main-repair'
+                       AND task.status = 'FAILED'
+                       AND coalesce(task.manual_retry_used, false) = false
+                       AND NOT EXISTS {
+                         MATCH (task)<-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
+                       }
+                       AND NOT EXISTS {
+                         MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
+                         WHERE dependency.status <> 'COMPLETED'
+                       }
+                     SET task.status = 'READY',
+                         task.max_attempts = task.attempt_count + 3,
+                         task.manual_retry_used = true,
+                         task.failure_reason = null,
+                         task.blocked_reason = null,
+                         task.updated_at = timestamp(),
+                         task.version = task.version + 1
+                     RETURN task.id AS id",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
     }
 
     fn claimed_task(
@@ -156,6 +247,16 @@ impl TaskStore for Neo4jTaskStore {
                 );
             }
         }
+        if installed_version < 3 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     WHERE task.manual_retry_used IS NULL
+                     SET task.manual_retry_used = false",
+                ))
+                .await
+                .context("failed to initialize schema-3 manual retry state")?;
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -201,6 +302,7 @@ impl TaskStore for Neo4jTaskStore {
                     "MERGE (task:Task {id: $id})
                      ON CREATE SET task.created_at = timestamp(),
                                    task.attempt_count = 0,
+                                   task.manual_retry_used = false,
                                    task.version = 0,
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
@@ -1302,7 +1404,74 @@ mod tests {
             "terminal dependency failure must propagate to every blocked descendant"
         );
 
-        let reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
+        let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
+        repair.kind = "main-repair".to_owned();
+        repair.max_attempts = 1;
+        store.enqueue(&repair).await.expect("enqueue Main repair");
+        let repair_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim Main repair")
+            .expect("Main repair available");
+        assert!(
+            store
+                .fail(&repair_claim, &agent_a, "invalid structured output schema")
+                .await
+                .expect("exhaust Main repair")
+        );
+        let status = store
+            .queue_status(200)
+            .await
+            .expect("inspect durable queue");
+        let failed_repair = status
+            .iter()
+            .find(|task| task.id == repair.id.as_str())
+            .expect("failed Main repair status");
+        assert_eq!(failed_repair.status, "FAILED");
+        assert_eq!(failed_repair.latest_attempt_status, "FAILED");
+        assert!(
+            failed_repair
+                .latest_error
+                .contains("invalid structured output schema")
+        );
+        assert!(
+            store
+                .retry_failed_main_task(&repair.id)
+                .await
+                .expect("retry failed Main repair")
+        );
+        assert!(
+            !store
+                .retry_failed_main_task(&repair.id)
+                .await
+                .expect("refuse duplicate retry"),
+            "a ready task must not receive an unbounded retry budget"
+        );
+        for attempt_number in 2..=4 {
+            let retried_claim = store
+                .claim(&agent_a, 300)
+                .await
+                .expect("claim retried Main repair")
+                .expect("retried Main repair available");
+            assert_eq!(retried_claim.id, repair.id);
+            assert_eq!(retried_claim.attempt_number, attempt_number);
+            assert!(
+                store
+                    .fail(&retried_claim, &agent_a, "repair attempt failed")
+                    .await
+                    .expect("fail retried Main repair")
+            );
+        }
+        assert!(
+            !store
+                .retry_failed_main_task(&repair.id)
+                .await
+                .expect("refuse a second recovery budget"),
+            "an exhausted recovery budget must never be rearmed"
+        );
+
+        let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
+        reused_failed_parent.kind = "main-repair".to_owned();
         store
             .enqueue(&reused_failed_parent)
             .await
@@ -1343,6 +1512,13 @@ mod tests {
                 .get::<String>("status")
                 .expect("reused exhausted-blocker status"),
             "FAILED"
+        );
+        assert!(
+            !store
+                .retry_failed_main_task(&reused_failed_parent.id)
+                .await
+                .expect("refuse repair with failed dependency"),
+            "a repair with a failed dependency must remain failed"
         );
 
         let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new());
@@ -1489,5 +1665,49 @@ mod tests {
             .run(query("MATCH (node) DETACH DELETE node"))
             .await
             .expect("clean schema migration fixture");
+        store
+            .graph
+            .run(query(
+                "CREATE (:HiveSchemaMigration {version: 2})
+                 CREATE (:Task {
+                   id: 'schema-2-task',
+                   status: 'FAILED',
+                   source_commit: '0123456789abcdef0123456789abcdef01234567'
+                 })",
+            ))
+            .await
+            .expect("create schema-2 fixture");
+        store.migrate().await.expect("migrate schema 2 to schema 3");
+        let mut schema_three_rows = store
+            .graph
+            .execute(query(
+                "MATCH (task:Task {id: 'schema-2-task'})
+                 MATCH (migration:HiveSchemaMigration {version: 3})
+                 RETURN task.manual_retry_used AS manual_retry_used,
+                        migration.version AS version",
+            ))
+            .await
+            .expect("read schema-3 migration state");
+        let schema_three = schema_three_rows
+            .next()
+            .await
+            .expect("read schema-3 row")
+            .expect("schema-3 migration row");
+        assert!(
+            !schema_three
+                .get::<bool>("manual_retry_used")
+                .expect("initialized retry marker")
+        );
+        assert_eq!(
+            schema_three
+                .get::<i64>("version")
+                .expect("schema-3 version"),
+            3
+        );
+        store
+            .graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .expect("clean schema-3 migration fixture");
     }
 }

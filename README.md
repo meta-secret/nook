@@ -381,6 +381,8 @@ task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migrat
 task infra:kata:verify      # prove a Pod is using the Kata guest kernel
 task infra:kata:diagnose    # bounded Kata installer and runtime evidence
 task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
+task infra:hive:queue:status # inspect durable task and latest-attempt state
+task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded recovery budget
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart
 task hive:check             # format-check and lint the Rust Hive worker
@@ -388,6 +390,9 @@ task hive:test              # run Hive lease/DAG behavior tests
 task infra:status           # inspect the remote infrastructure stack
 task infra:redis:stats      # remote compiler-cache memory and hit statistics
 ```
+
+See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
+inspection and recovery workflow.
 
 UI-facing pull requests must add or update a focused
 `e2e/demos/*.demo.spec.ts`. PR CI records those specs in headless Chromium and

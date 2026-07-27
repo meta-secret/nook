@@ -467,6 +467,13 @@ unless hive_taskfile.include?('if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]') &&
        )
   raise "standalone Hive tests must keep destructive Neo4j integration opt-in"
 end
+
+unless infra_taskfile.include?("hive:queue:status:") &&
+       infra_taskfile.include?("hive:queue:retry:") &&
+       infra_taskfile.include?("/usr/local/bin/hive queue status") &&
+       infra_taskfile.include?("/usr/local/bin/hive queue retry-failed-main")
+  raise "Hive queue inspection and bounded failed-task recovery must remain Taskfile-owned"
+end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 unless hive_dockerfile.include?(
          'SHELL ["/bin/bash", "-o", "pipefail", "-c"]'

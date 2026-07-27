@@ -9,37 +9,31 @@
       "enum": ["completed", "blocked"]
     },
     "summary": {
-      "type": "string",
-      "minLength": 1
+      "type": "string"
     },
     "changed_files": {
       "type": "array",
       "items": {
-        "type": "string",
-        "minLength": 1
+        "type": "string"
       }
     },
     "tests": {
       "type": "array",
       "items": {
-        "type": "string",
-        "minLength": 1
+        "type": "string"
       }
     },
     "blocker": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["id", "title", "prompt"],
-          "properties": {
-            "id": { "type": "string", "minLength": 1 },
-            "title": { "type": "string", "minLength": 1 },
-            "prompt": { "type": "string", "minLength": 1 }
-          }
-        },
-        { "type": "null" }
-      ]
+      "type": "object",
+      "description": "Set present=true with non-empty details only for blocked status. For completed status, set present=false and all three detail strings to empty.",
+      "additionalProperties": false,
+      "required": ["present", "id", "title", "prompt"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "prompt": { "type": "string" }
+      }
     }
   }
 }
