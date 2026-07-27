@@ -185,11 +185,9 @@ RUN groupadd --gid 1000 hive \
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
 COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox
-COPY hive/docker/bwrap-with-publication-fd.sh /usr/local/bin/bwrap
 COPY hive/docker/bwrap-publication-fd-smoke.py /usr/local/libexec/hive-bwrap-fd-smoke.py
 RUN chmod 0755 \
       /usr/local/bin/hive-codex-linux-sandbox \
-      /usr/local/bin/bwrap \
       /usr/local/libexec/hive-bwrap-fd-smoke.py
 
 USER 1000:1000

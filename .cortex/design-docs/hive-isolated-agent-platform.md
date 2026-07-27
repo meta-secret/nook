@@ -315,8 +315,10 @@ Codex cannot read the token or issue arbitrary authenticated requests.
 The worker binds this API before repository execution and opens one inheritable
 publication listener capability. The worker relays one fresh broker connection
 through that listener per `hive github` invocation, so an interrupted client
-cannot leave a reply queued for the next command. The runtime Bubblewrap wrapper
-preserves only this explicit descriptor. Codex's restricted network policy
+cannot leave a reply queued for the next command. The listener is explicitly
+inheritable, and deployment verification proves the descriptor survives the
+distribution Bubblewrap implementation without a version-specific wrapper.
+Codex's restricted network policy
 continues to deny every new connection while `hive github` can accept only the
 already-bound, typed broker channel. Main-repair tasks receive the bounded
 publication capability; all other task kinds receive no publication descriptor.

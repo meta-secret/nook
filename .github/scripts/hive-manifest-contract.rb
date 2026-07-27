@@ -557,9 +557,6 @@ hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
-hive_bwrap_wrapper = File.read(
-  File.join(root, "agentic-ai/minds/hive/docker/bwrap-with-publication-fd.sh")
-)
 hive_bwrap_smoke = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-fd-smoke.py")
 )
@@ -581,13 +578,6 @@ unless hive_dockerfile.include?(
        )
   raise "Hive runtime must inject Codex's nested Restricted-Pod procfs mode"
 end
-unless hive_dockerfile.include?(
-         "COPY hive/docker/bwrap-with-publication-fd.sh /usr/local/bin/bwrap"
-       ) &&
-       hive_bwrap_wrapper.include?('--keep-fd "$publication_fd"') &&
-       hive_bwrap_wrapper.include?('exec "$real_bwrap" "$@"')
-  raise "Hive runtime must preserve only the explicit publication descriptor through Bubblewrap"
-end
 unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("/usr/bin/setpriv --no-new-privs") &&
        infra_taskfile.include?("/usr/bin/bwrap") &&
@@ -597,6 +587,8 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("publication descriptor through Bubblewrap") &&
        infra_taskfile.include?("/usr/local/libexec/hive-bwrap-fd-smoke.py") &&
        hive_bwrap_smoke.include?("os.fstat(fd)") &&
+       hive_bwrap_smoke.include?("os.set_inheritable(fd, True)") &&
+       hive_bwrap_smoke.include?("pass_fds=(fd,)") &&
        infra_taskfile.include?("awk '/^Seccomp:/ {print $2}' /proc/self/status")
   raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
 end
