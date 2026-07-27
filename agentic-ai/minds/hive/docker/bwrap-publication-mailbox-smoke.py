@@ -15,6 +15,20 @@ with tempfile.TemporaryDirectory(
     responses = os.path.join(directory, "responses")
     os.mkdir(requests, mode=0o700)
     os.mkdir(responses, mode=0o700)
+    signing_key = os.path.join(directory, ".signing-key.pem")
+    subprocess.run(
+        ["openssl", "genpkey", "-algorithm", "ED25519", "-out", signing_key],
+        check=True,
+        capture_output=True,
+    )
+    public_der = subprocess.run(
+        ["openssl", "pkey", "-in", signing_key, "-pubout", "-outform", "DER"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    if len(public_der) < 32:
+        raise RuntimeError("publication smoke verification key is invalid")
+    verifying_key = public_der[-32:].hex()
     broker_errors: list[Exception] = []
 
     def serve_ping() -> None:
@@ -38,12 +52,33 @@ with tempfile.TemporaryDirectory(
             request_id = os.path.basename(request_path).removesuffix(".json")
             temporary = os.path.join(responses, f".{request_id}.tmp")
             destination = os.path.join(responses, f"{request_id}.json")
+            response_json = json.dumps(
+                {
+                    "result": "value",
+                    "value": {"status": "ok"},
+                },
+                separators=(",", ":"),
+            )
+            signed_message = request_id.encode() + b"\0" + response_json.encode()
+            signature = subprocess.run(
+                [
+                    "openssl",
+                    "pkeyutl",
+                    "-sign",
+                    "-rawin",
+                    "-inkey",
+                    signing_key,
+                ],
+                input=signed_message,
+                check=True,
+                capture_output=True,
+            ).stdout
             with open(temporary, "x", encoding="utf-8") as response_file:
                 os.chmod(temporary, 0o600)
                 json.dump(
                     {
-                        "result": "value",
-                        "value": {"status": "ok"},
+                        "response_json": response_json,
+                        "signature": signature.hex(),
                     },
                     response_file,
                 )
@@ -58,6 +93,7 @@ with tempfile.TemporaryDirectory(
 
     environment = os.environ.copy()
     environment["HIVE_PUBLICATION_DIRECTORY"] = directory
+    environment["HIVE_PUBLICATION_VERIFY_KEY"] = verifying_key
     client_error: Exception | None = None
     completed: subprocess.CompletedProcess[str] | None = None
     try:

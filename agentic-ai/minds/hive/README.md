@@ -81,7 +81,13 @@ tasks and exposes no capability path to any other task kind. The capability is
 a private filesystem mailbox beneath the task's bound `/workspace`. Each
 `hive github` command publishes one unique atomic request file and waits for its
 matching create-new response; the worker relay preconnects one fresh typed
-broker stream before consuming that request. This requires neither an inherited
+broker stream before consuming that request. The relay signs the response with
+an ephemeral Ed25519 key and the sandbox receives only its verification key, so
+task-controlled code cannot forge a privileged result. The client waits for the
+broker operation within the worker's task lifecycle rather than timing out
+while a mutation may still complete. `hive github inspect --page N` returns
+bounded pages for large check, review, comment, and thread histories. This
+requires neither an inherited
 descriptor nor a sandbox socket connection, so Codex retains its deny-network
 policy. Abandoned responses cannot be consumed by later commands and disappear
 with the task workspace. Publication uses a

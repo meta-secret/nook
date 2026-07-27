@@ -4,6 +4,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use anyhow::Context;
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -18,8 +19,9 @@ use crate::model::ClaimedTask;
 const REPOSITORY: &str = "meta-secret/nook";
 const API_ROOT: &str = "https://api.github.com";
 const MAILBOX_REQUEST_LIMIT: u64 = 64 * 1024;
-const MAILBOX_RESPONSE_LIMIT: u64 = 4 * 1024 * 1024;
+const MAILBOX_RESPONSE_LIMIT: u64 = 8 * 1024 * 1024;
 const MAILBOX_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+const INSPECTION_PAGE_SIZE: u64 = 50;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BoundTask {
@@ -61,7 +63,9 @@ pub enum GitHubRequest {
         title: String,
         body: String,
     },
-    Inspect,
+    Inspect {
+        page: u32,
+    },
     ReplyThread {
         thread_id: String,
         body: String,
@@ -87,6 +91,12 @@ pub enum GitHubRequest {
 enum GitHubResponse {
     Value(Value),
     Error(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SignedMailboxResponse {
+    response_json: String,
+    signature: String,
 }
 
 #[derive(Clone)]
@@ -141,11 +151,16 @@ pub struct PublicationCapability {
     relay: JoinHandle<()>,
     _directory: TempDir,
     directory: PathBuf,
+    verifying_key: String,
 }
 
 impl PublicationCapability {
     pub fn directory(&self) -> &Path {
         &self.directory
+    }
+
+    pub fn verifying_key(&self) -> &str {
+        &self.verifying_key
     }
 }
 
@@ -171,10 +186,13 @@ pub async fn open_publication_capability(
             .with_context(|| format!("create publication mailbox {}", child.display()))?;
         std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o700))?;
     }
+    let signing_key = SigningKey::from_bytes(&rand::random());
+    let verifying_key = encode_hex(signing_key.verifying_key().as_bytes());
     let (ready_tx, ready_rx) = oneshot::channel();
     let relay = tokio::spawn(relay_publication_requests(
         directory.path().to_owned(),
         socket.to_owned(),
+        signing_key,
         ready_tx,
     ));
     ready_rx
@@ -183,6 +201,7 @@ pub async fn open_publication_capability(
     Ok(PublicationCapability {
         relay,
         directory: directory.path().to_owned(),
+        verifying_key,
         _directory: directory,
     })
 }
@@ -200,7 +219,11 @@ pub async fn run_publication_client(
     request_value: GitHubRequest,
 ) -> anyhow::Result<()> {
     let response = match std::env::var_os("HIVE_PUBLICATION_DIRECTORY") {
-        Some(directory) => request_via_mailbox(Path::new(&directory), &request_value).await?,
+        Some(directory) => {
+            let verifying_key = std::env::var("HIVE_PUBLICATION_VERIFY_KEY")
+                .context("publication mailbox verification key is unavailable")?;
+            request_via_mailbox(Path::new(&directory), &verifying_key, &request_value).await?
+        }
         None => request(socket, &request_value).await?,
     };
     println!("{}", serde_json::to_string(&response)?);
@@ -214,6 +237,7 @@ async fn request(socket: &Path, request_value: &GitHubRequest) -> anyhow::Result
 async fn relay_publication_requests(
     capability_directory: PathBuf,
     broker_socket: PathBuf,
+    signing_key: SigningKey,
     ready: oneshot::Sender<()>,
 ) {
     let mut ready = Some(ready);
@@ -260,7 +284,8 @@ async fn relay_publication_requests(
             }
         };
         if let Err(error) =
-            write_mailbox_response(&capability_directory, &request_id, &response).await
+            write_mailbox_response(&capability_directory, &request_id, &response, &signing_key)
+                .await
         {
             eprintln!("Hive publication capability response failed: {error:#}");
         }
@@ -321,6 +346,7 @@ async fn write_mailbox_response(
     directory: &Path,
     request_id: &str,
     response: &GitHubResponse,
+    signing_key: &SigningKey,
 ) -> anyhow::Result<()> {
     let responses = directory.join("responses");
     let temporary = responses.join(format!(".{request_id}.tmp"));
@@ -332,7 +358,13 @@ async fn write_mailbox_response(
         .custom_flags(libc::O_NOFOLLOW)
         .open(&temporary)
         .await?;
-    file.write_all(&serde_json::to_vec(response)?).await?;
+    let response_json = serde_json::to_string(response)?;
+    let signature = signing_key.sign(&mailbox_signed_message(request_id, &response_json));
+    let envelope = SignedMailboxResponse {
+        response_json,
+        signature: encode_hex(&signature.to_bytes()),
+    };
+    file.write_all(&serde_json::to_vec(&envelope)?).await?;
     file.sync_all().await?;
     drop(file);
     tokio::fs::rename(&temporary, &destination).await?;
@@ -341,15 +373,21 @@ async fn write_mailbox_response(
 
 async fn request_via_mailbox(
     directory: &Path,
+    verifying_key: &str,
     request_value: &GitHubRequest,
 ) -> anyhow::Result<Value> {
-    let (request_path, response_path) = write_mailbox_request(directory, request_value).await?;
+    let (request_id, response_path) = write_mailbox_request(directory, request_value).await?;
+    let verifying_key = decode_verifying_key(verifying_key)?;
 
-    for _ in 0..2400 {
+    loop {
         match read_mailbox_response(&response_path).await {
             Ok(response) => {
                 let _ = tokio::fs::remove_file(&response_path).await;
-                return response_value(response);
+                return response_value(verify_mailbox_response(
+                    &request_id,
+                    &verifying_key,
+                    response,
+                )?);
             }
             Err(error)
                 if error
@@ -361,17 +399,12 @@ async fn request_via_mailbox(
             Err(error) => return Err(error),
         }
     }
-    let _ = tokio::fs::remove_file(&request_path).await;
-    anyhow::bail!(
-        "publication mailbox {} was unavailable for 120 seconds",
-        directory.display()
-    )
 }
 
 async fn write_mailbox_request(
     directory: &Path,
     request_value: &GitHubRequest,
-) -> anyhow::Result<(PathBuf, PathBuf)> {
+) -> anyhow::Result<(String, PathBuf)> {
     let request_id = uuid::Uuid::new_v4().simple().to_string();
     let requests = directory.join("requests");
     let responses = directory.join("responses");
@@ -390,10 +423,10 @@ async fn write_mailbox_request(
     file.sync_all().await?;
     drop(file);
     tokio::fs::rename(&temporary, &request_path).await?;
-    Ok((request_path, response_path))
+    Ok((request_id, response_path))
 }
 
-async fn read_mailbox_response(path: &Path) -> anyhow::Result<GitHubResponse> {
+async fn read_mailbox_response(path: &Path) -> anyhow::Result<SignedMailboxResponse> {
     let file = tokio::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW)
@@ -411,6 +444,54 @@ async fn read_mailbox_response(path: &Path) -> anyhow::Result<GitHubResponse> {
         anyhow::bail!("publication mailbox response exceeds the size limit");
     }
     serde_json::from_slice(&contents).context("decode publication mailbox response")
+}
+
+fn mailbox_signed_message(request_id: &str, response_json: &str) -> Vec<u8> {
+    let mut message = Vec::with_capacity(request_id.len() + 1 + response_json.len());
+    message.extend_from_slice(request_id.as_bytes());
+    message.push(0);
+    message.extend_from_slice(response_json.as_bytes());
+    message
+}
+
+fn verify_mailbox_response(
+    request_id: &str,
+    verifying_key: &VerifyingKey,
+    response: SignedMailboxResponse,
+) -> anyhow::Result<GitHubResponse> {
+    let signature_bytes = decode_hex::<64>(&response.signature)
+        .context("publication mailbox signature is invalid")?;
+    let signature = Signature::from_bytes(&signature_bytes);
+    verifying_key
+        .verify(
+            &mailbox_signed_message(request_id, &response.response_json),
+            &signature,
+        )
+        .context("publication mailbox response was not signed by the trusted relay")?;
+    serde_json::from_str(&response.response_json)
+        .context("decode signed publication mailbox response")
+}
+
+fn decode_verifying_key(value: &str) -> anyhow::Result<VerifyingKey> {
+    VerifyingKey::from_bytes(
+        &decode_hex::<32>(value).context("publication mailbox verification key is invalid")?,
+    )
+    .context("publication mailbox verification key is invalid")
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn decode_hex<const N: usize>(value: &str) -> anyhow::Result<[u8; N]> {
+    if value.len() != N * 2 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        anyhow::bail!("expected {} hexadecimal bytes", N);
+    }
+    let mut output = [0_u8; N];
+    for (index, byte) in output.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16)?;
+    }
+    Ok(output)
 }
 
 async fn connect(socket: &Path) -> anyhow::Result<UnixStream> {
@@ -539,7 +620,7 @@ impl PublicationBroker {
                 enabled,
             } => self.bind(task_id, source_commit, enabled).await,
             GitHubRequest::Publish { title, body } => self.publish(&title, &body).await,
-            GitHubRequest::Inspect => self.inspect().await,
+            GitHubRequest::Inspect { page } => self.inspect(page).await,
             GitHubRequest::ReplyThread { thread_id, body } => {
                 self.reply_thread(&thread_id, &body).await
             }
@@ -728,7 +809,10 @@ impl PublicationBroker {
         }))
     }
 
-    async fn inspect(&self) -> anyhow::Result<Value> {
+    async fn inspect(&self, page: u32) -> anyhow::Result<Value> {
+        if page == 0 || page > 10_000 {
+            anyhow::bail!("inspection page must be between 1 and 10000");
+        }
         let task = self.bound_task().await?;
         let pull = self.pull_for_branch(&task.branch).await?;
         let number = pull
@@ -739,19 +823,47 @@ impl PublicationBroker {
             .pointer("/head/sha")
             .and_then(Value::as_str)
             .context("pull request has no head SHA")?;
-        let checks = self
-            .paginated_api_object_array(
-                &format!("/repos/{REPOSITORY}/commits/{head}/check-runs"),
-                "check_runs",
+        let checks_response = self
+            .api(
+                "GET",
+                &format!(
+                    "/repos/{REPOSITORY}/commits/{head}/check-runs?per_page={INSPECTION_PAGE_SIZE}&page={page}"
+                ),
+                None,
             )
             .await?;
+        let checks = checks_response
+            .get("check_runs")
+            .and_then(Value::as_array)
+            .context("GitHub check-run inspection page is invalid")?
+            .clone();
         let reviews = self
-            .paginated_api_array(&format!("/repos/{REPOSITORY}/pulls/{number}/reviews"))
+            .api(
+                "GET",
+                &format!(
+                    "/repos/{REPOSITORY}/pulls/{number}/reviews?per_page={INSPECTION_PAGE_SIZE}&page={page}"
+                ),
+                None,
+            )
             .await?;
         let comments = self
-            .paginated_api_array(&format!("/repos/{REPOSITORY}/issues/{number}/comments"))
+            .api(
+                "GET",
+                &format!(
+                    "/repos/{REPOSITORY}/issues/{number}/comments?per_page={INSPECTION_PAGE_SIZE}&page={page}"
+                ),
+                None,
+            )
             .await?;
-        let review_threads = self.review_threads(number).await?;
+        let (review_threads, review_threads_have_more) =
+            self.review_threads_page(number, page).await?;
+        let reviews_have_more = reviews
+            .as_array()
+            .is_some_and(|values| values.len() as u64 == INSPECTION_PAGE_SIZE);
+        let comments_have_more = comments
+            .as_array()
+            .is_some_and(|values| values.len() as u64 == INSPECTION_PAGE_SIZE);
+        let checks_have_more = checks.len() as u64 == INSPECTION_PAGE_SIZE;
         let feedback = review_feedback(&pull, &reviews, &comments);
         Ok(json!({
             "pull_request": number,
@@ -766,6 +878,15 @@ impl PublicationBroker {
             "comments": comments,
             "feedback": feedback,
             "review_threads": review_threads,
+            "pagination": {
+                "page": page,
+                "page_size": INSPECTION_PAGE_SIZE,
+                "has_more": checks_have_more || reviews_have_more || comments_have_more || review_threads_have_more,
+                "checks_have_more": checks_have_more,
+                "reviews_have_more": reviews_have_more,
+                "comments_have_more": comments_have_more,
+                "review_threads_have_more": review_threads_have_more,
+            },
         }))
     }
 
@@ -1836,6 +1957,59 @@ impl PublicationBroker {
         Ok(Value::Array(threads))
     }
 
+    async fn review_threads_page(
+        &self,
+        number: u64,
+        requested_page: u32,
+    ) -> anyhow::Result<(Value, bool)> {
+        let mut cursor: Option<String> = None;
+        for page_number in 1..=requested_page {
+            let response = self
+                .api(
+                    "POST",
+                    "/graphql",
+                    Some(json!({
+                        "query": "query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:50,after:$after){nodes{id isResolved isOutdated comments(last:1){nodes{body url author{login}}}} pageInfo{hasNextPage endCursor}}}}}",
+                        "variables": {
+                            "owner": "meta-secret",
+                            "name": "nook",
+                            "number": number,
+                            "after": cursor.as_deref(),
+                        }
+                    })),
+                )
+                .await?;
+            if response.get("errors").is_some() {
+                anyhow::bail!("GitHub rejected the paged review-thread query");
+            }
+            let page = response
+                .pointer("/data/repository/pullRequest/reviewThreads")
+                .context("GitHub paged review-thread response is invalid")?;
+            let has_more = page
+                .pointer("/pageInfo/hasNextPage")
+                .and_then(Value::as_bool)
+                == Some(true);
+            if page_number == requested_page {
+                return Ok((
+                    page.get("nodes")
+                        .cloned()
+                        .context("GitHub paged review-thread nodes are invalid")?,
+                    has_more,
+                ));
+            }
+            if !has_more {
+                return Ok((Value::Array(Vec::new()), false));
+            }
+            cursor = Some(
+                page.pointer("/pageInfo/endCursor")
+                    .and_then(Value::as_str)
+                    .context("GitHub review-thread page has no end cursor")?
+                    .to_owned(),
+            );
+        }
+        unreachable!("validated inspection pages always execute at least once")
+    }
+
     async fn paginated_api_array(&self, path: &str) -> anyhow::Result<Value> {
         let mut values = Vec::new();
         for page in 1.. {
@@ -2388,15 +2562,17 @@ fn publication_branch_generation(base_branch: &str, branch: &str) -> Option<u64>
 mod tests {
     use std::os::unix::fs::PermissionsExt;
 
+    use ed25519_dalek::{Signer, SigningKey};
     use serde_json::{Value, json};
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixListener;
 
     use super::{
-        BoundTask, GitHubRequest, GitHubResponse, open_publication_capability,
-        publication_branch_generation, publication_branch_name, request_via_mailbox,
-        review_feedback, run_publication_broker, valid_feedback_id, workbench_issue_path,
-        workbench_plan_path, workbench_worklog_path, write_mailbox_request,
+        BoundTask, GitHubRequest, GitHubResponse, SignedMailboxResponse, encode_hex,
+        mailbox_signed_message, open_publication_capability, publication_branch_generation,
+        publication_branch_name, request_via_mailbox, review_feedback, run_publication_broker,
+        valid_feedback_id, verify_mailbox_response, workbench_issue_path, workbench_plan_path,
+        workbench_worklog_path, write_mailbox_request,
     };
 
     #[tokio::test]
@@ -2432,7 +2608,12 @@ mod tests {
         }
         std::fs::remove_file(&socket)?;
 
-        let response = request_via_mailbox(capability.directory(), &GitHubRequest::Ping).await?;
+        let response = request_via_mailbox(
+            capability.directory(),
+            capability.verifying_key(),
+            &GitHubRequest::Ping,
+        )
+        .await?;
         assert_eq!(response, json!({ "status": "ok" }));
 
         broker.abort();
@@ -2470,7 +2651,7 @@ mod tests {
         });
         let capability = open_publication_capability(&socket, &workspace).await?;
 
-        let (_abandoned_request, abandoned_response) =
+        let (_abandoned_request_id, abandoned_response) =
             write_mailbox_request(capability.directory(), &GitHubRequest::Ping).await?;
         for _ in 0..100 {
             if abandoned_response.is_file() {
@@ -2480,10 +2661,42 @@ mod tests {
         }
         assert!(abandoned_response.is_file());
 
-        let response = request_via_mailbox(capability.directory(), &GitHubRequest::Ping).await?;
+        let response = request_via_mailbox(
+            capability.directory(),
+            capability.verifying_key(),
+            &GitHubRequest::Ping,
+        )
+        .await?;
         assert_eq!(response, json!({ "sequence": 2 }));
 
         broker.await??;
+        Ok(())
+    }
+
+    #[test]
+    fn forged_mailbox_response_is_rejected() -> anyhow::Result<()> {
+        let trusted_key = SigningKey::from_bytes(&[7; 32]);
+        let attacker_key = SigningKey::from_bytes(&[9; 32]);
+        let request_id = "0123456789abcdef0123456789abcdef";
+        let response_json =
+            serde_json::to_string(&GitHubResponse::Value(json!({ "status": "forged" })))?;
+        let signature = attacker_key.sign(&mailbox_signed_message(request_id, &response_json));
+        let response = SignedMailboxResponse {
+            response_json,
+            signature: encode_hex(&signature.to_bytes()),
+        };
+
+        let Err(error) =
+            verify_mailbox_response(request_id, &trusted_key.verifying_key(), response)
+        else {
+            anyhow::bail!("an untrusted relay signature was accepted");
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains("was not signed by the trusted relay")
+        );
         Ok(())
     }
 

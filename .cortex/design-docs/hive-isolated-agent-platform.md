@@ -339,7 +339,13 @@ publication capability in a random private directory beneath the task's bound
 and unique atomic request/response files. The worker preconnects one fresh
 broker stream before consuming each `hive github` request. Matching responses
 by random request identifier means an interrupted client cannot leave a reply
-queued for the next command. The bound workspace remains visible when
+queued for the next command. Each response is signed with a per-task ephemeral
+Ed25519 key; Codex receives only the verification key, so task-controlled
+repository code cannot forge publication results. The client remains attached
+until the broker answers or the enclosing worker task lifecycle cancels it,
+avoiding ambiguous timeouts after GitHub mutations. Inspection is exposed as
+bounded `--page N` output so large PR histories remain traversable without a
+whole-response size failure. The bound workspace remains visible when
 Bubblewrap replaces `/tmp`; regular file operations also preserve Codex's
 deny-network policy and avoid relying on inherited descriptors that Codex
 closes at its shell exec boundary. Deployment verification executes the real

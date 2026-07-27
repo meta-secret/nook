@@ -591,6 +591,9 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("task-bound publication mailbox through Bubblewrap") &&
        infra_taskfile.include?("/usr/local/libexec/hive-bwrap-publication-smoke.py") &&
        hive_bwrap_smoke.include?('"HIVE_PUBLICATION_DIRECTORY"') &&
+       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_VERIFY_KEY"') &&
+       hive_bwrap_smoke.include?('"openssl"') &&
+       hive_bwrap_smoke.include?('"signature"') &&
        hive_bwrap_smoke.include?('"--tmpfs"') &&
        hive_bwrap_smoke.include?('dir="/workspace"') &&
        hive_bwrap_smoke.include?("timeout=10") &&

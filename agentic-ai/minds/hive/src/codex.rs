@@ -42,6 +42,7 @@ pub struct CodexOptions {
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
     pub publication_directory: Option<PathBuf>,
+    pub publication_verifying_key: Option<String>,
 }
 
 impl CodexOptions {
@@ -53,6 +54,7 @@ impl CodexOptions {
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
             publication_directory: None,
+            publication_verifying_key: None,
         }
     }
 
@@ -61,8 +63,13 @@ impl CodexOptions {
         self
     }
 
-    pub fn with_publication_directory(mut self, publication_directory: PathBuf) -> Self {
+    pub fn with_publication_capability(
+        mut self,
+        publication_directory: PathBuf,
+        publication_verifying_key: String,
+    ) -> Self {
         self.publication_directory = Some(publication_directory);
+        self.publication_verifying_key = Some(publication_verifying_key);
         self
     }
 }
@@ -212,6 +219,12 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         permissions.shell_environment_policy.r#set.insert(
             "HIVE_PUBLICATION_DIRECTORY".to_owned(),
             publication_directory.display().to_string(),
+        );
+    }
+    if let Some(publication_verifying_key) = &options.publication_verifying_key {
+        permissions.shell_environment_policy.r#set.insert(
+            "HIVE_PUBLICATION_VERIFY_KEY".to_owned(),
+            publication_verifying_key.clone(),
         );
     }
     let model_reasoning_effort =
@@ -995,10 +1008,14 @@ mod tests {
     fn task_thread_receives_only_its_ephemeral_publication_directory() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let publication_directory = PathBuf::from("/workspace/hive-publication-capability");
+        let publication_verifying_key = "11".repeat(32);
         let config = new_config(
             &CodexOptions::new(repository.path().to_owned())
                 .with_workspace_write()
-                .with_publication_directory(publication_directory.clone()),
+                .with_publication_capability(
+                    publication_directory.clone(),
+                    publication_verifying_key.clone(),
+                ),
         )?;
 
         assert_eq!(
@@ -1013,6 +1030,15 @@ mod tests {
                 .get("HIVE_PUBLICATION_DIRECTORY")
                 .map(String::as_str),
             publication_directory.to_str()
+        );
+        assert_eq!(
+            config
+                .permissions
+                .shell_environment_policy
+                .r#set
+                .get("HIVE_PUBLICATION_VERIFY_KEY")
+                .map(String::as_str),
+            Some(publication_verifying_key.as_str())
         );
         assert!(
             !config
