@@ -124,14 +124,7 @@ impl Neo4jTaskStore {
         Ok(tasks)
     }
 
-    pub async fn retry_failed_main_task(
-        &self,
-        task_id: &TaskId,
-        additional_attempts: i64,
-    ) -> anyhow::Result<bool> {
-        if !(1..=10).contains(&additional_attempts) {
-            anyhow::bail!("additional attempts must be between 1 and 10");
-        }
+    pub async fn retry_failed_main_task(&self, task_id: &TaskId) -> anyhow::Result<bool> {
         let mut rows = self
             .graph
             .execute(
@@ -148,7 +141,7 @@ impl Neo4jTaskStore {
                          WHERE dependency.status <> 'COMPLETED'
                        }
                      SET task.status = 'READY',
-                         task.max_attempts = task.attempt_count + $additional_attempts,
+                         task.max_attempts = task.attempt_count + 3,
                          task.manual_retry_used = true,
                          task.failure_reason = null,
                          task.blocked_reason = null,
@@ -156,8 +149,7 @@ impl Neo4jTaskStore {
                          task.version = task.version + 1
                      RETURN task.id AS id",
                 )
-                .param("id", task_id.as_str())
-                .param("additional_attempts", additional_attempts),
+                .param("id", task_id.as_str()),
             )
             .await?;
         Ok(rows.next().await?.is_some())
@@ -1433,13 +1425,13 @@ mod tests {
         );
         assert!(
             store
-                .retry_failed_main_task(&repair.id, 3)
+                .retry_failed_main_task(&repair.id)
                 .await
                 .expect("retry failed Main repair")
         );
         assert!(
             !store
-                .retry_failed_main_task(&repair.id, 3)
+                .retry_failed_main_task(&repair.id)
                 .await
                 .expect("refuse duplicate retry"),
             "a ready task must not receive an unbounded retry budget"
@@ -1461,7 +1453,7 @@ mod tests {
         }
         assert!(
             !store
-                .retry_failed_main_task(&repair.id, 3)
+                .retry_failed_main_task(&repair.id)
                 .await
                 .expect("refuse a second recovery budget"),
             "an exhausted recovery budget must never be rearmed"
@@ -1512,7 +1504,7 @@ mod tests {
         );
         assert!(
             !store
-                .retry_failed_main_task(&reused_failed_parent.id, 3)
+                .retry_failed_main_task(&reused_failed_parent.id)
                 .await
                 .expect("refuse repair with failed dependency"),
             "a repair with a failed dependency must remain failed"

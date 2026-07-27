@@ -2616,6 +2616,5 @@ tasks:
           --namespace hive-system \
           --container dispatcher \
           -- /usr/local/bin/hive queue retry-failed-main \
-            --task-id "$task_id" \
-            --additional-attempts 3
+            --task-id "$task_id"
         REMOTE

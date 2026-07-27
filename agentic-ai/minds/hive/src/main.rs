@@ -220,8 +220,6 @@ enum QueueAction {
     RetryFailedMain {
         #[arg(long)]
         task_id: String,
-        #[arg(long, default_value_t = 3)]
-        additional_attempts: i64,
     },
 }
 
@@ -282,18 +280,12 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     );
                     Ok(())
                 }
-                QueueAction::RetryFailedMain {
-                    task_id,
-                    additional_attempts,
-                } => {
+                QueueAction::RetryFailedMain { task_id } => {
                     let task_id = TaskId::new(task_id).map_err(anyhow::Error::msg)?;
-                    if !store
-                        .retry_failed_main_task(&task_id, additional_attempts)
-                        .await?
-                    {
+                    if !store.retry_failed_main_task(&task_id).await? {
                         anyhow::bail!("task {task_id} is not a retryable failed Main-repair task");
                     }
-                    println!("requeued {task_id} with {additional_attempts} additional attempts");
+                    println!("requeued {task_id} with 3 additional attempts");
                     Ok(())
                 }
             }
