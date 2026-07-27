@@ -11,6 +11,7 @@ import {
 } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 import * as localLoginActions from "$lib/vault/local-login";
+import { intoWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-sync");
 
@@ -170,7 +171,9 @@ export function startVaultSync(state: VaultState) {
     return;
   }
   const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
-    import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+    intoWasmStringValue(
+      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+    ),
   );
   const needsRemoteUpdates =
     state.isAuthenticated ||

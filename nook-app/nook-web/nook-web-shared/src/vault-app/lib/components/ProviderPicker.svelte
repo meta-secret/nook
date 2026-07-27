@@ -38,16 +38,15 @@
               preset: oauthPreset ?? 'google-drive',
               accessToken: 'draft-token',
               fileName: 'nook-events',
+              driveMode: 'private',
+              iCloudMode: 'private',
             }
           : undefined,
       localFolder: undefined,
       storeId: undefined,
-      lastSyncedVersion: undefined,
-      lastSyncedAt: undefined,
-      lastSyncRevision: undefined,
-      lastCommonContentHash: undefined,
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: new Date(0).toISOString(),
-    } as StorageProvider
+    }
   }
 
   function blocked(
