@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use nook_preflight::{
     portable_core_browser_dependencies, rust_wasm_domain_boundary_escape_hatches,
-    typescript_domain_boundary_boilerplate,
+    typescript_domain_boundary_boilerplate, typescript_null_absence_sentinels,
 };
 
 fn repository_root() -> PathBuf {
@@ -53,6 +53,16 @@ fn typescript_domain_boundary_stays_generated_and_direct() {
     assert!(
         violations.is_empty(),
         "vault domain schemas belong in Rust; use generated WASM types and direct exports instead of TypeScript mirrors or forwarding wrappers: {violations:#?}"
+    );
+}
+
+#[test]
+fn typescript_uses_undefined_for_application_absence() {
+    let violations =
+        typescript_null_absence_sentinels(&repository_root()).expect("scan TypeScript null usage");
+    assert!(
+        violations.is_empty(),
+        "authored TypeScript and Svelte must use undefined for application absence; keep platform-required null only at an explicit boundary: {violations:#?}"
     );
 }
 

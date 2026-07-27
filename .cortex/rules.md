@@ -60,8 +60,11 @@ This document defines the strict development standards, architectural boundaries
   UI/domain states with discriminated unions or Rust/WASM-owned enums. Browser
   APIs that return `null` must be normalized at the boundary with
   `?? undefined`; do not let nullable values flow through app code. Generated
-  WASM bindings may mention `null` because wasm-bindgen emits those types; do
-  not hand-edit generated files.
+  WASM bindings and ambient declarations may mention `null` because they mirror
+  external contracts. Browser callbacks and third-party component adapters
+  whose signatures require `null` may retain it only at that explicit boundary;
+  normalize before values enter application state. Do not hand-edit generated
+  files or spread nullable types into internal helpers.
 - **Reactive State Encapsulation:**
   - Keep components thin and stateless where possible.
   - Store application-wide reactive state and side-effect handlers (e.g. configuration loads, storage fetches, updates) in Svelte 5 state classes defined in `.svelte.ts` files.

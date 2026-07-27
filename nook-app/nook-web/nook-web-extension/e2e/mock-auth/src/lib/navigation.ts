@@ -15,7 +15,7 @@ export function navigate(path: string): void {
 export function recordLoginSubmission(email: string, password: string): void {
   ;(
     window as Window & {
-      __nookLoginSubmitted?: { email: string; password: string } | null
+      __nookLoginSubmitted?: { email: string; password: string }
     }
   ).__nookLoginSubmitted = { email, password }
 }

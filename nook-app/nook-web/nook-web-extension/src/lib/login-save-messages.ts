@@ -70,7 +70,7 @@ function hasOriginPayload(
 function isOutcomeObservation(
   value: unknown,
 ): value is AuthenticationOutcomeObservationView {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const view = value as Record<string, unknown>
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&

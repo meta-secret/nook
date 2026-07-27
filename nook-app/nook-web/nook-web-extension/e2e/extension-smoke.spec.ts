@@ -343,7 +343,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         url.searchParams.get('device_public_key') === 'age1popup' &&
         url.searchParams.get('device_signing_public_key') ===
           'popup-signing-key' &&
-        url.searchParams.get('nonce') !== null &&
+        url.searchParams.has('nonce') &&
         url.searchParams.get('scopes') ===
           'vault-access,password-filling,passkey-management,sync-provider-credentials'
       )

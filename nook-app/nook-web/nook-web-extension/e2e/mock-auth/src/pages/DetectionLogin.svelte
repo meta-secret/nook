@@ -1,13 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { resetLoginSubmission } from '../lib/login-form'
   import { recordLoginSubmission } from '../lib/navigation'
 
   onMount(() => {
-    ;(
-      window as Window & {
-        __nookLoginSubmitted?: { email: string; password: string } | null
-      }
-    ).__nookLoginSubmitted = null
+    resetLoginSubmission()
 
     const form = document.getElementById('login-form')
     if (!(form instanceof HTMLFormElement)) return

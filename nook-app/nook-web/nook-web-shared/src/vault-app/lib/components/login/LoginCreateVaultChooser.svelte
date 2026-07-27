@@ -335,14 +335,14 @@
     ].join(',')
     const siblingInertState: Array<[HTMLElement, boolean]> = []
     let active = false
-    let previousFocus: HTMLElement | null = null
+    let previousFocus: HTMLElement | undefined
     let returnFocusTestId = 'sentinel-dashboard-card-stack'
     node.before(anchor)
 
     function focusableElements() {
       return Array.from(
         node.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((element) => element.offsetParent !== null)
+      ).filter((element) => Boolean(element.offsetParent))
     }
 
     function trapFocus(event: KeyboardEvent) {
@@ -388,7 +388,7 @@
       previousFocus =
         document.activeElement instanceof HTMLElement
           ? document.activeElement
-          : null
+          : undefined
       document.body.appendChild(node)
       setBackgroundInert(true)
       node.addEventListener('keydown', trapFocus)
@@ -415,7 +415,7 @@
               )
               ?.focus()
           }
-          previousFocus = null
+          previousFocus = undefined
         })
       })
       active = false
