@@ -182,13 +182,6 @@ impl<T> CeremonyState<T> {
             Self::Inactive => Err(JsError::new(message)),
         }
     }
-
-    fn take(&mut self, message: &'static str) -> Result<T, JsError> {
-        match std::mem::replace(self, Self::Inactive) {
-            Self::Active(session) => Ok(session),
-            Self::Inactive => Err(JsError::new(message)),
-        }
-    }
 }
 
 impl SearchCatalogState {

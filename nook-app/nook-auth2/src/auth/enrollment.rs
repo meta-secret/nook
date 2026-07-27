@@ -655,20 +655,13 @@ mod tests {
 
     #[test]
     fn encrypts_provider_credentials_and_peeks_outer_fields() -> anyhow::Result<()> {
-        let code = encrypt_enrollment_payload(&github_payload(), "vault-pass-99", "Work laptop")
-            .expect("encrypt enrollment");
+        let code = encrypt_enrollment_payload(&github_payload(), "vault-pass-99", "Work laptop")?;
+        assert_eq!(peek_enrollment_entry_id(&code)?, "entry-1");
         assert_eq!(
-            peek_enrollment_entry_id(&code).expect("enrollment entry id"),
-            "entry-1"
-        );
-        assert_eq!(
-            peek_enrollment_entry_label(&code).expect("enrollment label"),
+            peek_enrollment_entry_label(&code)?,
             EnrollmentEntryLabel::Labeled("Work laptop".to_owned())
         );
-        assert_eq!(
-            peek_enrollment_issued_at(&code).expect("enrollment issued at"),
-            "2026-06-23T12:00:00Z"
-        );
+        assert_eq!(peek_enrollment_issued_at(&code)?, "2026-06-23T12:00:00Z");
 
         let envelope = parse_enrollment_envelope(&code)?;
         let serialized = serde_json::to_string(&envelope)?;

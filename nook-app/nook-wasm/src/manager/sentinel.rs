@@ -418,7 +418,8 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity()?;
         let session = self
             .sentinel_unlock
-            .take("No Sentinel unlock ceremony is active.")?;
+            .get("No Sentinel unlock ceremony is active.")?
+            .clone();
         let keys = nook_core::finalize_sentinel_unlock(session, &identity)?;
         let records = self.stored_records_snapshot();
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
@@ -428,7 +429,9 @@ impl NookVaultManager {
         }
         self.persist_projection_cache().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        self.sentinel_unlock = CeremonyState::Inactive;
+        Ok(records)
     }
 
     /// Atomically create the complete encrypted Sentinel projection. No vault key
@@ -447,7 +450,8 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let session = self
             .sentinel_genesis
-            .take("No Sentinel genesis ceremony is active.")?;
+            .get("No Sentinel genesis ceremony is active.")?
+            .clone();
         let genesis_request = session.request.clone();
         let participants = session.participants().to_vec();
         let output = nook_core::finalize_sentinel_genesis(session, &signing)?;
@@ -479,6 +483,7 @@ impl NookVaultManager {
         // This public/encrypted plan is the commit marker. Every subsequent
         // write is idempotent and a retry resumes this exact store/root.
         save_sentinel_genesis_finalization_pending(&pending_json).await?;
+        self.sentinel_genesis = CeremonyState::Inactive;
         self.complete_sentinel_genesis_finalization(pending).await
     }
 
