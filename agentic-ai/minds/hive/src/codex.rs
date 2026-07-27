@@ -41,6 +41,7 @@ pub struct CodexOptions {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
+    pub publication_fd: Option<i32>,
 }
 
 impl CodexOptions {
@@ -51,11 +52,17 @@ impl CodexOptions {
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
+            publication_fd: None,
         }
     }
 
     pub fn with_workspace_write(mut self) -> Self {
         self.access = CodexAccess::WorkspaceWrite;
+        self
+    }
+
+    pub fn with_publication_fd(mut self, publication_fd: i32) -> Self {
+        self.publication_fd = Some(publication_fd);
         self
     }
 }
@@ -196,11 +203,17 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         CodexAccess::ReadOnly => PermissionProfile::read_only(),
         CodexAccess::WorkspaceWrite => PermissionProfile::workspace_write(),
     };
-    let permissions = Permissions::from_approval_and_profile(
+    let mut permissions = Permissions::from_approval_and_profile(
         Constrained::allow_any(AskForApproval::Never),
         Constrained::allow_any(permission_profile),
     )
     .map_err(|error| CodexError::Configuration(error.to_string()))?;
+    if let Some(publication_fd) = options.publication_fd {
+        permissions
+            .shell_environment_policy
+            .r#set
+            .insert("HIVE_PUBLICATION_FD".to_owned(), publication_fd.to_string());
+    }
     let model_reasoning_effort =
         serde_json::from_value(serde_json::Value::String(options.reasoning_effort.clone()))
             .map_err(|error| {
@@ -939,6 +952,7 @@ mod tests {
                 main_execve_wrapper_exe: Some(PathBuf::from("/bin/codex-execve-wrapper")),
             },
             access: CodexAccess::ReadOnly,
+            publication_fd: None,
         };
         let config = new_config(&options).unwrap();
 
@@ -973,6 +987,31 @@ mod tests {
 
         assert_eq!(options.model.as_deref(), Some(DEFAULT_CODEX_MODEL));
         assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
+    }
+
+    #[test]
+    fn task_thread_inherits_only_the_preconnected_publication_capability() {
+        let repository = tempfile::tempdir().unwrap();
+        let config = new_config(
+            &CodexOptions::new(repository.path().to_owned())
+                .with_workspace_write()
+                .with_publication_fd(17),
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.permissions.permission_profile(),
+            &PermissionProfile::workspace_write()
+        );
+        assert_eq!(
+            config
+                .permissions
+                .shell_environment_policy
+                .r#set
+                .get("HIVE_PUBLICATION_FD")
+                .map(String::as_str),
+            Some("17")
+        );
     }
 
     #[test]
