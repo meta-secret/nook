@@ -84,9 +84,14 @@ It is deny-by-default, based on Moby's pinned
 and adds only Bubblewrap's namespace and mount syscalls; `bpf` and
 `perf_event_open` remain denied.
 The worker remains non-root, drops every capability, disallows privilege
-escalation, and has a read-only root filesystem. Hive deployment executes a
-Bubblewrap sandbox inside a live worker and fails if that boundary cannot be
-created; all sidecars retain `RuntimeDefault`.
+escalation, and has a read-only root filesystem. The Taskfile also enables
+runtime-rs guest seccomp so the profile is actually enforced inside Dragonball.
+Because Restricted Pods mask the inherited procfs, the embedded Codex helper
+uses its supported `--no-proc` mode: the user, PID, mount, and network
+namespaces remain isolated, while Bubblewrap reuses the masked procfs instead
+of attempting a forbidden nested procfs mount. Hive deployment executes that
+sandbox shape inside a live worker, asserts guest seccomp is active, and fails
+if either boundary cannot be created; all sidecars retain `RuntimeDefault`.
 
 The first Hive deployment requires explicit Codex authentication and a
 repository-scoped GitHub publication token:

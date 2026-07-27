@@ -1554,6 +1554,48 @@ tasks:
         kubectl get runtimeclasses
         kubectl get runtimeclass kata-dragonball
         REMOTE
+      - task: kata:guest-seccomp:enable
+
+  kata:guest-seccomp:enable:
+    desc: Pass Kubernetes seccomp profiles into Dragonball guests.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        config=/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/dragonball/configuration-dragonball.toml
+        sudo -n test -f "$config"
+        current="$(
+          sudo -n sed -n \
+            's/^[[:space:]]*disable_guest_seccomp[[:space:]]*=[[:space:]]*//p' \
+            "$config"
+        )"
+        case "$current" in
+          false) ;;
+          true)
+            next="$(mktemp)"
+            trap 'rm -f "$next"' EXIT
+            sudo -n sed \
+              's/^[[:space:]]*disable_guest_seccomp[[:space:]]*=[[:space:]]*true[[:space:]]*$/disable_guest_seccomp = false/' \
+              "$config" > "$next"
+            test "$(
+              sed -n \
+                's/^[[:space:]]*disable_guest_seccomp[[:space:]]*=[[:space:]]*//p' \
+                "$next"
+            )" = false
+            sudo -n install -m 0644 "$next" "$config"
+            ;;
+          *)
+            echo "Refusing ambiguous Dragonball guest seccomp setting: $current" >&2
+            exit 1
+            ;;
+        esac
+        test "$(
+          sudo -n sed -n \
+            's/^[[:space:]]*disable_guest_seccomp[[:space:]]*=[[:space:]]*//p' \
+            "$config"
+        )" = false
+        REMOTE
 
   kata:diagnose:
     desc: Show bounded Kata installer diagnostics when its rollout fails.
@@ -2090,6 +2132,7 @@ tasks:
     deps: [k0s:sync]
     silent: true
     cmds:
+      - task: kata:guest-seccomp:enable
       - task: hive:seccomp:install
       - task: hive:image
       - task: hive:auth:sync
@@ -2338,15 +2381,22 @@ tasks:
           --container hive \
           -- /usr/bin/setpriv --no-new-privs \
             /usr/bin/bwrap \
-              --unshare-all \
+              --unshare-user \
+              --unshare-pid \
+              --unshare-net \
               --ro-bind / / \
               --dev /dev \
-              --proc /proc \
               --tmpfs /tmp \
               --bind /workspace /workspace \
               --chdir /workspace \
               /bin/bash -ceu \
                 'touch .hive-sandbox-smoke && test ! -w /usr && rm .hive-sandbox-smoke'
+        test "$(
+          kubectl exec "$old_pod" \
+            --namespace hive-system \
+            --container hive \
+            -- awk '/^Seccomp:/ {print $2}' /proc/self/status
+        )" = 2
         old_uid="$(kubectl get pod "$old_pod" \
           --namespace hive-system \
           -o jsonpath='{.metadata.uid}')"
@@ -2559,6 +2609,73 @@ tasks:
           --namespace hive-system \
           --sort-by=.lastTimestamp |
           tail -100 || true
+        REMOTE
+
+  hive:sandbox:diagnose:
+    desc: Probe the live Hive worker namespace and Bubblewrap prerequisites.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        config=/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/dragonball/configuration-dragonball.toml
+        sudo -n grep -H '^disable_guest_seccomp' "$config"
+        pod="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json |
+            jq -r '
+              .items[]
+              | select(.metadata.deletionTimestamp == null)
+              | select(any(.status.containerStatuses[]?; .name == "hive" and .ready == true))
+              | .metadata.name
+            ' |
+            head -1
+        )"
+        test -n "$pod"
+        kubectl exec "$pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /bin/bash -ceu '
+            probe() {
+              label="$1"
+              shift
+              printf "== %s ==\n" "$label"
+              output=""
+              if output="$("$@" 2>&1)"; then
+                test -z "$output" || printf "%s\n" "$output"
+                printf "%s\n" "result=ok"
+              else
+                status="$?"
+                test -z "$output" || printf "%s\n" "$output"
+                printf "result=failed exit=%s\n" "$status"
+              fi
+            }
+            id
+            uname -a
+            bwrap --version
+            grep -E "^(Cap|NoNewPrivs|Seccomp)" /proc/self/status
+            for setting in \
+              /proc/sys/kernel/unprivileged_userns_clone \
+              /proc/sys/user/max_user_namespaces; do
+              if test -r "$setting"; then
+                printf "%s=" "$setting"
+                cat "$setting"
+              fi
+            done
+            probe "Codex no-fresh-proc sandbox shape" bwrap \
+              --unshare-user \
+              --unshare-pid \
+              --unshare-net \
+              --ro-bind / / \
+              --dev /dev \
+              --tmpfs /tmp \
+              --bind /workspace /workspace \
+              --chdir /workspace \
+              /bin/bash -ceu "test ! -w /usr; touch .hive-sandbox-diagnostic; rm .hive-sandbox-diagnostic"
+          '
         REMOTE
 
   status:

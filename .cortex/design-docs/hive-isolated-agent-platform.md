@@ -334,9 +334,17 @@ its ordinary allowlist from Moby's pinned `seccomp/v0.2.1` default profile,
 adding only the namespace and mount calls required by Bubblewrap; privileged
 kernel APIs such as `bpf` and `perf_event_open` remain denied. Credential and
 lifecycle sidecars retain `RuntimeDefault`. The Taskfile installs the profile
-beneath k0s's kubelet seccomp root before applying Hive, and deployment
-verification launches a real Bubblewrap sandbox inside a live worker before
-the rollout is accepted.
+beneath k0s's kubelet seccomp root and configures runtime-rs to pass Kubernetes
+seccomp profiles into the Dragonball guest before applying Hive.
+
+Restricted Kubernetes Pods mask sensitive paths in their inherited `/proc`,
+which prevents an unprivileged nested sandbox from mounting a second procfs.
+Hive therefore routes embedded Codex commands through a tiny wrapper that
+selects Codex's explicit `--no-proc` mode. User, PID, mount, and restricted
+network namespaces remain active; only the redundant fresh procfs mount is
+omitted. Deployment verification launches the same no-fresh-proc Bubblewrap
+shape inside a live worker, verifies that the guest applied seccomp, and rejects
+the rollout if either boundary is unavailable.
 
 Worker Pods have no hostPath volume and never mount the host repository, host
 `CODEX_HOME`, or host Docker socket. They contain no privileged containers and
@@ -474,9 +482,17 @@ Redis `sccache` and GHA BuildKit are separate layers:
 - Redis stores Rust compiler outputs.
 - GHA stores BuildKit layers and dependency/source graph snapshots.
 - Neither is a correctness dependency.
-- Forks and local runs without `SCCACHE_REDIS_PASSWORD_FILE` compile normally.
+- `task infra:redis:credential:sync` writes the ignored, mode-`0600`
+  `.nook/cache/redis-password` file. Hive build/check/test tasks use that path
+  by default, while an explicit `SCCACHE_REDIS_PASSWORD_FILE` still overrides
+  it in CI.
+- Forks and local runs without either credential file compile normally and
+  report the missing cache credential.
 - The Redis credential is mounted as a BuildKit secret or read-only runtime
   secret and is never copied into an image or cache layer.
+- The credential is not mounted into the untrusted Hive worker. Worker tasks
+  publish changes and rely on repository-owned GitHub verification, where the
+  same Redis cache is attached by the trusted workflow.
 
 ## 10. Taskfile operations
 

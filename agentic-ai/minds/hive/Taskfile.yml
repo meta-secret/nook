@@ -6,6 +6,7 @@ vars:
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
   HIVE_TEST_RUNTIME_IMAGE: rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
   NOOK_APP_CONTEXT: ../../nook-app
+  SCCACHE_REDIS_PASSWORD_FILE: '{{default "../../.nook/cache/redis-password" .SCCACHE_REDIS_PASSWORD_FILE}}'
 
 tasks:
   format:
@@ -53,9 +54,11 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
-        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
-          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
-          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        credential_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}"
+        if [ -r "$credential_file" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$credential_file")
+        else
+          echo "Hive Redis compiler cache credential unavailable: $credential_file" >&2
         fi
         command+=(
           --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
@@ -86,9 +89,11 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
-        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
-          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
-          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        credential_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}"
+        if [ -r "$credential_file" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$credential_file")
+        else
+          echo "Hive Redis compiler cache credential unavailable: $credential_file" >&2
         fi
         command+=(
           --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
@@ -155,9 +160,11 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
-        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
-          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
-          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        credential_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}"
+        if [ -r "$credential_file" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$credential_file")
+        else
+          echo "Hive Redis compiler cache credential unavailable: $credential_file" >&2
         fi
         command+=(
           --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
@@ -205,9 +212,11 @@ tasks:
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
-        if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ] \
-          && [ -r "$SCCACHE_REDIS_PASSWORD_FILE" ]; then
-          command+=(--secret "id=sccache_redis_password,src=$SCCACHE_REDIS_PASSWORD_FILE")
+        credential_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}"
+        if [ -r "$credential_file" ]; then
+          command+=(--secret "id=sccache_redis_password,src=$credential_file")
+        else
+          echo "Hive Redis compiler cache credential unavailable: $credential_file" >&2
         fi
         command+=(
           --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
