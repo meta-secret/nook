@@ -23,6 +23,7 @@ RUN apt-get update \
         bubblewrap \
         ca-certificates \
         curl \
+        gh \
         git \
         jq \
         openssh-client \
@@ -62,6 +63,9 @@ RUN curl -fsSL \
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 
 WORKDIR /build
@@ -195,10 +199,7 @@ RUN groupadd --gid 1000 hive \
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
 COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox
-COPY hive/docker/bwrap-publication-mailbox-smoke.py /usr/local/libexec/hive-bwrap-publication-smoke.py
-RUN chmod 0755 \
-      /usr/local/bin/hive-codex-linux-sandbox \
-      /usr/local/libexec/hive-bwrap-publication-smoke.py
+RUN chmod 0755 /usr/local/bin/hive-codex-linux-sandbox
 
 USER 1000:1000
 WORKDIR /workspace

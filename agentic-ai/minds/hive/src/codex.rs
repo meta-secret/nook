@@ -41,8 +41,7 @@ pub struct CodexOptions {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
-    pub publication_directory: Option<PathBuf>,
-    pub publication_verifying_key: Option<String>,
+    pub github_token: Option<String>,
 }
 
 impl CodexOptions {
@@ -53,23 +52,12 @@ impl CodexOptions {
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
-            publication_directory: None,
-            publication_verifying_key: None,
+            github_token: std::env::var("GH_TOKEN").ok(),
         }
     }
 
     pub fn with_workspace_write(mut self) -> Self {
         self.access = CodexAccess::WorkspaceWrite;
-        self
-    }
-
-    pub fn with_publication_capability(
-        mut self,
-        publication_directory: PathBuf,
-        publication_verifying_key: String,
-    ) -> Self {
-        self.publication_directory = Some(publication_directory);
-        self.publication_verifying_key = Some(publication_verifying_key);
         self
     }
 }
@@ -208,24 +196,22 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         .ok_or_else(|| CodexError::Configuration("OpenAI model provider is unavailable".into()))?;
     let permission_profile = match options.access {
         CodexAccess::ReadOnly => PermissionProfile::read_only(),
-        CodexAccess::WorkspaceWrite => PermissionProfile::workspace_write(),
+        CodexAccess::WorkspaceWrite => PermissionProfile::Disabled,
     };
     let mut permissions = Permissions::from_approval_and_profile(
         Constrained::allow_any(AskForApproval::Never),
         Constrained::allow_any(permission_profile),
     )
     .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    if let Some(publication_directory) = &options.publication_directory {
-        permissions.shell_environment_policy.r#set.insert(
-            "HIVE_PUBLICATION_DIRECTORY".to_owned(),
-            publication_directory.display().to_string(),
-        );
-    }
-    if let Some(publication_verifying_key) = &options.publication_verifying_key {
-        permissions.shell_environment_policy.r#set.insert(
-            "HIVE_PUBLICATION_VERIFY_KEY".to_owned(),
-            publication_verifying_key.clone(),
-        );
+    if let Some(github_token) = &options.github_token {
+        permissions
+            .shell_environment_policy
+            .r#set
+            .insert("GH_TOKEN".to_owned(), github_token.clone());
+        permissions
+            .shell_environment_policy
+            .r#set
+            .insert("GITHUB_TOKEN".to_owned(), github_token.clone());
     }
     let model_reasoning_effort =
         serde_json::from_value(serde_json::Value::String(options.reasoning_effort.clone()))
@@ -236,13 +222,7 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
                 ))
             })?;
 
-    let mut workspace_roots = vec![cwd.clone()];
-    if let Some(publication_directory) = &options.publication_directory {
-        workspace_roots.push(
-            AbsolutePathBuf::from_absolute_path_checked(publication_directory)
-                .map_err(|error| CodexError::Configuration(error.to_string()))?,
-        );
-    }
+    let workspace_roots = vec![cwd.clone()];
     let mut config = Config {
         config_layer_stack: ConfigLayerStack::default(),
         startup_warnings: Vec::new(),
@@ -972,8 +952,7 @@ mod tests {
                 main_execve_wrapper_exe: Some(PathBuf::from("/bin/codex-execve-wrapper")),
             },
             access: CodexAccess::ReadOnly,
-            publication_directory: None,
-            publication_verifying_key: None,
+            github_token: None,
         };
         let config = new_config(&options)?;
 
@@ -1013,59 +992,35 @@ mod tests {
     }
 
     #[test]
-    fn task_thread_receives_only_its_ephemeral_publication_directory() -> anyhow::Result<()> {
+    fn trusted_task_thread_receives_direct_github_access() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
-        let publication_directory = PathBuf::from("/workspace/hive-publication-capability");
-        let publication_verifying_key = "11".repeat(32);
-        let config = new_config(
-            &CodexOptions::new(repository.path().to_owned())
-                .with_workspace_write()
-                .with_publication_capability(
-                    publication_directory.clone(),
-                    publication_verifying_key.clone(),
-                ),
-        )?;
+        let github_token = "test-token".to_owned();
+        let mut options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
+        options.github_token = Some(github_token.clone());
+        let config = new_config(&options)?;
 
         assert_eq!(
             config.permissions.permission_profile(),
-            &PermissionProfile::workspace_write()
+            &PermissionProfile::Disabled
         );
-        assert_eq!(config.workspace_roots.len(), 2);
+        assert_eq!(config.workspace_roots, vec![config.cwd.clone()]);
         assert_eq!(
-            config.workspace_roots[1].as_ref(),
-            publication_directory.as_path()
+            config
+                .permissions
+                .shell_environment_policy
+                .r#set
+                .get("GH_TOKEN")
+                .map(String::as_str),
+            Some(github_token.as_str())
         );
         assert_eq!(
             config
                 .permissions
                 .shell_environment_policy
                 .r#set
-                .get("HIVE_PUBLICATION_DIRECTORY")
+                .get("GITHUB_TOKEN")
                 .map(String::as_str),
-            publication_directory.to_str()
-        );
-        assert_eq!(
-            config
-                .permissions
-                .shell_environment_policy
-                .r#set
-                .get("HIVE_PUBLICATION_VERIFY_KEY")
-                .map(String::as_str),
-            Some(publication_verifying_key.as_str())
-        );
-        assert!(
-            !config
-                .permissions
-                .shell_environment_policy
-                .r#set
-                .contains_key("HIVE_PUBLICATION_FD")
-        );
-        assert!(
-            !config
-                .permissions
-                .shell_environment_policy
-                .r#set
-                .contains_key("HIVE_PUBLICATION_SOCKET")
+            Some(github_token.as_str())
         );
         Ok(())
     }
@@ -1105,7 +1060,7 @@ mod tests {
     }
 
     #[test]
-    fn execution_options_enable_workspace_write() -> anyhow::Result<()> {
+    fn trusted_execution_options_disable_the_inner_permission_profile() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
         let config = new_config(&options)?;
@@ -1113,7 +1068,7 @@ mod tests {
         assert_eq!(options.access, CodexAccess::WorkspaceWrite);
         assert_eq!(
             config.permissions.permission_profile(),
-            &PermissionProfile::workspace_write()
+            &PermissionProfile::Disabled
         );
         Ok(())
     }

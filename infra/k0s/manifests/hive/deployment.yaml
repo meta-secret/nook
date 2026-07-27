@@ -15,7 +15,7 @@ spec:
     metadata:
       annotations:
         hive.nook.sh/codex-auth-sha256: HIVE_AUTH_CHECKSUM
-        hive.nook.sh/github-publication-sha256: HIVE_GITHUB_CHECKSUM
+        hive.nook.sh/github-token-sha256: HIVE_GITHUB_CHECKSUM
         hive.nook.sh/neo4j-ca-sha256: HIVE_NEO4J_CA_CHECKSUM
       labels:
         app.kubernetes.io/name: hive
@@ -93,8 +93,11 @@ spec:
               value: /run/hive-auth/broker.sock
             - name: HIVE_COORDINATOR_SOCKET
               value: /run/hive-coordinator/coordinator.sock
-            - name: HIVE_PUBLICATION_SOCKET
-              value: /run/hive-publication/broker.sock
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hive-github-publication
+                  key: token
             - name: CODEX_HOME
               value: /home/hive/.codex
             - name: HOME
@@ -132,8 +135,6 @@ spec:
               mountPath: /run/hive-auth
             - name: coordinator-channel
               mountPath: /run/hive-coordinator
-            - name: publication-channel
-              mountPath: /run/hive-publication
           resources:
             requests:
               cpu: "2"
@@ -171,42 +172,6 @@ spec:
               mountPath: /run/hive-coordinator
             - name: trust-bundle
               mountPath: /trust
-              readOnly: true
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
-        - name: publication-broker
-          image: HIVE_IMAGE
-          imagePullPolicy: Always
-          args: ["publication-broker"]
-          env:
-            - name: HIVE_PUBLICATION_SOCKET
-              value: /run/hive-publication/broker.sock
-            - name: HIVE_GITHUB_TOKEN_FILE
-              value: /run/secrets/github/token
-            - name: HIVE_WORKSPACE
-              value: /workspace
-            - name: HIVE_PUBLICATION_HOME
-              value: /var/lib/hive-publication
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: workspace
-              mountPath: /workspace
-              readOnly: true
-            - name: publication-channel
-              mountPath: /run/hive-publication
-            - name: publication-home
-              mountPath: /var/lib/hive-publication
-            - name: github-publication
-              mountPath: /run/secrets/github
               readOnly: true
           resources:
             requests:
@@ -312,12 +277,6 @@ spec:
         - name: coordinator-channel
           emptyDir:
             sizeLimit: 1Mi
-        - name: publication-channel
-          emptyDir:
-            sizeLimit: 1Mi
-        - name: publication-home
-          emptyDir:
-            sizeLimit: 100Gi
         - name: broker-auth-home
           emptyDir:
             sizeLimit: 2Mi
@@ -328,10 +287,6 @@ spec:
         - name: codex-auth-source
           secret:
             secretName: hive-codex-auth
-            defaultMode: 0400
-        - name: github-publication
-          secret:
-            secretName: hive-github-publication
             defaultMode: 0400
         - name: reaper-auth
           secret:

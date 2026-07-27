@@ -17,10 +17,6 @@ use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{
     AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TerminalResult,
 };
-use crate::publication::{
-    PublicationBinding, bind_publication_task, open_publication_capability,
-    publication_delivery_verified,
-};
 use crate::store::TaskStore;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -41,7 +37,6 @@ pub struct WorkerConfig {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub auth_socket: PathBuf,
-    pub publication_socket: PathBuf,
 }
 
 pub struct Worker<S> {
@@ -95,39 +90,7 @@ impl<S: TaskStore> Worker<S> {
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
             tokio::time::sleep(Duration::from_secs(wait)).await;
         };
-        let publication_binding = match bind_publication_task(
-            &self.config.publication_socket,
-            &task,
-            task.kind == "main-repair",
-        )
-        .await
-        {
-            Ok(binding) => binding,
-            Err(error) => {
-                let released = self
-                    .store
-                    .release(&task, &self.config.agent_id)
-                    .await
-                    .context("release task after publication broker binding failed")?;
-                tokio::fs::write(&lifecycle_marker, task.id.as_str())
-                    .await
-                    .context("mark publication-binding failure for Pod replacement")?;
-                if !released {
-                    return Err(anyhow!(
-                        "publication broker binding failed after the task lease expired: \
-                             {error:#}"
-                    ));
-                }
-                return Err(anyhow!(
-                    "publication broker binding failed; the task claim was released without \
-                        consuming an attempt: {error:#}"
-                ));
-            }
-        };
-
-        let result = self
-            .execute(&task, external_auth, &publication_binding)
-            .await;
+        let result = self.execute(&task, external_auth).await;
         if let Err(error) = result {
             if error.downcast_ref::<WorkerBlocked>().is_some() {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
@@ -163,19 +126,7 @@ impl<S: TaskStore> Worker<S> {
         &self,
         task: &ClaimedTask,
         external_auth: std::sync::Arc<BrokerExternalAuth>,
-        publication: &PublicationBinding,
     ) -> anyhow::Result<()> {
-        let publication_capability = if task.kind == "main-repair" {
-            Some(
-                open_publication_capability(
-                    &self.config.publication_socket,
-                    &self.config.workspace,
-                )
-                .await?,
-            )
-        } else {
-            None
-        };
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
             self.store.clone(),
@@ -189,13 +140,13 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
-                let resume_branch =
-                    (task.kind == "main-repair").then_some(publication.branch.as_str());
+                let repair_branch =
+                    (task.kind == "main-repair").then(|| repair_branch_name(task.id.as_str()));
                 let preparation = prepare_workspace(
                     &self.config.workspace,
                     &self.config.repository_url,
                     &task.source_commit,
-                    resume_branch,
+                    repair_branch.as_deref(),
                     &task.dependency_artifacts,
                 )
                 .await?;
@@ -203,12 +154,6 @@ impl<S: TaskStore> Worker<S> {
                 let baseline = if preparation.conflicted {
                     let mut codex_options =
                         CodexOptions::new(repository.clone()).with_workspace_write();
-                    if let Some(capability) = &publication_capability {
-                        codex_options = codex_options.with_publication_capability(
-                            capability.directory().to_owned(),
-                            capability.verifying_key().to_owned(),
-                        );
-                    }
                     codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                     codex_options
@@ -237,14 +182,8 @@ impl<S: TaskStore> Worker<S> {
                 } else {
                     preparation.baseline
                 };
-                let prompt = task_prompt(task, publication.merge_commit.as_deref());
+                let prompt = task_prompt(task);
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
-                if let Some(capability) = &publication_capability {
-                    codex_options = codex_options.with_publication_capability(
-                        capability.directory().to_owned(),
-                        capability.verifying_key().to_owned(),
-                    );
-                }
                 codex_options.model.clone_from(&self.config.model);
                 codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                 codex_options
@@ -283,13 +222,6 @@ impl<S: TaskStore> Worker<S> {
                         ));
                     }
                     return Err(WorkerBlocked.into());
-                }
-                if task.kind == "main-repair"
-                    && !publication_delivery_verified(&self.config.publication_socket).await?
-                {
-                    return Err(anyhow!(
-                        "Main repair cannot complete before its squash merge and green Main run"
-                    ));
                 }
                 let summary = bounded(&format!(
                     "{}\n\nChanged files:\n{}\n\nTests:\n{}",
@@ -776,7 +708,7 @@ async fn persistable_patch(
     }))
 }
 
-fn task_prompt(task: &ClaimedTask, recovered_merge_commit: Option<&str>) -> String {
+fn task_prompt(task: &ClaimedTask) -> String {
     let dependencies = if task.dependency_context.is_empty() {
         "No dependency results.".to_owned()
     } else {
@@ -786,30 +718,22 @@ fn task_prompt(task: &ClaimedTask, recovered_merge_commit: Option<&str>) -> Stri
             .collect::<Vec<_>>()
             .join("\n")
     };
-    let recovery = recovered_merge_commit.map_or_else(String::new, |merge_commit| {
-        format!(
-            "\n\nA prior repair PR already merged as `{merge_commit}`. Resume the post-merge \
-             lifecycle with `hive github verify-main --merge-commit {merge_commit}`; do not \
-             create or merge a replacement PR."
-        )
-    });
     let delivery = if task.kind == "main-repair" {
+        let branch = repair_branch_name(task.id.as_str());
         format!(
             "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
-         Use only repository Taskfile commands for formatting and validation. Use \
-         `hive github publish --title <title> --body <body>` to push the deterministic \
-         task branch and create or update its PR, `hive github inspect --page N` to traverse \
-         bounded review pages, `hive github inspect-detail --kind KIND --id ID --offset N` to \
-         retrieve every chunk of a truncated record, \
-         every page while waiting for and addressing exact-head checks and every review surface, \
-         `hive github reply-thread`, \
-         `hive github resolve-thread`, and `hive github reply-feedback` after each targeted \
-         fix, `hive github merge \
-         --expected-head <sha>` \
-         only after every check succeeds, and `hive github verify-main --merge-commit <sha>` \
-         until the resulting Main run succeeds. Do not report completed before the squash \
-         merge and green Main verification. If blocked by another change, report structured \
-         blocked status and identify the blocker precisely.{recovery}"
+         You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
+         `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
+         authenticated Git push. Reuse or create the deterministic branch \
+         `{branch}`, publish the repair PR, apply and verify the `ci:full-e2e` label, traverse all \
+         checks and review feedback, fix and reply \
+         to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
+         readiness audit, squash-merge, verify the \
+         resulting Main workflow is green, and publish the required Workbench completion records \
+         and statistics. Inspect GitHub first because a replacement Pod may be resuming a branch, \
+         PR, merge, or Main verification completed by an earlier attempt. Do not report completed \
+         before the squash merge and green Main verification. If blocked by another change, report \
+         structured blocked status and identify the blocker precisely."
         )
     } else {
         String::new()
@@ -823,6 +747,20 @@ fn task_prompt(task: &ClaimedTask, recovered_merge_commit: Option<&str>) -> Stri
          Completed dependency context:\n{}{}",
         task.attempt_number, task.id, task.kind, task.prompt, dependencies, delivery
     )
+}
+
+fn repair_branch_name(task_id: &str) -> String {
+    let slug = task_id
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '-' {
+                character.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    format!("codex/hive-{}", slug.trim_matches('-'))
 }
 
 fn bounded(value: &str) -> String {
@@ -888,7 +826,7 @@ mod tests {
     }
 
     #[test]
-    fn recovered_merge_commit_is_part_of_replacement_worker_context() -> anyhow::Result<()> {
+    fn replacement_worker_inspects_direct_github_delivery_state() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::new("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
@@ -900,12 +838,14 @@ mod tests {
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let merge_commit = "abcdef0123456789abcdef0123456789abcdef01";
-        let prompt = task_prompt(&task, Some(merge_commit));
+        let prompt = task_prompt(&task);
 
-        assert!(prompt.contains(merge_commit));
-        assert!(prompt.contains("Resume the post-merge lifecycle"));
-        assert!(prompt.contains("do not create or merge a replacement PR"));
+        assert!(prompt.contains("GH_TOKEN"));
+        assert!(prompt.contains("codex/hive-main-failure-recovery"));
+        assert!(prompt.contains("replacement Pod"));
+        assert!(prompt.contains("Main verification"));
+        assert!(prompt.contains("ci:full-e2e"));
+        assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
         Ok(())
     }
 

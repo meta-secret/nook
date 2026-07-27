@@ -36,7 +36,6 @@ end
 worker = pod.fetch("containers").find { |container| container.fetch("name") == "hive" }
 broker = pod.fetch("containers").find { |container| container.fetch("name") == "auth-broker" }
 coordinator = pod.fetch("containers").find { |container| container.fetch("name") == "coordinator" }
-publisher = pod.fetch("containers").find { |container| container.fetch("name") == "publication-broker" }
 reaper = pod.fetch("containers").find { |container| container.fetch("name") == "pod-reaper" }
 unless worker.dig("securityContext", "seccompProfile", "type") == "Localhost" &&
        worker.dig(
@@ -54,19 +53,18 @@ end
 worker_mounts = worker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 broker_mounts = broker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 coordinator_mounts = coordinator.fetch("volumeMounts").map { |mount| mount.fetch("name") }
-publisher_mounts = publisher.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 reaper_mounts = reaper.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 raise "Hive worker must not mount Codex credentials" if worker_mounts.include?("codex-auth-source")
 raise "Hive worker must not mount the broker auth home" if worker_mounts.include?("broker-auth-home")
 raise "Hive worker must not mount the broker API token" if worker_mounts.include?("broker-auth-api")
-raise "Hive worker must not mount GitHub credentials" if worker_mounts.include?("github-publication")
 unless broker_mounts.include?("codex-auth-source") &&
        broker_mounts.include?("broker-auth-home") &&
        broker_mounts.include?("broker-auth-api") &&
        worker_mounts.include?("auth-channel")
   raise "Hive auth broker boundary is incomplete"
 end
-worker_environment = worker.fetch("env").map { |entry| entry.fetch("name") }
+worker_environment_entries = worker.fetch("env")
+worker_environment = worker_environment_entries.map { |entry| entry.fetch("name") }
 coordinator_environment = coordinator.fetch("env").map { |entry| entry.fetch("name") }
 if worker_environment.any? { |name| name.start_with?("NEO4J_") } ||
    worker_mounts.include?("trust-bundle")
@@ -78,21 +76,15 @@ unless coordinator_environment.include?("NEO4J_PASSWORD") &&
        worker_mounts.include?("coordinator-channel")
   raise "Hive coordinator credential boundary is incomplete"
 end
-unless publisher_mounts.include?("github-publication") &&
-       publisher_mounts.include?("publication-channel") &&
-       worker_mounts.include?("publication-channel")
-  raise "Hive publication broker boundary is incomplete"
+github_token = worker_environment_entries.find { |entry| entry["name"] == "GH_TOKEN" }
+unless github_token&.dig("valueFrom", "secretKeyRef", "name") == "hive-github-publication" &&
+       github_token&.dig("valueFrom", "secretKeyRef", "key") == "token"
+  raise "Trusted Hive agents must receive the repository GitHub token directly"
 end
 unless reaper_mounts.include?("reaper-auth") &&
        !reaper_mounts.include?("broker-auth-api") &&
        !reaper_mounts.include?("reaper-api")
   raise "Hive reaper must use only its opaque controller credential"
-end
-publisher_workspace = publisher
-  .fetch("volumeMounts")
-  .find { |mount| mount.fetch("name") == "workspace" }
-unless publisher_workspace&.fetch("readOnly", false) == true
-  raise "Hive publication broker must see the worker workspace read-only"
 end
 worker_environment = worker.fetch("env").to_h { |entry| [entry.fetch("name"), entry["value"]] }
 unless worker_environment["HIVE_SEALED_GUEST"] == "1"
@@ -561,9 +553,6 @@ hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
-hive_bwrap_smoke = File.read(
-  File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-mailbox-smoke.py")
-)
 unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
   raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
 end
@@ -588,25 +577,11 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("--unshare-pid") &&
        infra_taskfile.include?("--ro-bind / /") &&
        infra_taskfile.include?("--bind /workspace /workspace") &&
-       infra_taskfile.include?("task-bound publication mailbox through Bubblewrap") &&
-       infra_taskfile.include?("/usr/local/libexec/hive-bwrap-publication-smoke.py") &&
-       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_DIRECTORY"') &&
-       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_VERIFY_KEY"') &&
-       hive_bwrap_smoke.include?('"openssl"') &&
-       hive_bwrap_smoke.include?("hashlib.sha256") &&
-       hive_bwrap_smoke.include?('"acknowledgement_signature"') &&
-       hive_bwrap_smoke.include?('"authorization_secret"') &&
-       hive_bwrap_smoke.include?('"signature"') &&
-       hive_bwrap_smoke.include?('"--tmpfs"') &&
-       hive_bwrap_smoke.include?('dir="/workspace"') &&
-       hive_bwrap_smoke.include?("timeout=10") &&
-       hive_bwrap_smoke.include?("broker.join(timeout=6)") &&
-       hive_bwrap_smoke.include?('"hive"') &&
-       hive_bwrap_smoke.include?('"github"') &&
-       hive_bwrap_smoke.include?('"ping"') &&
-       !hive_bwrap_smoke.include?("socket.") &&
        infra_taskfile.include?("awk '/^Seccomp:/ {print $2}' /proc/self/status")
   raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
+end
+unless hive_dockerfile.match?(/apt-get install.*?gh/m)
+  raise "Trusted Hive agents must include the standard GitHub CLI"
 end
 unless hive_dockerfile.include?(
          'SHELL ["/bin/bash", "-o", "pipefail", "-c"]'

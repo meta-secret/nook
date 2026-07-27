@@ -8,7 +8,6 @@ use hive::codex::{DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT};
 use hive::coordinator::run_coordinator;
 use hive::dispatcher::run_workbench_dispatcher;
 use hive::model::{AgentId, EnqueueTask, TaskId};
-use hive::publication::{GitHubRequest, run_publication_broker, run_publication_client};
 use hive::{
     CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
     install_rustls_crypto_provider,
@@ -76,12 +75,6 @@ enum Command {
         auth_socket: PathBuf,
         #[arg(
             long,
-            env = "HIVE_PUBLICATION_SOCKET",
-            default_value = "/run/hive-publication/broker.sock"
-        )]
-        publication_socket: PathBuf,
-        #[arg(
-            long,
             env = "HIVE_COORDINATOR_SOCKET",
             default_value = "/run/hive-coordinator/coordinator.sock"
         )]
@@ -129,38 +122,6 @@ enum Command {
         #[arg(long, env = "HIVE_AUTH_HOME", default_value = "/var/lib/hive-auth")]
         auth_home: PathBuf,
     },
-    PublicationBroker {
-        #[arg(
-            long,
-            env = "HIVE_PUBLICATION_SOCKET",
-            default_value = "/run/hive-publication/broker.sock"
-        )]
-        socket: PathBuf,
-        #[arg(
-            long,
-            env = "HIVE_GITHUB_TOKEN_FILE",
-            default_value = "/run/secrets/github/token"
-        )]
-        token_file: PathBuf,
-        #[arg(long, env = "HIVE_WORKSPACE", default_value = "/workspace")]
-        workspace: PathBuf,
-        #[arg(
-            long,
-            env = "HIVE_PUBLICATION_HOME",
-            default_value = "/var/lib/hive-publication"
-        )]
-        private_home: PathBuf,
-    },
-    Github {
-        #[arg(
-            long,
-            env = "HIVE_PUBLICATION_SOCKET",
-            default_value = "/run/hive-publication/broker.sock"
-        )]
-        socket: PathBuf,
-        #[command(subcommand)]
-        action: GitHubAction,
-    },
     Queue {
         #[command(subcommand)]
         action: QueueAction,
@@ -181,53 +142,6 @@ enum Command {
         max_attempts: i64,
         #[arg(long, value_delimiter = ',')]
         depends_on: Vec<String>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum GitHubAction {
-    Ping,
-    Publish {
-        #[arg(long)]
-        title: String,
-        #[arg(long)]
-        body: String,
-    },
-    Inspect {
-        #[arg(long, default_value_t = 1)]
-        page: u32,
-    },
-    InspectDetail {
-        #[arg(long)]
-        kind: String,
-        #[arg(long)]
-        id: String,
-        #[arg(long, default_value_t = 0)]
-        offset: usize,
-    },
-    ReplyThread {
-        #[arg(long)]
-        thread_id: String,
-        #[arg(long)]
-        body: String,
-    },
-    ReplyFeedback {
-        #[arg(long)]
-        feedback_id: String,
-        #[arg(long)]
-        body: String,
-    },
-    ResolveThread {
-        #[arg(long)]
-        thread_id: String,
-    },
-    Merge {
-        #[arg(long)]
-        expected_head: String,
-    },
-    VerifyMain {
-        #[arg(long)]
-        merge_commit: String,
     },
 }
 
@@ -259,36 +173,6 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             auth_source,
             auth_home,
         } => run_auth_broker(socket, auth_source, auth_home).await,
-        Command::PublicationBroker {
-            socket,
-            token_file,
-            workspace,
-            private_home,
-        } => run_publication_broker(socket, workspace, token_file, private_home).await,
-        Command::Github { socket, action } => {
-            let request = match action {
-                GitHubAction::Ping => GitHubRequest::Ping,
-                GitHubAction::Publish { title, body } => GitHubRequest::Publish { title, body },
-                GitHubAction::Inspect { page } => GitHubRequest::Inspect { page },
-                GitHubAction::InspectDetail { kind, id, offset } => {
-                    GitHubRequest::InspectDetail { kind, id, offset }
-                }
-                GitHubAction::ReplyThread { thread_id, body } => {
-                    GitHubRequest::ReplyThread { thread_id, body }
-                }
-                GitHubAction::ReplyFeedback { feedback_id, body } => {
-                    GitHubRequest::ReplyFeedback { feedback_id, body }
-                }
-                GitHubAction::ResolveThread { thread_id } => {
-                    GitHubRequest::ResolveThread { thread_id }
-                }
-                GitHubAction::Merge { expected_head } => GitHubRequest::Merge { expected_head },
-                GitHubAction::VerifyMain { merge_commit } => {
-                    GitHubRequest::VerifyMain { merge_commit }
-                }
-            };
-            run_publication_client(&socket, request).await
-        }
         Command::Queue { action } => {
             let neo4j_password = cli
                 .neo4j_password
@@ -358,7 +242,6 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             model,
             reasoning_effort,
             auth_socket,
-            publication_socket,
             coordinator_socket,
             codex_linux_sandbox_exe,
         } => {
@@ -386,7 +269,6 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     reasoning_effort,
                     arg0_paths,
                     auth_socket,
-                    publication_socket,
                 },
             )
             .run()

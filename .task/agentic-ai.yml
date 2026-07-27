@@ -34,6 +34,23 @@ tasks:
       - cd nook-app/nook-web/nook-web-extension && bun run format
       - cd agentic-ai/minds && cargo fmt --all
 
+  hive:guest:pr:ready:
+    desc: Run the existing PR readiness audit natively inside a sealed Hive guest (PR=<number>).
+    preconditions:
+      - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
+        msg: hive:guest:pr:ready is available only inside a sealed Hive guest
+    requires:
+      vars: [PR]
+    env:
+      PR_NUMBER: '{{.PR}}'
+    cmds:
+      - cd agentic-ai/ci-agent && npm ci
+      - cd agentic-ai/ci-agent && npm run build
+      - >-
+        cd agentic-ai/ci-agent &&
+        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}" &&
+        node dist/main/main.js pr-ready
+
   hive:check:
     desc: Format-check and lint the Hive worker.
     cmds:
