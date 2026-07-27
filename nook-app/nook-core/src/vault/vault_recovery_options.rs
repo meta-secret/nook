@@ -5,17 +5,24 @@
 //! labels a person needs to choose a recovery path. It never exposes an
 //! envelope, credential id, private key, or decrypted vault value.
 
-use crate::{DeviceId, EventGraph, VaultOperation, VaultResult, project_vault};
+use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultResult, project_vault};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use tsify::Tsify;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct VaultRecoveryDevice {
+    #[tsify(type = "string")]
     pub device_id: DeviceId,
     pub label: String,
     pub passkey_hint: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct VaultRecoveryPassword {
     pub id: String,
     pub label: String,
@@ -27,6 +34,36 @@ pub struct VaultRecoveryOptions {
     pub devices: Vec<VaultRecoveryDevice>,
     pub password_entries: Vec<VaultRecoveryPassword>,
     pub requires_sentinel_quorum: bool,
+}
+
+/// Safe, Rust-owned recovery DTO returned across the WASM boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct VaultRecoverySummary {
+    #[tsify(type = "StoreId")]
+    pub store_id: StoreId,
+    pub vault_name: String,
+    pub devices: Vec<VaultRecoveryDevice>,
+    pub password_entries: Vec<VaultRecoveryPassword>,
+    pub requires_sentinel_quorum: bool,
+}
+
+impl VaultRecoverySummary {
+    #[must_use]
+    pub fn from_options(
+        store_id: StoreId,
+        vault_name: String,
+        options: VaultRecoveryOptions,
+    ) -> Self {
+        Self {
+            store_id,
+            vault_name,
+            devices: options.devices,
+            password_entries: options.password_entries,
+            requires_sentinel_quorum: options.requires_sentinel_quorum,
+        }
+    }
 }
 
 /// Project the recovery choices present in a signed vault event graph.

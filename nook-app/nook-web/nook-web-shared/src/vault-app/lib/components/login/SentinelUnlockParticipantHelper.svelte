@@ -5,6 +5,10 @@
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    createSentinelUnlockResponse,
+    listSentinelStoredDeliveries,
+  } from '$lib/vault/sentinel-unlock'
 
   let {
     vault,
@@ -21,7 +25,7 @@
   let actionBusy = $state(false)
   let loaded = $state(false)
   let open = $state(false)
-  let selectedDelivery = $state<string | undefined>(undefined)
+  let selectedDelivery = $state<string>()
   let request = $state('')
   let response = $state('')
   let copied = $state(false)
@@ -45,7 +49,7 @@
 
   async function refreshDeliveries() {
     try {
-      const deliveries = await vault.listSentinelStoredDeliveries()
+      const deliveries = await listSentinelStoredDeliveries(vault)
       if (
         !selectedDelivery ||
         !deliveries.some((delivery) => delivery.storeId === selectedDelivery)
@@ -66,7 +70,7 @@
     actionBusy = true
     vault.errorMsg = ''
     try {
-      response = await vault.createSentinelUnlockResponse(storeId, payload)
+      response = await createSentinelUnlockResponse(vault, storeId, payload)
     } catch (error: unknown) {
       vault.errorMsg =
         error instanceof Error

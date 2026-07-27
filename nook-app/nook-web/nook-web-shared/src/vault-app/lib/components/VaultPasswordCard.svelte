@@ -62,7 +62,7 @@
   }
 
   let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<string | undefined>(undefined)
+  let activeEntryId = $state<string>()
 
   let labelInput = $state('')
   let passwordInput = $state('')

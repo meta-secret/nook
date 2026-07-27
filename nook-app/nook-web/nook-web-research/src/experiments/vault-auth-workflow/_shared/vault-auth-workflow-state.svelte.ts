@@ -3,7 +3,7 @@ import type { VaultAuthStepKey } from './vault-auth-workflow-messages'
 export type Presence = 'empty' | 'existing'
 export type VaultPath = 'undecided' | 'simple' | 'sentinel'
 
-export class VaultAuthWorkflowState {
+class VaultAuthWorkflowState {
   presence = $state<Presence>('empty')
   step = $state(0)
   path = $state<VaultPath>('undecided')
@@ -58,4 +58,8 @@ export class VaultAuthWorkflowState {
     }
     if (this.step > 0) this.step -= 1
   }
+}
+
+export function createVaultAuthWorkflowState(): VaultAuthWorkflowState {
+  return new VaultAuthWorkflowState()
 }

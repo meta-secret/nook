@@ -51,7 +51,7 @@ impl NookVaultManager {
         let result = match &record.data {
             nook_core::SecretValue::Authenticator(authenticator) => authenticator
                 .current_code(u64::from(unix_seconds))
-                .map(NookTotpCode::from_core)
+                .map(|code| NookTotpCode::from_core(code, u64::from(unix_seconds)))
                 .map_err(NookError::from),
             _ => Err(NookError::Decryption(
                 "Selected secret is not an authenticator item.".to_owned(),

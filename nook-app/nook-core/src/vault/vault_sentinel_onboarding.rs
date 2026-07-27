@@ -180,8 +180,16 @@ mod tests {
         let member = DeviceIdentity::generate().unwrap();
         let owner_signing = SigningIdentity::generate().unwrap().0;
         let member_signing = SigningIdentity::generate().unwrap().0;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".to_owned()).unwrap();
+        let mut session = start_sentinel_genesis(
+            &owner,
+            &owner_signing,
+            crate::StartSentinelGenesisArgs {
+                label: "Owner".to_owned(),
+                participant_count: 2,
+                threshold: 2,
+            },
+        )
+        .unwrap();
         let response = crate::respond_to_sentinel_genesis_request(
             &session.request,
             &member,

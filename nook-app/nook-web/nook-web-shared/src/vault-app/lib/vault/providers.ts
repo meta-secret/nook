@@ -73,9 +73,9 @@ export async function loadProviders(
 export async function promoteSessionVaultToLocalIfNeeded(
   state: VaultState,
 ): Promise<void> {
-  const snapshot = await state.manager!.ensureLocalAuthProviderSnapshot(
-    JSON.parse(JSON.stringify({ providers: state.providers })),
-  );
+  const snapshot = await state.manager!.ensureLocalAuthProviderSnapshot({
+    providers: state.providers,
+  });
   if (snapshot.providers.length !== state.providers.length) {
     state.providers = snapshot.providers;
     await state.enqueueStorage(() =>
@@ -491,42 +491,9 @@ export async function discoverStagedVaultStoreId(
       const storeId = await Promise.race([discovery, timeout]);
       if (storeId && state.manager) {
         try {
-          const raw = await state.enqueueStorage(() =>
+          state.existingVaultRecoverySummary = await state.enqueueStorage(() =>
             state.manager!.vaultRecoveryOptions(),
           );
-          try {
-            const devices = raw.devices.map((device) => {
-              try {
-                return {
-                  deviceId: device.deviceId,
-                  label: device.label,
-                  passkeyHint: device.passkeyHint,
-                };
-              } finally {
-                device.free();
-              }
-            });
-            const passwordEntries = raw.passwordEntries.map((entry) => {
-              try {
-                return {
-                  id: entry.id,
-                  label: entry.label,
-                  createdAt: entry.createdAt,
-                };
-              } finally {
-                entry.free();
-              }
-            });
-            state.existingVaultRecoverySummary = {
-              storeId: raw.storeId,
-              vaultName: raw.vaultName,
-              devices,
-              passwordEntries,
-              requiresSentinelQuorum: raw.requiresSentinelQuorum,
-            };
-          } finally {
-            raw.free();
-          }
         } catch (error) {
           state.existingVaultRecoverySummary = undefined;
           log.warn("vault recovery summary unavailable", {
@@ -552,8 +519,6 @@ export async function connectAndSyncStagedProvider(
   const stagedRemoteArgs = state.stagedRemoteStorageArgs();
   try {
     if (stagedRemoteArgs) {
-      const reconcileOutcome = await state.reconcileStagedRemoteWithLocal();
-      if (reconcileOutcome === "skip") return;
       const accessStatus =
         await state.assessVaultConnectStatus(stagedRemoteArgs);
       if (await state.handleRemoteVaultAssessStatus(accessStatus)) return;

@@ -115,8 +115,8 @@
     vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
-  let providerId = $state<string | undefined>(undefined)
-  let passwordEntryId = $state<string | undefined>(undefined)
+  let providerId = $state<string>()
+  let passwordEntryId = $state<string>()
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)

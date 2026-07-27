@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { SentinelVaultUnlockState } from '$app-wasm'
   import { Copy, KeyRound, RefreshCw, ShieldCheck, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Separator } from '$lib/components/ui/separator'
   import type { VaultState } from '$lib/vault.svelte'
+  import * as sentinelUnlockActions from '$lib/vault/sentinel-unlock'
 
   let {
     vault,
@@ -24,7 +26,7 @@
 
   const isBusy = $derived(isVerifying || isInitializing || actionBusy)
   const awaitingShares = $derived(
-    vault.sentinelUnlockStatus === 'awaiting_shares',
+    vault.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares,
   )
   const session = $derived(vault.sentinelUnlockSession)
 
@@ -45,14 +47,14 @@
   }
 
   async function startUnlock() {
-    await runAction(() => vault.startSentinelUnlock())
+    await runAction(() => sentinelUnlockActions.startSentinelUnlock(vault))
   }
 
   async function addResponse() {
     const payload = responseInput.trim()
     if (!payload) return
     await runAction(async () => {
-      await vault.addSentinelUnlockResponse(payload)
+      await sentinelUnlockActions.addSentinelUnlockResponse(vault, payload)
       responseInput = ''
     })
   }
@@ -60,7 +62,7 @@
   async function finalizeUnlock() {
     if (!session.ready) return
     await runAction(async () => {
-      await vault.finalizeSentinelUnlock()
+      await sentinelUnlockActions.finalizeSentinelUnlock(vault)
       if (vault.isAuthenticated) {
         await onUnlocked?.()
       }

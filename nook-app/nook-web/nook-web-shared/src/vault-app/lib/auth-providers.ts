@@ -57,26 +57,21 @@ export function setGoogleDriveProviderMode(
   config: OAuthFileConfig,
   mode: GoogleDriveMode,
 ): OAuthFileConfig {
-  return setGoogleDriveProviderModeWasm(toPlain(config), mode);
+  return setGoogleDriveProviderModeWasm(config, mode);
 }
 
 export function setICloudProviderMode(
   config: OAuthFileConfig,
   mode: ICloudMode,
 ): OAuthFileConfig {
-  return setICloudProviderModeWasm(toPlain(config), mode);
+  return setICloudProviderModeWasm(config, mode);
 }
 
 export function bindGoogleDriveSharedFolder(
   config: OAuthFileConfig,
   folderRef: string,
 ): OAuthFileConfig {
-  return bindGoogleDriveSharedFolderWasm(toPlain(config), folderRef);
-}
-
-/** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
-function toPlain<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return bindGoogleDriveSharedFolderWasm(config, folderRef);
 }
 
 export function findDuplicateSyncProvider(
@@ -85,8 +80,8 @@ export function findDuplicateSyncProvider(
   options?: { excludeId?: string },
 ): StorageProvider | undefined {
   return findDuplicateSyncProviderWasm(
-    { providers: toPlain(providers) },
-    toPlain(candidate),
+    { providers },
+    candidate,
     options?.excludeId ?? undefined,
   );
 }
@@ -95,17 +90,14 @@ export async function saveAuthProviders(
   manager: NookVaultManager,
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
-  await manager.saveAuthProviders(toPlain(snapshot));
+  await manager.saveAuthProviders(snapshot);
 }
 
 export function sealAuthProvidersForDevicePublicKey(
   devicePublicKey: string,
   snapshot: AuthProvidersSnapshot,
 ): AuthProvidersSnapshot {
-  return sealAuthProvidersForDevicePublicKeyWasm(
-    devicePublicKey,
-    toPlain(snapshot),
-  );
+  return sealAuthProvidersForDevicePublicKeyWasm(devicePublicKey, snapshot);
 }
 
 export function providerDefaultLabel(
@@ -148,7 +140,7 @@ export function providerStorageDetail(
   t?: (key: string) => string,
 ): string {
   return providerStorageDetailCore(
-    toPlain(provider),
+    provider,
     t
       ? t("provider_picker.this_device_desc")
       : "Vault in browser storage on this device",

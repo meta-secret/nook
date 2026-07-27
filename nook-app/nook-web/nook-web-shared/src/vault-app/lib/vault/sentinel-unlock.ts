@@ -5,17 +5,12 @@ import {
   classifyVaultRecoveryError,
   JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
+  SentinelVaultUnlockState,
   VaultRecoveryErrorKind,
   type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
 } from "$app-wasm";
 
 const log = createLogger("vault-sentinel");
-
-export type SentinelUnlockStatus =
-  | "not_sentinel"
-  | "unlocked"
-  | "awaiting_shares"
-  | "ceremony_required";
 
 export type {
   NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
@@ -58,60 +53,57 @@ export function isSentinelVault(state: VaultState): boolean {
   if (state.vaultArchitecture.vault_type === "sentinel") return true;
   if (!state.manager) return false;
   try {
-    return state.manager.sentinelUnlockStatus() !== "not_sentinel";
+    return (
+      state.manager.sentinelUnlockStatus() !==
+      SentinelVaultUnlockState.NotSentinel
+    );
   } catch {
     return false;
   }
 }
 
-export async function getSentinelUnlockStatus(
+async function getSentinelUnlockStatus(
   state: VaultState,
-): Promise<SentinelUnlockStatus> {
-  if (!state.manager) return "not_sentinel";
+): Promise<SentinelVaultUnlockState> {
+  if (!state.manager) return SentinelVaultUnlockState.NotSentinel;
   try {
-    const status = await state.enqueueStorage(() =>
+    return await state.enqueueStorage(() =>
       state.manager!.sentinelUnlockStatus(),
     );
-    switch (status) {
-      case "unlocked":
-      case "awaiting_shares":
-      case "ceremony_required":
-      case "not_sentinel":
-        return status;
-      default:
-        return "not_sentinel";
-    }
   } catch {
-    return "not_sentinel";
+    return SentinelVaultUnlockState.NotSentinel;
   }
 }
 
 export async function refreshSentinelUnlockStatus(
   state: VaultState,
-): Promise<SentinelUnlockStatus> {
+): Promise<SentinelVaultUnlockState> {
   let status = await getSentinelUnlockStatus(state);
   if (
     !state.isAuthenticated &&
-    status === "not_sentinel" &&
+    status === SentinelVaultUnlockState.NotSentinel &&
     state.vaultArchitecture.vault_type === "sentinel"
   ) {
     await ensureSentinelCeremonyHydrated(state);
     status = await getSentinelUnlockStatus(state);
   }
   state.sentinelUnlockStatus = status;
-  if (status === "ceremony_required" || status === "awaiting_shares") {
+  if (
+    status === SentinelVaultUnlockState.CeremonyRequired ||
+    status === SentinelVaultUnlockState.AwaitingShares
+  ) {
     state.sentinelCeremonyPrompt = true;
     state.loginPasswordPrompt = false;
-  } else if (status === "unlocked") {
+  } else if (status === SentinelVaultUnlockState.Unlocked) {
     state.sentinelCeremonyPrompt = false;
   } else if (
-    status === "not_sentinel" &&
+    status === SentinelVaultUnlockState.NotSentinel &&
     state.vaultArchitecture.vault_type === "sentinel"
   ) {
     state.sentinelCeremonyPrompt = true;
-    state.sentinelUnlockStatus = "ceremony_required";
-    return "ceremony_required";
-  } else if (status === "not_sentinel") {
+    state.sentinelUnlockStatus = SentinelVaultUnlockState.CeremonyRequired;
+    return SentinelVaultUnlockState.CeremonyRequired;
+  } else if (status === SentinelVaultUnlockState.NotSentinel) {
     state.sentinelCeremonyPrompt = false;
   }
   return state.sentinelUnlockStatus;
@@ -129,7 +121,10 @@ export async function ensureSentinelCeremonyHydrated(
     // A locked Sentinel sync may fail closed until its local share is selected.
   }
   const status = await getSentinelUnlockStatus(state);
-  if (status === "ceremony_required" || status === "awaiting_shares") {
+  if (
+    status === SentinelVaultUnlockState.CeremonyRequired ||
+    status === SentinelVaultUnlockState.AwaitingShares
+  ) {
     state.refreshVaultArchitectureFromManager();
     state.sentinelCeremonyPrompt = true;
     state.loginPasswordPrompt = false;
@@ -171,21 +166,6 @@ export async function addSentinelUnlockResponse(
     state.manager!.addSentinelUnlockResponse(response.trim()),
   );
   replaceUnlockSession(state, status);
-}
-
-export async function refreshSentinelUnlockSession(
-  state: VaultState,
-): Promise<void> {
-  if (!state.manager) return;
-  const status = await state.enqueueStorage(() =>
-    state.manager!.sentinelUnlockSessionStatus(),
-  );
-  replaceUnlockSession(state, status);
-  if (state.sentinelUnlockSession.active && !state.sentinelUnlockRequest) {
-    state.sentinelUnlockRequest = await state.enqueueStorage(() =>
-      state.manager!.sentinelUnlockRequestJson(),
-    );
-  }
 }
 
 export async function listSentinelStoredDeliveries(
@@ -236,7 +216,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     state.sentinelCeremonyPrompt = false;
     state.sentinelUnlockRequest = "";
     replaceUnlockSession(state, inactiveSentinelUnlockSession());
-    state.sentinelUnlockStatus = "unlocked";
+    state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked;
     await state.ensureProviderSaved();
     await state.loadProviders();
     await state.refreshPasswordEntriesList();
@@ -277,7 +257,10 @@ export async function surfaceSentinelCeremonyIfNeeded(
   }
   state.refreshVaultArchitectureFromManager();
   const status = await refreshSentinelUnlockStatus(state);
-  if (status === "ceremony_required" || status === "awaiting_shares") {
+  if (
+    status === SentinelVaultUnlockState.CeremonyRequired ||
+    status === SentinelVaultUnlockState.AwaitingShares
+  ) {
     state.sentinelCeremonyPrompt = true;
     state.loginPasswordPrompt = false;
     state.errorMsg = "";

@@ -6,7 +6,81 @@
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::VaultAccessStatus;
+use crate::{VaultAccessStatus, translate_from_catalog};
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DeviceProtectionStatus {
+    #[default]
+    Loading,
+    Missing,
+    Plaintext,
+    Passkey,
+    Pin,
+    PinSetup,
+    Unlocked,
+    Error,
+}
+
+impl DeviceProtectionStatus {
+    #[must_use]
+    pub fn from_persisted(value: &str) -> Option<Self> {
+        match value {
+            "missing" => Some(Self::Missing),
+            "plaintext" => Some(Self::Plaintext),
+            "passkey" => Some(Self::Passkey),
+            "pin" => Some(Self::Pin),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Loading => "loading",
+            Self::Missing => "missing",
+            Self::Plaintext => "plaintext",
+            Self::Passkey => "passkey",
+            Self::Pin => "pin",
+            Self::PinSetup => "pin-setup",
+            Self::Unlocked => "unlocked",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SentinelVaultUnlockState {
+    #[default]
+    NotSentinel,
+    Unlocked,
+    AwaitingShares,
+    CeremonyRequired,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RemoteVaultRecoveryState {
+    #[default]
+    None,
+    PromptWithCache,
+    PromptMissingOnly,
+    ConnectFromCache,
+    ConnectFresh,
+}
+
+impl RemoteVaultRecoveryState {
+    #[must_use]
+    pub const fn prompt_visible(self) -> bool {
+        matches!(self, Self::PromptWithCache | Self::PromptMissingOnly)
+    }
+
+    #[must_use]
+    pub const fn prompt_has_cache(self) -> bool {
+        matches!(self, Self::PromptWithCache)
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -23,6 +97,17 @@ pub enum VaultEditBlockReason {
     SecurityConflict,
     SyncConflict,
     Architecture,
+}
+
+impl VaultEditBlockReason {
+    #[must_use]
+    pub const fn translation_key(self) -> &'static str {
+        match self {
+            Self::SecurityConflict => "auth_storage.security_conflict_edits",
+            Self::SyncConflict => "auth_storage.sync_blocked_edits",
+            Self::Architecture => "architecture_modes.sentinel_secret_creation_blocked",
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -48,6 +133,16 @@ pub struct VaultClientPolicy;
 
 impl VaultClientPolicy {
     #[must_use]
+    pub const fn remote_recovery_prompt_visible(state: RemoteVaultRecoveryState) -> bool {
+        state.prompt_visible()
+    }
+
+    #[must_use]
+    pub const fn remote_recovery_prompt_has_cache(state: RemoteVaultRecoveryState) -> bool {
+        state.prompt_has_cache()
+    }
+
+    #[must_use]
     pub const fn edit_block_reason(
         security_conflict_count: usize,
         has_sync_conflict: bool,
@@ -66,6 +161,26 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
+    pub fn edit_block_message(
+        security_conflict_count: usize,
+        has_sync_conflict: bool,
+        architecture_allows_secret_creation: bool,
+        catalog_json: &str,
+        locale: &str,
+    ) -> Option<String> {
+        let reason = Self::edit_block_reason(
+            security_conflict_count,
+            has_sync_conflict,
+            architecture_allows_secret_creation,
+        )?;
+        Some(translate_from_catalog(
+            catalog_json,
+            locale,
+            reason.translation_key(),
+        ))
+    }
+
+    #[must_use]
     #[allow(clippy::fn_params_excessive_bools)]
     pub const fn sync_activity_visible(
         fan_out_syncing: bool,
@@ -77,11 +192,30 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
-    pub const fn has_password_envelope(
-        password_entry_count: usize,
-        password_unlock_mode: bool,
+    pub const fn should_use_join_provider_for_connect(
+        authenticated: bool,
+        sync_provider_count: usize,
+        join_state: JoinEnrollmentState,
     ) -> bool {
-        password_entry_count > 0 || password_unlock_mode
+        !authenticated
+            && sync_provider_count > 0
+            && !matches!(join_state, JoinEnrollmentState::None)
+    }
+
+    #[must_use]
+    #[allow(clippy::fn_params_excessive_bools)]
+    pub const fn should_sync_from_providers(
+        sync_blocked: bool,
+        force: bool,
+        verifying: bool,
+        saving: bool,
+        password_busy: bool,
+        syncing: bool,
+        sync_provider_count: usize,
+    ) -> bool {
+        !sync_blocked
+            && (force || (!verifying && !saving && !password_busy && !syncing))
+            && sync_provider_count > 0
     }
 
     #[must_use]
@@ -239,6 +373,33 @@ mod tests {
             Some(VaultEditBlockReason::Architecture)
         );
         assert_eq!(VaultClientPolicy::edit_block_reason(0, false, true), None);
+        assert_eq!(
+            VaultEditBlockReason::SecurityConflict.translation_key(),
+            "auth_storage.security_conflict_edits"
+        );
+        assert_eq!(
+            VaultEditBlockReason::SyncConflict.translation_key(),
+            "auth_storage.sync_blocked_edits"
+        );
+        assert_eq!(
+            VaultEditBlockReason::Architecture.translation_key(),
+            "architecture_modes.sentinel_secret_creation_blocked"
+        );
+        assert_eq!(
+            VaultClientPolicy::edit_block_message(
+                1,
+                true,
+                false,
+                crate::get_translation_catalog("en"),
+                "en",
+            )
+            .as_deref(),
+            Some("Security conflict detected. Sync from all devices before editing.")
+        );
+        assert_eq!(
+            VaultClientPolicy::edit_block_message(0, false, true, "{}", "en"),
+            None
+        );
     }
 
     #[test]
@@ -258,6 +419,32 @@ mod tests {
                 blocked.0, blocked.1, blocked.2, blocked.3, blocked.4, blocked.5
             ));
         }
+    }
+
+    #[test]
+    fn provider_connect_and_sync_guards_are_portable() {
+        assert!(VaultClientPolicy::should_use_join_provider_for_connect(
+            false,
+            1,
+            JoinEnrollmentState::Pending,
+        ));
+        assert!(!VaultClientPolicy::should_use_join_provider_for_connect(
+            true,
+            1,
+            JoinEnrollmentState::Pending,
+        ));
+        assert!(VaultClientPolicy::should_sync_from_providers(
+            false, false, false, false, false, false, 1,
+        ));
+        assert!(!VaultClientPolicy::should_sync_from_providers(
+            false, false, false, true, false, false, 1,
+        ));
+        assert!(VaultClientPolicy::should_sync_from_providers(
+            false, true, false, true, true, true, 1,
+        ));
+        assert!(!VaultClientPolicy::should_sync_from_providers(
+            true, true, false, false, false, false, 1,
+        ));
     }
 
     #[test]
@@ -327,6 +514,39 @@ mod tests {
             ),
             RemoteVaultAssessDecision::PromptMissingRemote
         );
+    }
+
+    #[test]
+    fn remote_recovery_state_exposes_only_prompt_variants_to_the_ui() {
+        assert!(VaultClientPolicy::remote_recovery_prompt_visible(
+            RemoteVaultRecoveryState::PromptWithCache
+        ));
+        assert!(VaultClientPolicy::remote_recovery_prompt_visible(
+            RemoteVaultRecoveryState::PromptMissingOnly
+        ));
+        assert!(!VaultClientPolicy::remote_recovery_prompt_visible(
+            RemoteVaultRecoveryState::ConnectFromCache
+        ));
+        assert!(VaultClientPolicy::remote_recovery_prompt_has_cache(
+            RemoteVaultRecoveryState::PromptWithCache
+        ));
+        assert!(!VaultClientPolicy::remote_recovery_prompt_has_cache(
+            RemoteVaultRecoveryState::PromptMissingOnly
+        ));
+    }
+
+    #[test]
+    fn persisted_device_protection_status_is_parsed_once_in_core() {
+        assert_eq!(
+            DeviceProtectionStatus::from_persisted("passkey"),
+            Some(DeviceProtectionStatus::Passkey)
+        );
+        assert_eq!(
+            DeviceProtectionStatus::from_persisted("pin"),
+            Some(DeviceProtectionStatus::Pin)
+        );
+        assert_eq!(DeviceProtectionStatus::from_persisted("future"), None);
+        assert_eq!(DeviceProtectionStatus::Unlocked.as_str(), "unlocked");
     }
 
     #[test]

@@ -271,53 +271,45 @@ impl NookSentinelGenesisParticipantStatus {
 
 #[wasm_bindgen]
 pub struct NookSentinelGenesisStatus {
-    active: bool,
     participants: Vec<NookSentinelGenesisParticipantStatus>,
-    complete: bool,
+    phase: nook_core::SentinelGenesisPhase,
 }
 
 #[wasm_bindgen]
 impl NookSentinelGenesisStatus {
-    pub(crate) const fn inactive() -> Self {
+    pub(crate) const fn from_phase(phase: nook_core::SentinelGenesisPhase) -> Self {
         Self {
-            active: false,
             participants: Vec::new(),
-            complete: false,
+            phase,
         }
     }
 
     pub(crate) fn from_session(session: &nook_core::SentinelGenesisSession) -> Self {
         Self {
-            active: true,
             participants: session
                 .participants()
                 .iter()
                 .map(NookSentinelGenesisParticipantStatus::from_core)
                 .collect(),
-            complete: session.is_complete(),
+            phase: nook_core::SentinelGenesisPhase::from_session(session),
         }
     }
 
     #[wasm_bindgen(getter)]
-    pub fn active(&self) -> bool {
-        self.active
+    pub fn phase(&self) -> nook_core::SentinelGenesisPhase {
+        self.phase
     }
 
     #[wasm_bindgen(getter)]
     pub fn participants(&mut self) -> Vec<NookSentinelGenesisParticipantStatus> {
         std::mem::take(&mut self.participants)
     }
-
-    #[wasm_bindgen(getter, js_name = isComplete)]
-    pub fn is_complete(&self) -> bool {
-        self.complete
-    }
 }
 
 #[wasm_bindgen]
 pub struct NookSentinelGenesisDelivery {
     device_id: String,
-    fingerprint: Option<String>,
+    fingerprint: String,
     payload: String,
 }
 
@@ -325,7 +317,7 @@ pub struct NookSentinelGenesisDelivery {
 impl NookSentinelGenesisDelivery {
     pub(crate) fn from_core(
         delivery: &nook_core::SentinelGenesisShareDelivery,
-        fingerprint: Option<String>,
+        fingerprint: String,
     ) -> Result<Self, crate::NookError> {
         Ok(Self {
             device_id: delivery.device_id.as_str().to_owned(),
@@ -341,7 +333,7 @@ impl NookSentinelGenesisDelivery {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn fingerprint(&self) -> Option<String> {
+    pub fn fingerprint(&self) -> String {
         self.fingerprint.clone()
     }
 
@@ -442,7 +434,8 @@ impl NookSentinelGenesisFinalizeResult {
                 let fingerprint = participants
                     .iter()
                     .find(|participant| participant.device_id == delivery.device_id)
-                    .map(|participant| participant.fingerprint.clone());
+                    .map(|participant| participant.fingerprint.clone())
+                    .ok_or(nook_core::MultiDeviceError::InvalidSentinelGenesisPayload)?;
                 NookSentinelGenesisDelivery::from_core(delivery, fingerprint)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -456,6 +449,11 @@ impl NookSentinelGenesisFinalizeResult {
     #[wasm_bindgen(getter, js_name = storeId)]
     pub fn store_id(&self) -> String {
         self.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn phase(&self) -> nook_core::SentinelGenesisPhase {
+        nook_core::SentinelGenesisPhase::DeliveringShares
     }
 
     #[wasm_bindgen(getter)]
@@ -975,6 +973,8 @@ impl NookPasskeyAssertion {
 #[wasm_bindgen(typescript_custom_section)]
 const WEB_TYPES: &'static str = r#"
 export type NookAppLocale = 'en' | 'ru';
+export type StoreId = string;
+export type PasswordEntryId = string;
 "#;
 
 fn browser_language_tags() -> Vec<String> {
@@ -1157,6 +1157,24 @@ pub struct NookVaultClientPolicy;
 
 #[wasm_bindgen]
 impl NookVaultClientPolicy {
+    #[wasm_bindgen(js_name = remoteRecoveryPromptVisible)]
+    #[must_use]
+    pub fn remote_recovery_prompt_visible(
+        &self,
+        state: nook_core::RemoteVaultRecoveryState,
+    ) -> bool {
+        nook_core::VaultClientPolicy::remote_recovery_prompt_visible(state)
+    }
+
+    #[wasm_bindgen(js_name = remoteRecoveryPromptHasCache)]
+    #[must_use]
+    pub fn remote_recovery_prompt_has_cache(
+        &self,
+        state: nook_core::RemoteVaultRecoveryState,
+    ) -> bool {
+        nook_core::VaultClientPolicy::remote_recovery_prompt_has_cache(state)
+    }
+
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Self {
@@ -1178,6 +1196,25 @@ impl NookVaultClientPolicy {
         )
     }
 
+    #[wasm_bindgen(js_name = editBlockMessage)]
+    #[must_use]
+    pub fn edit_block_message(
+        &self,
+        security_conflict_count: u32,
+        has_sync_conflict: bool,
+        architecture_allows_secret_creation: bool,
+        catalog_json: &str,
+        locale: &str,
+    ) -> Option<String> {
+        nook_core::VaultClientPolicy::edit_block_message(
+            security_conflict_count as usize,
+            has_sync_conflict,
+            architecture_allows_secret_creation,
+            catalog_json,
+            locale,
+        )
+    }
+
     #[wasm_bindgen(js_name = isSyncActivityVisible)]
     #[must_use]
     pub fn is_sync_activity_visible(
@@ -1195,16 +1232,42 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = hasPasswordEnvelope)]
+    #[wasm_bindgen(js_name = shouldUseJoinProviderForConnect)]
     #[must_use]
-    pub fn has_password_envelope(
+    pub fn should_use_join_provider_for_connect(
         &self,
-        password_entry_count: u32,
-        password_unlock_mode: bool,
+        authenticated: bool,
+        sync_provider_count: u32,
+        join_state: nook_core::JoinEnrollmentState,
     ) -> bool {
-        nook_core::VaultClientPolicy::has_password_envelope(
-            password_entry_count as usize,
-            password_unlock_mode,
+        nook_core::VaultClientPolicy::should_use_join_provider_for_connect(
+            authenticated,
+            sync_provider_count as usize,
+            join_state,
+        )
+    }
+
+    #[wasm_bindgen(js_name = shouldSyncFromProviders)]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn should_sync_from_providers(
+        &self,
+        sync_blocked: bool,
+        force: bool,
+        verifying: bool,
+        saving: bool,
+        password_busy: bool,
+        syncing: bool,
+        sync_provider_count: u32,
+    ) -> bool {
+        nook_core::VaultClientPolicy::should_sync_from_providers(
+            sync_blocked,
+            force,
+            verifying,
+            saving,
+            password_busy,
+            syncing,
+            sync_provider_count as usize,
         )
     }
 
@@ -1658,100 +1721,6 @@ pub(crate) fn password_entries_to_vec(
         .iter()
         .map(NookPasswordEntrySummary::from_core)
         .collect()
-}
-
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct NookVaultRecoveryDevice {
-    device_id: String,
-    label: String,
-    passkey_hint: String,
-}
-
-#[wasm_bindgen]
-impl NookVaultRecoveryDevice {
-    #[wasm_bindgen(getter, js_name = deviceId)]
-    pub fn device_id(&self) -> String {
-        self.device_id.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn label(&self) -> String {
-        self.label.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = passkeyHint)]
-    pub fn passkey_hint(&self) -> String {
-        self.passkey_hint.clone()
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct NookVaultRecoveryOptions {
-    store_id: String,
-    vault_name: String,
-    devices: Vec<NookVaultRecoveryDevice>,
-    password_entries: Vec<NookPasswordEntrySummary>,
-    requires_sentinel_quorum: bool,
-}
-
-#[wasm_bindgen]
-impl NookVaultRecoveryOptions {
-    #[wasm_bindgen(getter, js_name = storeId)]
-    pub fn store_id(&self) -> String {
-        self.store_id.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = vaultName)]
-    pub fn vault_name(&self) -> String {
-        self.vault_name.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn devices(&self) -> Vec<NookVaultRecoveryDevice> {
-        self.devices.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = passwordEntries)]
-    pub fn password_entries(&self) -> Vec<NookPasswordEntrySummary> {
-        self.password_entries.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = requiresSentinelQuorum)]
-    pub fn requires_sentinel_quorum(&self) -> bool {
-        self.requires_sentinel_quorum
-    }
-
-    pub(crate) fn from_core(
-        store_id: String,
-        vault_name: String,
-        options: nook_core::VaultRecoveryOptions,
-    ) -> Self {
-        Self {
-            store_id,
-            vault_name,
-            devices: options
-                .devices
-                .into_iter()
-                .map(|device| NookVaultRecoveryDevice {
-                    device_id: device.device_id.as_str().to_owned(),
-                    label: device.label,
-                    passkey_hint: device.passkey_hint,
-                })
-                .collect(),
-            password_entries: options
-                .password_entries
-                .into_iter()
-                .map(|entry| NookPasswordEntrySummary {
-                    id: entry.id,
-                    label: entry.label,
-                    created_at: entry.created_at,
-                })
-                .collect(),
-            requires_sentinel_quorum: options.requires_sentinel_quorum,
-        }
-    }
 }
 
 #[wasm_bindgen]
@@ -2493,6 +2462,7 @@ pub struct NookTotpCode {
     code: String,
     seconds_remaining: u32,
     period: u32,
+    expires_at_unix_seconds: f64,
 }
 
 #[wasm_bindgen]
@@ -2515,11 +2485,20 @@ impl NookTotpCode {
         self.period
     }
 
-    pub(crate) fn from_core(value: nook_core::TotpCode) -> Self {
+    #[wasm_bindgen(getter, js_name = expiresAtUnixSeconds)]
+    #[must_use]
+    pub fn expires_at_unix_seconds(&self) -> f64 {
+        self.expires_at_unix_seconds
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) fn from_core(value: nook_core::TotpCode, unix_seconds: u64) -> Self {
+        let seconds_remaining = u32::try_from(value.seconds_remaining).unwrap_or(u32::MAX);
         Self {
             code: value.code,
-            seconds_remaining: u32::try_from(value.seconds_remaining).unwrap_or(u32::MAX),
+            seconds_remaining,
             period: u32::try_from(value.period).unwrap_or(u32::MAX),
+            expires_at_unix_seconds: unix_seconds as f64 + f64::from(seconds_remaining),
         }
     }
 }

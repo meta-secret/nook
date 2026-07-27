@@ -19,8 +19,11 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [feature-issue-planning.md](feature-issue-planning.md) | Organize each feature as a Workbench directory with a shared summary, focused Markdown issues, dependencies, and explicit automation state | |
 | [issue-scope-management.md](issue-scope-management.md) | Preserve deferred, risky, or too-large work in existing Workbench feature/issue records and task worklogs without disrupting other agents | [`.agents/skills/issue-scope-management/SKILL.md`](../../.agents/skills/issue-scope-management/SKILL.md) |
 | [rust-coding.md](rust-coding.md) | Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs | [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md) |
-| [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes in Rust and reserve TypeScript for UI presentation state and browser glue; model sum types as enums and treat `Option<T>` as a missing enum | |
+| [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes and generated DTOs in Rust/WASM, reserve TypeScript for UI/browser glue, and model sum types as enums | |
+| [svelte-state-modeling.md](svelte-state-modeling.md) | Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM | |
+| [typescript-serial-operation-queues.md](typescript-serial-operation-queues.md) | Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains | |
 | [ui-design-skills.md](ui-design-skills.md) | Always load both `impeccable` and `design-taste-frontend` for user-visible UI work, applying them through Nook's Svelte, product, accessibility, and typed-boundary constraints | |
+| [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
 
 ## How To Add One
 

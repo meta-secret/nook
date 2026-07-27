@@ -19,13 +19,6 @@ const E2E_PASSWORD_SCRYPT_LOG_N: u8 = 10;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = "vaultUnlockMode")]
-    pub fn vault_unlock_mode(&self) -> String {
-        // Device keys are always the primary unlock path; backup passwords
-        // coexist in `password_entries` without changing the mode tag.
-        "keys".to_owned()
-    }
-
     #[wasm_bindgen(js_name = "listVaultPasswordEntries")]
     pub fn list_vault_password_entries(&self) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
         Ok(password_entries_to_vec(&self.vault.password_entries))

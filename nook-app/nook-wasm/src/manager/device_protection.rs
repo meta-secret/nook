@@ -97,13 +97,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(js_name = deviceProtectionStatus)]
-    pub async fn device_protection_status(&self) -> Result<String, JsError> {
+    pub async fn device_protection_status(
+        &self,
+    ) -> Result<nook_core::DeviceProtectionStatus, JsError> {
         if !self.device.identity_private_key.is_empty() {
-            return Ok("unlocked".to_owned());
+            return Ok(nook_core::DeviceProtectionStatus::Unlocked);
         }
-        Ok(indexed_db::device_identity_protection_status()
-            .await?
-            .to_owned())
+        Ok(indexed_db::device_identity_protection_status().await?)
     }
 
     /// Return the product device-protection mode persisted during device setup.
@@ -119,7 +119,7 @@ impl NookVaultManager {
         if self.device.identity_private_key.is_empty()
             && matches!(
                 indexed_db::device_identity_protection_status().await?,
-                "passkey" | "pin"
+                nook_core::DeviceProtectionStatus::Passkey | nook_core::DeviceProtectionStatus::Pin
             )
         {
             return Err(NookError::Decryption(
@@ -283,7 +283,8 @@ impl NookVaultManager {
             if self.device.identity_private_key.is_empty() {
                 if matches!(
                     indexed_db::device_identity_protection_status().await?,
-                    "passkey" | "pin"
+                    nook_core::DeviceProtectionStatus::Passkey
+                        | nook_core::DeviceProtectionStatus::Pin
                 ) {
                     return Err(NookError::Decryption(
                         "errors.device_protection.authorization_required".to_owned(),

@@ -1339,9 +1339,7 @@ export function oauthTokensToICloudConfig(
   return iCloudOAuthTokensToConfigCore(
     tokens.accessToken,
     tokens.accountName ?? undefined,
-    existing
-      ? (JSON.parse(JSON.stringify(existing)) as OAuthFileConfig)
-      : undefined,
+    existing,
   );
 }
 

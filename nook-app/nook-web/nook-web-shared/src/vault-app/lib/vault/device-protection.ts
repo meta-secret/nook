@@ -11,24 +11,28 @@ import { LOCAL_PROVIDER_TYPE } from "$lib/auth-providers";
 import { createLogger } from "$lib/log";
 import type { DeviceMode } from "$lib/vault-architecture";
 import type { VaultState } from "$lib/vault.svelte";
+import { DeviceProtectionStatus } from "$app-wasm";
 
 const log = createLogger("vault-device-protection");
 
 async function finishAuthorizedInitialization(
   state: VaultState,
-  mode: "passkey" | "pin",
+  mode: DeviceProtectionStatus,
 ): Promise<void> {
   state.deviceAuthorizationInProgress = true;
-  state.deviceProtectionLockedMode = mode;
+  state.deviceProtectionLockedStatus = mode;
   await state.continueInitializationAfterDeviceUnlock();
-  state.deviceProtectionStatus = "unlocked";
+  state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
 }
 
 function lockFailedAuthorization(
   state: VaultState,
   deviceIdentityUnlocked: boolean,
 ): void {
-  if (state.deviceProtectionStatus === "unlocked" || deviceIdentityUnlocked) {
+  if (
+    state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
+    deviceIdentityUnlocked
+  ) {
     void state.lockDeviceProtection();
   }
 }
@@ -51,7 +55,7 @@ export async function setupDeviceProtection(
       createPasskeyProtection(state.manager!, passkeyLabel, deviceMode),
     );
     deviceIdentityUnlocked = true;
-    await finishAuthorizedInitialization(state, "passkey");
+    await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
       logPasskeyCeremony("passkey creation did not finish", error);
@@ -63,7 +67,7 @@ export async function setupDeviceProtection(
         "passkey unavailable; offering PIN device protection fallback",
         error,
       );
-      state.deviceProtectionStatus = "pin-setup";
+      state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       state.errorMsg = state.t(
         "device_protection.passkey_unavailable_pin_fallback_ready",
       );
@@ -74,7 +78,7 @@ export async function setupDeviceProtection(
         "passkey PRF unavailable; offering PIN device protection fallback",
         error,
       );
-      state.deviceProtectionStatus = "pin-setup";
+      state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       state.errorMsg = state.t("device_protection.pin_fallback_ready");
       return;
     }
@@ -101,7 +105,7 @@ export async function recoverDeviceProtectionWithPasskey(
       recoverExistingPasskeyProtection(state.manager!),
     );
     deviceIdentityUnlocked = true;
-    await finishAuthorizedInitialization(state, "passkey");
+    await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
       logPasskeyCeremony("passkey recovery did not finish", error);
@@ -115,7 +119,7 @@ export async function recoverDeviceProtectionWithPasskey(
         "passkey recovery unavailable; offering PIN device protection fallback",
         error,
       );
-      state.deviceProtectionStatus = "pin-setup";
+      state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       state.errorMsg = state.t(
         "device_protection.recovery_passkey_unavailable_pin_fallback_ready",
       );
@@ -126,7 +130,7 @@ export async function recoverDeviceProtectionWithPasskey(
         "passkey recovery PRF unavailable; offering PIN device protection fallback",
         error,
       );
-      state.deviceProtectionStatus = "pin-setup";
+      state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       state.errorMsg = state.t("device_protection.recovery_pin_fallback_ready");
       return;
     }
@@ -160,7 +164,7 @@ export async function setupPinDeviceProtection(
       state.manager!.finishPinDeviceProtection(pin),
     );
     deviceIdentityUnlocked = true;
-    await finishAuthorizedInitialization(state, "pin");
+    await finishAuthorizedInitialization(state, DeviceProtectionStatus.Pin);
   } catch (error) {
     log.warn("PIN device protection setup failed", {
       outcome: "pin_setup_failed",
@@ -185,7 +189,7 @@ export async function unlockDeviceProtection(state: VaultState): Promise<void> {
       authorizePasskeyProtection(state.manager!),
     );
     deviceIdentityUnlocked = true;
-    await finishAuthorizedInitialization(state, "passkey");
+    await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
       logPasskeyCeremony("passkey authorization did not finish", error);
@@ -216,7 +220,7 @@ export async function unlockPinDeviceProtection(
       state.manager!.unlockPinDeviceIdentity(pin),
     );
     deviceIdentityUnlocked = true;
-    await finishAuthorizedInitialization(state, "pin");
+    await finishAuthorizedInitialization(state, DeviceProtectionStatus.Pin);
   } catch (error) {
     log.warn("PIN device protection unlock failed", {
       outcome: "pin_unlock_failed",
@@ -239,8 +243,8 @@ export async function resetDeviceProtectionForRecovery(
   state.errorMsg = "";
   try {
     await state.manager.resetDeviceProtectionForRecovery();
-    state.deviceProtectionStatus = "missing";
-    state.deviceProtectionLockedMode = "passkey";
+    state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
+    state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";
     state.devicePublicKey = "";
     state.providers = [];

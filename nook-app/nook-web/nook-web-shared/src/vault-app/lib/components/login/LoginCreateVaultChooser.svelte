@@ -18,33 +18,19 @@
   import SentinelTerminalDashboard from '$lib/components/login/SentinelTerminalDashboard.svelte'
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
   import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
-  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
+  import type { VaultState } from '$lib/vault.svelte'
   import type { AppKind } from '$lib/app-kind'
   import {
     buildSentinelGenesisParticipantResponseLink,
     buildSentinelGenesisRequestLink,
   } from '$lib/sentinel-genesis-link'
-  import { sentinelGenesisParticipantFingerprint } from '$app-wasm'
-
-  type SentinelGenesisStatus =
-    | 'idle'
-    | 'collecting'
-    | 'ready'
-    | 'finalizing'
-    | 'delivering'
-    | 'complete'
-
-  type SentinelGenesisDelivery = {
-    participantId: string
-    fingerprint?: string
-    payload: string
-  }
-
-  type SentinelGenesisParticipantSummary = {
-    participantId: string
-    label: string
-    fingerprint: string
-  }
+  import {
+    SentinelGenesisPhase,
+    sentinelGenesisParticipantFingerprint,
+    type NookSentinelGenesisDelivery,
+    type NookSentinelGenesisParticipantStatus,
+    type StartSentinelGenesisArgs,
+  } from '$app-wasm'
 
   type WizardStep =
     | 'choose'
@@ -73,7 +59,7 @@
     onRememberSentinelGenesisRequest,
     onReceiveSentinelGenesisShare,
     onCompleteSentinelGenesisDelivery,
-    sentinelGenesisStatus = 'idle',
+    sentinelGenesisPhase = SentinelGenesisPhase.Inactive,
     sentinelGenesisRequest = '',
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
@@ -110,10 +96,10 @@
       sharePayload: string,
     ) => void | Promise<void>
     onCompleteSentinelGenesisDelivery?: () => void | Promise<void>
-    sentinelGenesisStatus?: SentinelGenesisStatus
+    sentinelGenesisPhase?: SentinelGenesisPhase
     sentinelGenesisRequest?: string
-    sentinelGenesisParticipants?: SentinelGenesisParticipantSummary[]
-    sentinelGenesisDeliveries?: SentinelGenesisDelivery[]
+    sentinelGenesisParticipants?: NookSentinelGenesisParticipantStatus[]
+    sentinelGenesisDeliveries?: NookSentinelGenesisDelivery[]
     sentinelInvitationRequest?: string
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
@@ -127,7 +113,7 @@
   let chosenPath = $state<ChosenPath>('undecided')
   let vaultName = $state('')
   let sentinelName = $state('')
-  let sentinelDashboard = $state<SentinelDashboard | undefined>(undefined)
+  let sentinelDashboard = $state<SentinelDashboard>()
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
   let copyingJoinResponse = $state(false)
@@ -165,7 +151,7 @@
     if (
       !response ||
       response === importedParticipantResponse ||
-      sentinelGenesisStatus !== 'collecting' ||
+      sentinelGenesisPhase !== SentinelGenesisPhase.CollectingParticipants ||
       sentinelDashboard !== 'terminal' ||
       !onAddSentinelGenesisParticipantResponse
     ) {
@@ -228,11 +214,11 @@
   }
 
   $effect(() => {
-    if (sentinelGenesisStatus === 'complete') {
+    if (sentinelGenesisPhase === SentinelGenesisPhase.Complete) {
       sentinelDashboard = undefined
       return
     }
-    if (sentinelGenesisStatus !== 'idle') {
+    if (sentinelGenesisPhase !== SentinelGenesisPhase.Inactive) {
       sentinelDashboard ??= 'card-stack'
       wizardStep = 'sentinel-ceremony'
       chosenPath = 'sentinel'
@@ -281,7 +267,7 @@
       initiatorPasskeyRequested &&
       deviceProtectionReady &&
       sentinelDashboardActive &&
-      sentinelGenesisStatus === 'idle' &&
+      sentinelGenesisPhase === SentinelGenesisPhase.Inactive &&
       !initiatorFingerprint &&
       !initiatorKeyLoading &&
       !isBusy
@@ -579,10 +565,9 @@
     try {
       generatedParticipantResponse =
         await onCreateSentinelGenesisParticipantResponse(requestPayload)
-      const response = JSON.parse(generatedParticipantResponse) as {
-        participant?: { fingerprint?: string }
-      }
-      generatedParticipantFingerprint = response.participant?.fingerprint ?? ''
+      generatedParticipantFingerprint = sentinelGenesisParticipantFingerprint(
+        generatedParticipantResponse,
+      )
     } catch (error) {
       generatedParticipantResponse = ''
       generatedParticipantFingerprint = ''
@@ -644,7 +629,7 @@
       bind:name={sentinelName}
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
-      status={sentinelGenesisStatus}
+      status={sentinelGenesisPhase}
       request={sentinelGenesisInvitationLink}
       participantResponse={sentinelParticipantResponse}
       participants={sentinelGenesisParticipants}
@@ -666,7 +651,7 @@
       bind:name={sentinelName}
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
-      status={sentinelGenesisStatus}
+      status={sentinelGenesisPhase}
       request={sentinelGenesisInvitationLink}
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}

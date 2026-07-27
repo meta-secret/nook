@@ -16,6 +16,7 @@
   import { resolveOAuthOriginSupport } from '$lib/oauth-origin'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
+  import * as oauthActions from '$lib/vault/oauth'
 
   const log = createLogger('icloud-oauth')
 
@@ -113,9 +114,9 @@
     vault.errorMsg = ''
     try {
       if (isSharedICloud) {
-        await vault.createICloudSharedProvider()
+        await oauthActions.createICloudSharedProvider(vault)
       } else {
-        await vault.createGoogleSharedFolder(collaboratorEmail)
+        await oauthActions.createGoogleSharedFolder(vault, collaboratorEmail)
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
@@ -139,9 +140,9 @@
     vault.errorMsg = ''
     try {
       if (isSharedICloud) {
-        await vault.useICloudSharedProvider(sharedFolderRef)
+        await oauthActions.useICloudSharedProvider(vault, sharedFolderRef)
       } else {
-        await vault.useGoogleSharedFolder(sharedFolderRef)
+        await oauthActions.useGoogleSharedFolder(vault, sharedFolderRef)
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
@@ -203,7 +204,9 @@
           return
         }
         log.info('CloudKit native sign-in deferred wait started')
-        void vault.signInWithICloud({ clickPreparedControl: false })
+        void oauthActions.signInWithICloud(vault, {
+          clickPreparedControl: false,
+        })
       }, 0)
     }
     node.addEventListener('click', handleClick, { capture: true })
@@ -234,7 +237,7 @@
       !icloudSignInPrepareStarted
     ) {
       icloudSignInPrepareStarted = true
-      void vault.prepareICloudSignIn()
+      void oauthActions.prepareICloudSignIn(vault)
     }
   })
 </script>
@@ -482,7 +485,7 @@
           )}
           data-testid="google-sign-in-btn"
           disabled={oauthBusy || oauthOriginUnsupported}
-          onclick={() => void vault.signInWithGoogle()}
+          onclick={() => void oauthActions.signInWithGoogle(vault)}
         >
           {#if oauthBusy}
             {vault.t('provider_setup.google_signing_in')}

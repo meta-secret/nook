@@ -19,15 +19,20 @@ import {
   hasRemoteCredentials as wasmHasRemoteCredentials,
   isLocalFolderBackupSupported,
   isVaultSessionLocked,
+  DeviceProtectionStatus,
   JoinEnrollmentState,
   NookBrowserLocale,
   NookClientRunModeUtil,
   NookRuntimeConfig,
+  SentinelGenesisPhase,
+  type NookSentinelGenesisDelivery,
+  type NookSentinelGenesisParticipantStatus,
   NookVaultClientPolicy,
   NookVaultArchitecture,
   RemoteVaultAssessDecision,
+  RemoteVaultRecoveryState,
+  SentinelVaultUnlockState,
   UnauthenticatedSyncDecision,
-  VaultEditBlockReason,
   activeVaultProviders as wasmActiveVaultProviders,
   get_translation_catalog as getTranslationCatalog,
   localProviderIdForActiveVault,
@@ -36,12 +41,13 @@ import {
   providerLabelById,
   providersVisibleWhileDeviceLocked,
   providerWasmArgs as wasmProviderWasmArgs,
+  resolveErrorMessage as wasmResolveErrorMessage,
   setActiveVault,
   setVaultSessionLocked,
   stagedRemoteStorageArgs as wasmStagedRemoteStorageArgs,
   stagedProviderLabel as wasmStagedProviderLabel,
   syncProvidersForActiveVault as wasmSyncProvidersForActiveVault,
-  translateFromCatalog,
+  translateWithReplacements,
   updateOauthRemoteRef,
   updateProviderSyncMetadata as wasmUpdateProviderSyncMetadata,
   wasmStorageArgs as wasmStorageArgsCore,
@@ -52,6 +58,10 @@ import {
   type NookStorageConnectArgs,
   type NookVaultManager,
   type NookAppLocale,
+  type PasswordEntryId,
+  type StartSentinelGenesisArgs,
+  type StoreId,
+  type VaultRecoverySummary,
 } from "$app-wasm";
 import { APP_KIND } from "$lib/app-kind";
 import {
@@ -59,9 +69,6 @@ import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
-  providerDefaultLabel,
-  wasmStorageModeForProvider,
-  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type GoogleDriveMode,
   type ICloudMode,
@@ -101,84 +108,29 @@ import * as passwordUnlockActions from "$lib/vault/password-unlock";
 import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
 import * as idleSessionActions from "$lib/vault/idle-session";
 import * as lifecycleActions from "$lib/vault/lifecycle";
-import * as deviceProtectionActions from "$lib/vault/device-protection";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import {
   clearTabScopedBrowserData,
   deleteLocalBrowserData as deleteBrowserData,
 } from "$lib/browser-data";
+import { SerialOperationQueue } from "$lib/serial-operation-queue";
 import type {
   SentinelStoredDeliverySummary,
   SentinelUnlockSessionStatus,
-  SentinelUnlockStatus,
 } from "$lib/vault/sentinel-unlock";
 
 const vaultLog = createLogger("vault");
 
 type TranslationCatalog = string;
 
-export type SentinelGenesisStatus =
-  | "idle"
-  | "collecting"
-  | "ready"
-  | "finalizing"
-  | "delivering"
-  | "complete";
-
-export type SentinelGenesisDelivery = {
-  participantId: string;
-  fingerprint?: string;
-  payload: string;
-  sharePayload?: string;
-};
-
-export type SentinelGenesisParticipantSummary = {
-  participantId: string;
-  label: string;
-  fingerprint: string;
-};
-
-export type StartSentinelGenesisArgs = {
-  label: string;
-  participantCount: number;
-  threshold: number;
-};
-
-export type ExistingVaultRecoverySummary = {
-  storeId: string;
-  vaultName: string;
-  devices: Array<{ deviceId: string; label: string; passkeyHint: string }>;
-  passwordEntries: Array<{ id: string; label: string; createdAt: string }>;
-  requiresSentinelQuorum: boolean;
-};
-
-function storageArgsTuple(
+function takeStorageArgsTuple(
   args: NookStorageConnectArgs,
 ): [string, string, string] {
-  return [args.mode, args.pat, args.repo];
-}
-
-function plainProvider(provider: StorageProvider): StorageProvider {
-  return JSON.parse(JSON.stringify(provider)) as StorageProvider;
-}
-
-function plainProviders(providers: StorageProvider[]): StorageProvider[] {
-  return JSON.parse(JSON.stringify(providers)) as StorageProvider[];
-}
-
-function plainProviderSnapshot(
-  providers: StorageProvider[],
-  activeVaultStoreId?: string,
-): AuthProvidersSnapshot {
-  const snapshot: AuthProvidersSnapshot = {
-    providers: plainProviders(providers),
-  };
-  if (activeVaultStoreId) snapshot.activeVaultStoreId = activeVaultStoreId;
-  return snapshot;
-}
-
-function plainOAuthFile(config: OAuthFileConfig): OAuthFileConfig {
-  return JSON.parse(JSON.stringify(config)) as OAuthFileConfig;
+  try {
+    return [args.mode, args.pat, args.repo];
+  } finally {
+    args.free();
+  }
 }
 
 export class VaultState {
@@ -196,37 +148,35 @@ export class VaultState {
 
   settingsOpen = $state(false);
   settingsSection = $state<"storage" | "onboard" | "admin">("storage");
-  settingsAccordionSection = $state<
-    "devices" | "language" | "danger" | undefined
-  >("devices");
+  settingsAccordionSection = $state<"devices" | "language" | "danger">(
+    "devices",
+  );
   adminAccordionSection = $state<
-    "vaults" | "storage" | "passwords" | "import-export" | undefined
+    "vaults" | "storage" | "passwords" | "import-export"
   >("vaults");
   helpOpen = $state(false);
 
-  providers = $state<StorageProvider[]>([]);
+  providers = $state.raw<StorageProvider[]>([]);
   providersLoaded = $state(false);
   /** Locally cached vaults on this browser (metadata only). */
   localVaults = $state<NookLocalVaultEntry[]>([]);
   /** Active vault store_id — sync providers and local blob are scoped to this. */
-  activeVaultStoreId = $state<string | undefined>(undefined);
+  activeVaultStoreId = $state<StoreId>();
   /** Login gate: user picked a vault but has not unlocked yet. */
-  selectedLoginVaultStoreId = $state<string | undefined>(undefined);
+  selectedLoginVaultStoreId = $state<StoreId>();
   /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false);
   localLoginPrepared = $state(false);
-  loginSetupType = $state<StorageProviderType | undefined>(undefined);
+  loginSetupType = $state<StorageProviderType>();
   loginRequiresExistingVault = $state(false);
-  existingVaultRecoverySummary = $state<
-    ExistingVaultRecoverySummary | undefined
-  >(undefined);
+  existingVaultRecoverySummary = $state<VaultRecoverySummary>();
   addProviderOpen = $state(false);
 
   storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE);
   githubPat = $state("");
   githubRepo = $state(DEFAULT_GITHUB_REPO);
-  oauthFile = $state<OAuthFileConfig | undefined>(undefined);
-  localFolder = $state<LocalFolderConfig | undefined>(undefined);
+  oauthFile = $state.raw<OAuthFileConfig>();
+  localFolder = $state.raw<LocalFolderConfig>();
   localFolderBackupSupported = $state(
     typeof window !== "undefined" && isLocalFolderBackupSupported(),
   );
@@ -234,30 +184,29 @@ export class VaultState {
   draftDeviceMode = $state<DeviceMode>("standard");
   draftVaultType = $state<VaultType>("simple");
   draftReplicationType = $state<ReplicationType>("personal");
-  sentinelGenesisStatus = $state<SentinelGenesisStatus>("idle");
+  sentinelGenesisPhase = $state<SentinelGenesisPhase>(
+    SentinelGenesisPhase.Inactive,
+  );
   sentinelGenesisRequest = $state("");
   sentinelGenesisParticipantCount = $state(0);
-  sentinelGenesisParticipants = $state<SentinelGenesisParticipantSummary[]>([]);
-  sentinelGenesisDeliveries = $state<SentinelGenesisDelivery[]>([]);
-  sentinelGenesisStoreId = $state<string | undefined>(undefined);
-  oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined);
+  sentinelGenesisParticipants = $state<NookSentinelGenesisParticipantStatus[]>(
+    [],
+  );
+  sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([]);
+  sentinelGenesisStoreId = $state<StoreId>();
+  oauthSetupPreset = $state<OAuthFilePreset>();
   googleOAuthBusy = $state(false);
   icloudOAuthPreparing = $state(false);
   icloudOAuthReady = $state(false);
   icloudOAuthBusy = $state(false);
 
-  manager = $state<NookVaultManager | undefined>(undefined);
-  deviceProtectionStatus = $state<
-    | "loading"
-    | "missing"
-    | "plaintext"
-    | "passkey"
-    | "pin"
-    | "pin-setup"
-    | "unlocked"
-    | "error"
-  >("loading");
-  deviceProtectionLockedMode = $state<"passkey" | "pin">("passkey");
+  manager = $state<NookVaultManager>();
+  deviceProtectionStatus = $state<DeviceProtectionStatus>(
+    DeviceProtectionStatus.Loading,
+  );
+  deviceProtectionLockedStatus = $state<DeviceProtectionStatus>(
+    DeviceProtectionStatus.Passkey,
+  );
   isAuthenticated = $state(false);
   /** True when the login gate should explain that the last lock was due to idle timeout. */
   sessionExpiredByIdle = $state(false);
@@ -266,7 +215,7 @@ export class VaultState {
   secretPageOffset = $state(0);
   secretPageSize = 50;
   secretQuery = $state("");
-  secretTypeFilter = $state<VaultItemType | undefined>(undefined);
+  secretTypeFilter = $state<VaultItemType>();
   private secretPageGeneration = 0;
 
   errorMsg = $state("");
@@ -290,10 +239,10 @@ export class VaultState {
    * auto-connect when the approval lands (`applyVaultSyncResult`).
    */
   awaitingJoinApproval = $state(false);
-  lastSyncedAt = $state<SvelteDate | undefined>(undefined);
+  lastSyncedAt = $state<SvelteDate>();
   isSyncing = $state(false);
   /** Provider id currently running a manual sync (Settings UI). */
-  syncingProviderId = $state<string | undefined>(undefined);
+  syncingProviderId = $state<string>();
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false);
   /** Concurrent secret replacement conflicts from the event log projection. */
@@ -308,11 +257,9 @@ export class VaultState {
     [],
   );
   /** User must pick local vs remote before editing when versions match but content differs. */
-  pendingSyncConflict = $state<NookPendingSyncConflict | undefined>(undefined);
+  pendingSyncConflict = $state<NookPendingSyncConflict>();
   /** Local-folder provider points at a folder that contains several vault event logs. */
-  localFolderMultipleVaultsIssue = $state<
-    LocalFolderMultipleVaultsIssue | undefined
-  >(undefined);
+  localFolderMultipleVaultsIssue = $state<LocalFolderMultipleVaultsIssue>();
   private architectureSecretCreationAllowed = $state(true);
 
   get syncBlocked(): boolean {
@@ -324,33 +271,31 @@ export class VaultState {
   }
 
   get editsBlocked(): boolean {
-    return this.editBlockReason !== undefined;
+    return (
+      this.clientPolicy.editBlockReason(
+        this.securityConflicts.length,
+        this.syncBlocked,
+        this.architectureCanCreateSecret,
+      ) !== undefined
+    );
   }
 
   get architectureCanCreateSecret(): boolean {
     return this.architectureSecretCreationAllowed;
   }
 
-  get editBlockReason(): string | undefined {
-    const reason = this.clientPolicy.editBlockReason(
+  get editBlockMessage(): string | undefined {
+    return this.clientPolicy.editBlockMessage(
       this.securityConflicts.length,
       this.syncBlocked,
       this.architectureCanCreateSecret,
+      this.translations,
+      this.locale,
     );
-    switch (reason) {
-      case VaultEditBlockReason.SecurityConflict:
-        return this.t("auth_storage.security_conflict_edits");
-      case VaultEditBlockReason.SyncConflict:
-        return this.t("auth_storage.sync_blocked_edits");
-      case VaultEditBlockReason.Architecture:
-        return this.t("architecture_modes.sentinel_secret_creation_blocked");
-      default:
-        return undefined;
-    }
   }
 
   get deviceProtectionReady(): boolean {
-    return this.deviceProtectionStatus === "unlocked";
+    return this.deviceProtectionStatus === DeviceProtectionStatus.Unlocked;
   }
 
   get syncProviderCount(): number {
@@ -360,7 +305,12 @@ export class VaultState {
   get syncingProviderLabel(): string | undefined {
     if (!this.syncingProviderId) return undefined;
     return providerLabelById(
-      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      $state.snapshot({
+        providers: this.providers,
+        ...(this.activeVaultStoreId
+          ? { activeVaultStoreId: this.activeVaultStoreId }
+          : {}),
+      }),
       this.syncingProviderId,
     );
   }
@@ -374,14 +324,13 @@ export class VaultState {
     );
   }
 
-  unlockMode = $state<"keys" | "password">("keys");
-  /** Remote vault unlock mode detected on the login screen (before session open). */
-  loginUnlockMode = $state<"unknown" | "keys" | "password">("unknown");
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false);
   /** Sentinel vault needs a signed, session-bound quorum ceremony. */
   sentinelCeremonyPrompt = $state(false);
-  sentinelUnlockStatus = $state<SentinelUnlockStatus>("not_sentinel");
+  sentinelUnlockStatus = $state<SentinelVaultUnlockState>(
+    SentinelVaultUnlockState.NotSentinel,
+  );
   /** Public, signed Sentinel unlock request. It contains no share material. */
   sentinelUnlockRequest = $state("");
   /** Rust-owned unlock-session progress rendered by the web layer. */
@@ -390,12 +339,10 @@ export class VaultState {
   );
   /** Provider-free encrypted deliveries available to this protected device. */
   sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([]);
-  /** Remote vault file missing on storage — prompt before unlock. */
-  remoteVaultRecoveryPrompt = $state<"none" | "with_cache" | "missing_only">(
-    "none",
+  /** Missing-remote prompt and the selected recovery connection path. */
+  remoteVaultRecoveryState = $state<RemoteVaultRecoveryState>(
+    RemoteVaultRecoveryState.None,
   );
-  /** How the next unlock should connect after the user confirms recovery. */
-  pendingConnectRecovery = $state<"none" | "from_cache" | "fresh">("none");
   isPasswordBusy = $state(false);
   passwordError = $state("");
   enrollmentCode = $state("");
@@ -403,54 +350,39 @@ export class VaultState {
   enrollmentFromUrlPending = $state(false);
   loginEnrollmentCode = $state("");
   passwordEntries = $state<NookPasswordEntrySummary[]>([]);
-  selectedPasswordEntryId = $state<string | undefined>(undefined);
-  activeEnrollmentEntryId = $state<string | undefined>(undefined);
+  selectedPasswordEntryId = $state<PasswordEntryId>();
+  activeEnrollmentEntryId = $state<PasswordEntryId>();
 
   get hasPasswordEnvelope(): boolean {
-    return this.clientPolicy.hasPasswordEnvelope(
-      this.passwordEntries.length,
-      this.unlockMode === "password",
-    );
+    return this.passwordEntries.length > 0;
   }
 
-  /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
-  syncIntervalMs(): number {
-    return this.runtimeConfig.resolveVaultSyncIntervalMs(
-      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
-    );
-  }
-
-  successDismissTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  idleSessionTracker: VaultIdleSessionTracker | undefined = undefined;
-  syncTimer: ReturnType<typeof setInterval> | undefined = undefined;
-  initPromise: Promise<void> | undefined = undefined;
-  storageChain: Promise<unknown> = Promise.resolve();
+  successDismissTimer: ReturnType<typeof setTimeout> | undefined;
+  idleSessionTracker: VaultIdleSessionTracker | undefined;
+  syncTimer: ReturnType<typeof setInterval> | undefined;
+  initPromise: Promise<void> | undefined;
+  private storageQueue = new SerialOperationQueue();
   private localDataDeletionStarted = false;
   /** Internal browser-orchestration flag shared with the device-protection actions. */
   deviceAuthorizationInProgress = false;
-  pendingEnrollmentFromUrl: string | undefined =
+  pendingEnrollmentFromUrl =
     typeof window !== "undefined" ? consumeEnrollmentFromLocation() : undefined;
 
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
     if (this.localDataDeletionStarted) {
       return Promise.reject(new Error("Local browser data deletion is active"));
     }
-    const next = this.storageChain.then(() => operation());
-    this.storageChain = next.then(
-      () => undefined,
-      () => undefined,
-    );
-    return next;
+    return this.storageQueue.enqueue(operation);
   }
 
   /** E2E/dev: wait for the serialized wasm storage queue to finish. */
   waitForStorageChain(): Promise<void> {
-    return lifecycleActions.waitForStorageChain(this);
+    return this.storageQueue.onIdle();
   }
 
   /** E2E/dev: reset a stuck storage queue (abandons in-flight wasm work). */
   resetStorageChain(): void {
-    return lifecycleActions.resetStorageChain(this);
+    this.storageQueue.reset();
   }
 
   static storageOpTimeoutMs = 20_000;
@@ -470,34 +402,38 @@ export class VaultState {
 
   wasmStorageArgs(): [string, string, string] {
     const syncProvider = this.syncProviders[0];
-    return storageArgsTuple(
+    return takeStorageArgsTuple(
       wasmStorageArgsCore(
         this.localVaultPresent,
         this.isAuthenticated,
-        syncProvider ? plainProvider(syncProvider) : undefined,
+        syncProvider ? $state.snapshot(syncProvider) : undefined,
         this.storageMode,
         this.githubPat,
         this.githubRepo,
-        this.oauthFile?.preset ?? undefined,
-        this.oauthFile?.accessToken ?? undefined,
+        this.oauthFile?.preset,
+        this.oauthFile?.accessToken,
         this.oauthFile
-          ? oauthRemoteStorageRef(plainOAuthFile(this.oauthFile))
+          ? oauthRemoteStorageRef($state.snapshot(this.oauthFile))
           : undefined,
-        this.oauthFile?.fileName ?? undefined,
+        this.oauthFile?.fileName,
       ),
     );
   }
 
   /** WASM connect always uses the local cache when one exists (unified vault). */
   connectStorageArgs(): [string, string, string] {
-    if (
-      !this.isAuthenticated &&
-      this.syncProviders.length > 0 &&
-      this.joinEnrollmentPrompt !== JoinEnrollmentState.None
-    ) {
+    if (this.shouldUseJoinProviderForConnect()) {
       return this.providerWasmArgs(this.syncProviders[0]!);
     }
     return this.wasmStorageArgs();
+  }
+
+  shouldUseJoinProviderForConnect(): boolean {
+    return this.clientPolicy.shouldUseJoinProviderForConnect(
+      this.isAuthenticated,
+      this.syncProviders.length,
+      this.joinEnrollmentPrompt,
+    );
   }
 
   stagedRemoteStorageArgs(): [string, string, string] | undefined {
@@ -506,43 +442,27 @@ export class VaultState {
       type,
       this.githubPat || undefined,
       this.githubRepo || undefined,
-      this.oauthFile ? plainOAuthFile(this.oauthFile) : undefined,
+      this.oauthFile ? $state.snapshot(this.oauthFile) : undefined,
     );
-    if (!args) return undefined;
-    try {
-      return storageArgsTuple(args);
-    } finally {
-      args.free();
-    }
+    return args ? takeStorageArgsTuple(args) : undefined;
   }
 
   stagedProviderLabel(): string {
     return wasmStagedProviderLabel(
       this.loginSetupType ?? this.storageMode,
       this.githubRepo,
-      this.oauthFile?.fileName ?? undefined,
-      this.oauthFile?.preset ?? undefined,
-      this.oauthSetupPreset ?? undefined,
+      this.oauthFile?.fileName,
+      this.oauthFile?.preset,
+      this.oauthSetupPreset,
     );
-  }
-
-  /**
-   * Check whether a staged remote provider exists before connect.
-   */
-  async reconcileStagedRemoteWithLocal(options?: {
-    providerId?: string;
-    quiet?: boolean;
-  }): Promise<"ok" | "skip"> {
-    void options;
-    return this.stagedRemoteStorageArgs() ? "ok" : "skip";
   }
 
   hasRemoteCredentials(): boolean {
     return wasmHasRemoteCredentials(
       this.storageMode,
       this.githubPat,
-      this.oauthFile?.accessToken ?? undefined,
-      this.localFolder?.handleId ?? undefined,
+      this.oauthFile?.accessToken,
+      this.localFolder?.handleId,
     );
   }
 
@@ -555,7 +475,7 @@ export class VaultState {
       return;
     }
     const updated = updateOauthRemoteRef(
-      plainOAuthFile(this.oauthFile),
+      $state.snapshot(this.oauthFile),
       this.manager.storage_remote_ref ?? "",
     );
     if (updated) this.oauthFile = updated;
@@ -565,42 +485,12 @@ export class VaultState {
     return oauthActions.ensureOAuthTokensFresh(this);
   }
 
-  async signInWithGoogle(): Promise<void> {
-    return oauthActions.signInWithGoogle(this);
-  }
-
   selectGoogleDriveMode(mode: GoogleDriveMode): void {
     oauthActions.selectGoogleDriveMode(this, mode);
   }
 
-  async createGoogleSharedFolder(collaboratorEmail: string): Promise<string> {
-    return oauthActions.createGoogleSharedFolder(this, collaboratorEmail);
-  }
-
-  async useGoogleSharedFolder(folderRef: string): Promise<string> {
-    return oauthActions.useGoogleSharedFolder(this, folderRef);
-  }
-
   selectICloudMode(mode: ICloudMode): void {
     oauthActions.selectICloudMode(this, mode);
-  }
-
-  async createICloudSharedProvider(): Promise<void> {
-    return oauthActions.createICloudSharedProvider(this);
-  }
-
-  async useICloudSharedProvider(shareReference: string): Promise<void> {
-    return oauthActions.useICloudSharedProvider(this, shareReference);
-  }
-
-  async prepareICloudSignIn(): Promise<void> {
-    return oauthActions.prepareICloudSignIn(this);
-  }
-
-  async signInWithICloud(options?: {
-    clickPreparedControl?: boolean;
-  }): Promise<void> {
-    return oauthActions.signInWithICloud(this, options);
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<void> {
@@ -634,18 +524,6 @@ export class VaultState {
     this.errorMsg = "";
   }
 
-  clearLoginPasswordPrompt() {
-    this.loginPasswordPrompt = false;
-  }
-
-  dismissJoinEnrollment() {
-    return multiDeviceActions.dismissJoinEnrollment(this);
-  }
-
-  async confirmJoinRequest() {
-    return multiDeviceActions.confirmJoinRequest(this);
-  }
-
   showSuccess(message: string) {
     this.dismissSuccess();
     this.successMsg = message;
@@ -656,32 +534,42 @@ export class VaultState {
 
   get localProvider(): StorageProvider | undefined {
     const id = localProviderIdForActiveVault(
-      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
-      this.activeVaultStoreId ?? undefined,
+      $state.snapshot({
+        providers: this.providers,
+        ...(this.activeVaultStoreId
+          ? { activeVaultStoreId: this.activeVaultStoreId }
+          : {}),
+      }),
+      this.activeVaultStoreId,
     );
     return id
       ? this.providers.find((provider) => provider.id === id)
       : undefined;
   }
 
-  /** Canonical on-device vault row — alias kept while settings code migrates. */
-  get activeProvider(): StorageProvider | undefined {
-    return this.localProvider;
-  }
-
   /** Providers belonging to the active vault only. */
   get activeVaultProviders(): StorageProvider[] {
     return wasmActiveVaultProviders(
-      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
-      this.activeVaultStoreId ?? undefined,
+      $state.snapshot({
+        providers: this.providers,
+        ...(this.activeVaultStoreId
+          ? { activeVaultStoreId: this.activeVaultStoreId }
+          : {}),
+      }),
+      this.activeVaultStoreId,
     ).providers;
   }
 
   /** Cloud sync destinations for the active vault — local row omitted. */
   get syncProviders(): StorageProvider[] {
     return wasmSyncProvidersForActiveVault(
-      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
-      this.activeVaultStoreId ?? undefined,
+      $state.snapshot({
+        providers: this.providers,
+        ...(this.activeVaultStoreId
+          ? { activeVaultStoreId: this.activeVaultStoreId }
+          : {}),
+      }),
+      this.activeVaultStoreId,
     ).providers;
   }
 
@@ -701,15 +589,9 @@ export class VaultState {
   }
 
   providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    return storageArgsTuple(wasmProviderWasmArgs(plainProvider(provider)));
-  }
-
-  get hasProviders(): boolean {
-    return this.providers.length > 0;
-  }
-
-  get activeProviderLabel(): string {
-    return this.activeProvider?.label ?? providerDefaultLabel(this.storageMode);
+    return takeStorageArgsTuple(
+      wasmProviderWasmArgs($state.snapshot(provider)),
+    );
   }
 
   async updateLocale(
@@ -720,28 +602,18 @@ export class VaultState {
   }
 
   resolveErrorMessage(message: string): string {
-    const stripped = message
-      .replace(/^GitHub error:\s*/i, "")
-      .replace(/^Drive error:\s*/i, "")
-      .replace(/^Database error:\s*/i, "")
-      .trim();
-    if (stripped.startsWith("errors.")) {
-      return this.t(stripped);
-    }
-    if (message.startsWith("errors.")) {
-      return this.t(message);
-    }
-    return message;
+    return wasmResolveErrorMessage(this.translations, this.locale, message);
   }
 
   t = (key: string, replacements?: Record<string, string>): string => {
-    let text = translateFromCatalog(this.translations, this.locale, key);
-    if (replacements) {
-      for (const [k, v] of Object.entries(replacements)) {
-        text = text.replace(`{${k}}`, v);
-      }
-    }
-    return text;
+    const entries = replacements ? Object.entries(replacements) : [];
+    return translateWithReplacements(
+      this.translations,
+      this.locale,
+      key,
+      entries.map(([name]) => name),
+      entries.map(([, value]) => value),
+    );
   };
 
   async init() {
@@ -773,13 +645,7 @@ export class VaultState {
         );
       }
       await this.updateLocale(locale, { preferWasm: true });
-      this.deviceProtectionStatus =
-        (await this.manager.deviceProtectionStatus()) as
-          | "missing"
-          | "plaintext"
-          | "passkey"
-          | "pin"
-          | "unlocked";
+      this.deviceProtectionStatus = await this.manager.deviceProtectionStatus();
       const persistedDeviceMode =
         await this.manager.deviceProtectionDeviceMode();
       if (
@@ -788,21 +654,23 @@ export class VaultState {
       ) {
         this.draftDeviceMode = persistedDeviceMode;
       }
-      if (this.deviceProtectionStatus === "pin") {
-        this.deviceProtectionLockedMode = "pin";
-      } else if (this.deviceProtectionStatus === "passkey") {
-        this.deviceProtectionLockedMode = "passkey";
+      if (this.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
+        this.deviceProtectionLockedStatus = DeviceProtectionStatus.Pin;
+      } else if (
+        this.deviceProtectionStatus === DeviceProtectionStatus.Passkey
+      ) {
+        this.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
       }
 
       const autoAuthorizeE2e =
         this.runtimeConfig.e2eExposeVault &&
         localStorage.getItem("nook_e2e_manual_passkey") !== "true";
       if (!this.deviceProtectionReady && autoAuthorizeE2e) {
-        if (this.deviceProtectionStatus === "passkey") {
+        if (this.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
           await this.enqueueStorage(() =>
             authorizePasskeyProtection(this.manager!),
           );
-        } else if (this.deviceProtectionStatus === "pin") {
+        } else if (this.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
           return;
         } else {
           await this.enqueueStorage(() =>
@@ -840,17 +708,17 @@ export class VaultState {
         return;
       }
       await this.continueInitializationAfterDeviceUnlock();
-      this.deviceProtectionStatus = "unlocked";
+      this.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     } catch (error) {
       if (
-        this.deviceProtectionStatus === "unlocked" ||
+        this.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
         deviceIdentityUnlocked
       ) {
         void this.lockDeviceProtection();
       }
       this.deviceProtectionStatus =
-        this.deviceProtectionStatus === "loading"
-          ? "error"
+        this.deviceProtectionStatus === DeviceProtectionStatus.Loading
+          ? DeviceProtectionStatus.Error
           : this.deviceProtectionStatus;
       this.errorMsg =
         error instanceof Error
@@ -878,7 +746,7 @@ export class VaultState {
     await this.loadProviders({ ensureLocalRow: true });
     await localLoginActions.refreshLocalVaultCatalog(this);
     if (!this.activeVaultStoreId) {
-      this.activeVaultStoreId = this.localVaults[0]?.storeId ?? undefined;
+      this.activeVaultStoreId = this.localVaults[0]?.storeId;
     }
     if (this.activeVaultStoreId) {
       await setActiveVault(this.activeVaultStoreId).catch(() => undefined);
@@ -901,7 +769,7 @@ export class VaultState {
     if (autoUnlock) {
       await this.loadDb();
       if (!this.isAuthenticated && this.localProvider) {
-        void this.probeLoginUnlockMode();
+        void this.refreshPasswordEntriesList();
       }
     } else {
       await this.refreshDeviceState();
@@ -967,7 +835,7 @@ export class VaultState {
       } else {
         await this.continueInitializationAfterDeviceUnlock();
       }
-      this.deviceProtectionStatus = "unlocked";
+      this.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
       vaultLog.info("extension identity adopted", {
         deviceId: this.deviceId,
       });
@@ -977,8 +845,8 @@ export class VaultState {
         this.manager!.rollbackExtensionIdentityHandoff(),
       );
       this.deviceProtectionStatus =
-        priorDeviceProtectionStatus === "unlocked"
-          ? this.deviceProtectionLockedMode
+        priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
+          ? this.deviceProtectionLockedStatus
           : priorDeviceProtectionStatus;
       this.errorMsg = this.t("extension.connect.identity_handoff_failed");
       vaultLog.warn("extension identity handoff failed", {
@@ -1051,44 +919,6 @@ export class VaultState {
     }
   }
 
-  async setupDeviceProtection(
-    passkeyLabel = "",
-    deviceMode = this.draftDeviceMode,
-  ): Promise<void> {
-    return deviceProtectionActions.setupDeviceProtection(
-      this,
-      passkeyLabel,
-      deviceMode,
-    );
-  }
-
-  async recoverDeviceProtectionWithPasskey(): Promise<void> {
-    return deviceProtectionActions.recoverDeviceProtectionWithPasskey(this);
-  }
-
-  async setupPinDeviceProtection(
-    pin: string,
-    confirmPin: string,
-  ): Promise<void> {
-    return deviceProtectionActions.setupPinDeviceProtection(
-      this,
-      pin,
-      confirmPin,
-    );
-  }
-
-  async unlockDeviceProtection(): Promise<void> {
-    return deviceProtectionActions.unlockDeviceProtection(this);
-  }
-
-  async unlockPinDeviceProtection(pin: string): Promise<void> {
-    return deviceProtectionActions.unlockPinDeviceProtection(this, pin);
-  }
-
-  async resetDeviceProtectionForRecovery(): Promise<void> {
-    return deviceProtectionActions.resetDeviceProtectionForRecovery(this);
-  }
-
   shouldAutoUnlock(): boolean {
     return this.clientPolicy.shouldAutoUnlock(
       isVaultSessionLocked(),
@@ -1113,62 +943,14 @@ export class VaultState {
   }
 
   async startSentinelGenesis(args: StartSentinelGenesisArgs): Promise<void> {
-    return sentinelGenesisActions.start(this, args);
+    return sentinelGenesisActions.start(this, $state.snapshot(args));
   }
 
-  async addSentinelGenesisParticipantResponse(
-    payload: string,
-    participantLabel = "",
-  ): Promise<void> {
-    return sentinelGenesisActions.addParticipantResponse(
-      this,
-      payload,
-      participantLabel,
-    );
-  }
-
-  async createSentinelGenesisPublicKeyAnnouncement(): Promise<string> {
-    return sentinelGenesisActions.createPublicKeyAnnouncement(this);
-  }
-
-  async rememberSentinelGenesisRequest(requestPayload: string): Promise<void> {
-    return sentinelGenesisActions.rememberRequest(this, requestPayload);
-  }
-
-  async createSentinelGenesisParticipantResponse(
-    requestPayload: string,
-  ): Promise<string> {
-    return sentinelGenesisActions.createParticipantResponse(
-      this,
-      requestPayload,
-    );
-  }
-
-  async finalizeSentinelGenesis(): Promise<void> {
-    return sentinelGenesisActions.finalize(this);
-  }
-
-  async acceptSentinelGenesisShareDelivery(payload: string): Promise<void> {
-    return sentinelGenesisActions.acceptShareDelivery(this, payload);
-  }
-
-  async completeSentinelGenesisDelivery(): Promise<void> {
-    return sentinelGenesisActions.completeDelivery(this);
-  }
-
-  async prepareSentinelOnboardingLinks(): Promise<void> {
-    return sentinelGenesisActions.prepareOnboardingLinks(this);
-  }
-
-  async acceptSentinelOnboardingPackage(packageJson: string): Promise<void> {
-    return sentinelGenesisActions.acceptOnboardingPackage(this, packageJson);
-  }
-
-  async renameLocalVault(storeId: string, label: string): Promise<void> {
+  async renameLocalVault(storeId: StoreId, label: string): Promise<void> {
     return localLoginActions.renameLocalVaultLabel(this, storeId, label);
   }
 
-  async selectVaultForUnlock(storeId: string): Promise<void> {
+  async selectVaultForUnlock(storeId: StoreId): Promise<void> {
     return localLoginActions.selectVaultForUnlock(this, storeId);
   }
 
@@ -1191,7 +973,7 @@ export class VaultState {
     return localLoginActions.syncActiveVaultStoreIdToAuth(this);
   }
 
-  async activateConnectedExistingVault(storeId: string): Promise<void> {
+  async activateConnectedExistingVault(storeId: StoreId): Promise<void> {
     return localLoginActions.activateConnectedExistingVault(this, storeId);
   }
 
@@ -1201,7 +983,7 @@ export class VaultState {
     this.resetVaultSessionState();
   }
 
-  async chooseLoginVault(storeId: string) {
+  async chooseLoginVault(storeId: StoreId) {
     await this.selectVaultForUnlock(storeId);
     this.selectedLoginVaultStoreId = storeId;
   }
@@ -1211,10 +993,10 @@ export class VaultState {
   }
 
   /** Lock and open the login unlock step for another vault on this device. */
-  async switchToVault(storeId: string): Promise<void> {
+  async switchToVault(storeId: StoreId): Promise<void> {
     const target = this.clientPolicy.vaultSwitchTarget(
       storeId,
-      this.activeVaultStoreId ?? undefined,
+      this.activeVaultStoreId,
       this.isVerifying,
     );
     if (!target) return;
@@ -1240,7 +1022,7 @@ export class VaultState {
   }
 
   lockDeviceProtection(): Promise<void> {
-    this.deviceProtectionStatus = this.deviceProtectionLockedMode;
+    this.deviceProtectionStatus = this.deviceProtectionLockedStatus;
     this.deviceAuthorizationInProgress = false;
     this.deviceId = "";
     this.devicePublicKey = "";
@@ -1248,7 +1030,12 @@ export class VaultState {
     // Keep only the non-secret local row in memory while that identity is
     // locked; passkey/PIN authorization reloads the sealed providers.
     this.providers = providersVisibleWhileDeviceLocked(
-      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      $state.snapshot({
+        providers: this.providers,
+        ...(this.activeVaultStoreId
+          ? { activeVaultStoreId: this.activeVaultStoreId }
+          : {}),
+      }),
     ).providers;
     this.providersLoaded = this.providers.length > 0;
     this.githubPat = "";
@@ -1263,11 +1050,6 @@ export class VaultState {
         // Persisted identity remains wrapped even if the manager is tearing down.
       },
     );
-  }
-
-  /** @deprecated Use {@link createLocalVaultWithDeviceKeys}. Backup passwords belong in Settings. */
-  async createLocalVault(password: string): Promise<void> {
-    return localLoginActions.createLocalVault(this, password);
   }
 
   async loadProviders(options?: { ensureLocalRow?: boolean }) {
@@ -1288,15 +1070,13 @@ export class VaultState {
 
   beginExistingVaultOpen() {
     this.loginRequiresExistingVault = true;
-    this.remoteVaultRecoveryPrompt = "none";
-    this.pendingConnectRecovery = "none";
+    this.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
     this.errorMsg = "";
   }
 
   cancelExistingVaultOpen() {
     this.loginRequiresExistingVault = false;
-    this.remoteVaultRecoveryPrompt = "none";
-    this.pendingConnectRecovery = "none";
+    this.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
     this.errorMsg = "";
   }
 
@@ -1310,13 +1090,6 @@ export class VaultState {
 
   cancelProviderSetup() {
     return providersActions.cancelProviderSetup(this);
-  }
-
-  /**
-   * Detect whether the vault unlocks with device keys or a password envelope.
-   */
-  async probeLoginUnlockMode(): Promise<void> {
-    return localLoginActions.probeLoginUnlockMode(this);
   }
 
   async refreshPasswordEntriesList(): Promise<boolean> {
@@ -1340,13 +1113,7 @@ export class VaultState {
   async assessVaultConnectStatus(
     argsOverride?: [string, string, string],
   ): Promise<VaultAccessStatus> {
-    const args =
-      argsOverride ??
-      (!this.isAuthenticated &&
-      this.syncProviders.length > 0 &&
-      this.joinEnrollmentPrompt !== JoinEnrollmentState.None
-        ? this.providerWasmArgs(this.syncProviders[0]!)
-        : this.wasmStorageArgs());
+    const args = argsOverride ?? this.connectStorageArgs();
     return (await this.enqueueStorage(async () => {
       const assessPromise = this.manager!.assess_vault_connect(...args);
       const assessTimeout = new Promise<never>((_, reject) => {
@@ -1372,16 +1139,17 @@ export class VaultState {
     );
     switch (decision) {
       case RemoteVaultAssessDecision.PromptRecoveryFromCache:
-        this.remoteVaultRecoveryPrompt = "with_cache";
+        this.remoteVaultRecoveryState =
+          RemoteVaultRecoveryState.PromptWithCache;
         await this.refreshPasswordEntriesList();
         return true;
       case RemoteVaultAssessDecision.RejectMissingExistingVault:
-        this.remoteVaultRecoveryPrompt = "none";
-        this.pendingConnectRecovery = "none";
+        this.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
         this.errorMsg = this.t("auth_storage.existing_vault_not_found");
         return true;
       case RemoteVaultAssessDecision.PromptMissingRemote:
-        this.remoteVaultRecoveryPrompt = "missing_only";
+        this.remoteVaultRecoveryState =
+          RemoteVaultRecoveryState.PromptMissingOnly;
         return true;
       default:
         return false;
@@ -1399,16 +1167,19 @@ export class VaultState {
     }
     this.passwordEntries = [];
     this.selectedPasswordEntryId = undefined;
-    this.loginUnlockMode = "unknown";
     this.loginPasswordPrompt = false;
     this.sentinelCeremonyPrompt = false;
-    this.sentinelUnlockStatus = "not_sentinel";
+    this.sentinelUnlockStatus = SentinelVaultUnlockState.NotSentinel;
     this.sentinelUnlockRequest = "";
     this.sentinelUnlockSession.free();
     this.sentinelUnlockSession =
       sentinelUnlockActions.inactiveSentinelUnlockSession();
     for (const delivery of this.sentinelStoredDeliveries) delivery.free();
     this.sentinelStoredDeliveries = [];
+    sentinelGenesisActions.releaseResults(this);
+    this.sentinelGenesisPhase = SentinelGenesisPhase.Inactive;
+    this.sentinelGenesisRequest = "";
+    this.sentinelGenesisStoreId = undefined;
     this.sharedJoinerIdentity = "";
     this.sharedGrantInstructions = "";
   }
@@ -1417,10 +1188,10 @@ export class VaultState {
     if (this.idleSessionTracker) return;
     this.idleSessionTracker = createVaultIdleSessionTracker({
       timeoutMs: this.runtimeConfig.resolveVaultIdleTimeoutMs(
-        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
+        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS,
       ),
       warningMs: this.runtimeConfig.resolveVaultIdleWarningMs(
-        import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? undefined,
+        import.meta.env.VITE_VAULT_IDLE_WARNING_MS,
       ),
       onExpire: () => this.lockVaultDueToIdle(),
       onWarning: () => this.showIdleLockWarning(),
@@ -1481,7 +1252,7 @@ export class VaultState {
     this.resetVaultSessionState(resetManager);
     if (wasSentinel) {
       this.sentinelCeremonyPrompt = true;
-      this.sentinelUnlockStatus = "ceremony_required";
+      this.sentinelUnlockStatus = SentinelVaultUnlockState.CeremonyRequired;
     }
   }
 
@@ -1524,7 +1295,7 @@ export class VaultState {
 
     const decision = this.clientPolicy.unauthenticatedSyncDecision(
       result.changed,
-      result.accessStatus ?? undefined,
+      result.accessStatus,
       this.joinEnrollmentPrompt,
       this.awaitingJoinApproval,
     );
@@ -1618,22 +1389,15 @@ export class VaultState {
         return {
           pendingJoins,
           vaultMembers,
-          unlockMode: this.manager!.vaultUnlockMode(),
         };
       });
       this.pendingJoins =
         snapshot.pendingJoins.length > 0 ? snapshot.pendingJoins : mergedJoins;
       this.vaultMembers = snapshot.vaultMembers;
-      this.unlockMode = "keys";
       await this.refreshPasswordEntriesList();
     } catch {
       this.vaultMembers = [];
-      this.unlockMode = "keys";
     }
-  }
-
-  async refreshPasswordEnvelopeState(): Promise<void> {
-    await this.refreshPasswordEntriesList();
   }
 
   async syncFromStorage(options?: { force?: boolean }) {
@@ -1646,12 +1410,19 @@ export class VaultState {
     force?: boolean;
   }): Promise<void> {
     if (!this.manager) return;
-    if (this.syncBlocked) return;
-    if (!options?.force && this.isVerifying) return;
-    if (!options?.force && this.isSaving) return;
-    if (!options?.force && this.isPasswordBusy) return;
-    if (!options?.force && this.isSyncing) return;
-    if (this.syncProviders.length === 0) return;
+    if (
+      !this.clientPolicy.shouldSyncFromProviders(
+        this.syncBlocked,
+        options?.force ?? false,
+        this.isVerifying,
+        this.isSaving,
+        this.isPasswordBusy,
+        this.isSyncing,
+        this.syncProviders.length,
+      )
+    ) {
+      return;
+    }
 
     this.isSyncing = true;
     try {
@@ -1783,10 +1554,15 @@ export class VaultState {
       ? await this.enqueueStorage(() => this.manager!.vaultStoreId)
       : "";
     this.providers = wasmUpdateProviderSyncMetadata(
-      plainProviderSnapshot(this.providers, this.activeVaultStoreId),
+      $state.snapshot({
+        providers: this.providers,
+        ...(this.activeVaultStoreId
+          ? { activeVaultStoreId: this.activeVaultStoreId }
+          : {}),
+      }),
       providerId,
       yaml,
-      revision ?? undefined,
+      revision,
       managerStoreId || undefined,
       isoTimestamp(),
     ).providers;
@@ -1909,26 +1685,12 @@ export class VaultState {
     return provider.id;
   }
 
-  async reloadSessionFromLocal(): Promise<void> {
-    if (!this.manager) return;
-    const raw = await this.enqueueStorage(() =>
-      this.manager!.sync_vault_from_storage(
-        wasmStorageModeForProvider(LOCAL_PROVIDER_TYPE),
-        "",
-        "",
-      ),
-    );
-    this.applyVaultSyncResult(raw);
-    await this.refreshSecretsFromSession();
-    await this.hydrateMultiDeviceState();
-  }
-
   /** Settings: connect a new sync provider and reconcile with local vault. */
   async connectAndSyncStagedProvider(): Promise<void> {
     return providersActions.connectAndSyncStagedProvider(this);
   }
 
-  async discoverStagedVaultStoreId(): Promise<string> {
+  async discoverStagedVaultStoreId(): Promise<StoreId> {
     return providersActions.discoverStagedVaultStoreId(this);
   }
 
@@ -2024,10 +1786,6 @@ export class VaultState {
     this.helpOpen = false;
   }
 
-  filterSecrets(query: string): NookSecretRecord[] {
-    return secretsActions.filterSecrets(this, query);
-  }
-
   async refreshSecretsFromSession() {
     if (!this.manager) {
       for (const secret of this.secrets) secret.free();
@@ -2045,17 +1803,14 @@ export class VaultState {
   async loadSecretPage(query: string, requestedOffset = 0) {
     if (!this.manager) return;
     const generation = this.secretPageGeneration;
-    const page = await this.enqueueStorage(async () => {
-      if (query.trim().length > 0) {
-        await this.manager!.prepareSecretSearch();
-      }
-      return this.manager!.querySecretPage(
+    const page = await this.enqueueStorage(() =>
+      this.manager!.queryPreparedSecretPage(
         query,
         this.secretTypeFilter,
         requestedOffset,
         this.secretPageSize,
-      );
-    });
+      ),
+    );
     let records = page.takeItems();
     let total = page.total;
     let offset = page.offset;
@@ -2128,7 +1883,7 @@ export class VaultState {
         code: result.code,
         secondsRemaining: result.secondsRemaining,
         period: result.period,
-        expiresAtUnixSeconds: unixSeconds + result.secondsRemaining,
+        expiresAtUnixSeconds: result.expiresAtUnixSeconds,
       };
     } finally {
       result.free();
@@ -2142,10 +1897,6 @@ export class VaultState {
   /** Refresh event-log joins from providers (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
     return multiDeviceActions.refreshPendingJoinsFromProviders(this);
-  }
-
-  async requestVaultAccess() {
-    return multiDeviceActions.requestVaultAccess(this);
   }
 
   async approveJoin(joinDeviceId: string) {
@@ -2206,7 +1957,7 @@ export class VaultState {
   }
 
   async updateVaultPasswordEntry(
-    entryId: string,
+    entryId: PasswordEntryId,
     password: string,
   ): Promise<void> {
     return passwordUnlockActions.updateVaultPasswordEntry(
@@ -2216,17 +1967,8 @@ export class VaultState {
     );
   }
 
-  async removeVaultPasswordEntry(entryId: string): Promise<void> {
+  async removeVaultPasswordEntry(entryId: PasswordEntryId): Promise<void> {
     return passwordUnlockActions.removeVaultPasswordEntry(this, entryId);
-  }
-
-  /** @deprecated Use addVaultPassword — kept for older callers. */
-  async setVaultPassword(password: string): Promise<void> {
-    return passwordUnlockActions.setVaultPassword(this, password);
-  }
-
-  async removeVaultPassword(): Promise<void> {
-    return passwordUnlockActions.removeVaultPassword(this);
   }
 
   /**
@@ -2239,7 +1981,7 @@ export class VaultState {
    * shared storage chain or wasm-bindgen rejects it as a recursive borrow.
    */
   async issueEnrollmentCode(
-    entryId: string,
+    entryId: PasswordEntryId,
     password: string,
     providerId = this.syncProviders[0]?.id ?? "",
   ): Promise<string> {
@@ -2258,60 +2000,18 @@ export class VaultState {
   /**
    * Unlock the vault with a labelled password entry.
    */
-  async unlockWithPassword(entryId: string, password: string): Promise<void> {
+  async unlockWithPassword(
+    entryId: PasswordEntryId,
+    password: string,
+  ): Promise<void> {
     return passwordUnlockActions.unlockWithPassword(this, entryId, password);
   }
 
-  isSentinelVault(): boolean {
-    return sentinelUnlockActions.isSentinelVault(this);
-  }
-
-  async getSentinelUnlockStatus(): Promise<SentinelUnlockStatus> {
-    return sentinelUnlockActions.getSentinelUnlockStatus(this);
-  }
-
-  async refreshSentinelUnlockStatus(): Promise<SentinelUnlockStatus> {
+  async refreshSentinelUnlockStatus(): Promise<SentinelVaultUnlockState> {
     const status =
       await sentinelUnlockActions.refreshSentinelUnlockStatus(this);
     await this.refreshArchitectureSecretCreationAllowed();
     return status;
-  }
-
-  async startSentinelUnlock(): Promise<void> {
-    return sentinelUnlockActions.startSentinelUnlock(this);
-  }
-
-  async addSentinelUnlockResponse(response: string): Promise<void> {
-    return sentinelUnlockActions.addSentinelUnlockResponse(this, response);
-  }
-
-  async refreshSentinelUnlockSession(): Promise<void> {
-    return sentinelUnlockActions.refreshSentinelUnlockSession(this);
-  }
-
-  async listSentinelStoredDeliveries(): Promise<
-    SentinelStoredDeliverySummary[]
-  > {
-    return sentinelUnlockActions.listSentinelStoredDeliveries(this);
-  }
-
-  async createSentinelUnlockResponse(
-    storeId: string,
-    request: string,
-  ): Promise<string> {
-    return sentinelUnlockActions.createSentinelUnlockResponse(
-      this,
-      storeId,
-      request,
-    );
-  }
-
-  async finalizeSentinelUnlock(): Promise<void> {
-    return sentinelUnlockActions.finalizeSentinelUnlock(this);
-  }
-
-  isSentinelCeremonyRequiredError(err: unknown): boolean {
-    return sentinelUnlockActions.isSentinelCeremonyRequiredError(err);
   }
 
   /**
@@ -2365,10 +2065,6 @@ export class VaultState {
     exportBytes: Uint8Array,
   ): Promise<NookImportResult> {
     return secretsActions.handleProtonPassImport(this, exportBytes);
-  }
-
-  scheduleRemoteEventOutboxFlush(): void {
-    void this.flushRemoteEventOutboxNow();
   }
 
   async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {

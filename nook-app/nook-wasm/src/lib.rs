@@ -49,10 +49,16 @@ pub use types::{
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
     NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
     NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultMember,
-    NookVaultRecoveryDevice, NookVaultRecoveryOptions, NookVaultSecretAccessDiagnostic,
-    NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSavePlan,
+    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
+    NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
+
+#[wasm_bindgen(js_name = sentinelGenesisPhaseName)]
+#[must_use]
+pub fn sentinel_genesis_phase_name(phase: nook_core::SentinelGenesisPhase) -> String {
+    phase.as_str().to_owned()
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
@@ -97,6 +103,12 @@ pub fn translate_key(locale: &str, key: &str) -> String {
 #[must_use]
 pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
     nook_core::classify_vault_recovery_error(message)
+}
+
+#[wasm_bindgen(js_name = deviceProtectionStatusName)]
+#[must_use]
+pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) -> String {
+    status.as_str().to_owned()
 }
 
 #[wasm_bindgen(js_name = assessVaultSecurity)]
@@ -169,6 +181,28 @@ pub fn lookup_translation(catalog_json: &str, key: &str) -> Option<String> {
 #[must_use]
 pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
     nook_core::translate_from_catalog(catalog_json, locale, key)
+}
+
+#[wasm_bindgen(js_name = translateWithReplacements)]
+#[must_use]
+pub fn translate_with_replacements(
+    catalog_json: &str,
+    locale: &str,
+    key: &str,
+    replacement_names: Vec<String>,
+    replacement_values: Vec<String>,
+) -> String {
+    let replacements = replacement_names
+        .into_iter()
+        .zip(replacement_values)
+        .collect::<Vec<_>>();
+    nook_core::translate_with_replacements(catalog_json, locale, key, &replacements)
+}
+
+#[wasm_bindgen(js_name = resolveErrorMessage)]
+#[must_use]
+pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
+    nook_core::resolve_error_message(catalog_json, locale, message)
 }
 
 #[wasm_bindgen(js_name = mergeTranslationCatalogs)]
@@ -2192,9 +2226,9 @@ pub fn current_code_from_otpauth_uri(
         return Err(NookError::from(nook_core::ValidationError::AuthenticatorSecretInvalid).into());
     }
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let seconds = (millis / 1000.0) as u64;
-    nook_core::AuthenticatorSecret::current_code_from_otpauth_uri(uri, seconds)
-        .map(types::NookTotpCode::from_core)
+    let unix_seconds = (millis / 1000.0) as u64;
+    nook_core::AuthenticatorSecret::current_code_from_otpauth_uri(uri, unix_seconds)
+        .map(|code| types::NookTotpCode::from_core(code, unix_seconds))
         .map_err(NookError::from)
         .map_err(Into::into)
 }

@@ -23,8 +23,8 @@
     embedded?: boolean
   } = $props()
 
-  let selectedFile = $state<File | undefined>(undefined)
-  let result = $state<NookImportResult | undefined>(undefined)
+  let selectedFile = $state<File>()
+  let result = $state<NookImportResult>()
   let error = $state('')
   let password = $state('')
   let isImporting = $state(false)

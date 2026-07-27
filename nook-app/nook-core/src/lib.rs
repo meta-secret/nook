@@ -105,8 +105,8 @@ pub use google_authenticator_import::{
 };
 pub use i18n::{
     get_translation_catalog, lookup_translation, merge_translation_catalogs, parse_app_locale,
-    resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_translation_catalog,
-    translate, translate_from_catalog,
+    resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_error_message,
+    resolve_translation_catalog, translate, translate_from_catalog, translate_with_replacements,
 };
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
@@ -262,8 +262,8 @@ pub use validation::{
     validate_storage_mode,
 };
 pub use vault::vault_recovery_options::{
-    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, recovery_device_id_hint,
-    vault_recovery_options,
+    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, VaultRecoverySummary,
+    recovery_device_id_hint, vault_recovery_options,
 };
 pub use vault_access_diagnostics::{
     VaultAccessDiagnosticsReport, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
@@ -278,8 +278,9 @@ pub use vault_architecture::{
     validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_client_policy::{
-    JoinEnrollmentState, RemoteVaultAssessDecision, UnauthenticatedSyncDecision, VaultClientPolicy,
-    VaultEditBlockReason,
+    DeviceProtectionStatus, JoinEnrollmentState, RemoteVaultAssessDecision,
+    RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
+    VaultClientPolicy, VaultEditBlockReason,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, VaultAccessStatus, VaultContentMetadata,
@@ -317,9 +318,9 @@ pub use vault_search_catalog::{
     SECRET_SEARCH_CATALOG_BUCKET_COUNT, SecretSearchCatalog, SecretSearchCatalogReconcile,
 };
 pub use vault_sentinel_genesis::{
-    SentinelGenesisOutput, create_sentinel_genesis_public_key_announcement,
-    finalize_sentinel_genesis, respond_to_sentinel_genesis_request, sentinel_genesis_operations,
-    start_sentinel_genesis,
+    SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
+    create_sentinel_genesis_public_key_announcement, finalize_sentinel_genesis,
+    respond_to_sentinel_genesis_request, sentinel_genesis_operations, start_sentinel_genesis,
 };
 pub use vault_sentinel_unlock::{respond_to_sentinel_unlock_request, start_sentinel_unlock};
 pub use vault_session::{

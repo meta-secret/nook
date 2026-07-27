@@ -31,10 +31,10 @@
   let wordCount = $state<MnemonicLength>(12)
   let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
   let syncingFromCells = $state(false)
-  let focusedIndex = $state<number | undefined>(undefined)
+  let focusedIndex = $state<number>()
   let suggestionIndex = $state(0)
   let inputRefs = $state<Array<HTMLInputElement | undefined>>([])
-  let checksumValid = $state<boolean | undefined>(undefined)
+  let checksumValid = $state<boolean>()
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))

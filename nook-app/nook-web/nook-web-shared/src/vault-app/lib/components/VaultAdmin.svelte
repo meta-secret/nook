@@ -134,10 +134,10 @@
   let drafts = $state<Record<string, string>>({});
   let draftSeed = $state("");
   let creating = $state(false);
-  let editingStoreId = $state<string | undefined>(undefined);
-  let renamingStoreId = $state<string | undefined>(undefined);
-  let switchingTo = $state<string | undefined>(undefined);
-  let activeImportProvider = $state<string | undefined>(undefined);
+  let editingStoreId = $state<string>();
+  let renamingStoreId = $state<string>();
+  let switchingTo = $state<string>();
+  let activeImportProvider = $state<string>();
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? "");
   const vaults = $derived(vault.localVaults);

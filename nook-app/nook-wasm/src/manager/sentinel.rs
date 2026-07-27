@@ -85,6 +85,7 @@ impl NookVaultManager {
         .await?;
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
         self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record);
+        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Complete;
         self.pending_sentinel_genesis_request = None;
         Ok(package.delivery.store_id.to_string())
     }
@@ -142,9 +143,7 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = startSentinelGenesis)]
     pub async fn start_sentinel_genesis(
         &mut self,
-        participant_count: u8,
-        threshold: u8,
-        participant_label: String,
+        mut args: nook_core::StartSentinelGenesisArgs,
     ) -> Result<NookSentinelGenesisStatus, JsError> {
         if load_sentinel_genesis_finalization_pending()
             .await?
@@ -154,16 +153,18 @@ impl NookVaultManager {
                 "A finalized Sentinel setup is awaiting durable completion; retry finalization first.",
             ));
         }
+        args.label = args.label.trim().to_owned();
+        self.set_vault_name(&args.label);
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
-        let session = nook_core::start_sentinel_genesis(
-            &identity,
-            &signing,
-            participant_count,
-            threshold,
-            participant_label,
-        )?;
+        let session = nook_core::start_sentinel_genesis(&identity, &signing, args)?;
         self.sentinel_genesis = Some(session);
+        self.sentinel_genesis_phase = self
+            .sentinel_genesis
+            .as_ref()
+            .map_or(nook_core::SentinelGenesisPhase::Inactive, |session| {
+                nook_core::SentinelGenesisPhase::from_session(session)
+            });
         Ok(self.sentinel_genesis_status())
     }
 
@@ -253,15 +254,34 @@ impl NookVaultManager {
             &response_json,
             participant_label,
         )?;
+        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::from_session(session);
         Ok(self.sentinel_genesis_status())
     }
 
     #[wasm_bindgen(js_name = sentinelGenesisStatus)]
     pub fn sentinel_genesis_status(&self) -> NookSentinelGenesisStatus {
         let Some(session) = self.sentinel_genesis.as_ref() else {
-            return NookSentinelGenesisStatus::inactive();
+            return NookSentinelGenesisStatus::from_phase(self.sentinel_genesis_phase);
         };
         NookSentinelGenesisStatus::from_session(session)
+    }
+
+    #[wasm_bindgen(getter, js_name = sentinelGenesisPhase)]
+    pub fn sentinel_genesis_phase(&self) -> nook_core::SentinelGenesisPhase {
+        self.sentinel_genesis_phase
+    }
+
+    /// Record browser delivery completion after the host has activated the new
+    /// vault and refreshed its local catalog.
+    #[wasm_bindgen(js_name = completeSentinelGenesisDelivery)]
+    pub fn complete_sentinel_genesis_delivery(
+        &mut self,
+    ) -> Result<nook_core::SentinelGenesisPhase, JsError> {
+        self.sentinel_genesis_phase = self
+            .sentinel_genesis_phase
+            .complete_delivery()
+            .ok_or_else(|| JsError::new("Sentinel share delivery is not awaiting completion."))?;
+        Ok(self.sentinel_genesis_phase)
     }
 
     #[wasm_bindgen(js_name = hasPendingSentinelGenesisFinalization)]
@@ -531,22 +551,21 @@ impl NookVaultManager {
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
-    /// Status string for sentinel unlock UI: `not_sentinel`, `unlocked`,
-    /// `awaiting_shares`, or `ceremony_required`.
+    /// Typed Sentinel unlock state for clients.
     #[wasm_bindgen(js_name = sentinelUnlockStatus)]
-    pub fn sentinel_unlock_status(&self) -> String {
+    pub fn sentinel_unlock_status(&self) -> nook_core::SentinelVaultUnlockState {
         if !self.is_sentinel_session() {
-            return "not_sentinel".to_owned();
+            return nook_core::SentinelVaultUnlockState::NotSentinel;
         }
         if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
-            return "unlocked".to_owned();
+            return nook_core::SentinelVaultUnlockState::Unlocked;
         }
         if self.vault.meta.sentinel_shares.is_empty() {
-            "awaiting_shares".to_owned()
+            nook_core::SentinelVaultUnlockState::AwaitingShares
         } else {
             // Opening the one share addressed to this device is independent of
             // the reconstruction threshold. Only the later combine step needs T.
-            "ceremony_required".to_owned()
+            nook_core::SentinelVaultUnlockState::CeremonyRequired
         }
     }
 }
@@ -597,6 +616,7 @@ impl NookVaultManager {
         .await?;
         clear_sentinel_genesis_finalization_pending().await?;
         self.sentinel_genesis = None;
+        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::DeliveringShares;
 
         Ok(NookSentinelGenesisFinalizeResult::from_core(
             pending.store_id,
@@ -732,16 +752,25 @@ mod tests {
     fn genesis_status_exposes_public_roster_without_persisting_a_vault() {
         let identity = nook_core::DeviceIdentity::generate().expect("identity");
         let (signing, _) = nook_core::SigningIdentity::generate().expect("signing identity");
-        let session =
-            nook_core::start_sentinel_genesis(&identity, &signing, 3, 2, "Initiator".to_owned())
-                .expect("session");
+        let session = nook_core::start_sentinel_genesis(
+            &identity,
+            &signing,
+            nook_core::StartSentinelGenesisArgs {
+                label: "Initiator".to_owned(),
+                participant_count: 3,
+                threshold: 2,
+            },
+        )
+        .expect("session");
         let mut manager = NookVaultManager::new();
         manager.sentinel_genesis = Some(session);
 
         let mut status = manager.sentinel_genesis_status();
-        assert!(status.active());
+        assert_eq!(
+            status.phase(),
+            nook_core::SentinelGenesisPhase::CollectingParticipants
+        );
         assert_eq!(status.participants().len(), 1);
-        assert!(!status.is_complete());
         assert!(manager.vault.store_id.is_empty());
     }
 
@@ -749,8 +778,7 @@ mod tests {
     fn inactive_genesis_status_is_explicit() {
         let manager = NookVaultManager::new();
         let status = manager.sentinel_genesis_status();
-        assert!(!status.active());
-        assert!(!status.is_complete());
+        assert_eq!(status.phase(), nook_core::SentinelGenesisPhase::Inactive);
     }
 
     #[test]
@@ -827,6 +855,9 @@ mod tests {
                 ciphertext: nook_core::AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
             },
         );
-        assert_eq!(manager.sentinel_unlock_status(), "ceremony_required");
+        assert_eq!(
+            manager.sentinel_unlock_status(),
+            nook_core::SentinelVaultUnlockState::CeremonyRequired
+        );
     }
 }

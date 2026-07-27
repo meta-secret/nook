@@ -11,8 +11,8 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let root = $state<HTMLDivElement | undefined>(undefined)
-  let switchingTo = $state<string | undefined>(undefined)
+  let root = $state<HTMLDivElement>()
+  let switchingTo = $state<string>()
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)

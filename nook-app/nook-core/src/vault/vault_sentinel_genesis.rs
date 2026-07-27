@@ -5,6 +5,64 @@ use crate::{
     SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity, StoredSecretRecord,
     VaultArchitecture, VaultType, finalize_sentinel_genesis_shares, generate_store_id,
 };
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
+
+/// Typed command for starting a Sentinel genesis ceremony.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct StartSentinelGenesisArgs {
+    pub label: String,
+    pub participant_count: u8,
+    pub threshold: u8,
+}
+
+/// Portable Sentinel setup phase shared by every host.
+///
+/// Hosts may separately track request-in-flight state while a transition is
+/// being performed; that transient UI state is not a genesis phase.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SentinelGenesisPhase {
+    Inactive,
+    CollectingParticipants,
+    ReadyToFinalize,
+    DeliveringShares,
+    Complete,
+}
+
+impl SentinelGenesisPhase {
+    #[must_use]
+    pub fn from_session(session: &SentinelGenesisSession) -> Self {
+        if session.is_complete() {
+            Self::ReadyToFinalize
+        } else {
+            Self::CollectingParticipants
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Inactive => "inactive",
+            Self::CollectingParticipants => "collecting participants",
+            Self::ReadyToFinalize => "ready to finalize",
+            Self::DeliveringShares => "delivering shares",
+            Self::Complete => "complete",
+        }
+    }
+
+    #[must_use]
+    pub const fn complete_delivery(self) -> Option<Self> {
+        if matches!(self, Self::DeliveringShares) {
+            Some(Self::Complete)
+        } else {
+            None
+        }
+    }
+}
 
 /// Complete, persistable Sentinel genesis result. It contains no full-key device
 /// envelope. `keys` are intentionally not exposed here; callers open the new
@@ -54,16 +112,14 @@ pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate:
 pub fn start_sentinel_genesis(
     identity: &DeviceIdentity,
     signing: &SigningIdentity,
-    participant_count: u8,
-    threshold: u8,
-    label: String,
+    args: StartSentinelGenesisArgs,
 ) -> Result<SentinelGenesisSession, crate::MultiDeviceError> {
     nook_auth2::start_sentinel_genesis(
         identity,
         signing.signing_key(),
-        participant_count,
-        threshold,
-        label,
+        args.participant_count,
+        args.threshold,
+        args.label,
     )
 }
 
@@ -134,9 +190,29 @@ mod tests {
 
     #[test]
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {
+        assert_eq!(
+            SentinelGenesisPhase::DeliveringShares.complete_delivery(),
+            Some(SentinelGenesisPhase::Complete)
+        );
+        assert_eq!(
+            SentinelGenesisPhase::ReadyToFinalize.complete_delivery(),
+            None
+        );
         let owner = DeviceIdentity::generate()?;
         let (owner_signing, _) = SigningIdentity::generate()?;
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".to_owned())?;
+        let mut session = start_sentinel_genesis(
+            &owner,
+            &owner_signing,
+            StartSentinelGenesisArgs {
+                label: "Owner".to_owned(),
+                participant_count: 2,
+                threshold: 2,
+            },
+        )?;
+        assert_eq!(
+            SentinelGenesisPhase::from_session(&session),
+            SentinelGenesisPhase::CollectingParticipants
+        );
         let peer = DeviceIdentity::generate()?;
         let (peer_signing, _) = SigningIdentity::generate()?;
         let response: SentinelGenesisParticipantResponse = respond_to_sentinel_genesis_request(
@@ -146,6 +222,10 @@ mod tests {
             "Peer".to_owned(),
         )?;
         add_sentinel_genesis_response(&mut session, response)?;
+        assert_eq!(
+            SentinelGenesisPhase::from_session(&session),
+            SentinelGenesisPhase::ReadyToFinalize
+        );
         let output = finalize_sentinel_genesis(session, &owner_signing)?;
         assert_eq!(output.participant_deliveries.len(), 2);
         let operations = sentinel_genesis_operations(&output);

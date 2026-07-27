@@ -275,13 +275,16 @@ All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).
 
 | Method                                                          | Role                                                                |
 | --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `vaultUnlockMode() -> "keys"`                                   | Device keys remain the primary mode; password entries are additive. |
 | `listVaultPasswordEntries()` / `fetchVaultPasswordEntries(...)` | Surface labelled password choices to login/settings/onboarding.     |
 | `addVaultPassword(label, password)`                             | Add a new backup password entry.                                    |
 | `updateVaultPasswordEntry(entry_id, password)`                  | Rotate one entry and start a new key epoch.                         |
 | `removeVaultPasswordEntry(entry_id)`                            | Remove one entry and start a new key epoch.                         |
 | `verifyVaultPassword(entry_id, password)`                       | Local password check for QR issuance and login UX.                  |
 | `connectWithPassword(mode, creds, entry_id, password)`          | Self-enrol/unlock via a selected password entry.                    |
+
+There is no separate client unlock-mode flag: device keys remain primary and
+the presence of `password_entries` determines whether additive password
+recovery is available.
 
 ---
 

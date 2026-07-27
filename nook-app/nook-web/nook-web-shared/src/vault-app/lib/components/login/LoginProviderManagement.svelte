@@ -17,6 +17,7 @@
     localizeProviderLabel,
     providerStorageDetail,
   } from '$lib/auth-providers'
+  import { SentinelGenesisPhase } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -101,7 +102,8 @@
         {vault}
         onSelect={onBeginSetup}
         excludeLocal
-        excludeLocalFolder={vault.sentinelGenesisStatus === 'delivering'}
+        excludeLocalFolder={vault.sentinelGenesisPhase ===
+          SentinelGenesisPhase.DeliveringShares}
       />
     {/if}
   </div>

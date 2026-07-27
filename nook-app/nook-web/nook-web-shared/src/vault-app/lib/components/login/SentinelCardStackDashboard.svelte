@@ -15,30 +15,16 @@
   } from '$lib/components/login/sentinel-dashboard-actions'
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
-  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
-
-  type SentinelGenesisStatus =
-    | 'idle'
-    | 'collecting'
-    | 'ready'
-    | 'finalizing'
-    | 'delivering'
-    | 'complete'
+  import type { VaultState } from '$lib/vault.svelte'
+  import {
+    SentinelGenesisPhase,
+    sentinelGenesisPhaseName,
+    type NookSentinelGenesisDelivery,
+    type NookSentinelGenesisParticipantStatus,
+    type StartSentinelGenesisArgs,
+  } from '$app-wasm'
 
   type OnboardingStage = 'identity' | 'name' | 'policy' | 'roster' | 'build'
-
-  type Participant = {
-    participantId: string
-    label: string
-    fingerprint: string
-  }
-
-  type Delivery = {
-    participantId: string
-    fingerprint?: string
-    payload: string
-    sharePayload?: string
-  }
 
   let {
     vault,
@@ -64,11 +50,11 @@
     name: string
     participantCount: number
     threshold: number
-    status: SentinelGenesisStatus
+    status: SentinelGenesisPhase
     request: string
     participantResponse?: string
-    participants: Participant[]
-    deliveries: Delivery[]
+    participants: NookSentinelGenesisParticipantStatus[]
+    deliveries: NookSentinelGenesisDelivery[]
     isBusy: boolean
     initiatorFingerprint: string
     initiatorKeyLoading: boolean
@@ -98,7 +84,7 @@
   const participantChoices = [3, 4, 5]
 
   const memberDeliveries = $derived(
-    deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),
+    deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   )
   const initiatorKeyReady = $derived(
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
@@ -133,7 +119,7 @@
     if (
       incomingResponse &&
       incomingResponse !== loadedParticipantResponse &&
-      status === 'collecting'
+      status === SentinelGenesisPhase.CollectingParticipants
     ) {
       response = incomingResponse
       loadedParticipantResponse = incomingResponse
@@ -142,9 +128,9 @@
   })
 
   $effect(() => {
-    if (status === 'collecting') {
+    if (status === SentinelGenesisPhase.CollectingParticipants) {
       onboardingStage = 'roster'
-    } else if (status !== 'idle') {
+    } else if (status !== SentinelGenesisPhase.Inactive) {
       onboardingStage = 'build'
     } else if (initiatorKeyReady && onboardingStage === 'identity') {
       onboardingStage = 'name'
@@ -189,7 +175,7 @@
     const payload = response.trim()
     if (
       !payload ||
-      status !== 'collecting' ||
+      status !== SentinelGenesisPhase.CollectingParticipants ||
       availableRosterSlots === 0 ||
       isBusy ||
       actionBusy
@@ -238,7 +224,7 @@
         <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
       </div>
 
-      {#if status === 'idle'}
+      {#if status === SentinelGenesisPhase.Inactive}
         <button
           class="flex h-10 shrink-0 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
           data-testid="sentinel-dashboard-back"
@@ -360,7 +346,9 @@
               class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 border-white/10 border-l-[#63eaa1] bg-[#303840]/85 px-5 py-4 text-left transition hover:border-[#6ed9ff]/60 hover:bg-[#37424b] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:border-l-[#63eaa1] disabled:hover:bg-[#303840]/85"
               data-testid="sentinel-onboarding-name-summary-card"
               aria-label={vault.t('login.vault_name_label')}
-              disabled={status !== 'idle' || isBusy || actionBusy}
+              disabled={status !== SentinelGenesisPhase.Inactive ||
+                isBusy ||
+                actionBusy}
               onclick={() => (onboardingStage = 'name')}
             >
               <span
@@ -380,7 +368,7 @@
             </button>
           {/if}
 
-          {#each participants.slice(1) as participant, index (participant.participantId)}
+          {#each participants.slice(1) as participant, index (participant.deviceId)}
             <button
               class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
               onclick={() => (selected = index + 1)}
@@ -392,7 +380,7 @@
               </span>
               <span class="min-w-0">
                 <b class="block truncate text-sm">
-                  {participant.label || participant.participantId} ·
+                  {participant.label || participant.deviceId} ·
                   {vault.t('login.sentinel_card_stack_participant')}
                   {String(index + 2).padStart(2, '0')}
                 </b>
@@ -406,7 +394,7 @@
             </button>
           {/each}
 
-          {#if status === 'collecting' && availableRosterSlots > 0}
+          {#if status === SentinelGenesisPhase.CollectingParticipants && availableRosterSlots > 0}
             <div class="border border-dashed border-[#aeb8c2] p-4">
               <div class="flex items-center justify-between gap-4">
                 <div>
@@ -534,7 +522,7 @@
           {/if}
         </div>
 
-        {#if status === 'idle' && onboardingStage === 'name'}
+        {#if status === SentinelGenesisPhase.Inactive && onboardingStage === 'name'}
           <section
             class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
             data-testid="sentinel-genesis-name-step"
@@ -569,7 +557,7 @@
               </button>
             </div>
           </section>
-        {:else if status === 'idle' && onboardingStage === 'policy'}
+        {:else if status === SentinelGenesisPhase.Inactive && onboardingStage === 'policy'}
           <section
             class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
             data-testid="sentinel-genesis-policy-step"
@@ -689,15 +677,19 @@
               </button>
             </div>
           </section>
-        {:else if status === 'collecting' || status === 'ready' || status === 'finalizing'}
+        {:else if status === SentinelGenesisPhase.CollectingParticipants || status === SentinelGenesisPhase.ReadyToFinalize}
           <div class="mt-6 flex justify-end">
             <button
-              disabled={status !== 'ready' || isBusy || actionBusy}
+              disabled={status !== SentinelGenesisPhase.ReadyToFinalize ||
+                isBusy ||
+                actionBusy}
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
               onclick={() =>
                 void runSentinelDashboardAction(
-                  status === 'ready' && !isBusy && !actionBusy,
+                  status === SentinelGenesisPhase.ReadyToFinalize &&
+                    !isBusy &&
+                    !actionBusy,
                   (value) => (actionBusy = value),
                   onFinalize,
                 )}
@@ -710,7 +702,7 @@
           </div>
         {/if}
 
-        {#if status === 'delivering' || deliveries.length > 0}
+        {#if status === SentinelGenesisPhase.DeliveringShares || deliveries.length > 0}
           <div
             class="mt-8 rounded-lg border border-[#79dfff]/25 bg-[#79dfff]/5 p-6"
             data-testid="sentinel-onboarding-delivery-actions"
@@ -774,9 +766,9 @@
             <span
               class="border border-[#657580] bg-[#192128] px-3 py-2 font-mono text-[9px] tracking-wider text-[#aab5be]"
             >
-              {status === 'idle'
+              {status === SentinelGenesisPhase.Inactive
                 ? vault.t('login.sentinel_card_stack_pre_genesis')
-                : status.toUpperCase()}
+                : sentinelGenesisPhaseName(status).toUpperCase()}
             </span>
           </div>
 
@@ -832,7 +824,7 @@
             </div>
           </dl>
 
-          {#if status !== 'idle' && status !== 'delivering' && status !== 'complete'}
+          {#if status !== SentinelGenesisPhase.Inactive && status !== SentinelGenesisPhase.DeliveringShares && status !== SentinelGenesisPhase.Complete}
             <div
               class="relative mt-6 space-y-4"
               data-testid="sentinel-genesis-ceremony-step"
@@ -915,7 +907,7 @@
           {/if}
         </div>
 
-        {#if onboardingStage !== 'identity' || status !== 'idle'}
+        {#if onboardingStage !== 'identity' || status !== SentinelGenesisPhase.Inactive}
           <div class="mt-6 flex items-center gap-3 text-xs text-[#a4afb9]">
             <span
               class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
@@ -927,7 +919,7 @@
           </div>
         {/if}
 
-        {#if status === 'delivering' || deliveries.length > 0}
+        {#if status === SentinelGenesisPhase.DeliveringShares || deliveries.length > 0}
           <div class="mt-8 space-y-4" data-testid="sentinel-genesis-deliveries">
             <h2 class="text-lg font-semibold">
               {vault.t('login.sentinel_genesis_delivery_title')}
@@ -935,7 +927,7 @@
             <p class="text-sm text-[#aeb8c2]">
               {vault.t('login.sentinel_genesis_delivery_description')}
             </p>
-            {#each memberDeliveries as delivery, index (delivery.participantId)}
+            {#each memberDeliveries as delivery, index (delivery.deviceId)}
               <div
                 class="grid gap-4 border border-white/10 bg-[#242d35] p-4 sm:grid-cols-[120px_1fr]"
                 data-testid="sentinel-genesis-delivery"

@@ -158,19 +158,6 @@ export async function removeVaultPasswordEntry(
   }
 }
 
-export async function setVaultPassword(
-  state: VaultState,
-  password: string,
-): Promise<void> {
-  await state.addVaultPassword("Vault password", password);
-}
-
-export async function removeVaultPassword(state: VaultState): Promise<void> {
-  const entry = state.passwordEntries[0];
-  if (!entry) return;
-  await state.removeVaultPasswordEntry(entry.id);
-}
-
 export async function unlockWithPassword(
   state: VaultState,
   entryId: string,
@@ -558,7 +545,7 @@ export async function issueEnrollmentCode(
     // retriable error instead.
     try {
       await state.raceStorageTimeout(
-        state.storageChain as Promise<void>,
+        state.waitForStorageChain(),
         "Vault storage",
       );
     } catch {
@@ -714,7 +701,7 @@ export async function issueEnrollmentCode(
       }
     }
     const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(
-      JSON.parse(JSON.stringify(enrollmentProviderRow)) as StorageProvider,
+      enrollmentProviderRow,
       state.vaultArchitecture,
       usesSharedProviderGrant && !usesSharedICloud
         ? sharedJoinerIdentity

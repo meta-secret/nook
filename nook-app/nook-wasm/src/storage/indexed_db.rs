@@ -397,12 +397,18 @@ pub(crate) async fn save_secret_search_catalog_buckets(
     Ok(())
 }
 
-pub(crate) async fn device_identity_protection_status() -> Result<&'static str, NookError> {
+pub(crate) async fn device_identity_protection_status()
+-> Result<nook_core::DeviceProtectionStatus, NookError> {
     let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
-        return Ok("missing");
+        return Ok(nook_core::DeviceProtectionStatus::Missing);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
-    Ok(wrapped.protection_mode())
+    nook_core::DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).ok_or_else(|| {
+        NookError::IndexedDb(format!(
+            "Unsupported persisted device-protection status: {}",
+            wrapped.protection_mode()
+        ))
+    })
 }
 
 pub(crate) async fn device_identity_device_mode() -> Result<Option<&'static str>, NookError> {
@@ -499,7 +505,7 @@ mod device_identity_storage_tests {
         let _ = rexie::Rexie::delete("nook_db").await;
         assert_eq!(
             device_identity_protection_status().await.expect("status"),
-            "missing"
+            nook_core::DeviceProtectionStatus::Missing
         );
 
         let setup = nook_core::DeviceKeyProtectionSetup::generate().expect("setup");

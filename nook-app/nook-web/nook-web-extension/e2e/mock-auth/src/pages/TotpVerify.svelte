@@ -8,7 +8,7 @@
   } from '../lib/session'
   import { verifyTotpCode } from '../lib/totp'
 
-  let session = $state<PendingTotpSession | undefined>(undefined)
+  let session = $state<PendingTotpSession>()
   let error = $state('')
   let busy = $state(false)
 

@@ -6,8 +6,8 @@
     type AppLogsResponse,
   } from '$lib/app-logs-api'
 
-  let payload = $state<AppLogsResponse | undefined>(undefined)
-  let error = $state<string | undefined>(undefined)
+  let payload = $state<AppLogsResponse>()
+  let error = $state<string>()
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'

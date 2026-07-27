@@ -82,6 +82,28 @@ free wrappers returned to JavaScript after their data has been copied out.
 
 WASM boundary getters may still return `String`; parse with `Foo::parse` / `Deserialize` before calling core. Use `.as_str()` / `.into_inner()` only at the JS edge.
 
+When a core policy enum selects a user-facing message, keep the exhaustive
+enum-to-translation-key mapping beside that enum in `nook-core`. A typed WASM
+adapter may translate the selected key from the active catalog and return the
+render-ready message. TypeScript/Svelte supplies reactive locale/catalog state
+and renders the result; it must not repeat the domain-enum switch.
+
+Apply the same test to every web-facade function, not only large helpers.
+Portable predicates, normalization, parsing, ordering, fallback selection,
+pagination, interpolation, and derived DTO fields belong in `nook-core`.
+`nook-wasm` exposes the typed result. A web `switch` over a Rust decision may
+remain only when its branches apply Svelte state or invoke browser lifecycle
+operations; a switch that merely returns data, labels, keys, or messages belongs
+in Rust. Browser time/API acquisition and conversion of Svelte proxies into
+plain typed boundary inputs remain web adapter responsibilities, while
+arithmetic and policy applied to those inputs remain Rust responsibilities.
+
+Long-running portable workflows expose their canonical phase as a Rust-owned
+`#[wasm_bindgen]` enum. Keep request-in-flight flags such as loading,
+submitting, or browser-ceremony activity separate in the host; do not add those
+transient UI states to the domain phase or mirror the phase with a TypeScript
+string union.
+
 **Do not duplicate in TypeScript.** List/search UI consumes
 `NookSecretListItem`; it cannot access password, API key, seed words, login
 notes, or secure-note bodies. Explicit reveal/copy calls return one

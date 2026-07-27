@@ -59,6 +59,39 @@ pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> St
     }
 }
 
+/// Translates a key and replaces named placeholders in the resulting message.
+#[must_use]
+pub fn translate_with_replacements(
+    catalog_json: &str,
+    locale: &str,
+    key: &str,
+    replacements: &[(String, String)],
+) -> String {
+    let mut message = translate_from_catalog(catalog_json, locale, key);
+    for (name, value) in replacements {
+        message = message.replacen(&format!("{{{name}}}"), value, 1);
+    }
+    message
+}
+
+/// Removes stable storage-adapter prefixes and translates error keys.
+#[must_use]
+pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
+    let stripped = ["GitHub error:", "Drive error:", "Database error:"]
+        .into_iter()
+        .fold(message, |current, prefix| {
+            strip_prefix_ignore_ascii_case(current, prefix).map_or(current, str::trim_start)
+        })
+        .trim();
+    if stripped.starts_with("errors.") {
+        return translate_from_catalog(catalog_json, locale, stripped);
+    }
+    if message.starts_with("errors.") {
+        return translate_from_catalog(catalog_json, locale, message);
+    }
+    message.to_owned()
+}
+
 /// Deep-merges two JSON catalogs. Overlay wins on scalar and array conflicts.
 ///
 /// This keeps newer bundled keys available when an older wasm/catalog copy is
@@ -116,6 +149,13 @@ fn lookup_key(json_str: &str, key: &str) -> Option<String> {
         current = current.get(part)?;
     }
     current.as_str().map(String::from)
+}
+
+fn strip_prefix_ignore_ascii_case<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    value
+        .get(..prefix.len())
+        .filter(|candidate| candidate.eq_ignore_ascii_case(prefix))
+        .and_then(|_| value.get(prefix.len()..))
 }
 
 #[cfg(test)]
@@ -181,6 +221,40 @@ mod tests {
         assert_eq!(
             translate_from_catalog(stale_ru, "en", "provider_picker.google_drive"),
             "provider_picker.google_drive"
+        );
+    }
+
+    #[test]
+    fn translation_replacements_and_error_messages_are_portable() {
+        assert_eq!(
+            translate_with_replacements(
+                get_translation_catalog("en"),
+                "en",
+                "vault.secret_count",
+                &[("count".to_owned(), "3".to_owned())],
+            ),
+            "Secrets: 3"
+        );
+        assert_eq!(
+            translate_with_replacements(
+                r#"{"message":"{value} {value}"}"#,
+                "en",
+                "message",
+                &[("value".to_owned(), "first".to_owned())],
+            ),
+            "first {value}"
+        );
+        assert_eq!(
+            resolve_error_message(
+                get_translation_catalog("en"),
+                "en",
+                "GitHub error: Drive error: errors.engine_unavailable",
+            ),
+            "Vault engine is not available. Refresh the page and try again."
+        );
+        assert_eq!(
+            resolve_error_message("{}", "en", "Drive error: unavailable"),
+            "Drive error: unavailable"
         );
     }
 

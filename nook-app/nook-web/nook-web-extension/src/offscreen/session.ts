@@ -1,6 +1,8 @@
 import initNookWasm, {
   configureVaultApplication,
   currentCodeFromOtpauthUri,
+  deviceProtectionStatusName,
+  DeviceProtectionStatus,
   NookExternalEventLogRecords,
   NookVaultManager,
   previewOtpauthUri,
@@ -292,7 +294,10 @@ async function handleMessage(message: unknown): Promise<unknown> {
     }
     case 'nook:extension-session-migrate-auth-providers': {
       const activeManager = await getManager()
-      if ((await activeManager.deviceProtectionStatus()) !== 'unlocked') {
+      if (
+        (await activeManager.deviceProtectionStatus()) !==
+        DeviceProtectionStatus.Unlocked
+      ) {
         return { ok: true, migrated: false }
       }
       await activeManager.loadAuthProviders()
@@ -303,8 +308,8 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const status = await activeManager.deviceProtectionStatus()
       return {
         ok: true,
-        status,
-        ...(status === 'unlocked'
+        status: deviceProtectionStatusName(status),
+        ...(status === DeviceProtectionStatus.Unlocked
           ? { device: await deviceResult(activeManager) }
           : {}),
       }
@@ -418,7 +423,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
-      if (status !== 'unlocked') {
+      if (status !== DeviceProtectionStatus.Unlocked) {
         throw new Error(SESSION_LOCKED_ERROR)
       }
       const device = await deviceResult(activeManager)
@@ -465,7 +470,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           'id' in provider &&
           typeof provider.id === 'string',
       )
-      if (protection === 'unlocked') {
+      if (protection === DeviceProtectionStatus.Unlocked) {
         await activeManager.replaceAuthProvidersForVault({
           providers: grantedProviders,
           activeVaultStoreId: grant.vaultStoreId,
