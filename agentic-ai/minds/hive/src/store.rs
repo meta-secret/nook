@@ -20,6 +20,12 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> anyhow::Result<bool>;
 
+    async fn acknowledge_cancellation(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+    ) -> anyhow::Result<bool>;
+
     async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome>;
 
     async fn heartbeat(
@@ -161,7 +167,7 @@ mod tests {
                 .find(|task| {
                     task.definition.source_commit == source_commit
                         && task.definition.kind == kind
-                        && matches!(task.status, "READY" | "RUNNING" | "BLOCKED")
+                        && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
                 .map(|task| task.definition.id.clone()))
         }
@@ -208,10 +214,34 @@ mod tests {
                 .collect::<Vec<_>>();
             for id in members {
                 let task = tasks.get_mut(&id).expect("cancelled task");
-                task.status = "CANCELLED";
-                task.lease_token = None;
-                task.lease_until = None;
+                if task.status == "RUNNING" {
+                    task.status = "CANCELLING";
+                } else {
+                    task.status = "CANCELLED";
+                    task.lease_token = None;
+                    task.lease_until = None;
+                }
             }
+            Ok(true)
+        }
+
+        async fn acknowledge_cancellation(
+            &self,
+            task: &ClaimedTask,
+            _agent_id: &AgentId,
+        ) -> anyhow::Result<bool> {
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let Some(stored) = tasks.get_mut(task.id.as_str()) else {
+                return Ok(false);
+            };
+            if stored.status != "CANCELLING"
+                || stored.lease_token.as_ref() != Some(&task.lease_token)
+            {
+                return Ok(false);
+            }
+            stored.status = "CANCELLED";
+            stored.lease_token = None;
+            stored.lease_until = None;
             Ok(true)
         }
 

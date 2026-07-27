@@ -329,9 +329,10 @@ keyed by failed SHA. Each run attempt creates a run-and-attempt-keyed delivery
 generation whose plan/worklog are generation-specific. A later failed rerun
 supersedes and cancels an active delivery before the new generation is
 enqueued. The dispatcher retries only after a poll interval longer than the
-worker heartbeat, ensuring the stale execution has stopped before its
-replacement becomes claimable; reconciliation of the current generation is
-idempotent.
+worker heartbeat, while the durable barrier is the worker's Neo4j
+acknowledgement that the stale Codex execution stopped. The old generation
+remains `CANCELLING` until that acknowledgement; reconciliation of the current
+generation is idempotent.
 The isolated Hive dispatcher enqueues actionable incidents once, and
 one logical task owns diagnosis, a normal exact-head PR, actionable review
 resolution, squash merge, and verification of the resulting Main run. The

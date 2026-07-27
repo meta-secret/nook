@@ -32,6 +32,10 @@ enum Request {
         lease_token: LeaseToken,
         lease_seconds: i64,
     },
+    AcknowledgeCancellation {
+        task: ClaimedTask,
+        agent_id: AgentId,
+    },
     Release {
         task: ClaimedTask,
         agent_id: AgentId,
@@ -165,6 +169,18 @@ impl TaskStore for CoordinatorTaskStore {
 
     async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
         anyhow::bail!("workers are not authorized to cancel tasks")
+    }
+
+    async fn acknowledge_cancellation(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+    ) -> anyhow::Result<bool> {
+        self.accepted(Request::AcknowledgeCancellation {
+            task: task.clone(),
+            agent_id: agent_id.clone(),
+        })
+        .await
     }
 
     async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
@@ -315,6 +331,9 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> anyhow::Re
             store
                 .heartbeat(&task_id, &agent_id, &lease_token, lease_seconds)
                 .await?,
+        )),
+        Request::AcknowledgeCancellation { task, agent_id } => Ok(Response::Accepted(
+            store.acknowledge_cancellation(&task, &agent_id).await?,
         )),
         Request::Release { task, agent_id } => {
             Ok(Response::Accepted(store.release(&task, &agent_id).await?))

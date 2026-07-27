@@ -11,7 +11,6 @@ use crate::store::TaskStore;
 const MAIN_FAILURE_PREFIX: &str = "main-failure-";
 const MAIN_FAILURE_SUFFIX: &str = ".md";
 const DEFERRED_E2E_RETIREMENT_MARKER: &str = "<!-- hive-retired:deferred-e2e -->";
-const WORKER_HEARTBEAT_SECONDS: u64 = 60;
 
 pub async fn run_workbench_dispatcher<S: TaskStore>(
     store: S,
@@ -19,11 +18,6 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     checkout: &Path,
     poll_seconds: u64,
 ) -> anyhow::Result<()> {
-    if poll_seconds <= WORKER_HEARTBEAT_SECONDS {
-        anyhow::bail!(
-            "Workbench polling must exceed the worker heartbeat interval to serialize superseded deliveries"
-        );
-    }
     store.migrate().await?;
     let mut reconciled_revision = None;
     let mut reconciled_incidents = HashMap::new();
@@ -181,39 +175,50 @@ async fn dispatch_once<S: TaskStore>(
             reconciled_incidents.insert(name, body);
             continue;
         }
-        let task_id = main_failure_task_id(task_base, run_id, run_attempt)?;
-        if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
-            if active_id == task_id {
-                eprintln!(
-                    "Hive Workbench delivery already current task={} source_commit={source_commit}",
-                    active_id,
-                );
-                reconciled_incidents.insert(name, body);
-                continue;
-            }
-            let cancelled = store
-                .cancel(&active_id, "Superseded by a newer failed Main attempt")
-                .await
-                .with_context(|| format!("cancel superseded delivery {}", active_id))?;
-            anyhow::bail!(
-                "superseded Hive delivery {active_id} cancelled={cancelled}; retry after the worker heartbeat barrier"
-            );
-        }
-        let task = EnqueueTask {
-            id: task_id,
-            kind: "main-repair".to_owned(),
-            prompt: body.clone(),
-            source_commit,
-            priority: 100,
-            max_attempts: 3,
-            dependencies: Vec::new(),
-        };
-        if let Err(error) = store.enqueue(&task).await
-            && !format!("{error:#}").contains("already exists")
-        {
-            return Err(error).with_context(|| format!("enqueue {}", task.id));
-        }
+        reconcile_delivery(store, &source_commit, task_base, &body, run_id, run_attempt).await?;
         reconciled_incidents.insert(name, body);
+    }
+    Ok(())
+}
+
+async fn reconcile_delivery<S: TaskStore>(
+    store: &S,
+    source_commit: &str,
+    task_base: &str,
+    body: &str,
+    run_id: u64,
+    run_attempt: u64,
+) -> anyhow::Result<()> {
+    let task_id = main_failure_task_id(task_base, run_id, run_attempt)?;
+    if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
+        if active_id == task_id {
+            eprintln!(
+                "Hive Workbench delivery already current task={} source_commit={source_commit}",
+                active_id,
+            );
+            return Ok(());
+        }
+        let cancelled = store
+            .cancel(&active_id, "Superseded by a newer failed Main attempt")
+            .await
+            .with_context(|| format!("cancel superseded delivery {}", active_id))?;
+        anyhow::bail!(
+            "superseded Hive delivery {active_id} cancellation_requested={cancelled}; retry after the worker acknowledges termination"
+        );
+    }
+    let task = EnqueueTask {
+        id: task_id,
+        kind: "main-repair".to_owned(),
+        prompt: body.to_owned(),
+        source_commit: source_commit.to_owned(),
+        priority: 100,
+        max_attempts: 3,
+        dependencies: Vec::new(),
+    };
+    if let Err(error) = store.enqueue(&task).await
+        && !format!("{error:#}").contains("already exists")
+    {
+        return Err(error).with_context(|| format!("enqueue {}", task.id));
     }
     Ok(())
 }
@@ -313,16 +318,98 @@ async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
 mod tests {
     use std::collections::HashMap;
     use std::process::Command as StdCommand;
+    use std::sync::{Arc, Mutex};
 
+    use async_trait::async_trait;
     use serde_json::json;
 
-    use crate::model::TaskId;
+    use crate::model::{
+        AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+    };
+    use crate::store::TaskStore;
 
     use super::{
         DEFERRED_E2E_RETIREMENT_MARKER, incident_needs_reconciliation, is_ready_agent_issue,
         main_failure_commit, main_failure_run, main_failure_task_id, main_failure_task_ids,
-        main_run_requires_repair, sync_workbench_checkout,
+        main_run_requires_repair, reconcile_delivery, sync_workbench_checkout,
     };
+
+    #[derive(Clone, Default)]
+    struct RecordingStore {
+        active: Arc<Mutex<Option<TaskId>>>,
+        cancelled: Arc<Mutex<Vec<TaskId>>>,
+        enqueued: Arc<Mutex<Vec<TaskId>>>,
+    }
+
+    #[async_trait]
+    impl TaskStore for RecordingStore {
+        async fn migrate(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn register_agent(&self, _: &AgentId, _: &str) -> anyhow::Result<()> {
+            unreachable!()
+        }
+        async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
+            self.enqueued
+                .lock()
+                .expect("enqueued")
+                .push(task.id.clone());
+            Ok(())
+        }
+        async fn active_delivery(&self, _: &str, _: &str) -> anyhow::Result<Option<TaskId>> {
+            Ok(self.active.lock().expect("active").clone())
+        }
+        async fn cancel(&self, task_id: &TaskId, _: &str) -> anyhow::Result<bool> {
+            self.cancelled
+                .lock()
+                .expect("cancelled")
+                .push(task_id.clone());
+            Ok(true)
+        }
+        async fn acknowledge_cancellation(
+            &self,
+            _: &ClaimedTask,
+            _: &AgentId,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn claim(&self, _: &AgentId, _: i64) -> anyhow::Result<ClaimOutcome> {
+            unreachable!()
+        }
+        async fn heartbeat(
+            &self,
+            _: &TaskId,
+            _: &AgentId,
+            _: &LeaseToken,
+            _: i64,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn release(&self, _: &ClaimedTask, _: &AgentId) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn complete(
+            &self,
+            _: &ClaimedTask,
+            _: &AgentId,
+            _: &str,
+            _: &CompletionArtifact,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn fail(&self, _: &ClaimedTask, _: &AgentId, _: &str) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn block(
+            &self,
+            _: &ClaimedTask,
+            _: &AgentId,
+            _: &EnqueueTask,
+            _: &str,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+    }
 
     #[test]
     fn recognizes_only_ready_automated_main_incidents() {
@@ -439,6 +526,51 @@ mod tests {
             "main-failure-deadbeef.md",
             "attempt: 2"
         ));
+    }
+
+    #[tokio::test]
+    async fn current_generation_is_idempotent() -> anyhow::Result<()> {
+        let store = RecordingStore::default();
+        let current = main_failure_task_id("main-failure-abcdef", 123, 2)?;
+        *store.active.lock().expect("active") = Some(current);
+
+        reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
+
+        assert!(store.cancelled.lock().expect("cancelled").is_empty());
+        assert!(store.enqueued.lock().expect("enqueued").is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn replacement_waits_for_superseded_worker_acknowledgement() -> anyhow::Result<()> {
+        let store = RecordingStore::default();
+        let old = main_failure_task_id("main-failure-abcdef", 123, 1)?;
+        *store.active.lock().expect("active") = Some(old.clone());
+
+        assert!(
+            reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            store.cancelled.lock().expect("cancelled").as_slice(),
+            &[old]
+        );
+        assert!(store.enqueued.lock().expect("enqueued").is_empty());
+
+        *store.active.lock().expect("active") = None;
+        reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
+        assert_eq!(
+            store
+                .enqueued
+                .lock()
+                .expect("enqueued")
+                .iter()
+                .map(TaskId::as_str)
+                .collect::<Vec<_>>(),
+            ["main-failure-abcdef-run-123-attempt-2"]
+        );
+        Ok(())
     }
 
     #[tokio::test]

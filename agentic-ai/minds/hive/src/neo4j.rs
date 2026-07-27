@@ -427,7 +427,7 @@ impl TaskStore for Neo4jTaskStore {
             .execute(
                 query(
                     "MATCH (task:Task {source_commit: $source_commit, kind: $kind})
-                     WHERE task.status IN ['READY', 'RUNNING', 'BLOCKED']
+                     WHERE task.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
                      RETURN task.id AS id
                      ORDER BY task.created_at
                      LIMIT 1",
@@ -463,22 +463,70 @@ impl TaskStore for Neo4jTaskStore {
                      UNWIND members AS task
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
                      OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
-                     SET task.status = 'CANCELLED',
+                     WITH task, attempt, agent, task.status = 'RUNNING' AS was_running
+                     SET task.status =
+                           CASE was_running
+                             WHEN true THEN 'CANCELLING'
+                             ELSE 'CANCELLED'
+                           END,
                          task.failure_reason = $reason,
+                         task.updated_at = timestamp(),
+                         task.version = task.version + 1,
+                         task.lease_owner =
+                           CASE was_running WHEN true THEN task.lease_owner ELSE null END,
+                         task.lease_token =
+                           CASE was_running WHEN true THEN task.lease_token ELSE null END,
+                         task.lease_until =
+                           CASE was_running WHEN true THEN task.lease_until ELSE null END,
+                         attempt.status =
+                           CASE was_running WHEN true THEN attempt.status ELSE 'CANCELLED' END,
+                         attempt.error =
+                           CASE was_running WHEN true THEN attempt.error ELSE $reason END,
+                         attempt.completed_at =
+                           CASE was_running WHEN true THEN attempt.completed_at ELSE timestamp() END,
+                         agent.status =
+                           CASE was_running WHEN true THEN agent.status ELSE 'IDLE' END,
+                         agent.last_seen_at = timestamp()
+                     RETURN DISTINCT root.id AS id",
+                )
+                .param("task_id", task_id.as_str())
+                .param("reason", reason),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
+
+    async fn acknowledge_cancellation(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+    ) -> anyhow::Result<bool> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt)
+                     MATCH (agent:Agent {id: $agent_id})-[:EXECUTED]->(attempt)
+                     WHERE task.status = 'CANCELLING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND attempt.lease_token = $lease_token
+                     SET task.status = 'CANCELLED',
                          task.updated_at = timestamp(),
                          task.version = task.version + 1,
                          task.lease_owner = null,
                          task.lease_token = null,
                          task.lease_until = null,
                          attempt.status = 'CANCELLED',
-                         attempt.error = $reason,
+                         attempt.error = coalesce(task.failure_reason, 'cancelled'),
                          attempt.completed_at = timestamp(),
                          agent.status = 'IDLE',
                          agent.last_seen_at = timestamp()
-                     RETURN DISTINCT root.id AS id",
+                     RETURN task.id AS id",
                 )
-                .param("task_id", task_id.as_str())
-                .param("reason", reason),
+                .param("task_id", task.id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str()),
             )
             .await?;
         Ok(rows.next().await?.is_some())

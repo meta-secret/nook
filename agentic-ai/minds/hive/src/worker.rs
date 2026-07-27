@@ -104,6 +104,25 @@ impl<S: TaskStore> Worker<S> {
                     .context("failed to mark the interrupted Pod for replacement")?;
                 return Ok(());
             }
+            if error
+                .downcast_ref::<WorkerCancellationRequested>()
+                .is_some()
+            {
+                let acknowledged = self
+                    .store
+                    .acknowledge_cancellation(&task, &self.config.agent_id)
+                    .await
+                    .context("failed to acknowledge task cancellation")?;
+                if !acknowledged {
+                    return Err(anyhow!(
+                        "task cancellation acknowledgement was rejected because the lease is stale"
+                    ));
+                }
+                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                    .await
+                    .context("failed to mark the cancelled Pod for replacement")?;
+                return Ok(());
+            }
             let message = bounded(&format!("{error:#}"));
             let _ = self
                 .store
@@ -263,9 +282,16 @@ impl<S: TaskStore> Worker<S> {
                 execution.map_err(|_| anyhow!("task timed out"))??
             }
             heartbeat_result = &mut heartbeat => {
-                heartbeat_result
+                let heartbeat_result = heartbeat_result
                     .context("heartbeat task panicked")?
-                    .context("lease heartbeat failed")?;
+                    .context("lease heartbeat failed");
+                if heartbeat_result
+                    .as_ref()
+                    .is_err_and(|error| error.downcast_ref::<WorkerCancellationRequested>().is_some())
+                {
+                    return Err(WorkerCancellationRequested.into());
+                }
+                heartbeat_result?;
                 return Err(anyhow!("lease heartbeat stopped before task execution"));
             }
             signal = terminate.recv() => {
@@ -299,6 +325,10 @@ struct WorkerInterrupted;
 #[derive(Debug, thiserror::Error)]
 #[error("worker persisted a blocking dependency")]
 struct WorkerBlocked;
+
+#[derive(Debug, thiserror::Error)]
+#[error("worker cancellation requested")]
+struct WorkerCancellationRequested;
 
 fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(workspace)?;
@@ -348,7 +378,7 @@ async fn heartbeat_loop<S: TaskStore>(
                     )
                     .await?;
                 if !accepted {
-                    return Err(anyhow!("lease was replaced or expired"));
+                    return Err(WorkerCancellationRequested.into());
                 }
                 renewal += 1;
                 eprintln!(
