@@ -26,6 +26,7 @@ test('Sentinel creation invites participants instead of standalone join', async 
   await demoBeat(page)
 
   await page.getByTestId('get-started-path-sentinel').click()
+  await expect(page.getByTestId('get-started-path-simple')).not.toBeVisible()
   const cardStackChoice = page.getByTestId('sentinel-dashboard-card-stack')
   await cardStackChoice.click()
   await page.getByTestId('sentinel-dashboard-back').click()
