@@ -25,7 +25,8 @@ Hive separates four responsibilities:
    store, attempt history, and artifact store.
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
    core API; it does not spawn a Codex CLI process or parse CLI JSONL. Every
-   worker turn explicitly selects `gpt-5.6` with `low` reasoning effort, the
+   worker turn explicitly selects `gpt-5.6-terra` with `low` reasoning effort,
+   the
    non-UI representation of Codex Light.
 4. **Narrow brokers own credentials and authority.** The repository-facing
    worker has no Neo4j password, Codex credential file, GitHub token, or
