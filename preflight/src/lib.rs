@@ -191,9 +191,7 @@ pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violatio
 /// # Errors
 ///
 /// Returns an error when the authored web source tree cannot be read.
-pub fn typescript_svelte_state_modeling_violations(
-    root: &Path,
-) -> io::Result<Vec<Violation>> {
+pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = source_violations(
         root,
         Path::new("nook-app/nook-web"),
@@ -212,26 +210,22 @@ pub fn typescript_svelte_state_modeling_violations(
                 line,
             }),
     );
-    violations.extend(
-        source
-            .lines()
-            .enumerate()
-            .filter_map(|(index, line)| {
-                let compact = line.bytes().filter(|byte| !byte.is_ascii_whitespace()).collect::<Vec<_>>();
-                let widens_store_id =
-                    compact.windows(b"StoreId=$state<string".len()).any(|window| {
-                        window == b"StoreId=$state<string"
-                    });
-                let widens_password_entry_id =
-                    compact
-                        .windows(b"PasswordEntryId=$state<string".len())
-                        .any(|window| window == b"PasswordEntryId=$state<string");
-                (widens_store_id || widens_password_entry_id).then_some(Violation {
-                    path: relative_path.to_path_buf(),
-                    line: index + 1,
-                })
-            }),
-    );
+    violations.extend(source.lines().enumerate().filter_map(|(index, line)| {
+        let compact = line
+            .bytes()
+            .filter(|byte| !byte.is_ascii_whitespace())
+            .collect::<Vec<_>>();
+        let widens_store_id = compact
+            .windows(b"StoreId=$state<string".len())
+            .any(|window| window == b"StoreId=$state<string");
+        let widens_password_entry_id = compact
+            .windows(b"PasswordEntryId=$state<string".len())
+            .any(|window| window == b"PasswordEntryId=$state<string");
+        (widens_store_id || widens_password_entry_id).then_some(Violation {
+            path: relative_path.to_path_buf(),
+            line: index + 1,
+        })
+    }));
     violations.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -357,9 +351,7 @@ fn json_round_trip_clone_lines(source: &str) -> Vec<usize> {
     compact
         .windows(PATTERN.len())
         .enumerate()
-        .filter_map(|(index, window)| {
-            (window == PATTERN).then_some(source_lines[index])
-        })
+        .filter_map(|(index, window)| (window == PATTERN).then_some(source_lines[index]))
         .collect()
 }
 
