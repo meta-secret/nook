@@ -955,46 +955,41 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
     }
 
     #[test]
-    fn reports_authored_null_while_preserving_external_contracts() {
-        let root = temporary_directory();
+    fn reports_authored_null_while_preserving_external_contracts() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
         let web_root = root.join("nook-app/nook-web");
         let app_source = web_root.join("nook-web-app/src");
         let extension_source = web_root.join("nook-web-extension/src/content");
         let select_source = web_root.join("nook-web-shared/src/vault-app/lib/components/ui/select");
         let scripts = web_root.join("nook-web-extension/scripts");
-        fs::create_dir_all(&app_source).unwrap();
-        fs::create_dir_all(&extension_source).unwrap();
-        fs::create_dir_all(&select_source).unwrap();
-        fs::create_dir_all(&scripts).unwrap();
+        fs::create_dir_all(&app_source)?;
+        fs::create_dir_all(&extension_source)?;
+        fs::create_dir_all(&select_source)?;
+        fs::create_dir_all(&scripts)?;
         fs::write(
             app_source.join("state.ts"),
             "const nullableName = 'annulled'\n// provider returned null\nconst message = \"provider returned null\"\nconst template = `provider returned null`\nconst matcher = /null|nil/\nconst interpolation = `value: ${null}`\nlet value: string | null = null\nconst ratio = amount / null\nconst assertedRatio = value! / (fallback ?? null)\nconst incrementedRatio = index++ / null\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             app_source.join("panel.svelte"),
             "<p>null is external</p>\n<!-- {null} is documentation -->\n<Child value={null} />\n{#if true}\n  {@const fallback = null}\n{/if}\n<script lang=\"ts\">\n  const message = 'null'\n  let value = null\n</script>\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             extension_source.join("webauthn-page.ts"),
             "getPublicKey: () => null,\nfallback: () => Promise<Credential | null>,\n): Promise<Credential | null> {\nreturn new Promise<Credential | null>((resolve, reject) => {\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             extension_source.join("chrome.d.ts"),
             "type External = string | null\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             select_source.join("select-trigger.svelte"),
             "ref = $bindable(null),\n",
-        )
-        .unwrap();
-        fs::write(scripts.join("build.ts"), "const value = null\n").unwrap();
+        )?;
+        fs::write(scripts.join("build.ts"), "const value = null\n")?;
 
         assert_eq!(
-            typescript_null_absence_sentinels(&root).unwrap(),
+            typescript_null_absence_sentinels(&root)?,
             vec![
                 Violation {
                     path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
@@ -1034,7 +1029,8 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
                 },
             ]
         );
-        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
