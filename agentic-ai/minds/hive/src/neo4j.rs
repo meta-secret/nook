@@ -20,7 +20,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 2;
+const LATEST_SCHEMA_VERSION: i64 = 3;
 const CLAIM_RETRY_LIMIT: usize = 5;
 
 fn is_transient_claim_error(error: &anyhow::Error) -> bool {
@@ -247,6 +247,16 @@ impl TaskStore for Neo4jTaskStore {
                 );
             }
         }
+        if installed_version < 3 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     WHERE task.manual_retry_used IS NULL
+                     SET task.manual_retry_used = false",
+                ))
+                .await
+                .context("failed to initialize schema-3 manual retry state")?;
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -292,6 +302,7 @@ impl TaskStore for Neo4jTaskStore {
                     "MERGE (task:Task {id: $id})
                      ON CREATE SET task.created_at = timestamp(),
                                    task.attempt_count = 0,
+                                   task.manual_retry_used = false,
                                    task.version = 0,
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
@@ -1654,5 +1665,49 @@ mod tests {
             .run(query("MATCH (node) DETACH DELETE node"))
             .await
             .expect("clean schema migration fixture");
+        store
+            .graph
+            .run(query(
+                "CREATE (:HiveSchemaMigration {version: 2})
+                 CREATE (:Task {
+                   id: 'schema-2-task',
+                   status: 'FAILED',
+                   source_commit: '0123456789abcdef0123456789abcdef01234567'
+                 })",
+            ))
+            .await
+            .expect("create schema-2 fixture");
+        store.migrate().await.expect("migrate schema 2 to schema 3");
+        let mut schema_three_rows = store
+            .graph
+            .execute(query(
+                "MATCH (task:Task {id: 'schema-2-task'})
+                 MATCH (migration:HiveSchemaMigration {version: 3})
+                 RETURN task.manual_retry_used AS manual_retry_used,
+                        migration.version AS version",
+            ))
+            .await
+            .expect("read schema-3 migration state");
+        let schema_three = schema_three_rows
+            .next()
+            .await
+            .expect("read schema-3 row")
+            .expect("schema-3 migration row");
+        assert!(
+            !schema_three
+                .get::<bool>("manual_retry_used")
+                .expect("initialized retry marker")
+        );
+        assert_eq!(
+            schema_three
+                .get::<i64>("version")
+                .expect("schema-3 version"),
+            3
+        );
+        store
+            .graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .expect("clean schema-3 migration fixture");
     }
 }
