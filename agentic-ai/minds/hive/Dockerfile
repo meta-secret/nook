@@ -90,26 +90,30 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
     && nook-sccache-report hive-chef-release
 
 # Verification needs Cargo's real test and Clippy fingerprints, not only the
-# cargo-chef package versions. Build them once against stub roots in a
-# manifest-only layer, publish that layer from Main, then compile only Hive and
-# Lace source on pull requests. Redis remains the compiler-object fallback
-# while the BuildKit layer preserves Cargo metadata and linked dependencies.
-FROM fetched-dependencies AS verification-dependencies
+# cargo-chef package versions. Build the two manifest-only graphs independently
+# so BuildKit can materialize/link them in parallel. Main publishes both layers;
+# pull requests compile only Hive and Lace source on top of the matching graph.
+# Redis remains the compiler-object fallback while BuildKit preserves Cargo
+# metadata and linked dependencies.
+FROM fetched-dependencies AS test-dependencies
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo test --locked -p hive --no-run \
-    && nook-sccache-report hive-test-dependencies
+    && nook-sccache-report hive-test-dependencies \
+    && install -D /dev/null /opt/nook/hive-test-dependencies
+
+FROM fetched-dependencies AS clippy-dependencies
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     printf 'fn main() {}\n' > hive/src/main.rs \
     && cargo clippy --locked -p hive --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy-dependencies \
-    && install -D /dev/null /opt/nook/hive-verification-dependencies
+    && install -D /dev/null /opt/nook/hive-clippy-dependencies
 
-FROM verification-dependencies AS source
+FROM clippy-dependencies AS check-source
 COPY lace/src lace/src
 COPY hive/src hive/src
 RUN find lace/src hive/src -type f -exec touch {} +
 
-FROM source AS check
+FROM check-source AS check
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo fmt --all -- --check \
     && cargo clippy --locked -p hive --all-targets -- -D warnings \
@@ -124,7 +128,12 @@ COPY lace/src lace/src
 COPY hive/src hive/src
 RUN cargo fmt --all
 
-FROM source AS test-compile
+FROM test-dependencies AS test-source
+COPY lace/src lace/src
+COPY hive/src hive/src
+RUN find lace/src hive/src -type f -exec touch {} +
+
+FROM test-source AS test-compile
 
 # Compile tests inside BuildKit, but export only the executable artifacts. The
 # Taskfile runs them in the pinned Rust base with normal container host
@@ -170,7 +179,8 @@ RUN find lace/src hive/src -type f -exec touch {} +
 FROM scratch AS cache-publish
 
 COPY --from=dependencies /build/recipe.json /hive-release-recipe.json
-COPY --from=verification-dependencies /opt/nook/hive-verification-dependencies /hive-verification-dependencies
+COPY --from=test-dependencies /opt/nook/hive-test-dependencies /hive-test-dependencies
+COPY --from=clippy-dependencies /opt/nook/hive-clippy-dependencies /hive-clippy-dependencies
 
 FROM release-source AS builder
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \

@@ -417,6 +417,73 @@ impl TaskStore for Neo4jTaskStore {
         Ok(())
     }
 
+    async fn active_delivery(
+        &self,
+        source_commit: &str,
+        kind: &str,
+    ) -> anyhow::Result<Option<TaskId>> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {source_commit: $source_commit, kind: $kind})
+                     WHERE task.status IN ['READY', 'RUNNING', 'BLOCKED']
+                     RETURN task.id AS id
+                     ORDER BY task.created_at
+                     LIMIT 1",
+                )
+                .param("source_commit", source_commit)
+                .param("kind", kind),
+            )
+            .await?;
+        rows.next()
+            .await?
+            .map(|row| TaskId::new(row.get::<String>("id")?).map_err(anyhow::Error::msg))
+            .transpose()
+    }
+
+    async fn cancel(&self, task_id: &TaskId, reason: &str) -> anyhow::Result<bool> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $task_id})
+                     WHERE root.status IN ['READY', 'RUNNING', 'BLOCKED', 'FAILED']
+                     OPTIONAL MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
+                     WITH root, collect(DISTINCT descendant) AS descendants
+                     WITH root, descendants,
+                          [descendant IN descendants
+                           WHERE descendant.status IN ['READY', 'RUNNING', 'BLOCKED']
+                             AND NOT EXISTS {
+                               MATCH (outside:Task)-[:DEPENDS_ON*1..]->(descendant)
+                               WHERE outside.status IN ['READY', 'RUNNING', 'BLOCKED']
+                                 AND NOT (outside IN ([root] + descendants))
+                             }] AS exclusive_descendants
+                     WITH root, [root] + exclusive_descendants AS members
+                     UNWIND members AS task
+                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
+                     OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
+                     SET task.status = 'CANCELLED',
+                         task.failure_reason = $reason,
+                         task.updated_at = timestamp(),
+                         task.version = task.version + 1,
+                         task.lease_owner = null,
+                         task.lease_token = null,
+                         task.lease_until = null,
+                         attempt.status = 'CANCELLED',
+                         attempt.error = $reason,
+                         attempt.completed_at = timestamp(),
+                         agent.status = 'IDLE',
+                         agent.last_seen_at = timestamp()
+                     RETURN DISTINCT root.id AS id",
+                )
+                .param("task_id", task_id.as_str())
+                .param("reason", reason),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
+
     async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
         for retry in 0..CLAIM_RETRY_LIMIT {
             let result = async {
@@ -948,22 +1015,19 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn production_store_enforces_claims_dependencies_and_stale_leases() {
+    async fn production_store_enforces_claims_dependencies_and_stale_leases() -> anyhow::Result<()>
+    {
         let Ok(uri) = env::var("HIVE_NEO4J_TEST_URI") else {
-            return;
+            return Ok(());
         };
         let username = env::var("HIVE_NEO4J_TEST_USERNAME").unwrap_or_else(|_| "neo4j".to_owned());
-        let password = env::var("HIVE_NEO4J_TEST_PASSWORD")
-            .expect("HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI");
-        let store = Neo4jTaskStore::connect(&uri, &username, &password)
-            .await
-            .expect("connect to integration Neo4j");
-        store.migrate().await.expect("migrate production store");
+        let password = env::var("HIVE_NEO4J_TEST_PASSWORD")?;
+        let store = Neo4jTaskStore::connect(&uri, &username, &password).await?;
+        store.migrate().await?;
         store
             .graph
             .run(query("MATCH (node) DETACH DELETE node"))
-            .await
-            .expect("clear isolated integration database");
+            .await?;
 
         let suffix = Uuid::new_v4().simple().to_string();
         let dependency = task(format!("dependency-{suffix}"), Vec::new());
@@ -1345,6 +1409,27 @@ mod tests {
                 .expect("complete resumed original")
         );
 
+        let cancelled_root = task(format!("cancelled-root-{suffix}"), Vec::new());
+        let cancelled_blocker = task(format!("cancelled-blocker-{suffix}"), Vec::new());
+        store.enqueue(&cancelled_root).await?;
+        let cancelled_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert!(
+            store
+                .block(
+                    &cancelled_claim,
+                    &agent_a,
+                    &cancelled_blocker,
+                    "obsolete prerequisite repair",
+                )
+                .await?
+        );
+        assert!(
+            store
+                .cancel(&cancelled_root.id, "deferred E2E-only rerun")
+                .await?
+        );
+        assert!(store.claim(&agent_a, 300).await?.is_idle());
+
         let reused = task(format!("reused-blocker-original-{suffix}"), Vec::new());
         store
             .enqueue(&reused)
@@ -1628,6 +1713,31 @@ mod tests {
                 )
                 .await
                 .expect("complete repair on release b")
+        );
+
+        let mut retired_repair = task(format!("retired-main-failure-{suffix}"), Vec::new());
+        retired_repair.kind = "main-repair".to_owned();
+        retired_repair.max_attempts = 1;
+        store.enqueue(&retired_repair).await?;
+        let retired_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert!(
+            store
+                .fail(&retired_claim, &agent_a, "obsolete failure")
+                .await?
+        );
+        assert!(
+            store
+                .cancel(&retired_repair.id, "deferred E2E-only rerun")
+                .await?
+        );
+        assert!(
+            !store
+                .retry_failed_main_task(
+                    &retired_repair.id,
+                    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                )
+                .await?,
+            "policy-retired failed generations must not be rearmed"
         );
 
         let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
@@ -1943,5 +2053,6 @@ mod tests {
             .run(query("MATCH (node) DETACH DELETE node"))
             .await
             .expect("clean schema-4 migration fixture");
+        Ok(())
     }
 }

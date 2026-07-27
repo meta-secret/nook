@@ -4,8 +4,12 @@ const path = require('node:path')
 const test = require('node:test')
 const {
   buildMainFailureIssue,
+  failedJobNames,
   incidentPathForRun,
+  isDeferredE2eOnlyFailure,
+  isStaleMainAttempt,
   requireMainFailure,
+  retireDeferredE2eIncident,
 } = require('./main-failure-handoff.cjs')
 
 function run(overrides = {}) {
@@ -79,6 +83,18 @@ test('deduplicates attempts and preserves an active claim', () => {
   )
 })
 
+test('rejects stale rerun delivery before changing incident policy', () => {
+  const current = buildMainFailureIssue({
+    run: run({ run_attempt: 3 }),
+    jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T07:00:00Z',
+  })
+
+  assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 2 })), true)
+  assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 3 })), false)
+  assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 4 })), false)
+})
+
 test('records a later failed rerun without reopening a completed incident', () => {
   const source = run()
   const initial = buildMainFailureIssue({
@@ -120,6 +136,81 @@ test('rejects untrusted or non-failing workflow shapes', () => {
   )
 })
 
+test('defers only failures confined to the explicitly deferred E2E jobs', () => {
+  const e2eFailures = failedJobNames([
+    { name: 'Native Rust verification', conclusion: 'success' },
+    { name: 'Web e2e', conclusion: 'failure' },
+    { name: 'UI demos', conclusion: 'timed_out' },
+    { name: 'Extension e2e', conclusion: 'failure' },
+  ])
+  assert.deepEqual(e2eFailures, ['Extension e2e', 'UI demos', 'Web e2e'])
+  assert.equal(isDeferredE2eOnlyFailure(e2eFailures), true)
+  assert.equal(
+    isDeferredE2eOnlyFailure([...e2eFailures, 'Native Rust verification']),
+    false,
+  )
+  assert.equal(isDeferredE2eOnlyFailure([]), false)
+})
+
+test('treats cancelled non-E2E jobs as actionable failure evidence', () => {
+  const failures = failedJobNames([
+    { name: 'Native Rust verification', conclusion: 'cancelled' },
+    { name: 'Web e2e', conclusion: 'failure' },
+  ])
+  assert.deepEqual(failures, ['Native Rust verification', 'Web e2e'])
+  assert.equal(isDeferredE2eOnlyFailure(failures), false)
+})
+
+test('retires an existing incident when a rerun fails only deferred E2E jobs', () => {
+  const source = run()
+  const initial = buildMainFailureIssue({
+    run: source,
+    jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T06:00:00Z',
+  })
+  const rerun = run({ run_attempt: 2 })
+  const retired = retireDeferredE2eIncident({
+    body: `${initial.body.replace('- [ ]', '- [x]')}\n\n## Completion\n\n<!-- hive-delivery-complete -->\n- Repair PR: [#800](https://github.com/meta-secret/nook/pull/800)\n- Worklog: old.md\n`,
+    run: rerun,
+    jobs: [
+      { name: 'Native Rust verification', conclusion: 'success' },
+      { name: 'Web e2e', conclusion: 'failure' },
+    ],
+    recordedAt: '2026-07-26T06:30:00Z',
+  })
+
+  assert.match(retired, /^status: done$/m)
+  assert.match(retired, /^automation: hive$/m)
+  assert.match(retired, /^updated_at: 2026-07-26T06:30:00Z$/m)
+  assert.match(retired, /<!-- main-run:30190000000:attempt:2 -->/)
+  assert.match(retired, /<!-- hive-retired:deferred-e2e -->/)
+
+  const reopened = buildMainFailureIssue({
+    run: run({ run_attempt: 3 }),
+    jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T07:00:00Z',
+    existingBody: retired,
+  })
+  assert.match(reopened.body, /^status: ready$/m)
+  assert.match(reopened.body, /^owner: unassigned$/m)
+  assert.doesNotMatch(reopened.body, /<!-- hive-retired:deferred-e2e -->/)
+  assert.doesNotMatch(reopened.body, /<!-- hive-delivery-complete -->/)
+  assert.doesNotMatch(reopened.body, /Worklog: old\.md/)
+  assert.match(reopened.body, /- \[ \] The failure is explained/)
+  assert.match(reopened.body, /<!-- main-run:30190000000:attempt:3 -->/)
+
+  assert.throws(
+    () =>
+      retireDeferredE2eIncident({
+        body: initial.body,
+        run: rerun,
+        jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
+        recordedAt: '2026-07-26T06:30:00Z',
+      }),
+    /only deferred E2E failures/,
+  )
+})
+
 test('workflow preserves the Main cache order and coalesces only pending runs', () => {
   const root = path.join(__dirname, '..', '..')
   const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
@@ -155,5 +246,6 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
   assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
   assert.match(workflow, /github-token: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)
   assert.match(workflow, /WORKBENCH_REPOSITORY: meta-secret\/nook-workbench/)
+  assert.match(workflow, /isDeferredE2eOnlyFailure\(failedJobs\)/)
   assert.doesNotMatch(workflow, /download-artifact|log-failed|issues\.create/)
 })

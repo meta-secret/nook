@@ -1043,14 +1043,13 @@ impl PublicationBroker {
             Err(error) if format!("{error:#}").contains("status exit status: 22") => {}
             Err(error) => return Err(error),
         }
-        let created_at = frontmatter_value(&issue_body, "created_at")
-            .context("Workbench incident has no created_at timestamp")?;
+        let started_at = utc_timestamp().await?;
         let content = format!(
             "---\n\
              title: Repair failed Main verification for {short}\n\
              feature: hive-isolated-agent-platform\n\
              issue: {issue_path}\n\
-             started_at: {created_at}\n\
+             started_at: {started_at}\n\
              agent: nook-hive\n\
              ---\n\n\
              # Repair failed Main verification for {short}\n\n\
@@ -1134,10 +1133,17 @@ impl PublicationBroker {
             .context("verified Main run has no URL")?;
         let finished_at = utc_timestamp().await?;
         let plan_path = workbench_plan_path(task, &issue_body);
-        let worklog_path = format!(
-            "worklogs/hive-isolated-agent-platform/main-failure-{}.md",
-            task.source_commit
-        );
+        let plan = self.workbench_contents(&plan_path).await?;
+        let plan_body = decode_base64(
+            plan.get("content")
+                .and_then(Value::as_str)
+                .context("Workbench plan has no content")?,
+        )
+        .await?;
+        let started_at = frontmatter_value(&plan_body, "started_at")
+            .unwrap_or(finished_at.as_str())
+            .to_owned();
+        let worklog_path = workbench_worklog_path(task);
         let worklog = format!(
             "---\n\
              title: Restore Main after {short}\n\
@@ -1168,8 +1174,7 @@ impl PublicationBroker {
              ## Remaining work\n\n\
              None.\n",
             short = &task.source_commit[..12],
-            started_at =
-                frontmatter_value(&issue_body, "created_at").unwrap_or(finished_at.as_str()),
+            started_at = started_at,
         );
         match self.workbench_contents(&worklog_path).await {
             Ok(_) => {}
@@ -1238,7 +1243,15 @@ impl PublicationBroker {
                 .context("Workbench issue has no content")?,
         )
         .await?;
-        let started_at = frontmatter_value(&issue_body, "created_at").unwrap_or(measured_at);
+        let plan_path = workbench_plan_path(task, &issue_body);
+        let plan = self.workbench_contents(&plan_path).await?;
+        let plan_body = decode_base64(
+            plan.get("content")
+                .and_then(Value::as_str)
+                .context("Workbench plan has no content")?,
+        )
+        .await?;
+        let started_at = frontmatter_value(&plan_body, "started_at").unwrap_or(measured_at);
         let opened_at = pull
             .get("created_at")
             .and_then(Value::as_str)
@@ -2086,7 +2099,10 @@ async fn timestamp_delta(start: &str, finish: &str) -> anyhow::Result<i64> {
 }
 
 fn workbench_issue_path(task: &BoundTask) -> String {
-    format!("issues/hive-isolated-agent-platform/{}.md", task.id)
+    format!(
+        "issues/hive-isolated-agent-platform/main-failure-{}.md",
+        task.source_commit
+    )
 }
 
 fn workbench_plan_path(task: &BoundTask, issue_body: &str) -> String {
@@ -2094,9 +2110,13 @@ fn workbench_plan_path(task: &BoundTask, issue_body: &str) -> String {
         .unwrap_or("unknown-time")
         .replace(':', "-");
     format!(
-        "plans/hive-isolated-agent-platform/{timestamp}-main-repair-{}.md",
-        &task.source_commit[..12]
+        "plans/hive-isolated-agent-platform/{timestamp}-{}.md",
+        task.id
     )
+}
+
+fn workbench_worklog_path(task: &BoundTask) -> String {
+    format!("worklogs/hive-isolated-agent-platform/{}.md", task.id)
 }
 
 fn frontmatter_value<'a>(body: &'a str, field: &str) -> Option<&'a str> {
@@ -2226,9 +2246,10 @@ mod tests {
     use tokio::net::UnixListener;
 
     use super::{
-        GitHubRequest, GitHubResponse, accept_inherited_stream, open_publication_capability,
-        publication_branch_generation, publication_branch_name, request_over_stream,
-        review_feedback, run_publication_broker, valid_feedback_id,
+        BoundTask, GitHubRequest, GitHubResponse, accept_inherited_stream,
+        open_publication_capability, publication_branch_generation, publication_branch_name,
+        request_over_stream, review_feedback, run_publication_broker, valid_feedback_id,
+        workbench_issue_path, workbench_plan_path, workbench_worklog_path,
     };
 
     #[tokio::test]
@@ -2325,6 +2346,32 @@ mod tests {
         assert_eq!(
             publication_branch_generation(base, "codex/hive-main-failure-abc-123-other"),
             None
+        );
+    }
+
+    #[test]
+    fn generated_main_delivery_uses_sha_issue_and_generation_records() {
+        let task = BoundTask {
+            branch: "codex/hive-main-failure".to_owned(),
+            id: "main-failure-abcdef0123456789abcdef0123456789abcdef01-run-42-attempt-3".to_owned(),
+            source_commit: "abcdef0123456789abcdef0123456789abcdef01".to_owned(),
+            enabled: true,
+        };
+        let issue = workbench_issue_path(&task);
+        let plan = workbench_plan_path(&task, "created_at: 2026-07-27T12:00:00Z\nstatus: ready\n");
+        let worklog = workbench_worklog_path(&task);
+
+        assert_eq!(
+            issue,
+            "issues/hive-isolated-agent-platform/main-failure-abcdef0123456789abcdef0123456789abcdef01.md"
+        );
+        assert_eq!(
+            plan,
+            "plans/hive-isolated-agent-platform/2026-07-27T12-00-00Z-main-failure-abcdef0123456789abcdef0123456789abcdef01-run-42-attempt-3.md"
+        );
+        assert_eq!(
+            worklog,
+            "worklogs/hive-isolated-agent-platform/main-failure-abcdef0123456789abcdef0123456789abcdef01-run-42-attempt-3.md"
         );
     }
 

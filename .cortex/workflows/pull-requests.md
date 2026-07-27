@@ -323,8 +323,17 @@ monitor, or live-verify the resulting Main run unless the user explicitly
 requested deployment/live verification or assigned a Main failure.
 
 After merge, `main.yml` independently runs full local-provider and extension
-**e2e**. An unsuccessful Main run creates one `automation: hive` Workbench
-incident keyed by failed SHA. The isolated Hive dispatcher enqueues it once, and
+**e2e**. An actionable unsuccessful Main run creates one `automation: hive`
+Workbench incident keyed by failed SHA. A failure confined to the explicitly
+deferred `Web e2e`, `UI demos`, and `Extension e2e` jobs remains visible without
+queuing Hive; a deferred-only rerun retires an existing incident for that SHA
+and cancels matching task-store work. A later actionable rerun reopens both.
+The reopened incident creates a fresh run-and-attempt-keyed delivery generation;
+its prior completion block is cleared, its plan/worklog are generation-specific,
+and completed publication history is never reused. An actionable rerun while a
+repair remains active reuses that logical delivery instead of starting a
+competing worker.
+The isolated Hive dispatcher enqueues actionable incidents once, and
 one logical task owns diagnosis, a normal exact-head PR, actionable review
 resolution, squash merge, and verification of the resulting Main run. The
 scheduled `agent-implement.yml` worker does not claim Hive incidents.

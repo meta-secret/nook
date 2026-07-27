@@ -13,6 +13,28 @@ fn read(path: &str) -> String {
 }
 
 #[test]
+fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() {
+    let dockerfile = read("agentic-ai/minds/hive/Dockerfile");
+    for required in [
+        "FROM fetched-dependencies AS test-dependencies",
+        "FROM fetched-dependencies AS clippy-dependencies",
+        "FROM clippy-dependencies AS check-source",
+        "FROM test-dependencies AS test-source",
+        "COPY --from=test-dependencies /opt/nook/hive-test-dependencies",
+        "COPY --from=clippy-dependencies /opt/nook/hive-clippy-dependencies",
+    ] {
+        assert!(
+            dockerfile.contains(required),
+            "Hive parallel verification cache topology is missing: {required}"
+        );
+    }
+    assert!(
+        !dockerfile.contains("AS verification-dependencies"),
+        "Hive test and Clippy dependency graphs must not share a serial stage"
+    );
+}
+
+#[test]
 fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [

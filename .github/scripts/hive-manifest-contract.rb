@@ -606,12 +606,13 @@ unless hive_dockerfile.include?(
   raise "Hive test compilation must propagate Cargo failures and export from scratch"
 end
 unless hive_taskfile.include?("--target cache-publish") &&
-       hive_dockerfile.include?("FROM fetched-dependencies AS verification-dependencies") &&
+       hive_dockerfile.include?("FROM fetched-dependencies AS test-dependencies") &&
+       hive_dockerfile.include?("FROM fetched-dependencies AS clippy-dependencies") &&
        hive_dockerfile.include?("FROM scratch AS cache-publish") &&
        hive_dockerfile.include?("hive-test-dependencies") &&
        hive_dockerfile.include?("hive-clippy-dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
-  raise "Hive cache publication must export release and verification dependency graphs"
+  raise "Hive cache publication must export release and parallel verification dependency graphs"
 end
 unless hive_taskfile.include?(
          'SCCACHE_REDIS_PASSWORD_FILE: \'{{default "../../.nook/cache/redis-password"'

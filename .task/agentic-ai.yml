@@ -54,6 +54,11 @@ tasks:
     cmds:
       - task --taskfile agentic-ai/minds/hive/Taskfile.yml test
 
+  hive:handoff:test:
+    desc: Run the Main-to-Hive Workbench handoff behavior tests.
+    cmds:
+      - node --test .github/scripts/main-failure-handoff.test.cjs
+
   hive:cache:publish:
     desc: Publish the already-verified Hive BuildKit graph.
     cmds:

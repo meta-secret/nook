@@ -10,6 +10,7 @@ use crate::store::TaskStore;
 
 const MAIN_FAILURE_PREFIX: &str = "main-failure-";
 const MAIN_FAILURE_SUFFIX: &str = ".md";
+const DEFERRED_E2E_RETIREMENT_MARKER: &str = "<!-- hive-retired:deferred-e2e -->";
 
 pub async fn run_workbench_dispatcher<S: TaskStore>(
     store: S,
@@ -145,11 +146,26 @@ async fn dispatch_once<S: TaskStore>(
         if !incident_needs_reconciliation(reconciled_incidents, &name, &body) {
             continue;
         }
+        let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
+        if body.contains(DEFERRED_E2E_RETIREMENT_MARKER) {
+            for task_id in main_failure_task_ids(task_base, &body)? {
+                let cancelled = store
+                    .cancel(&task_id, "Main rerun failed only deferred E2E jobs")
+                    .await
+                    .with_context(|| format!("cancel {}", task_id))?;
+                eprintln!(
+                    "Hive Workbench retirement task={} cancelled={cancelled}",
+                    task_id
+                );
+            }
+            reconciled_incidents.insert(name, body);
+            continue;
+        }
         if !is_ready_agent_issue(&body) {
             reconciled_incidents.insert(name, body);
             continue;
         }
-        let run_id = main_failure_run_id(&body)
+        let (run_id, run_attempt) = main_failure_run(&body)
             .context("ready Main failure issue has no workflow-run marker")?;
         let run: serde_json::Value = serde_json::from_slice(
             &fetch(&format!(
@@ -162,9 +178,15 @@ async fn dispatch_once<S: TaskStore>(
             reconciled_incidents.insert(name, body);
             continue;
         }
+        if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
+            eprintln!(
+                "Hive Workbench delivery already active task={} source_commit={source_commit}",
+                active_id
+            );
+            continue;
+        }
         let task = EnqueueTask {
-            id: TaskId::new(name.trim_end_matches(MAIN_FAILURE_SUFFIX))
-                .map_err(anyhow::Error::msg)?,
+            id: main_failure_task_id(task_base, run_id, run_attempt)?,
             kind: "main-repair".to_owned(),
             prompt: body.clone(),
             source_commit,
@@ -203,13 +225,32 @@ fn is_ready_agent_issue(body: &str) -> bool {
         && body.lines().any(|line| line.trim() == "automation: hive")
 }
 
-fn main_failure_run_id(body: &str) -> Option<u64> {
+fn main_failure_runs(body: &str) -> Vec<(u64, u64)> {
     body.split("<!-- main-run:")
-        .nth(1)?
-        .split(":attempt:")
-        .next()?
-        .parse()
-        .ok()
+        .skip(1)
+        .filter_map(|marker| {
+            let (run_id, attempt) = marker.split_once(":attempt:")?;
+            let attempt = attempt.split_whitespace().next()?;
+            Some((run_id.parse().ok()?, attempt.parse().ok()?))
+        })
+        .collect()
+}
+
+fn main_failure_run(body: &str) -> Option<(u64, u64)> {
+    main_failure_runs(body).into_iter().last()
+}
+
+fn main_failure_task_id(task_base: &str, run_id: u64, run_attempt: u64) -> anyhow::Result<TaskId> {
+    TaskId::new(format!("{task_base}-run-{run_id}-attempt-{run_attempt}"))
+        .map_err(anyhow::Error::msg)
+}
+
+fn main_failure_task_ids(task_base: &str, body: &str) -> anyhow::Result<Vec<TaskId>> {
+    let mut task_ids = vec![TaskId::new(task_base).map_err(anyhow::Error::msg)?];
+    for (run_id, run_attempt) in main_failure_runs(body) {
+        task_ids.push(main_failure_task_id(task_base, run_id, run_attempt)?);
+    }
+    Ok(task_ids)
 }
 
 fn main_run_requires_repair(run: &serde_json::Value, source_commit: &str) -> bool {
@@ -261,9 +302,12 @@ mod tests {
 
     use serde_json::json;
 
+    use crate::model::TaskId;
+
     use super::{
-        incident_needs_reconciliation, is_ready_agent_issue, main_failure_commit,
-        main_failure_run_id, main_run_requires_repair, sync_workbench_checkout,
+        DEFERRED_E2E_RETIREMENT_MARKER, incident_needs_reconciliation, is_ready_agent_issue,
+        main_failure_commit, main_failure_run, main_failure_task_ids, main_run_requires_repair,
+        sync_workbench_checkout,
     };
 
     #[test]
@@ -289,10 +333,27 @@ mod tests {
         assert!(!is_ready_agent_issue(
             "---\nstatus: in_progress\nautomation: hive\n---\n"
         ));
+        assert!(
+            "---\nstatus: done\nautomation: hive\n---\n<!-- hive-retired:deferred-e2e -->"
+                .contains(DEFERRED_E2E_RETIREMENT_MARKER)
+        );
         assert!(main_failure_commit("unrelated.md").is_none());
         assert_eq!(
-            main_failure_run_id("<!-- main-run:123456:attempt:2 -->\n- failed workflow evidence"),
-            Some(123456)
+            main_failure_run(
+                "<!-- main-run:123456:attempt:2 -->\n<!-- main-run:789012:attempt:3 -->"
+            ),
+            Some((789012, 3))
+        );
+        assert_eq!(
+            main_failure_task_ids("main-failure-abcdef", "<!-- main-run:123456:attempt:2 -->")
+                .expect("task ids")
+                .iter()
+                .map(TaskId::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "main-failure-abcdef",
+                "main-failure-abcdef-run-123456-attempt-2"
+            ]
         );
         assert!(main_run_requires_repair(&failed_main, source_commit));
         assert!(!main_run_requires_repair(
@@ -336,6 +397,22 @@ mod tests {
             &reconciled,
             "main-failure-deadbeef.md",
             "attempt: 1"
+        ));
+        assert!(incident_needs_reconciliation(
+            &reconciled,
+            "main-failure-deadbeef.md",
+            "attempt: 2"
+        ));
+    }
+
+    #[test]
+    fn suppressed_incident_remains_reconcilable_after_active_delivery_finishes() {
+        let reconciled = HashMap::new();
+
+        assert!(incident_needs_reconciliation(
+            &reconciled,
+            "main-failure-deadbeef.md",
+            "attempt: 2"
         ));
         assert!(incident_needs_reconciliation(
             &reconciled,
