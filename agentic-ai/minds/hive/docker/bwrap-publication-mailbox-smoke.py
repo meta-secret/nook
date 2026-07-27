@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import os
 import subprocess
@@ -45,8 +46,9 @@ with tempfile.TemporaryDirectory(
                 time.sleep(0.05)
             if not request_path:
                 raise TimeoutError("publication smoke request was not created")
-            with open(request_path, encoding="utf-8") as request_file:
-                request = json.load(request_file)
+            with open(request_path, "rb") as request_file:
+                request_bytes = request_file.read()
+            request = json.loads(request_bytes)
             if request != {"operation": "ping"}:
                 raise RuntimeError(f"unexpected publication request: {request!r}")
             request_id = os.path.basename(request_path).removesuffix(".json")
@@ -59,7 +61,14 @@ with tempfile.TemporaryDirectory(
                 },
                 separators=(",", ":"),
             )
-            signed_message = request_id.encode() + b"\0" + response_json.encode()
+            request_digest = hashlib.sha256(request_bytes).digest()
+            signed_message = (
+                request_id.encode()
+                + b"\0"
+                + request_digest
+                + b"\0"
+                + response_json.encode()
+            )
             signature = subprocess.run(
                 [
                     "openssl",

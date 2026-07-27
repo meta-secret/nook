@@ -7,6 +7,7 @@ use anyhow::Context;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
@@ -18,7 +19,8 @@ use crate::model::ClaimedTask;
 
 const REPOSITORY: &str = "meta-secret/nook";
 const API_ROOT: &str = "https://api.github.com";
-const MAILBOX_REQUEST_LIMIT: u64 = 64 * 1024;
+const PUBLICATION_BODY_LIMIT: usize = 64 * 1024;
+const MAILBOX_REQUEST_LIMIT: u64 = 512 * 1024;
 const MAILBOX_RESPONSE_LIMIT: u64 = 8 * 1024 * 1024;
 const MAILBOX_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
 const INSPECTION_PAGE_SIZE: u64 = 50;
@@ -272,20 +274,29 @@ async fn relay_publication_requests(
                 return;
             }
         };
-        let response = match read_mailbox_request(&processing_path).await {
-            Ok(request_value) => match exchange_response(broker, &request_value).await {
-                Ok(response) => response,
-                Err(error) => {
-                    GitHubResponse::Error(format!("publication broker request failed: {error:#}"))
-                }
-            },
-            Err(error) => {
-                GitHubResponse::Error(format!("invalid publication mailbox request: {error:#}"))
+        let (response, request_digest) = match read_mailbox_request(&processing_path).await {
+            Ok((request_value, request_digest)) => {
+                let response = match exchange_response(broker, &request_value).await {
+                    Ok(response) => response,
+                    Err(error) => GitHubResponse::Error(format!(
+                        "publication broker request failed: {error:#}"
+                    )),
+                };
+                (response, request_digest)
             }
+            Err(error) => (
+                GitHubResponse::Error(format!("invalid publication mailbox request: {error:#}")),
+                Sha256::digest([]).into(),
+            ),
         };
-        if let Err(error) =
-            write_mailbox_response(&capability_directory, &request_id, &response, &signing_key)
-                .await
+        if let Err(error) = write_mailbox_response(
+            &capability_directory,
+            &request_id,
+            &request_digest,
+            &response,
+            &signing_key,
+        )
+        .await
         {
             eprintln!("Hive publication capability response failed: {error:#}");
         }
@@ -322,7 +333,7 @@ fn mailbox_request_id(name: &str) -> Option<&str> {
         .then_some(request_id)
 }
 
-async fn read_mailbox_request(path: &Path) -> anyhow::Result<GitHubRequest> {
+async fn read_mailbox_request(path: &Path) -> anyhow::Result<(GitHubRequest, [u8; 32])> {
     let file = tokio::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW)
@@ -339,12 +350,15 @@ async fn read_mailbox_request(path: &Path) -> anyhow::Result<GitHubRequest> {
     if contents.len() as u64 > MAILBOX_REQUEST_LIMIT {
         anyhow::bail!("publication mailbox request exceeds the size limit");
     }
-    serde_json::from_slice(&contents).context("decode publication mailbox request")
+    let request =
+        serde_json::from_slice(&contents).context("decode publication mailbox request")?;
+    Ok((request, Sha256::digest(&contents).into()))
 }
 
 async fn write_mailbox_response(
     directory: &Path,
     request_id: &str,
+    request_digest: &[u8; 32],
     response: &GitHubResponse,
     signing_key: &SigningKey,
 ) -> anyhow::Result<()> {
@@ -359,12 +373,20 @@ async fn write_mailbox_response(
         .open(&temporary)
         .await?;
     let response_json = serde_json::to_string(response)?;
-    let signature = signing_key.sign(&mailbox_signed_message(request_id, &response_json));
+    let signature = signing_key.sign(&mailbox_signed_message(
+        request_id,
+        request_digest,
+        &response_json,
+    ));
     let envelope = SignedMailboxResponse {
         response_json,
         signature: encode_hex(&signature.to_bytes()),
     };
-    file.write_all(&serde_json::to_vec(&envelope)?).await?;
+    let envelope = serde_json::to_vec(&envelope)?;
+    if envelope.len() as u64 > MAILBOX_RESPONSE_LIMIT {
+        anyhow::bail!("publication mailbox response exceeds the size limit");
+    }
+    file.write_all(&envelope).await?;
     file.sync_all().await?;
     drop(file);
     tokio::fs::rename(&temporary, &destination).await?;
@@ -376,7 +398,8 @@ async fn request_via_mailbox(
     verifying_key: &str,
     request_value: &GitHubRequest,
 ) -> anyhow::Result<Value> {
-    let (request_id, response_path) = write_mailbox_request(directory, request_value).await?;
+    let (request_id, response_path, request_digest) =
+        write_mailbox_request(directory, request_value).await?;
     let verifying_key = decode_verifying_key(verifying_key)?;
 
     loop {
@@ -385,6 +408,7 @@ async fn request_via_mailbox(
                 let _ = tokio::fs::remove_file(&response_path).await;
                 return response_value(verify_mailbox_response(
                     &request_id,
+                    &request_digest,
                     &verifying_key,
                     response,
                 )?);
@@ -404,7 +428,7 @@ async fn request_via_mailbox(
 async fn write_mailbox_request(
     directory: &Path,
     request_value: &GitHubRequest,
-) -> anyhow::Result<(String, PathBuf)> {
+) -> anyhow::Result<(String, PathBuf, [u8; 32])> {
     let request_id = uuid::Uuid::new_v4().simple().to_string();
     let requests = directory.join("requests");
     let responses = directory.join("responses");
@@ -419,11 +443,13 @@ async fn write_mailbox_request(
         .open(&temporary)
         .await
         .with_context(|| format!("create publication mailbox request {}", temporary.display()))?;
-    file.write_all(&serde_json::to_vec(request_value)?).await?;
+    let request_json = serde_json::to_vec(request_value)?;
+    let request_digest = Sha256::digest(&request_json).into();
+    file.write_all(&request_json).await?;
     file.sync_all().await?;
     drop(file);
     tokio::fs::rename(&temporary, &request_path).await?;
-    Ok((request_id, response_path))
+    Ok((request_id, response_path, request_digest))
 }
 
 async fn read_mailbox_response(path: &Path) -> anyhow::Result<SignedMailboxResponse> {
@@ -446,9 +472,16 @@ async fn read_mailbox_response(path: &Path) -> anyhow::Result<SignedMailboxRespo
     serde_json::from_slice(&contents).context("decode publication mailbox response")
 }
 
-fn mailbox_signed_message(request_id: &str, response_json: &str) -> Vec<u8> {
-    let mut message = Vec::with_capacity(request_id.len() + 1 + response_json.len());
+fn mailbox_signed_message(
+    request_id: &str,
+    request_digest: &[u8; 32],
+    response_json: &str,
+) -> Vec<u8> {
+    let mut message =
+        Vec::with_capacity(request_id.len() + 1 + request_digest.len() + 1 + response_json.len());
     message.extend_from_slice(request_id.as_bytes());
+    message.push(0);
+    message.extend_from_slice(request_digest);
     message.push(0);
     message.extend_from_slice(response_json.as_bytes());
     message
@@ -456,6 +489,7 @@ fn mailbox_signed_message(request_id: &str, response_json: &str) -> Vec<u8> {
 
 fn verify_mailbox_response(
     request_id: &str,
+    request_digest: &[u8; 32],
     verifying_key: &VerifyingKey,
     response: SignedMailboxResponse,
 ) -> anyhow::Result<GitHubResponse> {
@@ -464,7 +498,7 @@ fn verify_mailbox_response(
     let signature = Signature::from_bytes(&signature_bytes);
     verifying_key
         .verify(
-            &mailbox_signed_message(request_id, &response.response_json),
+            &mailbox_signed_message(request_id, request_digest, &response.response_json),
             &signature,
         )
         .context("publication mailbox response was not signed by the trusted relay")?;
@@ -619,12 +653,17 @@ impl PublicationBroker {
                 source_commit,
                 enabled,
             } => self.bind(task_id, source_commit, enabled).await,
-            GitHubRequest::Publish { title, body } => self.publish(&title, &body).await,
+            GitHubRequest::Publish { title, body } => {
+                validate_publication_body(&body)?;
+                self.publish(&title, &body).await
+            }
             GitHubRequest::Inspect { page } => self.inspect(page).await,
             GitHubRequest::ReplyThread { thread_id, body } => {
+                validate_publication_body(&body)?;
                 self.reply_thread(&thread_id, &body).await
             }
             GitHubRequest::ReplyFeedback { feedback_id, body } => {
+                validate_publication_body(&body)?;
                 self.reply_feedback(&feedback_id, &body).await
             }
             GitHubRequest::ResolveThread { thread_id } => self.resolve_thread(&thread_id).await,
@@ -855,6 +894,9 @@ impl PublicationBroker {
                 None,
             )
             .await?;
+        let all_comments = self
+            .paginated_api_array(&format!("/repos/{REPOSITORY}/issues/{number}/comments"))
+            .await?;
         let (review_threads, review_threads_have_more) =
             self.review_threads_page(number, page).await?;
         let reviews_have_more = reviews
@@ -864,8 +906,9 @@ impl PublicationBroker {
             .as_array()
             .is_some_and(|values| values.len() as u64 == INSPECTION_PAGE_SIZE);
         let checks_have_more = checks.len() as u64 == INSPECTION_PAGE_SIZE;
-        let feedback = review_feedback(&pull, &reviews, &comments);
-        Ok(json!({
+        let feedback =
+            review_feedback_with_address_comments(&pull, &reviews, &comments, &all_comments);
+        bounded_inspection_response(json!({
             "pull_request": number,
             "url": pull.get("html_url"),
             "state": pull.get("state"),
@@ -2336,10 +2379,32 @@ pub fn publication_branch_name(task_id: &str) -> String {
     format!("codex/hive-{}", slug.trim_matches('-'))
 }
 
+fn validate_publication_body(body: &str) -> anyhow::Result<()> {
+    if body.len() > PUBLICATION_BODY_LIMIT {
+        anyhow::bail!(
+            "publication body exceeds the {} byte limit",
+            PUBLICATION_BODY_LIMIT
+        );
+    }
+    Ok(())
+}
+
 fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value> {
+    review_feedback_with_address_comments(pull, reviews, comments, comments)
+}
+
+fn review_feedback_with_address_comments(
+    pull: &Value,
+    reviews: &Value,
+    comments: &Value,
+    address_comments: &Value,
+) -> Vec<Value> {
     let comment_values = comments.as_array().map(Vec::as_slice).unwrap_or(&[]);
     let pull_author = pull.pointer("/user/login").and_then(Value::as_str);
-    let addressed = comment_values
+    let addressed = address_comments
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
         .iter()
         .filter(|comment| comment.pointer("/user/login").and_then(Value::as_str) == pull_author)
         .filter_map(|comment| comment.get("body").and_then(Value::as_str))
@@ -2397,6 +2462,45 @@ fn review_feedback(pull: &Value, reviews: &Value, comments: &Value) -> Vec<Value
         }));
     }
     feedback
+}
+
+fn bounded_inspection_response(mut response: Value) -> anyhow::Result<Value> {
+    for maximum_string_bytes in [64 * 1024, 16 * 1024, 4 * 1024, 1024, 256] {
+        truncate_json_strings(&mut response, maximum_string_bytes);
+        let response_json = serde_json::to_string(&GitHubResponse::Value(response.clone()))?;
+        let envelope = SignedMailboxResponse {
+            response_json,
+            signature: "0".repeat(128),
+        };
+        if serde_json::to_vec(&envelope)?.len() as u64 <= MAILBOX_RESPONSE_LIMIT {
+            return Ok(response);
+        }
+    }
+    anyhow::bail!("inspection page exceeds the signed mailbox byte limit")
+}
+
+fn truncate_json_strings(value: &mut Value, maximum_bytes: usize) {
+    match value {
+        Value::String(text) if text.len() > maximum_bytes => {
+            let mut boundary = maximum_bytes;
+            while !text.is_char_boundary(boundary) {
+                boundary -= 1;
+            }
+            text.truncate(boundary);
+            text.push_str("…[truncated]");
+        }
+        Value::Array(values) => {
+            for value in values {
+                truncate_json_strings(value, maximum_bytes);
+            }
+        }
+        Value::Object(values) => {
+            for value in values.values_mut() {
+                truncate_json_strings(value, maximum_bytes);
+            }
+        }
+        _ => {}
+    }
 }
 
 async fn timestamp_delta(start: &str, finish: &str) -> anyhow::Result<i64> {
@@ -2564,15 +2668,18 @@ mod tests {
 
     use ed25519_dalek::{Signer, SigningKey};
     use serde_json::{Value, json};
+    use sha2::{Digest, Sha256};
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixListener;
 
     use super::{
-        BoundTask, GitHubRequest, GitHubResponse, SignedMailboxResponse, encode_hex,
-        mailbox_signed_message, open_publication_capability, publication_branch_generation,
-        publication_branch_name, request_via_mailbox, review_feedback, run_publication_broker,
-        valid_feedback_id, verify_mailbox_response, workbench_issue_path, workbench_plan_path,
-        workbench_worklog_path, write_mailbox_request,
+        BoundTask, GitHubRequest, GitHubResponse, MAILBOX_REQUEST_LIMIT, MAILBOX_RESPONSE_LIMIT,
+        SignedMailboxResponse, bounded_inspection_response, encode_hex, mailbox_signed_message,
+        open_publication_capability, publication_branch_generation, publication_branch_name,
+        request_via_mailbox, review_feedback, review_feedback_with_address_comments,
+        run_publication_broker, valid_feedback_id, validate_publication_body,
+        verify_mailbox_response, workbench_issue_path, workbench_plan_path, workbench_worklog_path,
+        write_mailbox_request,
     };
 
     #[tokio::test]
@@ -2651,7 +2758,7 @@ mod tests {
         });
         let capability = open_publication_capability(&socket, &workspace).await?;
 
-        let (_abandoned_request_id, abandoned_response) =
+        let (_abandoned_request_id, abandoned_response, _request_digest) =
             write_mailbox_request(capability.directory(), &GitHubRequest::Ping).await?;
         for _ in 0..100 {
             if abandoned_response.is_file() {
@@ -2678,17 +2785,25 @@ mod tests {
         let trusted_key = SigningKey::from_bytes(&[7; 32]);
         let attacker_key = SigningKey::from_bytes(&[9; 32]);
         let request_id = "0123456789abcdef0123456789abcdef";
+        let request_digest: [u8; 32] = Sha256::digest(br#"{"operation":"ping"}"#).into();
         let response_json =
             serde_json::to_string(&GitHubResponse::Value(json!({ "status": "forged" })))?;
-        let signature = attacker_key.sign(&mailbox_signed_message(request_id, &response_json));
+        let signature = attacker_key.sign(&mailbox_signed_message(
+            request_id,
+            &request_digest,
+            &response_json,
+        ));
         let response = SignedMailboxResponse {
             response_json,
             signature: encode_hex(&signature.to_bytes()),
         };
 
-        let Err(error) =
-            verify_mailbox_response(request_id, &trusted_key.verifying_key(), response)
-        else {
+        let Err(error) = verify_mailbox_response(
+            request_id,
+            &request_digest,
+            &trusted_key.verifying_key(),
+            response,
+        ) else {
             anyhow::bail!("an untrusted relay signature was accepted");
         };
 
@@ -2697,6 +2812,65 @@ mod tests {
                 .to_string()
                 .contains("was not signed by the trusted relay")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn mailbox_response_is_bound_to_the_submitted_request() -> anyhow::Result<()> {
+        let signing_key = SigningKey::from_bytes(&[7; 32]);
+        let request_id = "0123456789abcdef0123456789abcdef";
+        let submitted_digest: [u8; 32] = Sha256::digest(br#"{"operation":"ping"}"#).into();
+        let substituted_digest: [u8; 32] =
+            Sha256::digest(br#"{"operation":"inspect","page":1}"#).into();
+        let response_json =
+            serde_json::to_string(&GitHubResponse::Value(json!({ "status": "ok" })))?;
+        let signature = signing_key.sign(&mailbox_signed_message(
+            request_id,
+            &substituted_digest,
+            &response_json,
+        ));
+        let response = SignedMailboxResponse {
+            response_json,
+            signature: encode_hex(&signature.to_bytes()),
+        };
+
+        assert!(
+            verify_mailbox_response(
+                request_id,
+                &submitted_digest,
+                &signing_key.verifying_key(),
+                response,
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn maximum_publication_body_fits_the_mailbox_with_json_escaping() -> anyhow::Result<()> {
+        let body = "\"".repeat(super::PUBLICATION_BODY_LIMIT);
+        validate_publication_body(&body)?;
+        let request = GitHubRequest::ReplyThread {
+            thread_id: "PRRT_example".to_owned(),
+            body,
+        };
+        assert!(serde_json::to_vec(&request)?.len() as u64 <= MAILBOX_REQUEST_LIMIT);
+        Ok(())
+    }
+
+    #[test]
+    fn inspection_response_is_bounded_after_envelope_serialization() -> anyhow::Result<()> {
+        let response = bounded_inspection_response(json!({
+            "checks": (0..50)
+                .map(|index| json!({"id": index, "output": {"summary": "x".repeat(1024 * 1024)}}))
+                .collect::<Vec<_>>(),
+        }))?;
+        let response_json = serde_json::to_string(&GitHubResponse::Value(response))?;
+        let envelope = SignedMailboxResponse {
+            response_json,
+            signature: "0".repeat(128),
+        };
+        assert!(serde_json::to_vec(&envelope)?.len() as u64 <= MAILBOX_RESPONSE_LIMIT);
         Ok(())
     }
 
@@ -2817,6 +2991,34 @@ mod tests {
         );
         assert!(valid_feedback_id("review-42"));
         assert!(!valid_feedback_id("review-not-a-number"));
+    }
+
+    #[test]
+    fn paged_feedback_uses_reply_markers_from_all_comment_pages() {
+        let pull = json!({
+            "user": {"login": "nook-hive"},
+            "head": {"sha": "current-head"}
+        });
+        let page_one = json!([{
+            "id": 7,
+            "body": "Keep this comment actionable until the targeted reply exists.",
+            "user": {"login": "reviewer"}
+        }]);
+        let all_comments = json!([
+            page_one[0].clone(),
+            {
+                "id": 57,
+                "body": "<!-- hive-feedback:comment-7 -->\nAddressed on the next page.",
+                "user": {"login": "nook-hive"}
+            }
+        ]);
+
+        let feedback =
+            review_feedback_with_address_comments(&pull, &json!([]), &page_one, &all_comments);
+        assert_eq!(
+            feedback[0].get("addressed").and_then(Value::as_bool),
+            Some(true)
+        );
     }
 
     #[test]

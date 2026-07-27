@@ -593,6 +593,7 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        hive_bwrap_smoke.include?('"HIVE_PUBLICATION_DIRECTORY"') &&
        hive_bwrap_smoke.include?('"HIVE_PUBLICATION_VERIFY_KEY"') &&
        hive_bwrap_smoke.include?('"openssl"') &&
+       hive_bwrap_smoke.include?("hashlib.sha256") &&
        hive_bwrap_smoke.include?('"signature"') &&
        hive_bwrap_smoke.include?('"--tmpfs"') &&
        hive_bwrap_smoke.include?('dir="/workspace"') &&
