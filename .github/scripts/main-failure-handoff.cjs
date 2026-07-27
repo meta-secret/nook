@@ -4,6 +4,10 @@ const FAILURE_CONCLUSIONS = new Set([
   'startup_failure',
   'timed_out',
 ])
+const REPAIR_JOB_CONCLUSIONS = new Set([...FAILURE_CONCLUSIONS, 'cancelled'])
+
+const DEFERRED_E2E_JOBS = new Set(['Extension e2e', 'UI demos', 'Web e2e'])
+const DEFERRED_E2E_RETIREMENT_MARKER = '<!-- hive-retired:deferred-e2e -->'
 
 function requireString(value, label) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -61,10 +65,38 @@ function safeInline(value) {
 function failedJobNames(jobs) {
   if (!Array.isArray(jobs)) throw new Error('jobs must be an array')
   const names = jobs
-    .filter((job) => FAILURE_CONCLUSIONS.has(job.conclusion))
+    .filter((job) => REPAIR_JOB_CONCLUSIONS.has(job.conclusion))
     .map((job) => safeInline(requireString(job.name, 'job.name')))
     .filter(Boolean)
   return [...new Set(names)].sort((left, right) => left.localeCompare(right))
+}
+
+function isDeferredE2eOnlyFailure(failures) {
+  if (!Array.isArray(failures)) throw new Error('failures must be an array')
+  return failures.length > 0 && failures.every((name) => DEFERRED_E2E_JOBS.has(name))
+}
+
+function retireDeferredE2eIncident({ body, run, jobs, recordedAt }) {
+  requireMainFailure(run)
+  const timestamp = requireTimestamp(recordedAt, 'recordedAt')
+  const failures = failedJobNames(jobs)
+  if (!isDeferredE2eOnlyFailure(failures)) {
+    throw new Error('only deferred E2E failures may retire a Main failure incident')
+  }
+  let updated = updateExistingIssue({
+    body,
+    run,
+    recordedAt: timestamp,
+    failures,
+    relatedPrs: [],
+  })
+  if (!updated.includes(DEFERRED_E2E_RETIREMENT_MARKER)) {
+    updated = updated.replace(
+      '\n## Findings and decisions\n',
+      `\n${DEFERRED_E2E_RETIREMENT_MARKER}\n\n## Findings and decisions\n`,
+    )
+  }
+  return replaceFrontmatterField(updated, 'status', 'done')
 }
 
 function pullRequestNumbers(sourcePullRequests) {
@@ -95,6 +127,11 @@ function replaceFrontmatterField(body, field, value) {
   return body.replace(pattern, `${field}: ${value}`)
 }
 
+function clearDeliveryCompletion(body) {
+  if (!body.includes('<!-- hive-delivery-complete -->')) return body
+  return body.replace(/\n\n## Completion\n[\s\S]*$/, '').replace(/- \[x\]/g, '- [ ]')
+}
+
 function progressEntry({ run, recordedAt, failures }) {
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
   const jobs = failures.length === 0 ? 'workflow-level failure' : failures.join(', ')
@@ -103,6 +140,20 @@ function progressEntry({ run, recordedAt, failures }) {
     `- ${recordedAt}: Main run [${run.id} attempt ${run.run_attempt}](${run.html_url})`,
     `  failed for \`${run.head_sha}\`. Failed jobs: ${jobs}.`,
   ].join('\n')
+}
+
+function latestMainAttempt(body, runId) {
+  if (typeof body !== 'string') return undefined
+  const attempts = [...body.matchAll(/<!-- main-run:(\d+):attempt:(\d+) -->/g)]
+    .filter((match) => Number.parseInt(match[1], 10) === runId)
+    .map((match) => Number.parseInt(match[2], 10))
+  return attempts.length === 0 ? undefined : Math.max(...attempts)
+}
+
+function isStaleMainAttempt(body, run) {
+  requireMainFailure(run)
+  const latest = latestMainAttempt(body, run.id)
+  return latest !== undefined && run.run_attempt < latest
 }
 
 function newIssue({ run, recordedAt, failures, relatedPrs }) {
@@ -211,9 +262,22 @@ function buildMainFailureIssue({
   const timestamp = requireTimestamp(recordedAt, 'recordedAt')
   const failures = failedJobNames(jobs)
   const relatedPrs = pullRequestNumbers(sourcePullRequests)
-  const body = existingBody
+  const actionableExistingBody = existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER)
+    ? replaceFrontmatterField(
+        replaceFrontmatterField(
+          clearDeliveryCompletion(
+            existingBody.replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, ''),
+          ),
+          'status',
+          'ready',
+        ),
+        'owner',
+        'unassigned',
+      )
+    : existingBody
+  const body = actionableExistingBody
     ? updateExistingIssue({
-        body: existingBody,
+        body: actionableExistingBody,
         run,
         recordedAt: timestamp,
         failures,
@@ -236,5 +300,8 @@ module.exports = {
   buildMainFailureIssue,
   failedJobNames,
   incidentPathForRun,
+  isDeferredE2eOnlyFailure,
+  isStaleMainAttempt,
   requireMainFailure,
+  retireDeferredE2eIncident,
 }

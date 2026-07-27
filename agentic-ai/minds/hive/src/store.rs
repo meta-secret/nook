@@ -12,6 +12,14 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()>;
 
+    async fn active_delivery(
+        &self,
+        source_commit: &str,
+        kind: &str,
+    ) -> anyhow::Result<Option<TaskId>>;
+
+    async fn cancel(&self, task_id: &TaskId, reason: &str) -> anyhow::Result<bool>;
+
     async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome>;
 
     async fn heartbeat(
@@ -50,7 +58,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
@@ -86,6 +94,26 @@ mod tests {
                 .expect("task")
                 .lease_until = Some(Instant::now() - Duration::from_secs(1));
         }
+
+        fn reaches(tasks: &BTreeMap<String, TestTask>, start: &str, target: &str) -> bool {
+            let mut pending = vec![start.to_owned()];
+            let mut visited = BTreeSet::new();
+            while let Some(id) = pending.pop() {
+                if !visited.insert(id.clone()) {
+                    continue;
+                }
+                let Some(task) = tasks.get(&id) else {
+                    continue;
+                };
+                for dependency in &task.definition.dependencies {
+                    if dependency.as_str() == target {
+                        return true;
+                    }
+                    pending.push(dependency.as_str().to_owned());
+                }
+            }
+            false
+        }
     }
 
     #[async_trait]
@@ -118,6 +146,73 @@ mod tests {
                 },
             );
             Ok(())
+        }
+
+        async fn active_delivery(
+            &self,
+            source_commit: &str,
+            kind: &str,
+        ) -> anyhow::Result<Option<TaskId>> {
+            Ok(self
+                .tasks
+                .lock()
+                .expect("store lock")
+                .values()
+                .find(|task| {
+                    task.definition.source_commit == source_commit
+                        && task.definition.kind == kind
+                        && matches!(task.status, "READY" | "RUNNING" | "BLOCKED")
+                })
+                .map(|task| task.definition.id.clone()))
+        }
+
+        async fn cancel(&self, task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let Some(root) = tasks.get(task_id.as_str()) else {
+                return Ok(false);
+            };
+            if !matches!(root.status, "READY" | "RUNNING" | "BLOCKED" | "FAILED") {
+                return Ok(false);
+            }
+            let mut pending = vec![task_id.as_str().to_owned()];
+            let mut graph_members = BTreeSet::new();
+            while let Some(id) = pending.pop() {
+                if !graph_members.insert(id.clone()) {
+                    continue;
+                }
+                let Some(task) = tasks.get(&id) else {
+                    continue;
+                };
+                pending.extend(
+                    task.definition
+                        .dependencies
+                        .iter()
+                        .map(|dependency| dependency.as_str().to_owned()),
+                );
+            }
+            let members = graph_members
+                .iter()
+                .filter(|id| {
+                    if id.as_str() == task_id.as_str() {
+                        return true;
+                    }
+                    let task = tasks.get(id.as_str()).expect("dependency task");
+                    matches!(task.status, "READY" | "RUNNING" | "BLOCKED")
+                        && !tasks.iter().any(|(outside_id, outside)| {
+                            !graph_members.contains(outside_id)
+                                && matches!(outside.status, "READY" | "RUNNING" | "BLOCKED")
+                                && Self::reaches(&tasks, outside_id, id)
+                        })
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            for id in members {
+                let task = tasks.get_mut(&id).expect("cancelled task");
+                task.status = "CANCELLED";
+                task.lease_token = None;
+                task.lease_until = None;
+            }
+            Ok(true)
         }
 
         async fn claim(
@@ -409,6 +504,130 @@ mod tests {
             store
                 .complete(&current, &agent_b, "done", &CompletionArtifact::NotProduced)
                 .await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancellation_revokes_a_running_lease() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let definition = task("main-failure-sha", Vec::new());
+        store.enqueue(&definition).await?;
+        let agent = AgentId::new("agent")?;
+        let stale = store.claim(&agent, 300).await?.into_claimed()?;
+
+        assert!(
+            store
+                .cancel(&definition.id, "deferred E2E-only rerun")
+                .await?
+        );
+        assert!(
+            !store
+                .heartbeat(&stale.id, &agent, &stale.lease_token, 300)
+                .await?
+        );
+        assert!(store.claim(&agent, 300).await?.is_idle());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancellation_policy_retires_an_already_failed_root() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let definition = task("main-failure-failed-sha", Vec::new());
+        store.enqueue(&definition).await?;
+        let agent = AgentId::new("agent")?;
+        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        assert!(store.fail(&claimed, &agent, "terminal failure").await?);
+
+        assert!(
+            store
+                .cancel(&definition.id, "deferred E2E-only rerun")
+                .await?
+        );
+        assert!(store.claim(&agent, 300).await?.is_idle());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancellation_retires_discovered_blockers_with_the_root() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let root = task("main-failure-sha", Vec::new());
+        store.enqueue(&root).await?;
+        let agent = AgentId::new("agent")?;
+        let claimed_root = store.claim(&agent, 300).await?.into_claimed()?;
+        let blocker = task("main-failure-sha-blocker", Vec::new());
+        assert!(
+            store
+                .block(&claimed_root, &agent, &blocker, "blocked by prerequisite")
+                .await?
+        );
+
+        assert!(store.cancel(&root.id, "deferred E2E-only rerun").await?);
+        assert!(store.claim(&agent, 300).await?.is_idle());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancellation_preserves_a_blocker_shared_with_another_root() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let root = task("main-failure-sha", Vec::new());
+        store.enqueue(&root).await?;
+        let agent = AgentId::new("agent")?;
+        let claimed_root = store.claim(&agent, 300).await?.into_claimed()?;
+        let blocker = task("shared-blocker", Vec::new());
+        assert!(
+            store
+                .block(&claimed_root, &agent, &blocker, "blocked by prerequisite")
+                .await?
+        );
+        store
+            .enqueue(&task("other-root", vec![blocker.id.clone()]))
+            .await?;
+
+        assert!(store.cancel(&root.id, "deferred E2E-only rerun").await?);
+        let preserved = store.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(preserved.id, blocker.id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_later_delivery_generation_does_not_reuse_a_completed_root() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let old = task("main-failure-sha-run-1-attempt-1", Vec::new());
+        store.enqueue(&old).await?;
+        let agent = AgentId::new("agent")?;
+        let completed = store.claim(&agent, 300).await?.into_claimed()?;
+        assert!(
+            store
+                .complete(
+                    &completed,
+                    &agent,
+                    "fixed",
+                    &CompletionArtifact::NotProduced
+                )
+                .await?
+        );
+        assert!(!store.cancel(&old.id, "deferred E2E-only rerun").await?);
+
+        let current = task("main-failure-sha-run-1-attempt-3", Vec::new());
+        store.enqueue(&current).await?;
+        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(claimed.id, current.id);
+        assert_eq!(claimed.attempt_number, 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn an_active_delivery_suppresses_a_competing_generation() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let active = task("main-failure-sha-run-1-attempt-1", Vec::new());
+        store.enqueue(&active).await?;
+
+        assert_eq!(
+            store
+                .active_delivery(&active.source_commit, &active.kind)
+                .await?,
+            Some(active.id)
         );
         Ok(())
     }

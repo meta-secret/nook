@@ -155,6 +155,18 @@ impl TaskStore for CoordinatorTaskStore {
         anyhow::bail!("workers are not authorized to enqueue tasks")
     }
 
+    async fn active_delivery(
+        &self,
+        _source_commit: &str,
+        _kind: &str,
+    ) -> anyhow::Result<Option<TaskId>> {
+        anyhow::bail!("workers are not authorized to inspect delivery tasks")
+    }
+
+    async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
+        anyhow::bail!("workers are not authorized to cancel tasks")
+    }
+
     async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
         match self
             .request(Request::Claim {

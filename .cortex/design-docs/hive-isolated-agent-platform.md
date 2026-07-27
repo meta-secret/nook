@@ -91,7 +91,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 
 | Component | Runs where | Owns | Must not own |
 | --- | --- | --- | --- |
-| Main failure handoff | GitHub Actions | Converts an unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA | Agent execution, raw failure logs, deployment |
+| Main failure handoff | GitHub Actions | Converts an actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA; deferred E2E-only failures remain visible without queuing Hive and retire an existing incident for that SHA | Agent execution, raw failure logs, deployment |
 | Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
@@ -232,7 +232,7 @@ Main uses a single concurrency group with `cancel-in-progress: false`. The
 active run finishes, including cache publication, while GitHub coalesces a
 burst of later pushes to the newest pending revision.
 
-An unsuccessful completed Main run follows this path:
+An actionable unsuccessful completed Main run follows this path:
 
 ```mermaid
 flowchart LR
@@ -248,6 +248,23 @@ flowchart LR
   main --> worklog["Workbench issue + worklog completion"]
   worklog --> complete["Neo4j task COMPLETED"]
 ```
+
+Failures confined to the explicitly deferred `Web e2e`, `UI demos`, and
+`Extension e2e` jobs remain visible in Main but create no Workbench incident.
+If an earlier attempt for the same SHA already created an incident, a
+deferred-only rerun records the attempt, marks that incident `done`, and makes
+the dispatcher cancel every active delivery generation plus discovered blockers
+exclusive to those roots. Shared blockers remain available to their other live
+dependents, and cancelling revokes active worker leases at their next heartbeat.
+A later actionable rerun removes the policy-retirement marker, restores the
+incident to `ready`, clears its prior completion evidence, and creates a new
+task generation keyed by workflow run and attempt. Publication branches, plans,
+and worklogs are generation-specific while the incident path remains keyed by
+source SHA. Completed or failed generations and their publication history
+remain immutable. An actionable rerun observed while a repair is still active
+reuses that logical delivery instead of creating a competing worker. Mixed or
+unknown failures, including a cancelled non-E2E job beside a deferred failure,
+remain actionable and follow the repair path above.
 
 The token-free dispatcher maintains a shallow public Git checkout of Workbench
 and reconciles only when its revision changes, rather than repeatedly spending
@@ -478,13 +495,17 @@ The Dockerfile follows Nook's cargo-chef boundary:
 
 1. plan the dependency recipe;
 2. cook stable debug/test and release dependencies;
-3. copy authored source;
-4. run format/Clippy and behavior tests; and
-5. publish the already-verified BuildKit graph only from `main`.
+3. materialize the real test and Clippy dependency graphs in independent
+   BuildKit stages so they run in parallel;
+4. copy authored source onto the matching warm graph;
+5. run format/Clippy and behavior tests; and
+6. publish both already-verified BuildKit graphs only from `main`.
 
 Pull requests restore the `nook-hive-linux-amd64-v1` GitHub Actions BuildKit
 scope read-only. Only Main publishes it after both Hive checks and Neo4j-backed
-behavior tests pass.
+behavior tests pass. Redis compiler hits avoid recompilation, while the parallel
+BuildKit stages also remove Cargo metadata and linking work from the serial
+critical path.
 
 Trusted same-repository Hive runs also use the remote TLS Redis compiler cache:
 
