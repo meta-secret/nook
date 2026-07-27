@@ -1,3 +1,5 @@
+//! Native cache proofs rebuild core source without changing its dependency graph.
+
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
