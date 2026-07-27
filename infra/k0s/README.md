@@ -95,13 +95,15 @@ task infra:hive:queue:status
 
 An exhausted Main-repair task is never reset implicitly or given an unbounded
 retry budget. After deploying a platform repair, an operator may add exactly
-three attempts to one failed task while preserving its attempt history:
+three attempts to the failed task and each failed blocker dependency while
+preserving attempt history:
 
 ```bash
 task infra:hive:queue:retry \
   HIVE_TASK_ID=main-failure-<full-main-sha>
 ```
 
-The retry refuses non-failed, non-Main-repair, already-requeued tasks, tasks
-whose one manual recovery budget was consumed, and tasks with incomplete
-dependencies.
+The Taskfile reads the currently deployed image digest and permits one recovery
+for that release. Repeating the command against the same release is refused;
+deploying a distinct platform repair creates one new bounded recovery
+generation.

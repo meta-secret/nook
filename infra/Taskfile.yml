@@ -2332,6 +2332,20 @@ tasks:
             head -1
         )"
         test -n "$old_pod"
+        kubectl exec "$old_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /usr/bin/setpriv --no-new-privs \
+            /usr/bin/bwrap \
+              --unshare-all \
+              --ro-bind / / \
+              --dev /dev \
+              --proc /proc \
+              --tmpfs /tmp \
+              --bind /workspace /workspace \
+              --chdir /workspace \
+              /bin/bash -ceu \
+                'touch .hive-sandbox-smoke && test ! -w /usr && rm .hive-sandbox-smoke'
         old_uid="$(kubectl get pod "$old_pod" \
           --namespace hive-system \
           -o jsonpath='{.metadata.uid}')"
@@ -2600,7 +2614,7 @@ tasks:
         REMOTE
 
   hive:queue:retry:
-    desc: Add three attempts to one exhausted Main-repair task (HIVE_TASK_ID required).
+    desc: Rearm one failed Main-repair chain once per deployed Hive release.
     silent: true
     cmds:
       - |
@@ -2612,9 +2626,23 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' -- "$task_id" <<'REMOTE'
         set -euo pipefail
         task_id="$1"
+        image="$(
+          sudo -n k0s kubectl get deployment hive \
+            --namespace hive-system \
+            -o jsonpath='{.spec.template.spec.containers[?(@.name=="hive")].image}'
+        )"
+        release_id="${image##*@}"
+        case "$release_id" in
+          sha256:????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Hive deployment is not pinned to a sha256 release" >&2
+            exit 1
+            ;;
+        esac
         sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
           --namespace hive-system \
           --container dispatcher \
           -- /usr/local/bin/hive queue retry-failed-main \
-            --task-id "$task_id"
+            --task-id "$task_id" \
+            --release-id "$release_id"
         REMOTE

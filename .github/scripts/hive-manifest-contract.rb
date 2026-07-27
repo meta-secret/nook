@@ -457,9 +457,10 @@ end
 unless hive_taskfile.include?("--target verify-export") &&
        hive_taskfile.include?("--target test-export") &&
        hive_taskfile.include?('type=local,dest=$verified') &&
+       hive_taskfile.include?('test -f "$verified/hive-sandbox-package-passed"') &&
        !hive_taskfile.include?("--target test-runner") &&
        !hive_taskfile.include?("--load")
-  raise "Hive verification must export only test executables from BuildKit"
+  raise "Hive verification must export only tests and sandbox package proof from BuildKit"
 end
 unless hive_taskfile.include?('if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]') &&
        !hive_taskfile.include?(
@@ -471,10 +472,28 @@ end
 unless infra_taskfile.include?("hive:queue:status:") &&
        infra_taskfile.include?("hive:queue:retry:") &&
        infra_taskfile.include?("/usr/local/bin/hive queue status") &&
-       infra_taskfile.include?("/usr/local/bin/hive queue retry-failed-main")
+       infra_taskfile.include?("/usr/local/bin/hive queue retry-failed-main") &&
+       infra_taskfile.include?('--release-id "$release_id"')
   raise "Hive queue inspection and bounded failed-task recovery must remain Taskfile-owned"
 end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
+unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
+  raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
+end
+unless hive_dockerfile.include?("FROM toolchain AS sandbox-package-check") &&
+       hive_dockerfile.include?("bwrap --version") &&
+       hive_dockerfile.include?(
+         "COPY --from=sandbox-package-check /opt/nook/hive-sandbox-package-passed"
+       )
+  raise "Hive verification must prove the Bubblewrap package is executable"
+end
+unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
+       infra_taskfile.include?("/usr/bin/setpriv --no-new-privs") &&
+       infra_taskfile.include?("/usr/bin/bwrap") &&
+       infra_taskfile.include?("--ro-bind / /") &&
+       infra_taskfile.include?("--bind /workspace /workspace")
+  raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
+end
 unless hive_dockerfile.include?(
          'SHELL ["/bin/bash", "-o", "pipefail", "-c"]'
        ) &&

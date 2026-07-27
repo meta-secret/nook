@@ -111,7 +111,7 @@ recovery bundle. Only the coordinator gets the Neo4j credential and CA.
 
 ## Graph schema
 
-Hive graph schema version `3` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `4` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, plus the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
 run when the stored version is newer than the binary supports. Because Neo4j
@@ -120,11 +120,13 @@ idempotent `IF NOT EXISTS` schema statements first and records the version only
 after every statement succeeds.
 
 Version 2 adds the pinned `source_commit` task property. Version 3 initializes
-the durable `manual_retry_used` property to `false` on existing tasks; new tasks
-set it explicitly. To roll version 3 back, first stop every Hive worker and back
-up the Neo4j data volume, then delete only the version-3
-`HiveSchemaMigration` node. Keep `manual_retry_used` so a later forward
-migration cannot accidentally restore an already-consumed recovery budget.
+the original one-time retry marker. Version 4 replaces that marker with
+`last_retry_release`, allowing one explicit three-attempt recovery per deployed
+Hive image digest and atomically rearming failed blocker dependencies. To roll
+version 4 back, first stop every Hive worker and back up the Neo4j data volume,
+then delete only the version-4 `HiveSchemaMigration` node. Keep
+`last_retry_release` so a later forward migration cannot repeat a recovery for
+the same deployed image.
 
 ## Commands
 
