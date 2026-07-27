@@ -28,21 +28,18 @@ fn api_key(value: &str) -> SecretValue {
     })
 }
 
-fn test_key() -> Result<SymmetricKey, Box<dyn std::error::Error>> {
+fn test_key() -> anyhow::Result<SymmetricKey> {
     Ok(SymmetricKey::parse(TEST_PASSPHRASE)?)
 }
 
-fn encrypted_api_key(
-    crypto: &VaultCrypto,
-    value: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+fn encrypted_api_key(crypto: &VaultCrypto, value: &str) -> anyhow::Result<String> {
     Ok(crypto
         .encrypt_value(api_key(value).to_yaml()?.as_str())?
         .as_str()
         .to_owned())
 }
 
-fn api_key_yaml(value: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn api_key_yaml(value: &str) -> anyhow::Result<String> {
     Ok(api_key(value).to_yaml()?.as_str().to_owned())
 }
 
@@ -53,7 +50,7 @@ fn sample_db() -> Database {
     db
 }
 
-fn passkey() -> Result<SecretValue, Box<dyn std::error::Error>> {
+fn passkey() -> anyhow::Result<SecretValue> {
     let request = PasskeyRegistrationRequest {
         origin: "https://login.example.com".to_owned(),
         challenge: URL_SAFE_NO_PAD.encode([1_u8; 32]),
@@ -79,7 +76,7 @@ fn passkey() -> Result<SecretValue, Box<dyn std::error::Error>> {
 fn armored_cache_from_db(
     db: &Database,
     crypto: &VaultCrypto,
-) -> Result<HashMap<SecretId, String>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<HashMap<SecretId, String>> {
     Ok(db
         .to_stored_records_with_crypto(crypto)?
         .into_iter()
@@ -87,9 +84,7 @@ fn armored_cache_from_db(
         .collect())
 }
 
-fn save_armored_cache(
-    armored: &HashMap<SecretId, String>,
-) -> Result<String, Box<dyn std::error::Error>> {
+fn save_armored_cache(armored: &HashMap<SecretId, String>) -> anyhow::Result<String> {
     let secret_types = armored
         .keys()
         .map(|key| (key.clone(), SecretType::ApiKey))
@@ -103,7 +98,7 @@ fn save_armored_cache(
 fn load_vault(
     yaml: &str,
     crypto: &VaultCrypto,
-) -> Result<(Database, HashMap<SecretId, String>), Box<dyn std::error::Error>> {
+) -> anyhow::Result<(Database, HashMap<SecretId, String>)> {
     let records = deserialize_stored(yaml, VaultFormat::Yaml)?;
     let mut armored = HashMap::with_capacity(records.len());
     for record in &records {
@@ -114,7 +109,7 @@ fn load_vault(
 }
 
 #[test]
-fn passkey_round_trips_through_encrypted_vault_storage() -> Result<(), Box<dyn std::error::Error>> {
+fn passkey_round_trips_through_encrypted_vault_storage() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut database = Database::new();
     let expected = passkey()?;
@@ -142,7 +137,7 @@ fn passkey_round_trips_through_encrypted_vault_storage() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn incremental_add_secret_matches_full_reencrypt() -> Result<(), Box<dyn std::error::Error>> {
+fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let db = sample_db();
     let mut armored = armored_cache_from_db(&db, &crypto)?;
@@ -172,7 +167,7 @@ fn incremental_add_secret_matches_full_reencrypt() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn incremental_delete_secret() -> Result<(), Box<dyn std::error::Error>> {
+fn incremental_delete_secret() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
 
@@ -186,8 +181,7 @@ fn incremental_delete_secret() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn incremental_replace_secret_swaps_id_and_updates_armored_cache()
--> Result<(), Box<dyn std::error::Error>> {
+fn incremental_replace_secret_swaps_id_and_updates_armored_cache() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
@@ -245,7 +239,7 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache()
 }
 
 #[test]
-fn incremental_replace_secret_rejects_missing_old_id() -> Result<(), Box<dyn std::error::Error>> {
+fn incremental_replace_secret_rejects_missing_old_id() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
@@ -269,7 +263,7 @@ fn incremental_replace_secret_rejects_missing_old_id() -> Result<(), Box<dyn std
 }
 
 #[test]
-fn incremental_replace_secret_rejects_duplicate_new_id() -> Result<(), Box<dyn std::error::Error>> {
+fn incremental_replace_secret_rejects_duplicate_new_id() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
@@ -320,7 +314,7 @@ fn incremental_replace_secret_rejects_duplicate_new_id() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn incremental_update_secret_replaces_armored_entry() -> Result<(), Box<dyn std::error::Error>> {
+fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
     let old = armored
@@ -354,7 +348,7 @@ fn incremental_update_secret_replaces_armored_entry() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn generated_password_can_be_stored_and_reloaded() -> Result<(), Box<dyn std::error::Error>> {
+fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let password = generate_password(&PasswordOptions {
         length: 20,
@@ -374,7 +368,7 @@ fn generated_password_can_be_stored_and_reloaded() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn connect_validation_matches_ui_rules() -> Result<(), Box<dyn std::error::Error>> {
+fn connect_validation_matches_ui_rules() -> anyhow::Result<()> {
     assert!(validate_connect("dropbox", "token").is_err());
     assert_eq!(validate_connect("local", "ignored")?, None);
     assert_eq!(
@@ -387,7 +381,7 @@ fn connect_validation_matches_ui_rules() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn filter_secrets_on_loaded_vault() -> Result<(), Box<dyn std::error::Error>> {
+fn filter_secrets_on_loaded_vault() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let yaml = save_armored_cache(&armored_cache_from_db(&sample_db(), &crypto)?)?;
     let (db, _) = load_vault(&yaml, &crypto)?;
@@ -404,7 +398,7 @@ fn filter_secrets_on_loaded_vault() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn yaml_vault_survives_add_delete_add_cycle() -> Result<(), Box<dyn std::error::Error>> {
+fn yaml_vault_survives_add_delete_add_cycle() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
 
@@ -429,7 +423,7 @@ fn yaml_vault_survives_add_delete_add_cycle() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn stored_records_from_armored_matches_serialize_order() -> Result<(), Box<dyn std::error::Error>> {
+fn stored_records_from_armored_matches_serialize_order() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let armored = armored_cache_from_db(&sample_db(), &crypto)?;
     let secret_types = armored

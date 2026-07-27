@@ -157,7 +157,7 @@ pub(crate) async fn clear_auth_providers_db() -> Result<(), NookError> {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
     use super::*;
-    use nook_core::{OAuthFileConfigData, StorageProviderData};
+    use nook_core::{ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -253,10 +253,12 @@ mod wasm_idb_tests {
                     account_email: None,
                     drive_mode: nook_core::GoogleDriveMode::Private,
                     folder_id: None,
+                    icloud_mode: ICloudMode::Private,
+                    icloud_share_target: None,
                 }),
                 local_folder: None,
                 store_id: None,
-                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
+                sync_checkpoint: nook_core::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: None,

@@ -1305,7 +1305,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_handles_missing_value() -> Result<(), Box<dyn std::error::Error>> {
+    fn normalize_handles_missing_value() -> anyhow::Result<()> {
         let result = normalize_auth_snapshot(&serde_json::Value::Null);
         assert_eq!(result.snapshot, AuthProvidersSnapshotData::default());
         assert!(!result.changed);
@@ -1313,7 +1313,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_keeps_active_vault_store_id() -> Result<(), Box<dyn std::error::Error>> {
+    fn normalize_keeps_active_vault_store_id() -> anyhow::Result<()> {
         let raw = json!({ "providers": [], "activeVaultStoreId": "vault-1" });
         let result = normalize_auth_snapshot(&raw);
         assert_eq!(
@@ -1325,7 +1325,7 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_matches_github_repo_and_pat() -> Result<(), Box<dyn std::error::Error>> {
+    fn find_duplicate_matches_github_repo_and_pat() -> anyhow::Result<()> {
         let existing = github_provider("gh-existing", "nook-crdt-test-1", "github_pat_11AAAA");
         let candidate = github_provider("gh-new", "nook-crdt-test-1", "github_pat_11AAAA");
         let found = find_duplicate_sync_provider(&[existing], &candidate, None);
@@ -1337,7 +1337,7 @@ mod tests {
     }
 
     #[test]
-    fn github_without_pat_has_no_stable_sync_identity() -> Result<(), Box<dyn std::error::Error>> {
+    fn github_without_pat_has_no_stable_sync_identity() -> anyhow::Result<()> {
         let provider = StorageProviderData {
             github_pat: None,
             ..github_provider("gh-draft", "nook", "github_pat_11AAAA")
@@ -1347,7 +1347,7 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_ignores_excluded_id() -> Result<(), Box<dyn std::error::Error>> {
+    fn find_duplicate_ignores_excluded_id() -> anyhow::Result<()> {
         let existing = github_provider("gh-self", "nook", "github_pat_11AAAA");
         let found = find_duplicate_sync_provider(
             std::slice::from_ref(&existing),
@@ -1359,7 +1359,7 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_returns_none_when_distinct() -> Result<(), Box<dyn std::error::Error>> {
+    fn find_duplicate_returns_none_when_distinct() -> anyhow::Result<()> {
         let existing = github_provider("gh-a", "alpha", "github_pat_11AAAA");
         let candidate = github_provider("gh-b", "beta", "github_pat_11AAAA");
         assert!(find_duplicate_sync_provider(&[existing], &candidate, None).is_none());
@@ -1367,7 +1367,7 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_matches_local_folder_handle() -> Result<(), Box<dyn std::error::Error>> {
+    fn find_duplicate_matches_local_folder_handle() -> anyhow::Result<()> {
         let existing = local_folder_provider("folder-a", "handle-1");
         let candidate = local_folder_provider("folder-b", "handle-1");
         let found = find_duplicate_sync_provider(&[existing], &candidate, None);
@@ -1379,8 +1379,7 @@ mod tests {
     }
 
     #[test]
-    fn oauth_target_identity_keeps_private_and_shared_drive_rows_distinct()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn oauth_target_identity_keeps_private_and_shared_drive_rows_distinct() -> anyhow::Result<()> {
         let mut private = oauth_provider(
             "drive-private",
             OauthFilePreset::GoogleDrive,
@@ -1418,8 +1417,8 @@ mod tests {
     }
 
     #[test]
-    fn storage_args_for_configured_provider_rows_match_wasm_connect_contract()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn storage_args_for_configured_provider_rows_match_wasm_connect_contract() -> anyhow::Result<()>
+    {
         assert_eq!(
             storage_args_for_provider(&github_provider("gh", " team-vault ", " pat "))?,
             StorageConnectArgs {
@@ -1449,8 +1448,7 @@ mod tests {
     }
 
     #[test]
-    fn google_drive_mode_switch_clears_scope_bound_credentials_and_targets()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn google_drive_mode_switch_clears_scope_bound_credentials_and_targets() -> anyhow::Result<()> {
         let config = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             access_token: "appdata-token".to_owned(),
@@ -1477,8 +1475,7 @@ mod tests {
     }
 
     #[test]
-    fn oauth_token_merges_preserve_only_same_provider_targets()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn oauth_token_merges_preserve_only_same_provider_targets() -> anyhow::Result<()> {
         let google_existing = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             access_token: "old".to_owned(),
@@ -1533,7 +1530,7 @@ mod tests {
 
     #[test]
     fn binding_shared_drive_folder_preserves_credentials_and_internal_event_name()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let config = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             access_token: "shared-token".to_owned(),
@@ -1571,8 +1568,7 @@ mod tests {
     }
 
     #[test]
-    fn storage_args_require_folder_for_explicit_shared_drive_mode()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn storage_args_require_folder_for_explicit_shared_drive_mode() -> anyhow::Result<()> {
         let mut provider = oauth_provider("drive", OauthFilePreset::GoogleDrive, None, "events");
         provider
             .oauth_file
@@ -1596,7 +1592,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_storage_detail_matches_provider_rows() -> Result<(), Box<dyn std::error::Error>> {
+    fn provider_storage_detail_matches_provider_rows() -> anyhow::Result<()> {
         let labels = detail_labels();
         assert_eq!(
             provider_storage_detail(
@@ -1676,8 +1672,7 @@ mod tests {
     }
 
     #[test]
-    fn localize_provider_label_preserves_provider_detail_suffixes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn localize_provider_label_preserves_provider_detail_suffixes() -> anyhow::Result<()> {
         let labels = provider_label_labels();
         assert_eq!(
             localize_provider_label("This device", &labels),
@@ -1711,8 +1706,7 @@ mod tests {
     }
 
     #[test]
-    fn draft_storage_args_select_provider_specific_fields() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn draft_storage_args_select_provider_specific_fields() -> anyhow::Result<()> {
         assert_eq!(
             draft_storage_args(
                 StorageProviderType::Local,
@@ -1749,8 +1743,7 @@ mod tests {
     }
 
     #[test]
-    fn vault_storage_args_prefers_local_cache_then_authenticated_provider()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn vault_storage_args_prefers_local_cache_then_authenticated_provider() -> anyhow::Result<()> {
         let provider = github_provider("gh", "team-vault", "pat");
         assert_eq!(
             vault_storage_args(
@@ -1809,7 +1802,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_local_row_added_when_missing() -> Result<(), Box<dyn std::error::Error>> {
+    fn ensure_local_row_added_when_missing() -> anyhow::Result<()> {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![github_provider("gh", "nook", "pat")],
             active_vault_store_id: None,
@@ -1824,7 +1817,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_local_row_noop_when_present() -> Result<(), Box<dyn std::error::Error>> {
+    fn ensure_local_row_noop_when_present() -> anyhow::Result<()> {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 id: "local".to_owned(),
@@ -1847,8 +1840,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_row_replication_capability_matches_provider_preset()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn provider_row_replication_capability_matches_provider_preset() -> anyhow::Result<()> {
         let github = github_provider("gh", "nook", "pat");
         assert!(validate_provider_row_replication(&github, ReplicationType::Personal).is_ok());
         assert!(validate_provider_row_replication(&github, ReplicationType::Shared).is_err());
@@ -1880,7 +1872,7 @@ mod tests {
     }
 
     #[test]
-    fn compatible_provider_selection_is_core_owned() -> Result<(), Box<dyn std::error::Error>> {
+    fn compatible_provider_selection_is_core_owned() -> anyhow::Result<()> {
         let github = github_provider("github", "nook", "github_pat_11AAAA");
         let drive = oauth_provider("drive", OauthFilePreset::GoogleDrive, None, "events");
         let providers = vec![github, drive];
@@ -1908,7 +1900,7 @@ mod tests {
 
     #[test]
     fn enrollment_provider_builder_enforces_replication_before_payload_creation()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
             ..VaultArchitecture::default()
@@ -1998,8 +1990,7 @@ mod tests {
     }
 
     #[test]
-    fn enrollment_payload_variants_define_the_onboarding_credential_policy()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn enrollment_payload_variants_define_the_onboarding_credential_policy() -> anyhow::Result<()> {
         let personal = EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
             "google-drive".to_owned(),
             "owner-token".to_owned(),
@@ -2036,8 +2027,7 @@ mod tests {
     }
 
     #[test]
-    fn private_icloud_row_is_not_ready_for_shared_replication()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn private_icloud_row_is_not_ready_for_shared_replication() -> anyhow::Result<()> {
         let mut icloud = oauth_provider("icloud", OauthFilePreset::ICloud, None, "nook-events");
         let oauth = icloud
             .oauth_file
@@ -2065,8 +2055,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_icloud_onboarding_carries_target_without_owner_credentials()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_icloud_onboarding_carries_target_without_owner_credentials() -> anyhow::Result<()> {
         let target = crate::ICloudSharedTarget::new(
             crate::ICloudShareRole::Owner,
             "zone",
@@ -2104,8 +2093,7 @@ mod tests {
     }
 
     #[test]
-    fn active_vault_provider_scope_and_roles_are_core_owned()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn active_vault_provider_scope_and_roles_are_core_owned() -> anyhow::Result<()> {
         let mut local_a = github_provider("local-a", "ignored", "ignored");
         local_a.provider_type = StorageProviderType::Local.as_str().to_owned();
         local_a.store_id = Some("store-a".to_owned());
@@ -2140,8 +2128,7 @@ mod tests {
     }
 
     #[test]
-    fn incoming_pairing_replaces_only_that_vaults_provider_grants()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn incoming_pairing_replaces_only_that_vaults_provider_grants() -> anyhow::Result<()> {
         let mut removed_a = github_provider("removed-a", "owner/old", "pat-old");
         removed_a.store_id = Some("store-a".to_owned());
         let mut retained_b = github_provider("retained-b", "owner/b", "pat-b");
@@ -2177,7 +2164,7 @@ mod tests {
     }
 
     #[test]
-    fn incoming_pairing_discards_unscoped_rows() -> Result<(), Box<dyn std::error::Error>> {
+    fn incoming_pairing_discards_unscoped_rows() -> anyhow::Result<()> {
         let unscoped = github_provider("unscoped-a", "owner/a", "pat-a");
         let existing = AuthProvidersSnapshotData {
             providers: vec![unscoped],
@@ -2195,8 +2182,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_incoming_pairing_removes_every_provider_for_that_vault()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_incoming_pairing_removes_every_provider_for_that_vault() -> anyhow::Result<()> {
         let mut removed_a = github_provider("removed-a", "owner/a", "pat-a");
         removed_a.store_id = Some("store-a".to_owned());
         let mut retained_b = github_provider("retained-b", "owner/b", "pat-b");
@@ -2217,7 +2203,7 @@ mod tests {
     }
 
     #[test]
-    fn oauth_remote_reference_policy_is_core_owned() -> Result<(), Box<dyn std::error::Error>> {
+    fn oauth_remote_reference_policy_is_core_owned() -> anyhow::Result<()> {
         let mut google = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             file_id: Some("file-id".to_owned()),
@@ -2254,8 +2240,7 @@ mod tests {
     }
 
     #[test]
-    fn staged_remote_args_reject_incomplete_drafts_and_normalize_targets()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn staged_remote_args_reject_incomplete_drafts_and_normalize_targets() -> anyhow::Result<()> {
         assert_eq!(
             staged_remote_storage_args(StorageProviderType::Local, None, None, None)?,
             None
@@ -2311,8 +2296,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_sync_metadata_update_preserves_unreported_fields()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn provider_sync_metadata_update_preserves_unreported_fields() -> anyhow::Result<()> {
         let mut provider = github_provider("github", "owner/repo", "pat");
         provider.sync_checkpoint = ProviderSyncCheckpoint::Synced {
             version: ProviderSyncedVaultVersion::Version(9),

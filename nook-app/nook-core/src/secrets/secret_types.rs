@@ -614,7 +614,7 @@ mod tests {
         URL_SAFE_NO_PAD.encode(vec![byte; length])
     }
 
-    fn passkey() -> Result<PasskeySecret, Box<dyn std::error::Error>> {
+    fn passkey() -> anyhow::Result<PasskeySecret> {
         let request = crate::PasskeyRegistrationRequest {
             origin: "https://accounts.example.com".to_owned(),
             challenge: encoded(1, 32),
@@ -638,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_payload_round_trips_as_versioned_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_payload_round_trips_as_versioned_yaml() -> anyhow::Result<()> {
         let value = SecretValue::Passkey(passkey()?);
         let yaml = value.to_yaml()?;
         let decoded = SecretValue::from_yaml(SecretType::Passkey, &yaml)?;
@@ -650,8 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_validation_rejects_invalid_domains_and_backup_state()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_validation_rejects_invalid_domains_and_backup_state() -> anyhow::Result<()> {
         let mut invalid_domain = passkey()?;
         invalid_domain.rp_id = "https://example.com".to_owned();
         assert!(invalid_domain.validate().is_err());
@@ -667,8 +666,8 @@ mod tests {
     }
 
     #[test]
-    fn passkey_validation_rejects_noncanonical_or_wrong_length_binary_fields()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_validation_rejects_noncanonical_or_wrong_length_binary_fields() -> anyhow::Result<()>
+    {
         let mut padded = passkey()?;
         padded.credential_id.push('=');
         assert!(padded.validate().is_err());
@@ -680,8 +679,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_debug_and_zeroize_do_not_retain_private_material()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_debug_and_zeroize_do_not_retain_private_material() -> anyhow::Result<()> {
         let mut value = SecretValue::Passkey(passkey()?);
         let debug = format!("{value:?}");
         assert!(debug.contains("[REDACTED]"));
@@ -718,7 +716,7 @@ mod tests {
     }
 
     #[test]
-    fn file_attachment_payload_round_trips_as_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn file_attachment_payload_round_trips_as_yaml() -> anyhow::Result<()> {
         let value = SecretValue::FileAttachment(file_attachment());
         let yaml = value.to_yaml()?;
         let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)?;

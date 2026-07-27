@@ -202,7 +202,7 @@ mod tests {
     use crate::test_support::sample_vault_yaml as sample_yaml;
 
     #[test]
-    fn identical_content_is_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+    fn identical_content_is_unchanged() -> anyhow::Result<()> {
         let yaml = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(
             compare_vault_sync(&yaml, &yaml)?,
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_local_adopts_remote() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_local_adopts_remote() -> anyhow::Result<()> {
         let remote = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(
             compare_vault_sync("", &remote)?,
@@ -222,14 +222,14 @@ mod tests {
     }
 
     #[test]
-    fn empty_remote_pushes_local() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_remote_pushes_local() -> anyhow::Result<()> {
         let local = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(compare_vault_sync(&local, "")?, VaultSyncAction::PushLocal);
         Ok(())
     }
 
     #[test]
-    fn higher_remote_version_wins() -> Result<(), Box<dyn std::error::Error>> {
+    fn higher_remote_version_wins() -> anyhow::Result<()> {
         let local = sample_yaml(1, "store_AAAAAAAAAAA", "a")?;
         let remote = sample_yaml(3, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
@@ -240,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn higher_local_version_pushes() -> Result<(), Box<dyn std::error::Error>> {
+    fn higher_local_version_pushes() -> anyhow::Result<()> {
         let local = sample_yaml(5, "store_AAAAAAAAAAA", "a")?;
         let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn same_version_different_content_is_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    fn same_version_different_content_is_conflict() -> anyhow::Result<()> {
         let local = sample_yaml(2, "store_AAAAAAAAAAA", "a")?;
         let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
@@ -262,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn common_hash_allows_single_successor_to_win() -> Result<(), Box<dyn std::error::Error>> {
+    fn common_hash_allows_single_successor_to_win() -> anyhow::Result<()> {
         let base = sample_yaml(2, "store_AAAAAAAAAAA", "base")?;
         let local = sample_yaml(3, "store_AAAAAAAAAAA", "local")?;
         let remote = base.clone();
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn common_hash_rejects_divergent_scalar_winner() -> Result<(), Box<dyn std::error::Error>> {
+    fn common_hash_rejects_divergent_scalar_winner() -> anyhow::Result<()> {
         let base = sample_yaml(2, "store_AAAAAAAAAAA", "base")?;
         let local = sample_yaml(4, "store_AAAAAAAAAAA", "local")?;
         let remote = sample_yaml(3, "store_AAAAAAAAAAA", "remote")?;
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn store_id_mismatch_is_error() -> Result<(), Box<dyn std::error::Error>> {
+    fn store_id_mismatch_is_error() -> anyhow::Result<()> {
         let local = sample_yaml(1, "store_AAAAAAAAAAA", "")?;
         let remote = sample_yaml(1, "store_BBBBBBBBBBB", "")?;
         assert!(compare_vault_sync(&local, &remote).is_err());

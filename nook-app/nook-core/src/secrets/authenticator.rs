@@ -567,7 +567,7 @@ fn parse_u64_or_default(value: &str, default: u64) -> Result<u64, ValidationErro
 mod tests {
     use super::*;
 
-    fn rfc_secret(secret: &[u8]) -> Result<TotpSecret, Box<dyn std::error::Error>> {
+    fn rfc_secret(secret: &[u8]) -> anyhow::Result<TotpSecret> {
         let encoded = match secret.len() {
             20 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
             32 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
@@ -579,10 +579,7 @@ mod tests {
         Ok(TotpSecret::parse(encoded)?)
     }
 
-    fn fixture(
-        algorithm: TotpAlgorithm,
-        secret: &[u8],
-    ) -> Result<AuthenticatorSecret, Box<dyn std::error::Error>> {
+    fn fixture(algorithm: TotpAlgorithm, secret: &[u8]) -> anyhow::Result<AuthenticatorSecret> {
         Ok(AuthenticatorSecret {
             issuer: "RFC".to_owned(),
             account: "test".to_owned(),
@@ -596,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn matches_rfc_6238_test_vectors() -> Result<(), Box<dyn std::error::Error>> {
+    fn matches_rfc_6238_test_vectors() -> anyhow::Result<()> {
         let sha1 = b"12345678901234567890";
         let sha256 = b"12345678901234567890123456789012";
         let sha512 = b"1234567890123456789012345678901234567890123456789012345678901234";
@@ -632,8 +629,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_google_authenticator_uri_and_normalizes_backup_codes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn parses_google_authenticator_uri_and_normalizes_backup_codes() -> anyhow::Result<()> {
         let mut item = AuthenticatorSecret::from_form_fields(
             "",
             "",
@@ -656,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn canonicalizes_base32_padding() -> Result<(), Box<dyn std::error::Error>> {
+    fn canonicalizes_base32_padding() -> anyhow::Result<()> {
         let padded = TotpSecret::parse("JBSWY3DPEHPK3PXP====")?;
         let unpadded = TotpSecret::parse("JBSWY3DPEHPK3PXP")?;
 
@@ -666,8 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn setup_key_change_detection_uses_canonical_base32() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn setup_key_change_detection_uses_canonical_base32() -> anyhow::Result<()> {
         assert!(!authenticator_setup_key_changed(
             "JBSWY3DPEHPK3PXP",
             "jbsw-y3dp ehpk-3pxp====",
@@ -684,7 +679,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_plus_signs_in_otpauth_labels() -> Result<(), Box<dyn std::error::Error>> {
+    fn preserves_plus_signs_in_otpauth_labels() -> anyhow::Result<()> {
         let item = AuthenticatorSecret::from_otpauth_uri(
             "otpauth://totp/Example%3Aalice%2Balerts%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
         )?;
@@ -694,8 +689,7 @@ mod tests {
     }
 
     #[test]
-    fn current_code_from_otpauth_matches_persisted_secret() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn current_code_from_otpauth_matches_persisted_secret() -> anyhow::Result<()> {
         let uri = "otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth";
         let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)?;
         let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)?.current_code(59)?;
@@ -712,8 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn previews_otpauth_without_exposing_secret_fields_elsewhere()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn previews_otpauth_without_exposing_secret_fields_elsewhere() -> anyhow::Result<()> {
         let preview = AuthenticatorSecret::preview_otpauth_uri(
             "otpauth://totp/Example%20Co:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example%20Co&algorithm=SHA256&digits=8&period=45",
         )?;
@@ -731,7 +724,7 @@ mod tests {
     }
 
     #[test]
-    fn backup_code_replace_and_merge_enforce_bounds() -> Result<(), Box<dyn std::error::Error>> {
+    fn backup_code_replace_and_merge_enforce_bounds() -> anyhow::Result<()> {
         let existing = vec!["keep-me".to_owned(), "old-code".to_owned()];
         let incoming = vec![
             "  new-code ".to_owned(),

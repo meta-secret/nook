@@ -7,6 +7,24 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[derive(Debug, thiserror::Error)]
+pub enum GeneratorError {
+    #[error("invalid graph YAML: {0}")]
+    InvalidYaml(#[from] serde_yaml::Error),
+    #[error("domain {domain} is missing a task definition")]
+    MissingTaskDefinition { domain: String },
+    #[error("task output reference must be a string")]
+    InvalidTaskOutputReference,
+    #[error("task error reference must be a string")]
+    InvalidTaskErrorReference,
+    #[error("generated Rust syntax is invalid: {0}")]
+    InvalidGeneratedRust(#[from] syn::Error),
+    #[error("failed to read graph YAML: {0}")]
+    ReadGraph(#[from] std::io::Error),
+}
+
+pub type GeneratorResult<T> = Result<T, GeneratorError>;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GraphYaml {
     pub graph: BTreeMap<String, BTreeMap<String, serde_yaml::Value>>,
@@ -101,7 +119,7 @@ fn generate_payload_tokens(struct_ident: &Ident, attrs: &[String]) -> TokenStrea
 }
 
 /// Generates strongly-typed, compile-time self-orchestrating Rust task code using `quote!`.
-pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn generate_rust_code(yaml_content: &str) -> GeneratorResult<String> {
     let parsed: GraphYaml = serde_yaml::from_str(yaml_content)?;
     let mut mod_tokens = TokenStream::new();
 
@@ -111,7 +129,9 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
         let (_task_key, task_val) = domain_map
             .iter()
             .find(|(k, _)| k.ends_with("_task") || k.contains("task"))
-            .ok_or_else(|| format!("Domain '{}' is missing a task definition", domain_name))?;
+            .ok_or_else(|| GeneratorError::MissingTaskDefinition {
+                domain: domain_name.clone(),
+            })?;
 
         let task_spec: TaskNodeSpecWrapper = if task_val.get("task").is_some() {
             let task_inner = &task_val["task"];
@@ -120,7 +140,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
                 spec.output = TaskOutputReference::Named(
                     out_val
                         .as_str()
-                        .ok_or("task output reference must be a string")?
+                        .ok_or(GeneratorError::InvalidTaskOutputReference)?
                         .to_owned(),
                 );
             }
@@ -128,7 +148,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
                 spec.error = TaskErrorReference::Named(
                     err_val
                         .as_str()
-                        .ok_or("task error reference must be a string")?
+                        .ok_or(GeneratorError::InvalidTaskErrorReference)?
                         .to_owned(),
                 );
             }
@@ -277,7 +297,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
 }
 
 /// Reads a YAML file from disk and returns the generated Rust source code string.
-pub fn generate_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn std::error::Error>> {
+pub fn generate_from_file<P: AsRef<Path>>(path: P) -> GeneratorResult<String> {
     let content = std::fs::read_to_string(path)?;
     generate_rust_code(&content)
 }

@@ -219,8 +219,7 @@ mod tests {
     use crate::test_support::sample_vault_yaml as sample_yaml;
 
     #[test]
-    fn reconcile_push_local_copies_blob_and_bumps_revision()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn reconcile_push_local_copies_blob_and_bumps_revision() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(3, store_id, "local")?;
         let mut local = MemoryVaultStore::with_blob(local_blob);
@@ -234,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_adopt_remote_updates_local() -> Result<(), Box<dyn std::error::Error>> {
+    fn reconcile_adopt_remote_updates_local() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let remote_blob = sample_yaml(5, store_id, "remote")?;
         let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local")?);
@@ -248,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_conflict_leaves_stores_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+    fn reconcile_conflict_leaves_stores_unchanged() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(2, store_id, "a")?;
         let remote_blob = sample_yaml(2, store_id, "b")?;
@@ -263,8 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_with_common_hash_preserves_divergent_branches()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn reconcile_with_common_hash_preserves_divergent_branches() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let base_blob = sample_yaml(2, store_id, "base")?;
         let local_blob = sample_yaml(4, store_id, "local")?;
@@ -285,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn fan_out_pushes_to_multiple_remotes() -> Result<(), Box<dyn std::error::Error>> {
+    fn fan_out_pushes_to_multiple_remotes() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(4, store_id, "canonical")?;
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());

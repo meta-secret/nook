@@ -72,8 +72,11 @@ failure. Rust tests that perform fallible setup or verification return
 `Result<(), E>` and propagate with `?`; converting `.unwrap()` mechanically to
 `.expect(...)` is forbidden. Keep `expect` only when the test is deliberately
 asserting an infallible local construction and the panic itself documents that
-specific invariant. Workspace Clippy configuration enforces `unwrap_used`
-across all targets, and reviews treat repetitive test `expect` chains as
+specific invariant. Do not erase test errors behind
+`Box<dyn std::error::Error>`: use the concrete crate error when one error family
+is involved, or `anyhow::Result` when a test composes unrelated fallible APIs.
+Workspace Clippy configuration enforces `unwrap_used` across all targets, and
+reviews treat repetitive test `expect` chains or boxed dynamic test errors as
 refactoring debt rather than acceptable test setup.
 
 ## ⛔ Non-negotiable: squash merge every PR

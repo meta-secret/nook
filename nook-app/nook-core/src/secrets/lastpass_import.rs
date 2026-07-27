@@ -184,8 +184,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn converts_logins_and_secure_notes_with_quoted_multiline_values()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn converts_logins_and_secure_notes_with_quoted_multiline_values() -> anyhow::Result<()> {
         let export = concat!(
             "url,username,password,extra,name,grouping,fav\n",
             "https://github.com/login,alice,secret,\"Recovery codes,\nelsewhere\",GitHub,Work,1\n",
@@ -215,8 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_reordered_headers_bom_extra_columns_and_blank_rows()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_reordered_headers_bom_extra_columns_and_blank_rows() -> anyhow::Result<()> {
         let export = concat!(
             "\u{feff}name,password,url,extra,username,fav,grouping,totp,ignored\n",
             "Router,router-secret,,note,admin,false,Home,otpauth://totp/router?secret=ABC,value\n",

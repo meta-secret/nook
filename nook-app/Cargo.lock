@@ -1483,6 +1483,7 @@ version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "age",
+ "anyhow",
  "base64 0.22.1",
  "bech32",
  "ed25519-dalek",
@@ -1507,6 +1508,7 @@ dependencies = [
  "aes",
  "aes-gcm",
  "age",
+ "anyhow",
  "argon2",
  "base64 0.22.1",
  "bip39",
@@ -1545,6 +1547,7 @@ dependencies = [
 name = "nook-event-log"
 version = "1.0.0"
 dependencies = [
+ "anyhow",
  "base64 0.22.1",
  "ed25519-dalek",
  "getrandom",
@@ -1562,11 +1565,15 @@ dependencies = [
 [[package]]
 name = "nook-replication"
 version = "1.0.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "nook-wasm"
 version = "1.0.0"
 dependencies = [
+ "anyhow",
  "base64 0.21.7",
  "coset",
  "flume",

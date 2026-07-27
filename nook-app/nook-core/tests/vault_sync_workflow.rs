@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 const STORE_ID: &str = "store_AAAAAAAAAAA";
 
-fn sample_yaml(version: u64, armor_line: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn sample_yaml(version: u64, armor_line: &str) -> anyhow::Result<String> {
     Ok(serialize_stored_yaml_with_unlock(
         &[StoredSecretRecord {
             key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
@@ -32,7 +32,7 @@ fn sample_yaml(version: u64, armor_line: &str) -> Result<String, Box<dyn std::er
 }
 
 #[test]
-fn local_save_then_fan_out_replicates_to_all_providers() -> Result<(), Box<dyn std::error::Error>> {
+fn local_save_then_fan_out_replicates_to_all_providers() -> anyhow::Result<()> {
     let v3 = sample_yaml(3, "after-save")?;
     let mut local = MemoryVaultStore::with_blob(v3.clone());
     let mut remotes = HashMap::from([
@@ -57,7 +57,7 @@ fn local_save_then_fan_out_replicates_to_all_providers() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn remote_ahead_adopts_into_local_on_reconcile() -> Result<(), Box<dyn std::error::Error>> {
+fn remote_ahead_adopts_into_local_on_reconcile() -> anyhow::Result<()> {
     let mut local = MemoryVaultStore::with_blob(sample_yaml(1, "local-copy")?);
     let remote_blob = sample_yaml(4, "remote-newer")?;
     let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
@@ -74,8 +74,7 @@ fn remote_ahead_adopts_into_local_on_reconcile() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn same_version_divergence_surfaces_conflict_without_mutating_stores()
--> Result<(), Box<dyn std::error::Error>> {
+fn same_version_divergence_surfaces_conflict_without_mutating_stores() -> anyhow::Result<()> {
     let local_blob = sample_yaml(2, "device-a-edit")?;
     let remote_blob = sample_yaml(2, "device-b-edit")?;
     let mut local = MemoryVaultStore::with_blob(local_blob.clone());
@@ -89,8 +88,7 @@ fn same_version_divergence_surfaces_conflict_without_mutating_stores()
 }
 
 #[test]
-fn stale_revision_write_reports_remote_changed_without_overwriting()
--> Result<(), Box<dyn std::error::Error>> {
+fn stale_revision_write_reports_remote_changed_without_overwriting() -> anyhow::Result<()> {
     let local_save_blob = sample_yaml(3, "local-save")?;
     let concurrent_remote_blob = sample_yaml(3, "remote-save")?;
     let mut remote =
@@ -111,8 +109,7 @@ fn stale_revision_write_reports_remote_changed_without_overwriting()
 }
 
 #[test]
-fn stale_revision_write_is_idempotent_when_remote_already_has_same_blob()
--> Result<(), Box<dyn std::error::Error>> {
+fn stale_revision_write_is_idempotent_when_remote_already_has_same_blob() -> anyhow::Result<()> {
     let local_save_blob = sample_yaml(3, "same-save")?;
     let mut remote = MemoryVaultStore::with_blob_and_revision(local_save_blob.clone(), "rev-2");
 
@@ -133,8 +130,7 @@ fn stale_revision_write_is_idempotent_when_remote_already_has_same_blob()
 }
 
 #[test]
-fn resolve_conflict_keep_local_then_fan_out_unifies_providers()
--> Result<(), Box<dyn std::error::Error>> {
+fn resolve_conflict_keep_local_then_fan_out_unifies_providers() -> anyhow::Result<()> {
     let local_blob = sample_yaml(2, "keep-this")?;
     let remote_blob = sample_yaml(2, "drop-this")?;
     let mut local = MemoryVaultStore::with_blob(local_blob.clone());
@@ -159,7 +155,7 @@ fn resolve_conflict_keep_local_then_fan_out_unifies_providers()
 }
 
 #[test]
-fn resolve_conflict_keep_remote_updates_local() -> Result<(), Box<dyn std::error::Error>> {
+fn resolve_conflict_keep_remote_updates_local() -> anyhow::Result<()> {
     let local_blob = sample_yaml(2, "local-edit")?;
     let remote_blob = sample_yaml(2, "remote-edit")?;
     let mut local = MemoryVaultStore::with_blob(local_blob);
@@ -171,7 +167,7 @@ fn resolve_conflict_keep_remote_updates_local() -> Result<(), Box<dyn std::error
 }
 
 #[test]
-fn empty_remote_receives_push_on_first_sync() -> Result<(), Box<dyn std::error::Error>> {
+fn empty_remote_receives_push_on_first_sync() -> anyhow::Result<()> {
     let local_blob = sample_yaml(1, "bootstrap")?;
     let mut local = MemoryVaultStore::with_blob(local_blob.clone());
     let mut remote = MemoryVaultStore::new();
@@ -185,8 +181,7 @@ fn empty_remote_receives_push_on_first_sync() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn sequential_fan_out_stops_updating_local_when_remote_is_newer()
--> Result<(), Box<dyn std::error::Error>> {
+fn sequential_fan_out_stops_updating_local_when_remote_is_newer() -> anyhow::Result<()> {
     let store_id = STORE_ID;
     let mut local = MemoryVaultStore::with_blob(sample_yaml(2, "local")?);
     let mut remotes = HashMap::from([

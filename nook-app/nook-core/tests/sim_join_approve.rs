@@ -16,7 +16,7 @@ use sim::{JoinApproval, SimWorld, Timeline};
 /// must observe the join resolved regardless of the order in which the approval is
 /// pushed to the shared bucket and pulled by the peer.
 #[test]
-fn join_approval_converges_across_all_delivery_orders() -> Result<(), Box<dyn std::error::Error>> {
+fn join_approval_converges_across_all_delivery_orders() -> anyhow::Result<()> {
     let joiner = DeviceIdentity::generate()?;
     let joiner_id = joiner.device_id().as_str().to_owned();
 
@@ -57,7 +57,7 @@ fn join_approval_converges_across_all_delivery_orders() -> Result<(), Box<dyn st
 /// afterwards. The peer must converge to "join resolved" — never stuck pending and
 /// never a dangling duplicate — once it has pulled after the push.
 #[test]
-fn peer_converges_after_pull_push_pull() -> Result<(), Box<dyn std::error::Error>> {
+fn peer_converges_after_pull_push_pull() -> anyhow::Result<()> {
     let joiner = DeviceIdentity::generate()?;
     let joiner_id = joiner.device_id().as_str().to_owned();
 
@@ -91,7 +91,7 @@ fn peer_converges_after_pull_push_pull() -> Result<(), Box<dyn std::error::Error
 /// A denied join also resolves (join row removed) and never re-appears on the peer,
 /// regardless of delivery order.
 #[test]
-fn join_denial_converges_across_all_delivery_orders() -> Result<(), Box<dyn std::error::Error>> {
+fn join_denial_converges_across_all_delivery_orders() -> anyhow::Result<()> {
     let joiner = DeviceIdentity::generate()?;
     let joiner_id = joiner.device_id().as_str().to_owned();
 

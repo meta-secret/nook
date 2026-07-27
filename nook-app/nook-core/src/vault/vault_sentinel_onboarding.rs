@@ -172,8 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn member_package_round_trips_share_and_provider_for_exact_device()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn member_package_round_trips_share_and_provider_for_exact_device() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let member = DeviceIdentity::generate()?;
         let owner_signing = SigningIdentity::generate()?.0;
@@ -231,8 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn oversized_onboarding_payload_is_rejected_before_deserialization()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn oversized_onboarding_payload_is_rejected_before_deserialization() -> anyhow::Result<()> {
         let oversized_len = usize::try_from(MAX_DECOMPRESSED_PACKAGE_BYTES + 1)?;
         let oversized = vec![b'x'; oversized_len];
         let mut deflater = DeflateEncoder::new(Vec::new(), Compression::best());

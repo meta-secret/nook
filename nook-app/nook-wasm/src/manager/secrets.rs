@@ -62,47 +62,23 @@ type ImportVersions = HashMap<
     nook_core::SecretFingerprint,
     Vec<(nook_core::StoredSecretRecord, nook_core::SecretFingerprint)>,
 >;
-type ImportFingerprintState = (ImportVersions, Vec<nook_core::SecretFingerprintAssignment>);
 
-fn import_fingerprints(
+fn group_import_fingerprints(
     dedup_state: Vec<(
         nook_core::StoredSecretRecord,
         nook_core::SecretFingerprint,
         nook_core::SecretFingerprint,
     )>,
-    crypto: &nook_core::VaultCrypto,
-    secrets_key: &nook_core::SymmetricKey,
     incoming_count: usize,
-) -> Result<ImportFingerprintState, NookError> {
+) -> ImportVersions {
     let mut by_identity = HashMap::with_capacity(dedup_state.len() + incoming_count);
-    let mut backfill = Vec::new();
     for (record, identity_fingerprint, fingerprint) in dedup_state {
-        let (identity_fingerprint, fingerprint) = if fingerprint.is_current_secret_version() {
-            (identity_fingerprint, fingerprint)
-        } else {
-            let secret_type = record.secret_type.ok_or_else(|| {
-                NookError::Database(format!("Secret {} is missing its type.", record.key))
-            })?;
-            let ciphertext = nook_core::AgeArmoredCiphertext::parse(record.value.as_str())?;
-            let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-            let mut value = nook_core::SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
-            plaintext.zeroize_plaintext();
-            let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key);
-            let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
-            backfill.push(nook_core::SecretFingerprintAssignment {
-                secret_id: record.key.clone(),
-                identity_fingerprint: identity_fingerprint.clone(),
-                fingerprint: fingerprint.clone(),
-            });
-            value.zeroize_plaintext();
-            (identity_fingerprint, fingerprint)
-        };
         by_identity
             .entry(identity_fingerprint)
             .or_insert_with(Vec::new)
             .push((record, fingerprint));
     }
-    Ok((by_identity, backfill))
+    by_identity
 }
 
 enum ImportItemOutcome {
@@ -278,20 +254,14 @@ impl NookVaultManager {
         let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key);
         let dedup_state = self.live_secret_dedup_state().await?;
         let crypto = self.vault.crypto.get()?;
-        let (existing_by_identity, backfill) =
-            import_fingerprints(dedup_state, crypto, &secrets_key, items.len())?;
+        let existing_by_identity = group_import_fingerprints(dedup_state, items.len());
         let mut seen_versions = existing_by_identity
             .values()
             .flatten()
             .map(|(_, fingerprint)| fingerprint.clone())
             .collect::<HashSet<_>>();
         let mut skipped_duplicates = within_batch_duplicates;
-        let mut operations = Vec::with_capacity(items.len() + usize::from(!backfill.is_empty()));
-        if !backfill.is_empty() {
-            operations.push(nook_core::VaultOperation::SecretFingerprintsBackfilled {
-                fingerprints: backfill,
-            });
-        }
+        let mut operations = Vec::with_capacity(items.len());
 
         for value in items {
             match reconcile_import_item(
@@ -342,13 +312,12 @@ impl NookVaultManager {
 mod import_tests {
     use super::*;
 
-    fn key() -> Result<nook_core::SymmetricKey, Box<dyn std::error::Error>> {
+    fn key() -> anyhow::Result<nook_core::SymmetricKey> {
         Ok(nook_core::SymmetricKey::parse(&"ab".repeat(32))?)
     }
 
     #[test]
-    fn same_batch_provider_notes_are_coalesced_without_losing_metadata()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn same_batch_provider_notes_are_coalesced_without_losing_metadata() -> anyhow::Result<()> {
         let items = vec![
             nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
                 title: "Recovery".to_owned(),
@@ -368,29 +337,6 @@ mod import_tests {
         };
         assert!(note.note.contains("## LastPass"));
         assert!(note.note.contains("## Proton Pass"));
-        Ok(())
-    }
-
-    #[test]
-    fn legacy_version_fingerprints_require_import_backfill()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let identity = nook_core::SecretFingerprint::from_trusted(format!(
-            "hmac-sha256:v1:{}",
-            "ab".repeat(32)
-        ));
-        let legacy = nook_core::SecretFingerprint::from_trusted(format!(
-            "hmac-sha256:v1:{}",
-            "cd".repeat(32)
-        ));
-        assert!(!legacy.is_current_secret_version());
-
-        let value = nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
-            title: "Recovery".to_owned(),
-            note: "same note".to_owned(),
-        });
-        let current = nook_core::secret_fingerprint(&value, &key()?);
-        assert!(current.is_current_secret_version());
-        assert!(!identity.as_str().is_empty());
         Ok(())
     }
 }
@@ -1014,58 +960,6 @@ mod wasm_tests {
             .expect("js field")
             .as_string()
             .expect("js string")
-    }
-
-    #[wasm_bindgen_test]
-    fn canonical_authenticator_fingerprints_replace_stored_legacy_values()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let secrets_key = nook_core::SymmetricKey::parse(&"a".repeat(64))?;
-        let crypto = nook_core::VaultCrypto::new(&secrets_key)?;
-        let padded_yaml = concat!(
-            "issuer: Example\n",
-            "account: alice@example.com\n",
-            "secret: JBSWY3DPEHPK3PXP====\n",
-            "algorithm: SHA1\n",
-            "digits: 6\n",
-            "period: 30\n",
-            "backupCodes: []\n"
-        );
-        let ciphertext = crypto.encrypt_value(padded_yaml)?;
-        let record = nook_core::StoredSecretRecord {
-            key: nook_core::SecretId::from_vault_record("secret_authenticator"),
-            secret_type: Some(nook_core::SecretType::Authenticator),
-            value: nook_core::StoredRecordPayload::from_age_armored(ciphertext),
-        };
-        let legacy_identity = nook_core::SecretFingerprint::from_trusted("legacy-id".to_owned());
-        let legacy_version =
-            nook_core::SecretFingerprint::from_trusted("legacy-version".to_owned());
-
-        let (by_identity, backfill) = import_fingerprints(
-            vec![(record.clone(), legacy_identity, legacy_version)],
-            &crypto,
-            &secrets_key,
-            1,
-        )?;
-
-        assert_eq!(backfill.len(), 1);
-        let assignment = &backfill[0];
-        let records = by_identity
-            .get(&assignment.identity_fingerprint)
-            .expect("canonical identity");
-        assert_eq!(records[0].1, assignment.fingerprint);
-
-        let (_, second_backfill) = import_fingerprints(
-            vec![(
-                record,
-                assignment.identity_fingerprint.clone(),
-                assignment.fingerprint.clone(),
-            )],
-            &crypto,
-            &secrets_key,
-            1,
-        )?;
-        assert!(second_backfill.is_empty());
-        Ok(())
     }
 
     #[wasm_bindgen_test]

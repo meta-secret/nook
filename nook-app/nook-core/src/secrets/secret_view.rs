@@ -1020,8 +1020,7 @@ mod tests {
     }
 
     #[test]
-    fn credit_card_list_item_exposes_last4_without_pan_or_cvv()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn credit_card_list_item_exposes_last4_without_pan_or_cvv() -> anyhow::Result<()> {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_card"),
             secret_type: SecretType::CreditCard,
@@ -1060,8 +1059,7 @@ mod tests {
     }
 
     #[test]
-    fn build_secret_yaml_from_credit_card_form_validates_number()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn build_secret_yaml_from_credit_card_form_validates_number() -> anyhow::Result<()> {
         let yaml =
             build_secret_yaml_from_form(&SecretFormFields::CreditCard(CreditCardSecretForm {
                 title: "Debit".to_owned(),
@@ -1093,8 +1091,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_list_item_exposes_account_metadata_without_key_material()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_list_item_exposes_account_metadata_without_key_material() -> anyhow::Result<()> {
         let private_key = URL_SAFE_NO_PAD.encode([7_u8; 96]);
         let credential_id = URL_SAFE_NO_PAD.encode([8_u8; 32]);
         let record = SecretRecord {
@@ -1133,7 +1130,7 @@ mod tests {
     }
 
     #[test]
-    fn build_secret_yaml_round_trips_login_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn build_secret_yaml_round_trips_login_fields() -> anyhow::Result<()> {
         let fields = serde_json::json!({
             "websiteUrl": "https://example.com",
             "username": "bob",
@@ -1153,8 +1150,7 @@ mod tests {
     }
 
     #[test]
-    fn build_secret_yaml_round_trips_api_key_from_flat_form()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn build_secret_yaml_round_trips_api_key_from_flat_form() -> anyhow::Result<()> {
         let fields = serde_json::json!({
             "websiteUrl": "https://api.example.com",
             "username": "",
@@ -1200,8 +1196,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticator_list_item_hides_shared_secret_and_backup_codes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn authenticator_list_item_hides_shared_secret_and_backup_codes() -> anyhow::Result<()> {
         let value = AuthenticatorSecret::from_form_fields(
             "Example",
             "alice@example.com",
@@ -1349,7 +1344,7 @@ mod tests {
     }
 
     #[test]
-    fn build_secret_yaml_accepts_authenticator_uri() -> Result<(), Box<dyn std::error::Error>> {
+    fn build_secret_yaml_accepts_authenticator_uri() -> anyhow::Result<()> {
         let fields = serde_json::json!({
             "issuer": "",
             "account": "",
@@ -1373,7 +1368,7 @@ mod tests {
     }
     #[test]
     fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let content =
             base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"secret-bytes");
         let fields = serde_json::json!({

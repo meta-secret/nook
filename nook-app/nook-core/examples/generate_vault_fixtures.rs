@@ -2,6 +2,7 @@
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 
+use anyhow::Context as _;
 use nook_core::{ApiKeySecret, Database, SecretId, SecretValue};
 use std::fs;
 use std::path::PathBuf;
@@ -14,9 +15,9 @@ fn api_key(website_url: &str, key: &str) -> SecretValue {
     })
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures");
-    fs::create_dir_all(&fixtures_dir).map_err(|e| format!("create fixtures dir: {e}"))?;
+    fs::create_dir_all(&fixtures_dir).context("create fixtures dir")?;
 
     let passphrase = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
@@ -40,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fixtures_dir.join("nook-projection.example.yaml"),
         stored_yaml.as_str(),
     )
-    .map_err(|e| format!("write nook-projection.example.yaml: {e}"))?;
+    .context("write nook-projection.example.yaml")?;
 
     println!("Wrote fixtures to {}", fixtures_dir.display());
     println!("  nook-projection.example.yaml   — encrypted on-disk format (GitHub / IndexedDB)");

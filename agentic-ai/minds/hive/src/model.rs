@@ -1,4 +1,23 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum ModelError {
+    #[error("{kind} must not be empty")]
+    EmptyId { kind: &'static str },
+    #[error("no task was claimable")]
+    NoClaimableTask,
+    #[error("task kind must not be empty")]
+    EmptyTaskKind,
+    #[error("task prompt must not be empty")]
+    EmptyTaskPrompt,
+    #[error("source_commit must be a full 40-character Git object id")]
+    InvalidSourceCommit,
+    #[error("max_attempts must be at least one")]
+    InvalidMaxAttempts,
+    #[error("a task cannot depend on itself")]
+    SelfDependency,
+}
 
 macro_rules! string_id {
     ($name:ident) => {
@@ -7,10 +26,12 @@ macro_rules! string_id {
         pub struct $name(String);
 
         impl $name {
-            pub fn new(value: impl Into<String>) -> Result<Self, String> {
+            pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
                 let value = value.into();
                 if value.trim().is_empty() {
-                    return Err(concat!(stringify!($name), " must not be empty").to_owned());
+                    return Err(ModelError::EmptyId {
+                        kind: stringify!($name),
+                    });
                 }
                 Ok(Self(value))
             }
@@ -75,10 +96,10 @@ impl ClaimOutcome {
         matches!(self, Self::NoTask)
     }
 
-    pub fn into_claimed(self) -> Result<ClaimedTask, &'static str> {
+    pub fn into_claimed(self) -> Result<ClaimedTask, ModelError> {
         match self {
             Self::Claimed(task) => Ok(task),
-            Self::NoTask => Err("no task was claimable"),
+            Self::NoTask => Err(ModelError::NoClaimableTask),
         }
     }
 }
@@ -101,12 +122,12 @@ pub struct EnqueueTask {
 }
 
 impl EnqueueTask {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), ModelError> {
         if self.kind.trim().is_empty() {
-            return Err("task kind must not be empty".to_owned());
+            return Err(ModelError::EmptyTaskKind);
         }
         if self.prompt.trim().is_empty() {
-            return Err("task prompt must not be empty".to_owned());
+            return Err(ModelError::EmptyTaskPrompt);
         }
         if self.source_commit.len() != 40
             || !self
@@ -114,17 +135,17 @@ impl EnqueueTask {
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit())
         {
-            return Err("source_commit must be a full 40-character Git object id".to_owned());
+            return Err(ModelError::InvalidSourceCommit);
         }
         if self.max_attempts < 1 {
-            return Err("max_attempts must be at least one".to_owned());
+            return Err(ModelError::InvalidMaxAttempts);
         }
         if self
             .dependencies
             .iter()
             .any(|dependency| dependency == &self.id)
         {
-            return Err("a task cannot depend on itself".to_owned());
+            return Err(ModelError::SelfDependency);
         }
         Ok(())
     }
@@ -177,11 +198,11 @@ impl TerminalResult {
 
 #[cfg(test)]
 mod tests {
-    use super::{EnqueueTask, TaskId};
+    use super::{EnqueueTask, ModelError, TaskId};
 
     #[test]
-    fn enqueue_rejects_self_dependency() {
-        let task_id = TaskId::new("task-1").expect("valid id");
+    fn enqueue_rejects_self_dependency() -> anyhow::Result<()> {
+        let task_id = TaskId::new("task-1")?;
         let task = EnqueueTask {
             id: task_id.clone(),
             kind: "code".to_owned(),
@@ -192,9 +213,7 @@ mod tests {
             dependencies: vec![task_id],
         };
 
-        assert_eq!(
-            task.validate().expect_err("self dependency must fail"),
-            "a task cannot depend on itself"
-        );
+        assert_eq!(task.validate(), Err(ModelError::SelfDependency));
+        Ok(())
     }
 }

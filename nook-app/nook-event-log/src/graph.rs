@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn union_is_commutative_on_ids() -> Result<(), Box<dyn std::error::Error>> {
+    fn union_is_commutative_on_ids() -> anyhow::Result<()> {
         let key = signing_key();
         let genesis = genesis_event(&key)?;
         let child = signed_child(vec![genesis.id()?], "secret_child00001", &key)?;
@@ -545,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_events_are_detected() -> Result<(), Box<dyn std::error::Error>> {
+    fn concurrent_events_are_detected() -> anyhow::Result<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 

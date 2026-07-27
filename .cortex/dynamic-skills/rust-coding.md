@@ -241,6 +241,9 @@ whether a value exists.
   verification. Do not silence `unwrap_used` by mechanically replacing
   `.unwrap()` with `.expect(...)`; reserve `expect` for a deliberately asserted
   infallible local invariant.
+- Do not use `Box<dyn std::error::Error>` as a catch-all test error. Return the
+  concrete crate error for one error family, or `anyhow::Result` when the test
+  intentionally combines unrelated error types.
 - Add deserialization tests proving required persisted values reject missing and
   empty input.
 - Run Clippy for all targets with `clippy::unwrap_used` denied and verify a

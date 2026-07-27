@@ -100,7 +100,6 @@ pub fn apply_vault_meta_operation(
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
-        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. }
         | VaultOperation::PasswordRemoved { .. }
@@ -217,7 +216,7 @@ mod tests {
         parents: Vec<EventId>,
         operations: Vec<VaultOperation>,
         timestamp: &str,
-    ) -> Result<VaultEvent, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<VaultEvent> {
         Ok(VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
@@ -236,8 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_event_materialization_retains_complete_public_roster()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sentinel_event_materialization_retains_complete_public_roster() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
         let operation = VaultOperation::SentinelParticipantEnrolled {
@@ -282,8 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn extension_access_follows_approval_and_revocation_events()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn extension_access_follows_approval_and_revocation_events() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let extension = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;

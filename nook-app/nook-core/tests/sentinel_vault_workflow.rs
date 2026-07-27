@@ -9,8 +9,7 @@ use nook_core::{
 };
 
 #[test]
-fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum()
--> Result<(), Box<dyn std::error::Error>> {
+fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let first = DeviceIdentity::generate()?;
     let second = DeviceIdentity::generate()?;

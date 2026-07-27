@@ -827,8 +827,7 @@ mod tests {
     }
 
     #[test]
-    fn setup_uses_random_user_handle_and_deterministic_prf_input()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn setup_uses_random_user_handle_and_deterministic_prf_input() -> anyhow::Result<()> {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let other = DeviceKeyProtectionSetup::generate()?;
         assert_eq!(setup.user_handle().len(), 32);
@@ -840,7 +839,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_prf_derives_stable_age_identity() -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_prf_derives_stable_age_identity() -> anyhow::Result<()> {
         let user_handle = [8u8; 32];
         let prf_output = [10u8; 32];
         let identity = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
@@ -856,8 +855,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_derived_record_stores_only_recovery_metadata()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_derived_record_stores_only_recovery_metadata() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = deterministic_passkey_prf_input();
@@ -880,8 +878,7 @@ mod tests {
     }
 
     #[test]
-    fn anti_hacker_record_wraps_random_identity_locally() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn anti_hacker_record_wraps_random_identity_locally() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = deterministic_passkey_prf_input();
@@ -916,8 +913,7 @@ mod tests {
     }
 
     #[test]
-    fn anti_hacker_unlock_requires_local_wrapper_and_matching_prf()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn anti_hacker_unlock_requires_local_wrapper_and_matching_prf() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = deterministic_passkey_prf_input();
@@ -945,7 +941,7 @@ mod tests {
     fn approved_mock_registration(
         authenticator: &mut MemoryPasskeyAuthenticator,
         setup: &DeviceKeyProtectionSetup,
-    ) -> Result<MockPasskeyRegistration, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<MockPasskeyRegistration> {
         Ok(authenticator.register(
             MockPasskeyRegistrationRequest::new(
                 TEST_RP_ID,
@@ -959,14 +955,11 @@ mod tests {
 
     fn complete_mock_registration(
         authenticator: &mut MemoryPasskeyAuthenticator,
-    ) -> Result<
-        (
-            DeviceKeyProtectionSetup,
-            MockPasskeyRegistration,
-            PasskeyDeviceIdentityMaterial,
-        ),
-        Box<dyn std::error::Error>,
-    > {
+    ) -> anyhow::Result<(
+        DeviceKeyProtectionSetup,
+        MockPasskeyRegistration,
+        PasskeyDeviceIdentityMaterial,
+    )> {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let registration = approved_mock_registration(authenticator, &setup)?;
         let resolution = resolve_passkey_registration(
@@ -982,8 +975,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_workflow_setup_completes_with_registration_prf()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_workflow_setup_completes_with_registration_prf() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (setup, registration, material) = complete_mock_registration(&mut authenticator)?;
 
@@ -1004,8 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn mode_aware_registration_creates_wrapped_local_identity()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn mode_aware_registration_creates_wrapped_local_identity() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let setup = DeviceKeyProtectionSetup::generate()?;
         let registration = approved_mock_registration(&mut authenticator, &setup)?;
@@ -1027,8 +1018,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_workflow_prf_missing_registration_falls_back_to_assertion()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_workflow_prf_missing_registration_falls_back_to_assertion() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let setup = DeviceKeyProtectionSetup::generate()?;
         let registration = approved_mock_registration(&mut authenticator, &setup)?;
@@ -1072,8 +1062,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_workflow_unlock_succeeds_from_stored_metadata()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_workflow_unlock_succeeds_from_stored_metadata() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
         let request = passkey_assertion_request(material.record())?;
@@ -1099,7 +1088,7 @@ mod tests {
 
     #[test]
     fn passkey_workflow_recovery_reconstructs_metadata_after_local_record_loss()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, original) = complete_mock_registration(&mut authenticator)?;
         let recovery_request = passkey_recovery_request();
@@ -1131,8 +1120,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_workflow_denial_blocks_registration_and_assertion()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_workflow_denial_blocks_registration_and_assertion() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let setup = DeviceKeyProtectionSetup::generate()?;
         let denied_registration = authenticator.register(
@@ -1176,8 +1164,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_workflow_wrong_rp_or_unknown_credential_is_rejected()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_workflow_wrong_rp_or_unknown_credential_is_rejected() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
         let request = passkey_assertion_request(material.record())?;
@@ -1209,7 +1196,7 @@ mod tests {
 
     #[test]
     fn passkey_workflow_reconstructs_request_metadata_and_rejects_mismatched_identity()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
         let request = passkey_assertion_request(material.record())?;
@@ -1254,8 +1241,7 @@ mod tests {
     }
 
     #[test]
-    fn pin_wrap_round_trips_and_serializes_without_plaintext()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn pin_wrap_round_trips_and_serializes_without_plaintext() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?.secret_string();
         let record = wrap_device_identity_with_pin(&identity, "123456")?;
         let json = serialize_wrapped_device_identity(&record)?;
@@ -1270,7 +1256,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_pin_does_not_decrypt() -> Result<(), Box<dyn std::error::Error>> {
+    fn wrong_pin_does_not_decrypt() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?.secret_string();
         let record = wrap_device_identity_with_pin(&identity, "123456")?;
         assert!(matches!(
@@ -1281,7 +1267,7 @@ mod tests {
     }
 
     #[test]
-    fn pin_metadata_and_ciphertext_reject_tampering() -> Result<(), Box<dyn std::error::Error>> {
+    fn pin_metadata_and_ciphertext_reject_tampering() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?.secret_string();
         let record = wrap_device_identity_with_pin(&identity, "123456")?;
 
@@ -1310,7 +1296,7 @@ mod tests {
     }
 
     #[test]
-    fn pin_requires_minimum_length() -> Result<(), Box<dyn std::error::Error>> {
+    fn pin_requires_minimum_length() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?.secret_string();
         assert!(matches!(
             wrap_device_identity_with_pin(&identity, "12345"),

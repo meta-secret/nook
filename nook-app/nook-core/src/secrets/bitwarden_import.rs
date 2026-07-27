@@ -451,7 +451,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn converts_export_login_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn converts_export_login_fields() -> anyhow::Result<()> {
         let json = r#"{
           "items": [{
             "id": "bw-1", "type": 1, "name": "GitHub work", "notes": "recovery codes elsewhere",
@@ -478,8 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_plaintext_export_notes_and_skips_unsupported_items()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn converts_plaintext_export_notes_and_skips_unsupported_items() -> anyhow::Result<()> {
         let json = r#"{"items":[
           {"type":2,"name":"Private note","notes":"hello"},
           {"type":3,"name":"Card","card":{"cardholderName":"Ada","number":"4111111111111111","expMonth":"12","expYear":"2030","code":"123","brand":"Visa"}},
@@ -507,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_secure_note_custom_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn preserves_secure_note_custom_fields() -> anyhow::Result<()> {
         let plan = plan_bitwarden_import(
             r#"{"items":[{
                 "type":2,
@@ -533,8 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_real_export_shape_with_folders_dates_nulls_and_fido_fields()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_real_export_shape_with_folders_dates_nulls_and_fido_fields() -> anyhow::Result<()> {
         let plan = plan_bitwarden_import(include_str!("fixtures/bitwarden_real_export.json"))?;
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 0);
@@ -562,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_null_optional_login_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_null_optional_login_fields() -> anyhow::Result<()> {
         let plan = plan_bitwarden_import(
             r#"{"items":[{"type":1,"name":"Example","notes":null,"login":{"username":null,"password":"pw","totp":null,"uris":[{"uri":null}]}}]}"#,
         )?;
@@ -617,8 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn decrypts_bitwarden_password_protected_pbkdf2_fixture()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn decrypts_bitwarden_password_protected_pbkdf2_fixture() -> anyhow::Result<()> {
         let plan = plan_bitwarden_import_with_password(
             include_str!("fixtures/bitwarden_encrypted_pbkdf2.json"),
             Some("correct horse battery staple"),
@@ -630,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    fn derives_bitwarden_argon2id_export_key() -> Result<(), Box<dyn std::error::Error>> {
+    fn derives_bitwarden_argon2id_export_key() -> anyhow::Result<()> {
         // Expected values come from Bitwarden SDK's Argon2id KDF vector, then
         // its documented HKDF "enc" / "mac" expansion.
         let export = EncryptedBitwardenExport {

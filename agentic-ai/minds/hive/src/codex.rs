@@ -940,7 +940,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn configures_an_ephemeral_read_only_core_thread() -> Result<(), Box<dyn std::error::Error>> {
+    fn configures_an_ephemeral_read_only_core_thread() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
@@ -982,7 +982,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_gpt_5_6_terra_with_light_reasoning() -> Result<(), Box<dyn std::error::Error>> {
+    fn defaults_to_gpt_5_6_terra_with_light_reasoning() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned());
 
@@ -1051,7 +1051,7 @@ mod tests {
     }
 
     #[test]
-    fn execution_options_enable_workspace_write() -> Result<(), Box<dyn std::error::Error>> {
+    fn execution_options_enable_workspace_write() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
         let config = new_config(&options)?;
@@ -1065,8 +1065,7 @@ mod tests {
     }
 
     #[test]
-    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() -> anyhow::Result<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
 
         progress.reasoning_delta("Inspecting ")?;
@@ -1084,8 +1083,7 @@ mod tests {
     }
 
     #[test]
-    fn inspection_progress_hides_shell_commands_behind_readable_steps()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn inspection_progress_hides_shell_commands_behind_readable_steps() -> anyhow::Result<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let commands = [
             vec![
@@ -1120,8 +1118,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_inspection_includes_the_command_for_debugging()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn failed_inspection_includes_the_command_for_debugging() -> anyhow::Result<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
 
@@ -1134,8 +1131,7 @@ mod tests {
     }
 
     #[test]
-    fn task_progress_logs_only_fixed_secret_safe_metadata() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn task_progress_logs_only_fixed_secret_safe_metadata() -> anyhow::Result<()> {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
 
         progress.line("36", "●", "start", "Agent started")?;
@@ -1157,8 +1153,7 @@ mod tests {
     }
 
     #[test]
-    fn task_progress_does_not_reveal_failed_commands_or_output()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn task_progress_does_not_reveal_failed_commands_or_output() -> anyhow::Result<()> {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "ui-agent".into());
 
         progress.command_finished(

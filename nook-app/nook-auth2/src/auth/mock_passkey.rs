@@ -434,7 +434,7 @@ mod tests {
     fn approved_registration(
         authenticator: &mut MemoryPasskeyAuthenticator,
         user_handle: Vec<u8>,
-    ) -> Result<MockPasskeyRegistration, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<MockPasskeyRegistration> {
         Ok(authenticator.register(
             MockPasskeyRegistrationRequest::new(
                 RP_ID,
@@ -447,8 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn registers_and_authorizes_device_identity_material() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn registers_and_authorizes_device_identity_material() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let registration = approved_registration(&mut authenticator, vec![8; 32])?;
         let assertion = authenticator.authenticate(
@@ -476,7 +475,7 @@ mod tests {
 
     #[test]
     fn discoverable_assertion_recovers_same_passkey_after_local_metadata_is_missing()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let registration = approved_registration(&mut authenticator, vec![9; 32])?;
         let original_identity = derive_device_identity_from_passkey_prf(
@@ -524,8 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn user_can_deny_assertion_without_incrementing_sign_count()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn user_can_deny_assertion_without_incrementing_sign_count() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let registration = approved_registration(&mut authenticator, vec![8; 32])?;
 
@@ -550,7 +548,7 @@ mod tests {
     }
 
     #[test]
-    fn assertion_rejects_unknown_allowed_credential() -> Result<(), Box<dyn std::error::Error>> {
+    fn assertion_rejects_unknown_allowed_credential() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         approved_registration(&mut authenticator, vec![8; 32])?;
 
@@ -571,8 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn assertion_rejects_credential_registered_for_another_rp()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn assertion_rejects_credential_registered_for_another_rp() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let registration = approved_registration(&mut authenticator, vec![8; 32])?;
 
@@ -590,8 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn allowed_credentials_are_checked_in_browser_order() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn allowed_credentials_are_checked_in_browser_order() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let first = approved_registration(&mut authenticator, vec![1; 32])?;
         let second = approved_registration(&mut authenticator, vec![2; 32])?;
@@ -628,8 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn discoverable_assertion_rejects_ambiguous_same_rp_credentials()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn discoverable_assertion_rejects_ambiguous_same_rp_credentials() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let first = approved_registration(&mut authenticator, vec![1; 32])?;
         let second = approved_registration(&mut authenticator, vec![2; 32])?;
@@ -661,8 +656,7 @@ mod tests {
     }
 
     #[test]
-    fn separate_passkeys_produce_distinct_device_identities()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn separate_passkeys_produce_distinct_device_identities() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
         let first = approved_registration(&mut authenticator, vec![1; 32])?;
         let second = approved_registration(&mut authenticator, vec![2; 32])?;

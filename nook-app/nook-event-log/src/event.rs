@@ -53,14 +53,6 @@ impl EncryptedSecretPayload {
     }
 }
 
-/// One legacy secret fingerprint added without changing its ciphertext.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SecretFingerprintAssignment {
-    pub secret_id: SecretId,
-    pub identity_fingerprint: SecretFingerprint,
-    pub fingerprint: SecretFingerprint,
-}
-
 /// One sentinel share encrypted to a participant device, recorded in the event log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -96,9 +88,6 @@ pub enum VaultOperation {
         old_id: SecretId,
         chosen_secret_id: SecretId,
         rejected_secret_ids: Vec<SecretId>,
-    },
-    SecretFingerprintsBackfilled {
-        fingerprints: Vec<SecretFingerprintAssignment>,
     },
     JoinRequested {
         device_id: DeviceId,
@@ -363,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn genesis_event_has_no_parents() -> Result<(), Box<dyn std::error::Error>> {
+    fn genesis_event_has_no_parents() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let event = empty_genesis_event(&signing_key)?;
         event.verify_signature(&signing_key.verifying_key())?;
@@ -372,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_one_event_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn schema_one_event_is_rejected() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let mut event = empty_genesis_event(&signing_key)?;
         event.body.schema_version = VaultEventSchemaVersion(1);
@@ -388,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn event_id_changes_when_parents_change() -> Result<(), Box<dyn std::error::Error>> {
+    fn event_id_changes_when_parents_change() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let mut body = VaultEventBody {
@@ -422,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_envelope_rejects_wrong_store() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_envelope_rejects_wrong_store() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let event = empty_genesis_event(&signing_key)?;
         let wrong_store = StoreId::parse("store_otherid0001")?;
@@ -431,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn event_storage_is_pretty_yaml_and_roundtrips() -> Result<(), Box<dyn std::error::Error>> {
+    fn event_storage_is_pretty_yaml_and_roundtrips() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let event = build_genesis_import_event(
@@ -501,8 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn current_event_requires_actor_signing_key_field_and_value()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn current_event_requires_actor_signing_key_field_and_value() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let valid = empty_genesis_event(&signing_key)?;
         let mut missing = serde_json::to_value(&valid)?;
@@ -525,7 +513,7 @@ mod tests {
     }
 
     #[test]
-    fn password_envelope_event_storage_is_yaml_map() -> Result<(), Box<dyn std::error::Error>> {
+    fn password_envelope_event_storage_is_yaml_map() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let body = VaultEventBody {

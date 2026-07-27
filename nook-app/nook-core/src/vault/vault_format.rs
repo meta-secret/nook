@@ -580,7 +580,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_roundtrip_stored_records() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_roundtrip_stored_records() -> anyhow::Result<()> {
         let records = sample_records();
         let stored = serialize_stored_yaml(&records)?;
         assert!(stored.as_str().contains("github.com"));
@@ -593,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn detect_yaml_and_reject_json_objects() -> Result<(), Box<dyn std::error::Error>> {
+    fn detect_yaml_and_reject_json_objects() -> anyhow::Result<()> {
         assert!(detect_stored_format(r#"{"key":"a","value":"b"}"#).is_err());
         assert_eq!(
             detect_stored_format("secrets:\n  - key: a\n    value: b\n")?,
@@ -607,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    fn format_from_path() -> Result<(), Box<dyn std::error::Error>> {
+    fn format_from_path() -> anyhow::Result<()> {
         assert_eq!(
             VaultFormat::from_path("nook-events.yaml"),
             VaultFormat::Yaml
@@ -625,14 +625,14 @@ mod tests {
     }
 
     #[test]
-    fn detect_empty_defaults_to_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn detect_empty_defaults_to_yaml() -> anyhow::Result<()> {
         assert_eq!(detect_stored_format("")?, VaultFormat::Yaml);
         assert_eq!(detect_stored_format("   \n  \n")?, VaultFormat::Yaml);
         Ok(())
     }
 
     #[test]
-    fn detect_yaml_document_header() -> Result<(), Box<dyn std::error::Error>> {
+    fn detect_yaml_document_header() -> anyhow::Result<()> {
         assert_eq!(
             detect_stored_format("%YAML 1.2\n---\nsecrets: []\n")?,
             VaultFormat::Yaml
@@ -641,14 +641,14 @@ mod tests {
     }
 
     #[test]
-    fn detect_unrecognized_format_fails() -> Result<(), Box<dyn std::error::Error>> {
+    fn detect_unrecognized_format_fails() -> anyhow::Result<()> {
         assert!(detect_stored_format("not a vault file").is_err());
         assert!(detect_stored_format("key: value").is_err());
         Ok(())
     }
 
     #[test]
-    fn empty_stored_records_roundtrip_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_stored_records_roundtrip_yaml() -> anyhow::Result<()> {
         let stored = serialize_stored(&[], VaultFormat::Yaml)?;
         let parsed = deserialize_stored(stored.as_str(), VaultFormat::Yaml)?;
         assert!(parsed.is_empty());
@@ -658,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_requires_secrets_auth_joins_sections() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_requires_secrets_auth_joins_sections() -> anyhow::Result<()> {
         let records = sample_records();
         let wrapped = serialize_stored_yaml(&records)?;
         assert_eq!(deserialize_stored_yaml(wrapped.as_str())?, records);
@@ -669,8 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_stored_matches_format_specific_helpers() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn serialize_stored_matches_format_specific_helpers() -> anyhow::Result<()> {
         let records = sample_records();
         assert_eq!(
             serialize_stored(&records, VaultFormat::Yaml)?.as_str(),
@@ -680,7 +679,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_preserves_multiline_armored_value_exactly() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_preserves_multiline_armored_value_exactly() -> anyhow::Result<()> {
         let records = sample_records();
         let stored = serialize_stored_yaml(&records)?;
         let parsed = deserialize_stored_yaml(stored.as_str())?;
@@ -691,8 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_accepts_root_sequence_format_detection_only() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn yaml_accepts_root_sequence_format_detection_only() -> anyhow::Result<()> {
         assert_eq!(
             detect_stored_format("- key: a\n  value: b\n")?,
             VaultFormat::Yaml
@@ -702,7 +700,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_empty_yaml_has_secrets_key() -> Result<(), Box<dyn std::error::Error>> {
+    fn serialize_empty_yaml_has_secrets_key() -> anyhow::Result<()> {
         let stored = serialize_stored_yaml(&[])?;
         assert!(stored.as_str().contains("secrets:"));
         assert!(!stored.as_str().contains("auth:"));
@@ -711,8 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_auth_section_uses_pk_id_secrets_key_and_members_key()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_auth_section_uses_pk_id_secrets_key_and_members_key() -> anyhow::Result<()> {
         use crate::multi_device::{DeviceIdentity, JoinRequest};
 
         let device_id = "abc123def4567890";
@@ -766,7 +763,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_members_section_uses_pk_id_and_ciphertext() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_members_section_uses_pk_id_and_ciphertext() -> anyhow::Result<()> {
         let auth_id = format!("key_{}", "c".repeat(64));
         let records = vec![StoredSecretRecord {
             key: sid(&format!("member:{auth_id}")),
@@ -791,8 +788,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_password_entries_roundtrip_with_keys_unlock() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn yaml_password_entries_roundtrip_with_keys_unlock() -> anyhow::Result<()> {
         use crate::{
             attach_password_envelope_with_work_factor, multi_device::VaultKeys,
             resolve_keys_from_password,
@@ -838,7 +834,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_keys_unlock_is_default() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_keys_unlock_is_default() -> anyhow::Result<()> {
         let records = sample_records();
         let yaml = serialize_stored_yaml(&records)?;
         assert!(!yaml.as_str().contains("unlock:"));
@@ -852,7 +848,7 @@ mod tests {
     }
 
     #[test]
-    fn store_id_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn store_id_roundtrip() -> anyhow::Result<()> {
         let records = sample_records();
         let yaml = serialize_stored_yaml_with_unlock(
             &records,
@@ -874,7 +870,7 @@ mod tests {
     }
 
     #[test]
-    fn architecture_roundtrips_when_explicit() -> Result<(), Box<dyn std::error::Error>> {
+    fn architecture_roundtrips_when_explicit() -> anyhow::Result<()> {
         let architecture = VaultArchitecture {
             device_mode: crate::DeviceMode::AntiHacker,
             vault_type: crate::VaultType::Sentinel,
@@ -901,7 +897,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_architecture_metadata_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn invalid_architecture_metadata_is_rejected() -> anyhow::Result<()> {
         let invalid = "\
 schema_version: 1
 store_id: store_SMypl8K0w9Y
@@ -917,8 +913,7 @@ secrets: []
     }
 
     #[test]
-    fn unknown_architecture_mode_reports_stable_validation_key()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn unknown_architecture_mode_reports_stable_validation_key() -> anyhow::Result<()> {
         use std::error::Error;
 
         let invalid = "\
@@ -944,8 +939,7 @@ secrets: []
     }
 
     #[test]
-    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = crate::deterministic_passkey_prf_input();
@@ -995,8 +989,7 @@ secrets: []
     }
 
     #[test]
-    fn sentinel_share_records_roundtrip_in_dedicated_yaml_section()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sentinel_share_records_roundtrip_in_dedicated_yaml_section() -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
         let first = crate::DeviceIdentity::generate()?;
         let second = crate::DeviceIdentity::generate()?;
@@ -1030,7 +1023,7 @@ secrets: []
     }
 
     #[test]
-    fn vault_name_roundtrip_and_update() -> Result<(), Box<dyn std::error::Error>> {
+    fn vault_name_roundtrip_and_update() -> anyhow::Result<()> {
         let records = sample_records();
         let yaml = serialize_stored_yaml_with_unlock_and_name(
             &records,
@@ -1062,7 +1055,7 @@ secrets: []
     }
 
     #[test]
-    fn unsupported_schema_version_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn unsupported_schema_version_is_rejected() -> anyhow::Result<()> {
         let future = "schema_version: 99\nunlock:\n  type: keys\nsecrets: []\n";
         let err = deserialize_stored_yaml(future)
             .expect_err("vault format test should reject invalid input");
@@ -1077,8 +1070,7 @@ secrets: []
     }
 
     #[test]
-    fn yaml_auth_envelopes_roundtrip_through_internal_json()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_auth_envelopes_roundtrip_through_internal_json() -> anyhow::Result<()> {
         let auth_id = format!("key_{}", "b".repeat(64));
         let record = auth_to_stored_record(AuthYamlRecord {
             pk_id: auth_id.clone(),

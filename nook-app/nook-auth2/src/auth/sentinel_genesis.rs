@@ -739,7 +739,7 @@ fn announcement_signing_bytes(
 mod tests {
     use super::*;
 
-    fn signing_key() -> Result<SigningKey, Box<dyn std::error::Error>> {
+    fn signing_key() -> anyhow::Result<SigningKey> {
         let mut seed = [0_u8; 32];
         getrandom::getrandom(&mut seed)?;
         Ok(SigningKey::from_bytes(&seed))
@@ -748,14 +748,11 @@ mod tests {
     fn participant(
         request: &SentinelGenesisRequest,
         label: &str,
-    ) -> Result<
-        (
-            DeviceIdentity,
-            SigningKey,
-            SentinelGenesisParticipantResponse,
-        ),
-        Box<dyn std::error::Error>,
-    > {
+    ) -> anyhow::Result<(
+        DeviceIdentity,
+        SigningKey,
+        SentinelGenesisParticipantResponse,
+    )> {
         let identity = DeviceIdentity::generate()?;
         let signing = signing_key()?;
         let response =
@@ -800,8 +797,7 @@ mod tests {
     }
 
     #[test]
-    fn standalone_public_key_announcement_is_rejected_for_enrollment()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn standalone_public_key_announcement_is_rejected_for_enrollment() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
@@ -829,8 +825,7 @@ mod tests {
     }
 
     #[test]
-    fn owner_can_name_a_verified_session_bound_participant()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn owner_can_name_a_verified_session_bound_participant() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
@@ -852,8 +847,7 @@ mod tests {
     }
 
     #[test]
-    fn request_link_round_trips_as_canonical_validated_json()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn request_link_round_trips_as_canonical_validated_json() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
@@ -871,8 +865,7 @@ mod tests {
     }
 
     #[test]
-    fn participant_response_link_round_trips_and_remains_session_verified()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn participant_response_link_round_trips_and_remains_session_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
@@ -894,8 +887,7 @@ mod tests {
     }
 
     #[test]
-    fn local_announcement_fingerprint_remains_readable_but_not_enrollable()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn local_announcement_fingerprint_remains_readable_but_not_enrollable() -> anyhow::Result<()> {
         let peer = DeviceIdentity::generate()?;
         let peer_signing = signing_key()?;
         let announcement =
@@ -915,7 +907,7 @@ mod tests {
     }
 
     #[test]
-    fn response_is_session_bound_signed_and_unique() -> Result<(), Box<dyn std::error::Error>> {
+    fn response_is_session_bound_signed_and_unique() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
@@ -931,8 +923,7 @@ mod tests {
     }
 
     #[test]
-    fn tampered_response_and_cross_session_response_fail() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn tampered_response_and_cross_session_response_fail() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let mut first = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
@@ -960,8 +951,7 @@ mod tests {
     }
 
     #[test]
-    fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let incomplete = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
@@ -994,7 +984,7 @@ mod tests {
     }
 
     #[test]
-    fn no_full_key_envelope_and_quorum_is_required() -> Result<(), Box<dyn std::error::Error>> {
+    fn no_full_key_envelope_and_quorum_is_required() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let mut session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;

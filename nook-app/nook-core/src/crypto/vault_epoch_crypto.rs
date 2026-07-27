@@ -97,8 +97,7 @@ mod tests {
     };
 
     #[test]
-    fn reencrypt_produces_decryptable_new_epoch_secrets() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn reencrypt_produces_decryptable_new_epoch_secrets() -> anyhow::Result<()> {
         let old_key = SymmetricKey::parse(
             "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         )?;

@@ -75,7 +75,6 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> EpochTransition {
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
-        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
         | VaultOperation::SentinelParticipantEnrolled { .. }
@@ -112,8 +111,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn password_and_revoke_rotations_conflict_when_concurrent()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn password_and_revoke_rotations_conflict_when_concurrent() -> anyhow::Result<()> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::PasswordRotated,
             EpochRotationReason::DeviceRevoked
@@ -126,8 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn password_removed_and_rotated_conflict_when_concurrent()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn password_removed_and_rotated_conflict_when_concurrent() -> anyhow::Result<()> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::PasswordRemoved,
             EpochRotationReason::PasswordRotated
@@ -136,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_revokes_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    fn concurrent_revokes_conflict() -> anyhow::Result<()> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::DeviceRevoked,
             EpochRotationReason::DeviceRevoked
@@ -145,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn operation_starts_epoch_maps_security_ops() -> Result<(), Box<dyn std::error::Error>> {
+    fn operation_starts_epoch_maps_security_ops() -> anyhow::Result<()> {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::VaultImported {
                 source_content_hash: crate::Sha256Hex::from_trusted("0".repeat(64)),

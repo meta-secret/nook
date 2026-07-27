@@ -99,7 +99,7 @@ mod tests {
         }
 
         async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
-            task.validate().map_err(anyhow::Error::msg)?;
+            task.validate()?;
             let tasks = self.tasks.lock().expect("store lock");
             let ready = task.dependencies.iter().all(|dependency| {
                 tasks
@@ -147,8 +147,7 @@ mod tests {
             };
             task.status = "RUNNING";
             task.attempt_count += 1;
-            let lease_token =
-                LeaseToken::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
+            let lease_token = LeaseToken::new(Uuid::new_v4().to_string())?;
             task.lease_token = Some(lease_token.clone());
             task.lease_until =
                 Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
@@ -157,8 +156,7 @@ mod tests {
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
                 source_commit: task.definition.source_commit.clone(),
-                attempt_id: AttemptId::new(Uuid::new_v4().to_string())
-                    .map_err(anyhow::Error::msg)?,
+                attempt_id: AttemptId::new(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
                 dependency_context: Vec::new(),
@@ -266,7 +264,7 @@ mod tests {
             blocker: &EnqueueTask,
             _reason: &str,
         ) -> anyhow::Result<bool> {
-            blocker.validate().map_err(anyhow::Error::msg)?;
+            blocker.validate()?;
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
             if task.lease_token.as_ref() != Some(&claimed.lease_token) {
@@ -304,8 +302,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn concurrent_workers_cannot_claim_the_same_attempt()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn concurrent_workers_cannot_claim_the_same_attempt() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("task-1", Vec::new())).await?;
         let agent_a = AgentId::new("agent-a")?;
@@ -324,7 +321,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn incomplete_dependencies_block_claiming() -> Result<(), Box<dyn std::error::Error>> {
+    async fn incomplete_dependencies_block_claiming() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         let dependency = task("dependency", Vec::new());
         store.enqueue(&dependency).await?;
@@ -340,8 +337,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rollout_release_does_not_consume_an_attempt() -> Result<(), Box<dyn std::error::Error>>
-    {
+    async fn rollout_release_does_not_consume_an_attempt() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("task-1", Vec::new())).await?;
         let agent = AgentId::new("agent")?;
@@ -355,8 +351,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn discovered_blocker_is_prioritized_and_resumes_original_task()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn discovered_blocker_is_prioritized_and_resumes_original_task() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("original", Vec::new())).await?;
         let agent = AgentId::new("agent")?;
@@ -388,8 +383,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn expired_lease_rejects_stale_worker_and_allows_retry()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn expired_lease_rejects_stale_worker_and_allows_retry() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         let definition = task("task-1", Vec::new());
         store.enqueue(&definition).await?;

@@ -111,7 +111,7 @@ mod tests {
     use crate::AgeArmoredCiphertext;
 
     #[test]
-    fn secret_type_parse_display_and_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn secret_type_parse_display_and_serde_roundtrip() -> anyhow::Result<()> {
         let cases = [
             ("login", SecretType::Login),
             ("api-key", SecretType::ApiKey),
@@ -133,8 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_record_payload_wraps_trusted_and_armored_values()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_record_payload_wraps_trusted_and_armored_values() -> anyhow::Result<()> {
         let trusted = StoredRecordPayload::from_trusted("opaque-json".to_owned());
         assert_eq!(trusted.as_str(), "opaque-json");
         assert_eq!(trusted.as_ref(), "opaque-json");
@@ -149,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_secret_record_uses_disk_field_names() -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_secret_record_uses_disk_field_names() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_token001"),
             secret_type: Some(SecretType::ApiKey),

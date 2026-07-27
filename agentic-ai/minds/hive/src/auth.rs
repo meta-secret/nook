@@ -302,8 +302,7 @@ mod tests {
     use super::{BrokerRequest, BrokerResponse};
 
     #[test]
-    fn broker_protocol_does_not_serialize_refresh_tokens() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn broker_protocol_does_not_serialize_refresh_tokens() -> anyhow::Result<()> {
         let response = BrokerResponse {
             access_token: "access".to_owned(),
             account_id: "account".to_owned(),

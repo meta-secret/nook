@@ -1547,7 +1547,7 @@ mod tests {
 
     fn genesis_vault(
         keys: &VaultKeys,
-    ) -> Result<(DeviceIdentity, Vec<StoredSecretRecord>), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
         let genesis = DeviceIdentity::generate()?;
         let mut records = vec![genesis_auth_record(
             &genesis,
@@ -1575,7 +1575,7 @@ mod tests {
         approver: &DeviceIdentity,
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())
             .ok_or_else(|| std::io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
@@ -1591,7 +1591,7 @@ mod tests {
         Ok(())
     }
 
-    fn sentinel_share_fixture() -> Result<SentinelShareFixture, Box<dyn std::error::Error>> {
+    fn sentinel_share_fixture() -> anyhow::Result<SentinelShareFixture> {
         let keys = generate_vault_keys()?;
         let identities = [
             DeviceIdentity::generate()?,
@@ -1603,7 +1603,7 @@ mod tests {
     }
 
     #[test]
-    fn genesis_device_can_decrypt_vault_keys() -> Result<(), Box<dyn std::error::Error>> {
+    fn genesis_device_can_decrypt_vault_keys() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, records) = genesis_vault(&keys)?;
         assert_eq!(resolve_secrets_key(&records, &genesis)?, keys.secrets_key);
@@ -1612,8 +1612,7 @@ mod tests {
     }
 
     #[test]
-    fn second_device_join_request_and_approval_roundtrips_key_access()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn second_device_join_request_and_approval_roundtrips_key_access() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
 
@@ -1629,8 +1628,8 @@ mod tests {
     }
 
     #[test]
-    fn vault_meta_state_classifies_roundtrips_and_removes_every_record_kind()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn vault_meta_state_classifies_roundtrips_and_removes_every_record_kind() -> anyhow::Result<()>
+    {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
@@ -1696,7 +1695,7 @@ mod tests {
 
     #[test]
     fn sentinel_threshold_shares_reconstruct_keys_without_full_device_envelopes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let (keys, [first, second, third], records) = sentinel_share_fixture()?;
 
         assert_eq!(records.len(), 3);
@@ -1715,8 +1714,7 @@ mod tests {
     }
 
     #[test]
-    fn opened_sentinel_shares_reconstruct_without_peer_identities()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn opened_sentinel_shares_reconstruct_without_peer_identities() -> anyhow::Result<()> {
         let (keys, [first, second, third], records) = sentinel_share_fixture()?;
 
         let opened_first = open_sentinel_share_for_identity(&records, &first)?;
@@ -1747,8 +1745,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_member_row_without_auth_counts_as_enrolled()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sentinel_member_row_without_auth_counts_as_enrolled() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let participant = DeviceIdentity::generate()?;
         let members = genesis_members_records(&participant, &keys.members_key, ENROLLED_AT)?;
@@ -1762,8 +1759,7 @@ mod tests {
     }
 
     #[test]
-    fn merge_remote_join_records_replaces_only_pending_join_bucket()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn merge_remote_join_records_replaces_only_pending_join_bucket() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         records.push(user_secret_record("secret_api001", "encrypted-user-secret"));
@@ -1796,7 +1792,7 @@ mod tests {
 
     #[test]
     fn connect_access_status_distinguishes_ready_pending_and_unenrolled_devices()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let pending = DeviceIdentity::generate()?;
@@ -1820,8 +1816,7 @@ mod tests {
     }
 
     #[test]
-    fn approve_join_falls_back_to_approver_when_roster_is_missing()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn approve_join_falls_back_to_approver_when_roster_is_missing() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let genesis = DeviceIdentity::generate()?;
         let joiner = DeviceIdentity::generate()?;
@@ -1871,8 +1866,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_self_in_roster_adds_missing_current_identity_once()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn ensure_self_in_roster_adds_missing_current_identity_once() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
@@ -1906,8 +1900,7 @@ mod tests {
     }
 
     #[test]
-    fn rename_vault_member_trims_clears_and_preserves_key_access()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn rename_vault_member_trims_clears_and_preserves_key_access() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
@@ -1946,8 +1939,8 @@ mod tests {
     }
 
     #[test]
-    fn revoke_vault_member_removes_auth_and_member_rows_but_not_user_secrets()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn revoke_vault_member_removes_auth_and_member_rows_but_not_user_secrets() -> anyhow::Result<()>
+    {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
@@ -1979,8 +1972,7 @@ mod tests {
     }
 
     #[test]
-    fn revoke_last_access_and_missing_member_are_errors() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn revoke_last_access_and_missing_member_are_errors() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, records) = genesis_vault(&keys)?;
         let stranger = DeviceIdentity::generate()?;
@@ -2006,7 +1998,7 @@ mod tests {
     }
 
     #[test]
-    fn member_roster_rejects_mismatched_record_key() -> Result<(), Box<dyn std::error::Error>> {
+    fn member_roster_rejects_mismatched_record_key() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let (genesis, records) = genesis_vault(&keys)?;
         let mut member_record = records

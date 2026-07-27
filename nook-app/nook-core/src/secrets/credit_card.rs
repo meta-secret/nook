@@ -211,7 +211,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accepts_valid_visa_test_number_and_masks_last4() -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_valid_visa_test_number_and_masks_last4() -> anyhow::Result<()> {
         let card = CreditCardSecret::from_fields(
             "Personal Visa",
             "Ada Lovelace",
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn allows_empty_optional_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn allows_empty_optional_fields() -> anyhow::Result<()> {
         let card = CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "")?;
         assert!(card.cardholder_name.is_empty());
         assert!(card.cvv.is_empty());

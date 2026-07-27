@@ -240,9 +240,6 @@ fn apply_operation(
                 let _ = chosen;
             }
         }
-        VaultOperation::SecretFingerprintsBackfilled { fingerprints } => {
-            apply_fingerprint_backfill(projection, fingerprints);
-        }
         VaultOperation::VaultCleared => {
             projection.cleared = true;
             projection.secrets.clear();
@@ -285,20 +282,6 @@ fn apply_operation(
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::DeviceRevoked { .. } => {}
-    }
-}
-
-fn apply_fingerprint_backfill(
-    projection: &mut VaultProjection,
-    fingerprints: &[crate::SecretFingerprintAssignment],
-) {
-    for assignment in fingerprints {
-        if let Some(secret) = projection.secrets.get_mut(&assignment.secret_id) {
-            secret
-                .identity_fingerprint
-                .clone_from(&assignment.identity_fingerprint);
-            secret.fingerprint.clone_from(&assignment.fingerprint);
-        }
     }
 }
 
@@ -408,7 +391,7 @@ mod tests {
         build_genesis_import_event,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::{EventResult, SecretFingerprint, SecretFingerprintAssignment};
+    use crate::{EventResult, SecretFingerprint};
     use crate::{PasswordEnvelope, PasswordUnlockEntry};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
@@ -535,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_secret_additions_both_survive() -> Result<(), Box<dyn std::error::Error>> {
+    fn concurrent_secret_additions_both_survive() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key)?;
@@ -552,50 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn fingerprint_backfill_updates_projection_without_changing_ciphertext()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key)?;
-        let created = secret_created(vec![genesis_id], "secret_fingerprint1", &signing_key)?;
-        let created_id = created.id()?;
-        graph.insert(created, STORE)?;
-
-        let fingerprint =
-            SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)));
-        let body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store()?,
-            actor_id: actor(&signing_key)?,
-            actor_signing_public_key: public_key(&signing_key),
-            parents: vec![created_id],
-            created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch()?,
-            operations: vec![VaultOperation::SecretFingerprintsBackfilled {
-                fingerprints: vec![SecretFingerprintAssignment {
-                    secret_id: sid("secret_fingerprint1"),
-                    identity_fingerprint: fingerprint.clone(),
-                    fingerprint: fingerprint.clone(),
-                }],
-            }],
-        };
-        graph.insert(VaultEvent::sign(body, &signing_key)?, STORE)?;
-
-        let projection = project_vault(&graph, STORE)?;
-        let projected = projection
-            .secrets
-            .get(&sid("secret_fingerprint1"))
-            .ok_or_else(|| std::io::Error::other("backfilled secret must be projected"))?;
-        assert_eq!(projected.fingerprint, fingerprint);
-        assert_eq!(
-            projected.record.value.as_str(),
-            "cipher-secret_fingerprint1"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn causal_delete_hides_secret() -> Result<(), Box<dyn std::error::Error>> {
+    fn causal_delete_hides_secret() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key)?;
@@ -624,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_replacements_create_conflict_group() -> Result<(), Box<dyn std::error::Error>> {
+    fn concurrent_replacements_create_conflict_group() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key)?;
@@ -648,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn projection_is_replay_invariant() -> Result<(), Box<dyn std::error::Error>> {
+    fn projection_is_replay_invariant() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key)?;

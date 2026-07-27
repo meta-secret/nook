@@ -372,7 +372,7 @@ mod tests {
         policy: SentinelUnlockPolicy,
     }
 
-    fn fixture() -> Result<Fixture, Box<dyn std::error::Error>> {
+    fn fixture() -> anyhow::Result<Fixture> {
         let participants = (0..3)
             .map(|_| DeviceIdentity::generate())
             .collect::<Result<Vec<_>, _>>()?;
@@ -396,7 +396,7 @@ mod tests {
         })
     }
 
-    fn session(fixture: &Fixture) -> Result<SentinelUnlockSession, Box<dyn std::error::Error>> {
+    fn session(fixture: &Fixture) -> anyhow::Result<SentinelUnlockSession> {
         Ok(start_sentinel_unlock(
             fixture.store_id.clone(),
             fixture.policy,
@@ -410,7 +410,7 @@ mod tests {
         fixture: &Fixture,
         request: &SentinelUnlockRequest,
         index: usize,
-    ) -> Result<SentinelUnlockResponse, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<SentinelUnlockResponse> {
         Ok(respond_to_sentinel_unlock_request(
             request,
             &fixture.records,
@@ -421,8 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn signed_two_of_three_responses_unlock_without_exposing_mnemonics()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn signed_two_of_three_responses_unlock_without_exposing_mnemonics() -> anyhow::Result<()> {
         let fixture = fixture()?;
         let mut session = session(&fixture)?;
         let request = sentinel_unlock_request(&session);
@@ -450,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn below_quorum_and_wrong_requester_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn below_quorum_and_wrong_requester_are_rejected() -> anyhow::Result<()> {
         let fixture = fixture()?;
         let mut session = session(&fixture)?;
         let request = sentinel_unlock_request(&session);
@@ -468,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_device_and_share_index_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn duplicate_device_and_share_index_are_rejected() -> anyhow::Result<()> {
         let fixture = fixture()?;
         let mut session = session(&fixture)?;
         let request = sentinel_unlock_request(&session);
@@ -495,8 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn tampered_request_response_and_wrong_session_are_rejected()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn tampered_request_response_and_wrong_session_are_rejected() -> anyhow::Result<()> {
         let fixture = fixture()?;
         let mut first_session = session(&fixture)?;
         let first_request = sentinel_unlock_request(&first_session);
@@ -531,8 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn unenrolled_requester_receives_no_unlock_response() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn unenrolled_requester_receives_no_unlock_response() -> anyhow::Result<()> {
         let fixture = fixture()?;
         let unknown_identity = DeviceIdentity::generate()?;
         let unknown_signing = signing_key(91);

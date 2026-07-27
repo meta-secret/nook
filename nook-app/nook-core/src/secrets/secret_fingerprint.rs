@@ -333,14 +333,11 @@ mod tests {
     };
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
-    fn key(byte: char) -> Result<SymmetricKey, Box<dyn std::error::Error>> {
+    fn key(byte: char) -> anyhow::Result<SymmetricKey> {
         Ok(SymmetricKey::parse(&byte.to_string().repeat(64))?)
     }
 
-    fn authenticator(
-        secret: &str,
-        backup_codes: &[&str],
-    ) -> Result<SecretValue, Box<dyn std::error::Error>> {
+    fn authenticator(secret: &str, backup_codes: &[&str]) -> anyhow::Result<SecretValue> {
         Ok(SecretValue::Authenticator(AuthenticatorSecret {
             issuer: "Example".to_owned(),
             account: "alice@example.com".to_owned(),
@@ -354,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn fingerprints_are_vault_scoped_and_deterministic() -> Result<(), Box<dyn std::error::Error>> {
+    fn fingerprints_are_vault_scoped_and_deterministic() -> anyhow::Result<()> {
         let value = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -383,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn identity_ignores_password_and_provider_metadata() -> Result<(), Box<dyn std::error::Error>> {
+    fn identity_ignores_password_and_provider_metadata() -> anyhow::Result<()> {
         let bitwarden = SecretValue::Login(LoginSecret {
             website_url: " https://example.com ".to_owned(),
             username: "alice".to_owned(),
@@ -404,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn different_passwords_are_different_versions() -> Result<(), Box<dyn std::error::Error>> {
+    fn different_passwords_are_different_versions() -> anyhow::Result<()> {
         assert_ne!(
             secret_fingerprint(
                 &SecretValue::Login(LoginSecret {
@@ -429,8 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn login_versions_ignore_all_supported_importer_metadata()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn login_versions_ignore_all_supported_importer_metadata() -> anyhow::Result<()> {
         let chrome = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -452,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn meaningful_secure_note_changes_remain_distinct() -> Result<(), Box<dyn std::error::Error>> {
+    fn meaningful_secure_note_changes_remain_distinct() -> anyhow::Result<()> {
         let first = SecretValue::SecureNote(SecureNoteSecret {
             title: "Recovery".to_owned(),
             note: "first".to_owned(),
@@ -469,8 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn login_only_import_markers_remain_meaningful_in_secure_notes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn login_only_import_markers_remain_meaningful_in_secure_notes() -> anyhow::Result<()> {
         let first = SecretValue::SecureNote(SecureNoteSecret {
             title: "Migration guide".to_owned(),
             note: "Steps\n\n## Apple Passwords\nUse the first export".to_owned(),
@@ -488,8 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn secure_note_versions_ignore_all_provider_metadata() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn secure_note_versions_ignore_all_provider_metadata() -> anyhow::Result<()> {
         let providers = [
             "## Bitwarden\n- field.folder: Personal",
             "## 1Password\n- format: 1PUX\n- PIN: 1234",
@@ -515,8 +509,7 @@ mod tests {
     }
 
     #[test]
-    fn user_authored_provider_sections_remain_meaningful() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn user_authored_provider_sections_remain_meaningful() -> anyhow::Result<()> {
         for heading in ["## LastPass", "## Proton Pass"] {
             let first = SecretValue::SecureNote(SecureNoteSecret {
                 title: "Migration diary".to_owned(),
@@ -536,8 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn generated_metadata_after_a_user_provider_section_is_still_ignored()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn generated_metadata_after_a_user_provider_section_is_still_ignored() -> anyhow::Result<()> {
         let first = SecretValue::SecureNote(SecureNoteSecret {
             title: "Migration diary".to_owned(),
             note: "Notes\n\n## LastPass\n- diary: first export\n\n## LastPass\n- group: Personal"
@@ -557,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticator_identity_excludes_secret_material() -> Result<(), Box<dyn std::error::Error>> {
+    fn authenticator_identity_excludes_secret_material() -> anyhow::Result<()> {
         let first = authenticator("JBSWY3DPEHPK3PXP", &["alpha"])?;
         let second = authenticator("KRSXG5DSNFXGOIDB", &["beta"])?;
         assert_eq!(
@@ -572,8 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticator_backup_code_order_does_not_create_a_new_version()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn authenticator_backup_code_order_does_not_create_a_new_version() -> anyhow::Result<()> {
         assert_eq!(
             secret_fingerprint(
                 &authenticator("JBSWY3DPEHPK3PXP", &["alpha", "beta"])?,
@@ -588,8 +579,8 @@ mod tests {
     }
 
     #[test]
-    fn passkey_identity_is_stable_while_counter_updates_create_new_versions()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_identity_is_stable_while_counter_updates_create_new_versions() -> anyhow::Result<()>
+    {
         let registration = create_website_passkey(
             &PasskeyRegistrationRequest {
                 origin: "https://login.example.com".to_owned(),
@@ -629,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn matching_login_versions_merge_provider_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn matching_login_versions_merge_provider_fields() -> anyhow::Result<()> {
         let existing = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),

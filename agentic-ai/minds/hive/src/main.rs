@@ -296,7 +296,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     task_id,
                     release_id,
                 } => {
-                    let task_id = TaskId::new(task_id).map_err(anyhow::Error::msg)?;
+                    let task_id = TaskId::new(task_id)?;
                     if !store.retry_failed_main_task(&task_id, &release_id).await? {
                         anyhow::bail!("task {task_id} is not a retryable failed Main-repair task");
                     }
@@ -359,7 +359,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             Worker::new(
                 store,
                 WorkerConfig {
-                    agent_id: AgentId::new(agent_id).map_err(anyhow::Error::msg)?,
+                    agent_id: AgentId::new(agent_id)?,
                     pod_name,
                     repository_url,
                     workspace,
@@ -407,12 +407,12 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             store.migrate().await?;
             let dependencies = depends_on
                 .into_iter()
-                .map(|value| TaskId::new(value).map_err(anyhow::Error::msg))
-                .collect::<anyhow::Result<Vec<_>>>()
+                .map(TaskId::new)
+                .collect::<Result<Vec<_>, _>>()
                 .context("invalid dependency id")?;
             store
                 .enqueue(&EnqueueTask {
-                    id: TaskId::new(id).map_err(anyhow::Error::msg)?,
+                    id: TaskId::new(id)?,
                     kind,
                     prompt,
                     source_commit,

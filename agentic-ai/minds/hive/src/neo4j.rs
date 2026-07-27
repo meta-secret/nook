@@ -190,7 +190,7 @@ impl Neo4jTaskStore {
             .zip(dependency_summaries)
             .map(|(id, summary)| {
                 Ok(DependencyResult {
-                    id: TaskId::new(id).map_err(anyhow::Error::msg)?,
+                    id: TaskId::new(id)?,
                     summary,
                 })
             })
@@ -216,7 +216,7 @@ impl Neo4jTaskStore {
             .collect();
 
         Ok(ClaimedTask {
-            id: TaskId::new(row.get::<String>("id")?).map_err(anyhow::Error::msg)?,
+            id: TaskId::new(row.get::<String>("id")?)?,
             kind: row.get("kind")?,
             prompt: row.get("prompt")?,
             source_commit: row.get("source_commit")?,
@@ -327,7 +327,7 @@ impl TaskStore for Neo4jTaskStore {
     }
 
     async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
-        task.validate().map_err(anyhow::Error::msg)?;
+        task.validate()?;
         let mut transaction = self.graph.start_txn().await?;
         let enqueue_token = Uuid::new_v4().to_string();
         let mut rows = transaction
@@ -410,9 +410,9 @@ impl TaskStore for Neo4jTaskStore {
         for retry in 0..CLAIM_RETRY_LIMIT {
             let result = async {
                 let attempt_id =
-                    AttemptId::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
+                    AttemptId::new(Uuid::new_v4().to_string())?;
                 let lease_token =
-                    LeaseToken::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
+                    LeaseToken::new(Uuid::new_v4().to_string())?;
                 let mut transaction = self.graph.start_txn().await?;
 
                 transaction
@@ -805,7 +805,7 @@ impl TaskStore for Neo4jTaskStore {
         blocker: &EnqueueTask,
         reason: &str,
     ) -> anyhow::Result<bool> {
-        blocker.validate().map_err(anyhow::Error::msg)?;
+        blocker.validate()?;
         if blocker.source_commit != task.source_commit {
             anyhow::bail!("a blocker must target the same pinned repository revision");
         }
@@ -1579,12 +1579,18 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim repair on release b")
+            .into_claimed()
             .expect("repair available on release b");
         assert_eq!(release_b_claim.id, repair.id);
         assert_eq!(release_b_claim.attempt_number, 5);
         assert!(
             store
-                .complete(&release_b_claim, &agent_a, "platform repaired", None)
+                .complete(
+                    &release_b_claim,
+                    &agent_a,
+                    "platform repaired",
+                    &CompletionArtifact::NotProduced,
+                )
                 .await
                 .expect("complete repair on release b")
         );
@@ -1647,6 +1653,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim recovered blocker")
+            .into_claimed()
             .expect("recovered blocker available");
         assert_eq!(recovered_blocker.id, exhausted.id);
         assert!(
@@ -1655,7 +1662,7 @@ mod tests {
                     &recovered_blocker,
                     &agent_a,
                     "sandbox dependency repaired",
-                    None,
+                    &CompletionArtifact::NotProduced,
                 )
                 .await
                 .expect("complete recovered blocker")
@@ -1664,6 +1671,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim recovered parent")
+            .into_claimed()
             .expect("recovered parent available");
         assert_eq!(recovered_parent.id, reused_failed_parent.id);
         assert!(
@@ -1672,7 +1680,7 @@ mod tests {
                     &recovered_parent,
                     &agent_a,
                     "dependent repair complete",
-                    None,
+                    &CompletionArtifact::NotProduced,
                 )
                 .await
                 .expect("complete recovered parent")

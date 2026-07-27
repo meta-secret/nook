@@ -547,7 +547,7 @@ mod tests {
 
     use super::*;
 
-    fn build_1pux(attributes: &str, data: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn build_1pux(attributes: &str, data: &str) -> anyhow::Result<Vec<u8>> {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         writer.start_file("export.attributes", options)?;
@@ -562,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_login_password_and_secure_note_items() -> Result<(), Box<dyn std::error::Error>> {
+    fn converts_login_password_and_secure_note_items() -> anyhow::Result<()> {
         let data = r#"{
           "accounts":[{
             "vaults":[{
@@ -645,8 +645,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_wrapped_items_and_skips_unsupported_categories()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_wrapped_items_and_skips_unsupported_categories() -> anyhow::Result<()> {
         let data = r#"{
           "accounts": [{
             "vaults": [{
@@ -678,8 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_archives_missing_entries_and_unknown_versions()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn rejects_non_archives_missing_entries_and_unknown_versions() -> anyhow::Result<()> {
         assert!(matches!(
             plan_onepassword_import(b"not a zip"),
             Err(OnePasswordImportError::InvalidArchive(_))

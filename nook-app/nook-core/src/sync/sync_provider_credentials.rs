@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn seal_and_open_github_pat_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+    fn seal_and_open_github_pat_round_trips() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11AAAAbbbbCCCC";
         let mut snapshot = github_snapshot(pat);
@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn seal_and_open_oauth_tokens_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+    fn seal_and_open_oauth_tokens_round_trips() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let access = "ya29.oauth-access-token";
         let refresh = "1//refresh-token-secret";
@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn open_rejects_plaintext_credentials() -> Result<(), Box<dyn std::error::Error>> {
+    fn open_rejects_plaintext_credentials() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11LEGACY";
         let mut snapshot = github_snapshot(pat);
@@ -277,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn seal_is_idempotent_for_already_sealed_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn seal_is_idempotent_for_already_sealed_fields() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11AAAA");
         seal_provider_credentials(&identity, &mut snapshot)?;
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn sealed_credentials_fail_on_wrong_device() -> Result<(), Box<dyn std::error::Error>> {
+    fn sealed_credentials_fail_on_wrong_device() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let other = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11SECRET");
@@ -298,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn seal_for_public_key_opens_on_recipient_device() -> Result<(), Box<dyn std::error::Error>> {
+    fn seal_for_public_key_opens_on_recipient_device() -> anyhow::Result<()> {
         let extension = DeviceIdentity::generate()?;
         let pat = "github_pat_11EXTENSIONgrant";
         let mut snapshot = github_snapshot(pat);
@@ -317,8 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn presealed_check_accepts_sealed_or_empty_credentials()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn presealed_check_accepts_sealed_or_empty_credentials() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11PRESEAL");
         assert!(!provider_credentials_are_presealed(&snapshot));

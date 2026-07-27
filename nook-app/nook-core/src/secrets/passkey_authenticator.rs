@@ -531,8 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn registration_builds_valid_es256_none_attestation() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn registration_builds_valid_es256_none_attestation() -> anyhow::Result<()> {
         let result = create_website_passkey(&registration_request(), &[])?;
         result.credential.validate()?;
         let attestation = URL_SAFE_NO_PAD.decode(&result.attestation_object)?;
@@ -550,8 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn assertion_signature_verifies_and_counter_advances() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn assertion_signature_verifies_and_counter_advances() -> anyhow::Result<()> {
         let registration = create_website_passkey(&registration_request(), &[])?;
         let request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
@@ -583,8 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn origin_algorithm_lookup_and_ambiguity_fail_closed() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn origin_algorithm_lookup_and_ambiguity_fail_closed() -> anyhow::Result<()> {
         let mut request = registration_request();
         request.origin = "https://example.net".to_owned();
         assert_eq!(
@@ -622,8 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_counter_variants_resume_from_the_highest_counter()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn concurrent_counter_variants_resume_from_the_highest_counter() -> anyhow::Result<()> {
         let registration = create_website_passkey(&registration_request(), &[])?;
         let mut older = registration.credential.clone();
         older.signature_count = 2;
@@ -646,8 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn credential_key_validation_rejects_mismatched_public_key()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn credential_key_validation_rejects_mismatched_public_key() -> anyhow::Result<()> {
         let first = create_website_passkey(&registration_request(), &[])?.credential;
         let second = create_website_passkey(&registration_request(), &[])?.credential;
         let PasskeyCredentialKey::Es256 {
@@ -664,8 +659,7 @@ mod tests {
     }
 
     #[test]
-    fn exclusions_malformed_descriptors_and_exhausted_counters_fail_closed()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn exclusions_malformed_descriptors_and_exhausted_counters_fail_closed() -> anyhow::Result<()> {
         let credential = create_website_passkey(&registration_request(), &[])?.credential;
         let mut excluded_request = registration_request();
         excluded_request.exclude_credentials = vec![PasskeyCredentialDescriptor {

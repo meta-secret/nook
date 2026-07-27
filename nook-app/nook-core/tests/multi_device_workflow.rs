@@ -24,13 +24,13 @@ fn api_key(value: &str) -> SecretValue {
 fn encrypt_user_secrets(
     db: &Database,
     crypto: &VaultCrypto,
-) -> Result<Vec<nook_core::StoredSecretRecord>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Vec<nook_core::StoredSecretRecord>> {
     Ok(db.to_stored_records_with_crypto(crypto)?)
 }
 
 fn genesis_vault(
     keys: &VaultKeys,
-) -> Result<(DeviceIdentity, Vec<nook_core::StoredSecretRecord>), Box<dyn std::error::Error>> {
+) -> anyhow::Result<(DeviceIdentity, Vec<nook_core::StoredSecretRecord>)> {
     let genesis = DeviceIdentity::generate()?;
     let mut records = vec![genesis_auth_record(
         &genesis,
@@ -46,8 +46,7 @@ fn genesis_vault(
 }
 
 #[test]
-fn three_device_join_flow_unlocks_shared_vault_and_roster() -> Result<(), Box<dyn std::error::Error>>
-{
+fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let crypto = VaultCrypto::new(&keys.secrets_key)?;
 
@@ -124,8 +123,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> Result<(), Box<dy
 }
 
 #[test]
-fn vault_without_auth_envelope_fails_to_resolve_secrets_key()
--> Result<(), Box<dyn std::error::Error>> {
+fn vault_without_auth_envelope_fails_to_resolve_secrets_key() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&generate_vault_keys()?.secrets_key)?;
     let mut db = Database::new();
     db.insert(sid("site"), api_key("secret"));
@@ -137,7 +135,7 @@ fn vault_without_auth_envelope_fails_to_resolve_secrets_key()
 }
 
 #[test]
-fn oob_enroll_writes_self_member_roster_only() -> Result<(), Box<dyn std::error::Error>> {
+fn oob_enroll_writes_self_member_roster_only() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let device = DeviceIdentity::generate()?;
     let (auth, members) = enroll_device_with_keys(
@@ -155,8 +153,7 @@ fn oob_enroll_writes_self_member_roster_only() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn yaml_roundtrip_preserves_secrets_and_members_key_resolution()
--> Result<(), Box<dyn std::error::Error>> {
+fn yaml_roundtrip_preserves_secrets_and_members_key_resolution() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let (genesis, records) = genesis_vault(&keys)?;
 
@@ -169,14 +166,14 @@ fn yaml_roundtrip_preserves_secrets_and_members_key_resolution()
 }
 
 #[test]
-fn resolve_members_key_fails_without_auth_envelope() -> Result<(), Box<dyn std::error::Error>> {
+fn resolve_members_key_fails_without_auth_envelope() -> anyhow::Result<()> {
     let device = DeviceIdentity::generate()?;
     assert!(resolve_members_key(&[], &device).is_err());
     Ok(())
 }
 
 #[test]
-fn member_roster_entries_expose_pk_id_and_public_key() -> Result<(), Box<dyn std::error::Error>> {
+fn member_roster_entries_expose_pk_id_and_public_key() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let device = DeviceIdentity::generate()?;
     let (auth, members) = enroll_device_with_keys(
@@ -197,8 +194,7 @@ fn member_roster_entries_expose_pk_id_and_public_key() -> Result<(), Box<dyn std
 }
 
 #[test]
-fn approve_join_writes_distinct_secrets_and_members_envelopes()
--> Result<(), Box<dyn std::error::Error>> {
+fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
@@ -225,7 +221,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes()
 }
 
 #[test]
-fn rename_member_label_survives_yaml_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let (device, mut records) = genesis_vault(&keys)?;
     let member_records = rename_vault_member(
@@ -246,8 +242,7 @@ fn rename_member_label_survives_yaml_roundtrip() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip()
--> Result<(), Box<dyn std::error::Error>> {
+fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;

@@ -611,8 +611,7 @@ mod tests {
     const OFFICIAL_EXTENDABLE_2_OF_3_B: &str = "western apart academic acid answer ancient auction flip image penalty oasis beaver multiple thunder problem switch alive heat inherit superior teaspoon explain blanket pencil numb lend punish endless aunt garlic humidity kidney observe";
 
     #[test]
-    fn official_extendable_256_bit_one_of_one_vector_recovers()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn official_extendable_256_bit_one_of_one_vector_recovers() -> anyhow::Result<()> {
         let mnemonics = vec![OFFICIAL_EXTENDABLE_1_OF_1.to_owned()];
         let recovered = recover_with_passphrase(&mnemonics, b"TREZOR")?;
         assert_eq!(
@@ -627,8 +626,7 @@ mod tests {
     }
 
     #[test]
-    fn official_extendable_256_bit_two_of_three_vector_recovers()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn official_extendable_256_bit_two_of_three_vector_recovers() -> anyhow::Result<()> {
         let mnemonics = vec![
             OFFICIAL_EXTENDABLE_2_OF_3_A.to_owned(),
             OFFICIAL_EXTENDABLE_2_OF_3_B.to_owned(),
@@ -642,8 +640,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_round_trip_is_current_ext_one_and_any_quorum_recovers()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sentinel_round_trip_is_current_ext_one_and_any_quorum_recovers() -> anyhow::Result<()> {
         let root = core::array::from_fn(|index| {
             u8::try_from(index).expect("fixed secret index must fit into u8")
         });
@@ -665,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn checksum_and_padding_corruption_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn checksum_and_padding_corruption_are_rejected() -> anyhow::Result<()> {
         let root = [42_u8; SECRET_BYTES];
         let mut shares = split_sentinel_secret(&root, 2, 3)?;
         let last = shares[0]
@@ -707,8 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_mixed_sets_duplicates_and_invalid_policy() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn rejects_mixed_sets_duplicates_and_invalid_policy() -> anyhow::Result<()> {
         let left = split_sentinel_secret(&[1_u8; SECRET_BYTES], 2, 3)?;
         let right = split_sentinel_secret(&[2_u8; SECRET_BYTES], 2, 3)?;
         assert!(recover_sentinel_secret(&[left[0].clone(), right[1].clone()]).is_err());

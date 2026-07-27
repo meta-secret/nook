@@ -140,8 +140,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn imports_chromium_login_and_preserves_name_and_note() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn imports_chromium_login_and_preserves_name_and_note() -> anyhow::Result<()> {
         let csv = concat!(
             "name,url,username,password,note\n",
             "\"Example, Inc\",https://example.com/login,alice@example.com,secret,",
@@ -166,8 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn supports_bom_reordered_headers_and_common_aliases() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn supports_bom_reordered_headers_and_common_aliases() -> anyhow::Result<()> {
         let csv =
             "\u{feff}Password,User_Name,Website URL,Title,Notes\nsecret,alice,,Example,Personal\n";
 
@@ -186,8 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_minimal_google_documented_columns_and_skips_empty_rows()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_minimal_google_documented_columns_and_skips_empty_rows() -> anyhow::Result<()> {
         let csv = concat!(
             "url,username,password\n",
             "https://example.com,alice,secret\n",
@@ -203,8 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_leading_and_trailing_password_whitespace() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn preserves_leading_and_trailing_password_whitespace() -> anyhow::Result<()> {
         let csv = "url,username,password\nhttps://example.com,alice,\" secret \"\n";
 
         let plan = plan_chrome_passwords_import(csv)?;
@@ -217,8 +213,8 @@ mod tests {
     }
 
     #[test]
-    fn skips_rows_without_a_password_but_preserves_whitespace_only_passwords()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn skips_rows_without_a_password_but_preserves_whitespace_only_passwords() -> anyhow::Result<()>
+    {
         let csv = concat!(
             "url,username,password\n",
             "https://example.com,alice,\n",

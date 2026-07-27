@@ -452,7 +452,7 @@ mod tests {
     use age::x25519::Identity;
 
     #[test]
-    fn symmetric_key_roundtrip_and_generate() -> Result<(), Box<dyn std::error::Error>> {
+    fn symmetric_key_roundtrip_and_generate() -> anyhow::Result<()> {
         let key = SymmetricKey::generate()?;
         assert_eq!(key.as_str().len(), 64);
         assert_eq!(SymmetricKey::parse(key.as_str())?, key);
@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn age_armored_accepts_valid_armor() -> Result<(), Box<dyn std::error::Error>> {
+    fn age_armored_accepts_valid_armor() -> anyhow::Result<()> {
         let armor = "-----BEGIN AGE ENCRYPTED FILE-----\nabc\n-----END AGE ENCRYPTED FILE-----";
         let parsed = AgeArmoredCiphertext::parse(armor)?;
         assert_eq!(parsed.as_str(), armor);
@@ -472,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn device_keys_parse_from_generated_identity() -> Result<(), Box<dyn std::error::Error>> {
+    fn device_keys_parse_from_generated_identity() -> anyhow::Result<()> {
         let identity = Identity::generate();
         let public = identity.to_public().to_string();
         let secret = identity.to_string().expose_secret().to_owned();
@@ -485,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn sha256_hex_parse_and_serde() -> Result<(), Box<dyn std::error::Error>> {
+    fn sha256_hex_parse_and_serde() -> anyhow::Result<()> {
         let hex = Sha256Hex::from_trusted("deadbeef".repeat(8));
         assert_eq!(Sha256Hex::parse(hex.as_str())?, hex);
         assert!(Sha256Hex::parse("short").is_err());
@@ -495,8 +495,7 @@ mod tests {
     }
 
     #[test]
-    fn device_signing_public_key_names_unavailable_and_ed25519_states()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn device_signing_public_key_names_unavailable_and_ed25519_states() -> anyhow::Result<()> {
         assert_eq!(
             DeviceSigningPublicKey::parse("")?,
             DeviceSigningPublicKey::Unavailable
@@ -509,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn password_entry_id_requires_compact_token() -> Result<(), Box<dyn std::error::Error>> {
+    fn password_entry_id_requires_compact_token() -> anyhow::Result<()> {
         let id = PasswordEntryId::parse("pwdentry001")?;
         assert_eq!(PasswordEntryId::parse(id.as_str())?, id);
         assert!(PasswordEntryId::parse("").is_err());
@@ -518,8 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_key_and_ciphertext_strings_fail_validation() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn invalid_key_and_ciphertext_strings_fail_validation() -> anyhow::Result<()> {
         assert!(SymmetricKey::parse("short").is_err());
         assert!(SymmetricKey::parse(&"zz".repeat(32)).is_err());
         assert!(AgeArmoredCiphertext::parse("plain text").is_err());
@@ -533,8 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn string_newtypes_expose_display_as_ref_and_inner_values()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn string_newtypes_expose_display_as_ref_and_inner_values() -> anyhow::Result<()> {
         let seed_hex = "ab".repeat(32);
         let seed = SigningSeedHex::parse(&seed_hex)?;
         assert_eq!(seed.as_str(), seed_hex);
@@ -571,8 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_and_signing_key_roundtrip_through_serde() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn timestamp_and_signing_key_roundtrip_through_serde() -> anyhow::Result<()> {
         let ts = IsoTimestamp::parse("2026-07-07T03:00:00Z")?;
         assert_eq!(ts.as_str(), "2026-07-07T03:00:00Z");
         assert_eq!(ts.as_ref(), ts.as_str());
@@ -594,8 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn device_identity_secret_can_be_unwrapped_without_debug_leak()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn device_identity_secret_can_be_unwrapped_without_debug_leak() -> anyhow::Result<()> {
         let identity = Identity::generate();
         let secret = identity.to_string().expose_secret().to_owned();
         let wrapped = DeviceIdentitySecret::parse(&secret)?;

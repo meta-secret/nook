@@ -380,7 +380,6 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
         VaultOperation::SentinelSharesIssued { shares } => shares.len(),
         VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretConflictResolved { .. }
-        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::SentinelParticipantEnrolled { .. }
         | VaultOperation::JoinDenied { .. }

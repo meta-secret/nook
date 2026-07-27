@@ -319,8 +319,7 @@ mod tests {
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     #[test]
-    fn compact_token_and_device_id_validate_expected_shapes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn compact_token_and_device_id_validate_expected_shapes() -> anyhow::Result<()> {
         let token = CompactToken::parse(TOKEN)?;
         assert_eq!(token.as_str(), TOKEN);
         assert_eq!(token.as_ref(), TOKEN);
@@ -340,8 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn store_ids_normalize_tokens_and_reject_reserved_device_ids()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn store_ids_normalize_tokens_and_reject_reserved_device_ids() -> anyhow::Result<()> {
         let token = CompactToken::parse(TOKEN)?;
         let store = StoreId::from_token(&token);
         assert_eq!(store.as_str(), "store_Abcdef_1234");
@@ -360,8 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_key_ids_require_the_current_prefixed_format() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn auth_key_ids_require_the_current_prefixed_format() -> anyhow::Result<()> {
         let auth = AuthKeyId::from_digest_hex(DIGEST)?;
         assert_eq!(auth.as_str(), format!("key_{DIGEST}"));
         assert_eq!(auth.digest()?, DIGEST);
@@ -380,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn secret_ids_require_the_current_prefixed_format() -> Result<(), Box<dyn std::error::Error>> {
+    fn secret_ids_require_the_current_prefixed_format() -> anyhow::Result<()> {
         let token = CompactToken::parse(TOKEN)?;
         let secret = SecretId::from_token(&token)?;
         assert_eq!(secret.as_str(), "secret_Abcdef_1234");

@@ -89,14 +89,14 @@ mod tests {
     use super::*;
     use crate::SymmetricKey;
 
-    fn test_key() -> Result<SymmetricKey, Box<dyn std::error::Error>> {
+    fn test_key() -> anyhow::Result<SymmetricKey> {
         Ok(SymmetricKey::parse(
             "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         )?)
     }
 
     #[test]
-    fn roundtrip_with_cached_crypto() -> Result<(), Box<dyn std::error::Error>> {
+    fn roundtrip_with_cached_crypto() -> anyhow::Result<()> {
         let crypto = VaultCrypto::new(&test_key()?)?;
         let encrypted = crypto.encrypt_value("hello world")?;
         let decrypted = crypto.decrypt_value(&encrypted)?;
@@ -105,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_passphrase_fails() -> Result<(), Box<dyn std::error::Error>> {
+    fn wrong_passphrase_fails() -> anyhow::Result<()> {
         let crypto = VaultCrypto::new(&test_key()?)?;
         let encrypted = crypto.encrypt_value("secret")?;
         let wrong = VaultCrypto::new(&SymmetricKey::parse("cafebabe".repeat(8).as_str())?)?;
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn encrypt_is_nondeterministic() -> Result<(), Box<dyn std::error::Error>> {
+    fn encrypt_is_nondeterministic() -> anyhow::Result<()> {
         let crypto = VaultCrypto::new(&test_key()?)?;
         let a = crypto.encrypt_value("same")?;
         let b = crypto.encrypt_value("same")?;
@@ -125,8 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn bulk_roundtrip_is_practical_for_password_manager_imports()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn bulk_roundtrip_is_practical_for_password_manager_imports() -> anyhow::Result<()> {
         let started = std::time::Instant::now();
         let crypto = VaultCrypto::new(&test_key()?)?;
         let encrypted = (0..1_300)

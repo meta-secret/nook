@@ -256,7 +256,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn canonical_json_sorts_object_keys() -> Result<(), Box<dyn std::error::Error>> {
+    fn canonical_json_sorts_object_keys() -> anyhow::Result<()> {
         let value = json!({"b": 2, "a": {"d": 4, "c": 3}});
         let bytes = canonical_json_bytes(&value)?;
         assert_eq!(bytes, br#"{"a":{"c":3,"d":4},"b":2}"#);
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn storage_path_is_flat_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn storage_path_is_flat_yaml() -> anyhow::Result<()> {
         let id = EventId::parse("sha256u:ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0")?;
         assert_eq!(
             id.storage_path(),
@@ -284,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn ed25519_sign_verify_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn ed25519_sign_verify_roundtrip() -> anyhow::Result<()> {
         use ed25519_dalek::SigningKey;
         use rand_core::OsRng;
 
@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn event_id_and_signature_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn event_id_and_signature_serde_roundtrip() -> anyhow::Result<()> {
         let id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let roundtripped: EventId = serde_json::from_str(&serde_json::to_string(&id)?)?;
         assert_eq!(roundtripped, id);

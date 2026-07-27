@@ -7026,6 +7026,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "syn 2.0.119",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

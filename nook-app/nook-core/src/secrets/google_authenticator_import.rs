@@ -363,8 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn imports_supported_totp_settings_and_normalizes_labels()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn imports_supported_totp_settings_and_normalizes_labels() -> anyhow::Result<()> {
         let plan = plan_google_authenticator_import(&[uri(&payload(
             vec![parameter(
                 0x41,
@@ -394,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn decodes_google_authenticator_wire_format() -> Result<(), Box<dyn std::error::Error>> {
+    fn decodes_google_authenticator_wire_format() -> anyhow::Result<()> {
         let migration_uri = concat!(
             "otpauth-migration://offline?data=",
             "CjUKBWYkQUSTEgdNWUxBQkVMGghNWUlTU1VFUiACKAIwAkIT",
@@ -410,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn imports_a_complete_out_of_order_batch() -> Result<(), Box<dyn std::error::Error>> {
+    fn imports_a_complete_out_of_order_batch() -> anyhow::Result<()> {
         let first = uri(&payload(
             vec![parameter(
                 1,
@@ -486,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_hotp_md5_and_invalid_secret_entries() -> Result<(), Box<dyn std::error::Error>> {
+    fn skips_hotp_md5_and_invalid_secret_entries() -> anyhow::Result<()> {
         let mut short_secret = parameter(
             5,
             "short",

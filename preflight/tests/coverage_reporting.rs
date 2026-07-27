@@ -34,7 +34,7 @@ fn classifies_source_and_build_only_coverage_inputs() {
 }
 
 #[test]
-fn validates_commit_keyed_coverage_artifacts() -> Result<(), Box<dyn std::error::Error>> {
+fn validates_commit_keyed_coverage_artifacts() -> anyhow::Result<()> {
     let root = temporary_directory()?;
     write_coverage_directory(&root, 92.5, 90.0)?;
     fs::write(
@@ -63,7 +63,7 @@ fn validates_commit_keyed_coverage_artifacts() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn reports_coverage_from_structured_json() -> Result<(), Box<dyn std::error::Error>> {
+fn reports_coverage_from_structured_json() -> anyhow::Result<()> {
     let root = temporary_directory()?;
     let current = root.join("current");
     let base = root.join("base");
@@ -95,8 +95,7 @@ Artifact: `nook-core-coverage`\n"
 }
 
 #[test]
-fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> Result<(), Box<dyn std::error::Error>>
-{
+fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> anyhow::Result<()> {
     let root = temporary_directory()?;
     let current = root.join("current");
     let base = root.join("base");
@@ -114,8 +113,7 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> Result<(), Box<dyn 
 }
 
 #[test]
-fn coverage_report_command_writes_github_outputs_and_markdown()
--> Result<(), Box<dyn std::error::Error>> {
+fn coverage_report_command_writes_github_outputs_and_markdown() -> anyhow::Result<()> {
     let root = temporary_directory()?;
     let current = root.join("current");
     let base = root.join("base");
@@ -151,11 +149,7 @@ fn coverage_report_command_writes_github_outputs_and_markdown()
     Ok(())
 }
 
-fn write_coverage_directory(
-    directory: &Path,
-    percent: f64,
-    floor: f64,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn write_coverage_directory(directory: &Path, percent: f64, floor: f64) -> anyhow::Result<()> {
     fs::create_dir_all(directory)?;
     fs::write(
         directory.join("summary.json"),
@@ -183,7 +177,7 @@ fn write_coverage_directory(
     Ok(())
 }
 
-fn temporary_directory() -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn temporary_directory() -> anyhow::Result<PathBuf> {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let process_id = std::process::id();

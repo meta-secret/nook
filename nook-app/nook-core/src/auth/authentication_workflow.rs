@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn classifies_single_and_multi_page_logins() -> Result<(), Box<dyn std::error::Error>> {
+    fn classifies_single_and_multi_page_logins() -> anyhow::Result<()> {
         let username_only = AuthenticationPageObservation {
             username_field_count: 1,
             ..observation()
@@ -453,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn distinguishes_signup_from_password_change() -> Result<(), Box<dyn std::error::Error>> {
+    fn distinguishes_signup_from_password_change() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 2,
@@ -489,8 +489,7 @@ mod tests {
     }
 
     #[test]
-    fn signup_with_manual_checkpoint_yields_to_takeover() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn signup_with_manual_checkpoint_yields_to_takeover() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -505,8 +504,7 @@ mod tests {
     }
 
     #[test]
-    fn classifies_authenticator_setup_and_verify_enrollment()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn classifies_authenticator_setup_and_verify_enrollment() -> anyhow::Result<()> {
         let setup = AuthenticationPageObservation {
             authenticator_setup_hint: true,
             ..observation()
@@ -532,8 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn classifies_standalone_one_time_code_as_second_factor()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn classifies_standalone_one_time_code_as_second_factor() -> anyhow::Result<()> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
             ..observation()
@@ -547,8 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn backup_code_link_does_not_hide_an_active_totp_challenge()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn backup_code_link_does_not_hide_an_active_totp_challenge() -> anyhow::Result<()> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
             backup_codes_hint: true,
@@ -562,8 +558,7 @@ mod tests {
     }
 
     #[test]
-    fn combined_password_and_code_fields_yield_to_manual_second_factor()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn combined_password_and_code_fields_yield_to_manual_second_factor() -> anyhow::Result<()> {
         let combined = AuthenticationPageObservation {
             current_password_field_count: 1,
             one_time_code_field_count: 1,
@@ -577,8 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn generic_multi_password_forms_never_offer_login_fill()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn generic_multi_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
         let ambiguous = AuthenticationPageObservation {
             username_field_count: 1,
             generic_password_field_count: 2,
@@ -591,8 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn current_plus_generic_password_forms_never_offer_login_fill()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn current_plus_generic_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
         let ambiguous_change = AuthenticationPageObservation {
             current_password_field_count: 1,
             generic_password_field_count: 1,
@@ -605,8 +598,7 @@ mod tests {
     }
 
     #[test]
-    fn separate_login_form_takes_precedence_over_signup_or_password_reset()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn separate_login_form_takes_precedence_over_signup_or_password_reset() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -629,8 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn active_totp_takes_precedence_over_unrelated_signup() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn active_totp_takes_precedence_over_unrelated_signup() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -649,7 +640,7 @@ mod tests {
     }
 
     #[test]
-    fn login_with_matching_passkeys_proposes_use() -> Result<(), Box<dyn std::error::Error>> {
+    fn login_with_matching_passkeys_proposes_use() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             current_password_field_count: 1,
             matching_passkey_account_count: 2,
@@ -663,7 +654,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_control_without_matches_proposes_create() -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_control_without_matches_proposes_create() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             username_field_count: 1,
             passkey_control_present: true,
@@ -676,7 +667,7 @@ mod tests {
     }
 
     #[test]
-    fn passkey_only_control_classifies_as_login_create() -> Result<(), Box<dyn std::error::Error>> {
+    fn passkey_only_control_classifies_as_login_create() -> anyhow::Result<()> {
         let passkey_only = AuthenticationPageObservation {
             passkey_control_present: true,
             ..observation()
@@ -688,8 +679,7 @@ mod tests {
     }
 
     #[test]
-    fn matching_passkeys_prefer_use_over_password_continue_candidate()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn matching_passkeys_prefer_use_over_password_continue_candidate() -> anyhow::Result<()> {
         let password_login = AuthenticationPageObservation {
             current_password_field_count: 1,
             ..observation()

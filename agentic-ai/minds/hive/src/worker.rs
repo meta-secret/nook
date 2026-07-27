@@ -850,8 +850,7 @@ mod tests {
     }
 
     #[test]
-    fn a_restarted_process_cannot_reuse_the_same_pod_workspace()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn a_restarted_process_cannot_reuse_the_same_pod_workspace() -> anyhow::Result<()> {
         let workspace = tempfile::tempdir()?;
 
         establish_worker_lifecycle(workspace.path(), "pod-a")?;
@@ -868,8 +867,7 @@ mod tests {
     }
 
     #[test]
-    fn recovered_merge_commit_is_part_of_replacement_worker_context()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn recovered_merge_commit_is_part_of_replacement_worker_context() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::new("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
@@ -924,8 +922,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn implementation_patch_is_durable_before_completion()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn implementation_patch_is_durable_before_completion() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
@@ -1005,8 +1002,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch() -> anyhow::Result<()>
+    {
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
@@ -1059,8 +1056,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completed_dependency_patch_becomes_the_task_baseline()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn completed_dependency_patch_becomes_the_task_baseline() -> anyhow::Result<()> {
         let source = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<Vec<u8>> {
             let output = std::process::Command::new("git")

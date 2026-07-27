@@ -198,7 +198,7 @@ mod tests {
     const TEST_PASSPHRASE: &str =
         "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
-    fn test_key() -> Result<crate::SymmetricKey, Box<dyn std::error::Error>> {
+    fn test_key() -> anyhow::Result<crate::SymmetricKey> {
         Ok(crate::SymmetricKey::parse(TEST_PASSPHRASE)?)
     }
 
@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn database_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn database_roundtrip() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("foo"), api_key("bar"));
         db.insert(sid("hello"), api_key("world"));
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_yaml_encrypts_values_only() -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_yaml_encrypts_values_only() -> anyhow::Result<()> {
         let passphrase = TEST_PASSPHRASE;
 
         let db = sample_db();
@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_auto_accepts_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_auto_accepts_yaml() -> anyhow::Result<()> {
         let passphrase = TEST_PASSPHRASE;
         let mut db = Database::new();
         db.insert(sid("x"), api_key("y"));
@@ -262,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn to_stored_writes_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn to_stored_writes_yaml() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("a"), api_key("1"));
         let passphrase = TEST_PASSPHRASE;
@@ -273,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn example_fixtures_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn example_fixtures_roundtrip() -> anyhow::Result<()> {
         let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
         let passphrase = TEST_PASSPHRASE;
 
@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_passphrase_fails() -> Result<(), Box<dyn std::error::Error>> {
+    fn wrong_passphrase_fails() -> anyhow::Result<()> {
         const WRONG_PASSPHRASE: &str =
             "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
         let db = sample_db();
@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_vault_roundtrip_yaml() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_vault_roundtrip_yaml() -> anyhow::Result<()> {
         let db = Database::new();
         assert!(db.list().is_empty());
 
@@ -326,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn insert_overwrites_duplicate_key() -> Result<(), Box<dyn std::error::Error>> {
+    fn insert_overwrites_duplicate_key() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("site"), api_key("old"));
         db.insert(sid("site"), api_key("new"));
@@ -337,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_returns_previous_value() -> Result<(), Box<dyn std::error::Error>> {
+    fn remove_returns_previous_value() -> anyhow::Result<()> {
         let mut db = sample_db();
         assert_eq!(
             db.remove(&sid("github.com"))
@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn list_is_sorted_by_key() -> Result<(), Box<dyn std::error::Error>> {
+    fn list_is_sorted_by_key() -> anyhow::Result<()> {
         let records = sample_db().list();
         let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(keys, vec!["github.com", "work-vpn"]);
@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn unicode_and_special_characters_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn unicode_and_special_characters_roundtrip() -> anyhow::Result<()> {
         let key = "🔐 café.example.com";
         let value = "パスワード \"quotes\" \\ backslash\nline2";
         let mut db = Database::new();
@@ -373,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_secret_value_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_secret_value_roundtrip() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("empty-value"), api_key(""));
 
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn mutate_through_stored_yaml_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn mutate_through_stored_yaml_roundtrip() -> anyhow::Result<()> {
         let mut db = sample_db();
         db.insert(sid("new-entry"), api_key("added-later"));
         db.remove(&sid("work-vpn"));
@@ -406,8 +406,7 @@ mod tests {
     }
 
     #[test]
-    fn multiline_secret_uses_yaml_block_scalar_not_escapes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn multiline_secret_uses_yaml_block_scalar_not_escapes() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("notes"), api_key("line-one\nline-two\nline-three"));
 
@@ -424,8 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_records_from_armored_is_sorted_and_preserves_ciphertext()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_records_from_armored_is_sorted_and_preserves_ciphertext() -> anyhow::Result<()> {
         use crate::VaultCrypto;
         use std::collections::HashMap;
 
@@ -453,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_records_from_armored_empty() -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_records_from_armored_empty() -> anyhow::Result<()> {
         use std::collections::HashMap;
 
         assert!(Database::stored_records_from_armored(&HashMap::new(), &HashMap::new()).is_empty());
@@ -461,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_records_with_crypto_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_records_with_crypto_roundtrip() -> anyhow::Result<()> {
         use crate::VaultCrypto;
 
         let crypto = VaultCrypto::new(&test_key()?)?;
@@ -473,8 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_type_is_plaintext_and_selects_decrypted_payload()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn stored_type_is_plaintext_and_selects_decrypted_payload() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(
             sid("login-id"),
@@ -497,7 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_payload_yaml_preserves_multiline_notes() -> Result<(), Box<dyn std::error::Error>> {
+    fn typed_payload_yaml_preserves_multiline_notes() -> anyhow::Result<()> {
         let value = SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -513,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_or_mismatched_type_metadata_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn missing_or_mismatched_type_metadata_is_rejected() -> anyhow::Result<()> {
         let crypto = crate::VaultCrypto::new(&test_key()?)?;
         let login_yaml = crate::SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
@@ -541,7 +538,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_before_insert_rejects_blank_label() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_before_insert_rejects_blank_label() -> anyhow::Result<()> {
         use crate::{validate_secret_data, validate_secret_id};
 
         assert!(validate_secret_id("   ").is_err());

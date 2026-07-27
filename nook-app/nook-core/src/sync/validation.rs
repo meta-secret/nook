@@ -951,7 +951,7 @@ mod tests {
         })
     }
 
-    fn sample_records() -> Result<Vec<SecretRecord>, Box<dyn std::error::Error>> {
+    fn sample_records() -> anyhow::Result<Vec<SecretRecord>> {
         Ok(vec![
             SecretRecord {
                 id: validate_secret_id("secret_SMypl8K0w9Y")?,
@@ -967,8 +967,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_github_repo_name_defaults_and_rejects_invalid()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_github_repo_name_defaults_and_rejects_invalid() -> anyhow::Result<()> {
         assert_eq!(
             validate_github_repo_name("  ")?.as_str(),
             DEFAULT_GITHUB_REPO_NAME
@@ -983,7 +982,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_connect_github_requires_pat() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_connect_github_requires_pat() -> anyhow::Result<()> {
         assert!(validate_connect(STORAGE_MODE_GITHUB, "  ").is_err());
         assert_eq!(
             validate_connect(STORAGE_MODE_GITHUB, " ghp_test ")?
@@ -995,13 +994,13 @@ mod tests {
     }
 
     #[test]
-    fn validate_connect_local_ok() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_connect_local_ok() -> anyhow::Result<()> {
         assert_eq!(validate_connect(STORAGE_MODE_LOCAL, "")?, None);
         Ok(())
     }
 
     #[test]
-    fn storage_mode_for_provider_maps_oauth_presets() -> Result<(), Box<dyn std::error::Error>> {
+    fn storage_mode_for_provider_maps_oauth_presets() -> anyhow::Result<()> {
         assert_eq!(
             storage_mode_for_provider(StorageProviderType::Local, None),
             StorageMode::Local
@@ -1029,7 +1028,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_default_labels_match_sync_provider_ui() -> Result<(), Box<dyn std::error::Error>> {
+    fn provider_default_labels_match_sync_provider_ui() -> anyhow::Result<()> {
         assert_eq!(
             sync_provider_default_label(StorageProviderType::Local, None, None),
             "This device"
@@ -1062,8 +1061,7 @@ mod tests {
     }
 
     #[test]
-    fn staged_provider_labels_match_login_setup_draft_fields()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn staged_provider_labels_match_login_setup_draft_fields() -> anyhow::Result<()> {
         assert_eq!(
             staged_provider_default_label(
                 StorageProviderType::Github,
@@ -1118,8 +1116,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_credentials_match_provider_requirements() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn provider_credentials_match_provider_requirements() -> anyhow::Result<()> {
         assert!(has_provider_credentials(
             StorageProviderType::Local,
             None,
@@ -1166,7 +1163,7 @@ mod tests {
     }
 
     #[test]
-    fn mask_github_pat_named_states() -> Result<(), Box<dyn std::error::Error>> {
+    fn mask_github_pat_named_states() -> anyhow::Result<()> {
         assert_eq!(mask_github_pat("   "), GithubPatMask::NoToken);
         assert_eq!(mask_github_pat(""), GithubPatMask::NoToken);
         assert_eq!(
@@ -1185,8 +1182,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_provider_target_key_matches_duplicates_by_storage_identity()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sync_provider_target_key_matches_duplicates_by_storage_identity() -> anyhow::Result<()> {
         let github_a = SyncProviderTarget::Github(GithubSyncTarget {
             repo: "My-Repo".to_owned(),
             pat: "github_pat_11AAAA".to_owned(),
@@ -1235,7 +1231,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_secret_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_secret_fields() -> anyhow::Result<()> {
         assert!(validate_secret_id("  ").is_err());
         assert_eq!(
             validate_secret_id(" secret_SMypl8K0w9Y ")?.as_str(),
@@ -1262,7 +1258,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_secrets_case_insensitive() -> Result<(), Box<dyn std::error::Error>> {
+    fn filter_secrets_case_insensitive() -> anyhow::Result<()> {
         let filtered = filter_secrets(&sample_records()?, "W9Y");
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
@@ -1270,19 +1266,19 @@ mod tests {
     }
 
     #[test]
-    fn filter_secrets_empty_query_returns_all() -> Result<(), Box<dyn std::error::Error>> {
+    fn filter_secrets_empty_query_returns_all() -> anyhow::Result<()> {
         assert_eq!(filter_secrets(&sample_records()?, "  ").len(), 2);
         Ok(())
     }
 
     #[test]
-    fn validate_storage_mode_rejects_unknown() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_storage_mode_rejects_unknown() -> anyhow::Result<()> {
         assert!(validate_storage_mode("s3").is_err());
         Ok(())
     }
 
     #[test]
-    fn storage_mode_roundtrips_through_string_tag() -> Result<(), Box<dyn std::error::Error>> {
+    fn storage_mode_roundtrips_through_string_tag() -> anyhow::Result<()> {
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
         assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
@@ -1300,30 +1296,28 @@ mod tests {
     }
 
     #[test]
-    fn storage_mode_consts_match_enum() -> Result<(), Box<dyn std::error::Error>> {
+    fn storage_mode_consts_match_enum() -> anyhow::Result<()> {
         assert_eq!(STORAGE_MODE_LOCAL, StorageMode::Local.as_str());
         assert_eq!(STORAGE_MODE_GITHUB, StorageMode::Github.as_str());
         Ok(())
     }
 
     #[test]
-    fn validate_connect_icloud_requires_access_token() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_connect_icloud_requires_access_token() -> anyhow::Result<()> {
         assert!(validate_connect("icloud", "  ").is_err());
         assert_eq!(validate_connect("icloud", " ck-web-token ")?, None);
         Ok(())
     }
 
     #[test]
-    fn validate_connect_google_drive_requires_access_token()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_connect_google_drive_requires_access_token() -> anyhow::Result<()> {
         assert!(validate_connect("google-drive", "  ").is_err());
         assert_eq!(validate_connect("google-drive", " ya29.test ")?, None);
         Ok(())
     }
 
     #[test]
-    fn validate_drive_backup_name_defaults_and_rejects_invalid()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_drive_backup_name_defaults_and_rejects_invalid() -> anyhow::Result<()> {
         assert_eq!(
             validate_drive_backup_name("  ")?.as_str(),
             DEFAULT_DRIVE_BACKUP_NAME
@@ -1338,7 +1332,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_drive_storage_ref_splits_file_id_and_name() -> Result<(), Box<dyn std::error::Error>> {
+    fn parse_drive_storage_ref_splits_file_id_and_name() -> anyhow::Result<()> {
         assert_eq!(
             parse_drive_storage_ref("abc123\twork-vault.yaml")?,
             (
@@ -1354,7 +1348,7 @@ mod tests {
     }
 
     #[test]
-    fn format_drive_storage_ref_omits_empty_file_id() -> Result<(), Box<dyn std::error::Error>> {
+    fn format_drive_storage_ref_omits_empty_file_id() -> anyhow::Result<()> {
         assert_eq!(
             format_drive_storage_ref("", &validate_drive_backup_name("nook-events")?),
             "nook-events"
@@ -1367,8 +1361,7 @@ mod tests {
     }
 
     #[test]
-    fn format_drive_storage_ref_raw_does_not_validate_file_name()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn format_drive_storage_ref_raw_does_not_validate_file_name() -> anyhow::Result<()> {
         assert_eq!(
             format_drive_storage_ref_raw(" abc ", " work vault.yaml "),
             "abc\twork vault.yaml"
@@ -1377,20 +1370,20 @@ mod tests {
     }
 
     #[test]
-    fn validate_oauth_access_token_rejects_empty() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_oauth_access_token_rejects_empty() -> anyhow::Result<()> {
         assert!(validate_oauth_access_token(" ").is_err());
         assert_eq!(validate_oauth_access_token(" token ")?.as_str(), "token");
         Ok(())
     }
 
     #[test]
-    fn filter_secrets_no_match_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
+    fn filter_secrets_no_match_returns_empty() -> anyhow::Result<()> {
         assert!(filter_secrets(&sample_records()?, "aws").is_empty());
         Ok(())
     }
 
     #[test]
-    fn filter_secrets_matches_substring_in_id() -> Result<(), Box<dyn std::error::Error>> {
+    fn filter_secrets_matches_substring_in_id() -> anyhow::Result<()> {
         let filtered = filter_secrets(&sample_records()?, "K0w9Y");
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
@@ -1398,13 +1391,13 @@ mod tests {
     }
 
     #[test]
-    fn validate_secret_data_allows_whitespace() -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_secret_data_allows_whitespace() -> anyhow::Result<()> {
         assert!(validate_secret_data("   ").is_ok());
         Ok(())
     }
 
     #[test]
-    fn filter_secrets_does_not_search_values() -> Result<(), Box<dyn std::error::Error>> {
+    fn filter_secrets_does_not_search_values() -> anyhow::Result<()> {
         let records = vec![SecretRecord {
             id: validate_secret_id("secret_SMypl8K0w9X")?,
             secret_type: SecretType::ApiKey,
@@ -1415,7 +1408,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_provider_cache_ref_is_stable() -> Result<(), Box<dyn std::error::Error>> {
+    fn sync_provider_cache_ref_is_stable() -> anyhow::Result<()> {
         assert_eq!(
             format_sync_provider_cache_ref(StorageMode::Local, "", ""),
             "local"
@@ -1432,7 +1425,7 @@ mod tests {
     }
 
     #[test]
-    fn drive_event_parent_parses_shared_folder_prefix() -> Result<(), Box<dyn std::error::Error>> {
+    fn drive_event_parent_parses_shared_folder_prefix() -> anyhow::Result<()> {
         assert_eq!(
             DriveEventParent::from_storage_id(""),
             DriveEventParent::AppDataFolder
@@ -1458,8 +1451,7 @@ mod tests {
     }
 
     #[test]
-    fn google_drive_mode_requires_an_explicit_current_value()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn google_drive_mode_requires_an_explicit_current_value() -> anyhow::Result<()> {
         assert_eq!(GoogleDriveMode::parse("private")?, GoogleDriveMode::Private);
         assert_eq!(GoogleDriveMode::parse("shared")?, GoogleDriveMode::Shared);
         assert!(GoogleDriveMode::parse("").is_err());
@@ -1468,8 +1460,7 @@ mod tests {
     }
 
     #[test]
-    fn icloud_shared_target_roundtrips_without_credentials()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn icloud_shared_target_roundtrips_without_credentials() -> anyhow::Result<()> {
         let owner = ICloudSharedTarget::new(
             ICloudShareRole::Owner,
             "nook-zone",
@@ -1502,7 +1493,7 @@ mod tests {
     }
 
     #[test]
-    fn icloud_mode_requires_an_explicit_current_value() -> Result<(), Box<dyn std::error::Error>> {
+    fn icloud_mode_requires_an_explicit_current_value() -> anyhow::Result<()> {
         assert_eq!(ICloudMode::parse("private")?, ICloudMode::Private);
         assert_eq!(ICloudMode::parse("shared")?, ICloudMode::Shared);
         assert!(ICloudMode::parse("").is_err());
@@ -1511,8 +1502,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_google_drive_folder_ref_accepts_id_and_folder_url()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn normalize_google_drive_folder_ref_accepts_id_and_folder_url() -> anyhow::Result<()> {
         assert_eq!(
             normalize_google_drive_folder_ref(" folder_ABC-123 ")?.as_str(),
             "folder_ABC-123"

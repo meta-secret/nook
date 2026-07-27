@@ -816,7 +816,7 @@ mod tests {
     static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
-    fn reports_only_cache_mounts_in_dockerfiles() -> Result<(), Box<dyn std::error::Error>> {
+    fn reports_only_cache_mounts_in_dockerfiles() -> anyhow::Result<()> {
         let root = temporary_directory()?;
         fs::create_dir_all(root.join("nested"))?;
         fs::create_dir_all(root.join("nook-app/nook-wasm"))?;
@@ -861,8 +861,7 @@ mod tests {
     }
 
     #[test]
-    fn fails_when_repository_root_contains_no_dockerfiles() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn fails_when_repository_root_contains_no_dockerfiles() -> anyhow::Result<()> {
         let root = temporary_directory()?;
         let error =
             dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
@@ -1090,7 +1089,7 @@ export function configuredCapability(): NookProviderReplicationCapability {
         assert_eq!(typescript_boundary_violation_lines(source), vec![6]);
     }
 
-    fn temporary_directory() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn temporary_directory() -> anyhow::Result<PathBuf> {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let process_id = std::process::id();
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);

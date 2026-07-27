@@ -78,7 +78,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generates_password_with_requested_length() -> Result<(), Box<dyn std::error::Error>> {
+    fn generates_password_with_requested_length() -> anyhow::Result<()> {
         let password = generate_password(&PasswordOptions {
             length: 24,
             lowercase: true,
@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn uses_only_selected_charsets() -> Result<(), Box<dyn std::error::Error>> {
+    fn uses_only_selected_charsets() -> anyhow::Result<()> {
         let password = generate_password(&PasswordOptions {
             length: 32,
             lowercase: true,
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_min_and_max_length() -> Result<(), Box<dyn std::error::Error>> {
+    fn accepts_min_and_max_length() -> anyhow::Result<()> {
         let min = generate_password(&PasswordOptions {
             length: MIN_PASSWORD_LENGTH,
             lowercase: true,
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn symbols_only_charset() -> Result<(), Box<dyn std::error::Error>> {
+    fn symbols_only_charset() -> anyhow::Result<()> {
         let password = generate_password(&PasswordOptions {
             length: 16,
             lowercase: false,

@@ -368,7 +368,7 @@ fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> Passw
 mod tests {
     use super::*;
 
-    fn sample_keys() -> Result<VaultKeys, Box<dyn std::error::Error>> {
+    fn sample_keys() -> anyhow::Result<VaultKeys> {
         Ok(VaultKeys {
             secrets_key: SymmetricKey::parse(&"deadbeefdeadbeefdeadbeefdeadbeef".repeat(2))?,
             members_key: SymmetricKey::parse(&"abadcafeabadcafeabadcafeabadcafe".repeat(2))?,
@@ -376,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn roundtrip_attach_and_resolve() -> Result<(), Box<dyn std::error::Error>> {
+    fn roundtrip_attach_and_resolve() -> anyhow::Result<()> {
         let keys = sample_keys()?;
         let envelope = attach_password_envelope(&keys, "correct horse battery staple")?;
         assert_eq!(envelope.version, 1);
@@ -394,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_password_fails() -> Result<(), Box<dyn std::error::Error>> {
+    fn wrong_password_fails() -> anyhow::Result<()> {
         let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         let err = resolve_keys_from_password(&envelope, "wrong password something else");
         assert!(err.is_err());
@@ -404,7 +404,7 @@ mod tests {
     }
 
     #[test]
-    fn short_password_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn short_password_rejected() -> anyhow::Result<()> {
         let err = attach_password_envelope(&sample_keys()?, "abc")
             .expect_err("password envelope test should reject invalid input");
         assert!(err.to_string().contains("at least"));
@@ -427,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_version_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn unsupported_version_rejected() -> anyhow::Result<()> {
         let mut envelope =
             attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         envelope.version = 99;
@@ -436,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_kdf_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    fn unsupported_kdf_rejected() -> anyhow::Result<()> {
         let mut envelope =
             attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         envelope.kdf = "argon2".to_owned();
@@ -445,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn ciphertext_is_nondeterministic() -> Result<(), Box<dyn std::error::Error>> {
+    fn ciphertext_is_nondeterministic() -> anyhow::Result<()> {
         let keys = sample_keys()?;
         let a = attach_password_envelope(&keys, "correct horse battery staple")?;
         let b = attach_password_envelope(&keys, "correct horse battery staple")?;
@@ -454,8 +454,7 @@ mod tests {
     }
 
     #[test]
-    fn vault_unlock_keys_variant_serialises_with_type_tag() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn vault_unlock_keys_variant_serialises_with_type_tag() -> anyhow::Result<()> {
         let yaml = serde_yaml::to_string(&VaultUnlock::Keys)?;
         assert!(yaml.as_str().contains("type: keys"));
         assert!(!yaml.as_str().contains("envelope:"));
@@ -471,7 +470,7 @@ mod tests {
     }
 
     #[test]
-    fn vault_unlock_password_variant_roundtrips() -> Result<(), Box<dyn std::error::Error>> {
+    fn vault_unlock_password_variant_roundtrips() -> anyhow::Result<()> {
         let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         let value = VaultUnlock::Passwords {
             entries: vec![PasswordUnlockEntry {

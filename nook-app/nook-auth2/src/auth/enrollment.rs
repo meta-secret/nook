@@ -654,8 +654,7 @@ mod tests {
     }
 
     #[test]
-    fn encrypts_provider_credentials_and_peeks_outer_fields()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn encrypts_provider_credentials_and_peeks_outer_fields() -> anyhow::Result<()> {
         let code = encrypt_enrollment_payload(&github_payload(), "vault-pass-99", "Work laptop")
             .expect("encrypt enrollment");
         assert_eq!(
@@ -695,7 +694,7 @@ mod tests {
     }
 
     #[test]
-    fn decrypts_roundtrip_payload() -> Result<(), Box<dyn std::error::Error>> {
+    fn decrypts_roundtrip_payload() -> anyhow::Result<()> {
         let input = github_payload();
         let code = encrypt_enrollment_payload(&input, "vault-pass-99", "")?;
         let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99")?;
@@ -707,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_wrong_password() -> Result<(), Box<dyn std::error::Error>> {
+    fn rejects_wrong_password() -> anyhow::Result<()> {
         let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")?;
         let err = decrypt_enrollment_payload(&code, "wrong-pass")
             .expect_err("enrollment test should reject invalid input");
@@ -719,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_malformed_codes() -> Result<(), Box<dyn std::error::Error>> {
+    fn rejects_malformed_codes() -> anyhow::Result<()> {
         let malformed = base64_url_encode(
             serde_json::to_vec(&json!({"provider": {"type": "local"}}))?.as_slice(),
         );
@@ -731,7 +730,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_local_provider() -> Result<(), Box<dyn std::error::Error>> {
+    fn preserves_local_provider() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
             vault_name: "Local vault".to_owned(),
@@ -748,8 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_provider_grant_roundtrips_without_provider_credentials()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_provider_grant_roundtrips_without_provider_credentials() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
                 "joiner@example.com".to_owned(),
@@ -781,8 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_typestate_wire_rejects_personal_oauth_provider_data()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_typestate_wire_rejects_personal_oauth_provider_data() -> anyhow::Result<()> {
         let provider = EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
             "joiner@example.com".to_owned(),
             "shared-folder-abc".to_owned(),
@@ -815,8 +812,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_icloud_target_roundtrips_without_provider_credentials()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_icloud_target_roundtrips_without_provider_credentials() -> anyhow::Result<()> {
         let storage_target_id = concat!(
             "icloud-share-v1:",
             r#"{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}"#
@@ -839,8 +835,7 @@ mod tests {
     }
 
     #[test]
-    fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
                 "google-drive".to_owned(),

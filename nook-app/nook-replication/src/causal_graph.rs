@@ -400,8 +400,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_child_becomes_applicable_when_parent_arrives()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn pending_child_becomes_applicable_when_parent_arrives() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         assert_eq!(
             graph.insert(id("child"), vec![id("root")]),
@@ -421,8 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn descendant_stays_pending_until_transitive_ancestor_arrives()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn descendant_stays_pending_until_transitive_ancestor_arrives() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         assert!(matches!(
             graph.insert(id("parent"), vec![id("root")]),
@@ -442,8 +440,8 @@ mod tests {
     }
 
     #[test]
-    fn direct_insertion_quarantines_conflicting_parent_sets_deterministically()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn direct_insertion_quarantines_conflicting_parent_sets_deterministically() -> anyhow::Result<()>
+    {
         let mut left = CausalGraph::new();
         left.insert(id("a"), Vec::new());
         left.insert(id("b"), Vec::new());
@@ -469,8 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn conflicting_parent_replacement_recomputes_cycles_deterministically()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn conflicting_parent_replacement_recomputes_cycles_deterministically() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("a"), vec![id("same")]);
         left.insert(id("b"), Vec::new());
@@ -501,8 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn parent_sets_are_normalized_before_duplicate_detection()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn parent_sets_are_normalized_before_duplicate_detection() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("a"), Vec::new());
         graph.insert(id("b"), Vec::new());
@@ -521,8 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_branches_and_join_have_deterministic_heads()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn concurrent_branches_and_join_have_deterministic_heads() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
         graph.insert(id("left"), vec![id("root")]);
@@ -537,8 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn quarantined_events_are_excluded_from_projection_order()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn quarantined_events_are_excluded_from_projection_order() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
         graph.insert(id("rejected"), vec![id("root")]);
@@ -552,8 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn quarantine_propagates_through_indexed_and_future_descendants()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn quarantine_propagates_through_indexed_and_future_descendants() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
         graph.insert(id("rejected"), vec![id("root")]);
@@ -574,8 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn cycles_are_quarantined_and_excluded_from_applicability()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn cycles_are_quarantined_and_excluded_from_applicability() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("left"), vec![id("right")]);
         assert_eq!(
@@ -599,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn union_is_commutative_associative_and_idempotent() -> Result<(), Box<dyn std::error::Error>> {
+    fn union_is_commutative_associative_and_idempotent() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("root"), Vec::new());
         left.insert(id("left"), vec![id("root")]);
@@ -621,8 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn union_quarantines_conflicting_parent_sets_commutatively()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn union_quarantines_conflicting_parent_sets_commutatively() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("a"), Vec::new());
         left.insert(id("same"), vec![id("a")]);
@@ -640,8 +631,7 @@ mod tests {
     }
 
     #[test]
-    fn union_preserves_the_deterministic_minimum_quarantine_reason()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn union_preserves_the_deterministic_minimum_quarantine_reason() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("a"), Vec::new());
         left.insert(id("b"), Vec::new());
@@ -663,8 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn union_recomputes_derived_quarantine_associatively() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn union_recomputes_derived_quarantine_associatively() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("0"), Vec::new());
         left.insert(id("1"), Vec::new());

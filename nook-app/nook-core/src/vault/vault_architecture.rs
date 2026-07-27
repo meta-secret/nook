@@ -780,7 +780,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn architecture_omits_default_personal_replication() -> Result<(), Box<dyn std::error::Error>> {
+    fn architecture_omits_default_personal_replication() -> anyhow::Result<()> {
         let architecture = VaultArchitecture::simple_personal(DeviceMode::Standard);
         let encoded = serde_json::to_value(&architecture)?;
         assert!(encoded.get("replication_type").is_none());
@@ -794,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn draft_builds_the_vault_type_specific_policy() -> Result<(), Box<dyn std::error::Error>> {
+    fn draft_builds_the_vault_type_specific_policy() -> anyhow::Result<()> {
         let simple = VaultArchitecture::draft(
             DeviceMode::AntiHacker,
             VaultType::Simple,
@@ -821,8 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_architecture_uses_only_sentinel_wire_names()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sentinel_architecture_uses_only_sentinel_wire_names() -> anyhow::Result<()> {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -852,7 +851,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_match_current_vault_behavior() -> Result<(), Box<dyn std::error::Error>> {
+    fn defaults_match_current_vault_behavior() -> anyhow::Result<()> {
         let architecture = VaultArchitecture::default();
         assert_eq!(architecture.device_mode, DeviceMode::Standard);
         assert_eq!(architecture.vault_type, VaultType::Simple);
@@ -867,7 +866,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_capability_matrix_is_fail_closed() -> Result<(), Box<dyn std::error::Error>> {
+    fn provider_capability_matrix_is_fail_closed() -> anyhow::Result<()> {
         validate_provider_replication(
             StorageProviderType::Github,
             ProviderOauthPreset::NotApplicable,
@@ -905,8 +904,7 @@ mod tests {
     }
 
     #[test]
-    fn grouped_architecture_matrix_validates_provider_replication()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn grouped_architecture_matrix_validates_provider_replication() -> anyhow::Result<()> {
         let simple_personal = VaultArchitecture::simple_personal(DeviceMode::Standard);
         validate_architecture_for_provider(
             &simple_personal,
@@ -996,7 +994,7 @@ mod tests {
 
     #[test]
     fn sentinel_requires_valid_threshold_and_all_participants_before_secret_creation()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let not_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
             SentinelPolicy {
@@ -1032,8 +1030,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_secret_creation_requires_actual_share_records()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn sentinel_secret_creation_requires_actual_share_records() -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
         let first = crate::DeviceIdentity::generate()?;
         let second = crate::DeviceIdentity::generate()?;
@@ -1056,7 +1053,7 @@ mod tests {
 
     #[test]
     fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
         let first = crate::DeviceIdentity::generate()?;
         let second = crate::DeviceIdentity::generate()?;
@@ -1114,8 +1111,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_record_validation_rejects_sentinel_shares() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn simple_record_validation_rejects_sentinel_shares() -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
         let first = crate::DeviceIdentity::generate()?;
         let second = crate::DeviceIdentity::generate()?;
@@ -1154,8 +1150,8 @@ mod tests {
     }
 
     #[test]
-    fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony() -> anyhow::Result<()>
+    {
         // Core validates only; WASM upgrades ManualGrantRequired → Granted after
         // Drive folder create + permissions.create succeed.
         let request = SharedStorageGrantRequest {
@@ -1216,8 +1212,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_storage_grant_granted_outcome_carries_storage_target()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_storage_grant_granted_outcome_carries_storage_target() -> anyhow::Result<()> {
         let granted = SharedStorageGrantOutcome::Granted {
             note: "Shared Drive folder ready.".to_owned(),
             storage_target_id: "folder-abc".to_owned(),
@@ -1233,8 +1228,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_storage_manual_grant_preserves_created_target()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn shared_storage_manual_grant_preserves_created_target() -> anyhow::Result<()> {
         let manual = SharedStorageGrantOutcome::ManualGrantRequired {
             instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
             joiner_identity: "joiner@example.com".to_owned(),
