@@ -180,7 +180,7 @@ impl Neo4jTaskStore {
                          member.updated_at = timestamp(),
                          member.version = member.version + 1,
                          root.last_retry_release = $release_id
-                     RETURN DISTINCT task.id AS id",
+                     RETURN DISTINCT root.id AS id",
                 )
                 .param("id", task_id.as_str())
                 .param("release_id", format!("sha256:{digest}")),
@@ -487,7 +487,7 @@ impl TaskStore for Neo4jTaskStore {
                          agent.status =
                            CASE was_running WHEN true THEN agent.status ELSE 'IDLE' END,
                          agent.last_seen_at = timestamp()
-                     RETURN DISTINCT root.id AS id",
+                     RETURN DISTINCT task.id AS id",
                 )
                 .param("task_id", task_id.as_str())
                 .param("reason", reason),
