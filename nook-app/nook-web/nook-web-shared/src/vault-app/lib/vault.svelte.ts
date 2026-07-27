@@ -91,10 +91,10 @@ import {
 import {
   canCreateSecret as architectureCanCreateSecret,
   defaultVaultArchitecture,
+  VaultType,
   type DeviceMode,
   type ReplicationType,
   type VaultArchitecture,
-  type VaultType,
 } from "$lib/vault-architecture";
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
@@ -187,7 +187,7 @@ export class VaultState {
   );
   vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture());
   draftDeviceMode = $state<DeviceMode>("standard");
-  draftVaultType = $state<VaultType>("simple");
+  draftVaultType = $state(VaultType.Simple);
   draftReplicationType = $state<ReplicationType>("personal");
   sentinelGenesisPhase = $state<SentinelGenesisPhase>(
     SentinelGenesisPhase.Inactive,
@@ -1263,7 +1263,8 @@ export class VaultState {
     this.settingsOpen = false;
     this.enrollmentCode = "";
     this.errorMsg = "";
-    const wasSentinel = this.vaultArchitecture.vault_type === "sentinel";
+    const wasSentinel =
+      this.vaultArchitecture.vault_type === VaultType.Sentinel;
     this.resetVaultSessionState(resetManager);
     if (wasSentinel) {
       this.sentinelCeremonyPrompt = true;

@@ -23,6 +23,7 @@
   } from '$lib/extension-install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
+  import { VaultType } from '$lib/vault-architecture'
 
   let {
     vault,
@@ -60,7 +61,7 @@
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
-    vault.vaultArchitecture.vault_type === 'sentinel',
+    vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   )
 
   async function refreshExtensionSetupStatus() {

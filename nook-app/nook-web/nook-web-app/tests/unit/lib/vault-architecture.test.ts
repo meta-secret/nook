@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookVaultArchitecture,
   OnboardingType,
+  VaultType,
   enrollmentProviderForArchitecture,
 } from '$app-wasm'
 import type { StorageProvider } from '$lib/auth-providers'
@@ -93,7 +94,7 @@ describe('vault architecture adapter', () => {
       replication_type: architecture.replication_type,
     }).toEqual({
       device_mode: 'standard',
-      vault_type: 'simple',
+      vault_type: VaultType.Simple,
       replication_type: 'personal',
     })
     expect(onboardingType(architecture)).toBe('personal-credential-transfer')
@@ -102,12 +103,12 @@ describe('vault architecture adapter', () => {
   test('draft construction delegates vault-specific defaults to Rust', () => {
     const simple = NookVaultArchitecture.draft(
       'anti-hacker',
-      'simple',
+      VaultType.Simple,
       'shared',
     )
     const sentinel = NookVaultArchitecture.draft(
       'standard',
-      'sentinel',
+      VaultType.Sentinel,
       'personal',
     )
     try {
@@ -143,7 +144,7 @@ describe('vault architecture adapter', () => {
   test('sentinel vaults are gated until their policy is ready', () => {
     const draft: VaultArchitectureDraft = {
       device_mode: 'anti-hacker',
-      vault_type: 'sentinel',
+      vault_type: VaultType.Sentinel,
       replication_type: 'shared',
       sentinel: {
         threshold: 2,
@@ -153,7 +154,7 @@ describe('vault architecture adapter', () => {
     }
 
     const architecture = validateVaultArchitecture(draft)
-    expect(architecture.vault_type).toBe('sentinel')
+    expect(architecture.vault_type).toBe(VaultType.Sentinel)
     expect(architecture.sentinel_threshold).toBe(2)
     expect(architecture.sentinel_required_participants).toBe(3)
     expect(architecture.sentinel_ready_participants).toBe(1)
@@ -164,7 +165,7 @@ describe('vault architecture adapter', () => {
   test('round-trips the Sentinel wire shape', () => {
     const normalized = validateVaultArchitecture({
       device_mode: 'standard',
-      vault_type: 'sentinel',
+      vault_type: VaultType.Sentinel,
       replication_type: 'personal',
       sentinel: {
         threshold: 2,
@@ -182,7 +183,7 @@ describe('vault architecture adapter', () => {
       sentinel_ready_participants: normalized.sentinel_ready_participants,
     }).toEqual({
       device_mode: 'standard',
-      vault_type: 'sentinel',
+      vault_type: VaultType.Sentinel,
       replication_type: 'personal',
       sentinel_threshold: 2,
       sentinel_required_participants: 3,
@@ -263,7 +264,7 @@ describe('vault architecture adapter', () => {
   test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
     const architecture = validateVaultArchitecture({
       device_mode: 'standard',
-      vault_type: 'simple',
+      vault_type: VaultType.Simple,
       replication_type: 'shared',
     })
     const provider = googleDriveProvider()
