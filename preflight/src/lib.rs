@@ -1124,40 +1124,40 @@ export function adaptedProviderCapability(
 
     #[test]
     fn reports_sentinel_command_and_recovery_summary_mirrors() {
-        let source = r#"
+        let source = r"
 export type StartSentinelGenesisArgs = {
   label: string
 }
 export type ExistingVaultRecoverySummary = {
   storeId: string
 }
-"#;
+";
 
         assert_eq!(typescript_boundary_violation_lines(source), vec![2, 5]);
     }
 
     #[test]
     fn reports_json_round_trip_clones_even_when_split_across_lines() {
-        let source = r#"
+        let source = r"
 const provider = JSON.parse(JSON.stringify(value))
 const snapshot = JSON.parse(
   JSON.stringify(state.providers),
 )
-"#;
+";
 
         assert_eq!(json_round_trip_clone_lines(source), vec![2, 3]);
     }
 
     #[test]
     fn reports_redundant_optional_rune_state_across_lines() {
-        let source = r#"
+        let source = r"
 let selected = $state<Item | undefined>(undefined)
 let recovery = $state<
   RecoverySummary | undefined
 >(undefined)
 let raw = $state.raw<Config | undefined>(undefined)
 let concise = $state<Item>()
-"#;
+";
 
         assert_eq!(redundant_optional_state_lines(source), vec![2, 3, 6]);
     }
