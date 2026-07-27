@@ -92,12 +92,12 @@ impl NookVaultArchitecture {
     #[wasm_bindgen(js_name = draft)]
     pub fn draft(
         device_mode: &str,
-        vault_type: &str,
+        vault_type: nook_core::VaultType,
         replication_type: &str,
     ) -> Result<Self, wasm_bindgen::JsError> {
         Ok(Self(nook_core::VaultArchitecture::draft(
             nook_core::DeviceMode::parse(device_mode)?,
-            nook_core::VaultType::parse(vault_type)?,
+            vault_type,
             nook_core::ReplicationType::parse(replication_type)?,
         )?))
     }

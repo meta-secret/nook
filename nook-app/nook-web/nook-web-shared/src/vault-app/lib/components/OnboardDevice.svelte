@@ -32,6 +32,7 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import { VaultType } from '$lib/vault-architecture'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
     firstCompatibleProvider,
@@ -108,7 +109,7 @@
   const showSetup = $derived(setupType !== undefined)
   const addingProvider = $derived(addProviderOpen || showSetup)
   const isSentinelVault = $derived(
-    vault.vaultArchitecture.vault_type === 'sentinel',
+    vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   )
   const sentinelReadyParticipants = $derived(
     vault.vaultArchitecture.sentinel_ready_participants ?? 0,

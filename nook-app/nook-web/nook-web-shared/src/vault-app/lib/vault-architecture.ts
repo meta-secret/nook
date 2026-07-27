@@ -1,5 +1,6 @@
 import {
   NookVaultArchitecture,
+  VaultType,
   defaultVaultArchitecture,
   firstCompatibleProviderId as wasmFirstCompatibleProviderId,
   providerReplicationCapability,
@@ -11,7 +12,7 @@ import {
   vaultArchitectureCanCreateSecret as canCreateSecret,
   vaultArchitectureOnboardingType as onboardingType,
 } from "$app-wasm";
-import type { DeviceMode, ReplicationType, VaultType } from "$app-wasm";
+import type { DeviceMode, ReplicationType } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 
 export type {
@@ -21,10 +22,10 @@ export type {
   SharedStorageGrantOutcome,
   SharedStorageGrantRequest,
   NookVaultArchitecture as VaultArchitecture,
-  VaultType,
 } from "$app-wasm";
 
 export {
+  VaultType,
   canCreateSecret,
   defaultVaultArchitecture,
   onboardingType,
@@ -50,7 +51,7 @@ export function validateVaultArchitecture(
   architecture: VaultArchitectureDraft,
 ): NookVaultArchitecture {
   const candidate =
-    architecture.vault_type === "sentinel"
+    architecture.vault_type === VaultType.Sentinel
       ? NookVaultArchitecture.sentinel(
           architecture.device_mode,
           architecture.replication_type,

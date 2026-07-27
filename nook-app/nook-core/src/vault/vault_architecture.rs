@@ -61,9 +61,9 @@ macro_rules! deserialize_with_parse {
 
 deserialize_with_parse!(DeviceMode);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum VaultType {
     /// Existing per-device full vault-key envelope model.
     #[default]
