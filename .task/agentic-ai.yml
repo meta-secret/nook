@@ -46,7 +46,10 @@ tasks:
     cmds:
       - cd agentic-ai/ci-agent && npm ci
       - cd agentic-ai/ci-agent && npm run build
-      - cd agentic-ai/ci-agent && node dist/main/main.js pr-ready
+      - >-
+        cd agentic-ai/ci-agent &&
+        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}" &&
+        node dist/main/main.js pr-ready
 
   hive:check:
     desc: Format-check and lint the Hive worker.

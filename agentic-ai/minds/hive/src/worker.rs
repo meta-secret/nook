@@ -725,7 +725,8 @@ fn task_prompt(task: &ClaimedTask) -> String {
          You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
          `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
          authenticated Git push. Reuse or create the deterministic branch \
-         `{branch}`, publish the repair PR, traverse all checks and review feedback, fix and reply \
+         `{branch}`, publish the repair PR, apply and verify the `ci:full-e2e` label, traverse all \
+         checks and review feedback, fix and reply \
          to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
          readiness audit, squash-merge, verify the \
          resulting Main workflow is green, and publish the required Workbench completion records \
@@ -843,6 +844,7 @@ mod tests {
         assert!(prompt.contains("codex/hive-main-failure-recovery"));
         assert!(prompt.contains("replacement Pod"));
         assert!(prompt.contains("Main verification"));
+        assert!(prompt.contains("ci:full-e2e"));
         assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
         Ok(())
     }
