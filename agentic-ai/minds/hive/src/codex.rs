@@ -992,14 +992,13 @@ mod tests {
     }
 
     #[test]
-    fn task_thread_inherits_only_the_preconnected_publication_capability() {
-        let repository = tempfile::tempdir().unwrap();
+    fn task_thread_inherits_only_the_preconnected_publication_capability() -> anyhow::Result<()> {
+        let repository = tempfile::tempdir()?;
         let config = new_config(
             &CodexOptions::new(repository.path().to_owned())
                 .with_workspace_write()
                 .with_publication_fd(17),
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(
             config.permissions.permission_profile(),
@@ -1014,6 +1013,7 @@ mod tests {
                 .map(String::as_str),
             Some("17")
         );
+        Ok(())
     }
 
     #[test]
