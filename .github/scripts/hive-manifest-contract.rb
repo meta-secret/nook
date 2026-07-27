@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require "tmpdir"
 
 root = File.expand_path("../..", __dir__)
 load_yaml = lambda do |path|
@@ -107,6 +108,36 @@ end
 unless worker_environment["HIVE_CODEX_LINUX_SANDBOX_EXE"] ==
        "/usr/local/bin/hive-codex-linux-sandbox"
   raise "Hive workers must select the Restricted-Pod Codex sandbox wrapper"
+end
+trust_initializers = [
+  pod.fetch("initContainers"),
+  dispatcher_deployment.dig("spec", "template", "spec", "initContainers")
+].map do |init_containers|
+  init_containers.find { |container| container["name"] == "neo4j-trust" }
+                 .fetch("command")
+                 .last
+end
+trust_initializers.each do |initializer|
+  Dir.mktmpdir("hive-trust-contract") do |directory|
+    system_ca = File.join(directory, "system-ca.crt")
+    neo4j_ca = File.join(directory, "neo4j-ca.crt")
+    trust_bundle = File.join(directory, "ca-certificates.crt")
+    File.write(system_ca, "system-ca\n")
+    File.write(neo4j_ca, "neo4j-ca\n")
+    command = initializer
+      .gsub("/etc/ssl/certs/ca-certificates.crt", system_ca)
+      .gsub("/run/neo4j/ca.crt", neo4j_ca)
+      .gsub("/trust/ca-certificates.crt", trust_bundle)
+    2.times do
+      unless system("bash", "-ceu", command, out: File::NULL, err: File::NULL)
+        raise "Hive Neo4j trust initialization must survive Kata sandbox recreation"
+      end
+    end
+    unless File.read(trust_bundle) == "system-ca\nneo4j-ca\n" &&
+           File.stat(trust_bundle).mode & 0o777 == 0o444
+      raise "Hive Neo4j trust initialization produced the wrong bundle"
+    end
+  end
 end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
