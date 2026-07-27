@@ -1,3 +1,4 @@
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -6,7 +7,7 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tempfile::TempDir;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::process::Command;
 use tokio::sync::{Mutex, oneshot};
@@ -16,6 +17,9 @@ use crate::model::ClaimedTask;
 
 const REPOSITORY: &str = "meta-secret/nook";
 const API_ROOT: &str = "https://api.github.com";
+const MAILBOX_REQUEST_LIMIT: u64 = 64 * 1024;
+const MAILBOX_RESPONSE_LIMIT: u64 = 4 * 1024 * 1024;
+const MAILBOX_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BoundTask {
@@ -136,12 +140,12 @@ pub struct PublicationBinding {
 pub struct PublicationCapability {
     relay: JoinHandle<()>,
     _directory: TempDir,
-    socket: PathBuf,
+    directory: PathBuf,
 }
 
 impl PublicationCapability {
-    pub fn socket(&self) -> &Path {
-        &self.socket
+    pub fn directory(&self) -> &Path {
+        &self.directory
     }
 }
 
@@ -159,25 +163,17 @@ pub async fn open_publication_capability(
         .prefix("hive-publication-")
         .tempdir_in(capability_root)
         .context("create publication capability directory")?;
-    std::fs::set_permissions(
-        directory.path(),
-        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
-    )
-    .context("secure publication capability directory")?;
-    let capability_socket = directory.path().join("broker.sock");
-    let listener = UnixListener::bind(&capability_socket).with_context(|| {
-        format!(
-            "bind publication capability {}",
-            capability_socket.display()
-        )
-    })?;
-    std::fs::set_permissions(
-        &capability_socket,
-        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o600),
-    )?;
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+        .context("secure publication capability directory")?;
+    for child in ["requests", "processing", "responses"] {
+        let child = directory.path().join(child);
+        std::fs::create_dir(&child)
+            .with_context(|| format!("create publication mailbox {}", child.display()))?;
+        std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o700))?;
+    }
     let (ready_tx, ready_rx) = oneshot::channel();
-    let relay = tokio::spawn(relay_publication_connections(
-        listener,
+    let relay = tokio::spawn(relay_publication_requests(
+        directory.path().to_owned(),
         socket.to_owned(),
         ready_tx,
     ));
@@ -186,8 +182,8 @@ pub async fn open_publication_capability(
         .context("publication capability relay stopped before connecting")?;
     Ok(PublicationCapability {
         relay,
+        directory: directory.path().to_owned(),
         _directory: directory,
-        socket: capability_socket,
     })
 }
 
@@ -203,10 +199,11 @@ pub async fn run_publication_client(
     socket: &Path,
     request_value: GitHubRequest,
 ) -> anyhow::Result<()> {
-    println!(
-        "{}",
-        serde_json::to_string(&request(socket, &request_value).await?)?
-    );
+    let response = match std::env::var_os("HIVE_PUBLICATION_DIRECTORY") {
+        Some(directory) => request_via_mailbox(Path::new(&directory), &request_value).await?,
+        None => request(socket, &request_value).await?,
+    };
+    println!("{}", serde_json::to_string(&response)?);
     Ok(())
 }
 
@@ -214,14 +211,14 @@ async fn request(socket: &Path, request_value: &GitHubRequest) -> anyhow::Result
     request_over_stream(connect(socket).await?, request_value).await
 }
 
-async fn relay_publication_connections(
-    listener: UnixListener,
+async fn relay_publication_requests(
+    capability_directory: PathBuf,
     broker_socket: PathBuf,
     ready: oneshot::Sender<()>,
 ) {
     let mut ready = Some(ready);
     loop {
-        let mut broker = match connect(&broker_socket).await {
+        let broker = match connect(&broker_socket).await {
             Ok(broker) => broker,
             Err(error) => {
                 eprintln!("Hive publication capability broker connection failed: {error:#}");
@@ -232,17 +229,188 @@ async fn relay_publication_connections(
         if let Some(ready) = ready.take() {
             let _ = ready.send(());
         }
-        let mut client = match listener.accept().await {
-            Ok((client, _)) => client,
+        let (request_id, request_path) = match wait_for_mailbox_request(&capability_directory).await
+        {
+            Ok(request) => request,
             Err(error) => {
                 eprintln!("Hive publication capability relay stopped: {error:#}");
                 return;
             }
         };
-        if let Err(error) = tokio::io::copy_bidirectional(&mut client, &mut broker).await {
-            eprintln!("Hive publication capability request ended early: {error}");
+        let processing_path = capability_directory
+            .join("processing")
+            .join(format!("{request_id}.json"));
+        match tokio::fs::rename(&request_path, &processing_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                eprintln!("Hive publication capability relay stopped: {error:#}");
+                return;
+            }
+        };
+        let response = match read_mailbox_request(&processing_path).await {
+            Ok(request_value) => match exchange_response(broker, &request_value).await {
+                Ok(response) => response,
+                Err(error) => {
+                    GitHubResponse::Error(format!("publication broker request failed: {error:#}"))
+                }
+            },
+            Err(error) => {
+                GitHubResponse::Error(format!("invalid publication mailbox request: {error:#}"))
+            }
+        };
+        if let Err(error) =
+            write_mailbox_response(&capability_directory, &request_id, &response).await
+        {
+            eprintln!("Hive publication capability response failed: {error:#}");
+        }
+        let _ = tokio::fs::remove_file(&processing_path).await;
+    }
+}
+
+async fn wait_for_mailbox_request(directory: &Path) -> anyhow::Result<(String, PathBuf)> {
+    let requests = directory.join("requests");
+    loop {
+        let mut entries = tokio::fs::read_dir(&requests).await?;
+        let mut candidates = Vec::new();
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(request_id) = mailbox_request_id(name) else {
+                continue;
+            };
+            candidates.push((request_id.to_owned(), entry.path()));
+        }
+        candidates.sort_by(|left, right| left.0.cmp(&right.0));
+        if let Some(request) = candidates.into_iter().next() {
+            return Ok(request);
+        }
+        tokio::time::sleep(MAILBOX_POLL_INTERVAL).await;
+    }
+}
+
+fn mailbox_request_id(name: &str) -> Option<&str> {
+    let request_id = name.strip_suffix(".json")?;
+    (request_id.len() == 32 && request_id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .then_some(request_id)
+}
+
+async fn read_mailbox_request(path: &Path) -> anyhow::Result<GitHubRequest> {
+    let file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .await?;
+    let metadata = file.metadata().await?;
+    if !metadata.is_file() || metadata.len() > MAILBOX_REQUEST_LIMIT {
+        anyhow::bail!("publication mailbox request is not a bounded regular file");
+    }
+    let mut contents = Vec::new();
+    file.take(MAILBOX_REQUEST_LIMIT + 1)
+        .read_to_end(&mut contents)
+        .await?;
+    if contents.len() as u64 > MAILBOX_REQUEST_LIMIT {
+        anyhow::bail!("publication mailbox request exceeds the size limit");
+    }
+    serde_json::from_slice(&contents).context("decode publication mailbox request")
+}
+
+async fn write_mailbox_response(
+    directory: &Path,
+    request_id: &str,
+    response: &GitHubResponse,
+) -> anyhow::Result<()> {
+    let responses = directory.join("responses");
+    let temporary = responses.join(format!(".{request_id}.tmp"));
+    let destination = responses.join(format!("{request_id}.json"));
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&temporary)
+        .await?;
+    file.write_all(&serde_json::to_vec(response)?).await?;
+    file.sync_all().await?;
+    drop(file);
+    tokio::fs::rename(&temporary, &destination).await?;
+    Ok(())
+}
+
+async fn request_via_mailbox(
+    directory: &Path,
+    request_value: &GitHubRequest,
+) -> anyhow::Result<Value> {
+    let (request_path, response_path) = write_mailbox_request(directory, request_value).await?;
+
+    for _ in 0..2400 {
+        match read_mailbox_response(&response_path).await {
+            Ok(response) => {
+                let _ = tokio::fs::remove_file(&response_path).await;
+                return response_value(response);
+            }
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                tokio::time::sleep(MAILBOX_POLL_INTERVAL).await;
+            }
+            Err(error) => return Err(error),
         }
     }
+    let _ = tokio::fs::remove_file(&request_path).await;
+    anyhow::bail!(
+        "publication mailbox {} was unavailable for 120 seconds",
+        directory.display()
+    )
+}
+
+async fn write_mailbox_request(
+    directory: &Path,
+    request_value: &GitHubRequest,
+) -> anyhow::Result<(PathBuf, PathBuf)> {
+    let request_id = uuid::Uuid::new_v4().simple().to_string();
+    let requests = directory.join("requests");
+    let responses = directory.join("responses");
+    let temporary = requests.join(format!(".{request_id}.tmp"));
+    let request_path = requests.join(format!("{request_id}.json"));
+    let response_path = responses.join(format!("{request_id}.json"));
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&temporary)
+        .await
+        .with_context(|| format!("create publication mailbox request {}", temporary.display()))?;
+    file.write_all(&serde_json::to_vec(request_value)?).await?;
+    file.sync_all().await?;
+    drop(file);
+    tokio::fs::rename(&temporary, &request_path).await?;
+    Ok((request_path, response_path))
+}
+
+async fn read_mailbox_response(path: &Path) -> anyhow::Result<GitHubResponse> {
+    let file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .await?;
+    let metadata = file.metadata().await?;
+    if !metadata.is_file() || metadata.len() > MAILBOX_RESPONSE_LIMIT {
+        anyhow::bail!("publication mailbox response is not a bounded regular file");
+    }
+    let mut contents = Vec::new();
+    file.take(MAILBOX_RESPONSE_LIMIT + 1)
+        .read_to_end(&mut contents)
+        .await?;
+    if contents.len() as u64 > MAILBOX_RESPONSE_LIMIT {
+        anyhow::bail!("publication mailbox response exceeds the size limit");
+    }
+    serde_json::from_slice(&contents).context("decode publication mailbox response")
 }
 
 async fn connect(socket: &Path) -> anyhow::Result<UnixStream> {
@@ -277,9 +445,16 @@ async fn connect(socket: &Path) -> anyhow::Result<UnixStream> {
 }
 
 async fn request_over_stream(
-    mut stream: UnixStream,
+    stream: UnixStream,
     request_value: &GitHubRequest,
 ) -> anyhow::Result<Value> {
+    response_value(exchange_response(stream, request_value).await?)
+}
+
+async fn exchange_response(
+    mut stream: UnixStream,
+    request_value: &GitHubRequest,
+) -> anyhow::Result<GitHubResponse> {
     stream
         .write_all(&serde_json::to_vec(request_value)?)
         .await?;
@@ -287,7 +462,11 @@ async fn request_over_stream(
     stream.flush().await?;
     let mut response = String::new();
     BufReader::new(stream).read_line(&mut response).await?;
-    match serde_json::from_str(&response).context("decode publication broker response")? {
+    serde_json::from_str(&response).context("decode publication broker response")
+}
+
+fn response_value(response: GitHubResponse) -> anyhow::Result<Value> {
+    match response {
         GitHubResponse::Value(value) => Ok(value),
         GitHubResponse::Error(error) => Err(anyhow::anyhow!(error)),
     }
@@ -2211,17 +2390,17 @@ mod tests {
 
     use serde_json::{Value, json};
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-    use tokio::net::{UnixListener, UnixStream};
+    use tokio::net::UnixListener;
 
     use super::{
         BoundTask, GitHubRequest, GitHubResponse, open_publication_capability,
-        publication_branch_generation, publication_branch_name, request_over_stream,
+        publication_branch_generation, publication_branch_name, request_via_mailbox,
         review_feedback, run_publication_broker, valid_feedback_id, workbench_issue_path,
-        workbench_plan_path, workbench_worklog_path,
+        workbench_plan_path, workbench_worklog_path, write_mailbox_request,
     };
 
     #[tokio::test]
-    async fn ephemeral_capability_keeps_its_preconnected_broker_stream() -> anyhow::Result<()> {
+    async fn ephemeral_mailbox_keeps_its_preconnected_broker_stream() -> anyhow::Result<()> {
         let directory = tempfile::tempdir()?;
         let socket = directory.path().join("broker.sock");
         let workspace = directory.path().join("workspace");
@@ -2236,28 +2415,24 @@ mod tests {
         ));
         let capability = open_publication_capability(&socket, &workspace).await?;
         assert_eq!(
-            std::fs::metadata(capability.socket())?.permissions().mode() & 0o777,
-            0o600
-        );
-        assert_eq!(
-            std::fs::metadata(
-                capability
-                    .socket()
-                    .parent()
-                    .ok_or_else(|| anyhow::anyhow!("capability socket has no parent"))?,
-            )?
-            .permissions()
-            .mode()
+            std::fs::metadata(capability.directory())?
+                .permissions()
+                .mode()
                 & 0o777,
             0o700
         );
+        for child in ["requests", "processing", "responses"] {
+            assert_eq!(
+                std::fs::metadata(capability.directory().join(child))?
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+        }
         std::fs::remove_file(&socket)?;
 
-        let response = request_over_stream(
-            UnixStream::connect(capability.socket()).await?,
-            &GitHubRequest::Ping,
-        )
-        .await?;
+        let response = request_via_mailbox(capability.directory(), &GitHubRequest::Ping).await?;
         assert_eq!(response, json!({ "status": "ok" }));
 
         broker.abort();
@@ -2295,18 +2470,17 @@ mod tests {
         });
         let capability = open_publication_capability(&socket, &workspace).await?;
 
-        let mut abandoned = UnixStream::connect(capability.socket()).await?;
-        abandoned
-            .write_all(&serde_json::to_vec(&GitHubRequest::Ping)?)
-            .await?;
-        abandoned.write_all(b"\n").await?;
-        drop(abandoned);
+        let (_abandoned_request, abandoned_response) =
+            write_mailbox_request(capability.directory(), &GitHubRequest::Ping).await?;
+        for _ in 0..100 {
+            if abandoned_response.is_file() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(abandoned_response.is_file());
 
-        let response = request_over_stream(
-            UnixStream::connect(capability.socket()).await?,
-            &GitHubRequest::Ping,
-        )
-        .await?;
+        let response = request_via_mailbox(capability.directory(), &GitHubRequest::Ping).await?;
         assert_eq!(response, json!({ "sequence": 2 }));
 
         broker.await??;

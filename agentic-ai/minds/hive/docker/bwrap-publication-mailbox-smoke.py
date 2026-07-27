@@ -1,36 +1,55 @@
 #!/usr/bin/env python3
 import json
 import os
-import socket
 import subprocess
 import tempfile
 import threading
+import time
 
 
 with tempfile.TemporaryDirectory(
     prefix="hive-publication-smoke-", dir="/workspace"
 ) as directory:
     os.chmod(directory, 0o700)
-    socket_path = os.path.join(directory, "broker.sock")
-    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    listener.settimeout(5)
-    listener.bind(socket_path)
-    os.chmod(socket_path, 0o600)
-    listener.listen(1)
+    requests = os.path.join(directory, "requests")
+    responses = os.path.join(directory, "responses")
+    os.mkdir(requests, mode=0o700)
+    os.mkdir(responses, mode=0o700)
     broker_errors: list[Exception] = []
 
     def serve_ping() -> None:
         try:
-            connection, _ = listener.accept()
-            with connection:
-                request = json.loads(connection.makefile().readline())
-                if request != {"operation": "ping"}:
-                    raise RuntimeError(f"unexpected publication request: {request!r}")
-                response = {
-                    "result": "value",
-                    "value": {"status": "ok"},
-                }
-                connection.sendall((json.dumps(response) + "\n").encode())
+            deadline = time.monotonic() + 5
+            request_path = ""
+            while time.monotonic() < deadline:
+                candidates = sorted(
+                    name for name in os.listdir(requests) if name.endswith(".json")
+                )
+                if candidates:
+                    request_path = os.path.join(requests, candidates[0])
+                    break
+                time.sleep(0.05)
+            if not request_path:
+                raise TimeoutError("publication smoke request was not created")
+            with open(request_path, encoding="utf-8") as request_file:
+                request = json.load(request_file)
+            if request != {"operation": "ping"}:
+                raise RuntimeError(f"unexpected publication request: {request!r}")
+            request_id = os.path.basename(request_path).removesuffix(".json")
+            temporary = os.path.join(responses, f".{request_id}.tmp")
+            destination = os.path.join(responses, f"{request_id}.json")
+            with open(temporary, "x", encoding="utf-8") as response_file:
+                os.chmod(temporary, 0o600)
+                json.dump(
+                    {
+                        "result": "value",
+                        "value": {"status": "ok"},
+                    },
+                    response_file,
+                )
+                response_file.flush()
+                os.fsync(response_file.fileno())
+            os.replace(temporary, destination)
         except Exception as error:
             broker_errors.append(error)
 
@@ -38,7 +57,7 @@ with tempfile.TemporaryDirectory(
     broker.start()
 
     environment = os.environ.copy()
-    environment["HIVE_PUBLICATION_SOCKET"] = socket_path
+    environment["HIVE_PUBLICATION_DIRECTORY"] = directory
     client_error: Exception | None = None
     completed: subprocess.CompletedProcess[str] | None = None
     try:
@@ -73,7 +92,6 @@ with tempfile.TemporaryDirectory(
     except Exception as error:
         client_error = error
     finally:
-        listener.close()
         broker.join(timeout=6)
 
     if broker.is_alive():

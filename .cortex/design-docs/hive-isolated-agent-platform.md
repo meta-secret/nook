@@ -335,18 +335,17 @@ Codex cannot read the token or issue arbitrary authenticated requests.
 
 The worker binds this API before repository execution and opens one ephemeral
 publication capability in a random private directory beneath the task's bound
-`/workspace`. Its Unix socket is mode `0600`, and the worker preconnects one
-fresh broker stream before each `hive github` invocation, so an interrupted
-client cannot leave a reply queued for the next command. The bound workspace
-keeps the socket visible when Bubblewrap replaces `/tmp`; passing its path
-through the task's filtered shell environment avoids relying on inherited
-descriptors that Codex closes at its shell exec boundary. Deployment
-verification executes the real
+`/workspace`. The capability is a filesystem mailbox with `0700` directories
+and unique atomic request/response files. The worker preconnects one fresh
+broker stream before consuming each `hive github` request. Matching responses
+by random request identifier means an interrupted client cannot leave a reply
+queued for the next command. The bound workspace remains visible when
+Bubblewrap replaces `/tmp`; regular file operations also preserve Codex's
+deny-network policy and avoid relying on inherited descriptors that Codex
+closes at its shell exec boundary. Deployment verification executes the real
 `hive github ping` client through the distribution Bubblewrap implementation.
-Codex's restricted network policy continues to deny network access while the
-local socket reaches only the already-bound typed broker channel. Main-repair
-tasks receive the bounded publication capability path; all other task kinds
-receive no capability path and remain broker-disabled.
+Main-repair tasks receive the bounded publication mailbox path; all other task
+kinds receive no capability path and remain broker-disabled.
 The broker
 reads the worker tree through a read-only mount,
 copies authored files into its own private checkout, and runs Git only there

@@ -78,12 +78,13 @@ task's authenticated reply marker to be visible first. A short Git-ref lock
 serializes the base recheck and merge; stale locks self-expire.
 Before Codex starts, the worker creates that capability only for Main-repair
 tasks and exposes no capability path to any other task kind. The capability is
-a random `0600` Unix socket inside a private directory beneath the task's bound
-`/workspace`, so it remains visible when Bubblewrap replaces `/tmp`. Its relay
-preconnects one fresh typed broker stream for each sandboxed `hive github`
-command. This avoids relying on inherited descriptors that Codex correctly
-closes at its shell exec boundary. Codex retains its deny-network policy, and
-an interrupted command cannot desynchronize later replies. Publication uses a
+a private filesystem mailbox beneath the task's bound `/workspace`. Each
+`hive github` command publishes one unique atomic request file and waits for its
+matching create-new response; the worker relay preconnects one fresh typed
+broker stream before consuming that request. This requires neither an inherited
+descriptor nor a sandbox socket connection, so Codex retains its deny-network
+policy. Abandoned responses cannot be consumed by later commands and disappear
+with the task workspace. Publication uses a
 broker-owned private Git checkout populated from the worker's read-only tree;
 task-controlled hooks and repository Git configuration therefore never execute
 in the token-bearing broker.

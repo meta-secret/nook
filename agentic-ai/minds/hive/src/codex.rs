@@ -41,7 +41,7 @@ pub struct CodexOptions {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
-    pub publication_socket: Option<PathBuf>,
+    pub publication_directory: Option<PathBuf>,
 }
 
 impl CodexOptions {
@@ -52,7 +52,7 @@ impl CodexOptions {
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
-            publication_socket: None,
+            publication_directory: None,
         }
     }
 
@@ -61,8 +61,8 @@ impl CodexOptions {
         self
     }
 
-    pub fn with_publication_socket(mut self, publication_socket: PathBuf) -> Self {
-        self.publication_socket = Some(publication_socket);
+    pub fn with_publication_directory(mut self, publication_directory: PathBuf) -> Self {
+        self.publication_directory = Some(publication_directory);
         self
     }
 }
@@ -208,10 +208,10 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         Constrained::allow_any(permission_profile),
     )
     .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    if let Some(publication_socket) = &options.publication_socket {
+    if let Some(publication_directory) = &options.publication_directory {
         permissions.shell_environment_policy.r#set.insert(
-            "HIVE_PUBLICATION_SOCKET".to_owned(),
-            publication_socket.display().to_string(),
+            "HIVE_PUBLICATION_DIRECTORY".to_owned(),
+            publication_directory.display().to_string(),
         );
     }
     let model_reasoning_effort =
@@ -952,7 +952,7 @@ mod tests {
                 main_execve_wrapper_exe: Some(PathBuf::from("/bin/codex-execve-wrapper")),
             },
             access: CodexAccess::ReadOnly,
-            publication_socket: None,
+            publication_directory: None,
         };
         let config = new_config(&options)?;
 
@@ -992,13 +992,13 @@ mod tests {
     }
 
     #[test]
-    fn task_thread_receives_only_its_ephemeral_publication_socket() -> anyhow::Result<()> {
+    fn task_thread_receives_only_its_ephemeral_publication_directory() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
-        let publication_socket = PathBuf::from("/tmp/hive-capability/broker.sock");
+        let publication_directory = PathBuf::from("/workspace/hive-publication-capability");
         let config = new_config(
             &CodexOptions::new(repository.path().to_owned())
                 .with_workspace_write()
-                .with_publication_socket(publication_socket.clone()),
+                .with_publication_directory(publication_directory.clone()),
         )?;
 
         assert_eq!(
@@ -1010,9 +1010,9 @@ mod tests {
                 .permissions
                 .shell_environment_policy
                 .r#set
-                .get("HIVE_PUBLICATION_SOCKET")
+                .get("HIVE_PUBLICATION_DIRECTORY")
                 .map(String::as_str),
-            publication_socket.to_str()
+            publication_directory.to_str()
         );
         assert!(
             !config
@@ -1020,6 +1020,13 @@ mod tests {
                 .shell_environment_policy
                 .r#set
                 .contains_key("HIVE_PUBLICATION_FD")
+        );
+        assert!(
+            !config
+                .permissions
+                .shell_environment_policy
+                .r#set
+                .contains_key("HIVE_PUBLICATION_SOCKET")
         );
         Ok(())
     }

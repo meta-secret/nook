@@ -204,8 +204,8 @@ impl<S: TaskStore> Worker<S> {
                     let mut codex_options =
                         CodexOptions::new(repository.clone()).with_workspace_write();
                     if let Some(capability) = &publication_capability {
-                        codex_options =
-                            codex_options.with_publication_socket(capability.socket().to_owned());
+                        codex_options = codex_options
+                            .with_publication_directory(capability.directory().to_owned());
                     }
                     codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
@@ -239,7 +239,7 @@ impl<S: TaskStore> Worker<S> {
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
                 if let Some(capability) = &publication_capability {
                     codex_options =
-                        codex_options.with_publication_socket(capability.socket().to_owned());
+                        codex_options.with_publication_directory(capability.directory().to_owned());
                 }
                 codex_options.model.clone_from(&self.config.model);
                 codex_options.arg0_paths.clone_from(&self.config.arg0_paths);

@@ -2682,7 +2682,7 @@ tasks:
               --bind /workspace /workspace \
               --chdir /workspace \
               /bin/bash -ceu "test ! -w /usr; touch .hive-sandbox-diagnostic; rm .hive-sandbox-diagnostic"
-            printf "%s\n" "== task-bound publication socket through Bubblewrap =="
+            printf "%s\n" "== task-bound publication mailbox through Bubblewrap =="
             python3 /usr/local/libexec/hive-bwrap-publication-smoke.py
           '
         REMOTE
