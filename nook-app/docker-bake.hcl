@@ -51,10 +51,6 @@ variable "SCCACHE_REDIS_MODE" {
   default = "external"
 }
 
-variable "SCCACHE_REDIS_PASSWORD_FILE" {
-  default = ""
-}
-
 // Enabled only by the GitHub Actions Docker setup. Keeping the default empty preserves zero-network
 // local builds. Separate scopes are mandatory: Docker's GHA backend overwrites a scope when a
 // different image exports to it, so sharing the default `buildkit` scope loses sibling lineages.
@@ -84,6 +80,13 @@ variable "GHA_CACHE_FALLBACK_ENABLED" {
 // Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
   default = ""
+}
+
+// Main and pull requests derive this immutable scope from every file that defines the WASM
+// dependency graph and compiler environment. A new graph gets a new location instead of
+// overwriting the last complete dependency export with a different lineage.
+variable "GHA_RUST_WASM_DEPS_SCOPE" {
+  default = "nook-rust-wasm-deps-v4-local"
 }
 
 rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
@@ -126,10 +129,11 @@ rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
 ] : []
 
-// v3 is the self-contained WASM dependency lineage (zstd cook upload from deferred Main
-// publish). Keep reading v2/v1 during the migration window so already-warmed runners can
-// still restore until Main publishes v3 with real cook layers.
+// The fingerprinted v4 scope is the self-contained WASM dependency lineage. Keep reading the
+// mutable v3/v2/v1 scopes during migration so already-warmed runners can still restore until Main
+// publishes the exact immutable graph.
 rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
+  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
   "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
@@ -137,7 +141,7 @@ rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFI
   "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
 ], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
   "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
   "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
@@ -147,6 +151,7 @@ rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFI
   "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ] : [
+  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
   "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
   "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
@@ -154,11 +159,11 @@ rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFI
   "type=gha,scope=nook-rust-base-v1,version=2",
   "type=gha,scope=nook-rust-v1,version=2",
 ]) : [
-  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},version=2",
+  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
 ]
 
 rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
+  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m",
 ] : []
 
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
@@ -284,9 +289,6 @@ target "_sccache" {
     SCCACHE_REDIS_MODE     = SCCACHE_REDIS_MODE
     SCCACHE_REDIS_ENDPOINT = SCCACHE_REDIS_ENDPOINT
   }
-  secret = SCCACHE_REDIS_PASSWORD_FILE != "" ? [
-    "id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}",
-  ] : []
 }
 
 // Default: build the nook-web image (source-in-image) that `task` runs.

@@ -31,10 +31,6 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
         );
     }
     assert!(
-        app_tasks.contains("SCCACHE_REDIS_PASSWORD_FILE: '{{.SCCACHE_REDIS_PASSWORD_FILE}}'"),
-        "Task must export the resolved credential path for Bake's HCL secret source"
-    );
-    assert!(
         !app_tasks.contains("print $4; exit") && !app_tasks.contains("print $2; exit"),
         "pipefail-safe Docker inspection must consume complete output instead of SIGPIPEing the producer"
     );
@@ -43,7 +39,7 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
             .matches("password_file=\"{{.SCCACHE_REDIS_PASSWORD_FILE}}\"")
             .count()
             >= 2,
-        "Bake permission and mount arguments must use the resolved Task credential path"
+        "local runtime checks and mounts must use the resolved Task credential path"
     );
     assert!(
         read(".dockerignore").lines().any(|line| line == ".nook"),
@@ -84,35 +80,29 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
 
 #[test]
 fn github_actions_keep_remote_credentials_out_of_delivery_builds() {
-    assert_cache_actions_use_credential_files();
+    assert_hosted_docker_builds_use_buildkit_only();
     assert_workflows_scope_cache_credentials();
     assert_rust_build_cache_boundary();
 }
 
-fn assert_cache_actions_use_credential_files() {
+fn assert_hosted_docker_builds_use_buildkit_only() {
     let action = read(".github/actions/nook-docker-setup/action.yml");
     for required in [
-        "cache-redis-password",
-        "uses: ./.github/actions/nook-cache-connect",
+        "NOOK_SCCACHE_BACKEND=direct_compile",
+        "NOOK_SCCACHE_BACKEND_REASON=hosted_buildkit_only",
     ] {
         assert!(
             action.contains(required),
-            "GitHub Actions cache configuration is missing: {required}"
+            "hosted Docker cache configuration is missing: {required}"
         );
     }
+    assert!(
+        !action.contains("cache-redis-password")
+            && !action.contains("uses: ./.github/actions/nook-cache-connect"),
+        "hosted Docker builds must rely on BuildKit without attaching Redis credentials"
+    );
     assert!(!action.contains("cloudflare-client"));
     assert!(!action.contains("ssh -fNT") && !action.contains("CACHE_SSH_PRIVATE_KEY"));
-    let cache_step = action
-        .split("    - name: Configure persistent Rust compiler cache\n")
-        .nth(1)
-        .expect("Docker setup must contain the persistent cache step")
-        .split("\n    # Inline `task`/Bake calls")
-        .next()
-        .expect("persistent cache step must precede the GHA runtime step");
-    assert!(
-        !cache_step.contains("env:"),
-        "secret-valued step environments are forbidden"
-    );
 
     let cache_action = read(".github/actions/nook-cache-connect/action.yml");
     assert!(cache_action.contains("using: node24"));
@@ -168,10 +158,17 @@ fn assert_workflows_scope_cache_credentials() {
 
 fn assert_rust_build_cache_boundary() {
     let bake = read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("id=sccache_redis_password,src=${SCCACHE_REDIS_PASSWORD_FILE}"));
     let app_tasks = read("nook-app/Taskfile.yml");
-    assert!(app_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"));
-    assert!(app_tasks.contains("--allow=fs.read="));
+    assert!(
+        !bake.contains("SCCACHE_REDIS_PASSWORD_FILE")
+            && !bake.contains("id=sccache_redis_password")
+            && !bake.contains("secret ="),
+        "Bake must not attach Redis credentials to hosted Docker builds"
+    );
+    assert!(
+        !app_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
+        "Task must not grant BuildKit access to the local Redis credential"
+    );
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");
     assert!(wrapper.contains("/run/secrets/sccache_redis_password"));
@@ -187,19 +184,18 @@ fn assert_rust_build_cache_boundary() {
     assert!(bake.contains("SCCACHE_REDIS_MODE") && bake.contains("= SCCACHE_REDIS_MODE"));
     assert!(app_tasks.contains("--set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'"));
 
-    let secret_mount = "--mount=type=secret,id=sccache_redis_password";
     let core_dockerfile = read("nook-app/nook-core/Dockerfile");
-    assert!(
-        core_dockerfile.matches(secret_mount).count() >= 12,
-        "every native Rust compiler layer must receive the optional cache credential"
-    );
-    assert!(
-        read("nook-app/nook-wasm/Dockerfile")
-            .matches(secret_mount)
-            .count()
-            >= 3,
-        "every WASM compiler layer must receive the optional cache credential"
-    );
+    let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
+    for (path, dockerfile) in [
+        ("nook-app/nook-core/Dockerfile", core_dockerfile.as_str()),
+        ("nook-app/nook-wasm/Dockerfile", wasm_dockerfile.as_str()),
+    ] {
+        assert!(
+            !dockerfile.contains("--mount=type=secret")
+                && !dockerfile.contains("/run/secrets/sccache_redis_password"),
+            "{path} must not attach secrets to compiler layers"
+        );
+    }
 }
 
 fn assert_delivery_cache_scope_contract() {
@@ -211,6 +207,30 @@ fn assert_delivery_cache_scope_contract() {
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX="));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED="));
     assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX="));
+    for fingerprint_input in [
+        "nook-app/Cargo.toml",
+        "nook-app/Cargo.lock",
+        "nook-app/**/Cargo.toml",
+        "nook-app/.cargo/**",
+        "nook-app/.config/**",
+        "nook-app/Taskfile.yml",
+        "nook-app/docker-bake.hcl",
+        "nook-app/**/docker-bake.hcl",
+        "nook-app/docker/*.docker-bake.hcl",
+        "nook-app/docker/base.Dockerfile",
+        "nook-app/docker/Taskfile.yml",
+        "nook-app/docker/sccache-wrapper.sh",
+        "nook-app/docker/sccache-report.sh",
+        "nook-app/nook-core/Dockerfile",
+    ] {
+        assert!(
+            setup.contains(fingerprint_input),
+            "WASM dependency scope fingerprint is missing {fingerprint_input}"
+        );
+    }
+    assert!(
+        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint")
+    );
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -z \"$read_only\" ]"));
     assert!(setup.contains("main-cache-only"));
@@ -218,15 +238,24 @@ fn assert_delivery_cache_scope_contract() {
     assert!(!setup.contains("cache_total_count()"));
     assert!(!setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
 
+    assert_release_cache_fingerprint_contract();
+
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
     assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
+    assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
+    assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2"));
+    assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m"));
+    let docker_tasks = read("nook-app/docker/Taskfile.yml");
+    assert!(
+        docker_tasks
+            .contains("scope=${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}")
+    );
     assert!(bake.contains("GHA_CACHE_FALLBACK_ENABLED != \"\""));
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
@@ -272,6 +301,25 @@ fn assert_delivery_cache_scope_contract() {
         wasm_dependencies.contains("cache-from = rust_wasm_deps_cache_from"),
         "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
     );
+}
+
+fn assert_release_cache_fingerprint_contract() {
+    let release = read(".github/workflows/release.yml");
+    let release_source = release
+        .find("- name: Checkout release source")
+        .expect("release source checkout must exist");
+    let release_tooling = release
+        .find("- name: Checkout release workflow tooling")
+        .expect("release tooling checkout must exist");
+    let release_docker_setup = release
+        .find("- name: Docker setup")
+        .expect("release Docker setup must exist");
+    assert!(
+        release_source < release_tooling && release_tooling < release_docker_setup,
+        "release Docker setup must fingerprint the requested source after checkout"
+    );
+    assert!(release.contains("path: .nook/release-workflow"));
+    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
 }
 
 #[test]

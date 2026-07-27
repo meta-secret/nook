@@ -31,8 +31,8 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
-  # Rust compilers connect directly to the password-protected public TLS cache. The credential is
-  # optional: without a readable file, the wrapper bypasses sccache and compiles normally.
+  # Local runtime Rust commands may connect directly to the password-protected TLS cache. Docker
+  # build stages never receive this credential and rely on BuildKit dependency layers instead.
   SCCACHE_REDIS_IMAGE: '{{default "redis:8.2.2-alpine" .SCCACHE_REDIS_IMAGE}}'
   SCCACHE_REDIS_ENDPOINT: '{{default "rediss://redis-ovh-borg-1.bynull.link:6380" .SCCACHE_REDIS_ENDPOINT}}'
   SCCACHE_REDIS_TLS_SERVER_NAME: '{{default "redis-ovh-borg-1.bynull.link" .SCCACHE_REDIS_TLS_SERVER_NAME}}'
@@ -50,12 +50,6 @@ vars:
       if [ -n "$password_file" ]; then
         printf '%s' '--mount type=bind,src='"$password_file"',dst=/run/secrets/sccache_redis_password,readonly';
       fi
-  SCCACHE_REDIS_BAKE_ALLOW:
-    sh: >-
-      password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
-      if [ -n "$password_file" ]; then
-        printf '%s' '--allow=fs.read='"$password_file";
-      fi
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -64,7 +58,6 @@ vars:
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
-    {{.SCCACHE_REDIS_BAKE_ALLOW}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/base.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl
@@ -88,12 +81,6 @@ vars:
   VITE_SENTINEL_APP_URL: '{{default "" .VITE_SENTINEL_APP_URL}}'
   VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
   WEB_DEV_PORT: '{{default "5173" .WEB_DEV_PORT}}'
-
-env:
-  # Buildx Bake reads HCL variables from the process environment. Task variables are not exported
-  # automatically, so expose only the credential file path; BuildKit transports its contents as a
-  # secret and never places the password in arguments, layers, or logs.
-  SCCACHE_REDIS_PASSWORD_FILE: '{{.SCCACHE_REDIS_PASSWORD_FILE}}'
 
 includes:
   docker:

@@ -44,19 +44,23 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Load the local composite action from the workflow ref before a manual release replaces the
-      # workspace with an older source ref that may still contain the retired daemon-restart setup.
-      - name: Checkout release workflow tooling
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-
       - name: Checkout release source
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
+
+      # Keep the current workflow's composite action in an ignored side checkout. Docker setup runs
+      # after the requested source checkout so hashFiles fingerprints that exact release source,
+      # while an older manual release cannot revive retired cache setup logic.
+      - name: Checkout release workflow tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .nook/release-workflow
+
+      - name: Docker setup
+        uses: ./.nook/release-workflow/.github/actions/nook-docker-setup
 
       - name: Resolve and validate release
         id: release
