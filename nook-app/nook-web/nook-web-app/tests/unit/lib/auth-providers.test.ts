@@ -86,6 +86,8 @@ describe('providerStorageDetail', () => {
         accessToken: 'ya29.test',
         fileName: 'personal.yaml',
         accountEmail: 'me@example.com',
+        driveMode: 'private',
+        iCloudMode: 'private',
       },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
@@ -98,6 +100,8 @@ describe('providerStorageDetail', () => {
         accessToken: 'ya29.test',
         fileName: 'work.yaml',
         accountEmail: 'me@example.com',
+        driveMode: 'private',
+        iCloudMode: 'private',
       },
       createdAt: '2026-06-24T00:00:00.000Z',
     }

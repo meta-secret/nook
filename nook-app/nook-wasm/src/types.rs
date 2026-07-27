@@ -8,6 +8,82 @@ use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookValueState {
+    Unavailable,
+    Value,
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone)]
+pub struct NookStringValue {
+    state: NookValueState,
+    value: String,
+}
+
+#[wasm_bindgen]
+impl NookStringValue {
+    #[wasm_bindgen(js_name = unavailable)]
+    #[must_use]
+    pub fn unavailable() -> Self {
+        Self {
+            state: NookValueState::Unavailable,
+            value: String::new(),
+        }
+    }
+
+    #[wasm_bindgen(js_name = value)]
+    pub fn available(value: String) -> Result<Self, wasm_bindgen::JsError> {
+        if value.is_empty() {
+            return Err(wasm_bindgen::JsError::new(
+                "available string value must not be empty",
+            ));
+        }
+        Ok(Self {
+            state: NookValueState::Value,
+            value,
+        })
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookValueState {
+        self.state
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn string(&self) -> Result<String, wasm_bindgen::JsError> {
+        match self.state {
+            NookValueState::Unavailable => {
+                Err(wasm_bindgen::JsError::new("string value is unavailable"))
+            }
+            NookValueState::Value => Ok(self.value.clone()),
+        }
+    }
+}
+
+pub(crate) enum NookStringValueRef<'a> {
+    Unavailable,
+    Value(&'a str),
+}
+
+impl NookStringValue {
+    pub(crate) fn from_value(value: impl Into<String>) -> Self {
+        Self {
+            state: NookValueState::Value,
+            value: value.into(),
+        }
+    }
+
+    pub(crate) fn as_ref(&self) -> NookStringValueRef<'_> {
+        match self.state {
+            NookValueState::Unavailable => NookStringValueRef::Unavailable,
+            NookValueState::Value => NookStringValueRef::Value(&self.value),
+        }
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookVaultArchitecture(nook_core::VaultArchitecture);
 
@@ -121,11 +197,11 @@ impl NookProviderReplicationCapability {
     }
 
     #[wasm_bindgen(getter, js_name = oauthPreset)]
-    pub fn oauth_preset(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_preset(&self) -> NookStringValue {
         match self.0.oauth_preset {
-            nook_core::ProviderOauthPreset::NotApplicable => wasm_bindgen::JsValue::UNDEFINED,
+            nook_core::ProviderOauthPreset::NotApplicable => NookStringValue::unavailable(),
             nook_core::ProviderOauthPreset::Preset(preset) => {
-                wasm_bindgen::JsValue::from_str(preset.as_str())
+                NookStringValue::from_value(preset.as_str())
             }
         }
     }
@@ -141,11 +217,11 @@ impl NookProviderReplicationCapability {
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
-    pub fn shared_joiner_identity(&self) -> wasm_bindgen::JsValue {
+    pub fn shared_joiner_identity(&self) -> NookStringValue {
         match self.0.shared_joiner_identity {
-            nook_core::ProviderJoinerIdentity::NotRequired => wasm_bindgen::JsValue::UNDEFINED,
+            nook_core::ProviderJoinerIdentity::NotRequired => NookStringValue::unavailable(),
             nook_core::ProviderJoinerIdentity::Required(kind) => {
-                wasm_bindgen::JsValue::from_str(kind.as_str())
+                NookStringValue::from_value(kind.as_str())
             }
         }
     }
@@ -1500,36 +1576,33 @@ impl NookRuntimeConfig {
     #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: wasm_bindgen::JsValue) -> u32 {
-        let raw = raw_timeout_ms.as_string();
+    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: NookStringValue) -> u32 {
         self.policy
-            .resolve_vault_idle_timeout_ms(match raw.as_deref() {
-                Some(value) => nook_core::RuntimeConfigValue::Set(value),
-                None => nook_core::RuntimeConfigValue::Unset,
+            .resolve_vault_idle_timeout_ms(match raw_timeout_ms.as_ref() {
+                NookStringValueRef::Value(value) => nook_core::RuntimeConfigValue::Set(value),
+                NookStringValueRef::Unavailable => nook_core::RuntimeConfigValue::Unset,
             })
     }
 
     #[wasm_bindgen(js_name = resolveVaultIdleWarningMs)]
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: wasm_bindgen::JsValue) -> u32 {
-        let raw = raw_warning_ms.as_string();
+    pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: NookStringValue) -> u32 {
         self.policy
-            .resolve_vault_idle_warning_ms(match raw.as_deref() {
-                Some(value) => nook_core::RuntimeConfigValue::Set(value),
-                None => nook_core::RuntimeConfigValue::Unset,
+            .resolve_vault_idle_warning_ms(match raw_warning_ms.as_ref() {
+                NookStringValueRef::Value(value) => nook_core::RuntimeConfigValue::Set(value),
+                NookStringValueRef::Unavailable => nook_core::RuntimeConfigValue::Unset,
             })
     }
 
     #[wasm_bindgen(js_name = resolveVaultSyncIntervalMs)]
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: wasm_bindgen::JsValue) -> u32 {
-        let raw = raw_interval_ms.as_string();
+    pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: NookStringValue) -> u32 {
         self.policy
-            .resolve_vault_sync_interval_ms(match raw.as_deref() {
-                Some(value) => nook_core::RuntimeConfigValue::Set(value),
-                None => nook_core::RuntimeConfigValue::Unset,
+            .resolve_vault_sync_interval_ms(match raw_interval_ms.as_ref() {
+                NookStringValueRef::Value(value) => nook_core::RuntimeConfigValue::Set(value),
+                NookStringValueRef::Unavailable => nook_core::RuntimeConfigValue::Unset,
             })
     }
 }
@@ -1884,35 +1957,54 @@ impl NookEnrollmentProvider {
     pub fn oauth_file(
         preset: String,
         access_token: String,
-        refresh_token: wasm_bindgen::JsValue,
-        expires_at: wasm_bindgen::JsValue,
-        file_id: wasm_bindgen::JsValue,
-        file_name: wasm_bindgen::JsValue,
-        account_email: wasm_bindgen::JsValue,
+        refresh_token: NookStringValue,
+        expires_at: NookStringValue,
+        file_id: NookStringValue,
+        file_name: NookStringValue,
+        account_email: NookStringValue,
     ) -> Self {
         Self(nook_core::EnrollmentProvider::personal(
             nook_core::PersonalEnrollmentProvider::oauth_file(
                 preset,
                 access_token,
-                match refresh_token.as_string() {
-                    Some(value) => nook_core::OAuthRefreshCredential::Token(value),
-                    None => nook_core::OAuthRefreshCredential::NotIssued,
-                },
-                match expires_at.as_string() {
-                    Some(value) => nook_core::OAuthTokenExpiry::ExpiresAt(value),
-                    None => nook_core::OAuthTokenExpiry::Unknown,
-                },
-                match (file_id.as_string(), file_name.as_string()) {
-                    (Some(file_id), Some(file_name)) => {
-                        nook_core::OAuthRemoteFile::Identified { file_id, file_name }
+                match refresh_token.as_ref() {
+                    NookStringValueRef::Value(value) => {
+                        nook_core::OAuthRefreshCredential::Token(value.to_owned())
                     }
-                    (Some(file_id), None) => nook_core::OAuthRemoteFile::FileId { file_id },
-                    (None, Some(file_name)) => nook_core::OAuthRemoteFile::FileName { file_name },
-                    (None, None) => nook_core::OAuthRemoteFile::Unresolved,
+                    NookStringValueRef::Unavailable => nook_core::OAuthRefreshCredential::NotIssued,
                 },
-                match account_email.as_string() {
-                    Some(value) => nook_core::OAuthAccountIdentity::Email(value),
-                    None => nook_core::OAuthAccountIdentity::Unknown,
+                match expires_at.as_ref() {
+                    NookStringValueRef::Value(value) => {
+                        nook_core::OAuthTokenExpiry::ExpiresAt(value.to_owned())
+                    }
+                    NookStringValueRef::Unavailable => nook_core::OAuthTokenExpiry::Unknown,
+                },
+                match (file_id.as_ref(), file_name.as_ref()) {
+                    (NookStringValueRef::Value(file_id), NookStringValueRef::Value(file_name)) => {
+                        nook_core::OAuthRemoteFile::Identified {
+                            file_id: file_id.to_owned(),
+                            file_name: file_name.to_owned(),
+                        }
+                    }
+                    (NookStringValueRef::Value(file_id), NookStringValueRef::Unavailable) => {
+                        nook_core::OAuthRemoteFile::FileId {
+                            file_id: file_id.to_owned(),
+                        }
+                    }
+                    (NookStringValueRef::Unavailable, NookStringValueRef::Value(file_name)) => {
+                        nook_core::OAuthRemoteFile::FileName {
+                            file_name: file_name.to_owned(),
+                        }
+                    }
+                    (NookStringValueRef::Unavailable, NookStringValueRef::Unavailable) => {
+                        nook_core::OAuthRemoteFile::Unresolved
+                    }
+                },
+                match account_email.as_ref() {
+                    NookStringValueRef::Value(value) => {
+                        nook_core::OAuthAccountIdentity::Email(value.to_owned())
+                    }
+                    NookStringValueRef::Unavailable => nook_core::OAuthAccountIdentity::Unknown,
                 },
             ),
         ))
@@ -1981,165 +2073,161 @@ impl NookEnrollmentProvider {
     }
 
     #[wasm_bindgen(getter, js_name = githubPat)]
-    pub fn github_pat(&self) -> wasm_bindgen::JsValue {
+    pub fn github_pat(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::Github { pat, .. },
-            ) => wasm_bindgen::JsValue::from_str(pat),
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value(pat),
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = githubRepo)]
-    pub fn github_repo(&self) -> wasm_bindgen::JsValue {
+    pub fn github_repo(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::Github { repo, .. },
-            ) => wasm_bindgen::JsValue::from_str(repo),
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value(repo),
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthPreset)]
-    pub fn oauth_preset(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_preset(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { preset, .. },
-            ) => wasm_bindgen::JsValue::from_str(preset),
+            ) => NookStringValue::from_value(preset),
             nook_core::EnrollmentProviderDataRef::Shared(
                 nook_core::SharedEnrollmentProviderData::GoogleDrive { oauth_preset, .. },
-            ) => wasm_bindgen::JsValue::from_str(oauth_preset),
+            ) => NookStringValue::from_value(oauth_preset),
             nook_core::EnrollmentProviderDataRef::Shared(
                 nook_core::SharedEnrollmentProviderData::ICloud { .. },
-            ) => wasm_bindgen::JsValue::from_str("icloud"),
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value("icloud"),
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthAccessToken)]
-    pub fn oauth_access_token(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_access_token(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { access_token, .. },
-            ) => wasm_bindgen::JsValue::from_str(access_token),
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value(access_token),
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthRefreshToken)]
-    pub fn oauth_refresh_token(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_refresh_token(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { refresh, .. },
             ) => match refresh {
                 nook_core::OAuthRefreshCredential::Token(value) => {
-                    wasm_bindgen::JsValue::from_str(value)
+                    NookStringValue::from_value(value)
                 }
-                nook_core::OAuthRefreshCredential::NotIssued => wasm_bindgen::JsValue::UNDEFINED,
+                nook_core::OAuthRefreshCredential::NotIssued => NookStringValue::unavailable(),
             },
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthExpiresAt)]
-    pub fn oauth_expires_at(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_expires_at(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { expiry, .. },
             ) => match expiry {
-                nook_core::OAuthTokenExpiry::ExpiresAt(value) => {
-                    wasm_bindgen::JsValue::from_str(value)
-                }
-                nook_core::OAuthTokenExpiry::Unknown => wasm_bindgen::JsValue::UNDEFINED,
+                nook_core::OAuthTokenExpiry::ExpiresAt(value) => NookStringValue::from_value(value),
+                nook_core::OAuthTokenExpiry::Unknown => NookStringValue::unavailable(),
             },
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthFileId)]
-    pub fn oauth_file_id(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_file_id(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { remote_file, .. },
             ) => match remote_file {
                 nook_core::OAuthRemoteFile::FileId { file_id }
                 | nook_core::OAuthRemoteFile::Identified { file_id, .. } => {
-                    wasm_bindgen::JsValue::from_str(file_id)
+                    NookStringValue::from_value(file_id)
                 }
                 nook_core::OAuthRemoteFile::Unresolved
-                | nook_core::OAuthRemoteFile::FileName { .. } => wasm_bindgen::JsValue::UNDEFINED,
+                | nook_core::OAuthRemoteFile::FileName { .. } => NookStringValue::unavailable(),
             },
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthFileName)]
-    pub fn oauth_file_name(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_file_name(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { remote_file, .. },
             ) => match remote_file {
                 nook_core::OAuthRemoteFile::FileName { file_name }
                 | nook_core::OAuthRemoteFile::Identified { file_name, .. } => {
-                    wasm_bindgen::JsValue::from_str(file_name)
+                    NookStringValue::from_value(file_name)
                 }
                 nook_core::OAuthRemoteFile::Unresolved
-                | nook_core::OAuthRemoteFile::FileId { .. } => wasm_bindgen::JsValue::UNDEFINED,
+                | nook_core::OAuthRemoteFile::FileId { .. } => NookStringValue::unavailable(),
             },
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthAccountEmail)]
-    pub fn oauth_account_email(&self) -> wasm_bindgen::JsValue {
+    pub fn oauth_account_email(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Personal(
                 nook_core::PersonalEnrollmentProviderData::OauthFile { account, .. },
             ) => match account {
-                nook_core::OAuthAccountIdentity::Email(value) => {
-                    wasm_bindgen::JsValue::from_str(value)
-                }
-                nook_core::OAuthAccountIdentity::Unknown => wasm_bindgen::JsValue::UNDEFINED,
+                nook_core::OAuthAccountIdentity::Email(value) => NookStringValue::from_value(value),
+                nook_core::OAuthAccountIdentity::Unknown => NookStringValue::unavailable(),
             },
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentityKind)]
-    pub fn shared_joiner_identity_kind(&self) -> wasm_bindgen::JsValue {
+    pub fn shared_joiner_identity_kind(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Shared(
                 nook_core::SharedEnrollmentProviderData::GoogleDrive {
                     joiner_identity_kind,
                     ..
                 },
-            ) => wasm_bindgen::JsValue::from_str(joiner_identity_kind),
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value(joiner_identity_kind),
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
-    pub fn shared_joiner_identity(&self) -> wasm_bindgen::JsValue {
+    pub fn shared_joiner_identity(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Shared(
                 nook_core::SharedEnrollmentProviderData::GoogleDrive {
                     joiner_identity, ..
                 },
-            ) => wasm_bindgen::JsValue::from_str(joiner_identity),
-            _ => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value(joiner_identity),
+            _ => NookStringValue::unavailable(),
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedStorageTargetId)]
-    pub fn shared_storage_target_id(&self) -> wasm_bindgen::JsValue {
+    pub fn shared_storage_target_id(&self) -> NookStringValue {
         match self.0.data() {
             nook_core::EnrollmentProviderDataRef::Shared(
                 nook_core::SharedEnrollmentProviderData::GoogleDrive {
                     storage_target_id, ..
                 }
                 | nook_core::SharedEnrollmentProviderData::ICloud { storage_target_id },
-            ) => wasm_bindgen::JsValue::from_str(storage_target_id),
-            nook_core::EnrollmentProviderDataRef::Personal(_) => wasm_bindgen::JsValue::UNDEFINED,
+            ) => NookStringValue::from_value(storage_target_id),
+            nook_core::EnrollmentProviderDataRef::Personal(_) => NookStringValue::unavailable(),
         }
     }
 }

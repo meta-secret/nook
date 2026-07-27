@@ -195,8 +195,8 @@ export function beginProviderSetup(
       preset,
       accessToken: "",
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      driveMode: preset === "google-drive" ? "private" : undefined,
-      iCloudMode: preset === "icloud" ? "private" : undefined,
+      driveMode: "private",
+      iCloudMode: "private",
     };
   } else {
     state.oauthSetupPreset = undefined;
@@ -295,8 +295,8 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           expiresAt: state.oauthFile?.expiresAt,
           fileId: state.oauthFile?.fileId,
           folderId: state.oauthFile?.folderId,
-          driveMode: state.oauthFile?.driveMode,
-          iCloudMode: state.oauthFile?.iCloudMode,
+          driveMode: state.oauthFile?.driveMode ?? "private",
+          iCloudMode: state.oauthFile?.iCloudMode ?? "private",
           iCloudShareTarget: state.oauthFile?.iCloudShareTarget,
           accountEmail: state.oauthFile?.accountEmail,
           fileName: driveFile,

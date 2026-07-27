@@ -28,29 +28,22 @@ fn api_key(value: &str) -> SecretValue {
     })
 }
 
-fn test_key() -> SymmetricKey {
-    SymmetricKey::parse(TEST_PASSPHRASE).expect("vault workflow test setup should succeed")
+fn test_key() -> Result<SymmetricKey, Box<dyn std::error::Error>> {
+    Ok(SymmetricKey::parse(TEST_PASSPHRASE)?)
 }
 
-fn encrypted_api_key(crypto: &VaultCrypto, value: &str) -> String {
-    crypto
-        .encrypt_value(
-            api_key(value)
-                .to_yaml()
-                .expect("vault workflow test setup should succeed")
-                .as_str(),
-        )
-        .expect("vault workflow test setup should succeed")
+fn encrypted_api_key(
+    crypto: &VaultCrypto,
+    value: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(crypto
+        .encrypt_value(api_key(value).to_yaml()?.as_str())?
         .as_str()
-        .to_owned()
+        .to_owned())
 }
 
-fn api_key_yaml(value: &str) -> String {
-    api_key(value)
-        .to_yaml()
-        .expect("vault workflow test setup should succeed")
-        .as_str()
-        .to_owned()
+fn api_key_yaml(value: &str) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(api_key(value).to_yaml()?.as_str().to_owned())
 }
 
 fn sample_db() -> Database {
@@ -60,7 +53,7 @@ fn sample_db() -> Database {
     db
 }
 
-fn passkey() -> SecretValue {
+fn passkey() -> Result<SecretValue, Box<dyn std::error::Error>> {
     let request = PasskeyRegistrationRequest {
         origin: "https://login.example.com".to_owned(),
         challenge: URL_SAFE_NO_PAD.encode([1_u8; 32]),
@@ -78,93 +71,91 @@ fn passkey() -> SecretValue {
         resident_key_required: true,
         user_verification_required: true,
     };
-    let mut passkey = nook_core::create_website_passkey(&request, &[])
-        .expect("vault workflow test setup should succeed")
-        .credential;
+    let mut passkey = nook_core::create_website_passkey(&request, &[])?.credential;
     passkey.signature_count = 7;
-    SecretValue::Passkey(passkey)
+    Ok(SecretValue::Passkey(passkey))
 }
 
-fn armored_cache_from_db(db: &Database, crypto: &VaultCrypto) -> HashMap<SecretId, String> {
-    db.to_stored_records_with_crypto(crypto)
-        .expect("vault workflow test setup should succeed")
+fn armored_cache_from_db(
+    db: &Database,
+    crypto: &VaultCrypto,
+) -> Result<HashMap<SecretId, String>, Box<dyn std::error::Error>> {
+    Ok(db
+        .to_stored_records_with_crypto(crypto)?
         .into_iter()
         .map(|record| (record.key, record.value.as_str().to_owned()))
-        .collect()
+        .collect())
 }
 
-fn save_armored_cache(armored: &HashMap<SecretId, String>) -> String {
+fn save_armored_cache(
+    armored: &HashMap<SecretId, String>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let secret_types = armored
         .keys()
         .map(|key| (key.clone(), SecretType::ApiKey))
         .collect();
     let records = Database::stored_records_from_armored(armored, &secret_types);
-    serialize_stored(&records, VaultFormat::Yaml)
-        .expect("vault workflow test setup should succeed")
+    Ok(serialize_stored(&records, VaultFormat::Yaml)?
         .as_str()
-        .to_owned()
+        .to_owned())
 }
 
-fn load_vault(yaml: &str, crypto: &VaultCrypto) -> (Database, HashMap<SecretId, String>) {
-    let records = deserialize_stored(yaml, VaultFormat::Yaml)
-        .expect("vault workflow test setup should succeed");
+fn load_vault(
+    yaml: &str,
+    crypto: &VaultCrypto,
+) -> Result<(Database, HashMap<SecretId, String>), Box<dyn std::error::Error>> {
+    let records = deserialize_stored(yaml, VaultFormat::Yaml)?;
     let mut armored = HashMap::with_capacity(records.len());
     for record in &records {
         armored.insert(record.key.clone(), record.value.as_str().to_owned());
     }
-    let db = Database::from_stored_records_with_crypto(&records, crypto)
-        .expect("vault workflow test setup should succeed");
-    (db, armored)
+    let db = Database::from_stored_records_with_crypto(&records, crypto)?;
+    Ok((db, armored))
 }
 
 #[test]
-fn passkey_round_trips_through_encrypted_vault_storage() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
+fn passkey_round_trips_through_encrypted_vault_storage() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
     let mut database = Database::new();
-    let expected = passkey();
+    let expected = passkey()?;
     database.insert(sid("passkey-example"), expected.clone());
 
-    let stored = database
-        .to_stored_records_with_crypto(&crypto)
-        .expect("vault workflow test setup should succeed");
+    let stored = database.to_stored_records_with_crypto(&crypto)?;
     assert_eq!(stored[0].secret_type, Some(SecretType::Passkey));
     assert!(!stored[0].value.as_str().contains("alice@example.com"));
     assert!(!stored[0].value.as_str().contains("login.example.com"));
 
-    let yaml = serialize_stored(&stored, VaultFormat::Yaml)
-        .expect("vault workflow test setup should succeed");
-    let parsed = deserialize_stored(yaml.as_str(), VaultFormat::Yaml)
-        .expect("vault workflow test setup should succeed");
-    let restored = Database::from_stored_records_with_crypto(&parsed, &crypto)
-        .expect("vault workflow test setup should succeed");
+    let yaml = serialize_stored(&stored, VaultFormat::Yaml)?;
+    let parsed = deserialize_stored(yaml.as_str(), VaultFormat::Yaml)?;
+    let restored = Database::from_stored_records_with_crypto(&parsed, &crypto)?;
 
     assert_eq!(
         restored
             .list()
             .iter()
             .find(|record| record.id == sid("passkey-example"))
-            .expect("vault workflow test setup should succeed")
+            .ok_or_else(|| std::io::Error::other("passkey record must exist"))?
             .data,
         expected
     );
+    Ok(())
 }
 
 #[test]
-fn incremental_add_secret_matches_full_reencrypt() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
+fn incremental_add_secret_matches_full_reencrypt() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
     let db = sample_db();
-    let mut armored = armored_cache_from_db(&db, &crypto);
+    let mut armored = armored_cache_from_db(&db, &crypto)?;
 
-    let label = validate_secret_id("  secret_SMypl8K0w9Y  ")
-        .expect("vault workflow test setup should succeed");
-    validate_secret_data("generated-secret").expect("vault workflow test setup should succeed");
+    let label = validate_secret_id("  secret_SMypl8K0w9Y  ")?;
+    validate_secret_data("generated-secret")?;
     armored.insert(
         label.clone(),
-        encrypted_api_key(&crypto, "generated-secret"),
+        encrypted_api_key(&crypto, "generated-secret")?,
     );
 
-    let yaml = save_armored_cache(&armored);
-    let (restored, reloaded_armored) = load_vault(&yaml, &crypto);
+    let yaml = save_armored_cache(&armored)?;
+    let (restored, reloaded_armored) = load_vault(&yaml, &crypto)?;
 
     assert_eq!(restored.list().len(), 3);
     assert_eq!(
@@ -172,53 +163,50 @@ fn incremental_add_secret_matches_full_reencrypt() {
             .list()
             .iter()
             .find(|r| r.id == label)
-            .expect("vault workflow test setup should succeed")
+            .ok_or_else(|| std::io::Error::other("added record must exist"))?
             .data,
         api_key("generated-secret")
     );
     assert_eq!(armored.len(), reloaded_armored.len());
+    Ok(())
 }
 
 #[test]
-fn incremental_delete_secret() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
-    let mut armored = armored_cache_from_db(&sample_db(), &crypto);
+fn incremental_delete_secret() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
+    let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
 
     armored.remove(&sid("work-vpn"));
-    let yaml = save_armored_cache(&armored);
-    let (restored, _) = load_vault(&yaml, &crypto);
+    let yaml = save_armored_cache(&armored)?;
+    let (restored, _) = load_vault(&yaml, &crypto)?;
 
     assert_eq!(restored.list().len(), 1);
     assert_eq!(restored.list()[0].id, sid("github.com"));
+    Ok(())
 }
 
 #[test]
-fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
+fn incremental_replace_secret_swaps_id_and_updates_armored_cache()
+-> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
 
     let old_secret_id = sid("github.com");
     let old_id = old_secret_id.as_str().to_owned();
-    let old_yaml = api_key_yaml("hunter2");
+    let old_yaml = api_key_yaml("hunter2")?;
     db.insert(old_secret_id.clone(), api_key("hunter2"));
     state.secrets.insert(
         old_secret_id.clone(),
         (
             SecretType::ApiKey,
-            StoredRecordPayload::from_trusted(
-                crypto
-                    .encrypt_value(&old_yaml)
-                    .expect("vault workflow test setup should succeed")
-                    .as_str()
-                    .to_owned(),
-            ),
+            StoredRecordPayload::from_trusted(crypto.encrypt_value(&old_yaml)?.as_str().to_owned()),
         ),
     );
 
     let new_secret_id = sid("github-updated.com");
     let new_id = new_secret_id.as_str().to_owned();
-    let new_yaml = api_key_yaml("new-token");
+    let new_yaml = api_key_yaml("new-token")?;
     replace_secret(
         &mut db,
         &mut state,
@@ -229,8 +217,7 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
             secret_type: SecretType::ApiKey,
             data_yaml: &new_yaml,
         },
-    )
-    .expect("vault workflow test setup should succeed");
+    )?;
 
     assert_eq!(db.list().len(), 1);
     assert_eq!(db.list()[0].id.as_str(), new_id);
@@ -243,23 +230,23 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
         Some(SecretType::ApiKey)
     );
 
-    let decrypted = crypto
-        .decrypt_value(&nook_core::AgeArmoredCiphertext::from_trusted_armored(
+    let decrypted =
+        crypto.decrypt_value(&nook_core::AgeArmoredCiphertext::from_trusted_armored(
             state
                 .secrets
                 .get(&new_secret_id)
-                .expect("vault workflow test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("replacement secret must exist"))?
                 .1
                 .as_str()
                 .to_owned(),
-        ))
-        .expect("vault workflow test setup should succeed");
+        ))?;
     assert_eq!(decrypted.as_str(), new_yaml);
+    Ok(())
 }
 
 #[test]
-fn incremental_replace_secret_rejects_missing_old_id() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
+fn incremental_replace_secret_rejects_missing_old_id() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
     let missing_id = sid("missing").into_inner();
@@ -273,16 +260,17 @@ fn incremental_replace_secret_rejects_missing_old_id() {
             old_id: &missing_id,
             new_id: &new_id,
             secret_type: SecretType::ApiKey,
-            data_yaml: &api_key_yaml("value"),
+            data_yaml: &api_key_yaml("value")?,
         },
     )
     .expect_err("vault workflow test should reject invalid input");
     assert!(err.to_string().contains("not found"));
+    Ok(())
 }
 
 #[test]
-fn incremental_replace_secret_rejects_duplicate_new_id() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
+fn incremental_replace_secret_rejects_duplicate_new_id() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
 
@@ -294,8 +282,7 @@ fn incremental_replace_secret_rejects_duplicate_new_id() {
             SecretType::ApiKey,
             StoredRecordPayload::from_trusted(
                 crypto
-                    .encrypt_value(api_key_yaml("a"))
-                    .expect("vault workflow test setup should succeed")
+                    .encrypt_value(api_key_yaml("a")?)?
                     .as_str()
                     .to_owned(),
             ),
@@ -307,8 +294,7 @@ fn incremental_replace_secret_rejects_duplicate_new_id() {
             SecretType::ApiKey,
             StoredRecordPayload::from_trusted(
                 crypto
-                    .encrypt_value(api_key_yaml("b"))
-                    .expect("vault workflow test setup should succeed")
+                    .encrypt_value(api_key_yaml("b")?)?
                     .as_str()
                     .to_owned(),
             ),
@@ -325,87 +311,86 @@ fn incremental_replace_secret_rejects_duplicate_new_id() {
             old_id: &replace_id,
             new_id: &keep_id,
             secret_type: SecretType::ApiKey,
-            data_yaml: &api_key_yaml("c"),
+            data_yaml: &api_key_yaml("c")?,
         },
     )
     .expect_err("vault workflow test should reject invalid input");
     assert!(err.to_string().contains("already exists"));
+    Ok(())
 }
 
 #[test]
-fn incremental_update_secret_replaces_armored_entry() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
-    let mut armored = armored_cache_from_db(&sample_db(), &crypto);
+fn incremental_update_secret_replaces_armored_entry() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
+    let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
     let old = armored
         .get(&sid("github.com"))
-        .expect("vault workflow test setup should succeed")
+        .ok_or_else(|| std::io::Error::other("GitHub fixture must exist"))?
         .clone();
 
     armored.insert(
         sid("github.com"),
-        encrypted_api_key(&crypto, "new-password"),
+        encrypted_api_key(&crypto, "new-password")?,
     );
     assert_ne!(
         armored
             .get(&sid("github.com"))
-            .expect("vault workflow test setup should succeed"),
+            .ok_or_else(|| std::io::Error::other("updated armor must exist"))?,
         &old
     );
 
-    let yaml = save_armored_cache(&armored);
-    let (restored, _) = load_vault(&yaml, &crypto);
+    let yaml = save_armored_cache(&armored)?;
+    let (restored, _) = load_vault(&yaml, &crypto)?;
     assert_eq!(
         restored
             .list()
             .iter()
             .find(|r| r.id == sid("github.com"))
-            .expect("vault workflow test setup should succeed")
+            .ok_or_else(|| std::io::Error::other("updated record must exist"))?
             .data,
         api_key("new-password")
     );
+    Ok(())
 }
 
 #[test]
-fn generated_password_can_be_stored_and_reloaded() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
+fn generated_password_can_be_stored_and_reloaded() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
     let password = generate_password(&PasswordOptions {
         length: 20,
         lowercase: true,
         uppercase: true,
         numbers: true,
         symbols: true,
-    })
-    .expect("vault workflow test setup should succeed");
+    })?;
 
     let mut armored = HashMap::new();
-    armored.insert(sid("generated"), encrypted_api_key(&crypto, &password));
+    armored.insert(sid("generated"), encrypted_api_key(&crypto, &password)?);
 
-    let yaml = save_armored_cache(&armored);
-    let (restored, _) = load_vault(&yaml, &crypto);
+    let yaml = save_armored_cache(&armored)?;
+    let (restored, _) = load_vault(&yaml, &crypto)?;
     assert_eq!(restored.list()[0].data, api_key(&password));
+    Ok(())
 }
 
 #[test]
-fn connect_validation_matches_ui_rules() {
+fn connect_validation_matches_ui_rules() -> Result<(), Box<dyn std::error::Error>> {
     assert!(validate_connect("dropbox", "token").is_err());
+    assert_eq!(validate_connect("local", "ignored")?, None);
     assert_eq!(
-        validate_connect("local", "ignored").expect("vault workflow test setup should succeed"),
-        None
-    );
-    assert_eq!(
-        validate_connect("github", "  ghp_abc  ")
-            .expect("vault workflow test setup should succeed")
-            .expect("vault workflow test setup should succeed")
+        validate_connect("github", "  ghp_abc  ")?
+            .ok_or_else(|| std::io::Error::other("GitHub credential must be returned"))?
             .as_str(),
         "ghp_abc"
     );
+    Ok(())
 }
 
 #[test]
-fn filter_secrets_on_loaded_vault() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
-    let yaml = save_armored_cache(&armored_cache_from_db(&sample_db(), &crypto));
-    let (db, _) = load_vault(&yaml, &crypto);
+fn filter_secrets_on_loaded_vault() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
+    let yaml = save_armored_cache(&armored_cache_from_db(&sample_db(), &crypto)?)?;
+    let (db, _) = load_vault(&yaml, &crypto)?;
     let records = db.list();
 
     assert_eq!(
@@ -415,23 +400,24 @@ fn filter_secrets_on_loaded_vault() {
     assert_eq!(filter_secrets(&records, sid("work-vpn").as_str()).len(), 1);
     assert!(filter_secrets(&records, "missing").is_empty());
     assert_eq!(filter_secrets(&records, ""), records);
+    Ok(())
 }
 
 #[test]
-fn yaml_vault_survives_add_delete_add_cycle() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
-    let mut armored = armored_cache_from_db(&sample_db(), &crypto);
+fn yaml_vault_survives_add_delete_add_cycle() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
+    let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
 
     armored.remove(&sid("work-vpn"));
-    armored.insert(sid("staging"), encrypted_api_key(&crypto, "stage-pass"));
-    let mid = save_armored_cache(&armored);
-    let (mid_db, mut mid_armored) = load_vault(&mid, &crypto);
+    armored.insert(sid("staging"), encrypted_api_key(&crypto, "stage-pass")?);
+    let mid = save_armored_cache(&armored)?;
+    let (mid_db, mut mid_armored) = load_vault(&mid, &crypto)?;
     assert_eq!(mid_db.list().len(), 2);
 
     mid_armored.remove(&sid("staging"));
-    mid_armored.insert(sid("prod"), encrypted_api_key(&crypto, "prod-pass"));
-    let final_yaml = save_armored_cache(&mid_armored);
-    let (final_db, _) = load_vault(&final_yaml, &crypto);
+    mid_armored.insert(sid("prod"), encrypted_api_key(&crypto, "prod-pass")?);
+    let final_yaml = save_armored_cache(&mid_armored)?;
+    let (final_db, _) = load_vault(&final_yaml, &crypto)?;
 
     let records = final_db.list();
     let keys: Vec<String> = records.iter().map(|r| r.id.as_str().to_owned()).collect();
@@ -439,12 +425,13 @@ fn yaml_vault_survives_add_delete_add_cycle() {
         keys,
         vec![sid("github.com").into_inner(), sid("prod").into_inner()]
     );
+    Ok(())
 }
 
 #[test]
-fn stored_records_from_armored_matches_serialize_order() {
-    let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
-    let armored = armored_cache_from_db(&sample_db(), &crypto);
+fn stored_records_from_armored_matches_serialize_order() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = VaultCrypto::new(&test_key()?)?;
+    let armored = armored_cache_from_db(&sample_db(), &crypto)?;
     let secret_types = armored
         .keys()
         .map(|key| (key.clone(), SecretType::ApiKey))
@@ -459,4 +446,5 @@ fn stored_records_from_armored_matches_serialize_order() {
             .as_str()
             .contains("BEGIN AGE ENCRYPTED FILE")
     );
+    Ok(())
 }

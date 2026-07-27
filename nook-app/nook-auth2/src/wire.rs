@@ -445,87 +445,81 @@ impl<'de> Deserialize<'de> for OpaqueCiphertext {
 pub type Url64EncodedString = CompactToken;
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use age::secrecy::ExposeSecret;
     use age::x25519::Identity;
 
     #[test]
-    fn symmetric_key_roundtrip_and_generate() {
-        let key = SymmetricKey::generate().expect("wire test setup should succeed");
+    fn symmetric_key_roundtrip_and_generate() -> Result<(), Box<dyn std::error::Error>> {
+        let key = SymmetricKey::generate()?;
         assert_eq!(key.as_str().len(), 64);
-        assert_eq!(
-            SymmetricKey::parse(key.as_str()).expect("wire test setup should succeed"),
-            key
-        );
+        assert_eq!(SymmetricKey::parse(key.as_str())?, key);
         assert_eq!(key.to_string(), key.as_str());
         assert_eq!(key.into_inner().len(), 64);
+        Ok(())
     }
 
     #[test]
-    fn age_armored_accepts_valid_armor() {
+    fn age_armored_accepts_valid_armor() -> Result<(), Box<dyn std::error::Error>> {
         let armor = "-----BEGIN AGE ENCRYPTED FILE-----\nabc\n-----END AGE ENCRYPTED FILE-----";
-        let parsed = AgeArmoredCiphertext::parse(armor).expect("wire test setup should succeed");
+        let parsed = AgeArmoredCiphertext::parse(armor)?;
         assert_eq!(parsed.as_str(), armor);
         let trusted = AgeArmoredCiphertext::from_trusted_armored(armor.to_owned());
         assert_eq!(parsed, trusted);
+        Ok(())
     }
 
     #[test]
-    fn device_keys_parse_from_generated_identity() {
+    fn device_keys_parse_from_generated_identity() -> Result<(), Box<dyn std::error::Error>> {
         let identity = Identity::generate();
         let public = identity.to_public().to_string();
         let secret = identity.to_string().expose_secret().to_owned();
-        let pk = DevicePublicKey::parse(&public).expect("wire test setup should succeed");
+        let pk = DevicePublicKey::parse(&public)?;
         assert_eq!(pk.as_str(), public);
-        let sk = DeviceIdentitySecret::parse(&secret).expect("wire test setup should succeed");
+        let sk = DeviceIdentitySecret::parse(&secret)?;
         assert_eq!(sk.as_str(), secret);
         assert_eq!(format!("{sk:?}"), "DeviceIdentitySecret([REDACTED])");
+        Ok(())
     }
 
     #[test]
-    fn sha256_hex_parse_and_serde() {
+    fn sha256_hex_parse_and_serde() -> Result<(), Box<dyn std::error::Error>> {
         let hex = Sha256Hex::from_trusted("deadbeef".repeat(8));
-        assert_eq!(
-            Sha256Hex::parse(hex.as_str()).expect("wire test setup should succeed"),
-            hex
-        );
+        assert_eq!(Sha256Hex::parse(hex.as_str())?, hex);
         assert!(Sha256Hex::parse("short").is_err());
-        let roundtripped: Sha256Hex = serde_json::from_str(
-            &serde_json::to_string(&hex).expect("wire test setup should succeed"),
-        )
-        .expect("wire test setup should succeed");
+        let roundtripped: Sha256Hex = serde_json::from_str(&serde_json::to_string(&hex)?)?;
         assert_eq!(roundtripped, hex);
+        Ok(())
     }
 
     #[test]
-    fn device_signing_public_key_names_unavailable_and_ed25519_states() {
+    fn device_signing_public_key_names_unavailable_and_ed25519_states()
+    -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            DeviceSigningPublicKey::parse("").expect("wire test setup should succeed"),
+            DeviceSigningPublicKey::parse("")?,
             DeviceSigningPublicKey::Unavailable
         );
         let pk = DeviceSigningPublicKey::from_trusted("ab".repeat(32));
         assert!(matches!(&pk, DeviceSigningPublicKey::Ed25519Hex(_)));
-        assert_eq!(
-            DeviceSigningPublicKey::parse(pk.as_str()).expect("wire test setup should succeed"),
-            pk
-        );
+        assert_eq!(DeviceSigningPublicKey::parse(pk.as_str())?, pk);
         assert!(DeviceSigningPublicKey::parse("not-hex").is_err());
+        Ok(())
     }
 
     #[test]
-    fn password_entry_id_requires_compact_token() {
-        let id = PasswordEntryId::parse("pwdentry001").expect("wire test setup should succeed");
-        assert_eq!(
-            PasswordEntryId::parse(id.as_str()).expect("wire test setup should succeed"),
-            id
-        );
+    fn password_entry_id_requires_compact_token() -> Result<(), Box<dyn std::error::Error>> {
+        let id = PasswordEntryId::parse("pwdentry001")?;
+        assert_eq!(PasswordEntryId::parse(id.as_str())?, id);
         assert!(PasswordEntryId::parse("").is_err());
         assert!(PasswordEntryId::parse("too-long-token-value").is_err());
+        Ok(())
     }
 
     #[test]
-    fn invalid_key_and_ciphertext_strings_fail_validation() {
+    fn invalid_key_and_ciphertext_strings_fail_validation() -> Result<(), Box<dyn std::error::Error>>
+    {
         assert!(SymmetricKey::parse("short").is_err());
         assert!(SymmetricKey::parse(&"zz".repeat(32)).is_err());
         assert!(AgeArmoredCiphertext::parse("plain text").is_err());
@@ -535,19 +529,18 @@ mod tests {
         assert!(SigningSeedHex::parse(&"zz".repeat(32)).is_err());
         assert!(IsoTimestamp::parse("").is_err());
         assert!(IsoTimestamp::parse("not-a-date").is_err());
+        Ok(())
     }
 
     #[test]
-    fn string_newtypes_expose_display_as_ref_and_inner_values() {
+    fn string_newtypes_expose_display_as_ref_and_inner_values()
+    -> Result<(), Box<dyn std::error::Error>> {
         let seed_hex = "ab".repeat(32);
-        let seed = SigningSeedHex::parse(&seed_hex).expect("wire test setup should succeed");
+        let seed = SigningSeedHex::parse(&seed_hex)?;
         assert_eq!(seed.as_str(), seed_hex);
         assert_eq!(seed.as_ref(), seed_hex);
         assert_eq!(seed.to_string(), seed_hex);
-        assert_eq!(
-            serde_json::to_string(&seed).expect("wire test setup should succeed"),
-            format!("\"{seed_hex}\"")
-        );
+        assert_eq!(serde_json::to_string(&seed)?, format!("\"{seed_hex}\""));
         assert_eq!(seed.clone().into_inner(), seed_hex);
 
         let trusted_seed = SigningSeedHex::from_trusted(seed_hex.clone());
@@ -558,8 +551,7 @@ mod tests {
         assert_eq!(label.as_ref(), "Laptop");
         assert_eq!(label.to_string(), "Laptop");
         assert_eq!(label.clone().into_inner(), "Laptop");
-        let decoded_label: MemberLabel =
-            serde_json::from_str("\"Laptop\"").expect("wire test setup should succeed");
+        let decoded_label: MemberLabel = serde_json::from_str("\"Laptop\"")?;
         assert_eq!(decoded_label, label);
 
         let opaque = OpaqueCiphertext::from_trusted("sealed".to_owned());
@@ -567,8 +559,7 @@ mod tests {
         assert_eq!(opaque.as_ref(), "sealed");
         assert_eq!(opaque.to_string(), "sealed");
         assert_eq!(opaque.clone().into_inner(), "sealed");
-        let decoded_opaque: OpaqueCiphertext =
-            serde_json::from_str("\"sealed\"").expect("wire test setup should succeed");
+        let decoded_opaque: OpaqueCiphertext = serde_json::from_str("\"sealed\"")?;
         assert_eq!(decoded_opaque, opaque);
 
         let plaintext = DecryptedPlaintext::from_trusted("secret".to_owned());
@@ -576,48 +567,43 @@ mod tests {
         assert_eq!(plaintext.as_ref(), "secret");
         assert_eq!(plaintext.to_string(), "secret");
         assert_eq!(plaintext.into_inner(), "secret");
+        Ok(())
     }
 
     #[test]
-    fn timestamp_and_signing_key_roundtrip_through_serde() {
-        let ts =
-            IsoTimestamp::parse("2026-07-07T03:00:00Z").expect("wire test setup should succeed");
+    fn timestamp_and_signing_key_roundtrip_through_serde() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let ts = IsoTimestamp::parse("2026-07-07T03:00:00Z")?;
         assert_eq!(ts.as_str(), "2026-07-07T03:00:00Z");
         assert_eq!(ts.as_ref(), ts.as_str());
         assert_eq!(ts.to_string(), ts.as_str());
         assert_eq!(ts.clone().into_inner(), ts.as_str());
         assert_eq!(IsoTimestamp::from_trusted(ts.as_str().to_owned()), ts);
-        let decoded_ts: IsoTimestamp = serde_json::from_str(
-            &serde_json::to_string(&ts).expect("wire test setup should succeed"),
-        )
-        .expect("wire test setup should succeed");
+        let decoded_ts: IsoTimestamp = serde_json::from_str(&serde_json::to_string(&ts)?)?;
         assert_eq!(decoded_ts, ts);
 
-        let signing = DeviceSigningPublicKey::parse(&"cd".repeat(32))
-            .expect("wire test setup should succeed");
+        let signing = DeviceSigningPublicKey::parse(&"cd".repeat(32))?;
         assert!(!signing.is_empty());
         assert_eq!(signing.as_ref(), signing.as_str());
         assert_eq!(signing.to_string(), signing.as_str());
         assert_eq!(signing.clone().into_inner(), signing.as_str());
-        let decoded_signing: DeviceSigningPublicKey = serde_json::from_str(
-            &serde_json::to_string(&signing).expect("wire test setup should succeed"),
-        )
-        .expect("wire test setup should succeed");
+        let decoded_signing: DeviceSigningPublicKey =
+            serde_json::from_str(&serde_json::to_string(&signing)?)?;
         assert_eq!(decoded_signing, signing);
+        Ok(())
     }
 
     #[test]
-    fn device_identity_secret_can_be_unwrapped_without_debug_leak() {
+    fn device_identity_secret_can_be_unwrapped_without_debug_leak()
+    -> Result<(), Box<dyn std::error::Error>> {
         let identity = Identity::generate();
         let secret = identity.to_string().expose_secret().to_owned();
-        let wrapped = DeviceIdentitySecret::parse(&secret).expect("wire test setup should succeed");
+        let wrapped = DeviceIdentitySecret::parse(&secret)?;
         assert_eq!(wrapped.as_ref(), secret);
         assert_eq!(wrapped.to_string(), secret);
         assert_eq!(format!("{wrapped:?}"), "DeviceIdentitySecret([REDACTED])");
-        assert_eq!(
-            serde_json::to_string(&wrapped).expect("wire test setup should succeed"),
-            format!("\"{secret}\"")
-        );
+        assert_eq!(serde_json::to_string(&wrapped)?, format!("\"{secret}\""));
         assert_eq!(wrapped.into_inner(), secret);
+        Ok(())
     }
 }

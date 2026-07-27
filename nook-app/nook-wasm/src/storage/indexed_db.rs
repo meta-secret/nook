@@ -500,72 +500,56 @@ mod device_identity_storage_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn verified_passkey_identity_metadata_round_trips() {
+    async fn verified_passkey_identity_metadata_round_trips() -> Result<(), wasm_bindgen::JsError> {
         let _ = rexie::Rexie::delete("nook_db").await;
-        assert_eq!(
-            device_identity_protection_status().await.expect("status"),
-            "missing"
-        );
+        assert_eq!(device_identity_protection_status().await?, "missing");
 
-        let setup = nook_core::DeviceKeyProtectionSetup::generate().expect("setup");
+        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
         let secret =
-            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])
-                .expect("derive identity");
-        let identity = nook_core::DeviceIdentity::from_secret_str(&secret).expect("identity");
+            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
+        let identity = nook_core::DeviceIdentity::from_secret_str(&secret)?;
         let wrapped = nook_core::passkey_derived_device_identity_record(
             &[7u8; 32],
             setup.user_handle(),
             setup.prf_input(),
-        )
-        .expect("record");
-        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped)
-            .await
-            .expect("persist identity metadata");
+        )?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
 
-        let (_, reloaded) = load_wrapped_device_identity()
-            .await
-            .expect("load")
-            .expect("record");
+        let (_, reloaded) = load_wrapped_device_identity().await?.ok_or_else(|| {
+            wasm_bindgen::JsError::new("wrapped device identity record should exist")
+        })?;
         assert_eq!(reloaded.protection_mode(), "passkey");
-        assert_eq!(reloaded.device_mode().expect("device mode"), "standard");
-        assert_eq!(
-            device_identity_device_mode().await.expect("device mode"),
-            Some("standard")
-        );
-        assert_eq!(
-            reloaded.user_handle_bytes().expect("user handle"),
-            setup.user_handle()
-        );
+        assert_eq!(reloaded.device_mode()?, "standard");
+        assert_eq!(device_identity_device_mode().await?, Some("standard"));
+        assert_eq!(reloaded.user_handle_bytes()?, setup.user_handle());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn verified_sentinel_genesis_share_delivery_round_trips() {
+    async fn verified_sentinel_genesis_share_delivery_round_trips()
+    -> Result<(), wasm_bindgen::JsError> {
         let _ = rexie::Rexie::delete("nook_db").await;
         let store_id = "store_testsentinel11";
         let device_id = "0123456789abcdef";
         let payload = r#"{"version":1,"ciphertext":"verified"}"#;
 
-        save_sentinel_genesis_share_delivery(store_id, device_id, payload)
-            .await
-            .expect("persist verified delivery");
+        save_sentinel_genesis_share_delivery(store_id, device_id, payload).await?;
 
         assert_eq!(
             load_sentinel_genesis_share_delivery(store_id, device_id)
-                .await
-                .expect("load delivery")
+                .await?
                 .as_deref(),
             Some(payload)
         );
         assert_eq!(
-            list_sentinel_genesis_share_deliveries(device_id)
-                .await
-                .expect("list delivery catalog"),
+            list_sentinel_genesis_share_deliveries(device_id).await?,
             vec![SentinelGenesisShareCatalogEntry {
                 store_id: store_id.to_owned(),
                 device_id: device_id.to_owned(),
                 delivery_json: payload.to_owned(),
             }]
         );
+        Ok(())
     }
 }
 

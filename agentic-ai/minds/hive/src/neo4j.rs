@@ -1493,11 +1493,11 @@ mod tests {
         repair.kind = "main-repair".to_owned();
         repair.max_attempts = 1;
         store.enqueue(&repair).await.expect("enqueue Main repair");
-        let repair_claim = store
-            .claim(&agent_a, 300)
-            .await
-            .expect("claim Main repair")
-            .expect("Main repair available");
+        let ClaimOutcome::Claimed(repair_claim) =
+            store.claim(&agent_a, 300).await.expect("claim Main repair")
+        else {
+            panic!("Main repair must be available");
+        };
         assert!(
             store
                 .fail(&repair_claim, &agent_a, "invalid structured output schema")
@@ -1539,11 +1539,13 @@ mod tests {
             "one release must not grant an unbounded retry budget"
         );
         for attempt_number in 2..=4 {
-            let retried_claim = store
+            let ClaimOutcome::Claimed(retried_claim) = store
                 .claim(&agent_a, 300)
                 .await
                 .expect("claim retried Main repair")
-                .expect("retried Main repair available");
+            else {
+                panic!("retried Main repair must be available");
+            };
             assert_eq!(retried_claim.id, repair.id);
             assert_eq!(retried_claim.attempt_number, attempt_number);
             assert!(

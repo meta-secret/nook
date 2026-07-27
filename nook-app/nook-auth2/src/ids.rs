@@ -319,8 +319,9 @@ mod tests {
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     #[test]
-    fn compact_token_and_device_id_validate_expected_shapes() {
-        let token = CompactToken::parse(TOKEN).expect("ids test setup should succeed");
+    fn compact_token_and_device_id_validate_expected_shapes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let token = CompactToken::parse(TOKEN)?;
         assert_eq!(token.as_str(), TOKEN);
         assert_eq!(token.as_ref(), TOKEN);
         assert_eq!(token.to_string(), TOKEN);
@@ -328,98 +329,67 @@ mod tests {
         assert!(CompactToken::parse("too-short").is_err());
         assert!(CompactToken::parse("has/slash11").is_err());
 
-        let device_id = DeviceId::parse(DEVICE_ID).expect("ids test setup should succeed");
+        let device_id = DeviceId::parse(DEVICE_ID)?;
         assert_eq!(device_id.as_str(), DEVICE_ID);
         assert_eq!(device_id.as_ref(), DEVICE_ID);
         assert_eq!(device_id.to_string(), DEVICE_ID);
         assert_eq!(device_id.clone().into_inner(), DEVICE_ID);
         assert!(is_device_id(DEVICE_ID));
         assert!(!is_device_id("not-a-device"));
+        Ok(())
     }
 
     #[test]
-    fn store_ids_normalize_tokens_and_reject_reserved_device_ids() {
-        let token = CompactToken::parse(TOKEN).expect("ids test setup should succeed");
+    fn store_ids_normalize_tokens_and_reject_reserved_device_ids()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let token = CompactToken::parse(TOKEN)?;
         let store = StoreId::from_token(&token);
         assert_eq!(store.as_str(), "store_Abcdef_1234");
         assert_eq!(store.as_ref(), store.as_str());
         assert_eq!(store.to_string(), store.as_str());
         assert_eq!(store.clone().into_inner(), store.as_str());
 
-        assert_eq!(
-            format_store_id(TOKEN).expect("ids test setup should succeed"),
-            store
-        );
-        assert_eq!(
-            normalize_store_id(TOKEN).expect("ids test setup should succeed"),
-            store
-        );
-        assert_eq!(
-            normalize_store_id(" store_Abcdef_1234 ").expect("ids test setup should succeed"),
-            store
-        );
-        assert_eq!(
-            validate_store_id(store.as_str()).expect("ids test setup should succeed"),
-            store
-        );
+        assert_eq!(format_store_id(TOKEN)?, store);
+        assert_eq!(normalize_store_id(TOKEN)?, store);
+        assert_eq!(normalize_store_id(" store_Abcdef_1234 ")?, store);
+        assert_eq!(validate_store_id(store.as_str())?, store);
         assert!(format_store_id(DEVICE_ID).is_err());
         assert!(normalize_store_id("store_not-valid!").is_err());
-        assert!(
-            generate_store_id()
-                .expect("ids test setup should succeed")
-                .as_str()
-                .starts_with(STORE_ID_PREFIX)
-        );
+        assert!(generate_store_id()?.as_str().starts_with(STORE_ID_PREFIX));
+        Ok(())
     }
 
     #[test]
-    fn auth_key_ids_require_the_current_prefixed_format() {
-        let auth = AuthKeyId::from_digest_hex(DIGEST).expect("ids test setup should succeed");
+    fn auth_key_ids_require_the_current_prefixed_format() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let auth = AuthKeyId::from_digest_hex(DIGEST)?;
         assert_eq!(auth.as_str(), format!("key_{DIGEST}"));
-        assert_eq!(
-            auth.digest().expect("ids test setup should succeed"),
-            DIGEST
-        );
+        assert_eq!(auth.digest()?, DIGEST);
         assert_eq!(auth.as_ref(), auth.as_str());
         assert_eq!(auth.to_string(), auth.as_str());
         assert_eq!(auth.clone().into_inner(), auth.as_str());
 
-        assert_eq!(
-            format_auth_key_id(DIGEST).expect("ids test setup should succeed"),
-            auth
-        );
+        assert_eq!(format_auth_key_id(DIGEST)?, auth);
         assert!(normalize_auth_key_id(DIGEST).is_err());
-        assert_eq!(
-            normalize_auth_key_id(&format!(" key_{DIGEST} "))
-                .expect("ids test setup should succeed"),
-            auth
-        );
-        assert_eq!(
-            auth_key_digest(auth.as_str()).expect("ids test setup should succeed"),
-            DIGEST
-        );
+        assert_eq!(normalize_auth_key_id(&format!(" key_{DIGEST} "))?, auth);
+        assert_eq!(auth_key_digest(auth.as_str())?, DIGEST);
         assert!(auth_key_digest(DIGEST).is_err());
         assert!(is_auth_key_id(auth.as_str()));
         assert!(format_auth_key_id("not-hex").is_err());
+        Ok(())
     }
 
     #[test]
-    fn secret_ids_require_the_current_prefixed_format() {
-        let token = CompactToken::parse(TOKEN).expect("ids test setup should succeed");
-        let secret = SecretId::from_token(&token).expect("ids test setup should succeed");
+    fn secret_ids_require_the_current_prefixed_format() -> Result<(), Box<dyn std::error::Error>> {
+        let token = CompactToken::parse(TOKEN)?;
+        let secret = SecretId::from_token(&token)?;
         assert_eq!(secret.as_str(), "secret_Abcdef_1234");
         assert_eq!(secret.as_ref(), secret.as_str());
         assert_eq!(secret.to_string(), secret.as_str());
         assert_eq!(secret.clone().into_inner(), secret.as_str());
 
-        assert_eq!(
-            format_secret_id(TOKEN).expect("ids test setup should succeed"),
-            secret
-        );
-        assert_eq!(
-            validate_secret_id(secret.as_str()).expect("ids test setup should succeed"),
-            secret
-        );
+        assert_eq!(format_secret_id(TOKEN)?, secret);
+        assert_eq!(validate_secret_id(secret.as_str())?, secret);
         assert!(validate_secret_id("pass_Abcdef_1234").is_err());
         assert!(normalize_secret_id_for_write(TOKEN).is_err());
         assert!(normalize_secret_id_for_write("github.com").is_err());
@@ -428,11 +398,7 @@ mod tests {
         assert!(validate_secret_id(DEVICE_ID).is_err());
         assert!(validate_secret_id(DIGEST).is_err());
         assert!(validate_secret_id("store_Abcdef_1234").is_err());
-        assert!(
-            generate_secret_id()
-                .expect("ids test setup should succeed")
-                .as_str()
-                .starts_with(SECRET_ID_PREFIX)
-        );
+        assert!(generate_secret_id()?.as_str().starts_with(SECRET_ID_PREFIX));
+        Ok(())
     }
 }

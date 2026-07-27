@@ -107,11 +107,13 @@ pub fn concurrent_epoch_rotations_conflict(
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
 
     #[test]
-    fn password_and_revoke_rotations_conflict_when_concurrent() {
+    fn password_and_revoke_rotations_conflict_when_concurrent()
+    -> Result<(), Box<dyn std::error::Error>> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::PasswordRotated,
             EpochRotationReason::DeviceRevoked
@@ -120,26 +122,30 @@ mod tests {
             EpochRotationReason::Genesis,
             EpochRotationReason::PasswordRotated
         ));
+        Ok(())
     }
 
     #[test]
-    fn password_removed_and_rotated_conflict_when_concurrent() {
+    fn password_removed_and_rotated_conflict_when_concurrent()
+    -> Result<(), Box<dyn std::error::Error>> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::PasswordRemoved,
             EpochRotationReason::PasswordRotated
         ));
+        Ok(())
     }
 
     #[test]
-    fn concurrent_revokes_conflict() {
+    fn concurrent_revokes_conflict() -> Result<(), Box<dyn std::error::Error>> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::DeviceRevoked,
             EpochRotationReason::DeviceRevoked
         ));
+        Ok(())
     }
 
     #[test]
-    fn operation_starts_epoch_maps_security_ops() {
+    fn operation_starts_epoch_maps_security_ops() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::VaultImported {
                 source_content_hash: crate::Sha256Hex::from_trusted("0".repeat(64)),
@@ -176,8 +182,7 @@ mod tests {
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SentinelParticipantEnrolled {
-                device_id: crate::DeviceId::parse("0123456789abcdef")
-                    .expect("epoch test setup should succeed"),
+                device_id: crate::DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: crate::DevicePublicKey::from_trusted(
                     "age-public-key".to_owned(),
                 ),
@@ -190,5 +195,6 @@ mod tests {
             operation_starts_epoch(&VaultOperation::SentinelSharesIssued { shares: Vec::new() }),
             EpochTransition::Unchanged
         );
+        Ok(())
     }
 }

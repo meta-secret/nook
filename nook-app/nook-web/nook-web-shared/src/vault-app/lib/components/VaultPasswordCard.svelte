@@ -19,6 +19,7 @@
     type NookPasswordEntrySummary,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import { takeWasmStringValue } from '$lib/wasm-string-value'
 
   type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
 
@@ -77,7 +78,7 @@
 
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return undefined
-    return peekEnrollmentIssuedAt(enrollmentCode)
+    return takeWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode))
   })
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',

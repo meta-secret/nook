@@ -434,34 +434,31 @@ mod tests {
     fn approved_registration(
         authenticator: &mut MemoryPasskeyAuthenticator,
         user_handle: Vec<u8>,
-    ) -> MockPasskeyRegistration {
-        authenticator
-            .register(
-                MockPasskeyRegistrationRequest::new(
-                    RP_ID,
-                    "Test passkey",
-                    user_handle,
-                    deterministic_passkey_prf_input(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .expect("mock passkey test setup should succeed")
+    ) -> Result<MockPasskeyRegistration, Box<dyn std::error::Error>> {
+        Ok(authenticator.register(
+            MockPasskeyRegistrationRequest::new(
+                RP_ID,
+                "Test passkey",
+                user_handle,
+                deterministic_passkey_prf_input(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?)
     }
 
     #[test]
-    fn registers_and_authorizes_device_identity_material() {
+    fn registers_and_authorizes_device_identity_material() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let registration = approved_registration(&mut authenticator, vec![8; 32]);
-        let assertion = authenticator
-            .authenticate(
-                &MockPasskeyAssertionRequest::with_allowed_credential(
-                    RP_ID,
-                    registration.credential_id().to_vec(),
-                    deterministic_passkey_prf_input(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .expect("mock passkey test setup should succeed");
+        let registration = approved_registration(&mut authenticator, vec![8; 32])?;
+        let assertion = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::with_allowed_credential(
+                RP_ID,
+                registration.credential_id().to_vec(),
+                deterministic_passkey_prf_input(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?;
 
         assert_eq!(registration.credential_id(), assertion.credential_id());
         assert_eq!(registration.user_handle(), assertion.user_handle());
@@ -474,46 +471,39 @@ mod tests {
             )
             .is_ok()
         );
+        Ok(())
     }
 
     #[test]
-    fn discoverable_assertion_recovers_same_passkey_after_local_metadata_is_missing() {
+    fn discoverable_assertion_recovers_same_passkey_after_local_metadata_is_missing()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let registration = approved_registration(&mut authenticator, vec![9; 32]);
+        let registration = approved_registration(&mut authenticator, vec![9; 32])?;
         let original_identity = derive_device_identity_from_passkey_prf(
             registration.user_handle(),
             registration.prf_output(),
-        )
-        .expect("mock passkey test setup should succeed");
+        )?;
 
-        let assertion = authenticator
-            .authenticate(
-                &MockPasskeyAssertionRequest::discoverable(
-                    RP_ID,
-                    deterministic_passkey_prf_input(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .expect("mock passkey test setup should succeed");
+        let assertion = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::discoverable(RP_ID, deterministic_passkey_prf_input()),
+            MockPasskeyUserAuthorization::Approved,
+        )?;
         let recovered_identity = derive_device_identity_from_passkey_prf(
             assertion.user_handle(),
             assertion.prf_output(),
-        )
-        .expect("mock passkey test setup should succeed");
+        )?;
         let recovered_record = passkey_derived_device_identity_record(
             assertion.credential_id(),
             assertion.user_handle(),
             &deterministic_passkey_prf_input(),
-        )
-        .expect("mock passkey test setup should succeed");
+        )?;
 
         assert_eq!(recovered_identity, original_identity);
         assert_eq!(
-            recovered_record
-                .credential_id_bytes()
-                .expect("mock passkey test setup should succeed"),
+            recovered_record.credential_id_bytes()?,
             registration.credential_id()
         );
+        Ok(())
     }
 
     #[test]
@@ -534,9 +524,10 @@ mod tests {
     }
 
     #[test]
-    fn user_can_deny_assertion_without_incrementing_sign_count() {
+    fn user_can_deny_assertion_without_incrementing_sign_count()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let registration = approved_registration(&mut authenticator, vec![8; 32]);
+        let registration = approved_registration(&mut authenticator, vec![8; 32])?;
 
         let result = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
@@ -551,16 +542,17 @@ mod tests {
         assert_eq!(
             authenticator
                 .credential(registration.credential_id())
-                .expect("mock passkey test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("registered credential must exist"))?
                 .sign_count(),
             0
         );
+        Ok(())
     }
 
     #[test]
-    fn assertion_rejects_unknown_allowed_credential() {
+    fn assertion_rejects_unknown_allowed_credential() -> Result<(), Box<dyn std::error::Error>> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        approved_registration(&mut authenticator, vec![8; 32]);
+        approved_registration(&mut authenticator, vec![8; 32])?;
 
         let result = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
@@ -575,12 +567,14 @@ mod tests {
             result,
             Err(MockPasskeyError::NoMatchingCredential)
         ));
+        Ok(())
     }
 
     #[test]
-    fn assertion_rejects_credential_registered_for_another_rp() {
+    fn assertion_rejects_credential_registered_for_another_rp()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let registration = approved_registration(&mut authenticator, vec![8; 32]);
+        let registration = approved_registration(&mut authenticator, vec![8; 32])?;
 
         let result = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
@@ -592,51 +586,53 @@ mod tests {
         );
 
         assert!(matches!(result, Err(MockPasskeyError::RpIdMismatch)));
+        Ok(())
     }
 
     #[test]
-    fn allowed_credentials_are_checked_in_browser_order() {
+    fn allowed_credentials_are_checked_in_browser_order() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let first = approved_registration(&mut authenticator, vec![1; 32]);
-        let second = approved_registration(&mut authenticator, vec![2; 32]);
+        let first = approved_registration(&mut authenticator, vec![1; 32])?;
+        let second = approved_registration(&mut authenticator, vec![2; 32])?;
 
-        let assertion = authenticator
-            .authenticate(
-                &MockPasskeyAssertionRequest::with_allowed_credentials(
-                    RP_ID,
-                    vec![
-                        vec![77; 32],
-                        second.credential_id().to_vec(),
-                        first.credential_id().to_vec(),
-                    ],
-                    deterministic_passkey_prf_input(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .expect("mock passkey test setup should succeed");
+        let assertion = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::with_allowed_credentials(
+                RP_ID,
+                vec![
+                    vec![77; 32],
+                    second.credential_id().to_vec(),
+                    first.credential_id().to_vec(),
+                ],
+                deterministic_passkey_prf_input(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?;
 
         assert_eq!(assertion.credential_id(), second.credential_id());
         assert_eq!(
             authenticator
                 .credential(first.credential_id())
-                .expect("mock passkey test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("first registered credential must exist"))?
                 .sign_count(),
             0
         );
         assert_eq!(
             authenticator
                 .credential(second.credential_id())
-                .expect("mock passkey test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("second registered credential must exist"))?
                 .sign_count(),
             1
         );
+        Ok(())
     }
 
     #[test]
-    fn discoverable_assertion_rejects_ambiguous_same_rp_credentials() {
+    fn discoverable_assertion_rejects_ambiguous_same_rp_credentials()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let first = approved_registration(&mut authenticator, vec![1; 32]);
-        let second = approved_registration(&mut authenticator, vec![2; 32]);
+        let first = approved_registration(&mut authenticator, vec![1; 32])?;
+        let second = approved_registration(&mut authenticator, vec![2; 32])?;
 
         let result = authenticator.authenticate(
             &MockPasskeyAssertionRequest::discoverable(RP_ID, deterministic_passkey_prf_input()),
@@ -650,34 +646,35 @@ mod tests {
         assert_eq!(
             authenticator
                 .credential(first.credential_id())
-                .expect("mock passkey test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("first registered credential must exist"))?
                 .sign_count(),
             0
         );
         assert_eq!(
             authenticator
                 .credential(second.credential_id())
-                .expect("mock passkey test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("second registered credential must exist"))?
                 .sign_count(),
             0
         );
+        Ok(())
     }
 
     #[test]
-    fn separate_passkeys_produce_distinct_device_identities() {
+    fn separate_passkeys_produce_distinct_device_identities()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let first = approved_registration(&mut authenticator, vec![1; 32]);
-        let second = approved_registration(&mut authenticator, vec![2; 32]);
+        let first = approved_registration(&mut authenticator, vec![1; 32])?;
+        let second = approved_registration(&mut authenticator, vec![2; 32])?;
 
         let first_identity =
-            derive_device_identity_from_passkey_prf(first.user_handle(), first.prf_output())
-                .expect("mock passkey test setup should succeed");
+            derive_device_identity_from_passkey_prf(first.user_handle(), first.prf_output())?;
         let second_identity =
-            derive_device_identity_from_passkey_prf(second.user_handle(), second.prf_output())
-                .expect("mock passkey test setup should succeed");
+            derive_device_identity_from_passkey_prf(second.user_handle(), second.prf_output())?;
 
         assert_ne!(first.credential_id(), second.credential_id());
         assert_ne!(first_identity, second_identity);
+        Ok(())
     }
 
     #[test]

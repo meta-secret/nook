@@ -156,7 +156,8 @@ impl AuthenticationWorkflowMatch {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("authentication workflow was not detected")]
 pub struct AuthenticationWorkflowNotDetected;
 
 impl AuthenticationWorkflowSnapshot {
@@ -423,14 +424,12 @@ mod tests {
     }
 
     #[test]
-    fn classifies_single_and_multi_page_logins() {
+    fn classifies_single_and_multi_page_logins() -> Result<(), Box<dyn std::error::Error>> {
         let username_only = AuthenticationPageObservation {
             username_field_count: 1,
             ..observation()
         };
-        let login = classify_authentication_workflow(username_only)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let login = classify_authentication_workflow(username_only).snapshot()?;
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
         assert_eq!((login.current_step, login.total_steps), (1, 3));
@@ -441,9 +440,7 @@ mod tests {
             ..observation()
         };
         assert_eq!(
-            classify_authentication_workflow(password_login)
-                .snapshot()
-                .expect("authentication workflow test setup should succeed"),
+            classify_authentication_workflow(password_login).snapshot()?,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
                 AuthenticationWorkflowStage::Credentials,
@@ -452,18 +449,17 @@ mod tests {
                 3,
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn distinguishes_signup_from_password_change() {
+    fn distinguishes_signup_from_password_change() -> Result<(), Box<dyn std::error::Error>> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 2,
             ..observation()
         };
-        let signup = classify_authentication_workflow(signup)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let signup = classify_authentication_workflow(signup).snapshot()?;
         assert_eq!(signup.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(
             signup.action,
@@ -476,9 +472,7 @@ mod tests {
             new_password_field_count: 2,
             ..observation()
         };
-        let password_change = classify_authentication_workflow(password_change)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let password_change = classify_authentication_workflow(password_change).snapshot()?;
         assert_eq!(
             password_change.kind,
             AuthenticationWorkflowKind::PasswordChange
@@ -491,33 +485,33 @@ mod tests {
             (password_change.current_step, password_change.total_steps),
             (2, 4)
         );
+        Ok(())
     }
 
     #[test]
-    fn signup_with_manual_checkpoint_yields_to_takeover() {
+    fn signup_with_manual_checkpoint_yields_to_takeover() -> Result<(), Box<dyn std::error::Error>>
+    {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
             manual_checkpoint_present: true,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(signup)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(signup).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn classifies_authenticator_setup_and_verify_enrollment() {
+    fn classifies_authenticator_setup_and_verify_enrollment()
+    -> Result<(), Box<dyn std::error::Error>> {
         let setup = AuthenticationPageObservation {
             authenticator_setup_hint: true,
             ..observation()
         };
-        let setup = classify_authentication_workflow(setup)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let setup = classify_authentication_workflow(setup).snapshot()?;
         assert_eq!(setup.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(setup.stage, AuthenticationWorkflowStage::Setup);
         assert_eq!(
@@ -530,89 +524,89 @@ mod tests {
             one_time_code_field_count: 1,
             ..observation()
         };
-        let verify = classify_authentication_workflow(verify)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let verify = classify_authentication_workflow(verify).snapshot()?;
         assert_eq!(verify.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(verify.stage, AuthenticationWorkflowStage::Verification);
         assert_eq!(verify.action, AuthenticationWorkflowAction::FillTotp);
+        Ok(())
     }
 
     #[test]
-    fn classifies_standalone_one_time_code_as_second_factor() {
+    fn classifies_standalone_one_time_code_as_second_factor()
+    -> Result<(), Box<dyn std::error::Error>> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
             ..observation()
         };
-        let code = classify_authentication_workflow(code)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let code = classify_authentication_workflow(code).snapshot()?;
         assert_eq!(code.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!((code.current_step, code.total_steps), (2, 3));
+        Ok(())
     }
 
     #[test]
-    fn backup_code_link_does_not_hide_an_active_totp_challenge() {
+    fn backup_code_link_does_not_hide_an_active_totp_challenge()
+    -> Result<(), Box<dyn std::error::Error>> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
             backup_codes_hint: true,
             ..observation()
         };
-        let code = classify_authentication_workflow(code)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let code = classify_authentication_workflow(code).snapshot()?;
         assert_eq!(code.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
+        Ok(())
     }
 
     #[test]
-    fn combined_password_and_code_fields_yield_to_manual_second_factor() {
+    fn combined_password_and_code_fields_yield_to_manual_second_factor()
+    -> Result<(), Box<dyn std::error::Error>> {
         let combined = AuthenticationPageObservation {
             current_password_field_count: 1,
             one_time_code_field_count: 1,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(combined)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(combined).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn generic_multi_password_forms_never_offer_login_fill() {
+    fn generic_multi_password_forms_never_offer_login_fill()
+    -> Result<(), Box<dyn std::error::Error>> {
         let ambiguous = AuthenticationPageObservation {
             username_field_count: 1,
             generic_password_field_count: 2,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(ambiguous)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(ambiguous).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn current_plus_generic_password_forms_never_offer_login_fill() {
+    fn current_plus_generic_password_forms_never_offer_login_fill()
+    -> Result<(), Box<dyn std::error::Error>> {
         let ambiguous_change = AuthenticationPageObservation {
             current_password_field_count: 1,
             generic_password_field_count: 1,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(ambiguous_change)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(ambiguous_change).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn separate_login_form_takes_precedence_over_signup_or_password_reset() {
+    fn separate_login_form_takes_precedence_over_signup_or_password_reset()
+    -> Result<(), Box<dyn std::error::Error>> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -624,19 +618,19 @@ mod tests {
             ..observation()
         };
 
-        let snapshot = classify_authentication_workflow_candidates(&[signup, login])
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow_candidates(&[signup, login]).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(
             snapshot.action,
             AuthenticationWorkflowAction::ContinueWithNook
         );
         assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 
     #[test]
-    fn active_totp_takes_precedence_over_unrelated_signup() {
+    fn active_totp_takes_precedence_over_unrelated_signup() -> Result<(), Box<dyn std::error::Error>>
+    {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -647,58 +641,55 @@ mod tests {
             ..observation()
         };
 
-        let snapshot = classify_authentication_workflow_candidates(&[signup, code])
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow_candidates(&[signup, code]).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 
     #[test]
-    fn login_with_matching_passkeys_proposes_use() {
+    fn login_with_matching_passkeys_proposes_use() -> Result<(), Box<dyn std::error::Error>> {
         let login = AuthenticationPageObservation {
             current_password_field_count: 1,
             matching_passkey_account_count: 2,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(login)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert!(snapshot.requires_human_approval);
+        Ok(())
     }
 
     #[test]
-    fn passkey_control_without_matches_proposes_create() {
+    fn passkey_control_without_matches_proposes_create() -> Result<(), Box<dyn std::error::Error>> {
         let login = AuthenticationPageObservation {
             username_field_count: 1,
             passkey_control_present: true,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(login)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        Ok(())
     }
 
     #[test]
-    fn passkey_only_control_classifies_as_login_create() {
+    fn passkey_only_control_classifies_as_login_create() -> Result<(), Box<dyn std::error::Error>> {
         let passkey_only = AuthenticationPageObservation {
             passkey_control_present: true,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(passkey_only)
-            .snapshot()
-            .expect("authentication workflow test setup should succeed");
+        let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        Ok(())
     }
 
     #[test]
-    fn matching_passkeys_prefer_use_over_password_continue_candidate() {
+    fn matching_passkeys_prefer_use_over_password_continue_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
         let password_login = AuthenticationPageObservation {
             current_password_field_count: 1,
             ..observation()
@@ -710,9 +701,9 @@ mod tests {
         };
         let snapshot =
             classify_authentication_workflow_candidates(&[password_login, passkey_login])
-                .snapshot()
-                .expect("authentication workflow test setup should succeed");
+                .snapshot()?;
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 }

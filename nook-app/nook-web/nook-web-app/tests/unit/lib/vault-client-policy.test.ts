@@ -101,24 +101,16 @@ describe('portable vault client policy', () => {
     ).toEqual(['local-a'])
   })
 
-  test('normalizes a legacy Google Drive draft before manager connection', () => {
-    const args = stagedRemoteStorageArgs(
-      'oauth-file',
-      undefined,
-      'nook-events',
-      {
+  test('rejects an invalid OAuth preset without a legacy fallback', () => {
+    expect(() =>
+      stagedRemoteStorageArgs('oauth-file', undefined, 'nook-events', {
         preset: '' as OAuthFilePreset,
         accessToken: 'token',
         fileId: 'file-id',
         fileName: 'stored-name',
-      },
-    )
-    expect(args).toBeDefined()
-    try {
-      expect(args?.mode).toBe('google-drive')
-      expect(args?.repo).toBe('file-id\tnook-events')
-    } finally {
-      args?.free()
-    }
+        driveMode: 'private',
+        iCloudMode: 'private',
+      }),
+    ).toThrow('unknown variant ``, expected `google-drive` or `icloud`')
   })
 })

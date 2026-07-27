@@ -208,39 +208,35 @@ mod tests {
     }
 
     #[test]
-    fn seal_and_open_github_pat_round_trips() {
-        let identity = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn seal_and_open_github_pat_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11AAAAbbbbCCCC";
         let mut snapshot = github_snapshot(pat);
-        seal_provider_credentials(&identity, &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials(&identity, &mut snapshot)?;
         let stored = snapshot.providers[0]
             .github_pat
             .as_ref()
-            .expect("sync provider credentials test setup should succeed");
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        open_provider_credentials(&identity, &mut opened)
-            .expect("sync provider credentials test setup should succeed");
+        open_provider_credentials(&identity, &mut opened)?;
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+        Ok(())
     }
 
     #[test]
-    fn seal_and_open_oauth_tokens_round_trips() {
-        let identity = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn seal_and_open_oauth_tokens_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        let identity = DeviceIdentity::generate()?;
         let access = "ya29.oauth-access-token";
         let refresh = "1//refresh-token-secret";
         let mut snapshot = oauth_snapshot(access, Some(refresh));
-        seal_provider_credentials(&identity, &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials(&identity, &mut snapshot)?;
         let oauth = snapshot.providers[0]
             .oauth_file
             .as_ref()
-            .expect("sync provider credentials test setup should succeed");
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert!(is_sealed_credential(&oauth.access_token));
         assert!(
             oauth
@@ -253,87 +249,80 @@ mod tests {
             !oauth
                 .refresh_token
                 .as_ref()
-                .expect("sync provider credentials test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("sealed refresh token must exist"))?
                 .contains(refresh)
         );
 
         let mut opened = snapshot;
-        open_provider_credentials(&identity, &mut opened)
-            .expect("sync provider credentials test setup should succeed");
+        open_provider_credentials(&identity, &mut opened)?;
         let opened_oauth = opened.providers[0]
             .oauth_file
             .as_ref()
-            .expect("sync provider credentials test setup should succeed");
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert_eq!(opened_oauth.access_token, access);
         assert_eq!(opened_oauth.refresh_token.as_deref(), Some(refresh));
+        Ok(())
     }
 
     #[test]
-    fn open_rejects_plaintext_credentials() {
-        let identity = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn open_rejects_plaintext_credentials() -> Result<(), Box<dyn std::error::Error>> {
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11LEGACY";
         let mut snapshot = github_snapshot(pat);
         assert!(matches!(
             open_provider_credentials(&identity, &mut snapshot),
             Err(MultiDeviceError::UnsealedProviderCredential)
         ));
+        Ok(())
     }
 
     #[test]
-    fn seal_is_idempotent_for_already_sealed_fields() {
-        let identity = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn seal_is_idempotent_for_already_sealed_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let identity = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11AAAA");
-        seal_provider_credentials(&identity, &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials(&identity, &mut snapshot)?;
         let sealed_once = snapshot.providers[0].github_pat.clone();
-        seal_provider_credentials(&identity, &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials(&identity, &mut snapshot)?;
         assert_eq!(snapshot.providers[0].github_pat, sealed_once);
+        Ok(())
     }
 
     #[test]
-    fn sealed_credentials_fail_on_wrong_device() {
-        let owner = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
-        let other = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn sealed_credentials_fail_on_wrong_device() -> Result<(), Box<dyn std::error::Error>> {
+        let owner = DeviceIdentity::generate()?;
+        let other = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11SECRET");
-        seal_provider_credentials(&owner, &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials(&owner, &mut snapshot)?;
         assert!(open_provider_credentials(&other, &mut snapshot).is_err());
+        Ok(())
     }
 
     #[test]
-    fn seal_for_public_key_opens_on_recipient_device() {
-        let extension = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn seal_for_public_key_opens_on_recipient_device() -> Result<(), Box<dyn std::error::Error>> {
+        let extension = DeviceIdentity::generate()?;
         let pat = "github_pat_11EXTENSIONgrant";
         let mut snapshot = github_snapshot(pat);
-        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot)?;
         let stored = snapshot.providers[0]
             .github_pat
             .as_ref()
-            .expect("sync provider credentials test setup should succeed");
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        open_provider_credentials(&extension, &mut opened)
-            .expect("sync provider credentials test setup should succeed");
+        open_provider_credentials(&extension, &mut opened)?;
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+        Ok(())
     }
 
     #[test]
-    fn presealed_check_accepts_sealed_or_empty_credentials() {
-        let identity = DeviceIdentity::generate()
-            .expect("sync provider credentials test setup should succeed");
+    fn presealed_check_accepts_sealed_or_empty_credentials()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let identity = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11PRESEAL");
         assert!(!provider_credentials_are_presealed(&snapshot));
-        seal_provider_credentials(&identity, &mut snapshot)
-            .expect("sync provider credentials test setup should succeed");
+        seal_provider_credentials(&identity, &mut snapshot)?;
         assert!(provider_credentials_are_presealed(&snapshot));
         assert!(provider_credentials_are_presealed(
             &AuthProvidersSnapshotData {
@@ -341,5 +330,6 @@ mod tests {
                 active_vault_store_id: Some("store-1".to_owned()),
             }
         ));
+        Ok(())
     }
 }

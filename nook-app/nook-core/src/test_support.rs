@@ -4,8 +4,12 @@ use crate::{
     serialize_stored_yaml_with_unlock,
 };
 
-pub(crate) fn sample_vault_yaml(version: u64, store_id: &str, armor_line: &str) -> String {
-    serialize_stored_yaml_with_unlock(
+pub(crate) fn sample_vault_yaml(
+    version: u64,
+    store_id: &str,
+    armor_line: &str,
+) -> VaultResult<String> {
+    Ok(serialize_stored_yaml_with_unlock(
         &[crate::StoredSecretRecord {
             key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
             secret_type: None,
@@ -17,9 +21,8 @@ pub(crate) fn sample_vault_yaml(version: u64, store_id: &str, armor_line: &str) 
         &[],
         crate::VaultStoreIdentityRef::Assigned(store_id),
         crate::VaultVersionWrite::Version(version),
-    )
-    .expect("test support test setup should succeed")
-    .into_inner()
+    )?
+    .into_inner())
 }
 
 pub(crate) fn simple_genesis_projection()

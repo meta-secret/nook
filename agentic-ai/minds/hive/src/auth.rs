@@ -302,18 +302,16 @@ mod tests {
     use super::{BrokerRequest, BrokerResponse};
 
     #[test]
-    fn broker_protocol_does_not_serialize_refresh_tokens() {
+    fn broker_protocol_does_not_serialize_refresh_tokens() -> Result<(), Box<dyn std::error::Error>>
+    {
         let response = BrokerResponse {
             access_token: "access".to_owned(),
             account_id: "account".to_owned(),
         };
-        let encoded = serde_json::to_string(&response).expect("auth test setup should succeed");
+        let encoded = serde_json::to_string(&response)?;
 
         assert!(!encoded.contains("refresh_token"));
-        assert!(
-            serde_json::from_str::<BrokerRequest>(r#"{"refresh":true}"#)
-                .expect("auth test setup should succeed")
-                .refresh
-        );
+        assert!(serde_json::from_str::<BrokerRequest>(r#"{"refresh":true}"#)?.refresh);
+        Ok(())
     }
 }

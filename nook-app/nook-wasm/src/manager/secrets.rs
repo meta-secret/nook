@@ -4,6 +4,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookImportResult;
+use crate::types::{NookStringValue, NookStringValueRef};
 use crate::{NookSecretPage, NookSecretRecord, NookTotpCode};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -341,12 +342,13 @@ impl NookVaultManager {
 mod import_tests {
     use super::*;
 
-    fn key() -> nook_core::SymmetricKey {
-        nook_core::SymmetricKey::parse(&"ab".repeat(32)).expect("secrets test setup should succeed")
+    fn key() -> Result<nook_core::SymmetricKey, Box<dyn std::error::Error>> {
+        Ok(nook_core::SymmetricKey::parse(&"ab".repeat(32))?)
     }
 
     #[test]
-    fn same_batch_provider_notes_are_coalesced_without_losing_metadata() {
+    fn same_batch_provider_notes_are_coalesced_without_losing_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
         let items = vec![
             nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
                 title: "Recovery".to_owned(),
@@ -358,7 +360,7 @@ mod import_tests {
             }),
         ];
 
-        let (items, duplicates) = coalesce_import_items(items, &key());
+        let (items, duplicates) = coalesce_import_items(items, &key()?);
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
         let nook_core::SecretValue::SecureNote(note) = &items[0] else {
@@ -366,10 +368,12 @@ mod import_tests {
         };
         assert!(note.note.contains("## LastPass"));
         assert!(note.note.contains("## Proton Pass"));
+        Ok(())
     }
 
     #[test]
-    fn legacy_version_fingerprints_require_import_backfill() {
+    fn legacy_version_fingerprints_require_import_backfill()
+    -> Result<(), Box<dyn std::error::Error>> {
         let identity = nook_core::SecretFingerprint::from_trusted(format!(
             "hmac-sha256:v1:{}",
             "ab".repeat(32)
@@ -384,9 +388,10 @@ mod import_tests {
             title: "Recovery".to_owned(),
             note: "same note".to_owned(),
         });
-        let current = nook_core::secret_fingerprint(&value, &key());
+        let current = nook_core::secret_fingerprint(&value, &key()?);
         assert!(current.is_current_secret_version());
         assert!(!identity.as_str().is_empty());
+        Ok(())
     }
 }
 
@@ -410,13 +415,15 @@ impl NookVaultManager {
     pub fn query_secret_page_js(
         &self,
         query: &str,
-        secret_type_filter: wasm_bindgen::JsValue,
+        secret_type_filter: NookStringValue,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let secret_type_filter = match secret_type_filter.as_string() {
-            Some(value) => nook_core::SecretTypeFilter::Only(nook_core::SecretType::parse(&value)?),
-            None => nook_core::SecretTypeFilter::All,
+        let secret_type_filter = match secret_type_filter.as_ref() {
+            NookStringValueRef::Value(value) => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::parse(value)?)
+            }
+            NookStringValueRef::Unavailable => nook_core::SecretTypeFilter::All,
         };
         Ok(NookSecretPage::from_core(self.query_secret_page(
             query,
@@ -1010,11 +1017,10 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn canonical_authenticator_fingerprints_replace_stored_legacy_values() {
-        let secrets_key = nook_core::SymmetricKey::parse(&"a".repeat(64))
-            .expect("secrets test setup should succeed");
-        let crypto =
-            nook_core::VaultCrypto::new(&secrets_key).expect("secrets test setup should succeed");
+    fn canonical_authenticator_fingerprints_replace_stored_legacy_values()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let secrets_key = nook_core::SymmetricKey::parse(&"a".repeat(64))?;
+        let crypto = nook_core::VaultCrypto::new(&secrets_key)?;
         let padded_yaml = concat!(
             "issuer: Example\n",
             "account: alice@example.com\n",
@@ -1024,9 +1030,7 @@ mod wasm_tests {
             "period: 30\n",
             "backupCodes: []\n"
         );
-        let ciphertext = crypto
-            .encrypt_value(padded_yaml)
-            .expect("secrets test setup should succeed");
+        let ciphertext = crypto.encrypt_value(padded_yaml)?;
         let record = nook_core::StoredSecretRecord {
             key: nook_core::SecretId::from_vault_record("secret_authenticator"),
             secret_type: Some(nook_core::SecretType::Authenticator),
@@ -1041,8 +1045,7 @@ mod wasm_tests {
             &crypto,
             &secrets_key,
             1,
-        )
-        .expect("secrets test setup should succeed");
+        )?;
 
         assert_eq!(backfill.len(), 1);
         let assignment = &backfill[0];
@@ -1060,9 +1063,9 @@ mod wasm_tests {
             &crypto,
             &secrets_key,
             1,
-        )
-        .expect("secrets test setup should succeed");
+        )?;
         assert!(second_backfill.is_empty());
+        Ok(())
     }
 
     #[wasm_bindgen_test]

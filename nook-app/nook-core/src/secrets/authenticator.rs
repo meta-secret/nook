@@ -567,7 +567,7 @@ fn parse_u64_or_default(value: &str, default: u64) -> Result<u64, ValidationErro
 mod tests {
     use super::*;
 
-    fn rfc_secret(secret: &[u8]) -> TotpSecret {
+    fn rfc_secret(secret: &[u8]) -> Result<TotpSecret, Box<dyn std::error::Error>> {
         let encoded = match secret.len() {
             20 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
             32 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
@@ -576,24 +576,27 @@ mod tests {
             }
             _ => panic!("unsupported fixture"),
         };
-        TotpSecret::parse(encoded).expect("authenticator test setup should succeed")
+        Ok(TotpSecret::parse(encoded)?)
     }
 
-    fn fixture(algorithm: TotpAlgorithm, secret: &[u8]) -> AuthenticatorSecret {
-        AuthenticatorSecret {
+    fn fixture(
+        algorithm: TotpAlgorithm,
+        secret: &[u8],
+    ) -> Result<AuthenticatorSecret, Box<dyn std::error::Error>> {
+        Ok(AuthenticatorSecret {
             issuer: "RFC".to_owned(),
             account: "test".to_owned(),
             website_url: String::new(),
-            secret: rfc_secret(secret),
+            secret: rfc_secret(secret)?,
             algorithm,
-            digits: TotpDigits::parse(8).expect("authenticator test setup should succeed"),
+            digits: TotpDigits::parse(8)?,
             period: TotpPeriod::default(),
             backup_codes: Vec::new(),
-        }
+        })
     }
 
     #[test]
-    fn matches_rfc_6238_test_vectors() {
+    fn matches_rfc_6238_test_vectors() -> Result<(), Box<dyn std::error::Error>> {
         let sha1 = b"12345678901234567890";
         let sha256 = b"12345678901234567890123456789012";
         let sha512 = b"1234567890123456789012345678901234567890123456789012345678901234";
@@ -607,31 +610,30 @@ mod tests {
         ];
         for (timestamp, expected_sha1, expected_sha256, expected_sha512) in cases {
             assert_eq!(
-                fixture(TotpAlgorithm::Sha1, sha1)
-                    .current_code(timestamp)
-                    .expect("authenticator test setup should succeed")
+                fixture(TotpAlgorithm::Sha1, sha1)?
+                    .current_code(timestamp)?
                     .code,
                 expected_sha1
             );
             assert_eq!(
-                fixture(TotpAlgorithm::Sha256, sha256)
-                    .current_code(timestamp)
-                    .expect("authenticator test setup should succeed")
+                fixture(TotpAlgorithm::Sha256, sha256)?
+                    .current_code(timestamp)?
                     .code,
                 expected_sha256
             );
             assert_eq!(
-                fixture(TotpAlgorithm::Sha512, sha512)
-                    .current_code(timestamp)
-                    .expect("authenticator test setup should succeed")
+                fixture(TotpAlgorithm::Sha512, sha512)?
+                    .current_code(timestamp)?
                     .code,
                 expected_sha512
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn parses_google_authenticator_uri_and_normalizes_backup_codes() {
+    fn parses_google_authenticator_uri_and_normalizes_backup_codes()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut item = AuthenticatorSecret::from_form_fields(
             "",
             "",
@@ -641,8 +643,7 @@ mod tests {
             "",
             " first-code \nsecond-code\nfirst-code\n",
             "",
-        )
-        .expect("authenticator test setup should succeed");
+        )?;
         assert_eq!(item.issuer, "Example Co");
         assert_eq!(item.account, "alice@example.com");
         assert_eq!(item.algorithm, TotpAlgorithm::Sha256);
@@ -651,56 +652,55 @@ mod tests {
         assert_eq!(item.backup_codes, ["first-code", "second-code"]);
         item.zeroize();
         assert!(item.secret.as_str().is_empty());
+        Ok(())
     }
 
     #[test]
-    fn canonicalizes_base32_padding() {
-        let padded = TotpSecret::parse("JBSWY3DPEHPK3PXP====")
-            .expect("authenticator test setup should succeed");
-        let unpadded =
-            TotpSecret::parse("JBSWY3DPEHPK3PXP").expect("authenticator test setup should succeed");
+    fn canonicalizes_base32_padding() -> Result<(), Box<dyn std::error::Error>> {
+        let padded = TotpSecret::parse("JBSWY3DPEHPK3PXP====")?;
+        let unpadded = TotpSecret::parse("JBSWY3DPEHPK3PXP")?;
 
         assert_eq!(padded, unpadded);
         assert_eq!(padded.as_str(), "JBSWY3DPEHPK3PXP");
+        Ok(())
     }
 
     #[test]
-    fn setup_key_change_detection_uses_canonical_base32() {
-        assert!(
-            !authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "jbsw-y3dp ehpk-3pxp====",)
-                .expect("authenticator test setup should succeed")
-        );
-        assert!(
-            authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "KRUGS4ZANFZSAYJA",)
-                .expect("authenticator test setup should succeed")
-        );
+    fn setup_key_change_detection_uses_canonical_base32() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert!(!authenticator_setup_key_changed(
+            "JBSWY3DPEHPK3PXP",
+            "jbsw-y3dp ehpk-3pxp====",
+        )?);
+        assert!(authenticator_setup_key_changed(
+            "JBSWY3DPEHPK3PXP",
+            "KRUGS4ZANFZSAYJA",
+        )?);
         assert!(authenticator_setup_key_changed(
             "JBSWY3DPEHPK3PXP",
             "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA256",
-        )
-        .expect("authenticator test setup should succeed"));
+        )?);
+        Ok(())
     }
 
     #[test]
-    fn preserves_plus_signs_in_otpauth_labels() {
+    fn preserves_plus_signs_in_otpauth_labels() -> Result<(), Box<dyn std::error::Error>> {
         let item = AuthenticatorSecret::from_otpauth_uri(
             "otpauth://totp/Example%3Aalice%2Balerts%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
-        )
-        .expect("authenticator test setup should succeed");
+        )?;
 
         assert_eq!(item.account, "alice+alerts@example.com");
+        Ok(())
     }
 
     #[test]
-    fn current_code_from_otpauth_matches_persisted_secret() {
+    fn current_code_from_otpauth_matches_persisted_secret() -> Result<(), Box<dyn std::error::Error>>
+    {
         let uri = "otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth";
-        let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)
-            .expect("authenticator test setup should succeed");
-        let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)
-            .expect("authenticator test setup should succeed")
-            .current_code(59)
-            .expect("authenticator test setup should succeed");
+        let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)?;
+        let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)?.current_code(59)?;
         assert_eq!(from_uri.code, from_secret.code);
+        Ok(())
     }
 
     #[test]
@@ -712,11 +712,11 @@ mod tests {
     }
 
     #[test]
-    fn previews_otpauth_without_exposing_secret_fields_elsewhere() {
+    fn previews_otpauth_without_exposing_secret_fields_elsewhere()
+    -> Result<(), Box<dyn std::error::Error>> {
         let preview = AuthenticatorSecret::preview_otpauth_uri(
             "otpauth://totp/Example%20Co:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example%20Co&algorithm=SHA256&digits=8&period=45",
-        )
-        .expect("authenticator test setup should succeed");
+        )?;
         assert_eq!(preview.issuer, "Example Co");
         assert_eq!(preview.account, "alice@example.com");
         assert_eq!(preview.algorithm, TotpAlgorithm::Sha256);
@@ -727,10 +727,11 @@ mod tests {
                 .is_err()
         );
         assert!(AuthenticatorSecret::preview_otpauth_uri("https://example.com").is_err());
+        Ok(())
     }
 
     #[test]
-    fn backup_code_replace_and_merge_enforce_bounds() {
+    fn backup_code_replace_and_merge_enforce_bounds() -> Result<(), Box<dyn std::error::Error>> {
         let existing = vec!["keep-me".to_owned(), "old-code".to_owned()];
         let incoming = vec![
             "  new-code ".to_owned(),
@@ -738,13 +739,11 @@ mod tests {
             String::new(),
         ];
         assert_eq!(
-            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Replace)
-                .expect("authenticator test setup should succeed"),
+            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Replace)?,
             ["new-code", "keep-me"]
         );
         assert_eq!(
-            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Merge)
-                .expect("authenticator test setup should succeed"),
+            apply_backup_codes(&existing, &incoming, BackupCodeAttachMode::Merge)?,
             ["keep-me", "old-code", "new-code"]
         );
 
@@ -755,5 +754,6 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(normalize_backup_codes(&too_many).is_err());
         assert!(BackupCodeAttachMode::parse("append").is_err());
+        Ok(())
     }
 }

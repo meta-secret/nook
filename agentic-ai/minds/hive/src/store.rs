@@ -304,119 +304,72 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn concurrent_workers_cannot_claim_the_same_attempt() {
+    async fn concurrent_workers_cannot_claim_the_same_attempt()
+    -> Result<(), Box<dyn std::error::Error>> {
         let store = MemoryStore::default();
-        store
-            .enqueue(&task("task-1", Vec::new()))
-            .await
-            .expect("store test setup should succeed");
-        let agent_a = AgentId::new("agent-a").expect("store test setup should succeed");
-        let agent_b = AgentId::new("agent-b").expect("store test setup should succeed");
+        store.enqueue(&task("task-1", Vec::new())).await?;
+        let agent_a = AgentId::new("agent-a")?;
+        let agent_b = AgentId::new("agent-b")?;
         let (claim_a, claim_b) =
             tokio::join!(store.claim(&agent_a, 300), store.claim(&agent_b, 300));
 
-        let claims = match (
-            claim_a.expect("store test setup should succeed"),
-            claim_b.expect("store test setup should succeed"),
-        ) {
+        let claims = match (claim_a?, claim_b?) {
             (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask)
             | (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => vec![claim],
             _ => Vec::new(),
         };
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0].attempt_number, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn incomplete_dependencies_block_claiming() {
+    async fn incomplete_dependencies_block_claiming() -> Result<(), Box<dyn std::error::Error>> {
         let store = MemoryStore::default();
         let dependency = task("dependency", Vec::new());
-        store
-            .enqueue(&dependency)
-            .await
-            .expect("store test setup should succeed");
+        store.enqueue(&dependency).await?;
         store
             .enqueue(&task("dependent", vec![dependency.id.clone()]))
-            .await
-            .expect("store test setup should succeed");
-        let agent = AgentId::new("agent").expect("store test setup should succeed");
+            .await?;
+        let agent = AgentId::new("agent")?;
 
-        let first = store
-            .claim(&agent, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        let first = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(first.id, dependency.id);
-        assert!(
-            store
-                .claim(&agent, 300)
-                .await
-                .expect("store test setup should succeed")
-                .is_idle()
-        );
+        assert!(store.claim(&agent, 300).await?.is_idle());
+        Ok(())
     }
 
     #[tokio::test]
-    async fn rollout_release_does_not_consume_an_attempt() {
+    async fn rollout_release_does_not_consume_an_attempt() -> Result<(), Box<dyn std::error::Error>>
+    {
         let store = MemoryStore::default();
-        store
-            .enqueue(&task("task-1", Vec::new()))
-            .await
-            .expect("store test setup should succeed");
-        let agent = AgentId::new("agent").expect("store test setup should succeed");
+        store.enqueue(&task("task-1", Vec::new())).await?;
+        let agent = AgentId::new("agent")?;
 
-        let first = store
-            .claim(&agent, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
-        assert!(
-            store
-                .release(&first, &agent)
-                .await
-                .expect("store test setup should succeed")
-        );
-        let replacement = store
-            .claim(&agent, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        let first = store.claim(&agent, 300).await?.into_claimed()?;
+        assert!(store.release(&first, &agent).await?);
+        let replacement = store.claim(&agent, 300).await?.into_claimed()?;
 
         assert_eq!(replacement.attempt_number, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn discovered_blocker_is_prioritized_and_resumes_original_task() {
+    async fn discovered_blocker_is_prioritized_and_resumes_original_task()
+    -> Result<(), Box<dyn std::error::Error>> {
         let store = MemoryStore::default();
-        store
-            .enqueue(&task("original", Vec::new()))
-            .await
-            .expect("store test setup should succeed");
-        let agent = AgentId::new("agent").expect("store test setup should succeed");
-        let original = store
-            .claim(&agent, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        store.enqueue(&task("original", Vec::new())).await?;
+        let agent = AgentId::new("agent")?;
+        let original = store.claim(&agent, 300).await?.into_claimed()?;
         let mut blocker = task("blocker", Vec::new());
         blocker.priority = 100;
 
         assert!(
             store
                 .block(&original, &agent, &blocker, "blocked by prerequisite")
-                .await
-                .expect("store test setup should succeed")
+                .await?
         );
-        let blocker_claim = store
-            .claim(&agent, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        let blocker_claim = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
@@ -426,62 +379,43 @@ mod tests {
                     "blocker fixed",
                     &CompletionArtifact::NotProduced
                 )
-                .await
-                .expect("store test setup should succeed")
+                .await?
         );
-        let resumed = store
-            .claim(&agent, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        let resumed = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(resumed.id, original.id);
         assert_eq!(resumed.attempt_number, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn expired_lease_rejects_stale_worker_and_allows_retry() {
+    async fn expired_lease_rejects_stale_worker_and_allows_retry()
+    -> Result<(), Box<dyn std::error::Error>> {
         let store = MemoryStore::default();
         let definition = task("task-1", Vec::new());
-        store
-            .enqueue(&definition)
-            .await
-            .expect("store test setup should succeed");
-        let agent_a = AgentId::new("agent-a").expect("store test setup should succeed");
-        let agent_b = AgentId::new("agent-b").expect("store test setup should succeed");
-        let stale = store
-            .claim(&agent_a, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        store.enqueue(&definition).await?;
+        let agent_a = AgentId::new("agent-a")?;
+        let agent_b = AgentId::new("agent-b")?;
+        let stale = store.claim(&agent_a, 300).await?.into_claimed()?;
         store.expire(&definition.id);
-        let current = store
-            .claim(&agent_b, 300)
-            .await
-            .expect("store test setup should succeed")
-            .into_claimed()
-            .expect("store test setup should succeed");
+        let current = store.claim(&agent_b, 300).await?.into_claimed()?;
 
         assert_ne!(stale.lease_token, current.lease_token);
         assert_eq!(current.attempt_number, 2);
         assert!(
             !store
                 .heartbeat(&stale.id, &agent_a, &stale.lease_token, 300)
-                .await
-                .expect("store test setup should succeed")
+                .await?
         );
         assert!(
             !store
                 .complete(&stale, &agent_a, "late", &CompletionArtifact::NotProduced)
-                .await
-                .expect("store test setup should succeed")
+                .await?
         );
         assert!(
             store
                 .complete(&current, &agent_b, "done", &CompletionArtifact::NotProduced)
-                .await
-                .expect("store test setup should succeed")
+                .await?
         );
+        Ok(())
     }
 }

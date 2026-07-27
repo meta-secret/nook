@@ -780,28 +780,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn architecture_omits_default_personal_replication() {
+    fn architecture_omits_default_personal_replication() -> Result<(), Box<dyn std::error::Error>> {
         let architecture = VaultArchitecture::simple_personal(DeviceMode::Standard);
-        let encoded = serde_json::to_value(&architecture)
-            .expect("vault architecture test setup should succeed");
+        let encoded = serde_json::to_value(&architecture)?;
         assert!(encoded.get("replication_type").is_none());
         let decoded: VaultArchitecture = serde_json::from_value(serde_json::json!({
             "device_mode": "standard",
             "vault_type": "simple",
             "replication_type": "personal"
-        }))
-        .expect("vault architecture test setup should succeed");
+        }))?;
         assert_eq!(decoded, architecture);
+        Ok(())
     }
 
     #[test]
-    fn draft_builds_the_vault_type_specific_policy() {
+    fn draft_builds_the_vault_type_specific_policy() -> Result<(), Box<dyn std::error::Error>> {
         let simple = VaultArchitecture::draft(
             DeviceMode::AntiHacker,
             VaultType::Simple,
             ReplicationType::Shared,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         assert_eq!(simple.device_mode, DeviceMode::AntiHacker);
         assert_eq!(simple.replication_type, ReplicationType::Shared);
         assert_eq!(simple.sentinel, SentinelConfiguration::Disabled);
@@ -810,8 +808,7 @@ mod tests {
             DeviceMode::Standard,
             VaultType::Sentinel,
             ReplicationType::Personal,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         assert_eq!(
             sentinel.sentinel,
             SentinelConfiguration::Enabled(SentinelPolicy {
@@ -820,10 +817,12 @@ mod tests {
                 ready_participants: 0,
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn sentinel_architecture_uses_only_sentinel_wire_names() {
+    fn sentinel_architecture_uses_only_sentinel_wire_names()
+    -> Result<(), Box<dyn std::error::Error>> {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -833,8 +832,7 @@ mod tests {
             },
         );
 
-        let encoded = serde_json::to_value(&architecture)
-            .expect("vault architecture test setup should succeed");
+        let encoded = serde_json::to_value(&architecture)?;
         assert_eq!(encoded["vault_type"], "sentinel");
         assert!(encoded.get("sentinel").is_some());
 
@@ -848,13 +846,13 @@ mod tests {
                     "ready_participants": 0
                 }
             }
-        }))
-        .expect("vault architecture test setup should succeed");
+        }))?;
         assert_eq!(decoded, architecture);
+        Ok(())
     }
 
     #[test]
-    fn defaults_match_current_vault_behavior() {
+    fn defaults_match_current_vault_behavior() -> Result<(), Box<dyn std::error::Error>> {
         let architecture = VaultArchitecture::default();
         assert_eq!(architecture.device_mode, DeviceMode::Standard);
         assert_eq!(architecture.vault_type, VaultType::Simple);
@@ -864,19 +862,17 @@ mod tests {
             architecture.onboarding_type(),
             OnboardingType::PersonalCredentialTransfer
         );
-        architecture
-            .validate()
-            .expect("vault architecture test setup should succeed");
+        architecture.validate()?;
+        Ok(())
     }
 
     #[test]
-    fn provider_capability_matrix_is_fail_closed() {
+    fn provider_capability_matrix_is_fail_closed() -> Result<(), Box<dyn std::error::Error>> {
         validate_provider_replication(
             StorageProviderType::Github,
             ProviderOauthPreset::NotApplicable,
             ReplicationType::Personal,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         assert!(
             validate_provider_replication(
                 StorageProviderType::Github,
@@ -890,8 +886,7 @@ mod tests {
             StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
             ReplicationType::Shared,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         assert_eq!(
             gdrive.shared_joiner_identity,
             ProviderJoinerIdentity::Required(SharedJoinerIdentityKind::Email)
@@ -901,29 +896,28 @@ mod tests {
             StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
             ReplicationType::Shared,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         assert_eq!(
             icloud.shared_joiner_identity,
             ProviderJoinerIdentity::NotRequired
         );
+        Ok(())
     }
 
     #[test]
-    fn grouped_architecture_matrix_validates_provider_replication() {
+    fn grouped_architecture_matrix_validates_provider_replication()
+    -> Result<(), Box<dyn std::error::Error>> {
         let simple_personal = VaultArchitecture::simple_personal(DeviceMode::Standard);
         validate_architecture_for_provider(
             &simple_personal,
             StorageProviderType::Github,
             ProviderOauthPreset::NotApplicable,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         validate_architecture_for_provider(
             &simple_personal,
             StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
 
         let simple_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
@@ -941,8 +935,7 @@ mod tests {
             &simple_shared,
             StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
 
         let sentinel_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
@@ -956,8 +949,7 @@ mod tests {
             &sentinel_ready,
             StorageProviderType::Github,
             ProviderOauthPreset::NotApplicable,
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
 
         let sentinel_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
@@ -967,8 +959,7 @@ mod tests {
             &sentinel_shared,
             StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
         assert!(
             validate_architecture_for_provider(
                 &sentinel_shared,
@@ -981,8 +972,8 @@ mod tests {
             &sentinel_shared,
             StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
-        )
-        .expect("vault architecture test setup should succeed");
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -1004,7 +995,8 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_requires_valid_threshold_and_all_participants_before_secret_creation() {
+    fn sentinel_requires_valid_threshold_and_all_participants_before_secret_creation()
+    -> Result<(), Box<dyn std::error::Error>> {
         let not_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
             SentinelPolicy {
@@ -1013,9 +1005,7 @@ mod tests {
                 ready_participants: 2,
             },
         );
-        not_ready
-            .validate()
-            .expect("vault architecture test setup should succeed");
+        not_ready.validate()?;
         assert!(!not_ready.can_create_secret());
 
         let ready = VaultArchitecture::sentinel_personal(
@@ -1026,9 +1016,7 @@ mod tests {
                 ready_participants: 3,
             },
         );
-        ready
-            .validate()
-            .expect("vault architecture test setup should succeed");
+        ready.validate()?;
         assert!(ready.can_create_secret());
 
         let invalid = VaultArchitecture::sentinel_personal(
@@ -1040,18 +1028,16 @@ mod tests {
             },
         );
         assert!(invalid.validate().is_err());
+        Ok(())
     }
 
     #[test]
-    fn sentinel_secret_creation_requires_actual_share_records() {
-        let keys =
-            crate::generate_vault_keys().expect("vault architecture test setup should succeed");
-        let first = crate::DeviceIdentity::generate()
-            .expect("vault architecture test setup should succeed");
-        let second = crate::DeviceIdentity::generate()
-            .expect("vault architecture test setup should succeed");
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)
-            .expect("vault architecture test setup should succeed");
+    fn sentinel_secret_creation_requires_actual_share_records()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -1065,16 +1051,15 @@ mod tests {
         assert!(!ready.can_create_secret_with_records(&[]));
         assert!(!ready.can_create_secret_with_records(&shares[..1]));
         assert!(ready.can_create_secret_with_records(&shares));
+        Ok(())
     }
 
     #[test]
-    fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets() {
-        let keys =
-            crate::generate_vault_keys().expect("vault architecture test setup should succeed");
-        let first = crate::DeviceIdentity::generate()
-            .expect("vault architecture test setup should succeed");
-        let second = crate::DeviceIdentity::generate()
-            .expect("vault architecture test setup should succeed");
+    fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -1084,14 +1069,10 @@ mod tests {
             },
         );
         let shares =
-            crate::create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)
-                .expect("vault architecture test setup should succeed");
-        architecture
-            .validate_records(&shares)
-            .expect("vault architecture test setup should succeed");
+            crate::create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)?;
+        architecture.validate_records(&shares)?;
 
-        let auth = crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key)
-            .expect("vault architecture test setup should succeed");
+        let auth = crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key)?;
         let mut shares_with_auth = shares.clone();
         shares_with_auth.push(auth);
         assert_eq!(
@@ -1119,36 +1100,31 @@ mod tests {
 
         let mut duplicate_index = shares;
         let first_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str())
-                .expect("vault architecture test setup should succeed");
+            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str())?;
         let mut second_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str())
-                .expect("vault architecture test setup should succeed");
+            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str())?;
         second_envelope.share_index = first_envelope.share_index;
-        duplicate_index[1].value = crate::StoredRecordPayload::from_trusted(
-            serde_json::to_string(&second_envelope)
-                .expect("vault architecture test setup should succeed"),
-        );
+        duplicate_index[1].value =
+            crate::StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
         assert_eq!(
             architecture.validate_records(&duplicate_index),
             Err(ValidationError::InvalidSentinelShareSet)
         );
+        Ok(())
     }
 
     #[test]
-    fn simple_record_validation_rejects_sentinel_shares() {
-        let keys =
-            crate::generate_vault_keys().expect("vault architecture test setup should succeed");
-        let first = crate::DeviceIdentity::generate()
-            .expect("vault architecture test setup should succeed");
-        let second = crate::DeviceIdentity::generate()
-            .expect("vault architecture test setup should succeed");
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)
-            .expect("vault architecture test setup should succeed");
+    fn simple_record_validation_rejects_sentinel_shares() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         assert_eq!(
             VaultArchitecture::default().validate_records(&shares),
             Err(ValidationError::SimpleVaultHasSentinelShares)
         );
+        Ok(())
     }
 
     #[test]
@@ -1178,7 +1154,8 @@ mod tests {
     }
 
     #[test]
-    fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony() {
+    fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony()
+    -> Result<(), Box<dyn std::error::Error>> {
         // Core validates only; WASM upgrades ManualGrantRequired → Granted after
         // Drive folder create + permissions.create succeed.
         let request = SharedStorageGrantRequest {
@@ -1190,8 +1167,7 @@ mod tests {
             storage_target_id: None,
             access_token: Some("ya29.owner-token".to_owned()),
         };
-        let outcome = prepare_shared_storage_grant(&request)
-            .expect("vault architecture test setup should succeed");
+        let outcome = prepare_shared_storage_grant(&request)?;
         assert_eq!(
             outcome,
             SharedStorageGrantOutcome::ManualGrantRequired {
@@ -1207,8 +1183,7 @@ mod tests {
             ..request.clone()
         };
         assert_eq!(
-            prepare_shared_storage_grant(&existing_target)
-                .expect("vault architecture test setup should succeed"),
+            prepare_shared_storage_grant(&existing_target)?,
             SharedStorageGrantOutcome::ManualGrantRequired {
                 instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
@@ -1232,50 +1207,50 @@ mod tests {
             ..request
         };
         assert_eq!(
-            prepare_shared_storage_grant(&github)
-                .expect("vault architecture test setup should succeed"),
+            prepare_shared_storage_grant(&github)?,
             SharedStorageGrantOutcome::Unsupported {
                 reason_key: "architecture_modes.shared_grant_unsupported".to_owned(),
             }
         );
+        Ok(())
     }
 
     #[test]
-    fn shared_storage_grant_granted_outcome_carries_storage_target() {
+    fn shared_storage_grant_granted_outcome_carries_storage_target()
+    -> Result<(), Box<dyn std::error::Error>> {
         let granted = SharedStorageGrantOutcome::Granted {
             note: "Shared Drive folder ready.".to_owned(),
             storage_target_id: "folder-abc".to_owned(),
             storage_target_name: Some("Nook shared vault".to_owned()),
         };
-        let json =
-            serde_json::to_value(&granted).expect("vault architecture test setup should succeed");
+        let json = serde_json::to_value(&granted)?;
         assert_eq!(json["kind"], "granted");
         assert_eq!(json["storageTargetId"], "folder-abc");
         assert_eq!(json["storageTargetName"], "Nook shared vault");
-        let roundtrip: SharedStorageGrantOutcome =
-            serde_json::from_value(json).expect("vault architecture test setup should succeed");
+        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json)?;
         assert_eq!(roundtrip, granted);
+        Ok(())
     }
 
     #[test]
-    fn shared_storage_manual_grant_preserves_created_target() {
+    fn shared_storage_manual_grant_preserves_created_target()
+    -> Result<(), Box<dyn std::error::Error>> {
         let manual = SharedStorageGrantOutcome::ManualGrantRequired {
             instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
             joiner_identity: "joiner@example.com".to_owned(),
             storage_target_id: Some("folder-created-before-permission-failed".to_owned()),
             storage_target_name: Some("Nook shared vault".to_owned()),
         };
-        let json =
-            serde_json::to_value(&manual).expect("vault architecture test setup should succeed");
+        let json = serde_json::to_value(&manual)?;
         assert_eq!(json["kind"], "manual-grant-required");
         assert_eq!(
             json["storageTargetId"],
             "folder-created-before-permission-failed"
         );
         assert_eq!(json["storageTargetName"], "Nook shared vault");
-        let roundtrip: SharedStorageGrantOutcome =
-            serde_json::from_value(json).expect("vault architecture test setup should succeed");
+        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json)?;
         assert_eq!(roundtrip, manual);
+        Ok(())
     }
 
     #[test]

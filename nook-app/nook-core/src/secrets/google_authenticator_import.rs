@@ -363,7 +363,8 @@ mod tests {
     }
 
     #[test]
-    fn imports_supported_totp_settings_and_normalizes_labels() {
+    fn imports_supported_totp_settings_and_normalizes_labels()
+    -> Result<(), Box<dyn std::error::Error>> {
         let plan = plan_google_authenticator_import(&[uri(&payload(
             vec![parameter(
                 0x41,
@@ -376,8 +377,7 @@ mod tests {
             1,
             0,
             17,
-        ))])
-        .expect("google authenticator import test setup should succeed");
+        ))])?;
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 0);
@@ -390,26 +390,27 @@ mod tests {
         assert_eq!(item.digits.get(), 8);
         assert_eq!(item.period.get(), 30);
         assert_eq!(item.secret.as_str(), "IFAUCQKBIFAUCQKBIFAUCQKBIFAUCQKB");
+        Ok(())
     }
 
     #[test]
-    fn decodes_google_authenticator_wire_format() {
+    fn decodes_google_authenticator_wire_format() -> Result<(), Box<dyn std::error::Error>> {
         let migration_uri = concat!(
             "otpauth-migration://offline?data=",
             "CjUKBWYkQUSTEgdNWUxBQkVMGghNWUlTU1VFUiACKAIwAkIT",
             "NjE5NGJjMTczNzcyNzc5ODc5MxACGAEgAA%3D%3D"
         );
 
-        let plan = plan_google_authenticator_import(&[migration_uri.to_owned()])
-            .expect("google authenticator import test setup should succeed");
+        let plan = plan_google_authenticator_import(&[migration_uri.to_owned()])?;
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 1);
         assert!(plan.items.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn imports_a_complete_out_of_order_batch() {
+    fn imports_a_complete_out_of_order_batch() -> Result<(), Box<dyn std::error::Error>> {
         let first = uri(&payload(
             vec![parameter(
                 1,
@@ -437,8 +438,7 @@ mod tests {
             91,
         ));
 
-        let plan = plan_google_authenticator_import(&[second, first])
-            .expect("google authenticator import test setup should succeed");
+        let plan = plan_google_authenticator_import(&[second, first])?;
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.items.len(), 2);
@@ -446,6 +446,7 @@ mod tests {
             panic!("expected authenticator");
         };
         assert_eq!(first.issuer, "First");
+        Ok(())
     }
 
     #[test]
@@ -485,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_hotp_md5_and_invalid_secret_entries() {
+    fn skips_hotp_md5_and_invalid_secret_entries() -> Result<(), Box<dyn std::error::Error>> {
         let mut short_secret = parameter(
             5,
             "short",
@@ -514,11 +515,11 @@ mod tests {
             ),
             short_secret,
         ];
-        let plan = plan_google_authenticator_import(&[uri(&payload(entries, 1, 0, 12))])
-            .expect("google authenticator import test setup should succeed");
+        let plan = plan_google_authenticator_import(&[uri(&payload(entries, 1, 0, 12))])?;
         assert!(plan.items.is_empty());
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 3);
+        Ok(())
     }
 
     #[test]

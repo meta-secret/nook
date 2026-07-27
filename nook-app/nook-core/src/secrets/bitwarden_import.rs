@@ -451,7 +451,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn converts_export_login_fields() {
+    fn converts_export_login_fields() -> Result<(), Box<dyn std::error::Error>> {
         let json = r#"{
           "items": [{
             "id": "bw-1", "type": 1, "name": "GitHub work", "notes": "recovery codes elsewhere",
@@ -461,7 +461,7 @@ mod tests {
           ]
         }"#;
 
-        let plan = plan_bitwarden_import(json).expect("bitwarden import test setup should succeed");
+        let plan = plan_bitwarden_import(json)?;
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 0);
         let SecretValue::Login(login) = &plan.items[0] else {
@@ -474,16 +474,18 @@ mod tests {
             login.notes,
             "recovery codes elsewhere\n\n## Bitwarden\n- name: GitHub work\n- totp: otpauth://secret\n- uri[2]: https://gist.github.com\n- field.PIN: 1234"
         );
+        Ok(())
     }
 
     #[test]
-    fn converts_plaintext_export_notes_and_skips_unsupported_items() {
+    fn converts_plaintext_export_notes_and_skips_unsupported_items()
+    -> Result<(), Box<dyn std::error::Error>> {
         let json = r#"{"items":[
           {"type":2,"name":"Private note","notes":"hello"},
           {"type":3,"name":"Card","card":{"cardholderName":"Ada","number":"4111111111111111","expMonth":"12","expYear":"2030","code":"123","brand":"Visa"}},
           {"type":4,"name":"Identity"}
         ]}"#;
-        let plan = plan_bitwarden_import(json).expect("bitwarden import test setup should succeed");
+        let plan = plan_bitwarden_import(json)?;
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 1);
         assert_eq!(plan.items.len(), 2);
@@ -501,10 +503,11 @@ mod tests {
         assert_eq!(card.number, "4111111111111111");
         assert_eq!(card.cardholder_name, "Ada");
         assert!(card.notes.contains("brand: Visa"));
+        Ok(())
     }
 
     #[test]
-    fn preserves_secure_note_custom_fields() {
+    fn preserves_secure_note_custom_fields() -> Result<(), Box<dyn std::error::Error>> {
         let plan = plan_bitwarden_import(
             r#"{"items":[{
                 "type":2,
@@ -516,8 +519,7 @@ mod tests {
                     {"name":"empty","value":null}
                 ]
             }]}"#,
-        )
-        .expect("bitwarden import test setup should succeed");
+        )?;
         assert_eq!(
             plan.items,
             vec![SecretValue::SecureNote(SecureNoteSecret {
@@ -527,12 +529,13 @@ mod tests {
                         .to_owned(),
             })]
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_real_export_shape_with_folders_dates_nulls_and_fido_fields() {
-        let plan = plan_bitwarden_import(include_str!("fixtures/bitwarden_real_export.json"))
-            .expect("bitwarden import test setup should succeed");
+    fn accepts_real_export_shape_with_folders_dates_nulls_and_fido_fields()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = plan_bitwarden_import(include_str!("fixtures/bitwarden_real_export.json"))?;
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(plan.items.len(), 2);
@@ -555,20 +558,21 @@ mod tests {
         assert_eq!(second.username, "guest");
         assert_eq!(second.password, "guest");
         assert_eq!(second.notes, "## Bitwarden\n- name: 9dev.io");
+        Ok(())
     }
 
     #[test]
-    fn accepts_null_optional_login_fields() {
+    fn accepts_null_optional_login_fields() -> Result<(), Box<dyn std::error::Error>> {
         let plan = plan_bitwarden_import(
             r#"{"items":[{"type":1,"name":"Example","notes":null,"login":{"username":null,"password":"pw","totp":null,"uris":[{"uri":null}]}}]}"#,
-        )
-        .expect("bitwarden import test setup should succeed");
+        )?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
         assert_eq!(login.website_url, "Example");
         assert_eq!(login.username, "");
         assert_eq!(login.password, "pw");
+        Ok(())
     }
 
     #[test]
@@ -613,19 +617,20 @@ mod tests {
     }
 
     #[test]
-    fn decrypts_bitwarden_password_protected_pbkdf2_fixture() {
+    fn decrypts_bitwarden_password_protected_pbkdf2_fixture()
+    -> Result<(), Box<dyn std::error::Error>> {
         let plan = plan_bitwarden_import_with_password(
             include_str!("fixtures/bitwarden_encrypted_pbkdf2.json"),
             Some("correct horse battery staple"),
-        )
-        .expect("bitwarden import test setup should succeed");
+        )?;
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(plan.items.len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn derives_bitwarden_argon2id_export_key() {
+    fn derives_bitwarden_argon2id_export_key() -> Result<(), Box<dyn std::error::Error>> {
         // Expected values come from Bitwarden SDK's Argon2id KDF vector, then
         // its documented HKDF "enc" / "mac" expansion.
         let export = EncryptedBitwardenExport {
@@ -638,8 +643,7 @@ mod tests {
             enc_key_validation: String::new(),
             data: String::new(),
         };
-        let key = derive_export_key(&export, "67t9b5g67$%Dh89n")
-            .expect("bitwarden import test setup should succeed");
+        let key = derive_export_key(&export, "67t9b5g67$%Dh89n")?;
         assert_eq!(
             *key.encryption,
             [
@@ -654,6 +658,7 @@ mod tests {
                 37, 111, 206, 155, 24, 224, 151, 134, 189, 202, 0, 27, 149, 131, 21,
             ]
         );
+        Ok(())
     }
 
     #[test]

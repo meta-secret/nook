@@ -89,77 +89,52 @@ mod tests {
     use super::*;
     use crate::SymmetricKey;
 
-    fn test_key() -> SymmetricKey {
-        SymmetricKey::parse("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-            .expect("vault crypto test setup should succeed")
+    fn test_key() -> Result<SymmetricKey, Box<dyn std::error::Error>> {
+        Ok(SymmetricKey::parse(
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )?)
     }
 
     #[test]
-    fn roundtrip_with_cached_crypto() {
-        let crypto = VaultCrypto::new(&test_key()).expect("vault crypto test setup should succeed");
-        let encrypted = crypto
-            .encrypt_value("hello world")
-            .expect("vault crypto test setup should succeed");
-        let decrypted = crypto
-            .decrypt_value(&encrypted)
-            .expect("vault crypto test setup should succeed");
+    fn roundtrip_with_cached_crypto() -> Result<(), Box<dyn std::error::Error>> {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let encrypted = crypto.encrypt_value("hello world")?;
+        let decrypted = crypto.decrypt_value(&encrypted)?;
         assert_eq!(decrypted.as_str(), "hello world");
+        Ok(())
     }
 
     #[test]
-    fn wrong_passphrase_fails() {
-        let crypto = VaultCrypto::new(&test_key()).expect("vault crypto test setup should succeed");
-        let encrypted = crypto
-            .encrypt_value("secret")
-            .expect("vault crypto test setup should succeed");
-        let wrong = VaultCrypto::new(
-            &SymmetricKey::parse("cafebabe".repeat(8).as_str())
-                .expect("vault crypto test setup should succeed"),
-        )
-        .expect("vault crypto test setup should succeed");
+    fn wrong_passphrase_fails() -> Result<(), Box<dyn std::error::Error>> {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let encrypted = crypto.encrypt_value("secret")?;
+        let wrong = VaultCrypto::new(&SymmetricKey::parse("cafebabe".repeat(8).as_str())?)?;
         assert!(wrong.decrypt_value(&encrypted).is_err());
+        Ok(())
     }
 
     #[test]
-    fn encrypt_is_nondeterministic() {
-        let crypto = VaultCrypto::new(&test_key()).expect("vault crypto test setup should succeed");
-        let a = crypto
-            .encrypt_value("same")
-            .expect("vault crypto test setup should succeed");
-        let b = crypto
-            .encrypt_value("same")
-            .expect("vault crypto test setup should succeed");
+    fn encrypt_is_nondeterministic() -> Result<(), Box<dyn std::error::Error>> {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let a = crypto.encrypt_value("same")?;
+        let b = crypto.encrypt_value("same")?;
         assert_ne!(a, b);
-        assert_eq!(
-            crypto
-                .decrypt_value(&a)
-                .expect("vault crypto test setup should succeed")
-                .as_str(),
-            "same"
-        );
-        assert_eq!(
-            crypto
-                .decrypt_value(&b)
-                .expect("vault crypto test setup should succeed")
-                .as_str(),
-            "same"
-        );
+        assert_eq!(crypto.decrypt_value(&a)?.as_str(), "same");
+        assert_eq!(crypto.decrypt_value(&b)?.as_str(), "same");
+        Ok(())
     }
 
     #[test]
-    fn bulk_roundtrip_is_practical_for_password_manager_imports() {
+    fn bulk_roundtrip_is_practical_for_password_manager_imports()
+    -> Result<(), Box<dyn std::error::Error>> {
         let started = std::time::Instant::now();
-        let crypto = VaultCrypto::new(&test_key()).expect("vault crypto test setup should succeed");
+        let crypto = VaultCrypto::new(&test_key()?)?;
         let encrypted = (0..1_300)
             .map(|index| crypto.encrypt_value(format!("secret-{index}")))
-            .collect::<Result<Vec<_>, _>>()
-            .expect("vault crypto test setup should succeed");
+            .collect::<Result<Vec<_>, _>>()?;
         for (index, ciphertext) in encrypted.iter().enumerate() {
             assert_eq!(
-                crypto
-                    .decrypt_value(ciphertext)
-                    .expect("vault crypto test setup should succeed")
-                    .as_str(),
+                crypto.decrypt_value(ciphertext)?.as_str(),
                 format!("secret-{index}")
             );
         }
@@ -168,5 +143,6 @@ mod tests {
             "1,300-record roundtrip took {:?}",
             started.elapsed()
         );
+        Ok(())
     }
 }

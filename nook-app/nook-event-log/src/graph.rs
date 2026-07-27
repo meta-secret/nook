@@ -415,15 +415,15 @@ mod tests {
         parents: Vec<EventId>,
         secret_id: &str,
         signing_key: &SigningKey,
-    ) -> VaultEvent {
+    ) -> EventResult<VaultEvent> {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(signing_key),
+            store_id: store()?,
+            actor_id: actor(signing_key)?,
             actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretCreated {
                 secret: crate::event::EncryptedSecretPayload {
                     id: SecretId::from_vault_record(secret_id),
@@ -438,14 +438,14 @@ mod tests {
                 },
             }],
         };
-        VaultEvent::sign(body, signing_key).expect("graph test setup should succeed")
+        VaultEvent::sign(body, signing_key)
     }
 
-    fn genesis_event(signing_key: &SigningKey) -> VaultEvent {
+    fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
         build_genesis_import_event(
-            &store(),
-            &actor(signing_key),
-            &epoch(),
+            &store()?,
+            &actor(signing_key)?,
+            &epoch()?,
             GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
@@ -454,30 +454,29 @@ mod tests {
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )
-        .expect("graph test setup should succeed")
     }
 
     fn signed_operation(
         parents: Vec<EventId>,
         operation: VaultOperation,
         signing_key: &SigningKey,
-    ) -> VaultEvent {
+    ) -> EventResult<VaultEvent> {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(signing_key),
+            store_id: store()?,
+            actor_id: actor(signing_key)?,
             actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![operation],
         };
-        VaultEvent::sign(body, signing_key).expect("graph test setup should succeed")
+        VaultEvent::sign(body, signing_key)
     }
 
     fn graph_with_genesis(signing_key: &SigningKey) -> EventResult<(EventGraph, EventId)> {
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(signing_key);
+        let genesis = genesis_event(signing_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
         Ok((graph, genesis_id))
@@ -488,15 +487,15 @@ mod tests {
         device_id: &str,
         encryption_public_key: &str,
         label: &str,
-    ) -> VaultOperation {
-        VaultOperation::JoinApproved {
-            device_id: DeviceId::parse(device_id).expect("graph test setup should succeed"),
+    ) -> EventResult<VaultOperation> {
+        Ok(VaultOperation::JoinApproved {
+            device_id: DeviceId::parse(device_id)?,
             encryption_public_key: DevicePublicKey::from_trusted(encryption_public_key.to_owned()),
             signing_public_key: public_key(signing_key),
             label: MemberLabel::from_trusted(label.to_owned()),
             secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
             members_key_ciphertext: AgeArmoredCiphertext::from_trusted("members-key".to_owned()),
-        }
+        })
     }
 
     fn assert_self_approval_quarantined(
@@ -512,9 +511,9 @@ mod tests {
                 "fedcba9876543210",
                 encryption_public_key,
                 "laptop",
-            ),
+            )?,
             stranger_key,
-        );
+        )?;
         let event_id = event.id()?;
         assert!(matches!(
             graph.insert(event, STORE_STR)?,
@@ -525,60 +524,43 @@ mod tests {
     }
 
     #[test]
-    fn union_is_commutative_on_ids() {
+    fn union_is_commutative_on_ids() -> Result<(), Box<dyn std::error::Error>> {
         let key = signing_key();
-        let genesis = genesis_event(&key);
-        let child = signed_child(
-            vec![genesis.id().expect("graph test setup should succeed")],
-            "secret_child00001",
-            &key,
-        );
+        let genesis = genesis_event(&key)?;
+        let child = signed_child(vec![genesis.id()?], "secret_child00001", &key)?;
 
         let mut left = EventGraph::new();
-        left.insert(genesis.clone(), STORE_STR)
-            .expect("graph test setup should succeed");
+        left.insert(genesis.clone(), STORE_STR)?;
         let mut right = EventGraph::new();
-        right
-            .insert(child.clone(), STORE_STR)
-            .expect("graph test setup should succeed");
-        right
-            .insert(genesis.clone(), STORE_STR)
-            .expect("graph test setup should succeed");
+        right.insert(child.clone(), STORE_STR)?;
+        right.insert(genesis.clone(), STORE_STR)?;
 
         let mut only_left = EventGraph::new();
-        only_left
-            .insert(genesis, STORE_STR)
-            .expect("graph test setup should succeed");
-        only_left
-            .insert(child, STORE_STR)
-            .expect("graph test setup should succeed");
+        only_left.insert(genesis, STORE_STR)?;
+        only_left.insert(child, STORE_STR)?;
 
         assert_eq!(left.union(&right).len(), only_left.len());
         assert_eq!(right.union(&only_left).len(), only_left.len());
+        Ok(())
     }
 
     #[test]
-    fn concurrent_events_are_detected() {
+    fn concurrent_events_are_detected() -> Result<(), Box<dyn std::error::Error>> {
         let key = signing_key();
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph
-            .insert(genesis_event(&key), store_str)
-            .expect("graph test setup should succeed");
+        graph.insert(genesis_event(&key)?, store_str)?;
         let head = graph.heads()[0].clone();
-        let a = signed_child(vec![head.clone()], "secret_concurrenta", &key);
-        let b = signed_child(vec![head], "secret_concurrentb", &key);
-        let a_id = a.id().expect("graph test setup should succeed");
-        let b_id = b.id().expect("graph test setup should succeed");
-        graph
-            .insert(a, store_str)
-            .expect("graph test setup should succeed");
-        graph
-            .insert(b, store_str)
-            .expect("graph test setup should succeed");
+        let a = signed_child(vec![head.clone()], "secret_concurrenta", &key)?;
+        let b = signed_child(vec![head], "secret_concurrentb", &key)?;
+        let a_id = a.id()?;
+        let b_id = b.id()?;
+        graph.insert(a, store_str)?;
+        graph.insert(b, store_str)?;
         assert!(graph.are_concurrent(&a_id, &b_id));
         assert_eq!(graph.heads().len(), 2);
+        Ok(())
     }
 
     #[test]
@@ -586,10 +568,10 @@ mod tests {
         let key = signing_key();
         let store_str = STORE_STR;
 
-        let genesis = genesis_event(&key);
+        let genesis = genesis_event(&key)?;
         let genesis_id = genesis.id()?;
 
-        let child = signed_child(vec![genesis_id.clone()], "secret_pending001", &key);
+        let child = signed_child(vec![genesis_id.clone()], "secret_pending001", &key)?;
 
         let mut graph = EventGraph::new();
         let status = graph.insert(child, store_str)?;
@@ -605,14 +587,14 @@ mod tests {
     fn unauthorized_pending_event_is_quarantined_when_parent_arrives() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
 
         let child = signed_child(
             vec![genesis_id.clone()],
             "secret_badpending1",
             &stranger_key,
-        );
+        )?;
         let child_id = child.id()?;
 
         let mut graph = EventGraph::new();
@@ -638,9 +620,9 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key), store_str)?;
+        graph.insert(genesis_event(&key)?, store_str)?;
         let head = graph.heads()[0].clone();
-        let child = signed_child(vec![head], "secret_duplicate01", &key);
+        let child = signed_child(vec![head], "secret_duplicate01", &key)?;
         assert_eq!(
             graph.insert(child.clone(), store_str)?,
             EventInsertStatus::Applied
@@ -658,13 +640,13 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key), store_str)?;
+        graph.insert(genesis_event(&key)?, store_str)?;
         let head = graph.heads()[0].clone();
-        let child = signed_child(vec![head.clone()], "secret_child00001", &key);
+        let child = signed_child(vec![head.clone()], "secret_child00001", &key)?;
         let child_id = child.id()?;
         graph.insert(child, store_str)?;
 
-        let grandchild = signed_child(vec![child_id.clone()], "secret_grandchild1", &key);
+        let grandchild = signed_child(vec![child_id.clone()], "secret_grandchild1", &key)?;
         let grandchild_id = grandchild.id()?;
         graph.insert(grandchild, store_str)?;
 
@@ -679,17 +661,17 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key), store_str)?;
+        graph.insert(genesis_event(&key)?, store_str)?;
         let head = graph.heads()[0].clone();
-        let a = signed_child(vec![head.clone()], "secret_concurrenta", &key);
-        let b = signed_child(vec![head], "secret_concurrentb", &key);
+        let a = signed_child(vec![head.clone()], "secret_concurrenta", &key)?;
+        let b = signed_child(vec![head], "secret_concurrentb", &key)?;
         let a_id = a.id()?;
         let b_id = b.id()?;
         graph.insert(a, store_str)?;
         graph.insert(b, store_str)?;
         assert_eq!(graph.heads().len(), 2);
 
-        let join = signed_child(vec![a_id, b_id], "secret_joinmerge1", &key);
+        let join = signed_child(vec![a_id, b_id], "secret_joinmerge1", &key)?;
         graph.insert(join, store_str)?;
         assert_eq!(graph.heads().len(), 1);
         Ok(())
@@ -701,14 +683,14 @@ mod tests {
         let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&key), store_str)?;
+        graph.insert(genesis_event(&key)?, store_str)?;
         let head = graph.heads()[0].clone();
         graph.insert(
-            signed_child(vec![head.clone()], "secret_concurrenta", &key),
+            signed_child(vec![head.clone()], "secret_concurrenta", &key)?,
             store_str,
         )?;
         graph.insert(
-            signed_child(vec![head], "secret_concurrentb", &key),
+            signed_child(vec![head], "secret_concurrentb", &key)?,
             store_str,
         )?;
 
@@ -723,11 +705,11 @@ mod tests {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
-        let stranger_event = signed_child(vec![genesis_id], "secret_unauth0001", &stranger_key);
+        let stranger_event = signed_child(vec![genesis_id], "secret_unauth0001", &stranger_key)?;
         let stranger_id = stranger_event.id()?;
         assert!(matches!(
             graph.insert(stranger_event, STORE_STR)?,
@@ -742,21 +724,20 @@ mod tests {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
         let join = signed_operation(
             vec![genesis_id],
             VaultOperation::JoinRequested {
-                device_id: DeviceId::parse("0123456789abcdef")
-                    .expect("graph test setup should succeed"),
+                device_id: DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
             },
             &joiner_key,
-        );
+        )?;
         assert_eq!(graph.insert(join, STORE_STR)?, EventInsertStatus::Applied);
         Ok(())
     }
@@ -769,13 +750,13 @@ mod tests {
 
         let enrol = signed_operation(
             vec![genesis_id],
-            join_approval(&joiner_key, "0123456789abcdef", "age-pub", "phone"),
+            join_approval(&joiner_key, "0123456789abcdef", "age-pub", "phone")?,
             &joiner_key,
-        );
+        )?;
         let enrol_id = enrol.id()?;
         assert_eq!(graph.insert(enrol, STORE_STR)?, EventInsertStatus::Applied);
 
-        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key);
+        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
         assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
         Ok(())
     }
@@ -788,13 +769,13 @@ mod tests {
 
         let approval = signed_operation(
             vec![genesis_id],
-            join_approval(&joiner_key, "0123456789abcdef", "age-pub", "phone"),
+            join_approval(&joiner_key, "0123456789abcdef", "age-pub", "phone")?,
             &root_key,
-        );
+        )?;
         let approval_id = approval.id()?;
         graph.insert(approval, STORE_STR)?;
 
-        let child = signed_child(vec![approval_id], "secret_joiner0001", &joiner_key);
+        let child = signed_child(vec![approval_id], "secret_joiner0001", &joiner_key)?;
         assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
         Ok(())
     }
@@ -803,10 +784,9 @@ mod tests {
     fn revoked_actor_cannot_append_after_observing_revocation() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
-        let device_id =
-            DeviceId::parse("0123456789abcdef").expect("graph test setup should succeed");
+        let device_id = DeviceId::parse("0123456789abcdef")?;
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
@@ -823,7 +803,7 @@ mod tests {
                 ),
             },
             &root_key,
-        );
+        )?;
         let approval_id = approval.id()?;
         graph.insert(approval, STORE_STR)?;
 
@@ -831,11 +811,11 @@ mod tests {
             vec![approval_id],
             VaultOperation::DeviceRevoked { device_id },
             &root_key,
-        );
+        )?;
         let revoke_id = revoke.id()?;
         graph.insert(revoke, STORE_STR)?;
 
-        let child = signed_child(vec![revoke_id], "secret_revoked0001", &joiner_key);
+        let child = signed_child(vec![revoke_id], "secret_revoked0001", &joiner_key)?;
         assert!(matches!(
             graph.insert(child, STORE_STR)?,
             EventInsertStatus::Quarantined(_)
@@ -848,8 +828,8 @@ mod tests {
         let first_key = signing_key();
         let second_key = signing_key();
         let mut graph = EventGraph::new();
-        graph.insert(genesis_event(&first_key), STORE_STR)?;
-        graph.insert(genesis_event(&second_key), STORE_STR)?;
+        graph.insert(genesis_event(&first_key)?, STORE_STR)?;
+        graph.insert(genesis_event(&second_key)?, STORE_STR)?;
 
         assert!(matches!(
             graph.topological_order(),
@@ -863,21 +843,20 @@ mod tests {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
         let enrol = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")
-                    .expect("graph test setup should succeed"),
+                device_id: DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&stranger_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
             },
             &stranger_key,
-        );
+        )?;
         let enrol_id = enrol.id()?;
         assert!(matches!(
             graph.insert(enrol, STORE_STR)?,
@@ -892,25 +871,24 @@ mod tests {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
         let enrol = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")
-                    .expect("graph test setup should succeed"),
+                device_id: DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
             },
             &root_key,
-        );
+        )?;
         let enrol_id = enrol.id()?;
         assert_eq!(graph.insert(enrol, STORE_STR)?, EventInsertStatus::Applied);
 
-        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key);
+        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
         assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
         Ok(())
     }
@@ -921,21 +899,20 @@ mod tests {
         let joiner_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
         let sentinel_enrol = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")
-                    .expect("graph test setup should succeed"),
+                device_id: DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
                 label: MemberLabel::from_trusted("phone".to_owned()),
             },
             &root_key,
-        );
+        )?;
         let sentinel_enrol_id = sentinel_enrol.id()?;
         graph.insert(sentinel_enrol, STORE_STR)?;
 
@@ -953,7 +930,7 @@ mod tests {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key);
+        let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
@@ -961,8 +938,7 @@ mod tests {
             vec![genesis_id],
             VaultOperation::SentinelSharesIssued {
                 shares: vec![crate::event::SentinelShareIssuedPayload {
-                    device_id: DeviceId::parse("0123456789abcdef")
-                        .expect("graph test setup should succeed"),
+                    device_id: DeviceId::parse("0123456789abcdef")?,
                     version: 1,
                     threshold: 2,
                     required_participants: 2,
@@ -971,7 +947,7 @@ mod tests {
                 }],
             },
             &root_key,
-        );
+        )?;
         let shares_id = shares.id()?;
         graph.insert(shares, STORE_STR)?;
 
@@ -988,19 +964,17 @@ mod tests {
         // Sentinel-style root: genesis import that also records the owner's
         // SentinelParticipantEnrolled in the same empty-parent event (allowed via
         // parents.is_empty() short-circuit on actor auth).
-        let mut sentinel_genesis = genesis_event(&root_key);
+        let mut sentinel_genesis = genesis_event(&root_key)?;
         sentinel_genesis
             .body
             .operations
             .push(VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")
-                    .expect("graph test setup should succeed"),
+                device_id: DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&root_key),
                 label: MemberLabel::from_trusted("owner".to_owned()),
             });
-        sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key)
-            .expect("graph test setup should succeed");
+        sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key)?;
         let sentinel_genesis_id = sentinel_genesis.id()?;
         assert_eq!(
             graph.insert(sentinel_genesis, STORE_STR)?,

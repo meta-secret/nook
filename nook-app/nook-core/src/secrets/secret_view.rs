@@ -1020,22 +1020,20 @@ mod tests {
     }
 
     #[test]
-    fn credit_card_list_item_exposes_last4_without_pan_or_cvv() {
+    fn credit_card_list_item_exposes_last4_without_pan_or_cvv()
+    -> Result<(), Box<dyn std::error::Error>> {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_card"),
             secret_type: SecretType::CreditCard,
-            data: SecretValue::CreditCard(
-                crate::CreditCardSecret::from_fields(
-                    "Personal Visa",
-                    "Ada Lovelace",
-                    "4111 1111 1111 1111",
-                    "12",
-                    "2030",
-                    "123",
-                    "work",
-                )
-                .expect("secret view test setup should succeed"),
-            ),
+            data: SecretValue::CreditCard(crate::CreditCardSecret::from_fields(
+                "Personal Visa",
+                "Ada Lovelace",
+                "4111 1111 1111 1111",
+                "12",
+                "2030",
+                "123",
+                "work",
+            )?),
         };
 
         let item = record.list_item();
@@ -1058,10 +1056,12 @@ mod tests {
         assert_eq!(record.primary_credential(), "4111111111111111");
         assert!(record.matches_search("1111"));
         assert!(!record.matches_search("4111111111111111"));
+        Ok(())
     }
 
     #[test]
-    fn build_secret_yaml_from_credit_card_form_validates_number() {
+    fn build_secret_yaml_from_credit_card_form_validates_number()
+    -> Result<(), Box<dyn std::error::Error>> {
         let yaml =
             build_secret_yaml_from_form(&SecretFormFields::CreditCard(CreditCardSecretForm {
                 title: "Debit".to_owned(),
@@ -1071,10 +1071,8 @@ mod tests {
                 expiration_year: String::new(),
                 cvv: String::new(),
                 notes: String::new(),
-            }))
-            .expect("secret view test setup should succeed");
-        let value = SecretValue::from_yaml(SecretType::CreditCard, &yaml)
-            .expect("secret view test setup should succeed");
+            }))?;
+        let value = SecretValue::from_yaml(SecretType::CreditCard, &yaml)?;
         let SecretValue::CreditCard(card) = value else {
             panic!("expected credit card");
         };
@@ -1091,10 +1089,12 @@ mod tests {
                 notes: String::new(),
             }));
         assert!(err.is_err());
+        Ok(())
     }
 
     #[test]
-    fn passkey_list_item_exposes_account_metadata_without_key_material() {
+    fn passkey_list_item_exposes_account_metadata_without_key_material()
+    -> Result<(), Box<dyn std::error::Error>> {
         let private_key = URL_SAFE_NO_PAD.encode([7_u8; 96]);
         let credential_id = URL_SAFE_NO_PAD.encode([8_u8; 32]);
         let record = SecretRecord {
@@ -1109,12 +1109,10 @@ mod tests {
                 user_name: "alice@example.com".to_owned(),
                 user_display_name: "Alice".to_owned(),
                 key: PasskeyCredentialKey::Es256 {
-                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone())
-                        .expect("secret view test setup should succeed"),
+                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone())?,
                     public_key_cose: PasskeyPublicKeyCose::parse(
                         URL_SAFE_NO_PAD.encode([10_u8; 77]),
-                    )
-                    .expect("secret view test setup should succeed"),
+                    )?,
                 },
                 signature_count: 0,
                 discoverable: true,
@@ -1131,20 +1129,19 @@ mod tests {
         assert!(item.display_title().contains("example.com"));
         assert!(!format!("{item:?}").contains(&private_key));
         assert!(!format!("{item:?}").contains(&credential_id));
+        Ok(())
     }
 
     #[test]
-    fn build_secret_yaml_round_trips_login_fields() {
+    fn build_secret_yaml_round_trips_login_fields() -> Result<(), Box<dyn std::error::Error>> {
         let fields = serde_json::json!({
             "websiteUrl": "https://example.com",
             "username": "bob",
             "password": "pw",
             "notes": "note"
         });
-        let yaml = build_secret_yaml(SecretType::Login, &fields)
-            .expect("secret view test setup should succeed");
-        let parsed = SecretValue::from_yaml(SecretType::Login, &yaml)
-            .expect("secret view test setup should succeed");
+        let yaml = build_secret_yaml(SecretType::Login, &fields)?;
+        let parsed = SecretValue::from_yaml(SecretType::Login, &yaml)?;
         match parsed {
             SecretValue::Login(value) => {
                 assert_eq!(value.username, "bob");
@@ -1152,10 +1149,12 @@ mod tests {
             }
             _ => panic!("expected login"),
         }
+        Ok(())
     }
 
     #[test]
-    fn build_secret_yaml_round_trips_api_key_from_flat_form() {
+    fn build_secret_yaml_round_trips_api_key_from_flat_form()
+    -> Result<(), Box<dyn std::error::Error>> {
         let fields = serde_json::json!({
             "websiteUrl": "https://api.example.com",
             "username": "",
@@ -1168,10 +1167,8 @@ mod tests {
             "title": "",
             "note": ""
         });
-        let yaml = build_secret_yaml(SecretType::ApiKey, &fields)
-            .expect("secret view test setup should succeed");
-        let parsed = SecretValue::from_yaml(SecretType::ApiKey, &yaml)
-            .expect("secret view test setup should succeed");
+        let yaml = build_secret_yaml(SecretType::ApiKey, &fields)?;
+        let parsed = SecretValue::from_yaml(SecretType::ApiKey, &yaml)?;
         match parsed {
             SecretValue::ApiKey(value) => {
                 assert_eq!(value.website_url, "https://api.example.com");
@@ -1180,6 +1177,7 @@ mod tests {
             }
             _ => panic!("expected api key"),
         }
+        Ok(())
     }
 
     #[test]
@@ -1202,7 +1200,8 @@ mod tests {
     }
 
     #[test]
-    fn authenticator_list_item_hides_shared_secret_and_backup_codes() {
+    fn authenticator_list_item_hides_shared_secret_and_backup_codes()
+    -> Result<(), Box<dyn std::error::Error>> {
         let value = AuthenticatorSecret::from_form_fields(
             "Example",
             "alice@example.com",
@@ -1212,8 +1211,7 @@ mod tests {
             "30",
             "backup-one\nbackup-two",
             "",
-        )
-        .expect("secret view test setup should succeed");
+        )?;
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_authenticator"),
             secret_type: SecretType::Authenticator,
@@ -1240,6 +1238,7 @@ mod tests {
         assert!(record.matches_search("ALICE@EXAMPLE.COM"));
         assert!(!record.matches_search("JBSWY3DPEHPK3PXP"));
         assert!(!record.matches_search("backup-one"));
+        Ok(())
     }
 
     #[test]
@@ -1350,7 +1349,7 @@ mod tests {
     }
 
     #[test]
-    fn build_secret_yaml_accepts_authenticator_uri() {
+    fn build_secret_yaml_accepts_authenticator_uri() -> Result<(), Box<dyn std::error::Error>> {
         let fields = serde_json::json!({
             "issuer": "",
             "account": "",
@@ -1360,10 +1359,8 @@ mod tests {
             "period": "",
             "backupCodes": "one\ntwo"
         });
-        let yaml = build_secret_yaml(SecretType::Authenticator, &fields)
-            .expect("secret view test setup should succeed");
-        let parsed = SecretValue::from_yaml(SecretType::Authenticator, &yaml)
-            .expect("secret view test setup should succeed");
+        let yaml = build_secret_yaml(SecretType::Authenticator, &fields)?;
+        let parsed = SecretValue::from_yaml(SecretType::Authenticator, &yaml)?;
         match parsed {
             SecretValue::Authenticator(value) => {
                 assert_eq!(value.issuer, "Example");
@@ -1372,9 +1369,11 @@ mod tests {
             }
             _ => panic!("expected authenticator"),
         }
+        Ok(())
     }
     #[test]
-    fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list() {
+    fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list()
+    -> Result<(), Box<dyn std::error::Error>> {
         let content =
             base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"secret-bytes");
         let fields = serde_json::json!({
@@ -1384,10 +1383,8 @@ mod tests {
             "sizeBytes": 12,
             "contentBase64": content,
         });
-        let yaml = build_secret_yaml(SecretType::FileAttachment, &fields)
-            .expect("secret view test setup should succeed");
-        let parsed = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)
-            .expect("secret view test setup should succeed");
+        let yaml = build_secret_yaml(SecretType::FileAttachment, &fields)?;
+        let parsed = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)?;
         let SecretValue::FileAttachment(value) = parsed else {
             panic!("expected file attachment");
         };
@@ -1413,5 +1410,6 @@ mod tests {
             }
         );
         assert!(!format!("{item:?}").contains("secret-bytes"));
+        Ok(())
     }
 }

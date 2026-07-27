@@ -549,6 +549,7 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use crate::SecretId;
@@ -579,36 +580,34 @@ mod tests {
     }
 
     #[test]
-    fn yaml_roundtrip_stored_records() {
+    fn yaml_roundtrip_stored_records() -> Result<(), Box<dyn std::error::Error>> {
         let records = sample_records();
-        let stored =
-            serialize_stored_yaml(&records).expect("vault format test setup should succeed");
+        let stored = serialize_stored_yaml(&records)?;
         assert!(stored.as_str().contains("github.com"));
         assert!(stored.as_str().contains('|'));
         assert!(!stored.as_str().contains("\\n"));
 
-        let parsed = deserialize_stored_yaml(stored.as_str())
-            .expect("vault format test setup should succeed");
+        let parsed = deserialize_stored_yaml(stored.as_str())?;
         assert_eq!(parsed, records);
+        Ok(())
     }
 
     #[test]
-    fn detect_yaml_and_reject_json_objects() {
+    fn detect_yaml_and_reject_json_objects() -> Result<(), Box<dyn std::error::Error>> {
         assert!(detect_stored_format(r#"{"key":"a","value":"b"}"#).is_err());
         assert_eq!(
-            detect_stored_format("secrets:\n  - key: a\n    value: b\n")
-                .expect("vault format test setup should succeed"),
+            detect_stored_format("secrets:\n  - key: a\n    value: b\n")?,
             VaultFormat::Yaml
         );
         assert_eq!(
-            detect_stored_format("- key: a\n  value: b\n")
-                .expect("vault format test setup should succeed"),
+            detect_stored_format("- key: a\n  value: b\n")?,
             VaultFormat::Yaml
         );
+        Ok(())
     }
 
     #[test]
-    fn format_from_path() {
+    fn format_from_path() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             VaultFormat::from_path("nook-events.yaml"),
             VaultFormat::Yaml
@@ -622,123 +621,103 @@ mod tests {
             VaultFormat::from_path("/data/user/nook-events.yaml"),
             VaultFormat::Yaml
         );
+        Ok(())
     }
 
     #[test]
-    fn detect_empty_defaults_to_yaml() {
-        assert_eq!(
-            detect_stored_format("").expect("vault format test setup should succeed"),
-            VaultFormat::Yaml
-        );
-        assert_eq!(
-            detect_stored_format("   \n  \n").expect("vault format test setup should succeed"),
-            VaultFormat::Yaml
-        );
+    fn detect_empty_defaults_to_yaml() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(detect_stored_format("")?, VaultFormat::Yaml);
+        assert_eq!(detect_stored_format("   \n  \n")?, VaultFormat::Yaml);
+        Ok(())
     }
 
     #[test]
-    fn detect_yaml_document_header() {
+    fn detect_yaml_document_header() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            detect_stored_format("%YAML 1.2\n---\nsecrets: []\n")
-                .expect("vault format test setup should succeed"),
+            detect_stored_format("%YAML 1.2\n---\nsecrets: []\n")?,
             VaultFormat::Yaml
         );
+        Ok(())
     }
 
     #[test]
-    fn detect_unrecognized_format_fails() {
+    fn detect_unrecognized_format_fails() -> Result<(), Box<dyn std::error::Error>> {
         assert!(detect_stored_format("not a vault file").is_err());
         assert!(detect_stored_format("key: value").is_err());
+        Ok(())
     }
 
     #[test]
-    fn empty_stored_records_roundtrip_yaml() {
-        let stored = serialize_stored(&[], VaultFormat::Yaml)
-            .expect("vault format test setup should succeed");
-        let parsed = deserialize_stored(stored.as_str(), VaultFormat::Yaml)
-            .expect("vault format test setup should succeed");
+    fn empty_stored_records_roundtrip_yaml() -> Result<(), Box<dyn std::error::Error>> {
+        let stored = serialize_stored(&[], VaultFormat::Yaml)?;
+        let parsed = deserialize_stored(stored.as_str(), VaultFormat::Yaml)?;
         assert!(parsed.is_empty());
-        assert!(
-            deserialize_stored_yaml("")
-                .expect("vault format test setup should succeed")
-                .is_empty()
-        );
-        assert!(
-            deserialize_stored_yaml("  \n")
-                .expect("vault format test setup should succeed")
-                .is_empty()
-        );
+        assert!(deserialize_stored_yaml("")?.is_empty());
+        assert!(deserialize_stored_yaml("  \n")?.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn yaml_requires_secrets_auth_joins_sections() {
+    fn yaml_requires_secrets_auth_joins_sections() -> Result<(), Box<dyn std::error::Error>> {
         let records = sample_records();
-        let wrapped =
-            serialize_stored_yaml(&records).expect("vault format test setup should succeed");
-        assert_eq!(
-            deserialize_stored_yaml(wrapped.as_str())
-                .expect("vault format test setup should succeed"),
-            records
-        );
+        let wrapped = serialize_stored_yaml(&records)?;
+        assert_eq!(deserialize_stored_yaml(wrapped.as_str())?, records);
 
-        let root = serde_yaml::to_string(&records).expect("vault format test setup should succeed");
+        let root = serde_yaml::to_string(&records)?;
         assert!(deserialize_stored_yaml(&root).is_err());
+        Ok(())
     }
 
     #[test]
-    fn serialize_stored_matches_format_specific_helpers() {
+    fn serialize_stored_matches_format_specific_helpers() -> Result<(), Box<dyn std::error::Error>>
+    {
         let records = sample_records();
         assert_eq!(
-            serialize_stored(&records, VaultFormat::Yaml)
-                .expect("vault format test setup should succeed")
-                .as_str(),
-            serialize_stored_yaml(&records)
-                .expect("vault format test setup should succeed")
-                .as_str()
+            serialize_stored(&records, VaultFormat::Yaml)?.as_str(),
+            serialize_stored_yaml(&records)?.as_str()
         );
+        Ok(())
     }
 
     #[test]
-    fn yaml_preserves_multiline_armored_value_exactly() {
+    fn yaml_preserves_multiline_armored_value_exactly() -> Result<(), Box<dyn std::error::Error>> {
         let records = sample_records();
-        let stored =
-            serialize_stored_yaml(&records).expect("vault format test setup should succeed");
-        let parsed = deserialize_stored_yaml(stored.as_str())
-            .expect("vault format test setup should succeed");
+        let stored = serialize_stored_yaml(&records)?;
+        let parsed = deserialize_stored_yaml(stored.as_str())?;
 
         assert_eq!(parsed[0].value, records[0].value);
         assert!(parsed[0].value.as_str().contains('\n'));
+        Ok(())
     }
 
     #[test]
-    fn yaml_accepts_root_sequence_format_detection_only() {
+    fn yaml_accepts_root_sequence_format_detection_only() -> Result<(), Box<dyn std::error::Error>>
+    {
         assert_eq!(
-            detect_stored_format("- key: a\n  value: b\n")
-                .expect("vault format test setup should succeed"),
+            detect_stored_format("- key: a\n  value: b\n")?,
             VaultFormat::Yaml
         );
         assert!(deserialize_stored_yaml("- key: a\n  value: b\n").is_err());
+        Ok(())
     }
 
     #[test]
-    fn serialize_empty_yaml_has_secrets_key() {
-        let stored = serialize_stored_yaml(&[]).expect("vault format test setup should succeed");
+    fn serialize_empty_yaml_has_secrets_key() -> Result<(), Box<dyn std::error::Error>> {
+        let stored = serialize_stored_yaml(&[])?;
         assert!(stored.as_str().contains("secrets:"));
         assert!(!stored.as_str().contains("auth:"));
-        assert!(
-            deserialize_stored_yaml(stored.as_str())
-                .expect("vault format test setup should succeed")
-                .is_empty()
-        );
+        assert!(deserialize_stored_yaml(stored.as_str())?.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn yaml_auth_section_uses_pk_id_secrets_key_and_members_key() {
+    fn yaml_auth_section_uses_pk_id_secrets_key_and_members_key()
+    -> Result<(), Box<dyn std::error::Error>> {
         use crate::multi_device::{DeviceIdentity, JoinRequest};
 
         let device_id = "abc123def4567890";
         let auth_id = format!("key_{}", "a".repeat(64));
-        let joiner = DeviceIdentity::generate().expect("vault format test setup should succeed");
+        let joiner = DeviceIdentity::generate()?;
         let join_request = JoinRequest {
             device_id: joiner.device_id().clone(),
             public_key: joiner.public_key(),
@@ -770,8 +749,7 @@ mod tests {
             },
         ];
 
-        let stored =
-            serialize_stored_yaml(&records).expect("vault format test setup should succeed");
+        let stored = serialize_stored_yaml(&records)?;
         assert!(stored.as_str().contains("secrets:"));
         assert!(stored.as_str().contains("auth:"));
         assert!(stored.as_str().contains("joins:"));
@@ -782,13 +760,13 @@ mod tests {
         assert!(!stored.as_str().contains("auth:\n- key:"));
         assert!(!stored.as_str().contains(device_id));
 
-        let parsed = deserialize_stored_yaml(stored.as_str())
-            .expect("vault format test setup should succeed");
+        let parsed = deserialize_stored_yaml(stored.as_str())?;
         assert_eq!(parsed.len(), 3);
+        Ok(())
     }
 
     #[test]
-    fn yaml_members_section_uses_pk_id_and_ciphertext() {
+    fn yaml_members_section_uses_pk_id_and_ciphertext() -> Result<(), Box<dyn std::error::Error>> {
         let auth_id = format!("key_{}", "c".repeat(64));
         let records = vec![StoredSecretRecord {
             key: sid(&format!("member:{auth_id}")),
@@ -799,36 +777,33 @@ mod tests {
             ),
         }];
 
-        let stored =
-            serialize_stored_yaml(&records).expect("vault format test setup should succeed");
+        let stored = serialize_stored_yaml(&records)?;
         assert!(stored.as_str().contains("members:"));
         assert!(stored.as_str().contains("pk_id:"));
         assert!(stored.as_str().contains("ciphertext:"));
         assert!(stored.as_str().contains(&auth_id));
         assert!(!stored.as_str().contains("member:"));
 
-        let parsed = deserialize_stored_yaml(stored.as_str())
-            .expect("vault format test setup should succeed");
+        let parsed = deserialize_stored_yaml(stored.as_str())?;
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), format!("member:{auth_id}"));
+        Ok(())
     }
 
     #[test]
-    fn yaml_password_entries_roundtrip_with_keys_unlock() {
+    fn yaml_password_entries_roundtrip_with_keys_unlock() -> Result<(), Box<dyn std::error::Error>>
+    {
         use crate::{
             attach_password_envelope_with_work_factor, multi_device::VaultKeys,
             resolve_keys_from_password,
         };
 
         let keys = VaultKeys {
-            secrets_key: crate::SymmetricKey::parse(&"d".repeat(64))
-                .expect("vault format test setup should succeed"),
-            members_key: crate::SymmetricKey::parse(&"e".repeat(64))
-                .expect("vault format test setup should succeed"),
+            secrets_key: crate::SymmetricKey::parse(&"d".repeat(64))?,
+            members_key: crate::SymmetricKey::parse(&"e".repeat(64))?,
         };
         let envelope =
-            attach_password_envelope_with_work_factor(&keys, "correct horse battery staple", 10)
-                .expect("vault format test setup should succeed");
+            attach_password_envelope_with_work_factor(&keys, "correct horse battery staple", 10)?;
         let entry = PasswordUnlockEntry {
             id: "pw-1".to_owned(),
             label: "test password".to_owned(),
@@ -842,48 +817,42 @@ mod tests {
             std::slice::from_ref(&entry),
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultVersionWrite::Version(1),
-        )
-        .expect("vault format test setup should succeed");
+        )?;
         assert!(!yaml.as_str().contains("unlock:"));
         assert!(yaml.as_str().contains("password_entries:"));
         assert!(!yaml.as_str().starts_with("password_envelope:"));
 
-        let parsed_entries = read_vault_password_entries(yaml.as_str())
-            .expect("vault format test setup should succeed");
+        let parsed_entries = read_vault_password_entries(yaml.as_str())?;
         assert_eq!(parsed_entries.len(), 1);
         let parsed_envelope = parsed_entries[0].envelope.clone();
         assert_eq!(parsed_envelope.version, envelope.version);
         assert_eq!(parsed_envelope.kdf, envelope.kdf);
         assert_eq!(
-            resolve_keys_from_password(&parsed_envelope, "correct horse battery staple")
-                .expect("vault format test setup should succeed"),
+            resolve_keys_from_password(&parsed_envelope, "correct horse battery staple")?,
             keys
         );
 
-        let read =
-            read_vault_unlock(yaml.as_str()).expect("vault format test setup should succeed");
+        let read = read_vault_unlock(yaml.as_str())?;
         assert_eq!(read, VaultUnlock::Keys);
+        Ok(())
     }
 
     #[test]
-    fn yaml_keys_unlock_is_default() {
+    fn yaml_keys_unlock_is_default() -> Result<(), Box<dyn std::error::Error>> {
         let records = sample_records();
-        let yaml = serialize_stored_yaml(&records).expect("vault format test setup should succeed");
+        let yaml = serialize_stored_yaml(&records)?;
         assert!(!yaml.as_str().contains("unlock:"));
         assert!(!yaml.as_str().contains("envelope:"));
 
-        let (parsed_records, unlock) = deserialize_stored_yaml_with_unlock(yaml.as_str())
-            .expect("vault format test setup should succeed");
+        let (parsed_records, unlock) = deserialize_stored_yaml_with_unlock(yaml.as_str())?;
         assert_eq!(parsed_records, records);
         assert_eq!(unlock, VaultUnlock::Keys);
-        assert_eq!(
-            read_vault_unlock(yaml.as_str()).expect("vault format test setup should succeed"),
-            VaultUnlock::Keys
-        );
+        assert_eq!(read_vault_unlock(yaml.as_str())?, VaultUnlock::Keys);
+        Ok(())
     }
 
     #[test]
-    fn store_id_roundtrip() {
+    fn store_id_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let records = sample_records();
         let yaml = serialize_stored_yaml_with_unlock(
             &records,
@@ -891,28 +860,21 @@ mod tests {
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultVersionWrite::Version(1),
-        )
-        .expect("vault format test setup should succeed");
+        )?;
         assert!(yaml.as_str().contains("store_id: store_SMypl8K0w9Y"));
         assert!(yaml.as_str().contains("schema_version: 1"));
         assert!(yaml.as_str().contains("vault_version: 1"));
+        assert_eq!(read_vault_schema_version(yaml.as_str())?, 1);
+        assert_eq!(read_vault_version(yaml.as_str())?, 1);
         assert_eq!(
-            read_vault_schema_version(yaml.as_str())
-                .expect("vault format test setup should succeed"),
-            1
-        );
-        assert_eq!(
-            read_vault_version(yaml.as_str()).expect("vault format test setup should succeed"),
-            1
-        );
-        assert_eq!(
-            read_vault_store_id(yaml.as_str()).expect("vault format test setup should succeed"),
+            read_vault_store_id(yaml.as_str())?,
             VaultStoreIdentity::Assigned("store_SMypl8K0w9Y".to_owned())
         );
+        Ok(())
     }
 
     #[test]
-    fn architecture_roundtrips_when_explicit() {
+    fn architecture_roundtrips_when_explicit() -> Result<(), Box<dyn std::error::Error>> {
         let architecture = VaultArchitecture {
             device_mode: crate::DeviceMode::AntiHacker,
             vault_type: crate::VaultType::Sentinel,
@@ -931,18 +893,15 @@ mod tests {
             VaultNameRef::Named("Team vault"),
             VaultVersionWrite::Version(7),
             &architecture,
-        )
-        .expect("vault format test setup should succeed");
+        )?;
         assert!(yaml.as_str().contains("architecture:"));
         assert!(yaml.as_str().contains("device_mode: anti-hacker"));
-        assert_eq!(
-            read_vault_architecture(yaml.as_str()).expect("vault format test setup should succeed"),
-            architecture
-        );
+        assert_eq!(read_vault_architecture(yaml.as_str())?, architecture);
+        Ok(())
     }
 
     #[test]
-    fn invalid_architecture_metadata_is_rejected() {
+    fn invalid_architecture_metadata_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
         let invalid = "\
 schema_version: 1
 store_id: store_SMypl8K0w9Y
@@ -954,10 +913,12 @@ architecture:
 secrets: []
 ";
         assert!(read_vault_architecture(invalid).is_err());
+        Ok(())
     }
 
     #[test]
-    fn unknown_architecture_mode_reports_stable_validation_key() {
+    fn unknown_architecture_mode_reports_stable_validation_key()
+    -> Result<(), Box<dyn std::error::Error>> {
         use std::error::Error;
 
         let invalid = "\
@@ -973,16 +934,18 @@ secrets: []
             .expect_err("vault format test should reject invalid input");
         let source = error
             .source()
-            .expect("vault format test setup should succeed")
+            .ok_or_else(|| std::io::Error::other("test source value must exist"))?
             .to_string();
         assert!(
             source.contains("errors.validation.unknown_device_mode:future-device-mode"),
             "{source}"
         );
+        Ok(())
     }
 
     #[test]
-    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml() {
+    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml()
+    -> Result<(), Box<dyn std::error::Error>> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = crate::deterministic_passkey_prf_input();
@@ -992,10 +955,8 @@ secrets: []
             &user_handle,
             &prf_input,
             &prf_output,
-        )
-        .expect("vault format test setup should succeed");
-        let local_record = crate::serialize_wrapped_device_identity(material.record())
-            .expect("vault format test setup should succeed");
+        )?;
+        let local_record = crate::serialize_wrapped_device_identity(material.record())?;
         assert!(local_record.contains("ciphertext"));
         assert!(local_record.contains("nonce"));
         assert!(local_record.contains("hkdfSalt"));
@@ -1018,8 +979,7 @@ secrets: []
             VaultNameRef::Named("Anti-hacker vault"),
             VaultVersionWrite::Version(1),
             &architecture,
-        )
-        .expect("vault format test setup should succeed");
+        )?;
         let stored = yaml.as_str();
 
         assert!(stored.contains("device_mode: anti-hacker"));
@@ -1031,17 +991,16 @@ secrets: []
         assert!(!stored.contains("nonce"));
         assert!(!stored.contains("ciphertext"));
         assert!(!stored.contains("AGE-SECRET-KEY-"));
+        Ok(())
     }
 
     #[test]
-    fn sentinel_share_records_roundtrip_in_dedicated_yaml_section() {
-        let keys = crate::generate_vault_keys().expect("vault format test setup should succeed");
-        let first =
-            crate::DeviceIdentity::generate().expect("vault format test setup should succeed");
-        let second =
-            crate::DeviceIdentity::generate().expect("vault format test setup should succeed");
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)
-            .expect("vault format test setup should succeed");
+    fn sentinel_share_records_roundtrip_in_dedicated_yaml_section()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         let architecture = VaultArchitecture::sentinel_personal(
             crate::DeviceMode::Standard,
             crate::SentinelPolicy {
@@ -1059,20 +1018,19 @@ secrets: []
             VaultNameRef::Named("Sentinel vault"),
             VaultVersionWrite::Version(1),
             &architecture,
-        )
-        .expect("vault format test setup should succeed");
+        )?;
         assert!(yaml.as_str().contains("sentinel_shares:"));
         assert!(!yaml.as_str().contains("auth:"));
         assert!(yaml.as_str().contains("secrets: []"));
 
-        let parsed =
-            deserialize_stored_yaml(yaml.as_str()).expect("vault format test setup should succeed");
+        let parsed = deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed, shares);
         assert!(parsed.iter().all(crate::is_sentinel_share_stored_record));
+        Ok(())
     }
 
     #[test]
-    fn vault_name_roundtrip_and_update() {
+    fn vault_name_roundtrip_and_update() -> Result<(), Box<dyn std::error::Error>> {
         let records = sample_records();
         let yaml = serialize_stored_yaml_with_unlock_and_name(
             &records,
@@ -1081,41 +1039,30 @@ secrets: []
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("  Personal vault  "),
             VaultVersionWrite::Version(1),
-        )
-        .expect("vault format test setup should succeed");
+        )?;
         assert!(yaml.as_str().contains("name: Personal vault"));
         assert_eq!(
-            read_vault_name(yaml.as_str()).expect("vault format test setup should succeed"),
+            read_vault_name(yaml.as_str())?,
             VaultName::Named("Personal vault".to_owned())
         );
-        assert_eq!(
-            deserialize_stored_yaml(yaml.as_str()).expect("vault format test setup should succeed"),
-            records
-        );
+        assert_eq!(deserialize_stored_yaml(yaml.as_str())?, records);
 
-        let renamed = set_vault_name(yaml.as_str(), "Work vault")
-            .expect("vault format test setup should succeed");
+        let renamed = set_vault_name(yaml.as_str(), "Work vault")?;
         assert_eq!(
-            read_vault_name(renamed.as_str()).expect("vault format test setup should succeed"),
+            read_vault_name(renamed.as_str())?,
             VaultName::Named("Work vault".to_owned())
         );
+        assert_eq!(read_vault_version(renamed.as_str())?, 1);
         assert_eq!(
-            read_vault_version(renamed.as_str()).expect("vault format test setup should succeed"),
-            1
-        );
-        assert_eq!(
-            read_vault_store_id(renamed.as_str()).expect("vault format test setup should succeed"),
+            read_vault_store_id(renamed.as_str())?,
             VaultStoreIdentity::Assigned("store_SMypl8K0w9Y".to_owned())
         );
-        assert_eq!(
-            deserialize_stored_yaml(renamed.as_str())
-                .expect("vault format test setup should succeed"),
-            records
-        );
+        assert_eq!(deserialize_stored_yaml(renamed.as_str())?, records);
+        Ok(())
     }
 
     #[test]
-    fn unsupported_schema_version_is_rejected() {
+    fn unsupported_schema_version_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
         let future = "schema_version: 99\nunlock:\n  type: keys\nsecrets: []\n";
         let err = deserialize_stored_yaml(future)
             .expect_err("vault format test should reject invalid input");
@@ -1126,10 +1073,12 @@ secrets: []
                 max_supported: 1
             }
         ));
+        Ok(())
     }
 
     #[test]
-    fn yaml_auth_envelopes_roundtrip_through_internal_json() {
+    fn yaml_auth_envelopes_roundtrip_through_internal_json()
+    -> Result<(), Box<dyn std::error::Error>> {
         let auth_id = format!("key_{}", "b".repeat(64));
         let record = auth_to_stored_record(AuthYamlRecord {
             pk_id: auth_id.clone(),
@@ -1139,20 +1088,17 @@ secrets: []
                 .to_owned(),
         });
 
-        let yaml = serialize_stored_yaml(std::slice::from_ref(&record))
-            .expect("vault format test setup should succeed");
+        let yaml = serialize_stored_yaml(std::slice::from_ref(&record))?;
         assert!(yaml.as_str().contains("secrets_key:"));
         assert!(yaml.as_str().contains("members_key:"));
         assert!(!yaml.as_str().contains("dek:"));
         assert!(!yaml.as_str().contains("mek:"));
 
-        let parsed =
-            deserialize_stored_yaml(yaml.as_str()).expect("vault format test setup should succeed");
+        let parsed = deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), auth_id);
 
-        let env = crate::parse_auth_envelopes(parsed[0].value.as_str())
-            .expect("vault format test setup should succeed");
+        let env = crate::parse_auth_envelopes(parsed[0].value.as_str())?;
         assert!(
             env.secrets_key
                 .as_str()
@@ -1163,5 +1109,6 @@ secrets: []
                 .as_str()
                 .contains("BEGIN AGE ENCRYPTED FILE")
         );
+        Ok(())
     }
 }

@@ -111,18 +111,21 @@ pub enum SyncProviderTarget {
 }
 ```
 
-Persisted compatibility shapes may still have optional fields because older
-JSON or browser storage may be incomplete. Do not let that optionality leak into
-the domain model; classify it while converting:
+Do not preserve optional persisted fields as a compatibility fallback. Current
+Nook schemas deserialize directly into required validated values or explicit
+state enums and reject incomplete data:
 
 ```rust
-let target = match non_empty(provider.github_pat.as_deref()) {
-    Some(pat) => SyncProviderTarget::Github(GithubSyncTarget {
-        repo: non_empty(provider.github_repo.as_deref()).unwrap_or(default_repo),
-        pat,
-    }),
-    None => SyncProviderTarget::Empty,
-};
+#[derive(Deserialize)]
+struct StoredGithubSyncTarget {
+    repo: GithubRepository,
+    pat: GithubPersonalAccessToken,
+}
+
+enum SyncProviderTarget {
+    Github(StoredGithubSyncTarget),
+    NotConfigured,
+}
 ```
 
 Required signed event data does not use compatibility optionality in the
@@ -234,6 +237,10 @@ whether a value exists.
 ## Validation
 
 - Add or update tests for each new enum state.
+- Make fallible Rust tests return `Result<(), E>` and use `?` for setup and
+  verification. Do not silence `unwrap_used` by mechanically replacing
+  `.unwrap()` with `.expect(...)`; reserve `expect` for a deliberately asserted
+  infallible local invariant.
 - Add deserialization tests proving required persisted values reject missing and
   empty input.
 - Run Clippy for all targets with `clippy::unwrap_used` denied and verify a

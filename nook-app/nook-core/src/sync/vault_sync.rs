@@ -202,100 +202,103 @@ mod tests {
     use crate::test_support::sample_vault_yaml as sample_yaml;
 
     #[test]
-    fn identical_content_is_unchanged() {
-        let yaml = sample_yaml(1, "store_AAAAAAAAAAA", "test");
+    fn identical_content_is_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+        let yaml = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(
-            compare_vault_sync(&yaml, &yaml).expect("vault sync test setup should succeed"),
+            compare_vault_sync(&yaml, &yaml)?,
             VaultSyncAction::Unchanged
         );
+        Ok(())
     }
 
     #[test]
-    fn empty_local_adopts_remote() {
-        let remote = sample_yaml(1, "store_AAAAAAAAAAA", "test");
+    fn empty_local_adopts_remote() -> Result<(), Box<dyn std::error::Error>> {
+        let remote = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(
-            compare_vault_sync("", &remote).expect("vault sync test setup should succeed"),
+            compare_vault_sync("", &remote)?,
             VaultSyncAction::AdoptRemote
         );
+        Ok(())
     }
 
     #[test]
-    fn empty_remote_pushes_local() {
-        let local = sample_yaml(1, "store_AAAAAAAAAAA", "test");
-        assert_eq!(
-            compare_vault_sync(&local, "").expect("vault sync test setup should succeed"),
-            VaultSyncAction::PushLocal
-        );
+    fn empty_remote_pushes_local() -> Result<(), Box<dyn std::error::Error>> {
+        let local = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
+        assert_eq!(compare_vault_sync(&local, "")?, VaultSyncAction::PushLocal);
+        Ok(())
     }
 
     #[test]
-    fn higher_remote_version_wins() {
-        let local = sample_yaml(1, "store_AAAAAAAAAAA", "a");
-        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "b");
+    fn higher_remote_version_wins() -> Result<(), Box<dyn std::error::Error>> {
+        let local = sample_yaml(1, "store_AAAAAAAAAAA", "a")?;
+        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
-            compare_vault_sync(&local, &remote).expect("vault sync test setup should succeed"),
+            compare_vault_sync(&local, &remote)?,
             VaultSyncAction::AdoptRemote
         );
+        Ok(())
     }
 
     #[test]
-    fn higher_local_version_pushes() {
-        let local = sample_yaml(5, "store_AAAAAAAAAAA", "a");
-        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
+    fn higher_local_version_pushes() -> Result<(), Box<dyn std::error::Error>> {
+        let local = sample_yaml(5, "store_AAAAAAAAAAA", "a")?;
+        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
-            compare_vault_sync(&local, &remote).expect("vault sync test setup should succeed"),
+            compare_vault_sync(&local, &remote)?,
             VaultSyncAction::PushLocal
         );
+        Ok(())
     }
 
     #[test]
-    fn same_version_different_content_is_conflict() {
-        let local = sample_yaml(2, "store_AAAAAAAAAAA", "a");
-        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
+    fn same_version_different_content_is_conflict() -> Result<(), Box<dyn std::error::Error>> {
+        let local = sample_yaml(2, "store_AAAAAAAAAAA", "a")?;
+        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
-            compare_vault_sync(&local, &remote).expect("vault sync test setup should succeed"),
+            compare_vault_sync(&local, &remote)?,
             VaultSyncAction::Conflict
         );
+        Ok(())
     }
 
     #[test]
-    fn common_hash_allows_single_successor_to_win() {
-        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base");
-        let local = sample_yaml(3, "store_AAAAAAAAAAA", "local");
+    fn common_hash_allows_single_successor_to_win() -> Result<(), Box<dyn std::error::Error>> {
+        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base")?;
+        let local = sample_yaml(3, "store_AAAAAAAAAAA", "local")?;
         let remote = base.clone();
         let base_hash = vault_content_hash(&base);
 
         assert_eq!(
-            compare_vault_sync_with_common(&local, &remote, CommonContentHash::Known(&base_hash))
-                .expect("vault sync test setup should succeed"),
+            compare_vault_sync_with_common(&local, &remote, CommonContentHash::Known(&base_hash))?,
             VaultSyncAction::PushLocal
         );
         assert_eq!(
-            compare_vault_sync_with_common(&remote, &local, CommonContentHash::Known(&base_hash))
-                .expect("vault sync test setup should succeed"),
+            compare_vault_sync_with_common(&remote, &local, CommonContentHash::Known(&base_hash))?,
             VaultSyncAction::AdoptRemote
         );
+        Ok(())
     }
 
     #[test]
-    fn common_hash_rejects_divergent_scalar_winner() {
-        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base");
-        let local = sample_yaml(4, "store_AAAAAAAAAAA", "local");
-        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "remote");
+    fn common_hash_rejects_divergent_scalar_winner() -> Result<(), Box<dyn std::error::Error>> {
+        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base")?;
+        let local = sample_yaml(4, "store_AAAAAAAAAAA", "local")?;
+        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "remote")?;
         let base_hash = vault_content_hash(&base);
 
         assert_eq!(
-            compare_vault_sync_with_common(&local, &remote, CommonContentHash::Known(&base_hash))
-                .expect("vault sync test setup should succeed"),
+            compare_vault_sync_with_common(&local, &remote, CommonContentHash::Known(&base_hash))?,
             VaultSyncAction::Conflict
         );
+        Ok(())
     }
 
     #[test]
-    fn store_id_mismatch_is_error() {
-        let local = sample_yaml(1, "store_AAAAAAAAAAA", "");
-        let remote = sample_yaml(1, "store_BBBBBBBBBBB", "");
+    fn store_id_mismatch_is_error() -> Result<(), Box<dyn std::error::Error>> {
+        let local = sample_yaml(1, "store_AAAAAAAAAAA", "")?;
+        let remote = sample_yaml(1, "store_BBBBBBBBBBB", "")?;
         assert!(compare_vault_sync(&local, &remote).is_err());
+        Ok(())
     }
 
     #[test]

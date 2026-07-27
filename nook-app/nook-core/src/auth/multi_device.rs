@@ -217,34 +217,29 @@ mod tests {
         parents: Vec<EventId>,
         operations: Vec<VaultOperation>,
         timestamp: &str,
-    ) -> VaultEvent {
-        VaultEvent::sign(
+    ) -> Result<VaultEvent, Box<dyn std::error::Error>> {
+        Ok(VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
                 store_id: store_id.clone(),
-                actor_id: signing
-                    .actor_id()
-                    .expect("multi device test setup should succeed"),
+                actor_id: signing.actor_id()?,
                 actor_signing_public_key: signing.public_key(),
                 parents,
-                created_at: IsoTimestamp::parse(timestamp)
-                    .expect("multi device test setup should succeed"),
+                created_at: IsoTimestamp::parse(timestamp)?,
                 key_epoch: EventId::from_sha256_hex(
                     crate::sha256_hex(store_id.as_str().as_bytes()).as_str(),
-                )
-                .expect("multi device test setup should succeed"),
+                )?,
                 operations,
             },
             signing.signing_key(),
-        )
-        .expect("multi device test setup should succeed")
+        )?)
     }
 
     #[test]
-    fn sentinel_event_materialization_retains_complete_public_roster() {
-        let identity = DeviceIdentity::generate().expect("multi device test setup should succeed");
-        let (signing, _) =
-            SigningIdentity::generate().expect("multi device test setup should succeed");
+    fn sentinel_event_materialization_retains_complete_public_roster()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let identity = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
         let operation = VaultOperation::SentinelParticipantEnrolled {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key(),
@@ -252,22 +247,18 @@ mod tests {
             label: MemberLabel::from_trusted("Owner".to_owned()),
         };
         let mut state = VaultMetaState::default();
-        apply_vault_meta_operation(&mut state, &operation, "2026-07-09T00:00:00Z")
-            .expect("multi device test setup should succeed");
+        apply_vault_meta_operation(&mut state, &operation, "2026-07-09T00:00:00Z")?;
         let participant = state
             .sentinel_participants
             .get(identity.device_id())
-            .expect("multi device test setup should succeed");
+            .ok_or_else(|| std::io::Error::other("sentinel participant must exist"))?;
         assert_eq!(participant.encryption_public_key, identity.public_key());
         assert_eq!(participant.signing_public_key, signing.public_key());
         assert_eq!(participant.label, "Owner");
 
-        let members_key =
-            crate::generate_symmetric_key().expect("multi device test setup should succeed");
-        let records = sentinel_member_records_from_public_roster(&state, &members_key)
-            .expect("multi device test setup should succeed");
-        let roster = crate::resolve_member_roster(&records, &members_key)
-            .expect("multi device test setup should succeed");
+        let members_key = crate::generate_symmetric_key()?;
+        let records = sentinel_member_records_from_public_roster(&state, &members_key)?;
+        let roster = crate::resolve_member_roster(&records, &members_key)?;
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].device_id, *identity.device_id());
 
@@ -278,30 +269,28 @@ mod tests {
                 label: MemberLabel::from_trusted("Renamed".to_owned()),
             },
             "2026-07-09T00:01:00Z",
-        )
-        .expect("multi device test setup should succeed");
+        )?;
         assert_eq!(
             state
                 .sentinel_participants
                 .get(identity.device_id())
-                .expect("multi device test setup should succeed")
+                .ok_or_else(|| std::io::Error::other("sentinel participant must exist"))?
                 .label,
             "Renamed"
         );
+        Ok(())
     }
 
     #[test]
-    fn extension_access_follows_approval_and_revocation_events() {
-        let owner = DeviceIdentity::generate().expect("multi device test setup should succeed");
-        let extension = DeviceIdentity::generate().expect("multi device test setup should succeed");
-        let (signing, _) =
-            SigningIdentity::generate().expect("multi device test setup should succeed");
-        let keys = crate::generate_vault_keys().expect("multi device test setup should succeed");
-        let auth = crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key)
-            .expect("multi device test setup should succeed");
-        let envelopes = crate::parse_auth_envelopes(auth.value.as_str())
-            .expect("multi device test setup should succeed");
-        let store_id = crate::generate_store_id().expect("multi device test setup should succeed");
+    fn extension_access_follows_approval_and_revocation_events()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let owner = DeviceIdentity::generate()?;
+        let extension = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
+        let keys = crate::generate_vault_keys()?;
+        let auth = crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key)?;
+        let envelopes = crate::parse_auth_envelopes(auth.value.as_str())?;
+        let store_id = crate::generate_store_id()?;
         let mut graph = EventGraph::new();
         let approval = signed_event(
             &signing,
@@ -323,34 +312,23 @@ mod tests {
                 },
             ],
             "2026-07-14T00:00:00Z",
-        );
-        let approval_id = approval
-            .id()
-            .expect("multi device test setup should succeed");
-        graph
-            .insert(approval, store_id.as_str())
-            .expect("multi device test setup should succeed");
+        )?;
+        let approval_id = approval.id()?;
+        graph.insert(approval, store_id.as_str())?;
 
-        assert!(
-            event_graph_has_active_device_access(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &signing.public_key(),
-            )
-            .expect("multi device test setup should succeed")
-        );
-        let (other_signing, _) =
-            SigningIdentity::generate().expect("multi device test setup should succeed");
-        assert!(
-            !event_graph_has_active_device_access(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &other_signing.public_key(),
-            )
-            .expect("multi device test setup should succeed")
-        );
+        assert!(event_graph_has_active_device_access(
+            &graph,
+            extension.device_id(),
+            &extension.public_key(),
+            &signing.public_key(),
+        )?);
+        let (other_signing, _) = SigningIdentity::generate()?;
+        assert!(!event_graph_has_active_device_access(
+            &graph,
+            extension.device_id(),
+            &extension.public_key(),
+            &other_signing.public_key(),
+        )?);
         assert!(
             event_graph_has_active_device_access(
                 &graph,
@@ -369,18 +347,14 @@ mod tests {
                 device_id: extension.device_id().clone(),
             }],
             "2026-07-14T00:01:00Z",
-        );
-        graph
-            .insert(revocation, store_id.as_str())
-            .expect("multi device test setup should succeed");
-        assert!(
-            !event_graph_has_active_device_access(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &signing.public_key(),
-            )
-            .expect("multi device test setup should succeed")
-        );
+        )?;
+        graph.insert(revocation, store_id.as_str())?;
+        assert!(!event_graph_has_active_device_access(
+            &graph,
+            extension.device_id(),
+            &extension.public_key(),
+            &signing.public_key(),
+        )?);
+        Ok(())
     }
 }

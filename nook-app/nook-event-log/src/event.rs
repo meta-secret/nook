@@ -347,11 +347,11 @@ mod tests {
     use crate::test_support::{actor, public_key, signing_key as test_signing_key};
     use ed25519_dalek::SigningKey;
 
-    fn empty_genesis_event(signing_key: &SigningKey) -> VaultEvent {
+    fn empty_genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
         build_genesis_import_event(
-            &crate::test_support::store(),
-            &actor(signing_key),
-            &crate::test_support::epoch(),
+            &crate::test_support::store()?,
+            &actor(signing_key)?,
+            &crate::test_support::epoch()?,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
@@ -360,45 +360,41 @@ mod tests {
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )
-        .expect("event test setup should succeed")
     }
 
     #[test]
-    fn genesis_event_has_no_parents() {
+    fn genesis_event_has_no_parents() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let event = empty_genesis_event(&signing_key);
-        event
-            .verify_signature(&signing_key.verifying_key())
-            .expect("event test setup should succeed");
+        let event = empty_genesis_event(&signing_key)?;
+        event.verify_signature(&signing_key.verifying_key())?;
         assert!(event.body.parents.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn schema_one_event_is_rejected() {
+    fn schema_one_event_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let mut event = empty_genesis_event(&signing_key);
+        let mut event = empty_genesis_event(&signing_key)?;
         event.body.schema_version = VaultEventSchemaVersion(1);
 
         let err = event
-            .validate_envelope(
-                &StoreId::parse("store_testtoken11").expect("event test setup should succeed"),
-            )
+            .validate_envelope(&StoreId::parse("store_testtoken11")?)
             .expect_err("event test should reject invalid input");
         assert!(matches!(
             err,
             EventError::UnsupportedSchemaVersion { version: 1 }
         ));
+        Ok(())
     }
 
     #[test]
-    fn event_id_changes_when_parents_change() {
+    fn event_id_changes_when_parents_change() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")
-            .expect("event test setup should succeed");
+        let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let mut body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: StoreId::parse("store_testtoken11").expect("event test setup should succeed"),
-            actor_id: actor(&signing_key),
+            store_id: StoreId::parse("store_testtoken11")?,
+            actor_id: actor(&signing_key)?,
             actor_signing_public_key: public_key(&signing_key),
             parents: vec![epoch.clone()],
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
@@ -415,33 +411,32 @@ mod tests {
                 },
             }],
         };
-        let id_a = body.event_id().expect("event test setup should succeed");
-        body.parents.push(
-            EventId::parse("sha256u:7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u4")
-                .expect("event test setup should succeed"),
-        );
+        let id_a = body.event_id()?;
+        body.parents.push(EventId::parse(
+            "sha256u:7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u4",
+        )?);
         body.parents.sort();
-        let id_b = body.event_id().expect("event test setup should succeed");
+        let id_b = body.event_id()?;
         assert_ne!(id_a, id_b);
+        Ok(())
     }
 
     #[test]
-    fn validate_envelope_rejects_wrong_store() {
+    fn validate_envelope_rejects_wrong_store() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let event = empty_genesis_event(&signing_key);
-        let wrong_store =
-            StoreId::parse("store_otherid0001").expect("event test setup should succeed");
+        let event = empty_genesis_event(&signing_key)?;
+        let wrong_store = StoreId::parse("store_otherid0001")?;
         assert!(event.validate_envelope(&wrong_store).is_err());
+        Ok(())
     }
 
     #[test]
-    fn event_storage_is_pretty_yaml_and_roundtrips() {
+    fn event_storage_is_pretty_yaml_and_roundtrips() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")
-            .expect("event test setup should succeed");
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11").expect("event test setup should succeed"),
-            &actor(&signing_key),
+            &StoreId::parse("store_testtoken11")?,
+            &actor(&signing_key)?,
             &epoch,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
@@ -462,13 +457,9 @@ mod tests {
             },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
-        )
-        .expect("event test setup should succeed");
+        )?;
 
-        let yaml = String::from_utf8(
-            serialize_event_storage_yaml(&event).expect("event test setup should succeed"),
-        )
-        .expect("event test setup should succeed");
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?)?;
         assert!(yaml.starts_with("schema_version: 2\n"));
         assert!(yaml.contains("operations:\n- type: vault-imported\n"));
         assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
@@ -477,12 +468,10 @@ mod tests {
         assert!(yaml.ends_with('\n'));
         assert!(!yaml.trim_start().starts_with('{'));
         assert_eq!(
-            parse_event_storage_bytes(yaml.as_bytes())
-                .expect("event test setup should succeed")
-                .id()
-                .expect("event test setup should succeed"),
-            event.id().expect("event test setup should succeed")
+            parse_event_storage_bytes(yaml.as_bytes())?.id()?,
+            event.id()?
         );
+        Ok(())
     }
 
     #[test]
@@ -512,10 +501,11 @@ mod tests {
     }
 
     #[test]
-    fn current_event_requires_actor_signing_key_field_and_value() {
+    fn current_event_requires_actor_signing_key_field_and_value()
+    -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let valid = empty_genesis_event(&signing_key);
-        let mut missing = serde_json::to_value(&valid).expect("event test setup should succeed");
+        let valid = empty_genesis_event(&signing_key)?;
+        let mut missing = serde_json::to_value(&valid)?;
         missing
             .as_object_mut()
             .expect("event object")
@@ -524,27 +514,24 @@ mod tests {
 
         let mut unavailable_body = valid.body;
         unavailable_body.actor_signing_public_key = DeviceSigningPublicKey::Unavailable;
-        let unavailable = VaultEvent::sign(unavailable_body, &signing_key)
-            .expect("event test setup should succeed");
+        let unavailable = VaultEvent::sign(unavailable_body, &signing_key)?;
         assert!(matches!(
             unavailable
-                .validate_envelope(
-                    &StoreId::parse("store_testtoken11").expect("event test setup should succeed")
-                )
+                .validate_envelope(&StoreId::parse("store_testtoken11")?)
                 .expect_err("event test should reject invalid input"),
             EventError::MissingActorSigningPublicKey
         ));
+        Ok(())
     }
 
     #[test]
-    fn password_envelope_event_storage_is_yaml_map() {
+    fn password_envelope_event_storage_is_yaml_map() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")
-            .expect("event test setup should succeed");
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: StoreId::parse("store_testtoken11").expect("event test setup should succeed"),
-            actor_id: actor(&signing_key),
+            store_id: StoreId::parse("store_testtoken11")?,
+            actor_id: actor(&signing_key)?,
             actor_signing_public_key: public_key(&signing_key),
             parents: vec![epoch.clone()],
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
@@ -561,12 +548,9 @@ mod tests {
                 },
             }],
         };
-        let event = VaultEvent::sign(body, &signing_key).expect("event test setup should succeed");
+        let event = VaultEvent::sign(body, &signing_key)?;
 
-        let yaml = String::from_utf8(
-            serialize_event_storage_yaml(&event).expect("event test setup should succeed"),
-        )
-        .expect("event test setup should succeed");
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?)?;
         assert!(yaml.contains("  envelope:\n"));
         assert!(yaml.contains("    version: 1\n"));
         assert!(yaml.contains("    kdf: scrypt\n"));
@@ -574,9 +558,7 @@ mod tests {
         assert!(yaml.contains("    ciphertext: age-ciphertext\n"));
         assert!(!yaml.contains("envelope_"));
         assert!(!yaml.contains('{'));
-        assert_eq!(
-            parse_event_storage_bytes(yaml.as_bytes()).expect("event test setup should succeed"),
-            event
-        );
+        assert_eq!(parse_event_storage_bytes(yaml.as_bytes())?, event);
+        Ok(())
     }
 }

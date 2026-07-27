@@ -219,54 +219,56 @@ mod tests {
     use crate::test_support::sample_vault_yaml as sample_yaml;
 
     #[test]
-    fn reconcile_push_local_copies_blob_and_bumps_revision() {
+    fn reconcile_push_local_copies_blob_and_bumps_revision()
+    -> Result<(), Box<dyn std::error::Error>> {
         let store_id = "store_AAAAAAAAAAA";
-        let local_blob = sample_yaml(3, store_id, "local");
+        let local_blob = sample_yaml(3, store_id, "local")?;
         let mut local = MemoryVaultStore::with_blob(local_blob);
         let mut remote = MemoryVaultStore::with_blob_and_revision("", "rev-0");
 
-        let action = reconcile_vault_stores(&mut local, &mut remote)
-            .expect("vault sync store test setup should succeed");
+        let action = reconcile_vault_stores(&mut local, &mut remote)?;
         assert_eq!(action, VaultSyncAction::PushLocal);
         assert_eq!(remote.blob(), local.blob());
         assert_eq!(remote.revision(), StoreRevisionRef::Version("rev-1"));
+        Ok(())
     }
 
     #[test]
-    fn reconcile_adopt_remote_updates_local() {
+    fn reconcile_adopt_remote_updates_local() -> Result<(), Box<dyn std::error::Error>> {
         let store_id = "store_AAAAAAAAAAA";
-        let remote_blob = sample_yaml(5, store_id, "remote");
-        let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local"));
+        let remote_blob = sample_yaml(5, store_id, "remote")?;
+        let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local")?);
         let mut remote = MemoryVaultStore::with_blob_and_revision(remote_blob.clone(), "rev-9");
 
-        let action = reconcile_vault_stores(&mut local, &mut remote)
-            .expect("vault sync store test setup should succeed");
+        let action = reconcile_vault_stores(&mut local, &mut remote)?;
         assert_eq!(action, VaultSyncAction::AdoptRemote);
         assert_eq!(local.blob(), remote_blob);
         assert_eq!(local.revision(), StoreRevisionRef::Version("rev-9"));
+        Ok(())
     }
 
     #[test]
-    fn reconcile_conflict_leaves_stores_unchanged() {
+    fn reconcile_conflict_leaves_stores_unchanged() -> Result<(), Box<dyn std::error::Error>> {
         let store_id = "store_AAAAAAAAAAA";
-        let local_blob = sample_yaml(2, store_id, "a");
-        let remote_blob = sample_yaml(2, store_id, "b");
+        let local_blob = sample_yaml(2, store_id, "a")?;
+        let remote_blob = sample_yaml(2, store_id, "b")?;
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action = reconcile_vault_stores(&mut local, &mut remote)
-            .expect("vault sync store test setup should succeed");
+        let action = reconcile_vault_stores(&mut local, &mut remote)?;
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
+        Ok(())
     }
 
     #[test]
-    fn reconcile_with_common_hash_preserves_divergent_branches() {
+    fn reconcile_with_common_hash_preserves_divergent_branches()
+    -> Result<(), Box<dyn std::error::Error>> {
         let store_id = "store_AAAAAAAAAAA";
-        let base_blob = sample_yaml(2, store_id, "base");
-        let local_blob = sample_yaml(4, store_id, "local");
-        let remote_blob = sample_yaml(3, store_id, "remote");
+        let base_blob = sample_yaml(2, store_id, "base")?;
+        let local_blob = sample_yaml(4, store_id, "local")?;
+        let remote_blob = sample_yaml(3, store_id, "remote")?;
         let base_hash = crate::vault_sync::vault_content_hash(&base_blob);
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
@@ -275,22 +277,22 @@ mod tests {
             &mut local,
             &mut remote,
             CommonContentHash::Known(&base_hash),
-        )
-        .expect("vault sync store test setup should succeed");
+        )?;
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
+        Ok(())
     }
 
     #[test]
-    fn fan_out_pushes_to_multiple_remotes() {
+    fn fan_out_pushes_to_multiple_remotes() -> Result<(), Box<dyn std::error::Error>> {
         let store_id = "store_AAAAAAAAAAA";
-        let local_blob = sample_yaml(4, store_id, "canonical");
+        let local_blob = sample_yaml(4, store_id, "canonical")?;
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remotes = HashMap::from([
             (
                 "github-a".to_owned(),
-                MemoryVaultStore::with_blob(sample_yaml(1, store_id, "stale-a")),
+                MemoryVaultStore::with_blob(sample_yaml(1, store_id, "stale-a")?),
             ),
             (
                 "github-b".to_owned(),
@@ -298,8 +300,7 @@ mod tests {
             ),
         ]);
 
-        let results = fan_out_sync(&mut local, &mut remotes)
-            .expect("vault sync store test setup should succeed");
+        let results = fan_out_sync(&mut local, &mut remotes)?;
         assert_eq!(results.len(), 2);
         assert!(
             results
@@ -308,5 +309,6 @@ mod tests {
         );
         assert_eq!(remotes["github-a"].blob(), local_blob);
         assert_eq!(remotes["github-b"].blob(), local_blob);
+        Ok(())
     }
 }

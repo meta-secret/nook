@@ -654,7 +654,8 @@ mod tests {
     }
 
     #[test]
-    fn encrypts_provider_credentials_and_peeks_outer_fields() {
+    fn encrypts_provider_credentials_and_peeks_outer_fields()
+    -> Result<(), Box<dyn std::error::Error>> {
         let code = encrypt_enrollment_payload(&github_payload(), "vault-pass-99", "Work laptop")
             .expect("encrypt enrollment");
         assert_eq!(
@@ -670,14 +671,13 @@ mod tests {
             "2026-06-23T12:00:00Z"
         );
 
-        let envelope =
-            parse_enrollment_envelope(&code).expect("enrollment test setup should succeed");
-        let serialized =
-            serde_json::to_string(&envelope).expect("enrollment test setup should succeed");
+        let envelope = parse_enrollment_envelope(&code)?;
+        let serialized = serde_json::to_string(&envelope)?;
         assert!(!serialized.contains("vault-pass-99"));
         assert!(!serialized.contains("github_pat_11AAAAbbbbCCCC"));
         assert!(!serialized.contains("Team vault"));
         assert!(!envelope.ct.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -695,63 +695,61 @@ mod tests {
     }
 
     #[test]
-    fn decrypts_roundtrip_payload() {
+    fn decrypts_roundtrip_payload() -> Result<(), Box<dyn std::error::Error>> {
         let input = github_payload();
-        let code = encrypt_enrollment_payload(&input, "vault-pass-99", "")
-            .expect("enrollment test setup should succeed");
-        let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99")
-            .expect("enrollment test setup should succeed");
+        let code = encrypt_enrollment_payload(&input, "vault-pass-99", "")?;
+        let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99")?;
         assert_eq!(decrypted.provider, input.provider);
         assert_eq!(decrypted.vault_name, "Team vault");
         assert_eq!(decrypted.entry_id, input.entry_id);
         assert_eq!(decrypted.issued_at, input.issued_at);
+        Ok(())
     }
 
     #[test]
-    fn rejects_wrong_password() {
-        let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")
-            .expect("enrollment test setup should succeed");
+    fn rejects_wrong_password() -> Result<(), Box<dyn std::error::Error>> {
+        let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")?;
         let err = decrypt_enrollment_payload(&code, "wrong-pass")
             .expect_err("enrollment test should reject invalid input");
         assert_eq!(
             err.to_string(),
             "Vault password does not decrypt this enrollment code."
         );
+        Ok(())
     }
 
     #[test]
-    fn rejects_malformed_codes() {
+    fn rejects_malformed_codes() -> Result<(), Box<dyn std::error::Error>> {
         let malformed = base64_url_encode(
-            serde_json::to_vec(&json!({"provider": {"type": "local"}}))
-                .expect("enrollment test setup should succeed")
-                .as_slice(),
+            serde_json::to_vec(&json!({"provider": {"type": "local"}}))?.as_slice(),
         );
         let err = decrypt_enrollment_payload(&malformed, "pw")
             .expect_err("enrollment test should reject invalid input");
         assert_eq!(err.to_string(), "Invalid enrollment code.");
         assert!(peek_enrollment_entry_id(&malformed).is_err());
+        Ok(())
     }
 
     #[test]
-    fn preserves_local_provider() {
+    fn preserves_local_provider() -> Result<(), Box<dyn std::error::Error>> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
             vault_name: "Local vault".to_owned(),
             entry_id: "entry-local".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "")
-            .expect("enrollment test setup should succeed");
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2")
-            .expect("enrollment test setup should succeed");
+        let code = encrypt_enrollment_payload(&input, "hunter2", "")?;
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2")?;
         assert_eq!(
             decrypted.provider,
             EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
         );
+        Ok(())
     }
 
     #[test]
-    fn shared_provider_grant_roundtrips_without_provider_credentials() {
+    fn shared_provider_grant_roundtrips_without_provider_credentials()
+    -> Result<(), Box<dyn std::error::Error>> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
                 "joiner@example.com".to_owned(),
@@ -761,10 +759,8 @@ mod tests {
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant")
-            .expect("enrollment test setup should succeed");
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2")
-            .expect("enrollment test setup should succeed");
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant")?;
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2")?;
         assert_eq!(decrypted.provider, input.provider);
         match decrypted.provider.data() {
             EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
@@ -776,17 +772,17 @@ mod tests {
             other => panic!("expected shared grant, got {other:?}"),
         }
 
-        let envelope =
-            parse_enrollment_envelope(&code).expect("enrollment test setup should succeed");
-        let serialized =
-            serde_json::to_string(&envelope).expect("enrollment test setup should succeed");
+        let envelope = parse_enrollment_envelope(&code)?;
+        let serialized = serde_json::to_string(&envelope)?;
         assert!(!serialized.contains("ya29."));
         assert!(!serialized.contains("github_pat_"));
         assert!(!serialized.contains("hunter2"));
+        Ok(())
     }
 
     #[test]
-    fn shared_typestate_wire_rejects_personal_oauth_provider_data() {
+    fn shared_typestate_wire_rejects_personal_oauth_provider_data()
+    -> Result<(), Box<dyn std::error::Error>> {
         let provider = EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
             "joiner@example.com".to_owned(),
             "shared-folder-abc".to_owned(),
@@ -794,8 +790,7 @@ mod tests {
         let value = serde_json::to_value(EnrollmentProviderPayload {
             provider,
             vault_name: "Shared vault".to_owned(),
-        })
-        .expect("enrollment test setup should succeed");
+        })?;
         assert_eq!(value["provider"]["onboardingType"], "shared-provider-grant");
         assert_eq!(
             value["provider"]["provider"]["type"],
@@ -816,10 +811,12 @@ mod tests {
             }
         });
         assert!(serde_json::from_value::<EnrollmentProviderPayload>(invalid).is_err());
+        Ok(())
     }
 
     #[test]
-    fn shared_icloud_target_roundtrips_without_provider_credentials() {
+    fn shared_icloud_target_roundtrips_without_provider_credentials()
+    -> Result<(), Box<dyn std::error::Error>> {
         let storage_target_id = concat!(
             "icloud-share-v1:",
             r#"{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}"#
@@ -833,17 +830,17 @@ mod tests {
             entry_id: "entry-icloud-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared iCloud")
-            .expect("enrollment test setup should succeed");
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2")
-            .expect("enrollment test setup should succeed");
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared iCloud")?;
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2")?;
         assert_eq!(decrypted.provider, input.provider);
         assert!(!code.contains("web-auth-token"));
         assert!(storage_target_id.contains("shortGuid"));
+        Ok(())
     }
 
     #[test]
-    fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() {
+    fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload()
+    -> Result<(), Box<dyn std::error::Error>> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
                 "google-drive".to_owned(),
@@ -860,14 +857,13 @@ mod tests {
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "correct horse", "OAuth entry")
-            .expect("enrollment test setup should succeed");
+        let code = encrypt_enrollment_payload(&input, "correct horse", "OAuth entry")?;
         assert!(!code.contains("ya29.secret"));
         assert!(!code.contains("refresh.secret"));
 
-        let decrypted = decrypt_enrollment_payload(&code, "correct horse")
-            .expect("enrollment test setup should succeed");
+        let decrypted = decrypt_enrollment_payload(&code, "correct horse")?;
         assert_eq!(decrypted.provider, input.provider);
+        Ok(())
     }
 
     #[test]

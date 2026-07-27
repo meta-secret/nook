@@ -78,16 +78,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generates_password_with_requested_length() {
+    fn generates_password_with_requested_length() -> Result<(), Box<dyn std::error::Error>> {
         let password = generate_password(&PasswordOptions {
             length: 24,
             lowercase: true,
             uppercase: true,
             numbers: true,
             symbols: false,
-        })
-        .expect("password test setup should succeed");
+        })?;
         assert_eq!(password.len(), 24);
+        Ok(())
     }
 
     #[test]
@@ -117,32 +117,31 @@ mod tests {
     }
 
     #[test]
-    fn uses_only_selected_charsets() {
+    fn uses_only_selected_charsets() -> Result<(), Box<dyn std::error::Error>> {
         let password = generate_password(&PasswordOptions {
             length: 32,
             lowercase: true,
             uppercase: false,
             numbers: true,
             symbols: false,
-        })
-        .expect("password test setup should succeed");
+        })?;
         assert!(
             password
                 .chars()
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_min_and_max_length() {
+    fn accepts_min_and_max_length() -> Result<(), Box<dyn std::error::Error>> {
         let min = generate_password(&PasswordOptions {
             length: MIN_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
-        .expect("password test setup should succeed");
+        })?;
         assert_eq!(min.len(), MIN_PASSWORD_LENGTH);
 
         let max = generate_password(&PasswordOptions {
@@ -151,9 +150,9 @@ mod tests {
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
-        .expect("password test setup should succeed");
+        })?;
         assert_eq!(max.len(), MAX_PASSWORD_LENGTH);
+        Ok(())
     }
 
     #[test]
@@ -170,15 +169,15 @@ mod tests {
     }
 
     #[test]
-    fn symbols_only_charset() {
+    fn symbols_only_charset() -> Result<(), Box<dyn std::error::Error>> {
         let password = generate_password(&PasswordOptions {
             length: 16,
             lowercase: false,
             uppercase: false,
             numbers: false,
             symbols: true,
-        })
-        .expect("password test setup should succeed");
+        })?;
         assert!(password.chars().all(|c| SYMBOLS.contains(c)));
+        Ok(())
     }
 }

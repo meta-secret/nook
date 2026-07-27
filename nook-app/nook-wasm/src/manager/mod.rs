@@ -46,7 +46,9 @@ use crate::storage::{
     indexed_db::load_from_indexed_db,
 };
 use crate::types::records_to_vec;
-use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
+use crate::{
+    NookJoinRequest, NookSecretRecord, NookStringValue, NookVaultArchitecture, NookVaultMember,
+};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -617,10 +619,10 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(getter, js_name = vaultName)]
-    pub fn vault_name(&self) -> wasm_bindgen::JsValue {
+    pub fn vault_name(&self) -> NookStringValue {
         match &self.vault.vault_name {
-            VaultNameState::Unnamed => wasm_bindgen::JsValue::UNDEFINED,
-            VaultNameState::Named(name) => wasm_bindgen::JsValue::from_str(name),
+            VaultNameState::Unnamed => NookStringValue::unavailable(),
+            VaultNameState::Named(name) => NookStringValue::from_value(name),
         }
     }
 

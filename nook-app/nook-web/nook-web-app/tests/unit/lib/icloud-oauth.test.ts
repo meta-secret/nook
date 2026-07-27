@@ -45,13 +45,9 @@ describe('icloud-oauth', () => {
     ).toEqual({
       preset: 'icloud',
       accessToken: 'ck-web-auth-token',
-      fileId: undefined,
-      fileName: undefined,
       accountEmail: 'Apple User',
+      driveMode: 'private',
       iCloudMode: 'private',
-      iCloudShareTarget: undefined,
-      refreshToken: undefined,
-      expiresAt: undefined,
     })
   })
 

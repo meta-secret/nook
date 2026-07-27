@@ -33,6 +33,7 @@ pub use manager::{
     NookExternalEventLogRecords, NookVaultManager,
 };
 pub use storage::local_folder::NookLocalFolderConfig;
+use types::NookStringValueRef;
 pub use types::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservation, NookAuthenticationPageObservations,
@@ -48,12 +49,13 @@ pub use types::{
     NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
-    NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
-    NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultMember,
-    NookVaultRecoveryDevice, NookVaultRecoveryOptions, NookVaultSecretAccessDiagnostic,
-    NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSavePlan,
+    NookStringValue, NookTotpCode, NookValueState, NookVaultAccessReport, NookVaultArchitecture,
+    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
+    NookVaultMember, NookVaultRecoveryDevice, NookVaultRecoveryOptions,
+    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
+    NookWebsiteLoginSavePlan,
 };
-use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
@@ -138,18 +140,18 @@ pub fn classify_authentication_outcome(
 #[wasm_bindgen(js_name = parseAppLocale)]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn parse_app_locale(value: JsValue) -> JsValue {
-    let locale = match value.as_string() {
-        Some(value) => nook_core::parse_app_locale(&value),
-        None => nook_core::AppLocale::Unsupported,
+pub fn parse_app_locale(value: NookStringValue) -> NookStringValue {
+    let locale = match value.as_ref() {
+        NookStringValueRef::Value(value) => nook_core::parse_app_locale(value),
+        NookStringValueRef::Unavailable => nook_core::AppLocale::Unsupported,
     };
-    app_locale_to_js(locale)
+    app_locale_value(locale)
 }
 
 #[wasm_bindgen(js_name = resolveAppLocaleFromTag)]
 #[must_use]
-pub fn resolve_app_locale_from_tag(tag: &str) -> JsValue {
-    app_locale_to_js(nook_core::resolve_app_locale_from_tag(tag))
+pub fn resolve_app_locale_from_tag(tag: &str) -> NookStringValue {
+    app_locale_value(nook_core::resolve_app_locale_from_tag(tag))
 }
 
 #[wasm_bindgen(js_name = resolveAppLocaleFromTags)]
@@ -159,12 +161,12 @@ pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
     nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
 }
 
-fn app_locale_to_js(locale: nook_core::AppLocale) -> JsValue {
+fn app_locale_value(locale: nook_core::AppLocale) -> NookStringValue {
     match locale {
         nook_core::AppLocale::English | nook_core::AppLocale::Russian => {
-            JsValue::from_str(locale.code())
+            NookStringValue::from_value(locale.code())
         }
-        nook_core::AppLocale::Unsupported => JsValue::UNDEFINED,
+        nook_core::AppLocale::Unsupported => NookStringValue::unavailable(),
     }
 }
 
@@ -657,23 +659,21 @@ pub fn update_provider_sync_metadata(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
     provider_id: &str,
     vault_yaml: &str,
-    revision: wasm_bindgen::JsValue,
-    manager_store_id: wasm_bindgen::JsValue,
+    revision: NookStringValue,
+    manager_store_id: NookStringValue,
     synced_at: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-    let revision = revision.as_string();
-    let manager_store_id = manager_store_id.as_string();
     snapshot.providers = nook_core::update_provider_sync_metadata(
         &snapshot.providers,
         provider_id,
         vault_yaml,
-        match revision.as_deref() {
-            Some(value) => nook_core::ProviderSyncRevisionRef::Revision(value),
-            None => nook_core::ProviderSyncRevisionRef::Unreported,
+        match revision.as_ref() {
+            NookStringValueRef::Value(value) => nook_core::ProviderSyncRevisionRef::Revision(value),
+            NookStringValueRef::Unavailable => nook_core::ProviderSyncRevisionRef::Unreported,
         },
-        match manager_store_id.as_deref() {
-            Some(value) => nook_core::ManagerStoreScopeRef::Store(value),
-            None => nook_core::ManagerStoreScopeRef::Unscoped,
+        match manager_store_id.as_ref() {
+            NookStringValueRef::Value(value) => nook_core::ManagerStoreScopeRef::Store(value),
+            NookStringValueRef::Unavailable => nook_core::ManagerStoreScopeRef::Unscoped,
         },
         synced_at,
     );
@@ -1178,32 +1178,32 @@ pub fn normalize_enrollment_code(code: &str) -> String {
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryId)]
 #[must_use]
-pub fn peek_enrollment_entry_id(code: &str) -> wasm_bindgen::JsValue {
+pub fn peek_enrollment_entry_id(code: &str) -> NookStringValue {
     let code = nook_core::normalize_enrollment_code(code);
-    nook_core::peek_enrollment_entry_id(&code).map_or(wasm_bindgen::JsValue::UNDEFINED, |value| {
-        wasm_bindgen::JsValue::from_str(&value)
-    })
+    match nook_core::peek_enrollment_entry_id(&code) {
+        Ok(value) => NookStringValue::from_value(value),
+        Err(_) => NookStringValue::unavailable(),
+    }
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryLabel)]
 #[must_use]
-pub fn peek_enrollment_entry_label(code: &str) -> wasm_bindgen::JsValue {
+pub fn peek_enrollment_entry_label(code: &str) -> NookStringValue {
     let code = nook_core::normalize_enrollment_code(code);
     match nook_core::peek_enrollment_entry_label(&code) {
-        Ok(nook_core::EnrollmentEntryLabel::Labeled(label)) => {
-            wasm_bindgen::JsValue::from_str(&label)
-        }
-        Ok(nook_core::EnrollmentEntryLabel::Unlabeled) | Err(_) => wasm_bindgen::JsValue::UNDEFINED,
+        Ok(nook_core::EnrollmentEntryLabel::Labeled(label)) => NookStringValue::from_value(label),
+        Ok(nook_core::EnrollmentEntryLabel::Unlabeled) | Err(_) => NookStringValue::unavailable(),
     }
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentIssuedAt)]
 #[must_use]
-pub fn peek_enrollment_issued_at(code: &str) -> wasm_bindgen::JsValue {
+pub fn peek_enrollment_issued_at(code: &str) -> NookStringValue {
     let code = nook_core::normalize_enrollment_code(code);
-    nook_core::peek_enrollment_issued_at(&code).map_or(wasm_bindgen::JsValue::UNDEFINED, |value| {
-        wasm_bindgen::JsValue::from_str(&value)
-    })
+    match nook_core::peek_enrollment_issued_at(&code) {
+        Ok(value) => NookStringValue::from_value(value),
+        Err(_) => NookStringValue::unavailable(),
+    }
 }
 
 #[wasm_bindgen]

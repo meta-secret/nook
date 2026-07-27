@@ -378,19 +378,12 @@ mod tests {
 
     use super::*;
 
-    fn build_zip(name: &str, data: &[u8]) -> Vec<u8> {
+    fn build_zip(name: &str, data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        writer
-            .start_file(name, options)
-            .expect("proton pass import test setup should succeed");
-        writer
-            .write_all(data)
-            .expect("proton pass import test setup should succeed");
-        writer
-            .finish()
-            .expect("proton pass import test setup should succeed")
-            .into_inner()
+        writer.start_file(name, options)?;
+        writer.write_all(data)?;
+        Ok(writer.finish()?.into_inner())
     }
 
     fn export_json() -> &'static str {
@@ -452,9 +445,9 @@ mod tests {
     }
 
     #[test]
-    fn converts_zip_logins_and_notes_and_counts_unsupported_items() {
-        let plan = plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes()))
-            .expect("proton pass import test setup should succeed");
+    fn converts_zip_logins_and_notes_and_counts_unsupported_items()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes())?)?;
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(plan.items.len(), 3);
@@ -487,43 +480,46 @@ mod tests {
                 note: "Keep offline\n\n## Proton Pass\n- vault: Work\n- state: trashed".to_owned(),
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_decrypted_json_and_uses_email_as_username_fallback() {
+    fn accepts_decrypted_json_and_uses_email_as_username_fallback()
+    -> Result<(), Box<dyn std::error::Error>> {
         let json = export_json().replace(r#""itemUsername":"alice""#, r#""itemUsername":"""#);
-        let plan = plan_proton_pass_import(json.as_bytes())
-            .expect("proton pass import test setup should succeed");
+        let plan = plan_proton_pass_import(json.as_bytes())?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
         assert_eq!(login.username, "alice@example.com");
         assert!(!login.notes.contains("- email:"));
+        Ok(())
     }
 
     #[test]
-    fn preserves_legacy_content_username() {
+    fn preserves_legacy_content_username() -> Result<(), Box<dyn std::error::Error>> {
         let json = export_json().replace(
             r#""itemUsername":"alice""#,
             r#""itemUsername":"","username":"legacy-alice""#,
         );
-        let plan = plan_proton_pass_import(json.as_bytes())
-            .expect("proton pass import test setup should succeed");
+        let plan = plan_proton_pass_import(json.as_bytes())?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
         assert_eq!(login.username, "legacy-alice");
         assert!(login.notes.contains("- email: alice@example.com"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_encrypted_missing_invalid_and_oversized_exports() {
-        let encrypted = build_zip("Proton Pass/data.pgp", b"encrypted");
+    fn rejects_encrypted_missing_invalid_and_oversized_exports()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let encrypted = build_zip("Proton Pass/data.pgp", b"encrypted")?;
         assert!(matches!(
             plan_proton_pass_import(&encrypted),
             Err(ProtonPassImportError::EncryptedExport)
         ));
-        let missing = build_zip("other.json", b"{}");
+        let missing = build_zip("other.json", b"{}")?;
         assert!(matches!(
             plan_proton_pass_import(&missing),
             Err(ProtonPassImportError::MissingDataFile)
@@ -537,5 +533,6 @@ mod tests {
             plan_proton_pass_import(&oversized),
             Err(ProtonPassImportError::ExportTooLarge)
         ));
+        Ok(())
     }
 }

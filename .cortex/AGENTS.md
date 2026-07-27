@@ -68,8 +68,13 @@ not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
 Authored Rust must not call `.unwrap()`. Production paths propagate or classify
-failure; tests use `Result`/`?` or an invariant-specific `expect`. Workspace
-Clippy configuration enforces this rule across all targets.
+failure. Rust tests that perform fallible setup or verification return
+`Result<(), E>` and propagate with `?`; converting `.unwrap()` mechanically to
+`.expect(...)` is forbidden. Keep `expect` only when the test is deliberately
+asserting an infallible local construction and the panic itself documents that
+specific invariant. Workspace Clippy configuration enforces `unwrap_used`
+across all targets, and reviews treat repetitive test `expect` chains as
+refactoring debt rather than acceptable test setup.
 
 ## ⛔ Non-negotiable: squash merge every PR
 

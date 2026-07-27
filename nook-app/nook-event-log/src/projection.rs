@@ -449,12 +449,12 @@ mod tests {
         VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store(),
-                actor_id: actor(signing_key),
+                store_id: store()?,
+                actor_id: actor(signing_key)?,
                 actor_signing_public_key: public_key(signing_key),
                 parents,
                 created_at: ts("2026-06-28T00:00:00Z"),
-                key_epoch: epoch(),
+                key_epoch: epoch()?,
                 operations: vec![operation],
             },
             signing_key,
@@ -486,11 +486,11 @@ mod tests {
 
     const STORE: &str = "store_testtoken11";
 
-    fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventId {
+    fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventResult<EventId> {
         let event = build_genesis_import_event(
-            &store(),
-            &actor(signing_key),
-            &epoch(),
+            &store()?,
+            &actor(signing_key)?,
+            &epoch()?,
             GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
@@ -498,28 +498,25 @@ mod tests {
             },
             &ts("2026-06-28T00:00:00Z"),
             signing_key,
-        )
-        .expect("projection test setup should succeed");
-        let id = event.id().expect("projection test setup should succeed");
-        graph
-            .insert(event, STORE)
-            .expect("projection test setup should succeed");
-        id
+        )?;
+        let id = event.id()?;
+        graph.insert(event, STORE)?;
+        Ok(id)
     }
 
     fn secret_created(
         parents: Vec<EventId>,
         secret_id: &str,
         signing_key: &SigningKey,
-    ) -> VaultEvent {
+    ) -> EventResult<VaultEvent> {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(signing_key),
+            store_id: store()?,
+            actor_id: actor(signing_key)?,
             actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretCreated {
                 secret: EncryptedSecretPayload {
                     id: sid(secret_id),
@@ -534,36 +531,33 @@ mod tests {
                 },
             }],
         };
-        VaultEvent::sign(body, signing_key).expect("projection test setup should succeed")
+        VaultEvent::sign(body, signing_key)
     }
 
     #[test]
-    fn concurrent_secret_additions_both_survive() {
+    fn concurrent_secret_additions_both_survive() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
-        let a = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
-        let b = secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key);
-        graph
-            .insert(a, STORE)
-            .expect("projection test setup should succeed");
-        graph
-            .insert(b, STORE)
-            .expect("projection test setup should succeed");
+        let a = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
+        let b = secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key)?;
+        graph.insert(a, STORE)?;
+        graph.insert(b, STORE)?;
 
-        let projection =
-            project_vault(&graph, STORE).expect("projection test setup should succeed");
+        let projection = project_vault(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
         assert!(!projection.has_blocking_conflicts());
+        Ok(())
     }
 
     #[test]
-    fn fingerprint_backfill_updates_projection_without_changing_ciphertext() -> EventResult<()> {
+    fn fingerprint_backfill_updates_projection_without_changing_ciphertext()
+    -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let created = secret_created(vec![genesis_id], "secret_fingerprint1", &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let created = secret_created(vec![genesis_id], "secret_fingerprint1", &signing_key)?;
         let created_id = created.id()?;
         graph.insert(created, STORE)?;
 
@@ -571,12 +565,12 @@ mod tests {
             SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)));
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
             actor_signing_public_key: public_key(&signing_key),
             parents: vec![created_id],
             created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretFingerprintsBackfilled {
                 fingerprints: vec![SecretFingerprintAssignment {
                     secret_id: sid("secret_fingerprint1"),
@@ -591,7 +585,7 @@ mod tests {
         let projected = projection
             .secrets
             .get(&sid("secret_fingerprint1"))
-            .expect("projection test setup should succeed");
+            .ok_or_else(|| std::io::Error::other("backfilled secret must be projected"))?;
         assert_eq!(projected.fingerprint, fingerprint);
         assert_eq!(
             projected.record.value.as_str(),
@@ -601,90 +595,73 @@ mod tests {
     }
 
     #[test]
-    fn causal_delete_hides_secret() {
+    fn causal_delete_hides_secret() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
-        let created_id = created.id().expect("projection test setup should succeed");
-        graph
-            .insert(created, STORE)
-            .expect("projection test setup should succeed");
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
+        let created_id = created.id()?;
+        graph.insert(created, STORE)?;
 
         let delete_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
             actor_signing_public_key: public_key(&signing_key),
             parents: vec![created_id],
             created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretDeleted {
                 secret_id: sid("secret_aaaaaaaaaaa"),
             }],
         };
-        let deleted = VaultEvent::sign(delete_body, &signing_key)
-            .expect("projection test setup should succeed");
-        graph
-            .insert(deleted, STORE)
-            .expect("projection test setup should succeed");
+        let deleted = VaultEvent::sign(delete_body, &signing_key)?;
+        graph.insert(deleted, STORE)?;
 
-        let projection =
-            project_vault(&graph, STORE).expect("projection test setup should succeed");
+        let projection = project_vault(&graph, STORE)?;
         assert!(projection.live_secrets(&graph).is_empty());
+        Ok(())
     }
 
     #[test]
-    fn concurrent_replacements_create_conflict_group() {
+    fn concurrent_replacements_create_conflict_group() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key);
-        let base_id = base.id().expect("projection test setup should succeed");
-        graph
-            .insert(base, STORE)
-            .expect("projection test setup should succeed");
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key)?;
+        let base_id = base.id()?;
+        graph.insert(base, STORE)?;
 
-        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")
-            .expect("projection test setup should succeed");
-        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")
-            .expect("projection test setup should succeed");
-        graph
-            .insert(r1, STORE)
-            .expect("projection test setup should succeed");
-        graph
-            .insert(r2, STORE)
-            .expect("projection test setup should succeed");
+        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
+        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
+        graph.insert(r1, STORE)?;
+        graph.insert(r2, STORE)?;
 
-        let projection =
-            project_vault(&graph, STORE).expect("projection test setup should succeed");
+        let projection = project_vault(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
         assert!(
             projection
                 .replacement_conflicts
                 .contains_key(&sid("secret_original1"))
         );
+        Ok(())
     }
 
     #[test]
-    fn projection_is_replay_invariant() {
+    fn projection_is_replay_invariant() -> Result<(), Box<dyn std::error::Error>> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        graph
-            .insert(
-                secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key),
-                STORE,
-            )
-            .expect("projection test setup should succeed");
-        graph
-            .insert(
-                secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key),
-                STORE,
-            )
-            .expect("projection test setup should succeed");
-        assert_projection_permutation_invariant(&graph, STORE)
-            .expect("projection test setup should succeed");
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        graph.insert(
+            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?,
+            STORE,
+        )?;
+        graph.insert(
+            secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key)?,
+            STORE,
+        )?;
+        assert_projection_permutation_invariant(&graph, STORE)?;
+        Ok(())
     }
 
     #[test]
@@ -697,9 +674,9 @@ mod tests {
             envelope: password_envelope("imported"),
         };
         let event = build_genesis_import_event(
-            &store(),
-            &actor(&signing_key),
-            &epoch(),
+            &store()?,
+            &actor(&signing_key)?,
+            &epoch()?,
             GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
@@ -720,7 +697,7 @@ mod tests {
     fn password_entry_events_add_rotate_and_remove() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
         let add = signed_operation(
             &signing_key,
@@ -777,8 +754,8 @@ mod tests {
     fn secret_conflict_resolved_picks_winner() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key)?;
         let base_id = base.id()?;
         graph.insert(base, STORE)?;
 
@@ -789,12 +766,12 @@ mod tests {
 
         let resolve_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
             actor_signing_public_key: public_key(&signing_key),
             parents: graph.heads(),
             created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretConflictResolved {
                 old_id: sid("secret_original1"),
                 chosen_secret_id: sid("secret_newaaaaaaa"),
@@ -816,21 +793,21 @@ mod tests {
     fn vault_cleared_empties_projection() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
         graph.insert(
-            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key),
+            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?,
             STORE,
         )?;
         assert_eq!(project_vault(&graph, STORE)?.live_secrets(&graph).len(), 1);
 
         let clear_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
             actor_signing_public_key: public_key(&signing_key),
             parents: graph.heads(),
             created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::VaultCleared],
         };
         let cleared = VaultEvent::sign(clear_body, &signing_key)?;
@@ -848,26 +825,28 @@ mod tests {
     fn concurrent_deletes_tombstone_secret() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
         let created_id = created.id()?;
         graph.insert(created, STORE)?;
 
-        let delete_body = |parents: Vec<EventId>| VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
-            actor_signing_public_key: public_key(&signing_key),
-            parents,
-            created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch(),
-            operations: vec![VaultOperation::SecretDeleted {
-                secret_id: sid("secret_aaaaaaaaaaa"),
-            }],
+        let delete_body = |parents: Vec<EventId>| -> EventResult<VaultEventBody> {
+            Ok(VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store()?,
+                actor_id: actor(&signing_key)?,
+                actor_signing_public_key: public_key(&signing_key),
+                parents,
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch()?,
+                operations: vec![VaultOperation::SecretDeleted {
+                    secret_id: sid("secret_aaaaaaaaaaa"),
+                }],
+            })
         };
 
-        let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()]), &signing_key)?;
-        let d2 = VaultEvent::sign(delete_body(vec![created_id]), &signing_key)?;
+        let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()])?, &signing_key)?;
+        let d2 = VaultEvent::sign(delete_body(vec![created_id])?, &signing_key)?;
         graph.insert(d1, STORE)?;
         graph.insert(d2, STORE)?;
 
@@ -880,22 +859,20 @@ mod tests {
     fn concurrent_security_rotations_surface_conflict() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
         let revoke = signed_operation(
             &signing_key,
             vec![genesis_id.clone()],
             VaultOperation::DeviceRevoked {
-                device_id: DeviceId::parse("abcd1234ef567890")
-                    .expect("projection test setup should succeed"),
+                device_id: DeviceId::parse("abcd1234ef567890")?,
             },
         )?;
         let rotate = signed_operation(
             &signing_key,
             vec![genesis_id],
             VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001")
-                    .expect("projection test setup should succeed"),
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
                 envelope: password_envelope_fixture("x"),
             },
         )?;
@@ -912,11 +889,11 @@ mod tests {
     fn three_way_fork_projection_is_replay_invariant() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
-        let a = secret_created(vec![genesis_id.clone()], "secret_forkaaaaaa", &signing_key);
-        let b = secret_created(vec![genesis_id.clone()], "secret_forkbbbbbb", &signing_key);
-        let c = secret_created(vec![genesis_id], "secret_forkcccccc", &signing_key);
+        let a = secret_created(vec![genesis_id.clone()], "secret_forkaaaaaa", &signing_key)?;
+        let b = secret_created(vec![genesis_id.clone()], "secret_forkbbbbbb", &signing_key)?;
+        let c = secret_created(vec![genesis_id], "secret_forkcccccc", &signing_key)?;
         graph.insert(a, STORE)?;
         graph.insert(b, STORE)?;
         graph.insert(c, STORE)?;
