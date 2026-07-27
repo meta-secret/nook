@@ -501,8 +501,13 @@ Kata-backed execution Pods:
   Git-patch artifacts;
 - a four-replica `kata-dragonball` pool gives every task a separate guest
   kernel and one embedded Codex thread;
-- narrow coordinator, authentication, and publication brokers keep Neo4j,
-  Codex, and GitHub credentials out of the repository-facing worker;
+- Hive treats its Codex agents as trusted operators and gives Main-repair
+  agents a repository-scoped GitHub credential for standard `git` and `gh`
+  delivery; custom publication brokers or mailbox protocols must not be added
+  solely to hide that credential from the agent;
+- the coordinator and authentication services remain only where they provide
+  durable coordination or Codex-session lifecycle behavior, not as a general
+  distrust boundary around the agent;
 - the worker image carries the native Rust, Bun, Node, and Task toolchain, so
   mandatory `task format` runs directly in the Kata guest without any Docker
   daemon or socket; and

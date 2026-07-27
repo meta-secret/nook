@@ -67,39 +67,14 @@ again. The failed Main SHA is the idempotency key, so retries do not duplicate
 work. It requires the referenced Actions run to be the exact
 `meta-secret/nook` Main push on `main` at that SHA before enqueueing, so a
 successful rerun makes a stale incident a no-op. A repository-scoped
-GitHub credential lives only in a
-separate publication broker. Codex can request deterministic branch
-publication, PR inspection, targeted review replies and resolution, exact-head
-squash merge, and resulting Main verification, but cannot read the credential
-or invoke arbitrary GitHub APIs. Review, comment, and repair-PR history is
-paginated, as are exact-head check runs. Automated-reviewer comments remain
-actionable, outdated threads do not block delivery, and resolution requires the
-task's authenticated reply marker to be visible first. A short Git-ref lock
-serializes the base recheck and merge; stale locks self-expire.
-Before Codex starts, the worker creates that capability only for Main-repair
-tasks and exposes no capability path to any other task kind. The capability is
-a private filesystem mailbox beneath the task's bound `/workspace`. Each
-`hive github` command publishes one unique atomic request file and waits for its
-matching create-new response; the worker relay preconnects one fresh typed
-broker stream before consuming that request. The relay signs the response with
-an ephemeral Ed25519 key over the request ID, exact request digest, and response,
-and the sandbox receives only its verification key, so task-controlled code
-cannot forge a privileged result. Before any broker operation runs, the relay
-also signs the observed request digest and requires the client's one-time
-authorization secret, then rechecks that the request has not changed. The
-client waits for the
-broker operation within the worker's task lifecycle rather than timing out
-while a mutation may still complete. `hive github inspect --page N` returns
-serialized-byte-bounded pages for large check, review, comment, and thread
-histories, computes targeted-reply state across every comment page, and exposes
-lossless chunked `inspect-detail` retrieval for any truncated record. This
-requires neither an inherited
-descriptor nor a sandbox socket connection, so Codex retains its deny-network
-policy. Abandoned responses cannot be consumed by later commands and disappear
-with the task workspace. Publication uses a
-broker-owned private Git checkout populated from the worker's read-only tree;
-task-controlled hooks and repository Git configuration therefore never execute
-in the token-bearing broker.
+GitHub credential is exposed directly to the trusted Main-repair Codex agent as
+`GH_TOKEN`. The runtime includes the standard `gh` CLI, and Codex uses ordinary
+`git`, `gh`, and repository Taskfile commands for deterministic branch
+publication, PR inspection, review replies and resolution, exact-head
+squash merge, resulting Main verification, and Workbench completion. Review,
+comment, repair-PR, and check histories must be traversed completely. Hive does
+not add a custom publication broker, mailbox, signing protocol, or private
+checkout to hide this credential from the agent.
 
 If Codex discovers blocking work, its structured result names the blocker.
 Hive atomically creates a higher-priority task, adds a `DEPENDS_ON` edge, and
@@ -111,20 +86,16 @@ disposable `emptyDir`; every task in one dependency DAG must target that same
 revision. Before marking an implementation task complete, Hive collects a
 bounded binary Git patch, stores its digest and content as an `Artifact` node
 linked to the attempt, and commits that artifact in the same Neo4j transaction
-as the terminal result. Main-repair tasks are not terminal until the broker has
-squash-merged their PR and the resulting Main workflow is green. Deterministic
-branches let replacement Pods resume an existing delivery instead of creating
-duplicates. Binding returns a recovered merge commit to the replacement worker,
-which resumes post-merge Main verification without opening another PR.
+as the terminal result. Main-repair agents do not return their completed result
+until they have squash-merged the PR and verified the resulting Main workflow.
+Deterministic branches and GitHub inspection let replacement Pods resume an
+existing delivery instead of creating duplicates.
 
 The complete Main-repair lifecycle has a six-hour execution bound. Embedded
 Codex validation commands append typed, secret-sanitized local execution events
-outside the repository checkout; the publication broker includes their command
-identity, category, timestamps, duration, outcome, and reason in the immutable
-Workbench statistics record.
-The record is first published at the successful squash-merge boundary and is
-retried idempotently during post-merge verification, completion, and recovered
-binding.
+outside the repository checkout. The agent includes their command identity,
+category, timestamps, duration, outcome, and reason in the immutable Workbench
+statistics record.
 
 Neo4j requires Bolt TLS. The deployment creates a private CA and
 service certificate, configures the chart with `server.bolt.tls_level=REQUIRED`,

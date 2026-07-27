@@ -28,9 +28,12 @@ Hive separates four responsibilities:
    worker turn explicitly selects `gpt-5.6-terra` with `low` reasoning effort,
    the
    non-UI representation of Codex Light.
-4. **Narrow brokers own credentials and authority.** The repository-facing
-   worker has no Neo4j password, Codex credential file, GitHub token, or
-   Kubernetes administrative credential.
+4. **Codex agents are trusted operators.** Main-repair agents receive a scoped
+   GitHub credential and use standard `git` and `gh` workflows directly. Hive
+   must not introduce a custom publication broker, filesystem mailbox, signed
+   request protocol, or similar layer solely to protect GitHub credentials from
+   Codex. Kata isolation and disposable workspaces remain operational
+   containment and lifecycle tools, not a statement that the agent is hostile.
 
 Hive does not add NATS, Redis, PostgreSQL, RabbitMQ, KubeVirt, or a
 Kata-specific application orchestrator. Redis used by Hive CI is only an
@@ -56,7 +59,6 @@ flowchart TB
         worker["Hive worker + embedded Codex"]
         coordinator["Coordinator"]
         auth["Auth broker"]
-        publication["Publication broker"]
         reaper["Pod reaper"]
       end
       reaper_controller["Reaper controller (runc)"]
@@ -68,8 +70,7 @@ flowchart TB
   worker <--> coordinator
   coordinator <--> neo4j
   worker <--> auth
-  worker <--> publication
-  publication <--> github["GitHub"]
+  worker <--> github["GitHub"]
   auth --> codex_api["Codex service"]
   reaper --> reaper_controller
   reaper_controller --> k0s
@@ -95,9 +96,8 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
-| Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, terminal result, dependency patch integration | Neo4j/GitHub/Codex credential files |
+| Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration | Raw Neo4j access or Kubernetes administrative credentials |
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
-| Publication broker | Worker Kata Pod | Bounded Nook/Workbench GitHub API and Git publication operations from a broker-owned checkout | Arbitrary GitHub API access by Codex or task-controlled Git metadata |
 | Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
 | Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker egress policy | Codex auth or task execution |
 | Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
@@ -191,18 +191,18 @@ sequenceDiagram
   participant N as Neo4j
   participant A as Auth broker
   participant X as Embedded Codex
-  participant P as Publication broker
+  participant G as GitHub
 
   K->>W: Start clean Kata-backed Pod
   W->>C: Claim one task
   C->>N: Transactional claim + attempt + lease
   N-->>W: Pinned task and dependency context
-  W->>P: Bind deterministic publication identity
   W->>W: Fetch pinned Git object and apply dependency artifacts
   W->>A: Establish short-lived Codex auth channel
   W->>X: Start one in-process thread
   loop While the task runs
     W->>C: Heartbeat current lease token
+    X->>G: Standard git and gh delivery operations
     X-->>W: Progress and structured result
     W->>W: Append typed validation execution event
   end
@@ -316,61 +316,30 @@ erase the already-completed PR measurement.
 ### Publication recovery
 
 The base branch is deterministic: `codex/hive-<task-id>`. If a prior repair PR
-is closed or merged but the durable task still requires work, the broker creates
+is closed or merged but the durable task still requires work, the agent creates
 `-g2`, `-g3`, and later generations instead of trying to reuse a closed PR.
-Replacement Pods discover the latest generation and merged commit from GitHub.
-The bind response carries that recovered merge commit into the worker prompt,
-which resumes `verify-main` without creating a replacement PR.
+Replacement Pods inspect GitHub for the latest generation and merged commit,
+then resume Main verification without creating a duplicate PR.
 
-The GitHub token is used only by the publication broker. Its typed socket API
-permits task binding, publish/update, inspection, targeted replies, thread
-resolution, exact-head squash merge, Main verification, and bounded Workbench
-file updates. Review threads, submitted reviews, comments, and prior repair PR
-history are cursor/page traversed rather than truncated at the first API page.
-The merge gate evaluates every repository check run, ignores only outdated
-inline threads, treats automated-reviewer comments as actionable, and requires
-an authenticated task reply marker to be visible before a thread can be
-resolved.
-Codex cannot read the token or issue arbitrary authenticated requests.
+The GitHub token is mounted into the Main-repair worker and exposed to Codex
+through the conventional `GH_TOKEN` environment contract. A single shared,
+repository-scoped token is acceptable; per-agent or short-lived tokens may be
+used when operationally convenient, but are not required as an additional
+security boundary. Repository permissions remain the authorization boundary.
 
-The worker binds this API before repository execution and opens one ephemeral
-publication capability in a random private directory beneath the task's bound
-`/workspace`. The capability is a filesystem mailbox with `0700` directories
-and unique atomic request/response files. The worker preconnects one fresh
-broker stream before consuming each `hive github` request. Before executing an
-operation, the relay signs the exact request digest and the client returns a
-one-time authorization secret whose hash was committed inside that request.
-Substitution before acknowledgement cannot be authorized by the original
-client, and mutation after acknowledgement fails the relay's digest recheck.
-Matching responses
-by random request identifier means an interrupted client cannot leave a reply
-queued for the next command. Each response is signed with a per-task ephemeral
-Ed25519 key over the request identifier, exact submitted-request digest, and
-response; Codex receives only the verification key, so task-controlled
-repository code cannot substitute requests or forge publication results. The
-client remains attached
-until the broker answers or the enclosing worker task lifecycle cancels it,
-avoiding ambiguous timeouts after GitHub mutations. Inspection is exposed as
-bounded `--page N` output whose strings are reduced against the signed
-envelope's serialized-byte ceiling. Every truncated record remains losslessly
-available through chunked `hive github inspect-detail --kind ... --id ...`
-continuation, so large PR histories remain traversable without a whole-response
-size failure or discarded review content. Reply markers are evaluated across all
-comment pages even when the requested inspection page contains older feedback.
-The bound workspace remains visible when
-Bubblewrap replaces `/tmp`; regular file operations also preserve Codex's
-deny-network policy and avoid relying on inherited descriptors that Codex
-closes at its shell exec boundary. Deployment verification executes the real
-`hive github ping` client through the distribution Bubblewrap implementation.
-Main-repair tasks receive the bounded publication mailbox path; all other task
-kinds receive no capability path and remain broker-disabled.
-The capability directory is an explicit workspace root for the Main-repair
-Codex thread, and broker readiness is bounded before task execution proceeds.
-The broker
-reads the worker tree through a read-only mount,
-copies authored files into its own private checkout, and runs Git only there
-with hooks and executable protocol extensions disabled. Task-controlled
-`.git` configuration is never used by a token-bearing process.
+Codex uses standard `git` and `gh` commands for branch publication, pull-request
+creation and inspection, targeted replies, thread resolution, exact-head
+squash merge, Main verification, and Workbench updates. It must traverse all
+relevant check, review, comment, and thread pages and continue to follow the
+repository's normal readiness rules. Hive must prefer these established tools
+over a custom typed publication API.
+
+The agent is trusted with both the credential and the task checkout. Hive does
+not need a broker-owned private checkout, request signing, mailbox correlation,
+or defenses against the agent substituting its own publication requests.
+Ordinary protections against accidental secret disclosure still apply:
+credentials remain in Kubernetes Secrets or process environment, never in
+repository files, logs, Workbench records, or pull-request content.
 
 ## 7. Isolation and credential design
 
@@ -416,7 +385,7 @@ only on that task's disposable checkout.
 | --- | --- | --- |
 | Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
 | Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
-| GitHub publication token | Publication broker only | Typed bounded publication operations |
+| Repository-scoped GitHub token | Main-repair worker | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
 | Reaper controller credential | Pod reaper and dedicated controller only | No |
 | Kubernetes auth-refresh token | Auth broker only | No |
 
@@ -436,8 +405,7 @@ opaque reaper credential for every request, so normal token projection and
 Secret rotation do not require a controller restart.
 
 Embedded Codex validation commands produce typed, secret-sanitized JSONL events
-outside the repository checkout. The publication broker reads those events
-through its read-only workspace mount and records their category, timestamps,
+outside the repository checkout. Hive records their category, timestamps,
 duration, outcome, and bounded command identity in the immutable Workbench
 statistics record.
 
@@ -551,9 +519,9 @@ Redis `sccache` and GHA BuildKit are separate layers:
   report the missing cache credential.
 - The Redis credential is mounted as a BuildKit secret or read-only runtime
   secret and is never copied into an image or cache layer.
-- The credential is not mounted into the untrusted Hive worker. Worker tasks
-  publish changes and rely on repository-owned GitHub verification, where the
-  same Redis cache is attached by the trusted workflow.
+- The Redis credential is not needed by the Hive worker. Worker tasks publish
+  changes and rely on repository-owned GitHub verification, where the same
+  Redis cache is attached by the workflow.
 
 ## 10. Taskfile operations
 

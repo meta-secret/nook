@@ -2098,7 +2098,7 @@ tasks:
           test "$(wc -l < "$token_file" | tr -d ' ')" = 1
           ssh -n -o BatchMode=yes "$ssh_target" \
             "install -d -m 0700 '$remote_dir/secrets'"
-          remote_token_file="$remote_dir/secrets/github-publication.next"
+          remote_token_file="$remote_dir/secrets/github-token.next"
           cleanup_token() {
             ssh -n -o BatchMode=yes "$ssh_target" \
               "rm -f '$remote_token_file'" >/dev/null 2>&1 || true
@@ -2109,7 +2109,7 @@ tasks:
           ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
         set -euo pipefail
         remote_dir="$remote_dir"
-        token_file="\$remote_dir/secrets/github-publication.next"
+        token_file="\$remote_dir/secrets/github-token.next"
         trap 'rm -f "\$token_file"' EXIT
         chmod 0600 "\$token_file"
         sudo -n k0s kubectl create secret generic hive-github-publication \
@@ -2206,7 +2206,7 @@ tasks:
         case "$github_checksum" in
           ????????????????????????????????????????????????????????????????) ;;
           *)
-            echo "GitHub publication credential checksum is invalid" >&2
+            echo "GitHub credential checksum is invalid" >&2
             exit 1
             ;;
         esac
@@ -2682,8 +2682,6 @@ tasks:
               --bind /workspace /workspace \
               --chdir /workspace \
               /bin/bash -ceu "test ! -w /usr; touch .hive-sandbox-diagnostic; rm .hive-sandbox-diagnostic"
-            printf "%s\n" "== task-bound publication mailbox through Bubblewrap =="
-            python3 /usr/local/libexec/hive-bwrap-publication-smoke.py
           '
         REMOTE
 
