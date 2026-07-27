@@ -298,7 +298,8 @@ mod tests {
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(task_id.as_str()).expect("task");
-            let accepted = task.lease_token.as_ref() == Some(lease_token)
+            let accepted = task.status == "RUNNING"
+                && task.lease_token.as_ref() == Some(lease_token)
                 && task.lease_until.is_some_and(|lease| lease > Instant::now());
             if accepted {
                 task.lease_until =
@@ -539,7 +540,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancellation_revokes_a_running_lease() -> anyhow::Result<()> {
+    async fn cancellation_requires_worker_acknowledgement() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         let definition = task("main-failure-sha", Vec::new());
         store.enqueue(&definition).await?;
@@ -555,6 +556,19 @@ mod tests {
             !store
                 .heartbeat(&stale.id, &agent, &stale.lease_token, 300)
                 .await?
+        );
+        assert_eq!(
+            store
+                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .await?,
+            Some(definition.id.clone())
+        );
+        assert!(store.acknowledge_cancellation(&stale, &agent).await?);
+        assert_eq!(
+            store
+                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .await?,
+            None
         );
         assert!(store.claim(&agent, 300).await?.is_idle());
         Ok(())
