@@ -167,6 +167,8 @@ RUN groupadd --gid 1000 hive \
     && install -d -o hive -g hive /workspace
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
+COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox
+RUN chmod 0755 /usr/local/bin/hive-codex-linux-sandbox
 
 USER 1000:1000
 WORKDIR /workspace

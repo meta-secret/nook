@@ -86,6 +86,8 @@ enum Command {
             default_value = "/run/hive-coordinator/coordinator.sock"
         )]
         coordinator_socket: PathBuf,
+        #[arg(long, env = "HIVE_CODEX_LINUX_SANDBOX_EXE")]
+        codex_linux_sandbox_exe: Option<PathBuf>,
     },
     Coordinator {
         #[arg(
@@ -335,6 +337,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             auth_socket,
             publication_socket,
             coordinator_socket,
+            codex_linux_sandbox_exe,
         } => {
             let store = CoordinatorTaskStore::connect(&coordinator_socket).await?;
             if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
@@ -343,6 +346,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             if poll_min_seconds == 0 || poll_min_seconds > poll_max_seconds {
                 anyhow::bail!("poll interval must be positive and ordered");
             }
+            let arg0_paths = with_linux_sandbox_override(arg0_paths, codex_linux_sandbox_exe);
             Worker::new(
                 store,
                 WorkerConfig {
@@ -412,9 +416,19 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     }
 }
 
+fn with_linux_sandbox_override(
+    mut arg0_paths: Arg0DispatchPaths,
+    override_path: Option<PathBuf>,
+) -> Arg0DispatchPaths {
+    if let Some(path) = override_path {
+        arg0_paths.codex_linux_sandbox_exe = Some(path);
+    }
+    arg0_paths
+}
+
 #[cfg(test)]
 mod tests {
-    use super::install_rustls_crypto_provider;
+    use super::{Arg0DispatchPaths, PathBuf, install_rustls_crypto_provider};
 
     #[test]
     fn production_tls_crypto_provider_is_available() {
@@ -423,5 +437,20 @@ mod tests {
         let _client = rustls::ClientConfig::builder()
             .with_root_certificates(rustls::RootCertStore::empty())
             .with_no_client_auth();
+    }
+
+    #[test]
+    fn worker_can_override_the_embedded_codex_linux_sandbox() {
+        let original = PathBuf::from("/tmp/codex-linux-sandbox");
+        let replacement = PathBuf::from("/usr/local/bin/hive-codex-linux-sandbox");
+        let paths = super::with_linux_sandbox_override(
+            Arg0DispatchPaths {
+                codex_linux_sandbox_exe: Some(original),
+                ..Arg0DispatchPaths::default()
+            },
+            Some(replacement.clone()),
+        );
+
+        assert_eq!(paths.codex_linux_sandbox_exe, Some(replacement));
     }
 }

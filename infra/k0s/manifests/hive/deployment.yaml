@@ -100,6 +100,8 @@ spec:
               value: /home/hive
             - name: HIVE_SEALED_GUEST
               value: "1"
+            - name: HIVE_CODEX_LINUX_SANDBOX_EXE
+              value: /usr/local/bin/hive-codex-linux-sandbox
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

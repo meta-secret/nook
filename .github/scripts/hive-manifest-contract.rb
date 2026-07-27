@@ -104,6 +104,10 @@ unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6-terra" &&
        worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "low"
   raise "Hive workers must pin Codex GPT-5.6 with Light reasoning"
 end
+unless worker_environment["HIVE_CODEX_LINUX_SANDBOX_EXE"] ==
+       "/usr/local/bin/hive-codex-linux-sandbox"
+  raise "Hive workers must select the Restricted-Pod Codex sandbox wrapper"
+end
 unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
@@ -208,6 +212,9 @@ unless seccomp_profile["defaultAction"] == "SCMP_ACT_ERRNO" &&
        end &&
        !allowed_syscalls.include?("bpf") &&
        !allowed_syscalls.include?("perf_event_open") &&
+       infra_taskfile.include?("kata:guest-seccomp:enable:") &&
+       infra_taskfile.include?("disable_guest_seccomp = false") &&
+       infra_taskfile.include?("task: kata:guest-seccomp:enable") &&
        infra_taskfile.include?("hive:seccomp:install:") &&
        infra_taskfile.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
        infra_taskfile.include?('task: hive:seccomp:install')
@@ -506,6 +513,9 @@ unless infra_taskfile.include?("hive:queue:status:") &&
   raise "Hive queue inspection and bounded failed-task recovery must remain Taskfile-owned"
 end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
+hive_sandbox_wrapper = File.read(
+  File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
+)
 unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
   raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
 end
@@ -516,11 +526,21 @@ unless hive_dockerfile.include?("FROM toolchain AS sandbox-package-check") &&
        )
   raise "Hive verification must prove the Bubblewrap package is executable"
 end
+unless hive_dockerfile.include?(
+         "COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox"
+       ) &&
+       hive_sandbox_wrapper.include?(
+         "exec -a codex-linux-sandbox /usr/local/bin/hive --no-proc"
+       )
+  raise "Hive runtime must inject Codex's nested Restricted-Pod procfs mode"
+end
 unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("/usr/bin/setpriv --no-new-privs") &&
        infra_taskfile.include?("/usr/bin/bwrap") &&
+       infra_taskfile.include?("--unshare-pid") &&
        infra_taskfile.include?("--ro-bind / /") &&
-       infra_taskfile.include?("--bind /workspace /workspace")
+       infra_taskfile.include?("--bind /workspace /workspace") &&
+       infra_taskfile.include?("awk '/^Seccomp:/ {print $2}' /proc/self/status")
   raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
 end
 unless hive_dockerfile.include?(
@@ -535,6 +555,14 @@ end
 unless hive_taskfile.include?("--target dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export the manifest-keyed dependency graph"
+end
+unless hive_taskfile.include?(
+         'SCCACHE_REDIS_PASSWORD_FILE: \'{{default "../../.nook/cache/redis-password"'
+       ) &&
+       hive_taskfile.include?(
+         '--secret "id=sccache_redis_password,src=$credential_file"'
+       )
+  raise "Hive local verification must consume the ignored Redis credential as a BuildKit secret"
 end
 unless hive_taskfile.include?("Refusing oversized Hive test export") &&
        hive_taskfile.include?("524288")
