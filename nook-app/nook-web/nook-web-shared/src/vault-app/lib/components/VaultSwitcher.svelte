@@ -5,14 +5,14 @@
     FolderKey,
     SlidersHorizontal,
   } from '@lucide/svelte'
-  import type { NookLocalVaultEntry } from '$app-wasm'
+  import type { NookLocalVaultEntry, StoreId } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
   let root = $state<HTMLDivElement>()
-  let switchingTo = $state<string>()
+  let switchingTo = $state<StoreId>()
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)

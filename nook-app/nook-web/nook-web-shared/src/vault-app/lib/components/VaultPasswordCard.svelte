@@ -17,6 +17,7 @@
     isVaultPasswordLongEnough,
     peekEnrollmentIssuedAt,
     type NookPasswordEntrySummary,
+    type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
@@ -46,11 +47,14 @@
     enrollmentCode: string
     onAddPassword: (label: string, password: string) => void | Promise<void>
     onUpdatePassword: (
-      entryId: string,
+      entryId: PasswordEntryId,
       password: string,
     ) => void | Promise<void>
-    onRemovePassword: (entryId: string) => void | Promise<void>
-    onIssueCode: (entryId: string, password: string) => Promise<string | void>
+    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
+    onIssueCode: (
+      entryId: PasswordEntryId,
+      password: string,
+    ) => Promise<string | void>
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
@@ -63,7 +67,7 @@
   }
 
   let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<string>()
+  let activeEntryId = $state<PasswordEntryId>()
 
   let labelInput = $state('')
   let passwordInput = $state('')

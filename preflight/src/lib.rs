@@ -185,8 +185,9 @@ pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violatio
     )
 }
 
-/// Finds redundant optional Svelte rune declarations and domain identifiers
-/// widened to `string` in the central vault state.
+/// Finds redundant optional Svelte rune declarations, domain identifiers
+/// widened to `string` anywhere in authored web state, and domain unions in
+/// the central vault state.
 ///
 /// # Errors
 ///
@@ -198,6 +199,12 @@ pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Ve
         &["ts", "svelte"],
         redundant_optional_state_lines,
     )?;
+    violations.extend(source_violations(
+        root,
+        Path::new("nook-app/nook-web"),
+        &["ts", "svelte"],
+        widened_domain_identifier_state_lines,
+    )?);
 
     let relative_path =
         Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault.svelte.ts");
@@ -210,28 +217,44 @@ pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Ve
                 line,
             }),
     );
-    violations.extend(source.lines().enumerate().filter_map(|(index, line)| {
-        let compact = line
-            .bytes()
-            .filter(|byte| !byte.is_ascii_whitespace())
-            .collect::<Vec<_>>();
-        let widens_store_id = compact
-            .windows(b"StoreId=$state<string".len())
-            .any(|window| window == b"StoreId=$state<string");
-        let widens_password_entry_id = compact
-            .windows(b"PasswordEntryId=$state<string".len())
-            .any(|window| window == b"PasswordEntryId=$state<string");
-        (widens_store_id || widens_password_entry_id).then_some(Violation {
-            path: relative_path.to_path_buf(),
-            line: index + 1,
-        })
-    }));
     violations.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
             .then_with(|| left.line.cmp(&right.line))
     });
     Ok(violations)
+}
+
+fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
+    let mut compact = Vec::with_capacity(source.len());
+    let mut source_lines = Vec::with_capacity(source.len());
+    let mut line = 1;
+    for byte in source.bytes() {
+        if byte == b'\n' {
+            line += 1;
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+            source_lines.push(line);
+        }
+    }
+
+    let mut lines = Vec::new();
+    for pattern in [
+        b"StoreId=$state<string".as_slice(),
+        b"PasswordEntryId=$state<string".as_slice(),
+    ] {
+        lines.extend(
+            compact
+                .windows(pattern.len())
+                .enumerate()
+                .filter_map(|(start, window)| {
+                    (window == pattern).then_some(source_lines[start])
+                }),
+        );
+    }
+    lines.sort_unstable();
+    lines.dedup();
+    lines
 }
 
 fn domain_string_union_state_lines(source: &str) -> Vec<usize> {
@@ -1172,6 +1195,23 @@ remoteRecovery = $state<
 "#;
 
         assert_eq!(domain_string_union_state_lines(source), vec![3, 4]);
+    }
+
+    #[test]
+    fn reports_domain_identifiers_widened_in_component_state() {
+        let source = r"
+let switchingTo = $state<string>()
+let passwordEntryId = $state<
+  string
+>()
+let providerId = $state<string>()
+let selectedStoreId = $state<StoreId>()
+";
+
+        assert_eq!(
+            widened_domain_identifier_state_lines(source),
+            vec![2, 3]
+        );
     }
 
     #[test]
