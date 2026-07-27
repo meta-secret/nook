@@ -237,22 +237,7 @@ fn assert_delivery_cache_scope_contract() {
     assert!(!setup.contains("cache_total_count()"));
     assert!(!setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
 
-    let release = read(".github/workflows/release.yml");
-    let release_source = release
-        .find("- name: Checkout release source")
-        .expect("release source checkout must exist");
-    let release_tooling = release
-        .find("- name: Checkout release workflow tooling")
-        .expect("release tooling checkout must exist");
-    let release_docker_setup = release
-        .find("- name: Docker setup")
-        .expect("release Docker setup must exist");
-    assert!(
-        release_source < release_tooling && release_tooling < release_docker_setup,
-        "release Docker setup must fingerprint the requested source after checkout"
-    );
-    assert!(release.contains("path: .nook/release-workflow"));
-    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
+    assert_release_cache_fingerprint_contract();
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -315,6 +300,25 @@ fn assert_delivery_cache_scope_contract() {
         wasm_dependencies.contains("cache-from = rust_wasm_deps_cache_from"),
         "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
     );
+}
+
+fn assert_release_cache_fingerprint_contract() {
+    let release = read(".github/workflows/release.yml");
+    let release_source = release
+        .find("- name: Checkout release source")
+        .expect("release source checkout must exist");
+    let release_tooling = release
+        .find("- name: Checkout release workflow tooling")
+        .expect("release tooling checkout must exist");
+    let release_docker_setup = release
+        .find("- name: Docker setup")
+        .expect("release Docker setup must exist");
+    assert!(
+        release_source < release_tooling && release_tooling < release_docker_setup,
+        "release Docker setup must fingerprint the requested source after checkout"
+    );
+    assert!(release.contains("path: .nook/release-workflow"));
+    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
 }
 
 #[test]
