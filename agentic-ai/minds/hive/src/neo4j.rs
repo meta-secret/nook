@@ -58,6 +58,7 @@ pub struct QueueTaskStatus {
     pub latest_attempt_status: String,
     pub latest_error: String,
     pub created_at: i64,
+    pub manual_retry_used: bool,
 }
 
 impl Neo4jTaskStore {
@@ -99,7 +100,8 @@ impl Neo4jTaskStore {
                               0,
                               600
                             ) AS latest_error,
-                            task.created_at AS created_at
+                            task.created_at AS created_at,
+                            coalesce(task.manual_retry_used, false) AS manual_retry_used
                      ORDER BY created_at DESC
                      LIMIT $limit",
                 )
@@ -116,6 +118,7 @@ impl Neo4jTaskStore {
                 latest_attempt_status: row.get("latest_attempt_status")?,
                 latest_error: row.get("latest_error")?,
                 created_at: row.get("created_at")?,
+                manual_retry_used: row.get("manual_retry_used")?,
             });
         }
         Ok(tasks)
@@ -136,11 +139,17 @@ impl Neo4jTaskStore {
                     "MATCH (task:Task {id: $id})
                      WHERE task.kind = 'main-repair'
                        AND task.status = 'FAILED'
+                       AND coalesce(task.manual_retry_used, false) = false
                        AND NOT EXISTS {
                          MATCH (task)<-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
                        }
+                       AND NOT EXISTS {
+                         MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
+                         WHERE dependency.status <> 'COMPLETED'
+                       }
                      SET task.status = 'READY',
                          task.max_attempts = task.attempt_count + $additional_attempts,
+                         task.manual_retry_used = true,
                          task.failure_reason = null,
                          task.blocked_reason = null,
                          task.updated_at = timestamp(),
@@ -1435,21 +1444,31 @@ mod tests {
                 .expect("refuse duplicate retry"),
             "a ready task must not receive an unbounded retry budget"
         );
-        let retried_claim = store
-            .claim(&agent_a, 300)
-            .await
-            .expect("claim retried Main repair")
-            .expect("retried Main repair available");
-        assert_eq!(retried_claim.id, repair.id);
-        assert_eq!(retried_claim.attempt_number, 2);
-        assert!(
-            store
-                .complete(&retried_claim, &agent_a, "platform repaired", None)
+        for attempt_number in 2..=4 {
+            let retried_claim = store
+                .claim(&agent_a, 300)
                 .await
-                .expect("complete retried Main repair")
+                .expect("claim retried Main repair")
+                .expect("retried Main repair available");
+            assert_eq!(retried_claim.id, repair.id);
+            assert_eq!(retried_claim.attempt_number, attempt_number);
+            assert!(
+                store
+                    .fail(&retried_claim, &agent_a, "repair attempt failed")
+                    .await
+                    .expect("fail retried Main repair")
+            );
+        }
+        assert!(
+            !store
+                .retry_failed_main_task(&repair.id, 3)
+                .await
+                .expect("refuse a second recovery budget"),
+            "an exhausted recovery budget must never be rearmed"
         );
 
-        let reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
+        let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
+        reused_failed_parent.kind = "main-repair".to_owned();
         store
             .enqueue(&reused_failed_parent)
             .await
@@ -1490,6 +1509,13 @@ mod tests {
                 .get::<String>("status")
                 .expect("reused exhausted-blocker status"),
             "FAILED"
+        );
+        assert!(
+            !store
+                .retry_failed_main_task(&reused_failed_parent.id, 3)
+                .await
+                .expect("refuse repair with failed dependency"),
+            "a repair with a failed dependency must remain failed"
         );
 
         let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new());

@@ -111,6 +111,21 @@ pub struct TerminalResult {
     pub blocker: BlockerResult,
 }
 
+impl TerminalResult {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.summary.trim().is_empty() {
+            return Err("terminal result summary must not be empty".to_owned());
+        }
+        if self.changed_files.iter().any(|path| path.trim().is_empty()) {
+            return Err("terminal result changed_files entries must not be empty".to_owned());
+        }
+        if self.tests.iter().any(|test| test.trim().is_empty()) {
+            return Err("terminal result tests entries must not be empty".to_owned());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockerResult {
     pub present: bool,
@@ -262,5 +277,34 @@ mod tests {
                 .as_str(),
             "repair-cache"
         );
+    }
+
+    #[test]
+    fn terminal_result_rejects_empty_content_outside_the_schema_subset() {
+        let valid = TerminalResult {
+            status: TerminalStatus::Completed,
+            summary: "done".to_owned(),
+            changed_files: vec!["src/main.rs".to_owned()],
+            tests: vec!["cargo test".to_owned()],
+            blocker: BlockerResult::none(),
+        };
+        valid.validate().expect("non-empty terminal result");
+
+        for invalid in [
+            TerminalResult {
+                summary: " ".to_owned(),
+                ..valid.clone()
+            },
+            TerminalResult {
+                changed_files: vec![String::new()],
+                ..valid.clone()
+            },
+            TerminalResult {
+                tests: vec!["\t".to_owned()],
+                ..valid
+            },
+        ] {
+            assert!(invalid.validate().is_err());
+        }
     }
 }

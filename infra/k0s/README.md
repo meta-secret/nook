@@ -102,4 +102,6 @@ task infra:hive:queue:retry \
   HIVE_TASK_ID=main-failure-<full-main-sha>
 ```
 
-The retry refuses non-failed, non-Main-repair, and already-requeued tasks.
+The retry refuses non-failed, non-Main-repair, already-requeued tasks, tasks
+whose one manual recovery budget was consumed, and tasks with incomplete
+dependencies.

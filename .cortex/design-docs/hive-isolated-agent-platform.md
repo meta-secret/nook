@@ -274,7 +274,8 @@ execution state and attempt history. Operators inspect that state with
 rearmed on every dispatcher poll: after repairing the platform, the explicit
 `task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
 attempts, adds one bounded three-attempt budget, and refuses a task that is
-already ready or running.
+already ready or running, has already consumed its manual recovery budget, or
+still has an incomplete dependency.
 
 The broker allows a successful descendant Main run to verify the merge when the
 exact merge-commit run was coalesced or cancelled, but only after GitHub proves

@@ -234,6 +234,10 @@ impl<S: TaskStore> Worker<S> {
                         .context("embedded Codex execution failed")?;
                 let result: TerminalResult = serde_json::from_str(&raw_result)
                     .context("Codex returned an invalid terminal result")?;
+                result
+                    .validate()
+                    .map_err(anyhow::Error::msg)
+                    .context("Codex returned empty terminal result content")?;
                 let blocker = result
                     .blocker
                     .clone()
