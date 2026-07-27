@@ -107,8 +107,8 @@
               return
             }
             if (
+              !!response &&
               typeof response === 'object' &&
-              response !== null &&
               'ok' in response &&
               (response as { ok?: unknown }).ok === true
             ) {
@@ -116,7 +116,7 @@
               return
             }
             const failure =
-              typeof response === 'object' && response !== null
+              !!response && typeof response === 'object'
                 ? (response as { reason?: unknown; error?: unknown })
                 : undefined
             const reason =

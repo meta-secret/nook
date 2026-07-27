@@ -31,19 +31,20 @@ export function isAuthenticationOutcomeClassifyMessage(
   message: unknown,
 ): message is AuthenticationOutcomeClassifyMessage {
   if (
+    !message ||
     typeof message !== 'object' ||
-    message === null ||
     !('type' in message) ||
     message.type !== 'nook:authentication-outcome-classify' ||
     !('payload' in message) ||
+    !message.payload ||
     typeof message.payload !== 'object' ||
-    message.payload === null
+    Array.isArray(message.payload)
   ) {
     return false
   }
   const payload = message.payload as Record<string, unknown>
   const observation = payload.observation
-  if (typeof observation !== 'object' || observation === null) return false
+  if (!observation || typeof observation !== 'object') return false
   const view = observation as Record<string, unknown>
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&

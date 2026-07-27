@@ -53,8 +53,8 @@ async function ensureNodeModulesLink() {
     )
   } catch (error) {
     if (
+      !!error &&
       typeof error === 'object' &&
-      error !== null &&
       'code' in error &&
       error.code === 'EEXIST'
     ) {
@@ -541,7 +541,7 @@ await writeFile(
       shortName: deployment.shortName,
       versionName,
     }),
-    null,
+    undefined,
     2,
   )}\n`,
 )

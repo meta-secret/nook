@@ -178,7 +178,7 @@ export async function classifyAuthenticationOutcome(
 function isImportedEventLogState(
   value: unknown,
 ): value is ImportedEventLogState {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const status = value as Record<string, unknown>
   return (
     typeof status.vaultStoreId === 'string' &&

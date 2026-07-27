@@ -136,15 +136,15 @@ export type RuntimeMessage =
 function isExtensionEventLogRecord(
   value: unknown,
 ): value is ExtensionEventLogRecord {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   return (
     typeof record.eventId === 'string' &&
     record.eventId.length > 0 &&
     typeof record.path === 'string' &&
     record.path.length > 0 &&
-    typeof record.event === 'object' &&
-    record.event !== null
+    Boolean(record.event) &&
+    typeof record.event === 'object'
   )
 }
 
@@ -395,7 +395,7 @@ export function isExtensionPairedVaultIdentityHandoffRequestMessage(
 export function isExtensionPairingApprovedGrant(
   value: unknown,
 ): value is ExtensionPairingApprovedGrant {
-  if (typeof value !== 'object' || value === null) return false
+  if (!value || typeof value !== 'object') return false
   const payload = value as Record<string, unknown>
   return (
     payload.vaultType === 'simple' &&

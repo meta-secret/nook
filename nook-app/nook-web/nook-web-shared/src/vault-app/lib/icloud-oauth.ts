@@ -247,8 +247,9 @@ function webAuthTokenStorageDiagnostics(): {
     }
   }
   const expectedKey = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${ICLOUD_CONTAINER_ID}`;
+  const expectedValue = sessionStorage.getItem(expectedKey) ?? undefined;
   return {
-    expectedKeyPresent: sessionStorage.getItem(expectedKey) != null,
+    expectedKeyPresent: expectedValue !== undefined,
     storedKeyCount: storedKeys.length,
     storedKeys,
   };
@@ -268,7 +269,7 @@ function iCloudConfigDiagnostics(): {
   };
 }
 
-function elementDiagnostics(element: Element | null): {
+function elementDiagnostics(element: Element | undefined): {
   present: boolean;
   tag?: string;
   id?: string;
@@ -301,16 +302,16 @@ function cloudKitSignInControlDiagnostics(): {
 } {
   const mount =
     typeof document === "undefined"
-      ? null
-      : document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
+      ? undefined
+      : (document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) ?? undefined);
   const control =
     mount?.querySelector<HTMLElement>(
       'button, [role="button"], iframe, a, .apple-auth-button',
-    ) ?? null;
+    ) ?? undefined;
   const signOutMount =
     typeof document === "undefined"
-      ? null
-      : document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID);
+      ? undefined
+      : (document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID) ?? undefined);
   return {
     mount: elementDiagnostics(mount),
     control: elementDiagnostics(control),
@@ -352,7 +353,7 @@ const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
     log.debug("CloudKit putToken", {
       container: containerIdentifier,
       tokenType: typeof authToken,
-      hasValue: authToken != null,
+      hasValue: authToken != undefined,
     });
     storeCloudKitWebAuthToken(containerIdentifier, authToken);
   },

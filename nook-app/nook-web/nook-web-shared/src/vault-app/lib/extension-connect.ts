@@ -40,7 +40,7 @@ export function isExtensionConnectPath(pathname: string): boolean {
   return normalized === EXTENSION_CONNECT_PATH;
 }
 
-function parseScopes(raw: string | null): ExtensionConnectScope[] {
+function parseScopes(raw: string | undefined): ExtensionConnectScope[] {
   const scopes = (raw ?? "")
     .split(",")
     .map((scope) => scope.trim())
@@ -66,7 +66,7 @@ export function extensionConnectRequestFromLocation(
     params.get("device_label")?.trim() ??
     "Nook Extension - this browser profile";
   const nonce = params.get("nonce")?.trim() ?? "";
-  const scopes = parseScopes(params.get("scopes"));
+  const scopes = parseScopes(params.get("scopes") ?? undefined);
 
   if (
     !deviceId ||

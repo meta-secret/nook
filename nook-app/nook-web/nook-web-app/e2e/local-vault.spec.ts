@@ -370,7 +370,9 @@ test.describe('local vault', () => {
             }
           ).__nookVault
           if (!vault || vault.isAuthenticated) return false
-          if (sessionStorage.getItem('nook_cleanup_probe') !== null) {
+          const cleanupProbe =
+            sessionStorage.getItem('nook_cleanup_probe') ?? undefined
+          if (cleanupProbe !== undefined) {
             return false
           }
           try {
