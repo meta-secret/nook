@@ -109,9 +109,7 @@ fn remote_vault_recovery_requires_core_confirmed_connect_state() {
         "loadDb must ask Rust policy whether remote recovery was explicitly confirmed"
     );
     assert!(
-        !source.contains(
-            "remoteVaultRecoveryState === RemoteVaultRecoveryState.None &&"
-        ),
+        !source.contains("remoteVaultRecoveryState === RemoteVaultRecoveryState.None &&"),
         "prompt states must never bypass remote-vault assessment and enter connect"
     );
 }
