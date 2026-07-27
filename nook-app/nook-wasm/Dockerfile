@@ -36,8 +36,7 @@ RUN touch nook-core/src/i18n.rs
 # in parallel with the export path prevents the Node-test join from rebuilding workspace crates.
 FROM builder-wasm-source AS builder-wasm-clippy
 
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy --release --target wasm32-unknown-unknown \
+RUN cargo clippy --release --target wasm32-unknown-unknown \
       -p nook-wasm \
       -- -D warnings \
     && nook-sccache-report wasm-clippy \
@@ -47,8 +46,7 @@ FROM builder-wasm-source AS builder-wasm-build
 
 # Emit the single JS/WASM package directly into the shared web source tree where every app imports
 # it. target/ stays in-tree for reuse.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    case "$WASM_BUILD_MODE" in \
+RUN case "$WASM_BUILD_MODE" in \
       prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
@@ -74,8 +72,7 @@ FROM builder-wasm-source AS builder-wasm-tests
 
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm \
+RUN CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm \
     && nook-sccache-report wasm-release-tests
 
@@ -86,8 +83,7 @@ COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
 
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    wasm-pack test --node --release nook-wasm \
+RUN wasm-pack test --node --release nook-wasm \
     && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export

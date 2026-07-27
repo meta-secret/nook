@@ -41,11 +41,9 @@ ARG NOOK_WASM_DEPS_CACHE_EPOCH=v3-seed-1
 RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
 # wasm deps via cargo-chef (the wasm build in nook-app/nook-wasm/Dockerfile reuses these). Separate RUNs so
 # each cooks into its own cache layer.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
+RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-release
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
+RUN cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-clippy
 RUN cargo fetch --locked
 
@@ -56,8 +54,7 @@ FROM builder-deps-common AS builder-wasm-deps
 
 RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-core/src nook-wasm/src \
     && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm \
+RUN cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm \
     && nook-sccache-report wasm-release-test-dependencies
 
 # Native verification extends the WASM dependency boundary with native and coverage profiles.
@@ -71,29 +68,21 @@ FROM builder-wasm-deps AS builder-deps
 # copied over in builder-debug in dependency order
 # (nook-auth2 + nook-replication -> nook-event-log -> nook-core -> nook-wasm).
 # Kept as separate cache layers.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo nextest run --no-run -p nook-auth2 --profile ci \
+RUN cargo nextest run --no-run -p nook-auth2 --profile ci \
     && nook-sccache-report native-auth-nextest-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo nextest run --no-run -p nook-replication --profile ci \
+RUN cargo nextest run --no-run -p nook-replication --profile ci \
     && nook-sccache-report native-replication-nextest-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo nextest run --no-run -p nook-event-log --profile ci \
+RUN cargo nextest run --no-run -p nook-event-log --profile ci \
     && nook-sccache-report native-event-log-nextest-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo nextest run --no-run -p nook-core --profile ci \
+RUN cargo nextest run --no-run -p nook-core --profile ci \
     && nook-sccache-report native-core-nextest-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-auth2 --all-targets -- -D warnings \
+RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report native-auth-clippy-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-replication --all-targets -- -D warnings \
+RUN cargo clippy -p nook-replication --all-targets -- -D warnings \
     && nook-sccache-report native-replication-clippy-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-event-log --all-targets -- -D warnings \
+RUN cargo clippy -p nook-event-log --all-targets -- -D warnings \
     && nook-sccache-report native-event-log-clippy-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-core --all-targets -- -D warnings \
+RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy-dependencies
 # Also warm the COVERAGE-instrumented deps: cargo-llvm-cov builds with -Cinstrument-coverage +
 # cfg(coverage) into its own target/llvm-cov-target dir — a distinct fingerprint AND location from
@@ -101,8 +90,7 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 # recompiles every dependency with instrumentation. --no-report skips report merge; --no-tests=pass
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass \
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 # --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---
 FROM builder-deps AS builder-debug
@@ -115,30 +103,24 @@ COPY nook-app/.config .config
 # Source-sensitive verification layers are ordered by Rust dependency edge. A nook-core-only change
 # can reuse the nook-auth2 clippy and coverage-test layers; a nook-wasm-only change can reuse both.
 COPY nook-app/nook-auth2 nook-auth2
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-auth2 --all-targets -- -D warnings \
+RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report native-auth-clippy
 # --no-clean keeps the manifest-keyed instrumented dependencies warmed above. cargo-llvm-cov does
 # not allow --no-clean with --no-report, so this first source-level run emits its interim report;
 # the nook-core run below then extends the same coverage session and enforces the combined floor.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2 \
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2 \
     && nook-sccache-report native-auth-coverage
 
 COPY nook-app/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-replication --all-targets -- -D warnings \
+RUN cargo clippy -p nook-replication --all-targets -- -D warnings \
     && nook-sccache-report native-replication-clippy
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
     && nook-sccache-report native-replication-coverage
 
 COPY nook-app/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo clippy -p nook-event-log --all-targets -- -D warnings \
+RUN cargo clippy -p nook-event-log --all-targets -- -D warnings \
     && nook-sccache-report native-event-log-clippy
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log \
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log \
     && nook-sccache-report native-event-log-coverage
 
 COPY nook-app/nook-core nook-core
@@ -146,8 +128,7 @@ COPY nook-app/nook-core nook-core
 # contain newer artifacts. Touch the module that embeds locale JSON so changes
 # to those non-Rust inputs always reach both the native and downstream WASM
 # builds instead of reusing a stale include_str! result.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    touch nook-core/src/i18n.rs \
+RUN touch nook-core/src/i18n.rs \
     && cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy
 # Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth2,
@@ -155,8 +136,7 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 # portable crates while preserving cacheable dependency coverage. The same run also bakes the
 # coverage artifacts that PR CI copies out later;
 # export must not rerun the Rust tests.
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
-    FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
+RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
     && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
