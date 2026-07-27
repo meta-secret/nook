@@ -153,6 +153,10 @@ enum Command {
         #[command(subcommand)]
         action: GitHubAction,
     },
+    Queue {
+        #[command(subcommand)]
+        action: QueueAction,
+    },
     Migrate,
     Enqueue {
         #[arg(long)]
@@ -207,6 +211,20 @@ enum GitHubAction {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum QueueAction {
+    Status {
+        #[arg(long, default_value_t = 50)]
+        limit: i64,
+    },
+    RetryFailedMain {
+        #[arg(long)]
+        task_id: String,
+        #[arg(long, default_value_t = 3)]
+        additional_attempts: i64,
+    },
+}
+
 fn main() -> anyhow::Result<()> {
     install_rustls_crypto_provider()?;
     arg0_dispatch_or_else(run_main)
@@ -246,6 +264,39 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 }
             };
             run_publication_client(&socket, request).await
+        }
+        Command::Queue { action } => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for queue operations")?;
+            let store =
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                    .await?;
+            store.migrate().await?;
+            match action {
+                QueueAction::Status { limit } => {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&store.queue_status(limit).await?)?
+                    );
+                    Ok(())
+                }
+                QueueAction::RetryFailedMain {
+                    task_id,
+                    additional_attempts,
+                } => {
+                    let task_id = TaskId::new(task_id).map_err(anyhow::Error::msg)?;
+                    if !store
+                        .retry_failed_main_task(&task_id, additional_attempts)
+                        .await?
+                    {
+                        anyhow::bail!("task {task_id} is not a retryable failed Main-repair task");
+                    }
+                    println!("requeued {task_id} with {additional_attempts} additional attempts");
+                    Ok(())
+                }
+            }
         }
         Command::Coordinator { socket } => {
             let neo4j_password = cli

@@ -976,6 +976,40 @@ mod tests {
     }
 
     #[test]
+    fn task_output_schema_uses_the_strict_structured_output_subset() {
+        let schema: serde_json::Value =
+            serde_json::from_str(TASK_OUTPUT_SCHEMA).expect("valid task output schema");
+        let serialized = serde_json::to_string(&schema).expect("serialize task output schema");
+        for unsupported in [
+            "\"oneOf\"",
+            "\"allOf\"",
+            "\"not\"",
+            "\"minLength\"",
+            "\"maxLength\"",
+            "\"pattern\"",
+        ] {
+            assert!(
+                !serialized.contains(unsupported),
+                "task output schema contains unsupported keyword {unsupported}"
+            );
+        }
+        let blocker = schema
+            .pointer("/properties/blocker")
+            .expect("blocker object schema");
+        assert_eq!(
+            blocker.get("type").and_then(serde_json::Value::as_str),
+            Some("object")
+        );
+        assert_eq!(
+            blocker
+                .get("required")
+                .and_then(serde_json::Value::as_array)
+                .map(Vec::len),
+            Some(4)
+        );
+    }
+
+    #[test]
     fn execution_options_enable_workspace_write() {
         let repository = tempfile::tempdir().unwrap();
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();

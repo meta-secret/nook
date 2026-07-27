@@ -4,6 +4,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use neo4rs::{ConfigBuilder, Error as Neo4jDriverError, Graph, Neo4jErrorKind, Row, query};
 use rand::RngExt;
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::install_rustls_crypto_provider;
@@ -48,6 +49,17 @@ pub struct Neo4jTaskStore {
     graph: Graph,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct QueueTaskStatus {
+    pub id: String,
+    pub status: String,
+    pub attempt_count: i64,
+    pub max_attempts: i64,
+    pub latest_attempt_status: String,
+    pub latest_error: String,
+    pub created_at: i64,
+}
+
 impl Neo4jTaskStore {
     pub async fn connect(uri: &str, username: &str, password: &str) -> anyhow::Result<Self> {
         install_rustls_crypto_provider()?;
@@ -62,6 +74,84 @@ impl Neo4jTaskStore {
             .await
             .context("failed to connect to Neo4j")?;
         Ok(Self { graph })
+    }
+
+    pub async fn queue_status(&self, limit: i64) -> anyhow::Result<Vec<QueueTaskStatus>> {
+        if !(1..=200).contains(&limit) {
+            anyhow::bail!("queue status limit must be between 1 and 200");
+        }
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task)
+                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
+                     WITH task, attempt
+                     ORDER BY attempt.completed_at DESC, attempt.started_at DESC
+                     WITH task, collect(attempt)[0] AS latest
+                     RETURN task.id AS id,
+                            task.status AS status,
+                            task.attempt_count AS attempt_count,
+                            task.max_attempts AS max_attempts,
+                            coalesce(latest.status, '') AS latest_attempt_status,
+                            substring(
+                              replace(coalesce(latest.error, ''), '\n', ' '),
+                              0,
+                              600
+                            ) AS latest_error,
+                            task.created_at AS created_at
+                     ORDER BY created_at DESC
+                     LIMIT $limit",
+                )
+                .param("limit", limit),
+            )
+            .await?;
+        let mut tasks = Vec::new();
+        while let Some(row) = rows.next().await? {
+            tasks.push(QueueTaskStatus {
+                id: row.get("id")?,
+                status: row.get("status")?,
+                attempt_count: row.get("attempt_count")?,
+                max_attempts: row.get("max_attempts")?,
+                latest_attempt_status: row.get("latest_attempt_status")?,
+                latest_error: row.get("latest_error")?,
+                created_at: row.get("created_at")?,
+            });
+        }
+        Ok(tasks)
+    }
+
+    pub async fn retry_failed_main_task(
+        &self,
+        task_id: &TaskId,
+        additional_attempts: i64,
+    ) -> anyhow::Result<bool> {
+        if !(1..=10).contains(&additional_attempts) {
+            anyhow::bail!("additional attempts must be between 1 and 10");
+        }
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $id})
+                     WHERE task.kind = 'main-repair'
+                       AND task.status = 'FAILED'
+                       AND NOT EXISTS {
+                         MATCH (task)<-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
+                       }
+                     SET task.status = 'READY',
+                         task.max_attempts = task.attempt_count + $additional_attempts,
+                         task.failure_reason = null,
+                         task.blocked_reason = null,
+                         task.updated_at = timestamp(),
+                         task.version = task.version + 1
+                     RETURN task.id AS id",
+                )
+                .param("id", task_id.as_str())
+                .param("additional_attempts", additional_attempts),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
     }
 
     fn claimed_task(
@@ -1300,6 +1390,63 @@ mod tests {
         assert!(
             failed_statuses.iter().all(|(_, status)| status == "FAILED"),
             "terminal dependency failure must propagate to every blocked descendant"
+        );
+
+        let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
+        repair.kind = "main-repair".to_owned();
+        repair.max_attempts = 1;
+        store.enqueue(&repair).await.expect("enqueue Main repair");
+        let repair_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim Main repair")
+            .expect("Main repair available");
+        assert!(
+            store
+                .fail(&repair_claim, &agent_a, "invalid structured output schema")
+                .await
+                .expect("exhaust Main repair")
+        );
+        let status = store
+            .queue_status(200)
+            .await
+            .expect("inspect durable queue");
+        let failed_repair = status
+            .iter()
+            .find(|task| task.id == repair.id.as_str())
+            .expect("failed Main repair status");
+        assert_eq!(failed_repair.status, "FAILED");
+        assert_eq!(failed_repair.latest_attempt_status, "FAILED");
+        assert!(
+            failed_repair
+                .latest_error
+                .contains("invalid structured output schema")
+        );
+        assert!(
+            store
+                .retry_failed_main_task(&repair.id, 3)
+                .await
+                .expect("retry failed Main repair")
+        );
+        assert!(
+            !store
+                .retry_failed_main_task(&repair.id, 3)
+                .await
+                .expect("refuse duplicate retry"),
+            "a ready task must not receive an unbounded retry budget"
+        );
+        let retried_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim retried Main repair")
+            .expect("retried Main repair available");
+        assert_eq!(retried_claim.id, repair.id);
+        assert_eq!(retried_claim.attempt_number, 2);
+        assert!(
+            store
+                .complete(&retried_claim, &agent_a, "platform repaired", None)
+                .await
+                .expect("complete retried Main repair")
         );
 
         let reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
