@@ -382,7 +382,7 @@ task infra:kata:verify      # prove a Pod is using the Kata guest kernel
 task infra:kata:diagnose    # bounded Kata installer and runtime evidence
 task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
 task infra:hive:queue:status # inspect durable task and latest-attempt state
-task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded recovery budget
+task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded budget per Hive release
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart
 task hive:check             # format-check and lint the Rust Hive worker

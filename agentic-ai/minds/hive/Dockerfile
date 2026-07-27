@@ -20,6 +20,7 @@ ENV SCCACHE_SERVER_UDS=/tmp/nook-hive-sccache.sock
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        bubblewrap \
         ca-certificates \
         curl \
         git \

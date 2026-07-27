@@ -20,7 +20,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 3;
+const LATEST_SCHEMA_VERSION: i64 = 4;
 const CLAIM_RETRY_LIMIT: usize = 5;
 
 fn is_transient_claim_error(error: &anyhow::Error) -> bool {
@@ -58,7 +58,7 @@ pub struct QueueTaskStatus {
     pub latest_attempt_status: String,
     pub latest_error: String,
     pub created_at: i64,
-    pub manual_retry_used: bool,
+    pub last_retry_release: String,
 }
 
 impl Neo4jTaskStore {
@@ -101,7 +101,7 @@ impl Neo4jTaskStore {
                               600
                             ) AS latest_error,
                             task.created_at AS created_at,
-                            coalesce(task.manual_retry_used, false) AS manual_retry_used
+                            coalesce(task.last_retry_release, '') AS last_retry_release
                      ORDER BY created_at DESC
                      LIMIT $limit",
                 )
@@ -118,38 +118,60 @@ impl Neo4jTaskStore {
                 latest_attempt_status: row.get("latest_attempt_status")?,
                 latest_error: row.get("latest_error")?,
                 created_at: row.get("created_at")?,
-                manual_retry_used: row.get("manual_retry_used")?,
+                last_retry_release: row.get("last_retry_release")?,
             });
         }
         Ok(tasks)
     }
 
-    pub async fn retry_failed_main_task(&self, task_id: &TaskId) -> anyhow::Result<bool> {
+    pub async fn retry_failed_main_task(
+        &self,
+        task_id: &TaskId,
+        release_id: &str,
+    ) -> anyhow::Result<bool> {
+        let digest = release_id
+            .strip_prefix("sha256:")
+            .filter(|digest| {
+                digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+            .context("release id must be a sha256 digest")?;
         let mut rows = self
             .graph
             .execute(
                 query(
-                    "MATCH (task:Task {id: $id})
-                     WHERE task.kind = 'main-repair'
-                       AND task.status = 'FAILED'
-                       AND coalesce(task.manual_retry_used, false) = false
+                    "MATCH (root:Task {id: $id})
+                     WHERE root.kind = 'main-repair'
+                       AND root.status = 'FAILED'
+                       AND coalesce(root.last_retry_release, '') <> $release_id
                        AND NOT EXISTS {
-                         MATCH (task)<-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
+                         MATCH (root)-[:DEPENDS_ON*0..]->(running:Task)
+                               <-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
                        }
-                       AND NOT EXISTS {
-                         MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
-                         WHERE dependency.status <> 'COMPLETED'
-                       }
-                     SET task.status = 'READY',
-                         task.max_attempts = task.attempt_count + 3,
-                         task.manual_retry_used = true,
-                         task.failure_reason = null,
-                         task.blocked_reason = null,
-                         task.updated_at = timestamp(),
-                         task.version = task.version + 1
-                     RETURN task.id AS id",
+                     MATCH (root)-[:DEPENDS_ON*0..]->(member:Task)
+                     WITH root, collect(DISTINCT member) AS members
+                     UNWIND members AS member
+                     WITH root, member
+                     WHERE member.status = 'FAILED'
+                     OPTIONAL MATCH (member)-[:DEPENDS_ON]->(dependency:Task)
+                     WITH root,
+                          member,
+                          count(dependency) AS dependency_count,
+                          count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END)
+                            AS completed_count
+                     SET member.status = CASE
+                           WHEN dependency_count = completed_count THEN 'READY'
+                           ELSE 'BLOCKED'
+                         END,
+                         member.max_attempts = member.attempt_count + 3,
+                         member.failure_reason = null,
+                         member.blocked_reason = null,
+                         member.updated_at = timestamp(),
+                         member.version = member.version + 1,
+                         root.last_retry_release = $release_id
+                     RETURN DISTINCT root.id AS id",
                 )
-                .param("id", task_id.as_str()),
+                .param("id", task_id.as_str())
+                .param("release_id", format!("sha256:{digest}")),
             )
             .await?;
         Ok(rows.next().await?.is_some())
@@ -257,6 +279,16 @@ impl TaskStore for Neo4jTaskStore {
                 .await
                 .context("failed to initialize schema-3 manual retry state")?;
         }
+        if installed_version < 4 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     SET task.last_retry_release = ''
+                     REMOVE task.manual_retry_used",
+                ))
+                .await
+                .context("failed to initialize schema-4 release-scoped retry state")?;
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -302,7 +334,7 @@ impl TaskStore for Neo4jTaskStore {
                     "MERGE (task:Task {id: $id})
                      ON CREATE SET task.created_at = timestamp(),
                                    task.attempt_count = 0,
-                                   task.manual_retry_used = false,
+                                   task.last_retry_release = '',
                                    task.version = 0,
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
@@ -1436,16 +1468,22 @@ mod tests {
         );
         assert!(
             store
-                .retry_failed_main_task(&repair.id)
+                .retry_failed_main_task(
+                    &repair.id,
+                    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                )
                 .await
                 .expect("retry failed Main repair")
         );
         assert!(
             !store
-                .retry_failed_main_task(&repair.id)
+                .retry_failed_main_task(
+                    &repair.id,
+                    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                )
                 .await
                 .expect("refuse duplicate retry"),
-            "a ready task must not receive an unbounded retry budget"
+            "one release must not grant an unbounded retry budget"
         );
         for attempt_number in 2..=4 {
             let retried_claim = store
@@ -1464,10 +1502,36 @@ mod tests {
         }
         assert!(
             !store
-                .retry_failed_main_task(&repair.id)
+                .retry_failed_main_task(
+                    &repair.id,
+                    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                )
                 .await
-                .expect("refuse a second recovery budget"),
-            "an exhausted recovery budget must never be rearmed"
+                .expect("refuse a second budget on one release"),
+            "an exhausted recovery budget must not be rearmed by the same release"
+        );
+        assert!(
+            store
+                .retry_failed_main_task(
+                    &repair.id,
+                    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                )
+                .await
+                .expect("allow recovery after a new Hive repair release"),
+            "a distinct repaired release must receive one bounded budget"
+        );
+        let release_b_claim = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim repair on release b")
+            .expect("repair available on release b");
+        assert_eq!(release_b_claim.id, repair.id);
+        assert_eq!(release_b_claim.attempt_number, 5);
+        assert!(
+            store
+                .complete(&release_b_claim, &agent_a, "platform repaired", None)
+                .await
+                .expect("complete repair on release b")
         );
 
         let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
@@ -1514,11 +1578,48 @@ mod tests {
             "FAILED"
         );
         assert!(
-            !store
-                .retry_failed_main_task(&reused_failed_parent.id)
+            store
+                .retry_failed_main_task(
+                    &reused_failed_parent.id,
+                    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                )
                 .await
-                .expect("refuse repair with failed dependency"),
-            "a repair with a failed dependency must remain failed"
+                .expect("recover failed dependency chain"),
+            "a repaired release must rearm the failed blocker chain"
+        );
+        let recovered_blocker = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim recovered blocker")
+            .expect("recovered blocker available");
+        assert_eq!(recovered_blocker.id, exhausted.id);
+        assert!(
+            store
+                .complete(
+                    &recovered_blocker,
+                    &agent_a,
+                    "sandbox dependency repaired",
+                    None,
+                )
+                .await
+                .expect("complete recovered blocker")
+        );
+        let recovered_parent = store
+            .claim(&agent_a, 300)
+            .await
+            .expect("claim recovered parent")
+            .expect("recovered parent available");
+        assert_eq!(recovered_parent.id, reused_failed_parent.id);
+        assert!(
+            store
+                .complete(
+                    &recovered_parent,
+                    &agent_a,
+                    "dependent repair complete",
+                    None,
+                )
+                .await
+                .expect("complete recovered parent")
         );
 
         let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new());
@@ -1668,46 +1769,52 @@ mod tests {
         store
             .graph
             .run(query(
-                "CREATE (:HiveSchemaMigration {version: 2})
+                "CREATE (:HiveSchemaMigration {version: 3})
                  CREATE (:Task {
-                   id: 'schema-2-task',
+                   id: 'schema-3-task',
                    status: 'FAILED',
+                   manual_retry_used: true,
                    source_commit: '0123456789abcdef0123456789abcdef01234567'
                  })",
             ))
             .await
-            .expect("create schema-2 fixture");
-        store.migrate().await.expect("migrate schema 2 to schema 3");
-        let mut schema_three_rows = store
+            .expect("create schema-3 fixture");
+        store.migrate().await.expect("migrate schema 3 to schema 4");
+        let mut schema_four_rows = store
             .graph
             .execute(query(
-                "MATCH (task:Task {id: 'schema-2-task'})
-                 MATCH (migration:HiveSchemaMigration {version: 3})
-                 RETURN task.manual_retry_used AS manual_retry_used,
+                "MATCH (task:Task {id: 'schema-3-task'})
+                 MATCH (migration:HiveSchemaMigration {version: 4})
+                 RETURN task.last_retry_release AS last_retry_release,
+                        task.manual_retry_used IS NULL AS removed_legacy_marker,
                         migration.version AS version",
             ))
             .await
-            .expect("read schema-3 migration state");
-        let schema_three = schema_three_rows
+            .expect("read schema-4 migration state");
+        let schema_four = schema_four_rows
             .next()
             .await
-            .expect("read schema-3 row")
-            .expect("schema-3 migration row");
+            .expect("read schema-4 row")
+            .expect("schema-4 migration row");
+        assert_eq!(
+            schema_four
+                .get::<String>("last_retry_release")
+                .expect("initialized release marker"),
+            ""
+        );
         assert!(
-            !schema_three
-                .get::<bool>("manual_retry_used")
-                .expect("initialized retry marker")
+            schema_four
+                .get::<bool>("removed_legacy_marker")
+                .expect("removed legacy marker")
         );
         assert_eq!(
-            schema_three
-                .get::<i64>("version")
-                .expect("schema-3 version"),
-            3
+            schema_four.get::<i64>("version").expect("schema-4 version"),
+            4
         );
         store
             .graph
             .run(query("MATCH (node) DETACH DELETE node"))
             .await
-            .expect("clean schema-3 migration fixture");
+            .expect("clean schema-4 migration fixture");
     }
 }

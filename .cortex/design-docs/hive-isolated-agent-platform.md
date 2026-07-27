@@ -274,9 +274,10 @@ execution state and attempt history. Operators inspect that state with
 `task infra:hive:queue:status`. A failed Main-repair is not automatically
 rearmed on every dispatcher poll: after repairing the platform, the explicit
 `task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
-attempts, adds one bounded three-attempt budget, and refuses a task that is
-already ready or running, has already consumed its manual recovery budget, or
-still has an incomplete dependency.
+attempts and adds one bounded three-attempt budget per deployed Hive image. It
+atomically rearms failed blocker dependencies from leaves toward the Main
+repair, refuses an active task, and cannot repeat a recovery for the same image
+digest.
 
 The broker allows a successful descendant Main run to verify the merge when the
 exact merge-commit run was coalesced or cancelled, but only after GitHub proves
