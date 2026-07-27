@@ -410,12 +410,35 @@ pub(crate) async fn device_identity_protection_status() -> Result<&'static str, 
     Ok(wrapped.protection_mode())
 }
 
-pub(crate) async fn device_identity_device_mode() -> Result<Option<&'static str>, NookError> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StoredDeviceMode {
+    Missing,
+    Pin,
+    Standard,
+    AntiHacker,
+}
+
+impl StoredDeviceMode {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Pin => "pin",
+            Self::Standard => "standard",
+            Self::AntiHacker => "anti-hacker",
+        }
+    }
+}
+
+pub(crate) async fn device_identity_device_mode() -> Result<StoredDeviceMode, NookError> {
     let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
-        return Ok(None);
+        return Ok(StoredDeviceMode::Missing);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
-    Ok(Some(wrapped.device_mode()?))
+    Ok(match wrapped {
+        nook_core::WrappedDeviceIdentity::Pin(_) => StoredDeviceMode::Pin,
+        nook_core::WrappedDeviceIdentity::PasskeyDerived(_) => StoredDeviceMode::Standard,
+        nook_core::WrappedDeviceIdentity::PasskeyWrappedLocal(_) => StoredDeviceMode::AntiHacker,
+    })
 }
 
 pub(crate) async fn load_wrapped_device_identity()
@@ -520,8 +543,24 @@ mod device_identity_storage_tests {
         })?;
         assert_eq!(reloaded.protection_mode(), "passkey");
         assert_eq!(reloaded.device_mode()?, "standard");
-        assert_eq!(device_identity_device_mode().await?, Some("standard"));
+        assert_eq!(
+            device_identity_device_mode().await?,
+            StoredDeviceMode::Standard
+        );
         assert_eq!(reloaded.user_handle_bytes()?, setup.user_handle());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn pin_identity_reports_explicit_pin_device_mode() -> Result<(), wasm_bindgen::JsError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let wrapped =
+            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+
+        assert_eq!(device_identity_device_mode().await?, StoredDeviceMode::Pin);
         Ok(())
     }
 

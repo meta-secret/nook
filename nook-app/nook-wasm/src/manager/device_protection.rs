@@ -108,10 +108,11 @@ impl NookVaultManager {
 
     /// Return the product device-protection mode persisted during device setup.
     #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
-    pub async fn device_protection_device_mode(&self) -> Result<Option<String>, JsError> {
+    pub async fn device_protection_device_mode(&self) -> Result<String, JsError> {
         Ok(indexed_db::device_identity_device_mode()
             .await?
-            .map(str::to_owned))
+            .as_str()
+            .to_owned())
     }
 
     #[wasm_bindgen(js_name = beginDeviceProtection)]
