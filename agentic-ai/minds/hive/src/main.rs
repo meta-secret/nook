@@ -100,10 +100,16 @@ enum Command {
     WorkbenchDispatcher {
         #[arg(
             long,
-            env = "HIVE_WORKBENCH_CONTENTS_URL",
-            default_value = "https://api.github.com/repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform?ref=main"
+            env = "HIVE_WORKBENCH_REPOSITORY_URL",
+            default_value = "https://github.com/meta-secret/nook-workbench.git"
         )]
-        contents_url: String,
+        repository_url: String,
+        #[arg(
+            long,
+            env = "HIVE_WORKBENCH_CHECKOUT",
+            default_value = "/tmp/nook-workbench"
+        )]
+        checkout: PathBuf,
         #[arg(long, env = "HIVE_WORKBENCH_POLL_SECONDS", default_value_t = 120)]
         poll_seconds: u64,
     },
@@ -180,6 +186,7 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum GitHubAction {
+    Ping,
     Publish {
         #[arg(long)]
         title: String,
@@ -249,6 +256,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
         } => run_publication_broker(socket, workspace, token_file, private_home).await,
         Command::Github { socket, action } => {
             let request = match action {
+                GitHubAction::Ping => GitHubRequest::Ping,
                 GitHubAction::Publish { title, body } => GitHubRequest::Publish { title, body },
                 GitHubAction::Inspect => GitHubRequest::Inspect,
                 GitHubAction::ReplyThread { thread_id, body } => {
@@ -310,7 +318,8 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             run_coordinator(socket, store).await
         }
         Command::WorkbenchDispatcher {
-            contents_url,
+            repository_url,
+            checkout,
             poll_seconds,
         } => {
             let neo4j_password = cli
@@ -320,7 +329,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let store =
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?;
-            run_workbench_dispatcher(store, &contents_url, poll_seconds).await
+            run_workbench_dispatcher(store, &repository_url, &checkout, poll_seconds).await
         }
         Command::Worker {
             agent_id,

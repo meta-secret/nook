@@ -247,8 +247,12 @@ flowchart LR
   worklog --> complete["Neo4j task COMPLETED"]
 ```
 
-Before enqueueing, the dispatcher fetches the referenced workflow run again and
-requires repository `meta-secret/nook`, workflow `Main`, push event, branch
+The token-free dispatcher maintains a shallow public Git checkout of Workbench
+and reconciles only when its revision changes, rather than repeatedly spending
+GitHub Contents API requests on unchanged incidents. It remembers already
+reconciled incident filenames for the life of the Pod. Before enqueueing, the
+dispatcher fetches the referenced workflow run once and requires repository
+`meta-secret/nook`, workflow `Main`, push event, branch
 `main`, and the incident's exact source SHA. A later successful rerun therefore
 turns a stale Workbench incident into a no-op instead of spending an isolated
 worker on an already-recovered revision.
@@ -308,9 +312,18 @@ an authenticated task reply marker to be visible before a thread can be
 resolved.
 Codex cannot read the token or issue arbitrary authenticated requests.
 
-The worker binds this API before repository execution. Main-repair tasks enable
-the bounded publication capability; all other task kinds permanently disable
-it for that Pod. The broker reads the worker tree through a read-only mount,
+The worker binds this API before repository execution and opens one inheritable
+publication listener capability. The worker relays one fresh broker connection
+through that listener per `hive github` invocation, so an interrupted client
+cannot leave a reply queued for the next command. The listener is explicitly
+inheritable, and deployment verification proves the descriptor survives the
+distribution Bubblewrap implementation without a version-specific wrapper.
+Codex's restricted network policy
+continues to deny every new connection while `hive github` can accept only the
+already-bound, typed broker channel. Main-repair tasks receive the bounded
+publication capability; all other task kinds receive no publication descriptor.
+The broker
+reads the worker tree through a read-only mount,
 copies authored files into its own private checkout, and runs Git only there
 with hooks and executable protocol extensions disabled. Task-controlled
 `.git` configuration is never used by a token-bearing process.

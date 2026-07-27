@@ -6024,6 +6024,7 @@ dependencies = [
  "clap",
  "codex-core-api",
  "futures",
+ "libc",
  "neo4rs",
  "rand 0.10.2",
  "rustls",

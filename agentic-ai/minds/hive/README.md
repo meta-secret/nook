@@ -59,9 +59,12 @@ or privileged builder is required.
 On `SIGTERM`, a claimed worker transactionally releases its lease and marks the
 attempt interrupted without consuming the task's retry budget before rollout.
 
-A one-replica Kata dispatcher reconciles trusted `ready/agent` Workbench Main
-incidents into Neo4j. The failed Main SHA is the idempotency key, so retries do
-not duplicate work. It requires the referenced Actions run to be the exact
+A one-replica Kata dispatcher keeps a bounded shallow public Workbench Git
+snapshot, prunes superseded Git objects, and reconciles trusted `ready/hive`
+Main incidents into Neo4j only when that snapshot changes. Incident bodies are
+cached by content, so an updated run attempt in the same file is evaluated
+again. The failed Main SHA is the idempotency key, so retries do not duplicate
+work. It requires the referenced Actions run to be the exact
 `meta-secret/nook` Main push on `main` at that SHA before enqueueing, so a
 successful rerun makes a stale incident a no-op. A repository-scoped
 GitHub credential lives only in a
@@ -73,9 +76,13 @@ paginated, as are exact-head check runs. Automated-reviewer comments remain
 actionable, outdated threads do not block delivery, and resolution requires the
 task's authenticated reply marker to be visible first. A short Git-ref lock
 serializes the base recheck and merge; stale locks self-expire.
-Before Codex starts, the worker enables that capability only for Main-repair
-tasks and permanently disables it for every other task kind. Publication uses
-a broker-owned private Git checkout populated from the worker's read-only tree;
+Before Codex starts, the worker creates that capability only for Main-repair
+tasks and exposes no publication descriptor to any other task kind. It passes
+an inheritable listener through Bubblewrap; the worker supplies a fresh typed
+broker stream for each sandboxed `hive github` command. Codex retains its
+deny-new-connections network policy, and an interrupted command cannot
+desynchronize later replies. Publication uses a broker-owned private Git
+checkout populated from the worker's read-only tree;
 task-controlled hooks and repository Git configuration therefore never execute
 in the token-bearing broker.
 

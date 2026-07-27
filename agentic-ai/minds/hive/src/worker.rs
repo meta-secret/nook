@@ -16,7 +16,8 @@ use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, TerminalResult, TerminalStatus};
 use crate::publication::{
-    PublicationBinding, bind_publication_task, publication_delivery_verified,
+    PublicationBinding, bind_publication_task, open_publication_capability,
+    publication_delivery_verified,
 };
 use crate::store::TaskStore;
 
@@ -161,6 +162,11 @@ impl<S: TaskStore> Worker<S> {
         external_auth: std::sync::Arc<BrokerExternalAuth>,
         publication: &PublicationBinding,
     ) -> anyhow::Result<()> {
+        let publication_capability = if task.kind == "main-repair" {
+            Some(open_publication_capability(&self.config.publication_socket).await?)
+        } else {
+            None
+        };
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
             self.store.clone(),
@@ -188,6 +194,9 @@ impl<S: TaskStore> Worker<S> {
                 let baseline = if preparation.conflicted {
                     let mut codex_options =
                         CodexOptions::new(repository.clone()).with_workspace_write();
+                    if let Some(capability) = &publication_capability {
+                        codex_options = codex_options.with_publication_fd(capability.raw_fd());
+                    }
                     if let Some(model) = &self.config.model {
                         codex_options.model = Some(model.clone());
                     }
@@ -220,6 +229,9 @@ impl<S: TaskStore> Worker<S> {
                 };
                 let prompt = task_prompt(task, publication.merge_commit.as_deref());
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
+                if let Some(capability) = &publication_capability {
+                    codex_options = codex_options.with_publication_fd(capability.raw_fd());
+                }
                 if let Some(model) = &self.config.model {
                     codex_options.model = Some(model.clone());
                 }

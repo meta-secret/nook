@@ -1,6 +1,9 @@
+use std::os::fd::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::net::UnixListener as StdUnixListener;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -8,12 +11,14 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::process::Command;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, oneshot};
+use tokio::task::JoinHandle;
 
 use crate::model::ClaimedTask;
 
 const REPOSITORY: &str = "meta-secret/nook";
 const API_ROOT: &str = "https://api.github.com";
+static CAPABILITY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BoundTask {
@@ -45,6 +50,7 @@ struct LocalExecutionEvent {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum GitHubRequest {
+    Ping,
     Bind {
         task_id: String,
         source_commit: String,
@@ -130,6 +136,60 @@ pub struct PublicationBinding {
     pub merge_commit: Option<String>,
 }
 
+pub struct PublicationCapability {
+    listener: StdUnixListener,
+    relay: JoinHandle<()>,
+    socket: PathBuf,
+}
+
+impl PublicationCapability {
+    pub fn raw_fd(&self) -> RawFd {
+        self.listener.as_raw_fd()
+    }
+}
+
+impl Drop for PublicationCapability {
+    fn drop(&mut self) {
+        self.relay.abort();
+        let _ = std::fs::remove_file(&self.socket);
+    }
+}
+
+pub async fn open_publication_capability(socket: &Path) -> anyhow::Result<PublicationCapability> {
+    let capability_socket = std::env::temp_dir().join(format!(
+        "hive-publication-{}-{}.sock",
+        std::process::id(),
+        CAPABILITY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let listener = StdUnixListener::bind(&capability_socket).with_context(|| {
+        format!(
+            "bind publication capability {}",
+            capability_socket.display()
+        )
+    })?;
+    listener.set_nonblocking(true)?;
+    let fd = listener.as_raw_fd();
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+    if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) } < 0 {
+        return Err(std::io::Error::last_os_error())
+            .context("make publication capability inheritable");
+    }
+    let (ready_tx, ready_rx) = oneshot::channel();
+    let relay = tokio::spawn(relay_publication_connections(
+        capability_socket.clone(),
+        socket.to_owned(),
+        ready_tx,
+    ));
+    ready_rx
+        .await
+        .context("publication capability relay stopped before connecting")?;
+    Ok(PublicationCapability {
+        listener,
+        relay,
+        socket: capability_socket,
+    })
+}
+
 pub async fn publication_delivery_verified(socket: &Path) -> anyhow::Result<bool> {
     Ok(request(socket, &GitHubRequest::CompletionStatus)
         .await?
@@ -150,6 +210,76 @@ pub async fn run_publication_client(
 }
 
 async fn request(socket: &Path, request_value: &GitHubRequest) -> anyhow::Result<Value> {
+    if let Some(raw_fd) = inherited_publication_fd()? {
+        return request_over_stream(accept_inherited_stream(raw_fd).await?, request_value).await;
+    }
+    request_over_stream(connect(socket).await?, request_value).await
+}
+
+fn inherited_publication_fd() -> anyhow::Result<Option<RawFd>> {
+    let Some(value) = std::env::var_os("HIVE_PUBLICATION_FD") else {
+        return Ok(None);
+    };
+    let value = value
+        .to_str()
+        .context("HIVE_PUBLICATION_FD is not valid UTF-8")?;
+    let fd = value
+        .parse::<RawFd>()
+        .context("invalid HIVE_PUBLICATION_FD")?;
+    if fd < 0 {
+        anyhow::bail!("HIVE_PUBLICATION_FD must be non-negative");
+    }
+    Ok(Some(fd))
+}
+
+async fn accept_inherited_stream(raw_fd: RawFd) -> anyhow::Result<UnixStream> {
+    let duplicated = unsafe { libc::dup(raw_fd) };
+    if duplicated < 0 {
+        return Err(std::io::Error::last_os_error()).context("duplicate publication capability");
+    }
+    let listener = unsafe { StdUnixListener::from_raw_fd(duplicated) };
+    listener.set_nonblocking(true)?;
+    let listener =
+        UnixListener::from_std(listener).context("adopt publication capability listener")?;
+    listener
+        .accept()
+        .await
+        .map(|(stream, _)| stream)
+        .context("accept publication capability connection")
+}
+
+async fn relay_publication_connections(
+    capability_socket: PathBuf,
+    broker_socket: PathBuf,
+    ready: oneshot::Sender<()>,
+) {
+    let mut ready = Some(ready);
+    loop {
+        let mut broker = match connect(&broker_socket).await {
+            Ok(broker) => broker,
+            Err(error) => {
+                eprintln!("Hive publication capability broker connection failed: {error:#}");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+        let mut client = match connect(&capability_socket).await {
+            Ok(client) => client,
+            Err(error) => {
+                eprintln!("Hive publication capability relay stopped: {error:#}");
+                return;
+            }
+        };
+        if let Some(ready) = ready.take() {
+            let _ = ready.send(());
+        }
+        if let Err(error) = tokio::io::copy_bidirectional(&mut client, &mut broker).await {
+            eprintln!("Hive publication capability request ended early: {error}");
+        }
+    }
+}
+
+async fn connect(socket: &Path) -> anyhow::Result<UnixStream> {
     let mut stream = None;
     for _ in 0..240 {
         match UnixStream::connect(socket).await {
@@ -172,12 +302,18 @@ async fn request(socket: &Path, request_value: &GitHubRequest) -> anyhow::Result
             }
         }
     }
-    let mut stream = stream.with_context(|| {
+    stream.with_context(|| {
         format!(
             "publication broker {} was unavailable for 120 seconds",
             socket.display()
         )
-    })?;
+    })
+}
+
+async fn request_over_stream(
+    mut stream: UnixStream,
+    request_value: &GitHubRequest,
+) -> anyhow::Result<Value> {
     stream
         .write_all(&serde_json::to_vec(request_value)?)
         .await?;
@@ -251,6 +387,7 @@ async fn serve_connection(broker: &PublicationBroker, stream: UnixStream) -> any
 impl PublicationBroker {
     async fn handle(&self, request_value: GitHubRequest) -> anyhow::Result<Value> {
         match request_value {
+            GitHubRequest::Ping => Ok(json!({ "status": "ok" })),
             GitHubRequest::Bind {
                 task_id,
                 source_commit,
@@ -2085,10 +2222,94 @@ fn publication_branch_generation(base_branch: &str, branch: &str) -> Option<u64>
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::UnixListener;
 
     use super::{
-        publication_branch_generation, publication_branch_name, review_feedback, valid_feedback_id,
+        GitHubRequest, GitHubResponse, accept_inherited_stream, open_publication_capability,
+        publication_branch_generation, publication_branch_name, request_over_stream,
+        review_feedback, run_publication_broker, valid_feedback_id,
     };
+
+    #[tokio::test]
+    async fn preconnected_capability_survives_without_a_connect_syscall() {
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("broker.sock");
+        let workspace = directory.path().join("workspace");
+        let token = directory.path().join("token");
+        let private_home = directory.path().join("private");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let broker = tokio::spawn(run_publication_broker(
+            socket.clone(),
+            workspace,
+            token,
+            private_home,
+        ));
+        let capability = open_publication_capability(&socket).await.unwrap();
+        std::fs::remove_file(&socket).unwrap();
+
+        let response = request_over_stream(
+            accept_inherited_stream(capability.raw_fd()).await.unwrap(),
+            &GitHubRequest::Ping,
+        )
+        .await
+        .unwrap();
+        assert_eq!(response, json!({ "status": "ok" }));
+
+        broker.abort();
+    }
+
+    #[tokio::test]
+    async fn abandoned_reply_cannot_shift_the_next_capability_request() {
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("broker.sock");
+        let broker = tokio::spawn({
+            let socket = socket.clone();
+            async move {
+                let listener = UnixListener::bind(socket).unwrap();
+                for sequence in 1..=2 {
+                    let (mut stream, _) = listener.accept().await.unwrap();
+                    let mut request = String::new();
+                    BufReader::new(&mut stream)
+                        .read_line(&mut request)
+                        .await
+                        .unwrap();
+                    stream
+                        .write_all(
+                            format!(
+                                "{}\n",
+                                serde_json::to_string(&GitHubResponse::Value(json!({
+                                    "sequence": sequence
+                                })))
+                                .unwrap()
+                            )
+                            .as_bytes(),
+                        )
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+        let capability = open_publication_capability(&socket).await.unwrap();
+
+        let mut abandoned = accept_inherited_stream(capability.raw_fd()).await.unwrap();
+        abandoned
+            .write_all(&serde_json::to_vec(&GitHubRequest::Ping).unwrap())
+            .await
+            .unwrap();
+        abandoned.write_all(b"\n").await.unwrap();
+        drop(abandoned);
+
+        let response = request_over_stream(
+            accept_inherited_stream(capability.raw_fd()).await.unwrap(),
+            &GitHubRequest::Ping,
+        )
+        .await
+        .unwrap();
+        assert_eq!(response, json!({ "sequence": 2 }));
+
+        broker.await.unwrap();
+    }
 
     #[test]
     fn task_branch_is_deterministic_and_namespaced() {
