@@ -58,6 +58,8 @@ pub struct QueueTaskStatus {
     pub max_attempts: i64,
     pub latest_attempt_status: String,
     pub latest_error: String,
+    pub previous_attempt_status: String,
+    pub previous_error: String,
     pub created_at: i64,
     pub last_retry_release: String,
 }
@@ -90,7 +92,8 @@ impl Neo4jTaskStore {
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
                      WITH task, attempt
                      ORDER BY attempt.completed_at DESC, attempt.started_at DESC
-                     WITH task, collect(attempt)[0] AS latest
+                     WITH task, collect(attempt) AS attempts
+                     WITH task, attempts[0] AS latest, attempts[1] AS previous
                      RETURN task.id AS id,
                             task.status AS status,
                             task.attempt_count AS attempt_count,
@@ -101,6 +104,12 @@ impl Neo4jTaskStore {
                               0,
                               600
                             ) AS latest_error,
+                            coalesce(previous.status, '') AS previous_attempt_status,
+                            substring(
+                              replace(coalesce(previous.error, ''), '\n', ' '),
+                              0,
+                              600
+                            ) AS previous_error,
                             task.created_at AS created_at,
                             coalesce(task.last_retry_release, '') AS last_retry_release
                      ORDER BY created_at DESC
@@ -118,6 +127,8 @@ impl Neo4jTaskStore {
                 max_attempts: row.get("max_attempts")?,
                 latest_attempt_status: row.get("latest_attempt_status")?,
                 latest_error: row.get("latest_error")?,
+                previous_attempt_status: row.get("previous_attempt_status")?,
+                previous_error: row.get("previous_error")?,
                 created_at: row.get("created_at")?,
                 last_retry_release: row.get("last_retry_release")?,
             });
@@ -1550,11 +1561,35 @@ mod tests {
             assert_eq!(retried_claim.attempt_number, attempt_number);
             assert!(
                 store
-                    .fail(&retried_claim, &agent_a, "repair attempt failed")
+                    .fail(
+                        &retried_claim,
+                        &agent_a,
+                        &format!("repair attempt {attempt_number} failed"),
+                    )
                     .await
                     .expect("fail retried Main repair")
             );
         }
+        let status = store
+            .queue_status(200)
+            .await
+            .expect("inspect retried Main repair attempts");
+        let failed_repair = status
+            .iter()
+            .find(|task| task.id == repair.id.as_str())
+            .expect("retried Main repair status");
+        assert_eq!(failed_repair.latest_attempt_status, "FAILED");
+        assert_eq!(failed_repair.previous_attempt_status, "FAILED");
+        assert!(
+            failed_repair
+                .latest_error
+                .contains("repair attempt 4 failed")
+        );
+        assert!(
+            failed_repair
+                .previous_error
+                .contains("repair attempt 3 failed")
+        );
         assert!(
             !store
                 .retry_failed_main_task(

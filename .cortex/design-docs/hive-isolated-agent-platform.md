@@ -147,8 +147,10 @@ expiry, then creates a unique attempt and lease token. Heartbeat and completion
 must present the current token. A late worker cannot overwrite a replacement
 attempt.
 
-The normal defaults are a five-minute lease, a one-minute heartbeat, a
-one-hour task timeout, and bounded idle polling with jitter. Rollout
+Production workers use a one-hour renewable lease, a one-minute heartbeat, a
+six-hour task timeout, and bounded idle polling with jitter. The lease window
+must cover long repository checks even if the embedded agent briefly delays
+the renewal task; accepted renewals remain visible in worker logs. Rollout
 interruption releases the task and decrements the consumed attempt before the
 Pod exits.
 
@@ -275,8 +277,10 @@ state, not completion. The task must:
 
 An incident remains the durable desired-state signal, while Neo4j owns actual
 execution state and attempt history. Operators inspect that state with
-`task infra:hive:queue:status`. A failed Main-repair is not automatically
-rearmed on every dispatcher poll: after repairing the platform, the explicit
+`task infra:hive:queue:status`, which includes the latest and previous attempt
+outcomes so replacement-Pod failures remain diagnosable. A failed Main-repair
+is not automatically rearmed on every dispatcher poll: after repairing the
+platform, the explicit
 `task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
 attempts and adds one bounded three-attempt budget per deployed Hive image. It
 atomically rearms failed blocker dependencies from leaves toward the Main

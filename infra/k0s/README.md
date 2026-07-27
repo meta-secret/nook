@@ -111,6 +111,13 @@ Durable Hive queue state is inspected through the repository Taskfile:
 task infra:hive:queue:status
 ```
 
+The status includes both the latest and previous attempt outcomes. For live
+renewal evidence and bounded logs from every worker Pod, use:
+
+```bash
+task infra:hive:diagnose
+```
+
 An exhausted Main-repair task is never reset implicitly or given an unbounded
 retry budget. After deploying a platform repair, an operator may add exactly
 three attempts to the failed task and each failed blocker dependency while
