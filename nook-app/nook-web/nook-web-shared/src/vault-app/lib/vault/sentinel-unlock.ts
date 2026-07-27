@@ -1,3 +1,4 @@
+import { VaultType } from "$lib/vault-architecture";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/log";
@@ -50,7 +51,7 @@ export function isSentinelPasswordUnlockForbiddenError(err: unknown): boolean {
 }
 
 export function isSentinelVault(state: VaultState): boolean {
-  if (state.vaultArchitecture.vault_type === "sentinel") return true;
+  if (state.vaultArchitecture.vault_type === VaultType.Sentinel) return true;
   if (!state.manager) return false;
   try {
     return (
@@ -82,7 +83,7 @@ export async function refreshSentinelUnlockStatus(
   if (
     !state.isAuthenticated &&
     status === SentinelVaultUnlockState.NotSentinel &&
-    state.vaultArchitecture.vault_type === "sentinel"
+    state.vaultArchitecture.vault_type === VaultType.Sentinel
   ) {
     await ensureSentinelCeremonyHydrated(state);
     status = await getSentinelUnlockStatus(state);
@@ -98,7 +99,7 @@ export async function refreshSentinelUnlockStatus(
     state.sentinelCeremonyPrompt = false;
   } else if (
     status === SentinelVaultUnlockState.NotSentinel &&
-    state.vaultArchitecture.vault_type === "sentinel"
+    state.vaultArchitecture.vault_type === VaultType.Sentinel
   ) {
     state.sentinelCeremonyPrompt = true;
     state.sentinelUnlockStatus = SentinelVaultUnlockState.CeremonyRequired;

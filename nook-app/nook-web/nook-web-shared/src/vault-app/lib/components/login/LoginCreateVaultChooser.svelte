@@ -19,6 +19,7 @@
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
   import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
   import type { VaultState } from '$lib/vault.svelte'
+  import { VaultType } from '$lib/vault-architecture'
   import type { AppKind } from '$lib/app-kind'
   import {
     buildSentinelGenesisParticipantResponseLink,
@@ -432,13 +433,13 @@
   }
 
   function chooseSimplePath() {
-    vault.draftVaultType = 'simple'
+    vault.draftVaultType = VaultType.Simple
     chosenPath = 'simple'
     wizardStep = 'simple-create'
   }
 
   function chooseSentinelCreatePath() {
-    vault.draftVaultType = 'sentinel'
+    vault.draftVaultType = VaultType.Sentinel
     chosenPath = 'sentinel'
     initiatorFingerprint = ''
     initiatorPasskeyRequested = false
