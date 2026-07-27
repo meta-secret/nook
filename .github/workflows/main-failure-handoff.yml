@@ -56,9 +56,7 @@ jobs:
               buildMainFailureIssue,
               failedJobNames,
               incidentPathForRun,
-              isDeferredE2eOnlyFailure,
               isStaleMainAttempt,
-              retireDeferredE2eIncident,
             } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-failure-handoff.cjs`)
 
             const eventRun = context.payload.workflow_run
@@ -83,19 +81,17 @@ jobs:
             )
             const failedJobs = failedJobNames(jobs)
             let sourcePullRequests = []
-            if (!isDeferredE2eOnlyFailure(failedJobs)) {
-              try {
-                sourcePullRequests = await github.paginate(
-                  github.rest.repos.listPullRequestsAssociatedWithCommit,
-                  {
-                    ...context.repo,
-                    commit_sha: run.head_sha,
-                    per_page: 100,
-                  },
-                )
-              } catch (error) {
-                core.warning(`Could not associate pull requests with ${run.head_sha}: ${error.message}`)
-              }
+            try {
+              sourcePullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  ...context.repo,
+                  commit_sha: run.head_sha,
+                  per_page: 100,
+                },
+              )
+            } catch (error) {
+              core.warning(`Could not associate pull requests with ${run.head_sha}: ${error.message}`)
             }
 
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
@@ -127,44 +123,6 @@ jobs:
                   `${incidentPath} already records a newer attempt; ignoring attempt ${run.run_attempt}`,
                 )
                 return
-              }
-
-              if (isDeferredE2eOnlyFailure(failedJobs)) {
-                if (!existing) {
-                  core.info(
-                    `Main failed only in deferred E2E jobs; no Hive incident queued: ${failedJobs.join(', ')}`,
-                  )
-                  core.setOutput('deferred-e2e-only', 'true')
-                  return
-                }
-                const retiredBody = retireDeferredE2eIncident({
-                  body: existing.body,
-                  run,
-                  jobs,
-                  recordedAt,
-                })
-                if (existing.body === retiredBody) {
-                  core.info(`${incidentPath} is already retired`)
-                  core.setOutput('deferred-e2e-only', 'true')
-                  return
-                }
-                try {
-                  await github.rest.repos.createOrUpdateFileContents({
-                    owner,
-                    repo,
-                    path: incidentPath,
-                    branch: 'main',
-                    sha: existing.sha,
-                    message: `ci: retire deferred E2E-only Nook Main ${run.head_sha.slice(0, 12)}`,
-                    content: Buffer.from(retiredBody).toString('base64'),
-                  })
-                  core.info(`Retired ${incidentPath}: ${failedJobs.join(', ')}`)
-                  core.setOutput('deferred-e2e-only', 'true')
-                  return
-                } catch (error) {
-                  if (error.status === 409 && attempt < 3) continue
-                  throw error
-                }
               }
 
               const incident = buildMainFailureIssue({

@@ -6,10 +6,8 @@ const {
   buildMainFailureIssue,
   failedJobNames,
   incidentPathForRun,
-  isDeferredE2eOnlyFailure,
   isStaleMainAttempt,
   requireMainFailure,
-  retireDeferredE2eIncident,
 } = require('./main-failure-handoff.cjs')
 
 function run(overrides = {}) {
@@ -136,79 +134,70 @@ test('rejects untrusted or non-failing workflow shapes', () => {
   )
 })
 
-test('defers only failures confined to the explicitly deferred E2E jobs', () => {
-  const e2eFailures = failedJobNames([
-    { name: 'Native Rust verification', conclusion: 'success' },
-    { name: 'Web e2e', conclusion: 'failure' },
-    { name: 'UI demos', conclusion: 'timed_out' },
-    { name: 'Extension e2e', conclusion: 'failure' },
-  ])
-  assert.deepEqual(e2eFailures, ['Extension e2e', 'UI demos', 'Web e2e'])
-  assert.equal(isDeferredE2eOnlyFailure(e2eFailures), true)
-  assert.equal(
-    isDeferredE2eOnlyFailure([...e2eFailures, 'Native Rust verification']),
-    false,
-  )
-  assert.equal(isDeferredE2eOnlyFailure([]), false)
-})
-
-test('treats cancelled non-E2E jobs as actionable failure evidence', () => {
-  const failures = failedJobNames([
-    { name: 'Native Rust verification', conclusion: 'cancelled' },
-    { name: 'Web e2e', conclusion: 'failure' },
-  ])
-  assert.deepEqual(failures, ['Native Rust verification', 'Web e2e'])
-  assert.equal(isDeferredE2eOnlyFailure(failures), false)
-})
-
-test('retires an existing incident when a rerun fails only deferred E2E jobs', () => {
+test('queues failures confined to browser and UI-demo jobs', () => {
   const source = run()
-  const initial = buildMainFailureIssue({
+  const issue = buildMainFailureIssue({
     run: source,
-    jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
-    recordedAt: '2026-07-26T06:00:00Z',
-  })
-  const rerun = run({ run_attempt: 2 })
-  const retired = retireDeferredE2eIncident({
-    body: `${initial.body.replace('- [ ]', '- [x]')}\n\n## Completion\n\n<!-- hive-delivery-complete -->\n- Repair PR: [#800](https://github.com/meta-secret/nook/pull/800)\n- Worklog: old.md\n`,
-    run: rerun,
     jobs: [
       { name: 'Native Rust verification', conclusion: 'success' },
       { name: 'Web e2e', conclusion: 'failure' },
+      { name: 'UI demos', conclusion: 'timed_out' },
+      { name: 'Extension e2e', conclusion: 'failure' },
     ],
-    recordedAt: '2026-07-26T06:30:00Z',
+    sourcePullRequests: [{ number: 816 }],
+    recordedAt: '2026-07-27T19:06:46Z',
   })
 
-  assert.match(retired, /^status: done$/m)
-  assert.match(retired, /^automation: hive$/m)
-  assert.match(retired, /^updated_at: 2026-07-26T06:30:00Z$/m)
-  assert.match(retired, /<!-- main-run:30190000000:attempt:2 -->/)
-  assert.match(retired, /<!-- hive-retired:deferred-e2e -->/)
+  assert.match(issue.body, /^status: ready$/m)
+  assert.match(issue.body, /^automation: hive$/m)
+  assert.match(issue.body, /^related_prs: \[816\]$/m)
+  assert.deepEqual(issue.failedJobs, ['Extension e2e', 'UI demos', 'Web e2e'])
+})
 
-  const reopened = buildMainFailureIssue({
-    run: run({ run_attempt: 3 }),
+test('records cancelled jobs as repair evidence', () => {
+  const issue = buildMainFailureIssue({
+    run: run(),
+    jobs: [
+      { name: 'Native Rust verification', conclusion: 'cancelled' },
+      { name: 'Web e2e', conclusion: 'failure' },
+    ],
+    recordedAt: '2026-07-27T19:06:46Z',
+  })
+
+  assert.deepEqual(issue.failedJobs, ['Native Rust verification', 'Web e2e'])
+  assert.match(issue.body, /Failed jobs: Native Rust verification, Web e2e\./)
+})
+
+test('reopens an incident retired by the former E2E suppression policy', () => {
+  const initial = buildMainFailureIssue({
+    run: run(),
     jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
-    recordedAt: '2026-07-26T07:00:00Z',
-    existingBody: retired,
+    recordedAt: '2026-07-26T06:00:00Z',
   })
+  const legacyRetired = `${initial.body
+    .replace(/^status: ready$/m, 'status: done')
+    .replace(
+      '\n## Findings and decisions\n',
+      '\n<!-- hive-retired:deferred-e2e -->\n\n## Findings and decisions\n',
+    )
+    .replace('- [ ]', '- [x]')}\n\n## Completion\n\n<!-- hive-delivery-complete -->\n- Repair PR: [#800](https://github.com/meta-secret/nook/pull/800)\n`
+  const reopened = buildMainFailureIssue({
+    run: run({ run_attempt: 2 }),
+    jobs: [
+      { name: 'Web e2e', conclusion: 'failure' },
+      { name: 'UI demos', conclusion: 'failure' },
+      { name: 'Extension e2e', conclusion: 'failure' },
+    ],
+    recordedAt: '2026-07-27T19:06:46Z',
+    existingBody: legacyRetired,
+  })
+
   assert.match(reopened.body, /^status: ready$/m)
   assert.match(reopened.body, /^owner: unassigned$/m)
   assert.doesNotMatch(reopened.body, /<!-- hive-retired:deferred-e2e -->/)
   assert.doesNotMatch(reopened.body, /<!-- hive-delivery-complete -->/)
-  assert.doesNotMatch(reopened.body, /Worklog: old\.md/)
   assert.match(reopened.body, /- \[ \] The failure is explained/)
-  assert.match(reopened.body, /<!-- main-run:30190000000:attempt:3 -->/)
-
-  assert.throws(
-    () =>
-      retireDeferredE2eIncident({
-        body: initial.body,
-        run: rerun,
-        jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
-        recordedAt: '2026-07-26T06:30:00Z',
-      }),
-    /only deferred E2E failures/,
-  )
+  assert.match(reopened.body, /<!-- main-run:30190000000:attempt:2 -->/)
 })
 
 test('workflow preserves the Main cache order and coalesces only pending runs', () => {
@@ -246,6 +235,7 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
   assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
   assert.match(workflow, /github-token: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)
   assert.match(workflow, /WORKBENCH_REPOSITORY: meta-secret\/nook-workbench/)
-  assert.match(workflow, /isDeferredE2eOnlyFailure\(failedJobs\)/)
+  assert.match(workflow, /buildMainFailureIssue\(\{/)
+  assert.doesNotMatch(workflow, /deferred-e2e-only|isDeferredE2eOnlyFailure/)
   assert.doesNotMatch(workflow, /download-artifact|log-failed|issues\.create/)
 })

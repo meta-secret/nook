@@ -6,7 +6,7 @@ const FAILURE_CONCLUSIONS = new Set([
 ])
 const REPAIR_JOB_CONCLUSIONS = new Set([...FAILURE_CONCLUSIONS, 'cancelled'])
 
-const DEFERRED_E2E_JOBS = new Set(['Extension e2e', 'UI demos', 'Web e2e'])
+// Kept only to reopen incidents retired by the former E2E suppression policy.
 const DEFERRED_E2E_RETIREMENT_MARKER = '<!-- hive-retired:deferred-e2e -->'
 
 function requireString(value, label) {
@@ -69,34 +69,6 @@ function failedJobNames(jobs) {
     .map((job) => safeInline(requireString(job.name, 'job.name')))
     .filter(Boolean)
   return [...new Set(names)].sort((left, right) => left.localeCompare(right))
-}
-
-function isDeferredE2eOnlyFailure(failures) {
-  if (!Array.isArray(failures)) throw new Error('failures must be an array')
-  return failures.length > 0 && failures.every((name) => DEFERRED_E2E_JOBS.has(name))
-}
-
-function retireDeferredE2eIncident({ body, run, jobs, recordedAt }) {
-  requireMainFailure(run)
-  const timestamp = requireTimestamp(recordedAt, 'recordedAt')
-  const failures = failedJobNames(jobs)
-  if (!isDeferredE2eOnlyFailure(failures)) {
-    throw new Error('only deferred E2E failures may retire a Main failure incident')
-  }
-  let updated = updateExistingIssue({
-    body,
-    run,
-    recordedAt: timestamp,
-    failures,
-    relatedPrs: [],
-  })
-  if (!updated.includes(DEFERRED_E2E_RETIREMENT_MARKER)) {
-    updated = updated.replace(
-      '\n## Findings and decisions\n',
-      `\n${DEFERRED_E2E_RETIREMENT_MARKER}\n\n## Findings and decisions\n`,
-    )
-  }
-  return replaceFrontmatterField(updated, 'status', 'done')
 }
 
 function pullRequestNumbers(sourcePullRequests) {
@@ -300,8 +272,6 @@ module.exports = {
   buildMainFailureIssue,
   failedJobNames,
   incidentPathForRun,
-  isDeferredE2eOnlyFailure,
   isStaleMainAttempt,
   requireMainFailure,
-  retireDeferredE2eIncident,
 }

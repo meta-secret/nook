@@ -92,7 +92,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 
 | Component | Runs where | Owns | Must not own |
 | --- | --- | --- | --- |
-| Main failure handoff | GitHub Actions | Converts an actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA; deferred E2E-only failures remain visible without queuing Hive and retire an existing incident for that SHA | Agent execution, raw failure logs, deployment |
+| Main failure handoff | GitHub Actions | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures | Agent execution, raw failure logs, deployment |
 | Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
