@@ -216,6 +216,7 @@ fn assert_delivery_cache_scope_contract() {
         "nook-app/Taskfile.yml",
         "nook-app/docker-bake.hcl",
         "nook-app/**/docker-bake.hcl",
+        "nook-app/docker/*.docker-bake.hcl",
         "nook-app/docker/base.Dockerfile",
         "nook-app/docker/Taskfile.yml",
         "nook-app/docker/sccache-wrapper.sh",
