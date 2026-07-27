@@ -252,7 +252,7 @@ fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
             .rposition(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'$'))
             .map_or(0, |index| index + 1);
         let identifier = &compact[identifier_start..equals];
-        let is_domain_identifier = identifier == b"switchingTo"
+        let is_domain_identifier = identifier.ends_with(b"switchingTo")
             || identifier.ends_with(b"StoreId")
             || identifier.ends_with(b"EntryId");
         if is_domain_identifier {
