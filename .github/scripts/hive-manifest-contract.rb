@@ -198,11 +198,20 @@ end
 
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
 seccomp_profile = load_yaml.call("infra/k0s/seccomp/hive-bubblewrap.json")
-unless seccomp_profile["defaultAction"] == "SCMP_ACT_ALLOW" &&
+allowed_syscalls = seccomp_profile
+  .fetch("syscalls")
+  .select { |rule| rule["action"] == "SCMP_ACT_ALLOW" }
+  .flat_map { |rule| rule.fetch("names") }
+unless seccomp_profile["defaultAction"] == "SCMP_ACT_ERRNO" &&
+       %w[clone clone3 mount pivot_root setns umount2 unshare].all? do |name|
+         allowed_syscalls.include?(name)
+       end &&
+       !allowed_syscalls.include?("bpf") &&
+       !allowed_syscalls.include?("perf_event_open") &&
        infra_taskfile.include?("hive:seccomp:install:") &&
        infra_taskfile.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
        infra_taskfile.include?('task: hive:seccomp:install')
-  raise "Hive deploy must install its pinned local Bubblewrap seccomp profile"
+  raise "Hive deploy must install its deny-by-default Bubblewrap seccomp profile"
 end
 kubernetes_tools_task = infra_taskfile.match(
   /^  kubernetes:tools:install:\n(?<body>.*?)(?=^  kubernetes:tools:status:)/m

@@ -79,6 +79,10 @@ The Kata-isolated Hive worker is the only container with the pinned
 `Localhost` seccomp profile installed by the Taskfile beneath k0s's kubelet
 root. The profile allows the rootless Bubblewrap mount-namespace setup inside
 the Dragonball guest while remaining compatible with Restricted Pod Security.
+It is deny-by-default, based on Moby's pinned
+[`seccomp/v0.2.1` default profile](https://github.com/moby/profiles/blob/seccomp/v0.2.1/seccomp/default.json),
+and adds only Bubblewrap's namespace and mount syscalls; `bpf` and
+`perf_event_open` remain denied.
 The worker remains non-root, drops every capability, disallows privilege
 escalation, and has a read-only root filesystem. Hive deployment executes a
 Bubblewrap sandbox inside a live worker and fails if that boundary cannot be

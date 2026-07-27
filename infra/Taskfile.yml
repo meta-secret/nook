@@ -2389,7 +2389,7 @@ tasks:
         profile_dir=/var/lib/k0s/kubelet/seccomp/nook
         test "$(
           jq -r '.defaultAction' "$source_profile"
-        )" = SCMP_ACT_ALLOW
+        )" = SCMP_ACT_ERRNO
         sudo -n install -d -m 0755 "$profile_dir"
         sudo -n install -m 0644 \
           "$source_profile" \
