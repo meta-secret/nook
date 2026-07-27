@@ -457,9 +457,10 @@ end
 unless hive_taskfile.include?("--target verify-export") &&
        hive_taskfile.include?("--target test-export") &&
        hive_taskfile.include?('type=local,dest=$verified') &&
+       hive_taskfile.include?('test -f "$verified/hive-sandbox-smoke-passed"') &&
        !hive_taskfile.include?("--target test-runner") &&
        !hive_taskfile.include?("--load")
-  raise "Hive verification must export only test executables from BuildKit"
+  raise "Hive verification must export only tests and runtime smoke proof from BuildKit"
 end
 unless hive_taskfile.include?('if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]') &&
        !hive_taskfile.include?(
@@ -478,6 +479,16 @@ end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
   raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
+end
+unless hive_dockerfile.include?("FROM runtime AS sandbox-smoke") &&
+       hive_dockerfile.include?("setpriv --no-new-privs") &&
+       hive_dockerfile.include?("bwrap") &&
+       hive_dockerfile.include?("--ro-bind / /") &&
+       hive_dockerfile.include?("--bind /workspace /workspace") &&
+       hive_dockerfile.include?(
+         "COPY --from=sandbox-smoke /tmp/hive-sandbox-smoke-passed"
+       )
+  raise "Hive verification must exercise bubblewrap in the production runtime constraints"
 end
 unless hive_dockerfile.include?(
          'SHELL ["/bin/bash", "-o", "pipefail", "-c"]'

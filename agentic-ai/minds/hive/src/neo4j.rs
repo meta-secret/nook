@@ -283,7 +283,8 @@ impl TaskStore for Neo4jTaskStore {
             self.graph
                 .run(query(
                     "MATCH (task:Task)
-                     SET task.last_retry_release = ''
+                     SET task.last_retry_release =
+                       coalesce(task.last_retry_release, '')
                      REMOVE task.manual_retry_used",
                 ))
                 .await
@@ -1775,6 +1776,14 @@ mod tests {
                    status: 'FAILED',
                    manual_retry_used: true,
                    source_commit: '0123456789abcdef0123456789abcdef01234567'
+                 })
+                 CREATE (:Task {
+                   id: 'schema-4-rollback-task',
+                   status: 'FAILED',
+                   manual_retry_used: true,
+                   last_retry_release:
+                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                   source_commit: '0123456789abcdef0123456789abcdef01234567'
                  })",
             ))
             .await
@@ -1810,6 +1819,24 @@ mod tests {
         assert_eq!(
             schema_four.get::<i64>("version").expect("schema-4 version"),
             4
+        );
+        let mut rollback_marker_rows = store
+            .graph
+            .execute(query(
+                "MATCH (task:Task {id: 'schema-4-rollback-task'})
+                 RETURN task.last_retry_release AS last_retry_release",
+            ))
+            .await
+            .expect("read retained schema-4 rollback marker");
+        assert_eq!(
+            rollback_marker_rows
+                .next()
+                .await
+                .expect("read schema-4 rollback row")
+                .expect("schema-4 rollback row")
+                .get::<String>("last_retry_release")
+                .expect("retained schema-4 rollback marker"),
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         );
         store
             .graph
