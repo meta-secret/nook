@@ -138,6 +138,18 @@ FROM scratch AS test-export
 
 COPY --from=test-compile /opt/nook/hive-tests /hive-tests
 
+FROM toolchain AS sandbox-package-check
+
+RUN test -x "$(command -v bwrap)" \
+    && bwrap --version \
+    && install -D /dev/null /opt/nook/hive-sandbox-package-passed
+
+FROM scratch AS verify-export
+
+COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
+COPY --from=test-export /hive-tests /hive-tests
+COPY --from=sandbox-package-check /opt/nook/hive-sandbox-package-passed /hive-sandbox-package-passed
+
 FROM dependencies AS release-source
 COPY lace/src lace/src
 COPY hive/src hive/src
@@ -160,31 +172,3 @@ USER 1000:1000
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/hive"]
 CMD ["worker"]
-
-# Exercise the actual production image as the same non-root user used by the
-# capability-dropped pod. setpriv supplies no_new_privs, while bwrap creates a
-# read-only root and a writable workspace just as Codex's Linux sandbox must.
-FROM runtime AS sandbox-smoke
-
-RUN test "$(id -u)" = 1000 \
-    && test -x "$(command -v bwrap)" \
-    && test "$(awk '/^CapEff:/ { print $2 }' /proc/self/status)" = \
-      0000000000000000 \
-    && setpriv --no-new-privs \
-      bwrap \
-        --unshare-all \
-        --ro-bind / / \
-        --dev /dev \
-        --proc /proc \
-        --tmpfs /tmp \
-        --bind /workspace /workspace \
-        --chdir /workspace \
-        /bin/bash -ceu \
-          'touch .hive-sandbox-smoke && test ! -w /usr && rm .hive-sandbox-smoke' \
-    && install -D /dev/null /tmp/hive-sandbox-smoke-passed
-
-FROM scratch AS verify-export
-
-COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
-COPY --from=test-export /hive-tests /hive-tests
-COPY --from=sandbox-smoke /tmp/hive-sandbox-smoke-passed /hive-sandbox-smoke-passed

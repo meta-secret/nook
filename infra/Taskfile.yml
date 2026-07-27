@@ -2332,6 +2332,20 @@ tasks:
             head -1
         )"
         test -n "$old_pod"
+        kubectl exec "$old_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /usr/bin/setpriv --no-new-privs \
+            /usr/bin/bwrap \
+              --unshare-all \
+              --ro-bind / / \
+              --dev /dev \
+              --proc /proc \
+              --tmpfs /tmp \
+              --bind /workspace /workspace \
+              --chdir /workspace \
+              /bin/bash -ceu \
+                'touch .hive-sandbox-smoke && test ! -w /usr && rm .hive-sandbox-smoke'
         old_uid="$(kubectl get pod "$old_pod" \
           --namespace hive-system \
           -o jsonpath='{.metadata.uid}')"
