@@ -166,7 +166,13 @@ impl<S: TaskStore> Worker<S> {
         publication: &PublicationBinding,
     ) -> anyhow::Result<()> {
         let publication_capability = if task.kind == "main-repair" {
-            Some(open_publication_capability(&self.config.publication_socket).await?)
+            Some(
+                open_publication_capability(
+                    &self.config.publication_socket,
+                    &self.config.workspace,
+                )
+                .await?,
+            )
         } else {
             None
         };

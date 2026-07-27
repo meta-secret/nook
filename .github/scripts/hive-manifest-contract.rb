@@ -591,6 +591,10 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("task-bound publication socket through Bubblewrap") &&
        infra_taskfile.include?("/usr/local/libexec/hive-bwrap-publication-smoke.py") &&
        hive_bwrap_smoke.include?('"HIVE_PUBLICATION_SOCKET"') &&
+       hive_bwrap_smoke.include?('"--tmpfs"') &&
+       hive_bwrap_smoke.include?('dir="/workspace"') &&
+       hive_bwrap_smoke.include?("timeout=10") &&
+       hive_bwrap_smoke.include?("broker.join(timeout=6)") &&
        hive_bwrap_smoke.include?('"hive"') &&
        hive_bwrap_smoke.include?('"github"') &&
        hive_bwrap_smoke.include?('"ping"') &&

@@ -151,10 +151,13 @@ impl Drop for PublicationCapability {
     }
 }
 
-pub async fn open_publication_capability(socket: &Path) -> anyhow::Result<PublicationCapability> {
+pub async fn open_publication_capability(
+    socket: &Path,
+    capability_root: &Path,
+) -> anyhow::Result<PublicationCapability> {
     let directory = tempfile::Builder::new()
         .prefix("hive-publication-")
-        .tempdir()
+        .tempdir_in(capability_root)
         .context("create publication capability directory")?;
     std::fs::set_permissions(
         directory.path(),
@@ -2227,11 +2230,11 @@ mod tests {
         std::fs::create_dir_all(&workspace)?;
         let broker = tokio::spawn(run_publication_broker(
             socket.clone(),
-            workspace,
+            workspace.clone(),
             token,
             private_home,
         ));
-        let capability = open_publication_capability(&socket).await?;
+        let capability = open_publication_capability(&socket, &workspace).await?;
         assert_eq!(
             std::fs::metadata(capability.socket())?.permissions().mode() & 0o777,
             0o600
@@ -2265,6 +2268,8 @@ mod tests {
     async fn abandoned_reply_cannot_shift_the_next_capability_request() -> anyhow::Result<()> {
         let directory = tempfile::tempdir()?;
         let socket = directory.path().join("broker.sock");
+        let workspace = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace)?;
         let broker = tokio::spawn({
             let socket = socket.clone();
             async move {
@@ -2288,7 +2293,7 @@ mod tests {
                 Ok::<(), anyhow::Error>(())
             }
         });
-        let capability = open_publication_capability(&socket).await?;
+        let capability = open_publication_capability(&socket, &workspace).await?;
 
         let mut abandoned = UnixStream::connect(capability.socket()).await?;
         abandoned
