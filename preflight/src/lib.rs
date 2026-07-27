@@ -238,17 +238,26 @@ fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
         }
     }
 
+    let pattern = b"$state<string";
     let mut lines = Vec::new();
-    for pattern in [
-        b"StoreId=$state<string".as_slice(),
-        b"PasswordEntryId=$state<string".as_slice(),
-    ] {
-        lines.extend(
-            compact
-                .windows(pattern.len())
-                .enumerate()
-                .filter_map(|(start, window)| (window == pattern).then_some(source_lines[start])),
-        );
+    for (start, window) in compact.windows(pattern.len()).enumerate() {
+        if window != pattern {
+            continue;
+        }
+        let Some(equals) = compact[..start].iter().rposition(|byte| *byte == b'=') else {
+            continue;
+        };
+        let identifier_start = compact[..equals]
+            .iter()
+            .rposition(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'$'))
+            .map_or(0, |index| index + 1);
+        let identifier = &compact[identifier_start..equals];
+        let is_domain_identifier = identifier == b"switchingTo"
+            || identifier.ends_with(b"StoreId")
+            || identifier.ends_with(b"EntryId");
+        if is_domain_identifier {
+            lines.push(source_lines[start]);
+        }
     }
     lines.sort_unstable();
     lines.dedup();
