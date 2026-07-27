@@ -966,6 +966,7 @@ mod tests {
             },
             access: CodexAccess::ReadOnly,
             publication_directory: None,
+            publication_verifying_key: None,
         };
         let config = new_config(&options)?;
 
