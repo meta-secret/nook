@@ -726,7 +726,8 @@ fn task_prompt(task: &ClaimedTask) -> String {
          `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
          authenticated Git push. Reuse or create the deterministic branch \
          `{branch}`, publish the repair PR, traverse all checks and review feedback, fix and reply \
-         to every actionable item, run the exact-head readiness audit, squash-merge, verify the \
+         to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
+         readiness audit, squash-merge, verify the \
          resulting Main workflow is green, and publish the required Workbench completion records \
          and statistics. Inspect GitHub first because a replacement Pod may be resuming a branch, \
          PR, merge, or Main verification completed by an earlier attempt. Do not report completed \
@@ -842,6 +843,7 @@ mod tests {
         assert!(prompt.contains("codex/hive-main-failure-recovery"));
         assert!(prompt.contains("replacement Pod"));
         assert!(prompt.contains("Main verification"));
+        assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
         Ok(())
     }
 

@@ -304,16 +304,7 @@ atomically rearms failed blocker dependencies from leaves toward the Main
 repair, refuses an active task, and cannot repeat a recovery for the same image
 digest.
 
-The broker allows a successful descendant Main run to verify the merge when the
-exact merge-commit run was coalesced or cancelled, but only after GitHub proves
-the successful head contains the merge commit.
-
-The successful squash-merge boundary immediately publishes the immutable agent
-statistics record. Publication is idempotent and is retried by `verify-main`,
-completion, and replacement-Pod binding, so a red post-merge Main run cannot
-erase the already-completed PR measurement.
-
-### Publication recovery
+### GitHub delivery recovery
 
 The base branch is deterministic: `codex/hive-<task-id>`. If a prior repair PR
 is closed or merged but the durable task still requires work, the agent creates
@@ -331,8 +322,10 @@ Codex uses standard `git` and `gh` commands for branch publication, pull-request
 creation and inspection, targeted replies, thread resolution, exact-head
 squash merge, Main verification, and Workbench updates. It must traverse all
 relevant check, review, comment, and thread pages and continue to follow the
-repository's normal readiness rules. Hive must prefer these established tools
-over a custom typed publication API.
+repository's normal readiness rules. Because the sealed guest intentionally has
+no Docker socket, it runs the existing TypeScript readiness audit through
+`task hive:guest:pr:ready PR=<number>` instead of the Docker-backed host wrapper.
+Hive must prefer these established tools over a custom typed publication API.
 
 The agent is trusted with both the credential and the task checkout. Hive does
 not need a broker-owned private checkout, request signing, mailbox correlation,
@@ -377,7 +370,9 @@ Worker Pods have no hostPath volume and never mount the host repository, host
 run no Docker daemon. The worker image carries the pinned Rust, Bun, Node, and
 Task tools required by the repository. When `task format` detects the sealed
 guest marker it selects the native `hive:guest:format` Taskfile path, operating
-only on that task's disposable checkout.
+only on that task's disposable checkout. The image also carries npm so
+`hive:guest:pr:ready` can install and run the repository's existing read-only
+TypeScript PR audit without Docker.
 
 ### Credential ownership
 
