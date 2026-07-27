@@ -197,6 +197,14 @@ enum GitHubAction {
         #[arg(long, default_value_t = 1)]
         page: u32,
     },
+    InspectDetail {
+        #[arg(long)]
+        kind: String,
+        #[arg(long)]
+        id: String,
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+    },
     ReplyThread {
         #[arg(long)]
         thread_id: String,
@@ -262,6 +270,9 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 GitHubAction::Ping => GitHubRequest::Ping,
                 GitHubAction::Publish { title, body } => GitHubRequest::Publish { title, body },
                 GitHubAction::Inspect { page } => GitHubRequest::Inspect { page },
+                GitHubAction::InspectDetail { kind, id, offset } => {
+                    GitHubRequest::InspectDetail { kind, id, offset }
+                }
                 GitHubAction::ReplyThread { thread_id, body } => {
                     GitHubRequest::ReplyThread { thread_id, body }
                 }

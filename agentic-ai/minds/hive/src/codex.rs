@@ -236,6 +236,13 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
                 ))
             })?;
 
+    let mut workspace_roots = vec![cwd.clone()];
+    if let Some(publication_directory) = &options.publication_directory {
+        workspace_roots.push(
+            AbsolutePathBuf::from_absolute_path_checked(publication_directory)
+                .map_err(|error| CodexError::Configuration(error.to_string()))?,
+        );
+    }
     let mut config = Config {
         config_layer_stack: ConfigLayerStack::default(),
         startup_warnings: Vec::new(),
@@ -285,7 +292,7 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         tui_session_picker_view: SessionPickerViewMode::Dense,
         tui_vim_mode_default: false,
         cwd: cwd.clone(),
-        workspace_roots: vec![cwd],
+        workspace_roots,
         workspace_roots_explicit: true,
         cli_auth_credentials_store_mode: AuthCredentialsStoreMode::File,
         mcp_servers: Constrained::allow_any(HashMap::new()),
@@ -1022,6 +1029,11 @@ mod tests {
         assert_eq!(
             config.permissions.permission_profile(),
             &PermissionProfile::workspace_write()
+        );
+        assert_eq!(config.workspace_roots.len(), 2);
+        assert_eq!(
+            config.workspace_roots[1].as_ref(),
+            publication_directory.as_path()
         );
         assert_eq!(
             config

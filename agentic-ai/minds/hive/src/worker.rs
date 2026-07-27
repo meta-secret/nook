@@ -799,6 +799,8 @@ fn task_prompt(task: &ClaimedTask, recovered_merge_commit: Option<&str>) -> Stri
          Use only repository Taskfile commands for formatting and validation. Use \
          `hive github publish --title <title> --body <body>` to push the deterministic \
          task branch and create or update its PR, `hive github inspect --page N` to traverse \
+         bounded review pages, `hive github inspect-detail --kind KIND --id ID --offset N` to \
+         retrieve every chunk of a truncated record, \
          every page while waiting for and addressing exact-head checks and every review surface, \
          `hive github reply-thread`, \
          `hive github resolve-thread`, and `hive github reply-feedback` after each targeted \

@@ -13,8 +13,12 @@ with tempfile.TemporaryDirectory(
 ) as directory:
     os.chmod(directory, 0o700)
     requests = os.path.join(directory, "requests")
+    acknowledgements = os.path.join(directory, "acknowledgements")
+    commits = os.path.join(directory, "commits")
     responses = os.path.join(directory, "responses")
     os.mkdir(requests, mode=0o700)
+    os.mkdir(acknowledgements, mode=0o700)
+    os.mkdir(commits, mode=0o700)
     os.mkdir(responses, mode=0o700)
     signing_key = os.path.join(directory, ".signing-key.pem")
     subprocess.run(
@@ -48,10 +52,59 @@ with tempfile.TemporaryDirectory(
                 raise TimeoutError("publication smoke request was not created")
             with open(request_path, "rb") as request_file:
                 request_bytes = request_file.read()
-            request = json.loads(request_bytes)
-            if request != {"operation": "ping"}:
-                raise RuntimeError(f"unexpected publication request: {request!r}")
+            request_envelope = json.loads(request_bytes)
+            if request_envelope["request"] != {"operation": "ping"}:
+                raise RuntimeError(
+                    f"unexpected publication request: {request_envelope!r}"
+                )
             request_id = os.path.basename(request_path).removesuffix(".json")
+            request_digest = hashlib.sha256(request_bytes).digest()
+            acknowledgement_message = (
+                b"ack" + b"\0" + request_id.encode() + b"\0" + request_digest
+            )
+            acknowledgement_signature = subprocess.run(
+                [
+                    "openssl",
+                    "pkeyutl",
+                    "-sign",
+                    "-rawin",
+                    "-inkey",
+                    signing_key,
+                ],
+                input=acknowledgement_message,
+                check=True,
+                capture_output=True,
+            ).stdout
+            acknowledgement_path = os.path.join(
+                acknowledgements, f"{request_id}.json"
+            )
+            with open(acknowledgement_path, "x", encoding="utf-8") as output:
+                json.dump(
+                    {
+                        "request_digest": request_digest.hex(),
+                        "signature": acknowledgement_signature.hex(),
+                    },
+                    output,
+                )
+            commit_path = os.path.join(commits, f"{request_id}.json")
+            commit_deadline = time.monotonic() + 5
+            while time.monotonic() < commit_deadline and not os.path.isfile(
+                commit_path
+            ):
+                time.sleep(0.05)
+            with open(commit_path, encoding="utf-8") as commit_file:
+                commit = json.load(commit_file)
+            if (
+                commit["acknowledgement_signature"]
+                != acknowledgement_signature.hex()
+            ):
+                raise RuntimeError("publication commit did not match acknowledgement")
+            authorization_secret = bytes.fromhex(commit["authorization_secret"])
+            if (
+                hashlib.sha256(authorization_secret).hexdigest()
+                != request_envelope["authorization_hash"]
+            ):
+                raise RuntimeError("publication commit did not authorize request")
             temporary = os.path.join(responses, f".{request_id}.tmp")
             destination = os.path.join(responses, f"{request_id}.json")
             response_json = json.dumps(
@@ -61,7 +114,6 @@ with tempfile.TemporaryDirectory(
                 },
                 separators=(",", ":"),
             )
-            request_digest = hashlib.sha256(request_bytes).digest()
             signed_message = (
                 request_id.encode()
                 + b"\0"

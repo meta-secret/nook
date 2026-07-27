@@ -52,7 +52,7 @@ struct LocalExecutionEvent {
     reason: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum GitHubRequest {
     Ping,
@@ -67,6 +67,11 @@ pub enum GitHubRequest {
     },
     Inspect {
         page: u32,
+    },
+    InspectDetail {
+        kind: String,
+        id: String,
+        offset: usize,
     },
     ReplyThread {
         thread_id: String,
@@ -98,6 +103,18 @@ enum GitHubResponse {
 #[derive(Debug, Serialize, Deserialize)]
 struct SignedMailboxResponse {
     response_json: String,
+    signature: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MailboxRequestEnvelope {
+    request: GitHubRequest,
+    authorization_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SignedMailboxAcknowledgement {
+    request_digest: String,
     signature: String,
 }
 
@@ -182,7 +199,13 @@ pub async fn open_publication_capability(
         .context("create publication capability directory")?;
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
         .context("secure publication capability directory")?;
-    for child in ["requests", "processing", "responses"] {
+    for child in [
+        "requests",
+        "processing",
+        "acknowledgements",
+        "commits",
+        "responses",
+    ] {
         let child = directory.path().join(child);
         std::fs::create_dir(&child)
             .with_context(|| format!("create publication mailbox {}", child.display()))?;
@@ -197,8 +220,9 @@ pub async fn open_publication_capability(
         signing_key,
         ready_tx,
     ));
-    ready_rx
+    tokio::time::timeout(std::time::Duration::from_secs(30), ready_rx)
         .await
+        .context("publication capability broker was unavailable for 30 seconds")?
         .context("publication capability relay stopped before connecting")?;
     Ok(PublicationCapability {
         relay,
@@ -274,20 +298,49 @@ async fn relay_publication_requests(
                 return;
             }
         };
-        let (response, request_digest) = match read_mailbox_request(&processing_path).await {
-            Ok((request_value, request_digest)) => {
-                let response = match exchange_response(broker, &request_value).await {
-                    Ok(response) => response,
-                    Err(error) => GitHubResponse::Error(format!(
-                        "publication broker request failed: {error:#}"
-                    )),
-                };
-                (response, request_digest)
+        let (request_envelope, request_digest) = match read_mailbox_request(&processing_path).await
+        {
+            Ok(request) => request,
+            Err(error) => {
+                eprintln!("Hive publication capability rejected a request: {error:#}");
+                let _ = tokio::fs::remove_file(&processing_path).await;
+                continue;
             }
-            Err(error) => (
-                GitHubResponse::Error(format!("invalid publication mailbox request: {error:#}")),
-                Sha256::digest([]).into(),
-            ),
+        };
+        let acknowledgement = match write_mailbox_acknowledgement(
+            &capability_directory,
+            &request_id,
+            &request_digest,
+            &signing_key,
+        )
+        .await
+        {
+            Ok(acknowledgement) => acknowledgement,
+            Err(error) => {
+                eprintln!("Hive publication capability acknowledgement failed: {error:#}");
+                let _ = tokio::fs::remove_file(&processing_path).await;
+                continue;
+            }
+        };
+        let response = match authorize_mailbox_request(
+            &capability_directory,
+            &request_id,
+            &processing_path,
+            &request_envelope.authorization_hash,
+            &request_digest,
+            &acknowledgement.signature,
+        )
+        .await
+        {
+            Ok(()) => match exchange_response(broker, &request_envelope.request).await {
+                Ok(response) => response,
+                Err(error) => {
+                    GitHubResponse::Error(format!("publication broker request failed: {error:#}"))
+                }
+            },
+            Err(error) => GitHubResponse::Error(format!(
+                "publication request authorization failed: {error:#}"
+            )),
         };
         if let Err(error) = write_mailbox_response(
             &capability_directory,
@@ -301,6 +354,18 @@ async fn relay_publication_requests(
             eprintln!("Hive publication capability response failed: {error:#}");
         }
         let _ = tokio::fs::remove_file(&processing_path).await;
+        let _ = tokio::fs::remove_file(
+            capability_directory
+                .join("acknowledgements")
+                .join(format!("{request_id}.json")),
+        )
+        .await;
+        let _ = tokio::fs::remove_file(
+            capability_directory
+                .join("commits")
+                .join(format!("{request_id}.json")),
+        )
+        .await;
     }
 }
 
@@ -333,7 +398,7 @@ fn mailbox_request_id(name: &str) -> Option<&str> {
         .then_some(request_id)
 }
 
-async fn read_mailbox_request(path: &Path) -> anyhow::Result<(GitHubRequest, [u8; 32])> {
+async fn read_mailbox_request(path: &Path) -> anyhow::Result<(MailboxRequestEnvelope, [u8; 32])> {
     let file = tokio::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW)
@@ -353,6 +418,66 @@ async fn read_mailbox_request(path: &Path) -> anyhow::Result<(GitHubRequest, [u8
     let request =
         serde_json::from_slice(&contents).context("decode publication mailbox request")?;
     Ok((request, Sha256::digest(&contents).into()))
+}
+
+async fn write_mailbox_acknowledgement(
+    directory: &Path,
+    request_id: &str,
+    request_digest: &[u8; 32],
+    signing_key: &SigningKey,
+) -> anyhow::Result<SignedMailboxAcknowledgement> {
+    let request_digest_hex = encode_hex(request_digest);
+    let signature = signing_key.sign(&mailbox_acknowledgement_message(request_id, request_digest));
+    let acknowledgement = SignedMailboxAcknowledgement {
+        request_digest: request_digest_hex,
+        signature: encode_hex(&signature.to_bytes()),
+    };
+    write_atomic_mailbox_file(
+        &directory.join("acknowledgements"),
+        request_id,
+        &serde_json::to_vec(&acknowledgement)?,
+    )
+    .await?;
+    Ok(acknowledgement)
+}
+
+async fn authorize_mailbox_request(
+    directory: &Path,
+    request_id: &str,
+    processing_path: &Path,
+    authorization_hash: &str,
+    request_digest: &[u8; 32],
+    acknowledgement_signature: &str,
+) -> anyhow::Result<()> {
+    let commit_path = directory.join("commits").join(format!("{request_id}.json"));
+    let commit = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        wait_for_mailbox_file(&commit_path, 1024),
+    )
+    .await
+    .context("publication request was not authorized within 30 seconds")??;
+    let commit: Value = serde_json::from_slice(&commit)?;
+    if commit
+        .get("acknowledgement_signature")
+        .and_then(Value::as_str)
+        != Some(acknowledgement_signature)
+    {
+        anyhow::bail!("commit does not match the trusted relay acknowledgement");
+    }
+    let authorization_secret = commit
+        .get("authorization_secret")
+        .and_then(Value::as_str)
+        .context("commit has no authorization secret")?;
+    let authorization_secret =
+        decode_hex::<32>(authorization_secret).context("authorization secret is invalid")?;
+    if encode_hex(&Sha256::digest(authorization_secret)) != authorization_hash {
+        anyhow::bail!("commit does not authorize the submitted request");
+    }
+    let (_, current_digest) = read_mailbox_request(processing_path).await?;
+    if &current_digest != request_digest {
+        anyhow::bail!("request changed after the trusted relay acknowledged it");
+    }
+    Ok(())
 }
 
 async fn write_mailbox_response(
@@ -398,9 +523,27 @@ async fn request_via_mailbox(
     verifying_key: &str,
     request_value: &GitHubRequest,
 ) -> anyhow::Result<Value> {
-    let (request_id, response_path, request_digest) =
+    let (request_id, acknowledgement_path, response_path, request_digest, authorization_secret) =
         write_mailbox_request(directory, request_value).await?;
     let verifying_key = decode_verifying_key(verifying_key)?;
+    let acknowledgement: SignedMailboxAcknowledgement =
+        serde_json::from_slice(&wait_for_mailbox_file(&acknowledgement_path, 4096).await?)
+            .context("decode publication mailbox acknowledgement")?;
+    verify_mailbox_acknowledgement(
+        &request_id,
+        &request_digest,
+        &verifying_key,
+        &acknowledgement,
+    )?;
+    write_atomic_mailbox_file(
+        &directory.join("commits"),
+        &request_id,
+        &serde_json::to_vec(&json!({
+            "acknowledgement_signature": acknowledgement.signature,
+            "authorization_secret": encode_hex(&authorization_secret),
+        }))?,
+    )
+    .await?;
 
     loop {
         match read_mailbox_response(&response_path).await {
@@ -428,12 +571,14 @@ async fn request_via_mailbox(
 async fn write_mailbox_request(
     directory: &Path,
     request_value: &GitHubRequest,
-) -> anyhow::Result<(String, PathBuf, [u8; 32])> {
+) -> anyhow::Result<(String, PathBuf, PathBuf, [u8; 32], [u8; 32])> {
     let request_id = uuid::Uuid::new_v4().simple().to_string();
     let requests = directory.join("requests");
+    let acknowledgements = directory.join("acknowledgements");
     let responses = directory.join("responses");
     let temporary = requests.join(format!(".{request_id}.tmp"));
     let request_path = requests.join(format!("{request_id}.json"));
+    let acknowledgement_path = acknowledgements.join(format!("{request_id}.json"));
     let response_path = responses.join(format!("{request_id}.json"));
     let mut file = tokio::fs::OpenOptions::new()
         .write(true)
@@ -443,13 +588,72 @@ async fn write_mailbox_request(
         .open(&temporary)
         .await
         .with_context(|| format!("create publication mailbox request {}", temporary.display()))?;
-    let request_json = serde_json::to_vec(request_value)?;
+    let authorization_secret: [u8; 32] = rand::random();
+    let request_json = serde_json::to_vec(&MailboxRequestEnvelope {
+        request: request_value.clone(),
+        authorization_hash: encode_hex(&Sha256::digest(authorization_secret)),
+    })?;
     let request_digest = Sha256::digest(&request_json).into();
     file.write_all(&request_json).await?;
     file.sync_all().await?;
     drop(file);
     tokio::fs::rename(&temporary, &request_path).await?;
-    Ok((request_id, response_path, request_digest))
+    Ok((
+        request_id,
+        acknowledgement_path,
+        response_path,
+        request_digest,
+        authorization_secret,
+    ))
+}
+
+async fn wait_for_mailbox_file(path: &Path, limit: u64) -> anyhow::Result<Vec<u8>> {
+    loop {
+        match tokio::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .await
+        {
+            Ok(file) => {
+                let metadata = file.metadata().await?;
+                if !metadata.is_file() || metadata.len() > limit {
+                    anyhow::bail!("publication mailbox file is not a bounded regular file");
+                }
+                let mut contents = Vec::new();
+                file.take(limit + 1).read_to_end(&mut contents).await?;
+                if contents.len() as u64 > limit {
+                    anyhow::bail!("publication mailbox file exceeds the size limit");
+                }
+                return Ok(contents);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                tokio::time::sleep(MAILBOX_POLL_INTERVAL).await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+async fn write_atomic_mailbox_file(
+    directory: &Path,
+    request_id: &str,
+    contents: &[u8],
+) -> anyhow::Result<()> {
+    let temporary = directory.join(format!(".{request_id}.tmp"));
+    let destination = directory.join(format!("{request_id}.json"));
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&temporary)
+        .await?;
+    file.write_all(contents).await?;
+    file.sync_all().await?;
+    drop(file);
+    tokio::fs::rename(&temporary, &destination).await?;
+    Ok(())
 }
 
 async fn read_mailbox_response(path: &Path) -> anyhow::Result<SignedMailboxResponse> {
@@ -485,6 +689,37 @@ fn mailbox_signed_message(
     message.push(0);
     message.extend_from_slice(response_json.as_bytes());
     message
+}
+
+fn mailbox_acknowledgement_message(request_id: &str, request_digest: &[u8; 32]) -> Vec<u8> {
+    let mut message = Vec::with_capacity(4 + 1 + request_id.len() + 1 + request_digest.len());
+    message.extend_from_slice(b"ack");
+    message.push(0);
+    message.extend_from_slice(request_id.as_bytes());
+    message.push(0);
+    message.extend_from_slice(request_digest);
+    message
+}
+
+fn verify_mailbox_acknowledgement(
+    request_id: &str,
+    request_digest: &[u8; 32],
+    verifying_key: &VerifyingKey,
+    acknowledgement: &SignedMailboxAcknowledgement,
+) -> anyhow::Result<()> {
+    if acknowledgement.request_digest != encode_hex(request_digest) {
+        anyhow::bail!("trusted relay acknowledged a different publication request");
+    }
+    let signature = Signature::from_bytes(
+        &decode_hex::<64>(&acknowledgement.signature)
+            .context("publication mailbox acknowledgement signature is invalid")?,
+    );
+    verifying_key
+        .verify(
+            &mailbox_acknowledgement_message(request_id, request_digest),
+            &signature,
+        )
+        .context("publication mailbox acknowledgement was not signed by the trusted relay")
 }
 
 fn verify_mailbox_response(
@@ -658,6 +893,9 @@ impl PublicationBroker {
                 self.publish(&title, &body).await
             }
             GitHubRequest::Inspect { page } => self.inspect(page).await,
+            GitHubRequest::InspectDetail { kind, id, offset } => {
+                self.inspect_detail(&kind, &id, offset).await
+            }
             GitHubRequest::ReplyThread { thread_id, body } => {
                 validate_publication_body(&body)?;
                 self.reply_thread(&thread_id, &body).await
@@ -930,6 +1168,81 @@ impl PublicationBroker {
                 "comments_have_more": comments_have_more,
                 "review_threads_have_more": review_threads_have_more,
             },
+        }))
+    }
+
+    async fn inspect_detail(&self, kind: &str, id: &str, offset: usize) -> anyhow::Result<Value> {
+        const DETAIL_CHUNK_BYTES: usize = 256 * 1024;
+
+        let task = self.bound_task().await?;
+        let pull = self.pull_for_branch(&task.branch).await?;
+        let number = pull
+            .get("number")
+            .and_then(Value::as_u64)
+            .context("pull request has no number")?;
+        let record = match kind {
+            "check" => {
+                let id = id
+                    .parse::<u64>()
+                    .context("check detail id must be numeric")?;
+                self.api("GET", &format!("/repos/{REPOSITORY}/check-runs/{id}"), None)
+                    .await?
+            }
+            "review" => {
+                let id = id
+                    .parse::<u64>()
+                    .context("review detail id must be numeric")?;
+                self.api(
+                    "GET",
+                    &format!("/repos/{REPOSITORY}/pulls/{number}/reviews/{id}"),
+                    None,
+                )
+                .await?
+            }
+            "comment" => {
+                let id = id
+                    .parse::<u64>()
+                    .context("comment detail id must be numeric")?;
+                self.api(
+                    "GET",
+                    &format!("/repos/{REPOSITORY}/issues/comments/{id}"),
+                    None,
+                )
+                .await?
+            }
+            "thread" if id.starts_with("PRRT_") => {
+                let response = self
+                    .api(
+                        "POST",
+                        "/graphql",
+                        Some(json!({
+                            "query": "query($id:ID!){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated comments(first:100){nodes{id body url author{login}} pageInfo{hasNextPage endCursor}}}}}",
+                            "variables": {"id": id},
+                        })),
+                    )
+                    .await?;
+                response
+                    .pointer("/data/node")
+                    .cloned()
+                    .context("GitHub review-thread detail is unavailable")?
+            }
+            _ => anyhow::bail!("detail kind must be check, review, comment, or thread"),
+        };
+        let serialized = serde_json::to_string(&record)?;
+        if offset > serialized.len() || !serialized.is_char_boundary(offset) {
+            anyhow::bail!("detail offset is outside the serialized record");
+        }
+        let mut end = serialized.len().min(offset + DETAIL_CHUNK_BYTES);
+        while !serialized.is_char_boundary(end) {
+            end -= 1;
+        }
+        Ok(json!({
+            "kind": kind,
+            "id": id,
+            "offset": offset,
+            "chunk": &serialized[offset..end],
+            "next_offset": (end < serialized.len()).then_some(end),
+            "complete": end == serialized.len(),
         }))
     }
 
@@ -2487,7 +2800,7 @@ fn truncate_json_strings(value: &mut Value, maximum_bytes: usize) {
                 boundary -= 1;
             }
             text.truncate(boundary);
-            text.push_str("…[truncated]");
+            text.push_str("…[truncated; use hive github inspect-detail]");
         }
         Value::Array(values) => {
             for value in values {
@@ -2669,17 +2982,19 @@ mod tests {
     use ed25519_dalek::{Signer, SigningKey};
     use serde_json::{Value, json};
     use sha2::{Digest, Sha256};
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixListener;
 
     use super::{
         BoundTask, GitHubRequest, GitHubResponse, MAILBOX_REQUEST_LIMIT, MAILBOX_RESPONSE_LIMIT,
-        SignedMailboxResponse, bounded_inspection_response, encode_hex, mailbox_signed_message,
+        MailboxRequestEnvelope, SignedMailboxAcknowledgement, SignedMailboxResponse,
+        bounded_inspection_response, encode_hex, mailbox_signed_message,
         open_publication_capability, publication_branch_generation, publication_branch_name,
-        request_via_mailbox, review_feedback, review_feedback_with_address_comments,
-        run_publication_broker, valid_feedback_id, validate_publication_body,
-        verify_mailbox_response, workbench_issue_path, workbench_plan_path, workbench_worklog_path,
-        write_mailbox_request,
+        read_mailbox_response, request_via_mailbox, review_feedback,
+        review_feedback_with_address_comments, run_publication_broker, valid_feedback_id,
+        validate_publication_body, verify_mailbox_acknowledgement, verify_mailbox_response,
+        wait_for_mailbox_file, workbench_issue_path, workbench_plan_path, workbench_worklog_path,
+        write_atomic_mailbox_file, write_mailbox_request,
     };
 
     #[tokio::test]
@@ -2704,7 +3019,13 @@ mod tests {
                 & 0o777,
             0o700
         );
-        for child in ["requests", "processing", "responses"] {
+        for child in [
+            "requests",
+            "processing",
+            "acknowledgements",
+            "commits",
+            "responses",
+        ] {
             assert_eq!(
                 std::fs::metadata(capability.directory().join(child))?
                     .permissions()
@@ -2758,8 +3079,31 @@ mod tests {
         });
         let capability = open_publication_capability(&socket, &workspace).await?;
 
-        let (_abandoned_request_id, abandoned_response, _request_digest) =
-            write_mailbox_request(capability.directory(), &GitHubRequest::Ping).await?;
+        let (
+            abandoned_request_id,
+            abandoned_acknowledgement,
+            abandoned_response,
+            request_digest,
+            authorization_secret,
+        ) = write_mailbox_request(capability.directory(), &GitHubRequest::Ping).await?;
+        let acknowledgement: SignedMailboxAcknowledgement = serde_json::from_slice(
+            &wait_for_mailbox_file(&abandoned_acknowledgement, 4096).await?,
+        )?;
+        verify_mailbox_acknowledgement(
+            &abandoned_request_id,
+            &request_digest,
+            &super::decode_verifying_key(capability.verifying_key())?,
+            &acknowledgement,
+        )?;
+        write_atomic_mailbox_file(
+            &capability.directory().join("commits"),
+            &abandoned_request_id,
+            &serde_json::to_vec(&json!({
+                "acknowledgement_signature": acknowledgement.signature,
+                "authorization_secret": encode_hex(&authorization_secret),
+            }))?,
+        )
+        .await?;
         for _ in 0..100 {
             if abandoned_response.is_file() {
                 break;
@@ -2777,6 +3121,87 @@ mod tests {
         assert_eq!(response, json!({ "sequence": 2 }));
 
         broker.await??;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn substituted_request_is_rejected_before_broker_execution() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let socket = directory.path().join("broker.sock");
+        let workspace = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace)?;
+        let broker = tokio::spawn({
+            let socket = socket.clone();
+            async move {
+                let listener = UnixListener::bind(socket)?;
+                let (mut stream, _) = listener.accept().await?;
+                let mut received = Vec::new();
+                stream.read_to_end(&mut received).await?;
+                Ok::<_, anyhow::Error>(received)
+            }
+        });
+        let capability = open_publication_capability(&socket, &workspace).await?;
+        let (request_id, acknowledgement_path, response_path, request_digest, secret) =
+            write_mailbox_request(capability.directory(), &GitHubRequest::Ping).await?;
+        let acknowledgement: SignedMailboxAcknowledgement =
+            serde_json::from_slice(&wait_for_mailbox_file(&acknowledgement_path, 4096).await?)?;
+        verify_mailbox_acknowledgement(
+            &request_id,
+            &request_digest,
+            &super::decode_verifying_key(capability.verifying_key())?,
+            &acknowledgement,
+        )?;
+
+        let processing = capability
+            .directory()
+            .join("processing")
+            .join(format!("{request_id}.json"));
+        let replacement = MailboxRequestEnvelope {
+            request: GitHubRequest::Merge {
+                expected_head: "0".repeat(40),
+            },
+            authorization_hash: encode_hex(&Sha256::digest(secret)),
+        };
+        tokio::fs::write(&processing, serde_json::to_vec(&replacement)?).await?;
+        write_atomic_mailbox_file(
+            &capability.directory().join("commits"),
+            &request_id,
+            &serde_json::to_vec(&json!({
+                "acknowledgement_signature": acknowledgement.signature,
+                "authorization_secret": encode_hex(&secret),
+            }))?,
+        )
+        .await?;
+
+        let response = loop {
+            match read_mailbox_response(&response_path).await {
+                Ok(response) => break response,
+                Err(error)
+                    if error
+                        .downcast_ref::<std::io::Error>()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+        let response = verify_mailbox_response(
+            &request_id,
+            &request_digest,
+            &super::decode_verifying_key(capability.verifying_key())?,
+            response,
+        )?;
+        assert!(matches!(
+            response,
+            GitHubResponse::Error(error) if error.contains("request changed")
+        ));
+        drop(capability);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(2), broker)
+                .await???
+                .is_empty()
+        );
         Ok(())
     }
 
@@ -2854,7 +3279,11 @@ mod tests {
             thread_id: "PRRT_example".to_owned(),
             body,
         };
-        assert!(serde_json::to_vec(&request)?.len() as u64 <= MAILBOX_REQUEST_LIMIT);
+        let envelope = MailboxRequestEnvelope {
+            request,
+            authorization_hash: "0".repeat(64),
+        };
+        assert!(serde_json::to_vec(&envelope)?.len() as u64 <= MAILBOX_REQUEST_LIMIT);
         Ok(())
     }
 

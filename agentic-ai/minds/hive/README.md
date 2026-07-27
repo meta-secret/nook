@@ -84,11 +84,15 @@ matching create-new response; the worker relay preconnects one fresh typed
 broker stream before consuming that request. The relay signs the response with
 an ephemeral Ed25519 key over the request ID, exact request digest, and response,
 and the sandbox receives only its verification key, so task-controlled code
-cannot substitute a request or forge a privileged result. The client waits for the
+cannot forge a privileged result. Before any broker operation runs, the relay
+also signs the observed request digest and requires the client's one-time
+authorization secret, then rechecks that the request has not changed. The
+client waits for the
 broker operation within the worker's task lifecycle rather than timing out
 while a mutation may still complete. `hive github inspect --page N` returns
 serialized-byte-bounded pages for large check, review, comment, and thread
-histories, and computes targeted-reply state across every comment page. This
+histories, computes targeted-reply state across every comment page, and exposes
+lossless chunked `inspect-detail` retrieval for any truncated record. This
 requires neither an inherited
 descriptor nor a sandbox socket connection, so Codex retains its deny-network
 policy. Abandoned responses cannot be consumed by later commands and disappear
