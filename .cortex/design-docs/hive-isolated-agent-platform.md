@@ -323,13 +323,16 @@ Every dispatcher and worker Pod selects `kata-dragonball`. There is no
 fallback to `runc`. The host, KVM support, runtime class, and guest-kernel
 identity are verified by infrastructure tasks before Hive deploys.
 
-The worker container alone uses an unconfined seccomp profile because rootless
-Bubblewrap must create and populate its mount namespace inside the guest.
-Dragonball remains the outer syscall and kernel boundary; the worker still runs
-as a non-root user with every capability dropped, privilege escalation
-disabled, and a read-only root filesystem. Credential and lifecycle sidecars
-retain `RuntimeDefault`. Deployment verification launches a real Bubblewrap
-sandbox inside a live worker before the rollout is accepted.
+The worker container alone uses the pinned, node-local
+`nook/hive-bubblewrap.json` seccomp profile because rootless Bubblewrap must
+create and populate its mount namespace inside the guest. `Localhost` keeps the
+Pod compatible with the namespace's Restricted admission policy. Dragonball
+remains the outer syscall and kernel boundary; the worker still runs as a
+non-root user with every capability dropped, privilege escalation disabled,
+and a read-only root filesystem. Credential and lifecycle sidecars retain
+`RuntimeDefault`. The Taskfile installs the profile beneath k0s's kubelet
+seccomp root before applying Hive, and deployment verification launches a real
+Bubblewrap sandbox inside a live worker before the rollout is accepted.
 
 Worker Pods have no hostPath volume and never mount the host repository, host
 `CODEX_HOME`, or host Docker socket. They contain no privileged containers and

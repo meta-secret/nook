@@ -108,7 +108,8 @@ spec:
             # Rootless Bubblewrap must create the mount namespace inside the
             # Dragonball guest. The VM is the outer syscall isolation boundary.
             seccompProfile:
-              type: Unconfined
+              type: Localhost
+              localhostProfile: nook/hive-bubblewrap.json
           readinessProbe:
             exec:
               command: ["test", "-f", "/workspace/.hive-worker-ready"]

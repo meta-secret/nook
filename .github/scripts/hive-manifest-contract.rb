@@ -37,13 +37,18 @@ broker = pod.fetch("containers").find { |container| container.fetch("name") == "
 coordinator = pod.fetch("containers").find { |container| container.fetch("name") == "coordinator" }
 publisher = pod.fetch("containers").find { |container| container.fetch("name") == "publication-broker" }
 reaper = pod.fetch("containers").find { |container| container.fetch("name") == "pod-reaper" }
-unless worker.dig("securityContext", "seccompProfile", "type") == "Unconfined"
+unless worker.dig("securityContext", "seccompProfile", "type") == "Localhost" &&
+       worker.dig(
+         "securityContext",
+         "seccompProfile",
+         "localhostProfile"
+       ) == "nook/hive-bubblewrap.json"
   raise "Hive worker must allow rootless Bubblewrap mounts inside the Kata guest"
 end
 if (containers - [worker]).any? do |container|
-     container.dig("securityContext", "seccompProfile", "type") == "Unconfined"
+     container.dig("securityContext", "seccompProfile", "type") == "Localhost"
    end
-  raise "Only the Kata-isolated Hive worker may use an unconfined seccomp profile"
+  raise "Only the Kata-isolated Hive worker may use the local seccomp profile"
 end
 worker_mounts = worker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 broker_mounts = broker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
@@ -192,6 +197,13 @@ unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
 end
 
 infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
+seccomp_profile = load_yaml.call("infra/k0s/seccomp/hive-bubblewrap.json")
+unless seccomp_profile["defaultAction"] == "SCMP_ACT_ALLOW" &&
+       infra_taskfile.include?("hive:seccomp:install:") &&
+       infra_taskfile.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
+       infra_taskfile.include?('task: hive:seccomp:install')
+  raise "Hive deploy must install its pinned local Bubblewrap seccomp profile"
+end
 kubernetes_tools_task = infra_taskfile.match(
   /^  kubernetes:tools:install:\n(?<body>.*?)(?=^  kubernetes:tools:status:)/m
 )&.[](:body)

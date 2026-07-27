@@ -75,12 +75,14 @@ restores them before Neo4j or Hive starts. Neo4j Bolt traffic is TLS-only. Its
 private CA and service key live only in encrypted Kubernetes Secrets and the
 authenticated recovery bundle, not as plaintext host key files.
 
-The Kata-isolated Hive worker is the only container with an unconfined seccomp
-profile, which rootless Bubblewrap needs for mount-namespace setup inside the
-Dragonball guest. It remains non-root, drops every capability, disallows
-privilege escalation, and has a read-only root filesystem. Hive deployment
-executes a Bubblewrap sandbox inside a live worker and fails if that boundary
-cannot be created; all sidecars retain `RuntimeDefault`.
+The Kata-isolated Hive worker is the only container with the pinned
+`Localhost` seccomp profile installed by the Taskfile beneath k0s's kubelet
+root. The profile allows the rootless Bubblewrap mount-namespace setup inside
+the Dragonball guest while remaining compatible with Restricted Pod Security.
+The worker remains non-root, drops every capability, disallows privilege
+escalation, and has a read-only root filesystem. Hive deployment executes a
+Bubblewrap sandbox inside a live worker and fails if that boundary cannot be
+created; all sidecars retain `RuntimeDefault`.
 
 The first Hive deployment requires explicit Codex authentication and a
 repository-scoped GitHub publication token:

@@ -2090,6 +2090,7 @@ tasks:
     deps: [k0s:sync]
     silent: true
     cmds:
+      - task: hive:seccomp:install
       - task: hive:image
       - task: hive:auth:sync
       - task: hive:github:sync
@@ -2374,6 +2375,25 @@ tasks:
         kubectl get pods --namespace hive-system \
           -l app.kubernetes.io/name=hive \
           -o wide
+        REMOTE
+
+  hive:seccomp:install:
+    desc: Install the Restricted-compatible Hive Bubblewrap profile on k0s.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        source_profile="$remote_dir/infra/k0s/seccomp/hive-bubblewrap.json"
+        profile_dir=/var/lib/k0s/kubelet/seccomp/nook
+        test "$(
+          jq -r '.defaultAction' "$source_profile"
+        )" = SCMP_ACT_ALLOW
+        sudo -n install -d -m 0755 "$profile_dir"
+        sudo -n install -m 0644 \
+          "$source_profile" \
+          "$profile_dir/hive-bubblewrap.json"
         REMOTE
 
   hive:diagnose:
