@@ -99,7 +99,9 @@ export async function loadDb(state: VaultState) {
     }
 
     if (
-      state.remoteVaultRecoveryState === RemoteVaultRecoveryState.None &&
+      !state.clientPolicy.remoteRecoveryConnectConfirmed(
+        state.remoteVaultRecoveryState,
+      ) &&
       (await state.handleRemoteVaultAssessStatus(accessStatus))
     ) {
       return;

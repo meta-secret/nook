@@ -80,6 +80,11 @@ impl RemoteVaultRecoveryState {
     pub const fn prompt_has_cache(self) -> bool {
         matches!(self, Self::PromptWithCache)
     }
+
+    #[must_use]
+    pub const fn connect_confirmed(self) -> bool {
+        matches!(self, Self::ConnectFromCache | Self::ConnectFresh)
+    }
 }
 
 #[wasm_bindgen]
@@ -162,6 +167,11 @@ impl VaultClientPolicy {
     #[must_use]
     pub const fn remote_recovery_prompt_has_cache(state: RemoteVaultRecoveryState) -> bool {
         state.prompt_has_cache()
+    }
+
+    #[must_use]
+    pub const fn remote_recovery_connect_confirmed(state: RemoteVaultRecoveryState) -> bool {
+        state.connect_confirmed()
     }
 
     #[must_use]
@@ -587,6 +597,23 @@ mod tests {
         assert!(!VaultClientPolicy::remote_recovery_prompt_has_cache(
             RemoteVaultRecoveryState::PromptMissingOnly
         ));
+    }
+
+    #[test]
+    fn remote_recovery_connect_requires_an_explicit_confirmation_state() {
+        for state in [
+            RemoteVaultRecoveryState::None,
+            RemoteVaultRecoveryState::PromptWithCache,
+            RemoteVaultRecoveryState::PromptMissingOnly,
+        ] {
+            assert!(!VaultClientPolicy::remote_recovery_connect_confirmed(state));
+        }
+        for state in [
+            RemoteVaultRecoveryState::ConnectFromCache,
+            RemoteVaultRecoveryState::ConnectFresh,
+        ] {
+            assert!(VaultClientPolicy::remote_recovery_connect_confirmed(state));
+        }
     }
 
     #[test]

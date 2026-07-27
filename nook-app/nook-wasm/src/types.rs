@@ -1301,6 +1301,15 @@ impl NookVaultClientPolicy {
         nook_core::VaultClientPolicy::remote_recovery_prompt_has_cache(state)
     }
 
+    #[wasm_bindgen(js_name = remoteRecoveryConnectConfirmed)]
+    #[must_use]
+    pub fn remote_recovery_connect_confirmed(
+        &self,
+        state: nook_core::RemoteVaultRecoveryState,
+    ) -> bool {
+        nook_core::VaultClientPolicy::remote_recovery_connect_confirmed(state)
+    }
+
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Self {

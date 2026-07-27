@@ -96,3 +96,22 @@ fn rust_wasm_domain_boundary_stays_real_and_typed() {
         "WASM domain DTOs must use real Rust ABI types; unchecked TypeScript hints and raw provider/auth JsValue signatures are forbidden: {violations:#?}"
     );
 }
+
+#[test]
+fn remote_vault_recovery_requires_core_confirmed_connect_state() {
+    let source = fs::read_to_string(
+        repository_root()
+            .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/secrets.ts"),
+    )
+    .expect("read vault connection lifecycle");
+    assert!(
+        source.contains("remoteRecoveryConnectConfirmed("),
+        "loadDb must ask Rust policy whether remote recovery was explicitly confirmed"
+    );
+    assert!(
+        !source.contains(
+            "remoteVaultRecoveryState === RemoteVaultRecoveryState.None &&"
+        ),
+        "prompt states must never bypass remote-vault assessment and enter connect"
+    );
+}
