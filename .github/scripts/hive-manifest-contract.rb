@@ -37,6 +37,14 @@ broker = pod.fetch("containers").find { |container| container.fetch("name") == "
 coordinator = pod.fetch("containers").find { |container| container.fetch("name") == "coordinator" }
 publisher = pod.fetch("containers").find { |container| container.fetch("name") == "publication-broker" }
 reaper = pod.fetch("containers").find { |container| container.fetch("name") == "pod-reaper" }
+unless worker.dig("securityContext", "seccompProfile", "type") == "Unconfined"
+  raise "Hive worker must allow rootless Bubblewrap mounts inside the Kata guest"
+end
+if (containers - [worker]).any? do |container|
+     container.dig("securityContext", "seccompProfile", "type") == "Unconfined"
+   end
+  raise "Only the Kata-isolated Hive worker may use an unconfined seccomp profile"
+end
 worker_mounts = worker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 broker_mounts = broker.fetch("volumeMounts").map { |mount| mount.fetch("name") }
 coordinator_mounts = coordinator.fetch("volumeMounts").map { |mount| mount.fetch("name") }

@@ -105,6 +105,10 @@ spec:
             capabilities:
               drop: ["ALL"]
             readOnlyRootFilesystem: true
+            # Rootless Bubblewrap must create the mount namespace inside the
+            # Dragonball guest. The VM is the outer syscall isolation boundary.
+            seccompProfile:
+              type: Unconfined
           readinessProbe:
             exec:
               command: ["test", "-f", "/workspace/.hive-worker-ready"]
