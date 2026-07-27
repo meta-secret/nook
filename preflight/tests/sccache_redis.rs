@@ -269,6 +269,20 @@ fn assert_delivery_cache_scope_contract() {
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
     assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2"));
     assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m"));
+    let wasm_source_cache = bake
+        .split_once("rust_wasm_source_cache_from =")
+        .expect("WASM source cache inputs must exist")
+        .1
+        .split_once("rust_wasm_source_cache_to =")
+        .expect("WASM source cache output must follow its inputs")
+        .0;
+    assert!(
+        wasm_source_cache
+            .matches("scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2")
+            .count()
+            >= 4,
+        "every WASM source cache path must directly import the fingerprinted dependency lineage"
+    );
     let docker_tasks = read("nook-app/docker/Taskfile.yml");
     assert!(
         docker_tasks
