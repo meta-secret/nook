@@ -25,7 +25,7 @@ use tokio::io::AsyncWriteExt;
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
 const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
-pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6";
+pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-terra";
 pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "low";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -967,7 +967,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_gpt_5_6_with_light_reasoning() {
+    fn defaults_to_gpt_5_6_terra_with_light_reasoning() {
         let repository = tempfile::tempdir().unwrap();
         let options = CodexOptions::new(repository.path().to_owned());
 
