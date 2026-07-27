@@ -1060,7 +1060,7 @@ mod tests {
     }
 
     #[test]
-    fn execution_options_enable_workspace_write() -> anyhow::Result<()> {
+    fn trusted_execution_options_disable_the_inner_permission_profile() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
         let config = new_config(&options)?;
@@ -1068,7 +1068,7 @@ mod tests {
         assert_eq!(options.access, CodexAccess::WorkspaceWrite);
         assert_eq!(
             config.permissions.permission_profile(),
-            &PermissionProfile::workspace_write()
+            &PermissionProfile::Disabled
         );
         Ok(())
     }
