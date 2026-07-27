@@ -316,6 +316,7 @@ tasks:
         --set "builder-wasm-deps.cache-to="
         --set "wasm-export.cache-from="
         wasm-export
+      - bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
 
   docker:ci:cache:publish:web:
     desc: Export the already-verified web dependency graph from this job's builder.

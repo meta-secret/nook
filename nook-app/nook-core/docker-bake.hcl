@@ -6,12 +6,9 @@
 target "builder-deps" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-core/Dockerfile"
+  dockerfile = "nook-app/docker/base.Dockerfile"
   target     = "builder-deps"
   platforms  = ["linux/amd64"]
-  contexts = {
-    rust-base = "target:rust-base"
-  }
   cache-from = rust_deps_cache_from
   cache-to   = rust_deps_cache_to
 }
@@ -19,12 +16,9 @@ target "builder-deps" {
 target "builder-wasm-deps" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-core/Dockerfile"
+  dockerfile = "nook-app/docker/base.Dockerfile"
   target     = "builder-wasm-deps"
   platforms  = ["linux/amd64"]
-  contexts = {
-    rust-base = "target:rust-base"
-  }
   // Main owns the complete dependency-fingerprinted WASM lineage. Pull requests restore it
   // read-only, avoiding both dependency rebuilds and competition with the larger native dependency
   // cache. The restore list also imports rust-base + native deps so cook layers cannot orphan when
@@ -45,7 +39,6 @@ target "builder-debug" {
   target     = "builder-debug"
   platforms  = ["linux/amd64"]
   contexts = {
-    rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
   cache-from = rust_native_source_cache_from
@@ -61,7 +54,6 @@ target "coverage-export" {
   target     = "coverage-export"
   platforms  = ["linux/amd64"]
   contexts = {
-    rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
   // Main verifies this graph read-only, then exports the already-solved local builder state in a

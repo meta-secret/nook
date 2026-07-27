@@ -179,9 +179,14 @@ solve; they do not propagate through a named build context into the outer
 source, export, or application solve. Every outer WASM solve must therefore
 list the fingerprinted WASM dependency scope directly in its `cache-from`
 inputs, even when it also consumes `builder-wasm-deps` as a named context.
-`nook-app/docker-bake.hcl` owns that direct import, and the repository invariant
-in `preflight/tests/sccache_redis.rs` prevents the source-cache fan-out from
-silently dropping it.
+The dependency producer itself extends `rust-base` inside
+`nook-app/docker/base.Dockerfile`; do not put that boundary behind another
+named-target image, because republishing the parent target can change the
+downstream cache identity across hosted builders. `nook-app/docker-bake.hcl`
+owns the direct consumer import, and Main verifies every publication from a
+fresh BuildKit builder before accepting it. Repository invariants in
+`preflight/tests/sccache_redis.rs` and
+`preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
 The split native and WASM producers additionally restore small validated
 handoffs by exact input hash. Their keys cover Rust sources and manifests,
