@@ -10,10 +10,6 @@ inputs:
     description: Restore only the trusted default-branch cache and disable cache writes.
     required: false
     default: "false"
-  cache-redis-password:
-    description: Password for the persistent remote Rust compiler cache.
-    required: false
-    default: ""
   require-e2e-cache:
     description: Require the browser-image cache lineage for this job.
     required: false
@@ -53,11 +49,6 @@ runs:
       id: buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Configure persistent Rust compiler cache
-      uses: ./.github/actions/nook-cache-connect
-      with:
-        cache-redis-password: ${{ inputs.cache-redis-password }}
-
     # Inline `task`/Bake calls do not receive GitHub's cache-service token automatically. This
     # helper exposes ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL as documented by Docker for `type=gha`.
     - name: Expose GitHub Actions cache runtime
@@ -93,6 +84,12 @@ runs:
         echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+        wasm_deps_fingerprint="${{ hashFiles('nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/.cargo/**', 'nook-app/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/docker/*.docker-bake.hcl', 'nook-app/docker/base.Dockerfile', 'nook-app/docker/Taskfile.yml', 'nook-app/docker/sccache-wrapper.sh', 'nook-app/docker/sccache-report.sh', 'nook-app/nook-core/Dockerfile') }}"
+        if [[ ! "$wasm_deps_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Could not fingerprint the hosted WASM dependency graph" >&2
+          exit 1
+        fi
+        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
         cache_write_enabled=""
         if [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
@@ -103,6 +100,8 @@ runs:
       shell: bash
       run: |
         echo "NOOK_ENV=ci" >> "$GITHUB_ENV"
+        echo "NOOK_SCCACHE_BACKEND=direct_compile" >> "$GITHUB_ENV"
+        echo "NOOK_SCCACHE_BACKEND_REASON=hosted_buildkit_only" >> "$GITHUB_ENV"
 
     - name: Start cache telemetry
       continue-on-error: true

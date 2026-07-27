@@ -1647,16 +1647,21 @@ fn assert_e2e_build_if_needed_contract(root: &Path) {
 
 fn assert_release_and_main_delivery_contract(root: &Path) {
     let release = read(root, ".github/workflows/release.yml");
-    let release_setup = release
-        .find("uses: ./.github/actions/nook-docker-setup")
-        .expect("release must use the safe workflow-ref Docker setup");
     let release_source = release
         .find("- name: Checkout release source")
         .expect("release must checkout its requested source");
+    let release_tooling = release
+        .find("- name: Checkout release workflow tooling")
+        .expect("release must preserve its workflow-ref tooling");
+    let release_setup = release
+        .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
+        .expect("release must use the safe workflow-ref Docker setup");
     assert!(
-        release_setup < release_source,
-        "release must initialize Docker from the workflow ref before checking out an older source"
+        release_source < release_tooling && release_tooling < release_setup,
+        "release must fingerprint its requested source with preserved workflow-ref Docker tooling"
     );
+    assert!(release.contains("ref: ${{ github.sha }}"));
+    assert!(release.contains("path: .nook/release-workflow"));
     let main = read(root, ".github/workflows/main.yml");
     for required in [
         "\n  rust:\n",
