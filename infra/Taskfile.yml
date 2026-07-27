@@ -2682,8 +2682,8 @@ tasks:
               --bind /workspace /workspace \
               --chdir /workspace \
               /bin/bash -ceu "test ! -w /usr; touch .hive-sandbox-diagnostic; rm .hive-sandbox-diagnostic"
-            printf "%s\n" "== publication descriptor through Bubblewrap =="
-            python3 /usr/local/libexec/hive-bwrap-fd-smoke.py
+            printf "%s\n" "== task-bound publication socket through Bubblewrap =="
+            python3 /usr/local/libexec/hive-bwrap-publication-smoke.py
           '
         REMOTE
 

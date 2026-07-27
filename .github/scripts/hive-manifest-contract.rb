@@ -562,7 +562,7 @@ hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
 hive_bwrap_smoke = File.read(
-  File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-fd-smoke.py")
+  File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-socket-smoke.py")
 )
 unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
   raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
@@ -588,11 +588,16 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("--unshare-pid") &&
        infra_taskfile.include?("--ro-bind / /") &&
        infra_taskfile.include?("--bind /workspace /workspace") &&
-       infra_taskfile.include?("publication descriptor through Bubblewrap") &&
-       infra_taskfile.include?("/usr/local/libexec/hive-bwrap-fd-smoke.py") &&
-       hive_bwrap_smoke.include?("os.fstat(fd)") &&
-       hive_bwrap_smoke.include?("os.set_inheritable(fd, True)") &&
-       hive_bwrap_smoke.include?("pass_fds=(fd,)") &&
+       infra_taskfile.include?("task-bound publication socket through Bubblewrap") &&
+       infra_taskfile.include?("/usr/local/libexec/hive-bwrap-publication-smoke.py") &&
+       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_SOCKET"') &&
+       hive_bwrap_smoke.include?('"--tmpfs"') &&
+       hive_bwrap_smoke.include?('dir="/workspace"') &&
+       hive_bwrap_smoke.include?("timeout=10") &&
+       hive_bwrap_smoke.include?("broker.join(timeout=6)") &&
+       hive_bwrap_smoke.include?('"hive"') &&
+       hive_bwrap_smoke.include?('"github"') &&
+       hive_bwrap_smoke.include?('"ping"') &&
        infra_taskfile.include?("awk '/^Seccomp:/ {print $2}' /proc/self/status")
   raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
 end
