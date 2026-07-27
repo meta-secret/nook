@@ -45,7 +45,7 @@ test('creates one ready automated incident per failed Main revision', () => {
   assert.doesNotMatch(issue.body, /raw log contents/)
 })
 
-test('deduplicates attempts and preserves an active claim', () => {
+test('deduplicates attempts and supersedes an active claim for a new rerun', () => {
   const source = run()
   const initial = buildMainFailureIssue({
     run: source,
@@ -72,8 +72,8 @@ test('deduplicates attempts and preserves an active claim', () => {
     existingBody: updated.body,
   })
 
-  assert.match(updated.body, /^status: in_progress$/m)
-  assert.match(updated.body, /^owner: hive-worker-1$/m)
+  assert.match(updated.body, /^status: ready$/m)
+  assert.match(updated.body, /^owner: unassigned$/m)
   assert.match(updated.body, /^related_prs: \[790\]$/m)
   assert.equal(
     duplicate.body.match(/<!-- main-run:30190000000:attempt:2 -->/g)?.length,
@@ -93,7 +93,7 @@ test('rejects stale rerun delivery before changing incident policy', () => {
   assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 4 })), false)
 })
 
-test('records a later failed rerun without reopening a completed incident', () => {
+test('reopens a completed incident for a later failed rerun', () => {
   const source = run()
   const initial = buildMainFailureIssue({
     run: source,
@@ -110,8 +110,8 @@ test('records a later failed rerun without reopening a completed incident', () =
     existingBody: completed,
   })
 
-  assert.match(updated.body, /^status: done$/m)
-  assert.match(updated.body, /^owner: hive-worker-1$/m)
+  assert.match(updated.body, /^status: ready$/m)
+  assert.match(updated.body, /^owner: unassigned$/m)
   assert.match(updated.body, /<!-- main-run:30190000000:attempt:2 -->/)
 })
 

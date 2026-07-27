@@ -37,8 +37,9 @@ Use this workflow for quality, CI, and deployment changes.
     Workbench incident per failed SHA, including `Web e2e`, `UI demos`, and
     `Extension e2e` failures. Each rerun creates a fresh delivery generation
     with generation-specific publication records and no completed publication
-    reuse. Actionable reruns while a repair remains active reuse that logical
-    delivery instead of competing.
+    reuse. A later failed rerun cancels and supersedes an active delivery before
+    its new generation is enqueued, so workers never compete on the same failed
+    SHA.
     A single isolated dispatcher enqueues actionable incidents, and one logical Hive
     task owns the normal PR, checks, review loop, squash merge, and replacement
     Main verification; the scheduled implementation worker does not claim it.

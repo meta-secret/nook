@@ -179,11 +179,14 @@ async fn dispatch_once<S: TaskStore>(
             continue;
         }
         if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
+            let cancelled = store
+                .cancel(&active_id, "Superseded by a newer failed Main attempt")
+                .await
+                .with_context(|| format!("cancel superseded delivery {}", active_id))?;
             eprintln!(
-                "Hive Workbench delivery already active task={} source_commit={source_commit}",
-                active_id
+                "Hive Workbench delivery superseded task={} cancelled={cancelled} source_commit={source_commit}",
+                active_id,
             );
-            continue;
         }
         let task = EnqueueTask {
             id: main_failure_task_id(task_base, run_id, run_attempt)?,

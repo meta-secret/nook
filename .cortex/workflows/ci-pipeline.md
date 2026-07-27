@@ -675,9 +675,10 @@ replacement Main verification. The scheduled implementation worker does not
 claim Hive incidents. Browser E2E and UI-demo failures enter the same durable
 repair queue as native, WASM, build, deployment, mixed, and unknown failures.
 Each rerun is recorded on the Workbench issue keyed by source SHA, and its
-publication branch, plan, and worklog are generation-specific.
-Actionable reruns observed during an active READY, RUNNING, or BLOCKED repair
-reuse that logical delivery instead of enqueuing a competing worker.
+publication branch, plan, and worklog are generation-specific. A later failed
+rerun supersedes and cancels an active delivery before its new generation is
+enqueued, so the next worker receives the latest failure evidence without a
+competing repair.
 Any mixed, unknown, native, WASM, build, deployment, or cancelled non-E2E job
 still queues Hive. The weekly Rust dependency workflow uses the same harness
 through **`task ci-agent:fix`** for its bounded update job.

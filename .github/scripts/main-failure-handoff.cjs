@@ -234,7 +234,10 @@ function buildMainFailureIssue({
   const timestamp = requireTimestamp(recordedAt, 'recordedAt')
   const failures = failedJobNames(jobs)
   const relatedPrs = pullRequestNumbers(sourcePullRequests)
-  const actionableExistingBody = existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER)
+  const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
+  const hasNewAttempt = existingBody !== undefined && !existingBody.includes(marker)
+  const actionableExistingBody =
+    hasNewAttempt || existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER)
     ? replaceFrontmatterField(
         replaceFrontmatterField(
           clearDeliveryCompletion(

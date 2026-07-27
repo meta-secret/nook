@@ -249,22 +249,18 @@ flowchart LR
   worklog --> complete["Neo4j task COMPLETED"]
 ```
 
-Failures confined to the explicitly deferred `Web e2e`, `UI demos`, and
-`Extension e2e` jobs remain visible in Main but create no Workbench incident.
-If an earlier attempt for the same SHA already created an incident, a
-deferred-only rerun records the attempt, marks that incident `done`, and makes
-the dispatcher cancel every active delivery generation plus discovered blockers
-exclusive to those roots. Shared blockers remain available to their other live
-dependents, and cancelling revokes active worker leases at their next heartbeat.
-A later actionable rerun removes the policy-retirement marker, restores the
-incident to `ready`, clears its prior completion evidence, and creates a new
-task generation keyed by workflow run and attempt. Publication branches, plans,
-and worklogs are generation-specific while the incident path remains keyed by
-source SHA. Completed or failed generations and their publication history
-remain immutable. An actionable rerun observed while a repair is still active
-reuses that logical delivery instead of creating a competing worker. Mixed or
-unknown failures, including a cancelled non-E2E job beside a deferred failure,
-remain actionable and follow the repair path above.
+Every failed browser E2E, UI-demo, native, WASM, build, deployment, mixed, or
+unknown Main attempt follows the repair path above. A later failed rerun
+restores the incident to `ready`, clears prior completion evidence, and creates
+a new task generation keyed by workflow run and attempt. If an earlier
+generation is still active, the dispatcher cancels it before enqueueing the new
+generation so the next worker receives the latest failed-job evidence without
+creating competing repairs. Cancellation revokes active worker leases at their
+next heartbeat and cancels blockers exclusive to the superseded delivery;
+shared blockers remain available to other live dependents. Publication
+branches, plans, and worklogs are generation-specific while the incident path
+remains keyed by source SHA. Completed or failed generations and their
+publication history remain immutable.
 
 The token-free dispatcher maintains a shallow public Git checkout of Workbench
 and reconciles only when its revision changes, rather than repeatedly spending

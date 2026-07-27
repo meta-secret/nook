@@ -326,9 +326,10 @@ After merge, `main.yml` independently runs full local-provider and extension
 **e2e**. Every actionable unsuccessful Main run, including `Web e2e`, `UI
 demos`, and `Extension e2e`, creates one `automation: hive` Workbench incident
 keyed by failed SHA. Each run attempt creates a run-and-attempt-keyed delivery
-generation whose plan/worklog are generation-specific, while an actionable
-rerun observed during an active repair reuses that logical delivery instead of
-starting a competing worker.
+generation whose plan/worklog are generation-specific. A later failed rerun
+supersedes and cancels an active delivery before the new generation is
+enqueued, ensuring its worker receives the latest evidence without starting a
+competing repair.
 The isolated Hive dispatcher enqueues actionable incidents once, and
 one logical task owns diagnosis, a normal exact-head PR, actionable review
 resolution, squash merge, and verification of the resulting Main run. The
