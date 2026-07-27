@@ -227,9 +227,9 @@ fn assert_delivery_cache_scope_contract() {
             "WASM dependency scope fingerprint is missing {fingerprint_input}"
         );
     }
-    assert!(setup.contains(
-        "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint"
-    ));
+    assert!(
+        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint")
+    );
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -z \"$read_only\" ]"));
     assert!(setup.contains("main-cache-only"));
@@ -243,13 +243,12 @@ fn assert_delivery_cache_scope_contract() {
     assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
     assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2"));
-    assert!(bake.contains(
-        "scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m"
-    ));
+    assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m"));
     let docker_tasks = read("nook-app/docker/Taskfile.yml");
-    assert!(docker_tasks.contains(
-        "scope=${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
-    ));
+    assert!(
+        docker_tasks
+            .contains("scope=${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}")
+    );
     assert!(bake.contains("GHA_CACHE_FALLBACK_ENABLED != \"\""));
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
