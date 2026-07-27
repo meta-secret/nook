@@ -337,6 +337,11 @@ fn assert_delivery_cache_scope_contract() {
         wasm_dependencies.contains("cache-from = rust_wasm_deps_cache_from"),
         "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
     );
+    assert!(
+        wasm_dependencies.contains("dockerfile = \"nook-app/docker/base.Dockerfile\"")
+            && !wasm_dependencies.contains("rust-base = \"target:rust-base\""),
+        "WASM dependency cache keys must extend rust-base inside one Dockerfile instead of through a volatile named-target image"
+    );
 }
 
 fn assert_release_cache_fingerprint_contract() {
@@ -390,6 +395,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
     for path in [
+        "nook-app/docker/base.Dockerfile",
         "nook-app/nook-core/Dockerfile",
         "nook-app/nook-wasm/Dockerfile",
     ] {
@@ -399,7 +405,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
         );
     }
     assert!(
-        read("nook-app/nook-core/Dockerfile")
+        read("nook-app/docker/base.Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 12

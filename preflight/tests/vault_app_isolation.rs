@@ -813,11 +813,12 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() {
 #[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     let root = repository_root();
-    let dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
+    let dependency_dockerfile = read(&root, "nook-app/docker/base.Dockerfile");
+    let source_dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
     let warmup = section(
-        &dockerfile,
-        "# Also warm the COVERAGE-instrumented deps:",
-        "# --- Native verify warm-up",
+        &dependency_dockerfile,
+        "FROM builder-wasm-deps AS builder-deps",
+        "# --- Web/e2e branch",
     );
 
     assert_eq!(
@@ -832,15 +833,19 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     assert!(warmup.contains(
         "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass"
     ));
-    assert!(dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2"));
     assert!(
-        dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-replication")
+        source_dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2")
     );
     assert!(
-        dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log")
+        source_dockerfile
+            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-replication")
     );
     assert!(
-        dockerfile
+        source_dockerfile
+            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log")
+    );
+    assert!(
+        source_dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
     );
 
@@ -1149,14 +1154,18 @@ fn assert_main_producer_owned_cache_publish(root: &Path) {
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
             && docker_tasks.contains("compression=zstd,force-compression=true")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
-            && docker_tasks.contains("--set \"wasm-export.cache-from=\""),
-        "producer-owned publishers must select local verified graphs and preserve the isolated no-import WASM dependency export"
+            && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
+            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
+        "producer-owned publishers must select local verified graphs, preserve the isolated no-import WASM dependency export, and verify it from a fresh builder"
     );
+    let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
-        read(root, "nook-app/nook-core/Dockerfile").contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
-            && read(root, "nook-app/nook-core/Dockerfile")
-                .contains("/etc/nook-wasm-deps-cache-epoch"),
-        "WASM cook lineage must include a bumpable epoch layer so reseeds force new cook digests"
+        cache_verifier.contains("docker-container")
+            && cache_verifier.contains("builder-wasm-deps.cache-from=type=gha")
+            && cache_verifier.contains("nook-sccache-report chef-wasm-release")
+            && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
+            && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
+        "Main must reject a published WASM cache until a fresh builder restores every dependency layer"
     );
     let base_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
     assert!(
@@ -1164,8 +1173,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) {
             && base_dockerfile.contains("@sha256:")
             && base_dockerfile.contains("FROM ${CARGO_CHEF_IMAGE} AS cargo-chef")
             && base_dockerfile.contains("FROM ${RUST_IMAGE} AS rust-base")
+            && base_dockerfile.contains("FROM rust-base AS chef-planner")
+            && base_dockerfile.contains("FROM rust-base AS builder-deps-common")
+            && base_dockerfile.contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
+            && base_dockerfile.contains("/etc/nook-wasm-deps-cache-epoch")
             && !base_dockerfile.contains("cargo-chef:latest-rust-${RUST_VERSION}"),
-        "Rust base images must be digest-pinned so floating tags cannot invalidate chef cook layers"
+        "Rust dependency stages must be self-contained on digest-pinned base images with an explicit reseed epoch"
     );
 }
 
@@ -1216,12 +1229,13 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
+    let dependency_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
     let core_dockerfile = read(root, "nook-app/nook-core/Dockerfile");
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")
             && !core_dockerfile
                 .contains("cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm")
-            && core_dockerfile.contains(
+            && dependency_dockerfile.contains(
                 "cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm",
             ),
         "the manifest-only WASM boundary must prewarm release tests without compiling a second debug graph"
