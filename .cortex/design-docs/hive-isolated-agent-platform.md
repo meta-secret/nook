@@ -255,8 +255,12 @@ restores the incident to `ready`, clears prior completion evidence, and creates
 a new task generation keyed by workflow run and attempt. If an earlier
 generation is still active, the dispatcher cancels it before enqueueing the new
 generation so the next worker receives the latest failed-job evidence without
-creating competing repairs. Cancellation revokes active worker leases at their
-next heartbeat and cancels blockers exclusive to the superseded delivery;
+creating competing repairs. The dispatcher aborts that reconciliation cycle
+after cancellation and retries only after its polling interval, which is
+required to exceed the worker heartbeat interval; the stale Codex execution
+therefore stops before the replacement becomes claimable. Reconciliation of
+the already-current run/attempt generation is idempotent and never cancels it.
+Cancellation also cancels blockers exclusive to the superseded delivery;
 shared blockers remain available to other live dependents. Publication
 branches, plans, and worklogs are generation-specific while the incident path
 remains keyed by source SHA. Completed or failed generations and their

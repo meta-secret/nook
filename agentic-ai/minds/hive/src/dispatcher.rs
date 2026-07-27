@@ -11,6 +11,7 @@ use crate::store::TaskStore;
 const MAIN_FAILURE_PREFIX: &str = "main-failure-";
 const MAIN_FAILURE_SUFFIX: &str = ".md";
 const DEFERRED_E2E_RETIREMENT_MARKER: &str = "<!-- hive-retired:deferred-e2e -->";
+const WORKER_HEARTBEAT_SECONDS: u64 = 60;
 
 pub async fn run_workbench_dispatcher<S: TaskStore>(
     store: S,
@@ -18,8 +19,10 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     checkout: &Path,
     poll_seconds: u64,
 ) -> anyhow::Result<()> {
-    if poll_seconds < 60 {
-        anyhow::bail!("Workbench polling must not run more often than once per minute");
+    if poll_seconds <= WORKER_HEARTBEAT_SECONDS {
+        anyhow::bail!(
+            "Workbench polling must exceed the worker heartbeat interval to serialize superseded deliveries"
+        );
     }
     store.migrate().await?;
     let mut reconciled_revision = None;
@@ -178,18 +181,26 @@ async fn dispatch_once<S: TaskStore>(
             reconciled_incidents.insert(name, body);
             continue;
         }
+        let task_id = main_failure_task_id(task_base, run_id, run_attempt)?;
         if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
+            if active_id == task_id {
+                eprintln!(
+                    "Hive Workbench delivery already current task={} source_commit={source_commit}",
+                    active_id,
+                );
+                reconciled_incidents.insert(name, body);
+                continue;
+            }
             let cancelled = store
                 .cancel(&active_id, "Superseded by a newer failed Main attempt")
                 .await
                 .with_context(|| format!("cancel superseded delivery {}", active_id))?;
-            eprintln!(
-                "Hive Workbench delivery superseded task={} cancelled={cancelled} source_commit={source_commit}",
-                active_id,
+            anyhow::bail!(
+                "superseded Hive delivery {active_id} cancelled={cancelled}; retry after the worker heartbeat barrier"
             );
         }
         let task = EnqueueTask {
-            id: main_failure_task_id(task_base, run_id, run_attempt)?,
+            id: task_id,
             kind: "main-repair".to_owned(),
             prompt: body.clone(),
             source_commit,
@@ -309,8 +320,8 @@ mod tests {
 
     use super::{
         DEFERRED_E2E_RETIREMENT_MARKER, incident_needs_reconciliation, is_ready_agent_issue,
-        main_failure_commit, main_failure_run, main_failure_task_ids, main_run_requires_repair,
-        sync_workbench_checkout,
+        main_failure_commit, main_failure_run, main_failure_task_id, main_failure_task_ids,
+        main_run_requires_repair, sync_workbench_checkout,
     };
 
     #[test]
@@ -357,6 +368,12 @@ mod tests {
                 "main-failure-abcdef",
                 "main-failure-abcdef-run-123456-attempt-2"
             ]
+        );
+        assert_eq!(
+            main_failure_task_id("main-failure-abcdef", 123456, 2)
+                .expect("current task id")
+                .as_str(),
+            "main-failure-abcdef-run-123456-attempt-2"
         );
         assert!(main_run_requires_repair(&failed_main, source_commit));
         assert!(!main_run_requires_repair(

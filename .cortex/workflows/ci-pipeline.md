@@ -677,8 +677,10 @@ repair queue as native, WASM, build, deployment, mixed, and unknown failures.
 Each rerun is recorded on the Workbench issue keyed by source SHA, and its
 publication branch, plan, and worklog are generation-specific. A later failed
 rerun supersedes and cancels an active delivery before its new generation is
-enqueued, so the next worker receives the latest failure evidence without a
-competing repair.
+enqueued. The failed reconciliation retries only after a poll interval longer
+than the worker heartbeat, establishing a termination barrier before the new
+generation becomes claimable. Reconciliation of the already-current generation
+is idempotent and never cancels it.
 Any mixed, unknown, native, WASM, build, deployment, or cancelled non-E2E job
 still queues Hive. The weekly Rust dependency workflow uses the same harness
 through **`task ci-agent:fix`** for its bounded update job.
