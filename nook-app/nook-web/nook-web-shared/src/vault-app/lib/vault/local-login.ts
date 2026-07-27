@@ -4,7 +4,6 @@ import { createLogger } from "$lib/log";
 import {
   getActiveVaultId,
   hasActiveLocalVault,
-  isVaultPasswordRecommendedLength,
   listLocalVaults,
   prepareNewLocalVaultSlot,
   setActiveVault,
@@ -184,76 +183,6 @@ export async function renameLocalVaultLabel(
   } finally {
     state.isVerifying = false;
   }
-}
-
-export async function createLocalVault(
-  state: VaultState,
-  password: string,
-): Promise<void> {
-  if (!state.manager) {
-    state.errorMsg = state.t("errors.engine_unavailable");
-    return;
-  }
-  if (state.isVerifying) return;
-  if (!isVaultPasswordRecommendedLength(password)) {
-    state.errorMsg = state.t("login.password_too_short");
-    return;
-  }
-
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.storageMode = "local";
-  state.githubPat = "";
-  state.oauthFile = undefined;
-  state.localFolder = undefined;
-  state.isVerifying = true;
-
-  try {
-    await state.initDeviceIdentity();
-    const creatingAdditionalVault = state.localVaults.length > 0;
-    if (creatingAdditionalVault) {
-      await prepareNewLocalVaultSlot();
-    }
-    const rawRecords = (await state.enqueueStorage(() => {
-      if (creatingAdditionalVault) {
-        state.manager!.resetVaultSession();
-        return state.manager!.connect_fresh("local", "", "");
-      }
-      return state.manager!.connect("local", "", "");
-    })) as NookSecretRecord[];
-    for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
-    state.markVaultUnlocked();
-    await state.addVaultPassword(
-      state.t("login.master_password_label"),
-      password,
-    );
-    state.activeVaultStoreId = requireManagerVaultStoreId(state.manager);
-    await refreshLocalVaultCatalog(state);
-    state.localLoginPrepared = true;
-    await state.ensureProviderSaved();
-    await state.syncActiveVaultStoreIdToAuth();
-    await state.hydrateMultiDeviceState();
-    log.info("local vault created (with backup password)", {
-      secrets: rawRecords.length,
-    });
-    state.showSuccess(state.t("toasts.local_loaded"));
-    state.startIdleSessionTracking();
-    state.startVaultSync();
-  } catch (e: unknown) {
-    state.isAuthenticated = false;
-    const message =
-      e instanceof Error ? e.message : "Failed to create local vault.";
-    log.warn("local vault create failed", { error: message });
-    state.errorMsg = message;
-  } finally {
-    state.isVerifying = false;
-  }
-}
-
-export async function probeLoginUnlockMode(state: VaultState): Promise<void> {
-  log.debug("probing login unlock mode");
-  await state.refreshPasswordEntriesList();
 }
 
 export async function syncActiveVaultStoreIdToAuth(

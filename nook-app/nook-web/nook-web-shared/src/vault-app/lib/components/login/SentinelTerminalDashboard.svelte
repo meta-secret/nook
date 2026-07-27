@@ -13,28 +13,14 @@
     copySentinelRequest,
     runSentinelDashboardAction,
   } from '$lib/components/login/sentinel-dashboard-actions'
-  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
-
-  type Status =
-    | 'idle'
-    | 'collecting'
-    | 'ready'
-    | 'finalizing'
-    | 'delivering'
-    | 'complete'
-
-  type Participant = {
-    participantId: string
-    label: string
-    fingerprint: string
-  }
-
-  type Delivery = {
-    participantId: string
-    fingerprint?: string
-    payload: string
-    sharePayload?: string
-  }
+  import type { VaultState } from '$lib/vault.svelte'
+  import {
+    SentinelGenesisPhase,
+    sentinelGenesisPhaseTranslationKey,
+    type NookSentinelGenesisDelivery,
+    type NookSentinelGenesisParticipantStatus,
+    type StartSentinelGenesisArgs,
+  } from '$app-wasm'
 
   type PolicyStep = 'total' | 'threshold' | 'confirm'
   type Tone = 'muted' | 'success' | 'answer' | 'accent'
@@ -60,10 +46,10 @@
     name: string
     participantCount: number
     threshold: number
-    status: Status
+    status: SentinelGenesisPhase
     request: string
-    participants: Participant[]
-    deliveries: Delivery[]
+    participants: NookSentinelGenesisParticipantStatus[]
+    deliveries: NookSentinelGenesisDelivery[]
     isBusy: boolean
     onBack: () => void
     onStart: (
@@ -81,7 +67,7 @@
   let outputElement = $state<HTMLDivElement>()
 
   const memberDeliveries = $derived(
-    deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),
+    deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   )
   const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
   const policyValid = $derived(
@@ -95,11 +81,12 @@
   )
   const rosterCount = $derived(Math.max(1, participants.length))
   const workflowStage = $derived(
-    status === 'delivering' || status === 'complete'
+    status === SentinelGenesisPhase.DeliveringShares ||
+      status === SentinelGenesisPhase.Complete
       ? 5
-      : status === 'ready' || status === 'finalizing'
+      : status === SentinelGenesisPhase.ReadyToFinalize
         ? 4
-        : status === 'collecting'
+        : status === SentinelGenesisPhase.CollectingParticipants
           ? 3
           : policyStep === 'total' || policyStep === 'threshold'
             ? 2
@@ -118,9 +105,9 @@
     { text: `◆ ${vault.t('login.vault_name_label')}  ${name}`, tone: 'answer' },
     {
       text:
-        status === 'idle'
+        status === SentinelGenesisPhase.Inactive
           ? vault.t('login.sentinel_terminal_draft_notice')
-          : `${vault.t('login.sentinel_terminal_status')}  ${status.toUpperCase()}`,
+          : `${vault.t('login.sentinel_terminal_status')}  ${vault.t(sentinelGenesisPhaseTranslationKey(status)).toUpperCase()}`,
       tone: 'muted',
     },
   ])
@@ -176,7 +163,7 @@
   data-sentinel-dashboard-focus
   tabindex="-1"
 >
-  {#if status === 'idle'}
+  {#if status === SentinelGenesisPhase.Inactive}
     <button
       class="fixed top-5 left-5 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md sm:left-10"
       data-testid="sentinel-dashboard-back"
@@ -189,7 +176,9 @@
 
   <section
     class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-[#41613b] bg-[#030503] shadow-[0_0_80px_rgb(93_255_103/0.08)]"
-    data-testid={status === 'idle' ? 'sentinel-genesis-policy-step' : undefined}
+    data-testid={status === SentinelGenesisPhase.Inactive
+      ? 'sentinel-genesis-policy-step'
+      : undefined}
   >
     <header
       class="flex items-center justify-between border-b border-[#2d4229] bg-[#101510] px-5 py-3 text-xs"
@@ -229,7 +218,7 @@
             </p>
           {/each}
 
-          {#if status === 'idle' && policyStep === 'confirm'}
+          {#if status === SentinelGenesisPhase.Inactive && policyStep === 'confirm'}
             <div class="mt-7 border border-[#4f7a46] bg-[#081008] p-5">
               <p class="text-[#d9c365]">REVIEW GENESIS</p>
               <p class="mt-3">{name} · {threshold}-of-{participantCount}</p>
@@ -237,7 +226,7 @@
                 {vault.t('login.sentinel_terminal_participant_one')}
               </p>
             </div>
-          {:else if status !== 'idle'}
+          {:else if status !== SentinelGenesisPhase.Inactive}
             <div
               class="mt-7 space-y-5 border border-[#4f7a46] bg-[#081008] p-5"
               data-testid="sentinel-genesis-ceremony-step"
@@ -274,7 +263,7 @@
                 <Copy class="size-4" />
                 {copied ? vault.t('common.copied') : vault.t('common.copy')}
               </button>
-              {#if status === 'collecting'}
+              {#if status === SentinelGenesisPhase.CollectingParticipants}
                 <label class="block text-[#83e273]">
                   ? {vault.t('login.sentinel_genesis_response_label')} ›
                   <textarea
@@ -301,7 +290,7 @@
           {/if}
 
           <div class="mt-7">
-            {#if status === 'idle' && policyStep === 'total'}
+            {#if status === SentinelGenesisPhase.Inactive && policyStep === 'total'}
               <p>
                 <span class="text-[#83e273]">?</span>
                 {vault.t('login.sentinel_terminal_total_question')}
@@ -320,7 +309,7 @@
                   >
                 {/each}
               </div>
-            {:else if status === 'idle' && policyStep === 'threshold'}
+            {:else if status === SentinelGenesisPhase.Inactive && policyStep === 'threshold'}
               <p>
                 <span class="text-[#83e273]">?</span>
                 {vault.t('login.sentinel_terminal_threshold_question')}
@@ -337,7 +326,7 @@
                   >
                 {/each}
               </div>
-            {:else if status === 'idle'}
+            {:else if status === SentinelGenesisPhase.Inactive}
               <div class="flex flex-wrap items-center justify-between gap-4">
                 <p>
                   <span class="text-[#83e273]">?</span>
@@ -353,14 +342,18 @@
                   {vault.t('login.sentinel_genesis_start')}
                 </button>
               </div>
-            {:else if status === 'ready' || status === 'finalizing'}
+            {:else if status === SentinelGenesisPhase.ReadyToFinalize}
               <button
                 class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
                 data-testid="sentinel-genesis-finalize"
-                disabled={status !== 'ready' || isBusy || actionBusy}
+                disabled={status !== SentinelGenesisPhase.ReadyToFinalize ||
+                  isBusy ||
+                  actionBusy}
                 onclick={() =>
                   void runSentinelDashboardAction(
-                    status === 'ready' && !isBusy && !actionBusy,
+                    status === SentinelGenesisPhase.ReadyToFinalize &&
+                      !isBusy &&
+                      !actionBusy,
                     (value) => (actionBusy = value),
                     onFinalize,
                   )}
@@ -371,7 +364,7 @@
             {/if}
           </div>
 
-          {#if status === 'delivering' || deliveries.length > 0}
+          {#if status === SentinelGenesisPhase.DeliveringShares || deliveries.length > 0}
             <div
               class="mt-7 border border-[#83e273] bg-[#0c190b] p-5 text-[#a5f58f]"
               data-testid="sentinel-genesis-deliveries"
@@ -383,7 +376,7 @@
               <p class="mt-2 text-xs text-[#6ca85e]">
                 {vault.t('login.sentinel_genesis_delivery_description')}
               </p>
-              {#each memberDeliveries as delivery, index (delivery.participantId)}
+              {#each memberDeliveries as delivery, index (delivery.deviceId)}
                 <div class="mt-4 grid gap-3 sm:grid-cols-[110px_1fr]">
                   <EnrollmentQrCode
                     enrollmentLink={delivery.payload}
@@ -444,9 +437,10 @@
           <div>
             <dt class="text-[#456440]">VAULT</dt>
             <dd
-              class={`mt-1 ${status === 'delivering' || status === 'complete' ? 'text-[#83e273]' : 'text-[#d9c365]'}`}
+              class={`mt-1 ${status === SentinelGenesisPhase.DeliveringShares || status === SentinelGenesisPhase.Complete ? 'text-[#83e273]' : 'text-[#d9c365]'}`}
             >
-              {status === 'delivering' || status === 'complete'
+              {status === SentinelGenesisPhase.DeliveringShares ||
+              status === SentinelGenesisPhase.Complete
                 ? 'SEALED'
                 : 'DOES NOT EXIST'}
             </dd>

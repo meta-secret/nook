@@ -3,7 +3,7 @@
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
   import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
-    VaultAuthWorkflowState,
+    createVaultAuthWorkflowState,
     type Presence,
   } from './vault-auth-workflow-state.svelte'
 
@@ -14,7 +14,7 @@
   }
 
   let { onSentinel }: Props = $props()
-  const workflow = new VaultAuthWorkflowState()
+  const workflow = createVaultAuthWorkflowState()
   let vaultName = $state('')
   const presence = $derived(workflow.presence)
   const step = $derived(workflow.step)

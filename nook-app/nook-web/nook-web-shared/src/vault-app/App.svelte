@@ -1,8 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from "@lucide/svelte";
-  import { VaultState, type StartSentinelGenesisArgs } from "$lib/vault.svelte";
-  import { JoinEnrollmentState } from "$app-wasm";
+  import { VaultState } from "$lib/vault.svelte";
+  import {
+    DeviceProtectionStatus,
+    JoinEnrollmentState,
+    type StartSentinelGenesisArgs,
+  } from "$app-wasm";
   import {
     saveAuthProviders,
     type AuthProvidersSnapshot,
@@ -71,6 +75,9 @@
     consumeSentinelGenesisParticipantResponseFromLocation,
     consumeSentinelGenesisRequestFromLocation,
   } from "$lib/sentinel-genesis-link";
+  import * as deviceProtectionActions from "$lib/vault/device-protection";
+  import * as multiDeviceActions from "$lib/vault/multi-device";
+  import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
 
   const vault = new VaultState();
@@ -360,7 +367,7 @@
           connectRequest.vaultStoreId === activeStoreId) &&
         (connectRequest.source === "paired-vault" ||
           extensionBackedVaultSession ||
-          vault.deviceProtectionStatus === "missing");
+          vault.deviceProtectionStatus === DeviceProtectionStatus.Missing);
       if (extensionIdentityCanUnlock) {
         const adopted = await vault.authorizeWithExternalDeviceIdentity(
           (manager) => adoptExtensionIdentity(manager, connectRequest),
@@ -374,8 +381,8 @@
         return;
       }
       pendingExistingVaultUnlock = true;
-      if (vault.deviceProtectionStatus === "passkey") {
-        await vault.unlockDeviceProtection();
+      if (vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
+        await deviceProtectionActions.unlockDeviceProtection(vault);
       }
       return;
     }
@@ -423,7 +430,7 @@
   );
   const appVersion = "0.1.0";
   let secretsAddOpen = $state(false);
-  let secretsAddFormType = $state<VaultItemType | undefined>(undefined);
+  let secretsAddFormType = $state<VaultItemType>();
   let secretsEditorResetKey = $state(0);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen && secretsAddFormType === "secure-note",
@@ -476,14 +483,13 @@
     oauthFile: OAuthFileConfig | undefined;
     localFolder: LocalFolderConfig | undefined;
   };
-  let pendingExistingVaultImport = $state<
-    PendingExistingVaultImport | undefined
-  >(undefined);
+  let pendingExistingVaultImport = $state<PendingExistingVaultImport>();
   let pendingExistingVaultUnlock = $state(false);
   let pendingEnrollmentDeviceUnlock = $state(false);
-  let pendingEnrollmentSubmit = $state<
-    { code: string; password: string } | undefined
-  >(undefined);
+  let pendingEnrollmentSubmit = $state<{
+    code: string;
+    password: string;
+  }>();
   const showPasskeyOverlay = $derived(
     pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
   );
@@ -506,10 +512,10 @@
       githubPat: vault.githubPat,
       githubRepo: vault.githubRepo,
       oauthFile: vault.oauthFile
-        ? (JSON.parse(JSON.stringify(vault.oauthFile)) as OAuthFileConfig)
+        ? $state.snapshot(vault.oauthFile)
         : undefined,
       localFolder: vault.localFolder
-        ? (JSON.parse(JSON.stringify(vault.localFolder)) as LocalFolderConfig)
+        ? $state.snapshot(vault.localFolder)
         : undefined,
     };
   }
@@ -666,7 +672,7 @@
       return "";
     }
     pendingVaultCreation = undefined;
-    return vault.createSentinelGenesisPublicKeyAnnouncement();
+    return sentinelGenesisActions.createPublicKeyAnnouncement(vault);
   }
 
   async function handleCreateSentinelParticipantResponse(
@@ -680,7 +686,10 @@
       return "";
     }
     pendingVaultCreation = undefined;
-    return vault.createSentinelGenesisParticipantResponse(requestPayload);
+    return sentinelGenesisActions.createParticipantResponse(
+      vault,
+      requestPayload,
+    );
   }
 
   async function handleAcceptSentinelOnboarding(packageJson: string) {
@@ -689,7 +698,7 @@
       return;
     }
     pendingVaultCreation = undefined;
-    await vault.acceptSentinelOnboardingPackage(packageJson);
+    await sentinelGenesisActions.acceptOnboardingPackage(vault, packageJson);
     sentinelOnboardingPackage = "";
   }
 
@@ -1040,7 +1049,8 @@
                   (extensionIdentityRequest.source === "paired-vault" ||
                     !requiresPasskeyFirst ||
                     extensionBackedVaultSession ||
-                    vault.deviceProtectionStatus === "missing")}
+                    vault.deviceProtectionStatus ===
+                      DeviceProtectionStatus.Missing)}
                 onUnlock={handleUnlock}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -1264,7 +1274,7 @@
                       {vault}
                       isSaving={vault.isSaving}
                       editsBlocked={vault.editsBlocked}
-                      editBlockReason={vault.editBlockReason}
+                      editBlockMessage={vault.editBlockMessage}
                       secrets={vault.secrets}
                       onAddModeChange={(open, type = undefined) => {
                         secretsAddOpen = open;
@@ -1350,10 +1360,10 @@
       isBusy={vault.isVerifying}
       bind:enrollSecretsKey={vault.enrollSecretsKey}
       bind:enrollMembersKey={vault.enrollMembersKey}
-      onConfirm={() => vault.confirmJoinRequest()}
+      onConfirm={() => multiDeviceActions.confirmJoinRequest(vault)}
       onEnrollWithKeys={() => vault.enrollAndConnect()}
       onCreateFreshVault={() => vault.createFreshVault()}
-      onCancel={() => vault.dismissJoinEnrollment()}
+      onCancel={() => multiDeviceActions.dismissJoinEnrollment(vault)}
     />
 
     {#if vault.pendingSyncConflict}

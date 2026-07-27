@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    SentinelVaultUnlockState,
+    type NookLocalVaultEntry,
+    type NookPasswordEntrySummary,
+  } from '$app-wasm'
   import { ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
@@ -6,11 +11,8 @@
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
-  import type {
-    NookLocalVaultEntry,
-    NookPasswordEntrySummary,
-  } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import { isSentinelVault } from '$lib/vault/sentinel-unlock'
 
   type PasswordEntrySummary = Pick<
     NookPasswordEntrySummary,
@@ -54,12 +56,13 @@
   let workflow = $state<'open' | 'create' | 'import'>('open')
   const showSentinelCeremony = $derived(
     vault.sentinelCeremonyPrompt ||
-      vault.sentinelUnlockStatus === 'ceremony_required' ||
-      vault.sentinelUnlockStatus === 'awaiting_shares' ||
-      (vault.isSentinelVault() && !vault.isAuthenticated),
+      vault.sentinelUnlockStatus ===
+        SentinelVaultUnlockState.CeremonyRequired ||
+      vault.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
+      (isSentinelVault(vault) && !vault.isAuthenticated),
   )
   const hidePasswordUnlock = $derived(
-    showSentinelCeremony || vault.isSentinelVault(),
+    showSentinelCeremony || isSentinelVault(vault),
   )
 </script>
 

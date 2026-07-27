@@ -10,7 +10,7 @@ import {
   VaultAccessStatus,
 } from "$lib/nook";
 import { createLogger } from "$lib/log";
-import { JoinEnrollmentState } from "$app-wasm";
+import { JoinEnrollmentState, RemoteVaultRecoveryState } from "$app-wasm";
 import { syncLocalFolderProvider } from "$lib/vault/sync";
 import {
   isSentinelCeremonyRequiredError,
@@ -99,7 +99,9 @@ export async function loadDb(state: VaultState) {
     }
 
     if (
-      state.pendingConnectRecovery === "none" &&
+      !state.clientPolicy.remoteRecoveryConnectConfirmed(
+        state.remoteVaultRecoveryState,
+      ) &&
       (await state.handleRemoteVaultAssessStatus(accessStatus))
     ) {
       return;
@@ -131,19 +133,14 @@ export async function loadDb(state: VaultState) {
       return;
     }
 
-    if (state.stagedRemoteStorageArgs()) {
-      const reconcileOutcome = await state.reconcileStagedRemoteWithLocal();
-      if (reconcileOutcome === "skip") return;
-    }
-
     const rawRecords = await state.enqueueStorage(async () => {
       const connectArgs = connectArgsOverride ?? state.connectStorageArgs();
       log.debug("loadDb connect", { mode: connectArgs[0] });
       const connectPromise =
-        state.pendingConnectRecovery === "fresh"
+        state.remoteVaultRecoveryState === RemoteVaultRecoveryState.ConnectFresh
           ? state.manager!.connect_fresh(...connectArgs)
           : state.manager!.connect(...connectArgs);
-      state.pendingConnectRecovery = "none";
+      state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
           () =>
@@ -215,13 +212,6 @@ export async function loadDb(state: VaultState) {
   }
 }
 
-function editBlockedMessage(state: VaultState): string {
-  if (state.editBlockReason) return state.editBlockReason;
-  return state.securityConflicts.length > 0
-    ? state.t("auth_storage.security_conflict_edits")
-    : state.t("auth_storage.sync_blocked_edits");
-}
-
 type VaultManager = NonNullable<VaultState["manager"]>;
 
 async function runPasswordManagerImport(
@@ -232,7 +222,8 @@ async function runPasswordManagerImport(
   failureKey: string,
 ): Promise<NookImportResult> {
   if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  if (state.editsBlocked) throw new Error(editBlockedMessage(state));
+  const editBlockMessage = state.editBlockMessage;
+  if (editBlockMessage !== undefined) throw new Error(editBlockMessage);
   state.errorMsg = "";
   state.dismissSuccess();
   state.isSaving = true;
@@ -264,8 +255,9 @@ async function runPasswordManagerImport(
 
 async function prepareSecretMutation(state: VaultState): Promise<boolean> {
   if (!state.manager) return false;
-  if (state.editsBlocked) {
-    state.errorMsg = editBlockedMessage(state);
+  const editBlockMessage = state.editBlockMessage;
+  if (editBlockMessage !== undefined) {
+    state.errorMsg = editBlockMessage;
     return false;
   }
   state.errorMsg = "";
@@ -399,8 +391,9 @@ export async function handleProtonPassImport(
 
 export async function handleDeleteSecret(state: VaultState, id: string) {
   if (!state.manager) return;
-  if (state.editsBlocked) {
-    state.errorMsg = editBlockedMessage(state);
+  const editBlockMessage = state.editBlockMessage;
+  if (editBlockMessage !== undefined) {
+    state.errorMsg = editBlockMessage;
     return;
   }
   state.errorMsg = "";
@@ -474,14 +467,6 @@ export async function handleReplaceSecret(
   }
 }
 
-export function filterSecrets(
-  state: VaultState,
-  query: string,
-): NookSecretRecord[] {
-  if (!state.manager) return [];
-  return state.manager.filter_secrets(query);
-}
-
 export async function refreshPasswordEntriesList(
   state: VaultState,
 ): Promise<boolean> {
@@ -489,7 +474,6 @@ export async function refreshPasswordEntriesList(
   try {
     if (!state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      state.loginUnlockMode = "unknown";
       return false;
     }
     await state.ensureOAuthTokensFresh();
@@ -497,15 +481,11 @@ export async function refreshPasswordEntriesList(
       state.manager!.fetchVaultPasswordEntries(...state.wasmStorageArgs()),
     );
     state.passwordEntries = raw;
-    state.loginUnlockMode = "keys";
     if (state.passwordEntries.length === 1 && !state.selectedPasswordEntryId) {
       state.selectedPasswordEntryId = state.passwordEntries[0]!.id;
     }
     return true;
   } catch {
-    if (!state.isAuthenticated) {
-      state.loginUnlockMode = "unknown";
-    }
     state.passwordEntries = [];
     return false;
   }

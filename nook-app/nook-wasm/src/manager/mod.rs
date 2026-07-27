@@ -7,8 +7,7 @@
 //! - [`connect`] — `connect` / `connect_fresh` / `assess_vault_connect` /
 //!   genesis initialisation.
 //! - [`sync`] — `sync_vault_from_storage` (periodic poll, mode-aware).
-//! - [`password`] — set / remove / verify / `connectWithPassword`,
-//!   `vaultUnlockMode`.
+//! - [`password`] — set / remove / verify / `connectWithPassword`.
 //! - [`multi_device`] — `init_device`, `list_pending_joins`,
 //!   `list_vault_members`, request/approve/enroll flows.
 //! - [`secrets`] — `add_secret` / `delete_secret`, search, password & id
@@ -358,6 +357,9 @@ pub struct NookVaultManager {
     /// deliberately live only in memory: they have no store id and must never
     /// be mistaken for a persisted vault.
     pub(in crate::manager) sentinel_genesis: CeremonyState<nook_core::SentinelGenesisSession>,
+    /// Portable setup phase remains available after the draft session is
+    /// consumed by finalization.
+    pub(in crate::manager) sentinel_genesis_phase: nook_core::SentinelGenesisPhase,
     /// Exact request this device answered as a Sentinel participant. A returned
     /// share delivery must bind to this request before it may be persisted.
     pub(in crate::manager) pending_sentinel_genesis_request:
@@ -379,6 +381,7 @@ impl Drop for NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
+        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
@@ -540,6 +543,7 @@ impl NookVaultManager {
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
             sentinel_genesis: CeremonyState::Inactive,
+            sentinel_genesis_phase: nook_core::SentinelGenesisPhase::Inactive,
             pending_sentinel_genesis_request: CeremonyState::Inactive,
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutboxState::default(),
@@ -661,6 +665,7 @@ impl NookVaultManager {
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
+        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();

@@ -48,10 +48,10 @@ rejects unreachable files and exports and stays pinned to 5.88 until the sibling
 vault/extension packages become a real root workspace. TypeScript and ESLint
 reject unused locals and parameters inside `.ts`, `.svelte.ts`, and `.svelte`
 files; the extension `check` script explicitly lints its build scripts,
-Playwright config, and E2E spec. Public class methods are not covered by those
-tools because they may be called through an exported object; verify suspected
-state-controller methods at their component call sites rather than treating a
-missing import as proof that they are dead.
+Playwright config, and E2E spec. Every web Knip graph enables
+`classMembers`, so unused public and private class members are reported across
+the production app family and research project. Treat each finding as a
+call-graph result: delete confirmed dead members rather than adding ignores.
 
 **Agent duty:** Knip unused findings and jscpd clone findings are hard failures.
 Delete or wire unused code; extract shared helpers for clones. Do not raise

@@ -14,8 +14,8 @@ domain schema outside Rust and risks drift across web, wasm, and future hosts.
 
 The review question is: "Is this type about the app itself, or is it only a
 visual element in the UI?" If it describes vault behavior, storage/sync
-providers, enrollment payloads, secret formats, validation, or wire contracts,
-it is app/core information.
+providers, enrollment payloads, secret formats, validation, wire contracts,
+workflow command arguments, or recovery summaries, it is app/core information.
 
 ## Preferred Pattern
 
@@ -42,12 +42,52 @@ Put app/domain types in Rust first:
   wasm APIs. The closer behavior is to browser lifecycle glue (`document`
   listeners, `setTimeout`, viewport/URL state), the more strongly it belongs in
   TypeScript/Svelte rather than Rust/WASM.
+- Never clone or unwrap reactive data with
+  `JSON.parse(JSON.stringify(value))`. In `.svelte` and `.svelte.ts` modules,
+  pass `$state.snapshot(value)` directly at the API boundary. Keep replace-only
+  DTO state in `$state.raw` so ordinary `.ts` domain and adapter modules receive
+  plain values. Do not rename a utility, domain, or action module to
+  `.svelte.ts` merely to access `$state.snapshot`; move the snapshot to the
+  rune-owning caller instead. Do not introduce `plain*` or `toPlain`
+  serialization helpers.
+- Use the `.svelte.ts` suffix only when the module genuinely owns Svelte
+  reactivity such as `$state`, `$derived`, or `$effect`. The suffix opts the
+  module into Svelte compiler transformation; it is not a general marker for
+  code called by Svelte components.
+- Keep reactive state and workflow actions as separate APIs. Do not add a
+  `VaultState` method whose complete implementation is
+  `return someActions.operation(this, ...args)`. Components and peer action
+  modules should import and call the action directly. Retain a state method only
+  when it owns a real boundary such as `$state.snapshot`, enforces an invariant,
+  adapts arguments/results, or composes multiple operations.
 - Consume generated WASM types and functions directly. Preserve a friendly web
   module API with direct import/export aliases when useful, but do not add local
   `type Foo = NookFoo` declarations or exported functions whose only statement
   forwards the same parameters to a WASM import. Keep a wrapper only when it
   performs a real boundary task such as constructing/freeing WASM values,
-  removing Svelte proxies, applying UI defaults, or translating browser state.
+  applying UI defaults, or translating browser state. Removing a Svelte proxy
+  alone is not a wrapper responsibility; snapshot directly at the call site.
+- Preserve semantic Rust identifier names in generated WASM declarations.
+  Svelte state and function signatures must use `StoreId`, `PasswordEntryId`,
+  and other available generated identifier types instead of widening them to
+  `string`. Optional identifiers use `$state<StoreId>()`; absence and identifier
+  identity are separate concerns.
+- Treat TypeScript string-literal unions that describe authentication, vault
+  unlock, recovery, Sentinel, provider, or session workflows as missing Rust
+  enums. Export the canonical `nook-core` enum through WASM and compare its
+  generated variants in Svelte. Before adding an enum, inspect every read: if
+  the state is write-only or a WASM getter always returns one constant, delete
+  the abandoned state/getter instead. Keep string unions only for visual state
+  such as the open panel, tab, accordion, or form view.
+- Do not copy a generated WASM DTO into an equivalent TypeScript "summary"
+  merely to free the wrapper immediately. Let the owning Svelte state retain the
+  generated objects, free the previous objects when replacing or resetting that
+  state, and pass the generated types directly through component props. A plain
+  view model is justified only when it is materially different and UI-only; do
+  not add duplicate fields such as `payload` plus `sharePayload`.
+- Workflow commands such as Sentinel genesis start arguments and safe recovery
+  projections are Rust DTOs. Components may construct and render their generated
+  TypeScript shapes, but `nook-web` must not redeclare them.
 
 ```ts
 // Preferred: ownership stays visible and no runtime wrapper is emitted.
@@ -353,6 +393,14 @@ When `Option<T>` is still acceptable (do not force an enum):
 - [ ] Re-export generated WASM bindings directly; remove local aliases and
       same-argument forwarding functions that add no lifecycle or translation
       behavior.
+- [ ] Search Svelte state and function parameters for domain identifiers typed
+      as `string`; replace them with the generated Rust/WASM identifier type.
+- [ ] Search `$state<"...">` and exported TypeScript unions for domain
+      workflows; delete write-only or constant state, otherwise move the closed
+      set to a Rust/WASM enum.
+- [ ] When Svelte retains generated WASM objects, identify one owner and free
+      every replaced or reset object exactly once; do not create equivalent
+      TypeScript summaries solely to simplify ownership.
 - [ ] Treat long wasm functions with many optional parameters (or a flattened
       stringly-typed struct) as a design smell. Model the state as a `nook-core`
       enum-of-structs and expose a thin `#[wasm_bindgen]` newtype wrapper with

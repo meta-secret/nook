@@ -14,14 +14,6 @@ export async function init(state: VaultState) {
   return state.initPromise;
 }
 
-export function waitForStorageChain(state: VaultState): Promise<void> {
-  return state.storageChain.then(() => undefined);
-}
-
-export function resetStorageChain(state: VaultState): void {
-  state.storageChain = Promise.resolve();
-}
-
 export async function createFreshVault(state: VaultState) {
   if (!state.manager) return;
   state.errorMsg = "";

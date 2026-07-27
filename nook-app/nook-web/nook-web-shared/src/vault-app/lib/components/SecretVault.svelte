@@ -40,7 +40,7 @@
     vault,
     isSaving,
     editsBlocked = false,
-    editBlockReason = undefined,
+    editBlockMessage = undefined,
     secrets = [] as NookSecretListItem[],
     onAddSecret,
     onReplaceSecret,
@@ -51,7 +51,7 @@
     vault: VaultState
     isSaving: boolean
     editsBlocked?: boolean
-    editBlockReason?: string | undefined
+    editBlockMessage?: string | undefined
     secrets?: NookSecretListItem[]
     onAddSecret: (
       id: string,
@@ -77,10 +77,10 @@
   let searchPattern = $derived(vault.secretQuery)
   let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-  let copiedKey = $state<string | undefined>(undefined)
+  let copiedKey = $state<string>()
   let addSecretOpen = $state(false)
-  let formSelectedType = $state<VaultItemType | undefined>(undefined)
-  let editingItem = $state<NookSecretRecord | undefined>(undefined)
+  let formSelectedType = $state<VaultItemType>()
+  let editingItem = $state<NookSecretRecord>()
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
@@ -363,7 +363,7 @@
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
-            title={editsBlocked ? editBlockReason : undefined}
+            title={editsBlocked ? editBlockMessage : undefined}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
@@ -372,14 +372,14 @@
         </div>
       </div>
 
-      {#if editsBlocked && editBlockReason}
+      {#if editsBlocked && editBlockMessage}
         <div
           class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
           data-testid="secret-edit-blocked-banner"
         >
           <TriangleAlert class="mt-0.5 size-4 shrink-0 text-amber-600" />
           <p class="text-pretty text-xs text-muted-foreground">
-            {editBlockReason}
+            {editBlockMessage}
           </p>
         </div>
       {/if}
@@ -500,7 +500,7 @@
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
                     editDisabled={editsBlocked}
-                    editDisabledReason={editBlockReason}
+                    editDisabledReason={editBlockMessage}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
                     onCopySecret={copySecret}

@@ -1,18 +1,19 @@
 <script lang="ts">
   import { AlertTriangle, RefreshCw } from '@lucide/svelte'
+  import type { RemoteVaultRecoveryState } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
-    mode,
+    state,
     isBusy = false,
     onRecover,
     onCreateFresh,
     onDismiss,
   }: {
     vault: VaultState
-    mode: 'with_cache' | 'missing_only'
+    state: RemoteVaultRecoveryState
     isBusy?: boolean
     onRecover?: () => void | Promise<void>
     onCreateFresh?: () => void | Promise<void>
@@ -31,7 +32,7 @@
         {vault.t('login_wizard.remote_recovery.title')}
       </p>
       <p class="text-xs leading-relaxed text-muted-foreground">
-        {#if mode === 'with_cache'}
+        {#if vault.clientPolicy.remoteRecoveryPromptHasCache(state)}
           {vault.t('login_wizard.remote_recovery.desc_with_cache')}
         {:else}
           {vault.t('login_wizard.remote_recovery.desc_missing_only')}
@@ -41,7 +42,7 @@
   </div>
 
   <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-    {#if mode === 'with_cache'}
+    {#if vault.clientPolicy.remoteRecoveryPromptHasCache(state)}
       <Button
         type="button"
         class="sm:min-w-[160px]"

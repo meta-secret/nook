@@ -29,6 +29,7 @@
     isVaultPasswordLongEnough,
     peekEnrollmentIssuedAt,
     type NookPasswordEntrySummary,
+    type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
@@ -75,7 +76,7 @@
     githubPat: string
     githubRepo: string
     onIssueCode: (
-      entryId: string,
+      entryId: PasswordEntryId,
       password: string,
       providerId: string,
     ) => Promise<string | void>
@@ -116,8 +117,8 @@
     vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
-  let providerId = $state<string | undefined>(undefined)
-  let passwordEntryId = $state<string | undefined>(undefined)
+  let providerId = $state<string>()
+  let passwordEntryId = $state<PasswordEntryId>()
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)

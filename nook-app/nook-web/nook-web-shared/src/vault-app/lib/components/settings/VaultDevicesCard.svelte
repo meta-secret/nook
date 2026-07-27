@@ -50,10 +50,10 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<string | undefined>(undefined)
-  let renameAuthId = $state<string | undefined>(undefined)
+  let detailsAuthId = $state<string>()
+  let renameAuthId = $state<string>()
   let renameLabel = $state('')
-  let revokeAuthId = $state<string | undefined>(undefined)
+  let revokeAuthId = $state<string>()
   let extensionSetupState = $state<ExtensionSetupState | undefined>(
     undefined,
   )

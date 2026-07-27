@@ -4,7 +4,7 @@
   import type { SentinelUi } from './KeyLaterAuth.svelte'
   import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
-    VaultAuthWorkflowState,
+    createVaultAuthWorkflowState,
     type Presence,
   } from './vault-auth-workflow-state.svelte'
 
@@ -14,7 +14,7 @@
 
   let { onSentinel }: Props = $props()
   let vaultName = $state('')
-  const workflow = new VaultAuthWorkflowState()
+  const workflow = createVaultAuthWorkflowState()
   const steps = $derived(workflow.steps)
   const path = $derived(workflow.path)
   const step = $derived(workflow.step)

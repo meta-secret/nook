@@ -7,6 +7,7 @@ import {
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   readLocalVaultYaml,
+  RemoteVaultRecoveryState,
   VaultSyncConflictKind,
 } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
@@ -573,8 +574,7 @@ export async function confirmRecoverRemoteVault(
     await state.enqueueStorage(() =>
       state.manager!.prepareConnectFromLocalCache(),
     );
-    state.pendingConnectRecovery = "from_cache";
-    state.remoteVaultRecoveryPrompt = "none";
+    state.remoteVaultRecoveryState = RemoteVaultRecoveryState.ConnectFromCache;
     if (state.loginSetupType) {
       await state.loadDb();
       return;
@@ -593,8 +593,7 @@ export async function confirmCreateFreshRemoteVault(
 ): Promise<void> {
   if (!state.manager) return;
   state.errorMsg = "";
-  state.pendingConnectRecovery = "fresh";
-  state.remoteVaultRecoveryPrompt = "none";
+  state.remoteVaultRecoveryState = RemoteVaultRecoveryState.ConnectFresh;
   if (state.loginSetupType) {
     state.isVerifying = true;
     try {
@@ -610,8 +609,7 @@ export async function confirmCreateFreshRemoteVault(
 }
 
 export function clearRemoteVaultRecovery(state: VaultState) {
-  state.remoteVaultRecoveryPrompt = "none";
-  state.pendingConnectRecovery = "none";
+  state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
   try {
     state.manager?.clearConnectRecovery();
   } catch {

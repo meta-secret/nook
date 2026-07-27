@@ -33,6 +33,8 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
     "interface ProviderReplicationCapability {",
     "type SentinelGenesisManagerStatus = {",
     "type SentinelGenesisFinalizeResult = {",
+    "type StartSentinelGenesisArgs = {",
+    "type ExistingVaultRecoverySummary = {",
     "type NookPendingSyncConflict = {",
     "type PendingSyncConflictCommonDraft = {",
     "type PendingSyncConflictDraft =",
@@ -164,6 +166,223 @@ pub fn typescript_domain_boundary_boilerplate(root: &Path) -> io::Result<Vec<Vio
         &["ts", "svelte"],
         typescript_boundary_violation_lines,
     )
+}
+
+/// Finds JSON serialize/parse round trips used as cloning or reactive-proxy
+/// escape hatches in authored web source.
+///
+/// Rune modules must take a Svelte snapshot at the call boundary instead.
+///
+/// # Errors
+///
+/// Returns an error when the web source tree cannot be read.
+pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violation>> {
+    source_violations(
+        root,
+        Path::new("nook-app/nook-web"),
+        &["ts", "svelte"],
+        json_round_trip_clone_lines,
+    )
+}
+
+/// Finds redundant optional Svelte rune declarations, domain identifiers
+/// widened to `string` anywhere in authored web state, and domain unions in
+/// the central vault state.
+///
+/// # Errors
+///
+/// Returns an error when the authored web source tree cannot be read.
+pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Vec<Violation>> {
+    let mut violations = source_violations(
+        root,
+        Path::new("nook-app/nook-web"),
+        &["ts", "svelte"],
+        redundant_optional_state_lines,
+    )?;
+    violations.extend(source_violations(
+        root,
+        Path::new("nook-app/nook-web"),
+        &["ts", "svelte"],
+        widened_domain_identifier_state_lines,
+    )?);
+
+    let relative_path =
+        Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault.svelte.ts");
+    let source = fs::read_to_string(root.join(relative_path))?;
+    violations.extend(
+        domain_string_union_state_lines(&source)
+            .into_iter()
+            .map(|line| Violation {
+                path: relative_path.to_path_buf(),
+                line,
+            }),
+    );
+    violations.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.line.cmp(&right.line))
+    });
+    Ok(violations)
+}
+
+fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
+    let mut compact = Vec::with_capacity(source.len());
+    let mut source_lines = Vec::with_capacity(source.len());
+    let mut line = 1;
+    for byte in source.bytes() {
+        if byte == b'\n' {
+            line += 1;
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+            source_lines.push(line);
+        }
+    }
+
+    let pattern = b"$state<string";
+    let mut lines = Vec::new();
+    for (start, window) in compact.windows(pattern.len()).enumerate() {
+        if window != pattern {
+            continue;
+        }
+        let Some(equals) = compact[..start].iter().rposition(|byte| *byte == b'=') else {
+            continue;
+        };
+        let identifier_start = compact[..equals]
+            .iter()
+            .rposition(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'$'))
+            .map_or(0, |index| index + 1);
+        let identifier = &compact[identifier_start..equals];
+        let is_domain_identifier = identifier.ends_with(b"switchingTo")
+            || identifier.ends_with(b"StoreId")
+            || identifier.ends_with(b"EntryId");
+        if is_domain_identifier {
+            lines.push(source_lines[start]);
+        }
+    }
+    lines.sort_unstable();
+    lines.dedup();
+    lines
+}
+
+fn domain_string_union_state_lines(source: &str) -> Vec<usize> {
+    const UI_ONLY_STATE: &[&[u8]] = &[
+        b"settingsSection",
+        b"settingsAccordionSection",
+        b"adminAccordionSection",
+    ];
+
+    let mut compact = Vec::with_capacity(source.len());
+    let mut source_lines = Vec::with_capacity(source.len());
+    let mut line = 1;
+    for byte in source.bytes() {
+        if byte == b'\n' {
+            line += 1;
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+            source_lines.push(line);
+        }
+    }
+
+    let prefix = b"$state<";
+    let mut lines = Vec::new();
+    for (start, window) in compact.windows(prefix.len()).enumerate() {
+        if window != prefix {
+            continue;
+        }
+        let generic_start = start + prefix.len();
+        let Some(generic_end) = compact[generic_start..]
+            .iter()
+            .position(|byte| *byte == b'>')
+            .map(|offset| generic_start + offset)
+        else {
+            continue;
+        };
+        let generic = &compact[generic_start..generic_end];
+        if !generic.contains(&b'|') || !(generic.contains(&b'"') || generic.contains(&b'\'')) {
+            continue;
+        }
+
+        let Some(equals) = compact[..start].iter().rposition(|byte| *byte == b'=') else {
+            continue;
+        };
+        let identifier_start = compact[..equals]
+            .iter()
+            .rposition(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'$'))
+            .map_or(0, |index| index + 1);
+        let identifier = &compact[identifier_start..equals];
+        if UI_ONLY_STATE.contains(&identifier) {
+            continue;
+        }
+        lines.push(source_lines[start]);
+    }
+    lines.sort_unstable();
+    lines.dedup();
+    lines
+}
+
+fn redundant_optional_state_lines(source: &str) -> Vec<usize> {
+    let mut compact = Vec::with_capacity(source.len());
+    let mut source_lines = Vec::with_capacity(source.len());
+    let mut line = 1;
+    for byte in source.bytes() {
+        if byte == b'\n' {
+            line += 1;
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+            source_lines.push(line);
+        }
+    }
+
+    let mut lines = Vec::new();
+    for prefix in [b"$state<".as_slice(), b"$state.raw<".as_slice()] {
+        for (start, window) in compact.windows(prefix.len()).enumerate() {
+            if window != prefix {
+                continue;
+            }
+            let tail = &compact[start + prefix.len()..];
+            let Some(end) = tail
+                .windows(b">(undefined)".len())
+                .position(|candidate| candidate == b">(undefined)")
+            else {
+                continue;
+            };
+            let generic = &tail[..end];
+            if generic.contains(&b';') {
+                continue;
+            }
+            if generic
+                .windows(b"|undefined".len())
+                .any(|candidate| candidate == b"|undefined")
+            {
+                lines.push(source_lines[start]);
+            }
+        }
+    }
+    lines.sort_unstable();
+    lines.dedup();
+    lines
+}
+
+fn json_round_trip_clone_lines(source: &str) -> Vec<usize> {
+    const PATTERN: &[u8] = b"JSON.parse(JSON.stringify(";
+
+    let mut compact = Vec::with_capacity(source.len());
+    let mut source_lines = Vec::with_capacity(source.len());
+    let mut line = 1;
+    for byte in source.bytes() {
+        if byte == b'\n' {
+            line += 1;
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+            source_lines.push(line);
+        }
+    }
+
+    compact
+        .windows(PATTERN.len())
+        .enumerate()
+        .filter_map(|(index, window)| (window == PATTERN).then_some(source_lines[index]))
+        .collect()
 }
 
 /// Finds authored TypeScript and Svelte source that uses `null` outside a
@@ -930,6 +1149,73 @@ export function adaptedProviderCapability(
 "#;
 
         assert_eq!(typescript_boundary_violation_lines(source), vec![7, 9]);
+    }
+
+    #[test]
+    fn reports_sentinel_command_and_recovery_summary_mirrors() {
+        let source = r"
+export type StartSentinelGenesisArgs = {
+  label: string
+}
+export type ExistingVaultRecoverySummary = {
+  storeId: string
+}
+";
+
+        assert_eq!(typescript_boundary_violation_lines(source), vec![2, 5]);
+    }
+
+    #[test]
+    fn reports_json_round_trip_clones_even_when_split_across_lines() {
+        let source = r"
+const provider = JSON.parse(JSON.stringify(value))
+const snapshot = JSON.parse(
+  JSON.stringify(state.providers),
+)
+";
+
+        assert_eq!(json_round_trip_clone_lines(source), vec![2, 3]);
+    }
+
+    #[test]
+    fn reports_redundant_optional_rune_state_across_lines() {
+        let source = r"
+let selected = $state<Item | undefined>(undefined)
+let recovery = $state<
+  RecoverySummary | undefined
+>(undefined)
+let raw = $state.raw<Config | undefined>(undefined)
+let concise = $state<Item>()
+";
+
+        assert_eq!(redundant_optional_state_lines(source), vec![2, 3, 6]);
+    }
+
+    #[test]
+    fn permits_visual_state_but_reports_domain_string_unions() {
+        let source = r#"
+settingsSection = $state<"storage" | "admin">("storage")
+loginUnlockMode = $state<"unknown" | "keys" | "password">("unknown")
+remoteRecovery = $state<
+  'none' | 'with_cache'
+>('none')
+"#;
+
+        assert_eq!(domain_string_union_state_lines(source), vec![3, 4]);
+    }
+
+    #[test]
+    fn reports_domain_identifiers_widened_in_component_state() {
+        let source = r"
+let switchingTo = $state<string>()
+let passwordEntryId = $state<
+  string
+>()
+let providerId = $state<string>()
+let selectedStoreId = $state<StoreId>()
+";
+
+        assert_eq!(widened_domain_identifier_state_lines(source), vec![2, 3]);
     }
 
     #[test]

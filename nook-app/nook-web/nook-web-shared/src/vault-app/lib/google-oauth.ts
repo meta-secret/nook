@@ -211,9 +211,7 @@ export function oauthTokensToConfig(
   return googleOAuthTokensToConfigCore(
     tokens.accessToken,
     tokens.expiresAt,
-    existing
-      ? (JSON.parse(JSON.stringify(existing)) as OAuthFileConfig)
-      : undefined,
+    existing,
   );
 }
 

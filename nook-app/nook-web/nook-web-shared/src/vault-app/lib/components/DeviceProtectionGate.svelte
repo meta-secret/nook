@@ -1,5 +1,7 @@
 <script lang="ts">
   import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { DeviceProtectionStatus } from '$app-wasm'
+  import * as deviceProtectionActions from '$lib/vault/device-protection'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
@@ -20,16 +22,16 @@
   let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
 
   const needsSetup = $derived(
-    vault.deviceProtectionStatus === 'missing' ||
-      vault.deviceProtectionStatus === 'plaintext' ||
-      vault.deviceProtectionStatus === 'pin-setup',
+    vault.deviceProtectionStatus === DeviceProtectionStatus.Missing ||
+      vault.deviceProtectionStatus === DeviceProtectionStatus.Plaintext ||
+      vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup,
   )
 
   function recover() {
     if (!confirm(vault.t('device_protection.recovery_confirm'))) {
       return
     }
-    void vault.resetDeviceProtectionForRecovery()
+    void deviceProtectionActions.resetDeviceProtectionForRecovery(vault)
   }
 </script>
 
@@ -59,15 +61,15 @@
       {vault.t('device_protection.title')}
     </CardTitle>
     <CardDescription class="leading-snug">
-      {#if vault.deviceProtectionStatus === 'plaintext'}
+      {#if vault.deviceProtectionStatus === DeviceProtectionStatus.Plaintext}
         {vault.t('device_protection.migration_description')}
-      {:else if vault.deviceProtectionStatus === 'pin-setup'}
+      {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup}
         {vault.t('device_protection.pin_setup_description')}
-      {:else if vault.deviceProtectionStatus === 'pin'}
+      {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Pin}
         {vault.t('device_protection.pin_unlock_description')}
-      {:else if vault.deviceProtectionStatus === 'passkey'}
+      {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey}
         {vault.t('device_protection.unlock_description')}
-      {:else if vault.deviceProtectionStatus === 'error'}
+      {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Error}
         {vault.t('device_protection.unavailable_description')}
       {:else}
         {vault.t('device_protection.setup_description')}
@@ -78,7 +80,7 @@
   <CardContent class="space-y-3">
     <ExistingVaultRecoverySummary {vault} />
 
-    {#if vault.deviceProtectionStatus === 'pin-setup'}
+    {#if vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">
           {vault.t('device_protection.pin_label')}
@@ -119,7 +121,12 @@
         class="w-full"
         disabled={vault.isVerifying}
         data-testid="device-protection-pin-setup-btn"
-        onclick={() => vault.setupPinDeviceProtection(pin, pinConfirm)}
+        onclick={() =>
+          deviceProtectionActions.setupPinDeviceProtection(
+            vault,
+            pin,
+            pinConfirm,
+          )}
       >
         {vault.isVerifying
           ? vault.t('device_protection.authorizing')
@@ -138,7 +145,8 @@
             class="w-full"
             disabled={vault.isVerifying}
             data-testid="device-protection-use-existing-choice"
-            onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+            onclick={() =>
+              deviceProtectionActions.recoverDeviceProtectionWithPasskey(vault)}
           >
             <KeyRound class="size-4" />
             {vault.isVerifying
@@ -198,7 +206,11 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-setup-btn"
             onclick={() =>
-              vault.setupDeviceProtection(passkeyLabel, vault.draftDeviceMode)}
+              deviceProtectionActions.setupDeviceProtection(
+                vault,
+                passkeyLabel,
+                vault.draftDeviceMode,
+              )}
           >
             {vault.isVerifying
               ? vault.t('device_protection.authorizing')
@@ -217,7 +229,8 @@
             size="sm"
             disabled={vault.isVerifying}
             data-testid="device-protection-use-existing-choice"
-            onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+            onclick={() =>
+              deviceProtectionActions.recoverDeviceProtectionWithPasskey(vault)}
           >
             <KeyRound class="size-4" />
             {vault.isVerifying
@@ -226,7 +239,7 @@
           </Button>
         </div>
       {/if}
-    {:else if vault.deviceProtectionStatus === 'pin'}
+    {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Pin}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">
           {vault.t('device_protection.pin_label')}
@@ -246,7 +259,8 @@
         class="w-full"
         disabled={vault.isVerifying}
         data-testid="device-protection-pin-unlock-btn"
-        onclick={() => vault.unlockPinDeviceProtection(pin)}
+        onclick={() =>
+          deviceProtectionActions.unlockPinDeviceProtection(vault, pin)}
       >
         {vault.isVerifying
           ? vault.t('device_protection.authorizing')
@@ -268,12 +282,12 @@
           {vault.t('device_protection.pin_recovery_action')}
         </Button>
       </div>
-    {:else if vault.deviceProtectionStatus === 'passkey'}
+    {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey}
       <Button
         class="w-full"
         disabled={vault.isVerifying}
         data-testid="device-protection-unlock-btn"
-        onclick={() => vault.unlockDeviceProtection()}
+        onclick={() => deviceProtectionActions.unlockDeviceProtection(vault)}
       >
         {vault.isVerifying
           ? vault.t('device_protection.authorizing')

@@ -18,9 +18,9 @@ Use this workflow for quality, CI, and deployment changes.
      (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`
-   - `knip` (`bun run unused`) — unused/unreachable files, exports, and
-     dependencies in `nook-web-app` / `nook-web-research` (and any package that
-     runs Knip in its check/lint path)
+   - `knip` (`bun run unused`) — unused/unreachable files, exports, class
+     members, and dependencies in `nook-web-app` / `nook-web-research` (and any
+     package that runs Knip in its check/lint path)
    - `jscpd` (`bun run duplicates`) — copy/paste clone detection across authored
      `nook-app` and `preflight` sources; the checked-in threshold in
      [`.jscpd.json`](../../.jscpd.json) is a no-regression ceiling, not a budget

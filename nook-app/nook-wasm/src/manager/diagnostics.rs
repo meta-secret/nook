@@ -2,7 +2,7 @@
 
 use super::{NookVaultManager, VaultNameState};
 use crate::storage::event_db::load_local_event_store;
-use crate::types::{NookVaultAccessReport, NookVaultRecoveryOptions};
+use crate::types::NookVaultAccessReport;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -18,19 +18,25 @@ impl NookVaultManager {
     /// This intentionally works before device authorization and never returns
     /// password envelopes, passkey credential ids, or encrypted secret payloads.
     #[wasm_bindgen(js_name = vaultRecoveryOptions)]
-    pub async fn vault_recovery_options(&mut self) -> Result<NookVaultRecoveryOptions, JsError> {
-        let store_id = self.vault.store_id.trim().to_owned();
-        if store_id.is_empty() {
+    pub async fn vault_recovery_options(
+        &mut self,
+    ) -> Result<nook_core::VaultRecoverySummary, JsError> {
+        let raw_store_id = self.vault.store_id.trim();
+        if raw_store_id.is_empty() {
             return Err(JsError::new("No staged vault is available."));
         }
-        let store = load_local_event_store(&store_id).await?;
-        let graph = store.load_graph(&store_id)?;
-        let options = nook_core::vault_recovery_options(&graph, &store_id)?;
+        let store_id = nook_core::StoreId::parse(raw_store_id)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let store = load_local_event_store(store_id.as_str()).await?;
+        let graph = store.load_graph(store_id.as_str())?;
+        let options = nook_core::vault_recovery_options(&graph, store_id.as_str())?;
         let vault_name = match &self.vault.vault_name {
             VaultNameState::Named(name) => name.clone(),
-            VaultNameState::Unnamed => nook_core::default_vault_name_for_store_id(&store_id),
+            VaultNameState::Unnamed => {
+                nook_core::default_vault_name_for_store_id(store_id.as_str())
+            }
         };
-        Ok(NookVaultRecoveryOptions::from_core(
+        Ok(nook_core::VaultRecoverySummary::from_options(
             store_id, vault_name, options,
         ))
     }

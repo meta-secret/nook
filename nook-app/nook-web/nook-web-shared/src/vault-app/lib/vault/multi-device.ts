@@ -13,35 +13,6 @@ export async function refreshPendingJoinsFromProviders(state: VaultState) {
   await state.hydrateMultiDeviceState();
 }
 
-export async function requestVaultAccess(state: VaultState) {
-  if (!state.manager) return;
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isVerifying = true;
-  try {
-    await state.enqueueStorage(() =>
-      state.manager!.request_vault_access(
-        ...state.wasmStorageArgs(),
-        isoTimestamp(),
-      ),
-    );
-    await state.ensureProviderSaved();
-    await state.refreshDeviceState();
-    if (state.localVaultPresent && state.syncProviders.length > 0) {
-      state.scheduleFanOutSyncAfterLocalSave();
-    } else {
-      state.scheduleRemoteEventOutboxFlush();
-    }
-    state.showSuccess(state.t("login.join_request_sent"));
-    log.info("join request sent", { deviceId: state.deviceId });
-  } catch (e: unknown) {
-    state.errorMsg =
-      e instanceof Error ? e.message : "Failed to request vault access.";
-  } finally {
-    state.isVerifying = false;
-  }
-}
-
 export async function approveJoin(state: VaultState, joinDeviceId: string) {
   if (!state.manager) return;
   state.errorMsg = "";

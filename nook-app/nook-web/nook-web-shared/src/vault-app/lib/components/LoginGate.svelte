@@ -1,6 +1,10 @@
 <script lang="ts">
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
+  import type { VaultState } from '$lib/vault.svelte'
+  import {
+    SentinelVaultUnlockState,
+    type StartSentinelGenesisArgs,
+  } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type {
     OAuthFilePreset,
@@ -29,7 +33,12 @@
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { AppKind } from '$lib/app-kind'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
-  import { peekEnrollmentEntryId, peekEnrollmentEntryLabel } from '$app-wasm'
+  import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
+  import {
+    peekEnrollmentEntryId,
+    peekEnrollmentEntryLabel,
+    SentinelGenesisPhase,
+  } from '$app-wasm'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
 
   let {
@@ -128,12 +137,13 @@
   const showSentinelCeremony = $derived(
     !vault.isAuthenticated &&
       (vault.sentinelCeremonyPrompt ||
-        vault.sentinelUnlockStatus === 'ceremony_required' ||
-        vault.sentinelUnlockStatus === 'awaiting_shares'),
+        vault.sentinelUnlockStatus ===
+          SentinelVaultUnlockState.CeremonyRequired ||
+        vault.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares),
   )
   const showLocalUnlock = $derived(
     vault.localVaultPresent &&
-      vault.sentinelGenesisStatus !== 'delivering' &&
+      vault.sentinelGenesisPhase !== SentinelGenesisPhase.DeliveringShares &&
       !showSetup &&
       !addProviderOpen &&
       !showProviderSetupLink &&
@@ -154,7 +164,7 @@
     ),
   )
   const showCreateVault = $derived(
-    (vault.sentinelGenesisStatus === 'delivering' ||
+    (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
         !hasProviders)) &&
@@ -197,7 +207,7 @@
 
   $effect(() => {
     if (
-      vault.sentinelGenesisStatus === 'delivering' &&
+      vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares &&
       vault.syncProviders.length > 0 &&
       !showSetup &&
       !addProviderOpen
@@ -257,19 +267,24 @@
       onStartSentinelGenesis={onStartSentinelGenesis ??
         ((args) => vault.startSentinelGenesis(args))}
       onAddSentinelGenesisParticipantResponse={(payload, participantLabel) =>
-        vault.addSentinelGenesisParticipantResponse(payload, participantLabel)}
-      onFinalizeSentinelGenesis={() => vault.finalizeSentinelGenesis()}
+        sentinelGenesisActions.addParticipantResponse(
+          vault,
+          payload,
+          participantLabel,
+        )}
+      onFinalizeSentinelGenesis={() => sentinelGenesisActions.finalize(vault)}
       onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
-        ((payload) => vault.createSentinelGenesisParticipantResponse(payload))}
+        ((payload) =>
+          sentinelGenesisActions.createParticipantResponse(vault, payload))}
       onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelGenesisPublicKeyAnnouncement ??
-        (() => vault.createSentinelGenesisPublicKeyAnnouncement())}
+        (() => sentinelGenesisActions.createPublicKeyAnnouncement(vault))}
       onRememberSentinelGenesisRequest={(payload) =>
-        vault.rememberSentinelGenesisRequest(payload)}
+        sentinelGenesisActions.rememberRequest(vault, payload)}
       onReceiveSentinelGenesisShare={(payload) =>
-        vault.acceptSentinelGenesisShareDelivery(payload)}
+        sentinelGenesisActions.acceptShareDelivery(vault, payload)}
       onCompleteSentinelGenesisDelivery={() =>
-        vault.completeSentinelGenesisDelivery()}
-      sentinelGenesisStatus={vault.sentinelGenesisStatus}
+        sentinelGenesisActions.completeDelivery(vault)}
+      sentinelGenesisPhase={vault.sentinelGenesisPhase}
       sentinelGenesisRequest={vault.sentinelGenesisRequest}
       sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
       sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
@@ -434,15 +449,19 @@
               idPrefix="login"
               {isVerifying}
               {isInitializing}
-              connectDisabled={vault.remoteVaultRecoveryPrompt !== 'none'}
+              connectDisabled={vault.clientPolicy.remoteRecoveryPromptVisible(
+                vault.remoteVaultRecoveryState,
+              )}
               {onCancelSetup}
               onConnect={onUnlock}
             >
               {#snippet beforeConnect()}
-                {#if vault.remoteVaultRecoveryPrompt !== 'none'}
+                {#if vault.clientPolicy.remoteRecoveryPromptVisible(
+                  vault.remoteVaultRecoveryState,
+                )}
                   <RemoteVaultRecoveryPanel
                     {vault}
-                    mode={vault.remoteVaultRecoveryPrompt}
+                    state={vault.remoteVaultRecoveryState}
                     isBusy={isVerifying}
                     onRecover={() => vault.confirmRecoverRemoteVault()}
                     onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}

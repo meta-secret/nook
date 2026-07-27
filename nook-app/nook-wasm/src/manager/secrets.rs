@@ -357,6 +357,21 @@ impl NookVaultManager {
     }
 
     #[allow(clippy::needless_pass_by_value)]
+    #[wasm_bindgen(js_name = queryPreparedSecretPage)]
+    pub async fn query_prepared_secret_page_js(
+        &mut self,
+        query: &str,
+        secret_type_filter: NookStringValue,
+        offset: u32,
+        limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
+        if !query.trim().is_empty() {
+            self.prepare_secret_search_catalog().await?;
+        }
+        self.query_secret_page_js(query, secret_type_filter, offset, limit)
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
     #[wasm_bindgen(js_name = querySecretPage)]
     pub fn query_secret_page_js(
         &self,
@@ -414,7 +429,7 @@ impl NookVaultManager {
             .into());
         };
         record.zeroize_plaintext();
-        Ok(NookTotpCode::from_core(code))
+        Ok(NookTotpCode::from_core(code, u64::from(unix_seconds)))
     }
 
     /// Prefixed secret item id (`secret_{token}`).

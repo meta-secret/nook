@@ -23,7 +23,7 @@
   let scanner: QrScanner | undefined;
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
-  let result = $state<NookImportResult | undefined>(undefined);
+  let result = $state<NookImportResult>();
   let error = $state("");
 
   function stopCamera() {

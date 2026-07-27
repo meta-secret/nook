@@ -24,6 +24,8 @@
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
+    PasswordEntryId,
+    StoreId,
   } from "$app-wasm";
   import type { VaultState } from "$lib/vault.svelte";
   import type { NookImportResult } from "$lib/nook";
@@ -104,11 +106,14 @@
     onRemoveProvider?: (id: string) => void | Promise<void>;
     onAddPassword: (label: string, password: string) => void | Promise<void>;
     onUpdatePassword: (
-      entryId: string,
+      entryId: PasswordEntryId,
       password: string,
     ) => void | Promise<void>;
-    onRemovePassword: (entryId: string) => void | Promise<void>;
-    onIssueCode: (entryId: string, password: string) => Promise<string | void>;
+    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>;
+    onIssueCode: (
+      entryId: PasswordEntryId,
+      password: string,
+    ) => Promise<string | void>;
     onClearCode: () => void;
     onImportBitwarden: (
       json: string,
@@ -134,10 +139,10 @@
   let drafts = $state<Record<string, string>>({});
   let draftSeed = $state("");
   let creating = $state(false);
-  let editingStoreId = $state<string | undefined>(undefined);
-  let renamingStoreId = $state<string | undefined>(undefined);
-  let switchingTo = $state<string | undefined>(undefined);
-  let activeImportProvider = $state<string | undefined>(undefined);
+  let editingStoreId = $state<StoreId>();
+  let renamingStoreId = $state<StoreId>();
+  let switchingTo = $state<StoreId>();
+  let activeImportProvider = $state<string>();
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? "");
   const vaults = $derived(vault.localVaults);
